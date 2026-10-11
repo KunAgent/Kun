@@ -224,6 +224,7 @@ export function portableSettingsForMigration(settings: AppSettingsV1): Record<st
     cursorSpotlight: settings.cursorSpotlight,
     cursorSpotlightColor: settings.cursorSpotlightColor,
     darkUiColors: normalizeDarkUiColors(settings.darkUiColors),
+    colorPalette: settings.colorPalette,
     notifications: settings.notifications,
     appBehavior: { closeAction: settings.appBehavior.closeAction },
     gitBranchPrefix: settings.gitBranchPrefix,

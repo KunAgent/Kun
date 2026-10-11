@@ -148,16 +148,21 @@ describe('General, Appearance, Notifications and Code settings pages', () => {
     }
   })
 
-  it('shows editable dark colors, a live preview, and the global reset action', () => {
+  it('offers every color palette and folds the dark UI colors into the custom editor', () => {
     const html = renderToStaticMarkup(createElement(AppearanceSettingsSection, { ctx: baseCtx() }))
 
-    expect(html).toContain('darkUiColorsTitle')
+    expect(html).toContain('colorPaletteTitle')
+    for (const id of ['kun', 'sky', 'parchment', 'mint', 'sakura', 'dusk', 'ember', 'graphite', 'custom']) {
+      expect(html).toContain(`data-color-palette-choice="${id}"`)
+    }
+    // Tuned dark colors without a palette migrate to the custom palette.
+    expect(html).toMatch(/data-color-palette-choice="custom"[^>]*aria-checked="true"|aria-checked="true"[^>]*data-color-palette-choice="custom"/)
     expect(html).toContain('value="#101010"')
     expect(html).toContain('value="#202020"')
     expect(html).toContain('value="#303030"')
-    expect(html).toContain('background-color:#101010')
-    expect(html).toContain('border-color:#202020')
-    expect(html).toContain('darkUiColorsReset')
+    expect(html).toContain('colorPaletteCustomReset')
+    expect(html).toContain('colorPalettePackFirst')
+    expect(html).not.toContain('darkUiColorsTitle')
   })
 
   it('keeps General free of nested tabs and moves folders, checkpoints and logs to their pages', () => {

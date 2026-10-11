@@ -396,8 +396,6 @@
   "uiModeWorkshopDesc": "작업 공간 마스코트 팩을 선택하세요. 내장된 iKun 모드는 그 자체로 사전 설치된 UI 플러그인 예제입니다. 개발자 가이드(선언적 이미지 팩, 실행 코드 없음)를 사용하여 자신만의 팩을 빌드하고 설치하세요.",
   "uiModeDefaultTitle": "기본 쿤",
   "uiModeDefaultSubtitle": "작은 파랑새",
-  "uiPaletteRetromaOn": "Retroma 팔레트 켜짐 — 기본 팔레트를 사용하려면 클릭하세요.",
-  "uiPaletteRetromaOff": "레트로마 양피지 팔레트로 전환",
   "uiPluginInstall": "플러그인 폴더 설치…",
   "uiPluginActivate": "사용",
   "uiPluginActive": "활성",

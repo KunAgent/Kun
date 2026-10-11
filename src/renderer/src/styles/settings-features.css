@@ -276,6 +276,42 @@
 .ds-settings-theme-thumb[data-theme-preview='system'] { background: linear-gradient(90deg, #ffffff 50%, #181818 50%); }
 .ds-settings-theme-thumb[data-theme-preview='system'] .ds-settings-theme-thumb-bar { background: #9aa0aa; }
 
+/* Color palette picker: one miniature window per palette, painted in its own colors. */
+.ds-settings-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem 1rem;
+}
+
+.ds-settings-palette-grid .ds-settings-option {
+  padding: 0.625rem;
+}
+
+.ds-settings-palette-preview {
+  display: flex;
+  block-size: 6.75rem;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 0.625rem;
+}
+
+.ds-settings-palette-check {
+  top: auto;
+  bottom: 0.875rem;
+  color: var(--ds-control-foreground);
+}
+
+.ds-settings-palette-custom {
+  display: grid;
+  gap: 0.875rem;
+  margin: 0 0.75rem 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid var(--ds-border);
+  border-radius: 0.875rem;
+  background: var(--ds-surface-subtle);
+}
+
 .ds-settings-option-icon {
   display: grid;
   inline-size: 2rem;

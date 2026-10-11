@@ -97,9 +97,8 @@ function applyUiModeDom(mode: string, runtime: UiPluginRuntime | null): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.setAttribute('data-ikun-mode', mode === UI_MODE_IKUN ? 'on' : 'off')
-  // Retroma 是纯配色模式:仅点亮 data-retroma-mode(浅色守卫在 CSS 侧),
-  // 不走插件运行时,不注入插件 token。
-  root.setAttribute('data-retroma-mode', mode === UI_MODE_RETROMA ? 'on' : 'off')
+  // Retroma 已迁为「外观 → 配色方案 → 羊皮纸」,这里只清掉旧属性。
+  root.removeAttribute('data-retroma-mode')
   for (const attribute of UI_PLUGIN_PRESENTATION_ATTRIBUTES) {
     root.removeAttribute(attribute)
   }
@@ -180,7 +179,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
     if (get().initialized) return
     set({ initialized: true })
     const mode = readUiModePreference()
-    if (mode === UI_MODE_DEFAULT || mode === UI_MODE_RETROMA) {
+    if (mode === UI_MODE_DEFAULT) {
       // Main may still remember/reapply a CDP theme across renderer reloads.
       // Route even inactive modes through the host deactivation handshake.
       await get().activateUiMode(mode)
@@ -205,13 +204,14 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
   },
 
   activateUiMode: (mode: string) => {
-    const normalized = mode.trim().toLowerCase()
+    const requested = mode.trim().toLowerCase()
+    const normalized = requested === UI_MODE_RETROMA ? UI_MODE_DEFAULT : requested
     const requestId = ++activationRequestId
     const operation = activationQueue.then(async () => {
       if (requestId !== activationRequestId) return
       const api = uiPluginApi()
 
-      if (normalized === UI_MODE_DEFAULT || normalized === UI_MODE_RETROMA) {
+      if (normalized === UI_MODE_DEFAULT) {
         writeUiModePreference(normalized)
         set({
           busy: false,

@@ -3,7 +3,6 @@ import {
   CHAT_CONTENT_MAX_WIDTH_MAX,
   CHAT_CONTENT_MAX_WIDTH_MIN,
   normalizeChatContentMaxWidth,
-  normalizeDarkUiColors,
   normalizeUiFontScale,
   UI_FONT_SCALE_MAX,
   UI_FONT_SCALE_MIN
@@ -12,7 +11,7 @@ import { Check } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { SettingRow, SettingsCard, SettingsReveal, Toggle } from './settings-controls'
 import { SpotlightColorControl } from './settings-color-controls'
-import { DarkUiColorsSettingsCard } from './settings-dark-ui-colors'
+import { ColorPaletteSettingsCard } from './settings-color-palette-card'
 
 type ThemeChoice = AppSettingsV1['theme']
 
@@ -133,6 +132,13 @@ export function AppearanceSettingsSection({ ctx }: { ctx: Record<string, any> })
         </div>
       </SettingsCard>
 
+      <ColorPaletteSettingsCard
+        form={form}
+        t={t}
+        onChange={(colorPalette) => update({ colorPalette })}
+        onDarkUiColorsChange={(darkUiColors) => update({ darkUiColors })}
+      />
+
       <SettingsCard title={t('settingsIaTextLayoutCard')}>
         <SettingRow
           title={t('fontScale')}
@@ -203,11 +209,6 @@ export function AppearanceSettingsSection({ ctx }: { ctx: Record<string, any> })
         </SettingsReveal>
       </SettingsCard>
 
-      <DarkUiColorsSettingsCard
-        colors={normalizeDarkUiColors(form.darkUiColors)}
-        t={t}
-        onChange={(darkUiColors) => update({ darkUiColors })}
-      />
     </>
   )
 }

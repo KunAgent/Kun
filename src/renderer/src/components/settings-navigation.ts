@@ -117,7 +117,7 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
       },
       {
         category: 'appearance', labelKey: 'settingsIaAppearance', icon: SunMoon, tone: 'violet',
-        searchKeys: ['theme', 'fontScale', 'chatContentMaxWidth', 'cursorSpotlight', 'darkUiColorsTitle']
+        searchKeys: ['theme', 'fontScale', 'chatContentMaxWidth', 'cursorSpotlight', 'colorPaletteTitle', 'darkUiColorsTitle']
       },
       {
         category: 'notifications', labelKey: 'settingsIaNotifications', icon: Bell, tone: 'amber',

@@ -7,6 +7,7 @@ import {
   WRITE_AGENT_PERSONA_MAX_CHARS,
   WINDOW_CLOSE_ACTIONS
 } from '../../../shared/app-settings'
+import { COLOR_PALETTE_IDS } from '../../../shared/app-settings-color-palette'
 import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { KEYBOARD_SHORTCUT_COMMANDS } from '../../../shared/keyboard-shortcuts'
 import { kunGraphPatchSchema } from './settings-graph'
@@ -99,6 +100,18 @@ const darkUiColorsPatchSchema = z.object({
   background: hexColorSchema.optional(),
   border: hexColorSchema.optional(),
   panel: hexColorSchema.optional()
+}).strict()
+
+const colorPalettePatchSchema = z.object({
+  id: z.enum(COLOR_PALETTE_IDS).optional(),
+  uiPackFirst: z.boolean().optional(),
+  customLight: z.object({
+    background: hexColorSchema.optional(),
+    panel: hexColorSchema.optional(),
+    border: hexColorSchema.optional(),
+    accent: hexColorSchema.optional()
+  }).strict().optional(),
+  customDarkAccent: hexColorSchema.optional()
 }).strict()
 
 const appBehaviorPatchSchema = z.object({
@@ -499,6 +512,7 @@ const settingsPatchObjectSchema = z.object({
   cursorSpotlight: z.boolean().optional(),
   cursorSpotlightColor: hexColorSchema.optional(),
   darkUiColors: darkUiColorsPatchSchema.optional(),
+  colorPalette: colorPalettePatchSchema.optional(),
   provider: modelProviderPatchSchema.optional(),
   agents: z.object({
     kun: kunRuntimePatchSchema.optional()

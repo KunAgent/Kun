@@ -26,6 +26,7 @@ import './styles/graph-workbench.css'
 import './styles/neutral-polish.css'
 import './styles/provider-quota-panel.css'
 import { applyCursorSpotlight, initializeStartupTheme } from './lib/apply-theme'
+import { applyCachedColorPalette } from './lib/color-palettes'
 import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
@@ -39,6 +40,7 @@ document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBa
 if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
 startArtUpdates()
 initializeStartupTheme(window.kunGui?.getSettings)
+applyCachedColorPalette()
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()
 const storageRelocationMode = new URLSearchParams(window.location.search).get('storageRelocation') === '1'

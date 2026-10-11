@@ -396,8 +396,6 @@
   "uiModeWorkshopDesc": "选择工作台吉祥物形象。iKun 模式本身就是一个预装的 UI 插件示例,你也可以按开发指南制作并安装自己的形象包(纯声明式图片包,不含可执行代码)。",
   "uiModeDefaultTitle": "默认 Kun",
   "uiModeDefaultSubtitle": "小Kun",
-  "uiPaletteRetromaOn": "已开启 Retroma 羊皮纸配色 — 点击切回默认配色",
-  "uiPaletteRetromaOff": "切换到 Retroma 羊皮纸配色",
   "uiPluginInstall": "安装插件文件夹…",
   "uiPluginActivate": "启用",
   "uiPluginActive": "使用中",

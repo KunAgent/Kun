@@ -396,8 +396,6 @@
   "uiModeWorkshopDesc": "Pick the workspace mascot pack. The built-in iKun mode is itself a pre-installed UI plugin example — build and install your own packs with the developer guide (declarative image packs, no executable code).",
   "uiModeDefaultTitle": "Default Kun",
   "uiModeDefaultSubtitle": "The little blue bird",
-  "uiPaletteRetromaOn": "Retroma palette on — click to use default palette",
-  "uiPaletteRetromaOff": "Switch to Retroma parchment palette",
   "uiPluginInstall": "Install plugin folder…",
   "uiPluginActivate": "Use",
   "uiPluginActive": "Active",

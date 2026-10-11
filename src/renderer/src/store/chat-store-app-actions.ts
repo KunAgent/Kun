@@ -6,6 +6,7 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { extensionWorkbenchClient } from '../extensions/extension-workbench-client'
 import { readRemoteLocaleOverride } from '../lib/remote-mobile'
+import { applyColorPalette } from '../lib/color-palettes'
 import {
   effectiveCodeWorkspaceRoot,
   readRemovedCodeWorkspaces
@@ -533,6 +534,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       applyCursorSpotlight(settings.cursorSpotlight !== false)
       applyCursorSpotlightColor(settings.cursorSpotlightColor)
       applyDarkUiColors(settings.darkUiColors)
+      applyColorPalette(settings.colorPalette, settings.darkUiColors)
       if (settings.write?.typography) applyWriteTypography(settings.write.typography)
       set({
         workspaceRoot,

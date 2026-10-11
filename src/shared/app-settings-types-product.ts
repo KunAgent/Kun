@@ -3,6 +3,7 @@ import type {
   WritePaperModeSettingsPatchV1,
   WritePaperModeSettingsV1
 } from './app-settings-types-paper-mode'
+import type { ColorPaletteSettingsPatchV1, ColorPaletteSettingsV1 } from './app-settings-color-palette'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { LocalWhisperDownloadSourceId } from './local-whisper'
@@ -590,6 +591,8 @@ export type AppSettingsV1 = {
   cursorSpotlightColor?: string
   /** Legacy snapshots omit this field; normalized settings always populate it. */
   darkUiColors?: DarkUiColorsV1
+  /** Legacy snapshots omit this field; normalized settings always populate it. */
+  colorPalette?: ColorPaletteSettingsV1
   provider: ModelProviderSettingsV1
   agents: KunSettingsEnvelopeV1
   workspaceRoot: string
@@ -625,9 +628,10 @@ export type AppSettingsV1 = {
 }
 
 export type AppSettingsPatch = Partial<
-  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'remote' | 'darkUiColors'>
+  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'remote' | 'darkUiColors' | 'colorPalette'>
 > & {
   darkUiColors?: DarkUiColorsPatchV1
+  colorPalette?: ColorPaletteSettingsPatchV1
   provider?: ModelProviderSettingsPatchV1
   agents?: KunSettingsEnvelopePatchV1
   log?: Partial<LogConfigV1>
