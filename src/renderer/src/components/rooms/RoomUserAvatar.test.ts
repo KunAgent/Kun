@@ -3,9 +3,13 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RoomAvatar } from './RoomAvatar'
 import { acceptRoomUserProfile, useRoomUserProfile } from './room-user-profile'
+// A signed-out user always wears the bundled Kun; the tests below are about a signed-in user's own look.
+const wardrobe = vi.hoisted(() => ({ mode: 'account' as 'account' | 'guest' }))
+vi.mock('./room-wardrobe', async (importOriginal) => ({ ...await importOriginal<typeof import('./room-wardrobe')>(),
+  useWardrobe: () => ({ mode: wardrobe.mode, unlockAll: false, wardrobe: null, revision: null, error: '', loaded: true }) }))
 vi.mock('./room-uploaded-avatar', () => ({ useRoomUploadedAvatar: (id?: string) => id === 'good' ? 'data:image/jpeg;base64,good' : undefined }))
 let renderer: ReactTestRenderer
-beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); useRoomUserProfile.setState({ profile: { avatar: null }, revision: null }) })
+beforeEach(() => { wardrobe.mode = 'account'; vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true); useRoomUserProfile.setState({ profile: { avatar: null }, revision: null }) })
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.unstubAllGlobals() })
 it('uses the bundled Kun for the user, replaces it everywhere and rejects older updates', () => {
   act(() => { renderer = create(createElement(Fragment, null, createElement(RoomAvatar, { id: 'user', label: 'You' }), createElement(RoomAvatar, { id: 'user', label: 'Old message' }))) })
@@ -63,4 +67,11 @@ it('crops list-sized avatars to the face and keeps large portraits whole', () =>
   const [list, profile] = renderer.root.findAll((node) => node.type === 'span' && node.props.className === 'rooms-avatar')
   expect(list!.props['data-compact']).toBe(true)
   expect(profile!.props['data-compact']).toBeUndefined()
+})
+it('keeps a signed-out user on the bundled Kun whatever look the saved profile holds', () => {
+  wardrobe.mode = 'guest'
+  act(() => { useRoomUserProfile.setState({ profile: { avatar: { kind: 'builtin', id: 'explorer' } }, revision: 3 }) })
+  act(() => { renderer = create(createElement(RoomAvatar, { id: 'user', label: 'You' })) })
+  expect(renderer.root.findByType('img').props.src).toContain('kun_greet.png')
+  expect(renderer.root.findAllByProps({ 'data-avatar-id': 'explorer' })).toHaveLength(0)
 })

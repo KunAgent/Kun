@@ -66,6 +66,12 @@ function timelineNodeMock() {
     removeEventListener: vi.fn(),
     scrollIntoView: vi.fn(),
     scrollBy: vi.fn(),
+    // The composer toolbar measures itself to decide which words to hide; an empty, fitting box is enough here.
+    toggleAttribute: vi.fn(),
+    querySelectorAll: vi.fn(() => []),
+    getBoundingClientRect: vi.fn(() => ({ left: 0, right: 640, top: 0, bottom: 40, width: 640, height: 40 })),
+    getClientRects: vi.fn(() => [{}]),
+    children: [],
     scrollHeight: 900,
     scrollTop: 0,
     clientHeight: 900,

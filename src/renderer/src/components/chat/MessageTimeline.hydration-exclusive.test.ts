@@ -97,7 +97,8 @@ describe('MessageTimeline hydration presentation', () => {
     expect(runtimeRequest).not.toHaveBeenCalled()
 
     await act(async () => {
-      useChatStore.setState({ threadLoadingId: null })
+      // A thread with nothing in it never asks for usage; this one has its answer.
+      useChatStore.setState({ threadLoadingId: null, blocks: [{ kind: 'assistant', id: 'target-answer', text: 'target-ready-content' }] })
       root!.render(element(false))
       await Promise.resolve()
     })

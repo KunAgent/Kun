@@ -62,7 +62,9 @@ describe('DesignDrawingStart', () => {
     const html = renderToStaticMarkup(createElement(DesignDrawingStart, props()))
 
     expect(html).toContain('data-design-start-composer="true"')
-    expect(html).toContain('Codex · gpt-5.6-luna')
+    // The trigger reads "provider · model" across separate spans.
+    expect(html).toContain('ds-composer-model-trigger-provider">Codex<')
+    expect(html).toContain('ds-composer-model-trigger-model">gpt-5.6-luna<')
     expect(html).toContain('aria-label="Model and reasoning settings: Codex / gpt-5.6-luna / Reasoning High / Fast mode on"')
     expect(html).toContain('lucide-zap')
   })

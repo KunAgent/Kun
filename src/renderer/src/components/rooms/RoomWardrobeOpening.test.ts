@@ -2,6 +2,7 @@ import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKunWardrobe, type KunWardrobeDrop, type RoomAvatarReference } from '@shared/rooms-api'
+import { serverPolicy } from '../../../../../kun/src/test-support/server-policy'
 
 const mocks = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en' },
@@ -28,7 +29,12 @@ const node = (props: Record<string, unknown>) => renderer.root.findAll((item) =>
 const text = () => JSON.stringify(renderer.toJSON())
 const advance = async (ms: number) => { await act(async () => { vi.advanceTimersByTime(ms) }) }
 
-beforeEach(() => { vi.clearAllMocks(); vi.useFakeTimers(); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true) })
+// The ten-pull size is the server's; without its policy nothing is playable. A local wardrobe keeps the runtime route.
+const policyWardrobe = (seed: number, pending: KunWardrobeDrop[] = []) => ({ ...createKunWardrobe(seed), pending, progress: serverPolicy() })
+beforeEach(() => {
+  vi.clearAllMocks(); vi.useFakeTimers(); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  acceptWardrobe({ wardrobe: policyWardrobe(1), revision: 1, mode: 'local' })
+})
 afterEach(() => { if (renderer) act(() => renderer.unmount()); vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('bottle opening stage', () => {
@@ -97,7 +103,7 @@ describe('bottle opening stage', () => {
 
   it('opens the oldest ten through the opener and wears a single result on request', async () => {
     const shelf = Array.from({ length: 12 }, (_, index) => bottle(12 - index))
-    acceptWardrobe({ wardrobe: { ...createKunWardrobe(2), pending: shelf }, revision: 7 })
+    acceptWardrobe({ wardrobe: policyWardrobe(2, shelf), revision: 7, mode: 'local' })
     const onWear = vi.fn()
     let api: ReturnType<typeof useWardrobeOpener> | undefined
     function Harness() { const opener = useWardrobeOpener({ onWear }); useEffect(() => { api = opener }); return createElement('div', null, opener.overlay) }
@@ -121,7 +127,7 @@ describe('bottle opening stage', () => {
     expect(node({ 'data-gacha-open': 'ten' })!.props.disabled).toBe(true)
     expect(text()).toContain('roomsGachaShort:6')
     act(() => renderer.unmount())
-    const wardrobe = { ...createKunWardrobe(3), pending: Array.from({ length: 23 }, (_, index) => bottle(index)) }
+    const wardrobe = policyWardrobe(3, Array.from({ length: 23 }, (_, index) => bottle(index)))
     await act(async () => { renderer = create(createElement(RoomWardrobeShelf, { wardrobe, onOpenOne: vi.fn(), onOpenTen: vi.fn() })) })
     expect(text()).toContain('roomsShelfReadyMany:23,2')
     expect(node({ 'data-shelf-open': 'ten' })!.props.disabled).toBe(false)

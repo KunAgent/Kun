@@ -103,6 +103,9 @@ vi.mock('electron', () => ({
   }
 }))
 
+// The art hot-update service has its own lifecycle (a before-quit hook, a daily timer); these suites only
+// exercise the handlers registered around it.
+vi.mock('./register-kun-art-ipc', () => ({ registerKunArtIpc: vi.fn() }))
 vi.mock('../protected-room-dialog', () => ({ showProtectedRoomDialog: electronMock.showProtectedDialog }))
 
 vi.mock('../services/ui-plugin-service', () => ({
