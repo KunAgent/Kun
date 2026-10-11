@@ -122,7 +122,7 @@ Renderer should only expose Kun. The UI sections listed below should be removed 
 kept removed:
 
 - Agent switcher: no runtime-switching `AgentSwitcher` returns; the harness picker
-  chooses the per-turn engine (see `docs/ade/01-harness-routing.md`).
+  chooses the per-turn engine.
 - Top connection status + runtime diagnostics entry: runtime detection is no longer the
   user entrypoint.
 - Runtime insights / right panel: retain only `Changes`, `Preview`, `Plan`, and GUI workspace
@@ -299,8 +299,7 @@ and only then add renderer wiring if needed (not both).
 Kun's Code mode can run as an ADE (Agentic Development Environment): one-to-one
 sessions may run on the Kun native loop or an external harness; a manager (the Kun
 native loop) can split tasks, dispatch workers, track progress, accept results, and
-report. The full design and implementation breakdown lives in
-[`docs/ade/README.md`](./ade/README.md). Invariants:
+report. Invariants:
 
 - External agents enter only as a `DelegatedTurnRuntime` inside `kun serve`; the
   GUI always talks to `kun serve`. The only exception is the terminal agent: its

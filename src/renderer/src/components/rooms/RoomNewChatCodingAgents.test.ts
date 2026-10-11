@@ -19,8 +19,11 @@ vi.mock('./rooms-client', async (original) => ({
 vi.mock('./agent-client', async (original) => ({
   ...(await original<typeof import('./agent-client')>()),
   useAgentCatalog: () => ({ agents: api.agents, cursor: undefined, more: async () => undefined, busy: false, error: '' }),
-  useAgentResource: (path: string) => ({ data: path === '/v1/agents/coding-agents' ? { agents: api.coding } : { templates: [] },
-    error: '', refresh: () => undefined })
+  useAgentResource: () => ({ data: { templates: [] }, error: '', refresh: () => undefined })
+}))
+vi.mock('./coding-agent-client', async (original) => ({
+  ...(await original<typeof import('./coding-agent-client')>()),
+  useCodingAgentCatalog: () => ({ data: { agents: api.coding }, error: '' })
 }))
 
 const codex = { id: 'agent-codex', name: 'Codex', title: 'gpt-5.5-mini', defaultRole: 'developer', presetId: 'general',

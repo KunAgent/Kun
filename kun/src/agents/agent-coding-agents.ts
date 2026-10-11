@@ -28,9 +28,28 @@ export type CodingAgentCatalogEntry = {
 const conversational = (id: string): id is AgentExecutor['harnessId'] =>
   (CONVERSATION_HARNESS_IDS as readonly string[]).includes(id)
 
-/** Same discovery as Code's external Agent list, narrowed to engines that may join conversations. */
+type CatalogCache = { value?: { agents: CodingAgentCatalogEntry[] }; at: number; pending?: Promise<{ agents: CodingAgentCatalogEntry[] }> }
+const catalogs = new WeakMap<WorkbenchHarnessService, CatalogCache>()
+const CATALOG_FRESH_MS = 30_000
+
+/**
+ * Same discovery as Code's external Agent list, narrowed to engines that may join conversations.
+ * Discovery spawns every installed CLI and can take seconds, so the last result is served
+ * immediately while one shared refresh runs; only the very first call waits.
+ */
 export async function codingAgentCatalog(harnesses: WorkbenchHarnessService | undefined): Promise<{ agents: CodingAgentCatalogEntry[] }> {
   if (!harnesses) return { agents: [] }
+  const entry = catalogs.get(harnesses) ?? { at: 0 }
+  catalogs.set(harnesses, entry)
+  if (entry.value && Date.now() - entry.at < CATALOG_FRESH_MS) return entry.value
+  entry.pending ??= discoverCodingAgents(harnesses).then((value) => {
+    entry.value = value; entry.at = Date.now(); return value
+  }).finally(() => { entry.pending = undefined })
+  if (entry.value) { entry.pending.catch(() => undefined); return entry.value }
+  return entry.pending
+}
+
+async function discoverCodingAgents(harnesses: WorkbenchHarnessService): Promise<{ agents: CodingAgentCatalogEntry[] }> {
   const listed = await harnesses.list()
   return { agents: listed.agents.flatMap((agent) => conversational(agent.harnessId) ? [{
     harnessId: agent.harnessId, displayName: agent.displayName, available: agent.available,

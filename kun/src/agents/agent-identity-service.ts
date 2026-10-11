@@ -7,7 +7,6 @@ import { RoomMemberSchema, RoomSchema, type Room, type RoomMember } from '../con
 import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 import type { RoomStore, RoomStoreCommit } from '../rooms/room-store.js'
 import { RoomStoreConflictError } from '../rooms/room-store.js'
-import { DEFAULT_AGENT_TEMPLATES } from './agent-defaults.js'
 import { bindAgentMembers, freezeAgentRoom } from './agent-membership.js'
 import { agentExecutorRouteKey, type AgentExecutor } from '../contracts/agent-executor.js'
 
@@ -172,24 +171,16 @@ export class AgentIdentityService {
       presetId: agent.presetId, role: agent.defaultRole, avatar: agent.avatar, revision: 0,
       allowedRepositoryIds: repositoryIds, ...(repositoryIds.length === 1 ? { defaultRepositoryId: repositoryIds[0] } : {}) })
   }
+  /** A new group starts with 小 Kun only; role presets are created on request, never seeded. */
   async defaultMembers(repositoryIds: string[]): Promise<RoomMember[]> {
-    const members: RoomMember[] = []
-    for (const template of DEFAULT_AGENT_TEMPLATES) {
-      const id = 'agent-default-' + template.templateId
-      let row = await this.store.get<AgentIdentity>('agent_identity', id)
-      if (!row) {
-        const now = new Date().toISOString()
-        const { examples: _examples, ...fields } = template
-        const agent = AgentIdentitySchema.parse({ ...fields, schemaVersion: 1, id, revision: 0, createdAt: now, updatedAt: now })
-        await this.store.commit({ requestId: 'agent-default:' + id,
-          checks: [{ kind: 'agent_identity', id, expectedRevision: null }],
-          puts: [{ kind: 'agent_identity', id, value: agent }] })
-        row = await this.store.get<AgentIdentity>('agent_identity', id)
-      }
-      if (!row!.value.archivedAt) members.push({ ...this.asMember(row!.value, repositoryIds), id: template.templateId })
-    }
-    if (!members.length) throw new RoomStoreConflictError('choose an active agent for the room')
-    return members
+    const { quickCreateAgent } = await import('./agent-chat-entry.js')
+    const { agentId } = await quickCreateAgent(this, { clientRequestId: 'default-members' }, true)
+    const kun = await this.store.get<AgentIdentity>('agent_identity', agentId)
+    if (kun && !kun.value.archivedAt) return [this.asMember(kun.value, repositoryIds)]
+    const fallback = (await this.store.list<AgentIdentity>('agent_identity', { limit: 50 }))
+      .find((row) => !row.value.archivedAt && !row.value.executor && row.value.setup?.status !== 'pending')
+    if (!fallback) throw new RoomStoreConflictError('choose an active agent for the room')
+    return [this.asMember(fallback.value, repositoryIds)]
   }
   async present(room: Room): Promise<Room> {
     const members = await Promise.all(room.members.map(async (member) => {

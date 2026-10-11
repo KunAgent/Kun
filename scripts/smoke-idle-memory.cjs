@@ -3,7 +3,7 @@
 
 // Idle memory budget smoke. Launches the built desktop app (out/ + kun/dist)
 // against a disposable profile, leaves it idle, then checks the regressions
-// behind the 2026-10 idle-memory investigation (docs/memory-optimization-plan.zh-CN.md):
+// behind the 2026-10 idle-memory investigation:
 // Main polling the Manager/Runtime, Agent CLIs spawned by readiness probes,
 // extra Electron-as-Node helpers, and the process-tree memory footprint.
 //

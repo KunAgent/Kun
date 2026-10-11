@@ -135,7 +135,7 @@ describe('peer topic API and Runtime admission', () => {
   it('delivers task milestones once without reawakening members for unchanged status text revisions', async () => {
     const f = await fixture()
     await f.peer.initialize((await f.request()).value)
-    const member = f.room.members.find((value) => value.id === 'developer')!
+    const member = f.room.members.find((value) => value.role === 'developer')!
     const task = RoomTaskSchema.parse({ id: 'task', roomId: f.room.id, requestId: f.sent.requestId,
       sourceMessageId: f.sent.message.id, title: 'Implement layout', ownerMemberId: member.id,
       memberSnapshot: member, repositoryId: 'repo', workspaceId: 'workspace', executionThreadId: 'task-thread',

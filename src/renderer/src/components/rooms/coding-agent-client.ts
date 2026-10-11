@@ -1,5 +1,5 @@
 import type { AgentIdentity } from '@shared/rooms-api'
-import { useAgentResource } from './agent-client'
+import { useEffect, useState } from 'react'
 import { roomsRequest } from './rooms-client'
 
 export type CodingAgentRoute = {
@@ -20,9 +20,42 @@ export type CodingAgentEntry = {
 export const codingRouteKey = (route: CodingAgentRoute): string =>
   JSON.stringify([route.credentialMode ?? '', route.providerId ?? '', route.accountId ?? '', route.model])
 
-/** Ready engines come from Code's own Agent discovery; probing can take a few seconds. */
+type CodingAgentCatalog = { agents: CodingAgentEntry[] }
+let lastCatalog: CodingAgentCatalog | null = null
+let inflight: Promise<CodingAgentCatalog> | null = null
+
+/** One shared request; the last result outlives the dialog so reopening it is instant. */
+export function loadCodingAgentCatalog(): Promise<CodingAgentCatalog> {
+  inflight ??= roomsRequest<CodingAgentCatalog>('/v1/agents/coding-agents', 'GET')
+    .then((value) => { lastCatalog = value; return value })
+    .finally(() => { inflight = null })
+  return inflight
+}
+
+/**
+ * Ready engines come from Code's own Agent discovery, which spawns every CLI.
+ * Kun caches it; here we show the last list at once and refresh quietly,
+ * instead of re-probing on every conversation event.
+ */
 export function useCodingAgentCatalog(active: boolean) {
-  return useAgentResource<{ agents: CodingAgentEntry[] }>('/v1/agents/coding-agents', active)
+  const [state, setState] = useState<{ data: CodingAgentCatalog | null; error: string }>(() => ({ data: lastCatalog, error: '' }))
+  useEffect(() => {
+    if (!active) return
+    let alive = true, failures = 0, retry: ReturnType<typeof setTimeout> | undefined
+    // A cold probe can outlive one request timeout while Kun keeps discovering;
+    // retry soon and keep the loading state for the first misses.
+    const refresh = () => void loadCodingAgentCatalog().then(
+      (data) => { failures = 0; if (alive) setState({ data, error: '' }) },
+      (cause) => {
+        if (!alive) return
+        if (++failures < 3) { clearTimeout(retry); retry = setTimeout(refresh, 2_000) }
+        setState((old) => ({ data: old.data, error: old.data || failures < 3 ? '' : String(cause) }))
+      })
+    refresh()
+    const timer = setInterval(refresh, 30_000)
+    return () => { alive = false; clearInterval(timer); clearTimeout(retry) }
+  }, [active])
+  return state
 }
 
 /** One contact per engine route; choosing another model updates that contact. */

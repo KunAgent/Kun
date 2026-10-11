@@ -105,8 +105,7 @@ the user's request: asking about a paper is an ordinary Work assistant turn on
 the Agent picked in its composer (Kun or an external Agent), with the open
 paper attached as `work-reference-paper` context. Reading purposes are a
 one-click menu in the reader; compare/Related Work send directly. Batch
-interpretation still uses its bounded single-request turns. See
-[work-assistant-agent.zh-CN.md](./work-assistant-agent.zh-CN.md).
+interpretation still uses its bounded single-request turns.
 
 ## First PR: implemented boundary and remaining Stage 1 work
 

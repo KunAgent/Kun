@@ -3,8 +3,7 @@
 A private bot Agent can hand work to the user's Code and Work modes, read what
 lives there, and be told what happened. Everything runs through the single Kun
 runtime and the Rooms data plane; no second runtime or renderer-side loop is
-involved. The design and the implementation notes are in
-[bot-workbench-bridge-plan.zh-CN.md](./bot-workbench-bridge-plan.zh-CN.md).
+involved.
 
 ## What the Agent can do
 

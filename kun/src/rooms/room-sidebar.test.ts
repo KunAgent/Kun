@@ -94,7 +94,7 @@ it('keeps a paged conversation list stable when a new Agent chat opens', async (
     entries.push(...next.entries); cursor = next.nextCursor
   }
   expect(entries.map((entry) => entry.id)).toEqual(allBefore.entries.map((entry) => entry.id))
-  expect(new Set(entries.map((entry) => entry.id)).size).toBe(25)
+  expect(new Set(entries.map((entry) => entry.id)).size).toBe(26) // 25 groups + 小 Kun's own chat, seeded as the default member
 })
 it('pages mixed empty private and group conversations without unused Agent catalog or pair rooms', async () => {
   const { store, agents, service, a, b } = await fixture()

@@ -167,16 +167,16 @@ export class WorkbenchHarnessService {
     }
     // Cold-start discovery must not require opening the Code model picker first.
     // Reuse its cached, prompt-free probes and never start disabled/unready engines.
-    for (const definition of this.deps.catalog.list().slice(0, 30)) {
-      signal.throwIfAborted()
+    // Engines are independent processes, so probe them concurrently instead of one after another.
+    await Promise.all(this.deps.catalog.list().slice(0, 30).map(async (definition) => {
       if (!this.deps.router.enabled() || definition.modelSource !== 'probe' || this.deps.catalog.isDisabled(definition.id) ||
-        !definition.credentialModes.includes('native-login') || this.deps.probedModels?.(definition)?.length) continue
+        !definition.credentialModes.includes('native-login') || this.deps.probedModels?.(definition)?.length) return
       const detected = await status(definition.id).catch(() => undefined)
       if (detected?.installed === 'yes' && detected.login !== 'signed-out' &&
         detected.ready !== 'no' && detected.versionSupported !== false) {
         if (this.deps.probeModels) await abortable(this.deps.probeModels(definition), signal).catch(() => undefined)
       }
-    }
+    }))
     signal.throwIfAborted()
     const listed = await listHarnessesForManager({ ...this.deps, detector: { status }, providers: async () => providers.map((entry) => ({
       providerId: entry.id, label: entry.name, kind: entry.kind, models: modelIds(entry), gatewayExportable: exposableProvider(entry)

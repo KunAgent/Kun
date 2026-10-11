@@ -395,8 +395,7 @@ custom agent 都禁用 Skills 自动激活。child record 持久化 route method
 
 Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 
-- 不恢复切换运行时的 Agent 切换器；harness 选择器选择的是 turn 引擎
-  （见 `docs/ade/01-harness-routing.md`）。
+- 不恢复切换运行时的 Agent 切换器；harness 选择器选择的是 turn 引擎。
 - 顶部连接状态条和 runtime 诊断按钮：不再把运行时检测作为用户入口。
 - Runtime insights/right panel：右侧面板可以展示只读 Kun 用量与 provider
   订阅额度，但不恢复 runtime 诊断、切换或控制台。
@@ -592,8 +591,7 @@ agent。
 
 Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：一对一
 会话可以跑在 Kun 原生 loop 或某个外部 harness 上；具备 Kun 工具桥的主 Agent（Kun 或第三方）可以
-拆任务、派 worker、盯进度、验收、汇报。完整设计与实施拆解见
-[`docs/ade/README.md`](./ade/README.md)。不变量：
+拆任务、派 worker、盯进度、验收、汇报。不变量：
 
 - 外部 agent 只能以 `kun serve` 内部的 `DelegatedTurnRuntime` 身份进入；
   GUI 永远只和 `kun serve` 通信。唯一例外是终端 agent：PTY 由主进程持有，
@@ -612,8 +610,7 @@ Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：�
 - Code 与历史 ADE 根任务使用统一服务端分页和搜索；旧 `ade` 路由重定向 Code，
   原 thread ID 和持久字段保留。worker 预览与审查目标不修改主会话选择。
 
-普通对话派工的三档权限、60 秒干预窗口、持久化恢复与卡片控制见
-[`docs/ade/16-conversation-agent-dispatch.md`](./ade/16-conversation-agent-dispatch.md)。
+普通对话派工使用三档权限、60 秒干预窗口、持久化恢复与卡片控制。
 新 Code 任务默认可派工，高级协作开关继续控制赛马等高级能力；用户显式限制和历史不明设置仍保留。
 
 ## 验证清单

@@ -99,8 +99,7 @@ pixel-identical anatomy or a native layered PSD master.
 
 ## V2 repair status
 
-`docs/kun-avatar-art-plan-v2.zh-CN.md` owns ongoing art work; the v1 plan is the
-delivered record. V2 registration is in `kun-avatar-v2-*-recipes.mjs` and
+V2 registration is in `kun-avatar-v2-*-recipes.mjs` and
 `kun-avatar-v2-recipes.mjs`: distinct clothing silhouettes, material refinements,
 three brow-free expressions, corrected perspectives, quieter/brighter scenes,
 an illuminated bottle, and separate backlight/foreground rarity layers. The

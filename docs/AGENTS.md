@@ -102,8 +102,6 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
    ACP can express (session resume/fork, per-kind approvals, account/quota surface),
    must implement the shared session contract (`kun/src/session/`), must stay behind
    `kun serve`'s HTTP/SSE boundary, and must obey harness routing and governance.
-   The gap analysis and admission checklist live in `docs/ade/impl/p6-native-agent-adapters.md`
-   and `docs/ade/13-governance-rollout.md`.
 
 ## Conversation Agent Dispatch
 
@@ -115,7 +113,6 @@ immediate automatic review, or a 60-second full-access intervention window.
 Renderer timers display deadlines only. Do not implement auto-click or create
 workspaces/processes before host admission. Controls use revisions and replay IDs;
 source authority only narrows, and completion preserves the source main route.
-See [conversation dispatch](./ade/16-conversation-agent-dispatch.md).
 
 ## Agent-Managed Plan Worktrees
 

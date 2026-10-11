@@ -24,6 +24,7 @@ import {
   useAgentChatNavigationStore
 } from '../rooms/agent-chat-navigation'
 import { openAgentChatDialog } from '../rooms/agent-chat-picker'
+import { loadCodingAgentCatalog } from '../rooms/coding-agent-client'
 import { publishLatestPrivateConversation, publishRoomActivityCounts } from '../rooms/room-activity-counts'
 import { SidebarIconButton, SidebarSearchField } from '../sidebar/SidebarPrimitives'
 import { SidebarAgentChatRow } from './SidebarAgentChatRow'
@@ -83,6 +84,12 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   useEffect(() => { publishRoomActivityCounts(page.entries) }, [page.entries])
   const unfilteredList = listState === 'active' && filter === 'all' && !search.trim()
   useEffect(() => { if (unfilteredList) publishLatestPrivateConversation(page.entries) }, [page.entries, unfilteredList])
+  // Warm the coding-Agent list once after startup so the new-chat dialog opens filled.
+  useEffect(() => {
+    if (!props.runtimeReady) return
+    const timer = setTimeout(() => { void loadCodingAgentCatalog().catch(() => undefined) }, 8_000)
+    return () => clearTimeout(timer)
+  }, [props.runtimeReady])
   useEffect(() => {
     if (!props.runtimeReady) { setInitializationError(''); return }
     let active = true
