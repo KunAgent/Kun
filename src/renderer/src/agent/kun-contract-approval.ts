@@ -9,4 +9,5 @@ export type CoreApprovalActionJson = {
   targets?: Array<{ kind: string; value: string }>
   reason?: string
   requiresUserDecision?: boolean
+  permissionOptions?: import('@shared/approval-choice').ApprovalPermissionOption[]
 }

@@ -182,7 +182,7 @@ describe('AcpClientHost', () => {
     expect(h.approvals).toHaveLength(2)
   })
 
-  test('allow_always is only picked when it is the only allow option', async () => {
+  test('unqualified approval never escalates to the only allow_always option', async () => {
     const h = await makeHarness({ approve: async () => 'allow' })
     const outcome = await h.call<{ outcome: { outcome: string; optionId?: string } }>(
       ACP_CLIENT_METHODS.requestPermission,
@@ -192,7 +192,19 @@ describe('AcpClientHost', () => {
         options: [{ optionId: 'always', name: 'Always', kind: 'allow_always' }]
       }
     )
-    expect(outcome.outcome).toEqual({ outcome: 'selected', optionId: 'always' })
+    expect(outcome.outcome).toEqual({ outcome: 'cancelled' })
+  })
+
+  test.each(['allow_always', 'reject_once', 'over-limit'] as const)('rejects an ambiguous or oversized %s permission menu before asking for approval', async (kind) => {
+    const h = await makeHarness({ approve: async () => 'allow' })
+    const once = { optionId: 'same', name: 'Once', kind: 'allow_once' }
+    const options = kind === 'over-limit'
+      ? Array.from({ length: 33 }, (_, index) => ({ ...once, optionId: `option-${index}` }))
+      : [once, { optionId: 'same', name: 'Other scope', kind }]
+    await expect(h.call(ACP_CLIENT_METHODS.requestPermission, {
+      sessionId: 'sess-1', toolCall: { toolCallId: 'duplicate', kind: 'execute', title: 'echo ok' }, options
+    })).rejects.toThrow()
+    expect(h.approvals).toHaveLength(0)
   })
 
   test('deny prefers reject_once and never fabricates allow options', async () => {

@@ -1,4 +1,4 @@
-import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
+import { manualApprovalResolution, type ApprovalRequest, type ApprovalResolution } from '../domain/approval.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -62,7 +62,8 @@ export function makeDelegatedAwaitApproval(
     }
     const gate = deps.approvalGate
     if (approvalPolicy === 'never' || !gate) return 'deny'
-    const pending = gate.request(approval)
+    const pending = gate.requestResolution ? gate.requestResolution(approval)
+      : gate.request(approval).then((decision) => manualApprovalResolution(decision))
 
     // Arm cancellation before publishing approval_requested. The recorder may
     // block on durable storage or synchronous observers, but a cancelled turn
@@ -148,11 +149,11 @@ export function makeDelegatedAwaitApproval(
         () => {
           if (settled) return
           pending.then(
-            (decision) => {
+            (resolution) => {
               if (settled) return
               settled = true
               cleanup()
-              resolve(requiresUserDecision ? { decision, reviewer: 'user' } : decision)
+              resolve(requiresUserDecision || resolution.choice ? resolution : resolution.decision)
             },
             (error) => {
               if (settled) return

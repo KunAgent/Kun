@@ -1,3 +1,6 @@
+import toolApprovalDetails from './common/tool-approval-details.json'
+import toolDetails from './common/tool-details.json'
+import toolStates from './common/tool-states.json'
 import agentDispatch from './common/agent-dispatch.json'
 import agentUpdates from './common/agent-updates.json'
 import roomsPolish from './common/rooms-polish.json'
@@ -60,6 +63,9 @@ import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
 
 const common = {
+  ...toolApprovalDetails,
+  ...toolDetails,
+  ...toolStates,
   ...agentDispatch,
   ...agentUpdates,
   ...roomsInitIm,

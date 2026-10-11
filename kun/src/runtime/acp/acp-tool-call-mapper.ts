@@ -79,6 +79,7 @@ export function toKunToolCallItem(input: {
   turnId: string
 }): TurnItem {
   const call = wireFields(input.call)
+  const presentation = acpToolPresentation(input.call, input.evidence)
   return makeToolCallItem({
     id: input.itemId,
     turnId: input.turnId,
@@ -86,7 +87,7 @@ export function toKunToolCallItem(input: {
     callId: call.toolCallId,
     toolName: acpToolName(call.kind),
     toolKind: toolItemKind(call.kind),
-    meta: { delegatedTool: acpToolPresentation(input.call, input.evidence) },
+    meta: { delegatedTool: presentation, toolPresentation: presentation },
     arguments: {
       ...(call.title ? { title: call.title } : {}),
       ...(call.kind ? { kind: call.kind } : {}),
@@ -167,6 +168,9 @@ export function toKunToolResult(input: {
 }): TurnItem {
   const wire = wireFields(input.call)
   const { text, diffs, terminalIds } = collectOutput(input.call)
+  const presentation = { ...acpToolPresentation(input.call, input.evidence),
+    state: input.outcome === 'interrupted' ? 'canceled' as const : input.outcome,
+    canCancel: false }
   let output: unknown
   if (input.outcome === 'interrupted') {
     output = 'interrupted'
@@ -187,7 +191,7 @@ export function toKunToolResult(input: {
     toolName: acpToolName(wire.kind),
     toolKind: toolItemKind(wire.kind),
     output,
-    meta: { delegatedTool: acpToolPresentation(input.call, input.evidence) },
+    meta: { delegatedTool: presentation, toolPresentation: presentation },
     isError: input.outcome !== 'completed',
     status: input.outcome === 'interrupted' ? 'aborted' : input.outcome
   })

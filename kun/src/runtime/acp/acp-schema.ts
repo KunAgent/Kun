@@ -8,6 +8,7 @@
  * required field is a protocol error.
  */
 import { z } from 'zod'
+import { AcpPermissionOptionsSchema } from './acp-permission-options.js'
 import type {
   AgentCapabilities,
   AvailableCommand,
@@ -629,13 +630,7 @@ export const AcpRequestPermissionParamsSchema = MetaSchema.extend({
     rawInput: z.unknown().optional(),
     rawOutput: z.unknown().optional()
   }),
-  options: z.array(
-    MetaSchema.extend({
-      optionId: z.string().min(1).max(1_024),
-      name: z.string().max(1_024),
-      kind: z.enum(['allow_once', 'allow_always', 'reject_once', 'reject_always'])
-    })
-  )
+  options: AcpPermissionOptionsSchema
 })
 export type AcpRequestPermissionParams = z.infer<typeof AcpRequestPermissionParamsSchema>
 

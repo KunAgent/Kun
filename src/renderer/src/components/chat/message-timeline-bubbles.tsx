@@ -1,14 +1,17 @@
+import { ApprovalDetails } from './ApprovalDetails'
+import { ApprovalActions } from './ApprovalActions'
 import { memo, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
-import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock, isWorkerUpdateNoticeBlock } from './message-timeline-turns'
 import { isAssignmentBlock } from '@shared/assignment-card'
 import { AssignmentCard } from '../workers/AssignmentCard'
-import { DiffView } from '../DiffView'
+import { ToolBlockDetails } from './ToolBlockDetails'
+import { ToolStateMeta } from './ToolStateMeta'
+import { readToolPresentation } from '../../agent/tool-presentation'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { readNumber, formatDuration, summarizeBackgroundShellToolBlock } from './message-timeline-tools'
 import { formatTtftSeconds, formatTps } from '../../hooks/use-thread-usage'
@@ -343,6 +346,7 @@ function MessageBubbleImpl({
           </div>
         ) : null}
         <p className="mt-2 whitespace-pre-wrap text-[14px] text-ds-ink">{block.summary}</p>
+        <ApprovalDetails action={block.action} />
         <MemoryApprovalHint toolName={block.toolName} action={block.action} t={t} />
         {block.errorMessage ? (
           <p className="mt-2 text-[12px] text-red-700 dark:text-red-300">{block.errorMessage}</p>
@@ -351,32 +355,9 @@ function MessageBubbleImpl({
             MobilePendingActions card — rendering Allow/Deny here too would
             duplicate the same approval with the opposite button order. */}
         {!done && surface !== 'mobile' ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={submitting}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
-              onClick={(event) => runTrustedUserActivation(
-                event,
-                () => void resolveApproval(block.id, 'allow')
-              )}
-            >
-              {t('approvalAllow')}
-            </button>
-            <button
-              type="button"
-              disabled={submitting}
-              className="rounded-lg border border-ds-border bg-ds-card px-3 py-1.5 text-[13px] font-medium text-ds-ink hover:bg-ds-hover disabled:cursor-wait disabled:opacity-60"
-              onClick={(event) => runTrustedUserActivation(
-                event,
-                () => void resolveApproval(block.id, 'deny')
-              )}
-            >
-              {t('approvalDeny')}
-            </button>
-            {submitting ? (
-              <span className="self-center text-[12px] font-medium text-ds-muted">{statusLabel}</span>
-            ) : null}
+          <div className="mt-3">
+            <ApprovalActions options={block.action?.permissionOptions} submitting={submitting} t={t}
+              onDecide={(decision, choice) => void resolveApproval(block.id, decision, choice)} />
           </div>
         ) : (
           <p className="mt-2 text-[12px] font-medium text-ds-muted">{statusLabel}</p>
@@ -426,22 +407,24 @@ function MessageBubbleImpl({
 
 function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boolean }): ReactElement {
   const { t } = useTranslation('common')
+  const presentation = readToolPresentation(block)
+  const running = presentation.state === 'running'
   // Errored tool calls stay collapsed by default — only the red header is shown so the
   // (often verbose) error payload doesn't disrupt reading. The user can still expand it.
-  const [open, setOpen] = useState(() => block.status === 'running')
+  const [open, setOpen] = useState(() => running)
 
   useEffect(() => {
-    if (block.status === 'running') {
+    if (running) {
       setOpen(true)
     }
-  }, [block.status, block.id])
+  }, [running, block.id])
 
-  const effectiveOpen = block.status === 'running' ? true : open
+  const effectiveOpen = running ? true : open
 
   const tone =
-    block.status === 'error'
+    presentation.state === 'failed'
       ? 'border-orange-300/80 bg-orange-500/10 text-orange-950 dark:border-orange-800/60 dark:bg-orange-950/35 dark:text-orange-100'
-      : block.status === 'running'
+      : running
         ? 'border-amber-300/80 bg-amber-500/10 text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100'
         : 'border-ds-border bg-ds-subtle text-ds-ink'
 
@@ -466,20 +449,19 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
   const sessionId = metaString(block.meta, 'session_id')
   const sessionStatus = metaString(block.meta, 'status')
 
-  const hasDetail = !!(block.detail && block.detail.trim().length > 0)
-  const patchText = block.toolKind === 'file_change' ? extractUnifiedDiffText(block.detail) : undefined
-  const canExpand = hasDetail || block.status === 'running'
+  const hasDetail = Boolean(block.meta?.toolPresentation || block.meta?.acpKind || block.detail?.trim())
+  const canExpand = hasDetail || running
 
   return (
     <div className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
       <button
         type="button"
         onClick={() => {
-          if (!canExpand || block.status === 'running') return
+          if (!canExpand || running) return
           setOpen((v) => !v)
         }}
         className={`flex w-full items-start gap-2 px-4 py-3 text-left text-[13.5px] leading-6 ${
-          canExpand && block.status !== 'running' ? 'cursor-pointer' : 'cursor-default'
+          canExpand && !running ? 'cursor-pointer' : 'cursor-default'
         }`}
       >
         <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
@@ -488,12 +470,8 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
             <span className="font-semibold uppercase tracking-[0.12em] text-[11px] opacity-75">
               {kindLabel}
             </span>
-            {block.status === 'running' ? (
-              <span className="rounded-full bg-amber-200/40 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-700/30 dark:text-amber-100">
-                {t('inspectorStatusRunning')}
-              </span>
-            ) : null}
-            {typeof exitCode === 'number' ? (
+            <ToolStateMeta block={block} />
+            {typeof exitCode === 'number' && !presentation.terminals?.some((terminal) => typeof terminal.exitCode === 'number') ? (
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-mono ${
                   exitCode === 0
@@ -509,7 +487,7 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
                 {sessionStatus === 'running' ? t('inspectorStatusRunning') : sessionStatus || 'session'} {sessionId.slice(0, 12)}
               </span>
             ) : null}
-            {typeof durationMs === 'number' ? (
+            {typeof durationMs === 'number' && presentation.durationMs === undefined ? (
               <span className="rounded-full bg-ds-card px-2 py-0.5 text-[11px] font-mono text-ds-muted">
                 {formatDuration(durationMs)}
               </span>
@@ -534,13 +512,7 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
       <ToolAttachmentPreviews meta={block.meta} />
       {effectiveOpen && hasDetail ? (
         <div className="ds-panel-strip min-w-0 border-t border-ds-border-muted/60 px-4 py-3">
-          {patchText !== undefined ? (
-            <DiffView patch={patchText} filePath={block.filePath} />
-          ) : (
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-ds-ink">
-              {block.detail}
-            </pre>
-          )}
+          <ToolBlockDetails block={block} />
         </div>
       ) : null}
     </div>

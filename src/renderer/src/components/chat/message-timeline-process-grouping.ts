@@ -1,5 +1,6 @@
 import { isAgentDispatchBlock } from './AgentDispatchCard'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import { readToolPresentation } from '../../agent/tool-presentation'
 import { blockHasPendingRuntimeWork } from './message-timeline-turns'
 import { isFastContextToolBlock } from './fast-context-card-copy'
 import { describeProcessBlock, getProcessDetail } from './message-timeline-process-detail'
@@ -214,7 +215,7 @@ export function isRequestUserInputTool(block: ChatBlock): boolean {
 export type ProcessErrorTone = 'tool' | 'error' | null
 
 export function processBlockErrorTone(block: ChatBlock): ProcessErrorTone {
-  if (block.kind === 'tool' && block.status === 'error') return 'tool'
+  if (block.kind === 'tool') return readToolPresentation(block).state === 'failed' ? 'tool' : null
   if (block.kind === 'compaction' && block.status === 'error') return 'error'
   if (block.kind === 'approval' && block.status === 'error') return 'error'
   if (

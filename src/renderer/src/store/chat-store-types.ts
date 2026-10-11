@@ -636,7 +636,7 @@ export type ChatState = {
     options?: { model?: string; mode?: string }
   ) => Promise<string | null>
   deleteThread: (threadId: string) => Promise<void>
-  resolveApproval: (blockId: string, decision: 'allow' | 'deny') => Promise<void>
+  resolveApproval: (blockId: string, decision: 'allow' | 'deny', choice?: import('@shared/approval-choice').ApprovalChoice) => Promise<void>
   resolveUserInput: (
     blockId: string,
     action: { kind: 'submit'; answers: UserInputAnswer[] } | { kind: 'cancel' }

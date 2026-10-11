@@ -168,7 +168,9 @@ export function SubagentCallCard({
     )
   const activityLine = !isTerminal(status) ? formatChildActivityLabel(activity) : undefined
   const steps = child.toolInvocations ?? detail.toolInvocations
-  const childId = child.childId || detail.childId
+  // External transcripts exist only when the owning adapter supplied this ID.
+  // Tool arguments/results and native child metadata cannot invent a drilldown.
+  const childId = external ? external.childThreadId : child.childId || detail.childId
   // Short subtitle only — keep CTA on the explicit process button, not in truncated text.
   const taskLine = activityLine || (
     isFastContext && isTerminal(status)
@@ -198,7 +200,7 @@ export function SubagentCallCard({
   const proactiveRetry = child.proactiveRetry ?? detail.proactiveRetry
   const attemptParentTurnId = child.parentTurnId || detail.parentTurnId
   const canResume = Boolean(
-    childId &&
+    !external && childId &&
     (status === 'failed' || status === 'stopped') &&
     (child.resumable ?? detail.resumable) === true &&
     (!attemptParentTurnId || !block.turnId || attemptParentTurnId === block.turnId)

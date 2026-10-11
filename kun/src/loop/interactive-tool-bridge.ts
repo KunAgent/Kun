@@ -84,7 +84,9 @@ export class InteractiveToolBridge {
         signal: input.signal
       })
     }
-    const pending = this.deps.approvalGate.request(input.approval)
+    const gate = this.deps.approvalGate
+    const pending = gate.requestResolution ? gate.requestResolution(input.approval)
+      : gate.request(input.approval).then((decision) => ({ decision, reviewer: 'user' as const }))
     const resumeTimer = this.deps.pauseForUser?.(input.approval.threadId)
     return new Promise<ApprovalResolution>((resolve, reject) => {
       let settled = false
@@ -146,16 +148,11 @@ export class InteractiveToolBridge {
         () => {
           if (settled) return
           pending.then(
-            (decision) => {
+            (resolution) => {
               if (settled) return
               settled = true
               cleanup()
-              const resolved = this.deps.approvalGate.get(input.approval.id)
-              resolve({
-                decision,
-                reviewer: 'user',
-                ...(resolved?.reason ? { reason: resolved.reason } : {})
-              })
+              resolve(resolution)
             },
             (error) => {
               if (settled) return

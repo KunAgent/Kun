@@ -1,9 +1,9 @@
 import { AcpToolDetail } from './AcpToolDetail'
+import { ToolBlockDetails } from './ToolBlockDetails'
 import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
-import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { MessageBubble } from './message-timeline-bubbles'
 import {
@@ -359,6 +359,7 @@ export function getProcessDetail(block: ChatBlock, summaryText?: string): Proces
     const paper = paperTool ? paperToolProcessDetail(block, paperTool) : null
     if (paper) return { kind: 'paper', paper }
     const detailText = block.detail?.trim() ?? ''
+    if (block.meta?.toolPresentation) return { kind: 'tool', text: detailText, isPatch: false, isError: block.status === 'error', filePath: block.filePath }
     if (!detailText) return { kind: 'none' }
     if (summaryText && normalizeProcessText(detailText) === normalizeProcessText(summaryText)) {
       return { kind: 'none' }
@@ -438,23 +439,6 @@ export function ProcessEntryDetail({
     if (block.kind === 'tool' && toolNameForBlock(block) === 'read_source_history' && !/^(codex|claude-code|opencode):/u.test(block.turnId ?? '')) {
       return <SourceHistoryReadDetail block={block} />
     }
-    if (detail.isPatch) {
-      return <DiffView patch={detail.text} filePath={detail.filePath} />
-    }
-    if (detail.isError) {
-      return (
-        <div className="overflow-hidden rounded-[10px] border border-orange-200/80 bg-orange-50/80 dark:border-orange-800/40 dark:bg-orange-500/10">
-          {detail.filePath ? (
-            <div className="border-b border-orange-200/70 bg-orange-100/50 px-3 py-1.5 font-mono text-[12px] text-orange-700 dark:border-orange-800/40 dark:bg-orange-500/15 dark:text-orange-300">
-              {detail.filePath}
-            </div>
-          ) : null}
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-2.5 font-mono text-[12px] leading-6 text-orange-900 dark:text-orange-100">
-            {detail.text}
-          </pre>
-        </div>
-      )
-    }
     if (
       block.kind === 'tool' &&
       toolNameForBlock(block) === 'knowledge_read' &&
@@ -462,11 +446,7 @@ export function ProcessEntryDetail({
     ) {
       return <KnowledgeEvidenceDetail block={block} />
     }
-    return (
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-ds-ink">
-        {detail.text}
-      </pre>
-    )
+    return block.kind === 'tool' ? <ToolBlockDetails block={block} /> : null
   }
   if (detail.kind === 'text') {
     return <p className="whitespace-pre-wrap text-[13.5px] leading-6 text-ds-muted">{detail.text}</p>

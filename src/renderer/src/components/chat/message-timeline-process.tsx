@@ -14,6 +14,7 @@ import {
   isBackgroundSubagentNoticeBlock
 } from './message-timeline-turns'
 import { TimelineVirtualList } from './TimelineVirtualList'
+import { ToolStateMeta } from './ToolStateMeta'
 import { useTimelineRowState } from './timeline-row-state'
 import { BackgroundSubagentRowSummary, ToolCancelButton, processBlockIsActive, processBlockIsAutoOpenPending } from './message-timeline-process-controls'
 import { SubagentGroup, type OpenChildThreadHandler } from './SubagentCallCard'
@@ -352,6 +353,7 @@ function ProcessStackRows({
                   <ProcessSummaryText block={block} summary={summary} workspaceRoot={workspaceRoot} />
                 </span>
               )}
+              {block.kind === 'tool' ? <ToolStateMeta block={block} /> : null}
               {canExpand ? (
                 <button
                   type="button"
@@ -508,6 +510,7 @@ function ProcessEntryRow({
             ) : null}
           </span>
         )}
+        {block.kind === 'tool' ? <ToolStateMeta block={block} /> : null}
         {canExpand ? (
           <button
             type="button"

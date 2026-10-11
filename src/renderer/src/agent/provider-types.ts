@@ -681,7 +681,8 @@ export interface AgentProvider {
   submitApprovalDecision?(
     approvalId: string,
     decision: 'allow' | 'deny',
-    userInitiated?: boolean
+    userInitiated?: boolean,
+    choice?: import('@shared/approval-choice').ApprovalChoice
   ): Promise<'submitted' | 'cancelled' | void>
   /** Runtime HTTP compatibility path for request_user_input responses. */
   submitUserInputResponse?(requestId: string, answers: UserInputAnswer[]): Promise<void>

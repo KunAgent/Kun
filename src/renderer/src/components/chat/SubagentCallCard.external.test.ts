@@ -118,4 +118,23 @@ describe('external subagent card', () => {
     expect(renderer!.root.findAllByProps({ 'data-testid': 'explore-open-process-button' })).toHaveLength(0)
     expect(text(renderer!.root)).toContain('OpenCode2 does not share this subagent’s steps')
   })
+
+  it('does not invent child navigation or resume from native-shaped metadata on an external card', async () => {
+    const block = toolBlockFromItem(agentItem({ childThreadId: undefined, source: 'opencode2', status: 'failed' }))
+    block.meta = { ...block.meta, child: { childId: 'not-a-real-external-transcript', childStatus: 'failed', resumable: true } }
+    await act(async () => { renderer = create(createElement(SubagentCallCard, { block })) })
+    expect(renderer!.root.findAllByProps({ 'data-testid': 'explore-open-process-button' })).toHaveLength(0)
+    expect(renderer!.root.findAllByProps({ 'data-testid': 'explore-peek-button' })).toHaveLength(0)
+    expect(renderer!.root.findAllByProps({ 'data-testid': 'subagent-resume-button' })).toHaveLength(0)
+  })
+
+  it('keeps source-Agent approvals and independent stop out of Kun controls', async () => {
+    await act(async () => { renderer = create(createElement(SubagentCallCard, {
+      block: toolBlockFromItem(agentItem({ status: 'awaiting', awaitingPermission: 'native' }))
+    })) })
+    expect(text(renderer!.root)).toContain('Kun cannot approve it')
+    expect(text(renderer!.root.findByProps({ 'data-testid': 'external-subagent-controls-source' }))).toContain('Claude Code')
+    expect(renderer!.root.findAllByProps({ 'data-testid': 'subagent-stop-button' })).toHaveLength(0)
+    expect(renderer!.root.findAllByProps({ 'data-testid': 'approval-actions' })).toHaveLength(0)
+  })
 })

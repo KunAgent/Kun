@@ -9,6 +9,7 @@ export type PendingApprovalItem = {
   toolName: string
   summary: string
   createdAt: string
+  action?: import('../../kun/src/contracts/approvals').ApprovalActionEnvelope
 }
 
 export type PendingApprovalListResponse = {

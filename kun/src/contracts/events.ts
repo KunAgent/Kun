@@ -1,5 +1,6 @@
 import { AgentDispatchIntentEvent } from './agent-dispatch-event.js'
 import { z } from 'zod'
+import { ApprovalChoiceSchema } from './approval-choice.js'
 import {
   isPublicTurnItem,
   ContextWindowTurnItem,
@@ -232,6 +233,7 @@ export const ApprovalEvent = RuntimeEventBase.extend({
   sandboxMode: SandboxModeSchema.optional(),
   summary: z.string().optional(),
   reason: z.string().optional(),
+  choice: ApprovalChoiceSchema.optional(),
   action: ApprovalActionEnvelopeSchema.optional()
 })
 export type ApprovalEvent = z.infer<typeof ApprovalEvent>

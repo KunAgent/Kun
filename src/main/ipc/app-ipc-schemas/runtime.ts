@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ApprovalChoiceSchema } from '../../../../kun/src/contracts/approval-choice'
 import { KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, KUN_AGENT_DISPATCH_INTENT_TEMPLATE, KUN_AGENT_DISPATCH_ACTION_TEMPLATE } from '../../../shared/kun-endpoints'
 import { ROOM_ENDPOINTS, ROOM_TASK_ACTIONS } from '../../../shared/rooms-api'
 import {
@@ -607,6 +608,7 @@ export const kunProtectedApprovalPayloadSchema = z
     presentation: z.literal('room').optional(),
     approvalId: z.string().trim().min(1).max(256).regex(/^[A-Za-z0-9._:-]+$/),
     decision: z.enum(['allow', 'deny']),
+    choice: ApprovalChoiceSchema.optional(),
     source: z.enum(['policy', 'user'])
   })
   .strict()

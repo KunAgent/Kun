@@ -1,4 +1,5 @@
 import { updateExecutionTask } from './kun-runtime-execution-tasks'
+import { submitKunApprovalDecision } from './kun-runtime-approval'
 import type {
   AgentProvider,
   ChatBlock,
@@ -636,25 +637,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     return readRuntimeJson<CoreClearThreadTodosResponseJson>(response.body, 'runtime returned an invalid clear thread todos response').cleared
   }
 
-  async submitApprovalDecision(
-    approvalId: string,
-    decision: 'allow' | 'deny',
-    userInitiated = false
-  ): Promise<'submitted' | 'cancelled'> {
-    const protectedResult = await window.kunGui.resolveKunApproval({
-      approvalId,
-      decision,
-      source: userInitiated ? 'user' : 'policy'
-    })
-    if (!protectedResult.confirmed) return 'cancelled'
-    if (!protectedResult.response.ok) {
-      throw runtimeErrorToError(readRuntimeError(
-        protectedResult.response.body,
-        'approval decision failed'
-      ))
-    }
-    return 'submitted'
-  }
+  submitApprovalDecision = submitKunApprovalDecision
 
   async submitUserInputResponse(inputId: string, answers: UserInputAnswer[]): Promise<void> {
     const response = await rendererRuntimeClient.runtimeRequest(

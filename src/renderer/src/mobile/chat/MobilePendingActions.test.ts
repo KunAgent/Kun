@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatBlock } from '../../agent/types'
 import { MobilePendingActions } from './MobilePendingActions'
+vi.mock('../../extensions/protected-user-activation', () => ({ runTrustedUserActivation: (_event: unknown, action: () => void) => action() }))
 
 let root: Root
 let host: HTMLDivElement

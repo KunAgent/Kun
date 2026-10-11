@@ -6,6 +6,7 @@ import { ApprovalConsentVerifier, KUN_APPROVAL_CONSENT_HEADER } from '../../../k
 import { RemoteClientSender, remoteInvokeEvent } from '../remote/remote-sender'
 
 vi.mock('../main-window', () => ({ trustedWorkbenchRendererUrl: () => 'http://127.0.0.1:5173/index.html' }))
+vi.mock('./register-kun-art-ipc', () => ({ registerKunArtIpc: vi.fn() }))
 const electron = getAppIpcElectronMock()
 const payload = { approvalId: 'approval-secret', decision: 'allow', source: 'user' }
 
@@ -33,12 +34,39 @@ function fixture() {
     destroy: () => { destroyed = true },
     navigate: () => { contents.mainFrame = { ...frame, processId: 11, routingId: 21 } } }
 }
-const decide = (event: unknown, value = payload) => handlers.get('approval:decide')!(event, value)
+const decide = (event: unknown, value: typeof payload & { choice?: import('../../shared/approval-choice').ApprovalChoice } = payload) => handlers.get('approval:decide')!(event, value)
 const writes = (f: ReturnType<typeof fixture>) => f.leaseRequest.mock.calls.filter((call) => call[1] === 'POST')
 
 describe('protected tool approval IPC', () => {
   beforeEach(resetAppIpcHandlerTestState)
   afterEach(cleanupAppIpcHandlerTestState)
+
+  it('confirms the real provider label and binds its exact scope in the signed request', async () => {
+    const f = fixture()
+    Object.assign(f.state.approval.action, { permissionOptions: [
+      { optionId: 'always', name: 'Remember this command', kind: 'allow_always' },
+      { optionId: 'once', name: 'Just once', kind: 'allow_once' }
+    ] })
+    registerAppIpcHandlers(f.options)
+    electron.showProtectedDialog.mockResolvedValueOnce(true)
+    await decide(f.event, { ...payload, choice: { optionId: 'always' } })
+    expect(electron.showProtectedDialog).toHaveBeenCalledWith(f.parent, expect.objectContaining({
+      confirmLabel: 'Remember this command', footnote: expect.stringContaining('persists')
+    }), expect.any(Function))
+    const write = writes(f)[0]
+    expect(JSON.parse(write[2]!)).toEqual({ decision: 'allow', choice: { optionId: 'always' } })
+    const verifier = new ApprovalConsentVerifier('resolved-runtime-secret')
+    const token = write[3]![KUN_APPROVAL_CONSENT_HEADER]
+    expect(verifier.verifyAndConsume({ token, approvalId: payload.approvalId, decision: 'allow', choice: { optionId: 'once' } })).toBe(false)
+    expect(verifier.verifyAndConsume({ token, approvalId: payload.approvalId, decision: 'allow', choice: { optionId: 'always' } })).toBe(true)
+  })
+
+  it('does not open a confirmation or sign a forged provider choice', async () => {
+    const f = fixture(); registerAppIpcHandlers(f.options)
+    await expect(decide(f.event, { ...payload, choice: { optionId: 'forged' } })).rejects.toThrow('no longer available')
+    expect(writes(f)).toEqual([])
+    expect(electron.showProtectedDialog).not.toHaveBeenCalled()
+  })
 
   it('rejects policy allows and untrusted frames before acquiring any runtime authority', async () => {
     const f = fixture(); registerAppIpcHandlers(f.options)

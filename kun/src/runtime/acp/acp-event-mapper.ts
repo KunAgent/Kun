@@ -54,6 +54,7 @@ type ToolCallPhase = 'seen' | 'started' | 'finished'
 
 type ToolCallState = {
   phase: ToolCallPhase
+  outcome?: 'completed' | 'failed' | 'interrupted'
   itemId: string
   /** Latest wire payload — result content is accumulated from updates. */
   call: AcpToolCallWire
@@ -168,6 +169,7 @@ export class AcpEventMapper {
     for (const [callId, state] of this.toolCalls) {
       if (state.phase === 'finished') continue
       state.phase = 'finished'
+      state.outcome = 'interrupted'
       drafts.push(this.toolFinished(
         callId,
         toKunToolResult({
@@ -315,6 +317,7 @@ export class AcpEventMapper {
       // state.call already carries this update's content — the caller merged
       // it before dispatching here; merging again would duplicate content.
       state.phase = 'finished'
+      state.outcome = status
       drafts.push(this.toolFinished(
         callId,
         toKunToolResult({
@@ -358,7 +361,7 @@ export class AcpEventMapper {
     if (state.phase === 'finished') {
       const itemId = this.resultItemId(callId)
       drafts.push(this.itemUpdated(itemId, toKunToolResult({ ...input, itemId,
-        outcome: state.call.status === 'failed' ? 'failed' : 'completed' })))
+        outcome: state.outcome ?? (state.call.status === 'failed' ? 'failed' : 'completed') })))
     }
     return drafts
   }

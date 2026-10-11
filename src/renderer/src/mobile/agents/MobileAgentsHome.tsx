@@ -1,3 +1,6 @@
+import type { ApprovalChoice } from '@shared/approval-choice'
+import { ApprovalActions } from '../../components/chat/ApprovalActions'
+import { ApprovalDetails } from '../../components/chat/ApprovalDetails'
 import { useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Settings } from 'lucide-react'
@@ -31,7 +34,7 @@ function stateLabel(row: ActivityRow, now: number, t: (key: string) => string): 
 function ApprovalCard({ item, busy, onDecide }: {
   item: Extract<MobileAttentionItem, { kind: 'approval' }>
   busy: boolean
-  onDecide: (decision: 'allow' | 'deny') => void
+  onDecide: (decision: 'allow' | 'deny', choice?: ApprovalChoice) => void
 }): ReactElement {
   const { t } = useTranslation('common')
   return <article className="kun-mobile-agents-card">
@@ -43,9 +46,9 @@ function ApprovalCard({ item, busy, onDecide }: {
     <p className="kun-mobile-agents-card-detail">
       {item.approval.toolName}{item.approval.summary ? ` — ${item.approval.summary}` : ''}
     </p>
+    <ApprovalDetails action={item.approval.action} />
     <div className="kun-mobile-agents-card-actions">
-      <button type="button" disabled={busy} onClick={() => onDecide('deny')}>{t('approvalDeny')}</button>
-      <button type="button" disabled={busy} onClick={() => onDecide('allow')}>{t('approvalAllow')}</button>
+      <ApprovalActions options={item.approval.action?.permissionOptions} submitting={busy} t={t} onDecide={onDecide} />
     </div>
   </article>
 }
@@ -167,13 +170,13 @@ export function MobileAgentsHome({ onOpenThread, onOpenSettings }: {
     return map
   }, [allRows])
 
-  const decide = async (item: Extract<MobileAttentionItem, { kind: 'approval' }>, decision: 'allow' | 'deny'): Promise<void> => {
+  const decide = async (item: Extract<MobileAttentionItem, { kind: 'approval' }>, decision: 'allow' | 'deny', choice?: ApprovalChoice): Promise<void> => {
     const provider = getProvider()
     if (!provider.submitApprovalDecision) return
     setBusyId(item.unitId)
     setError('')
     try {
-      await provider.submitApprovalDecision(item.approval.approvalId, decision, true)
+      await provider.submitApprovalDecision(item.approval.approvalId, decision, true, ...(choice ? [choice] as const : []))
       refresh(`appr:${item.row.threadId}`)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -216,7 +219,7 @@ export function MobileAgentsHome({ onOpenThread, onOpenSettings }: {
       {items.map((item) => {
         if (item.kind === 'approval') {
           return <ApprovalCard key={item.unitId} item={item} busy={busyId === item.unitId}
-            onDecide={(decision) => void decide(item, decision)} />
+            onDecide={(decision, choice) => void decide(item, decision, choice)} />
         }
         if (item.kind === 'question') {
           return <QuestionCard key={item.unitId} item={item} busy={busyId === item.unitId}

@@ -1,4 +1,5 @@
-import type { ApprovalRequest } from '../domain/approval.js'
+import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
+import type { ApprovalChoice } from '../contracts/approval-choice.js'
 
 /**
  * Port for the approval flow used by tool execution. The local gate
@@ -8,9 +9,11 @@ import type { ApprovalRequest } from '../domain/approval.js'
  */
 export interface ApprovalGate {
   request(approval: ApprovalRequest): Promise<'allow' | 'deny'>
-  decide(approvalId: string, decision: 'allow' | 'deny', reason?: string): boolean
+  /** Full immutable outcome; legacy gates may implement only the bare decision API. */
+  requestResolution?(approval: ApprovalRequest): Promise<ApprovalResolution>
+  decide(approvalId: string, decision: 'allow' | 'deny', reason?: string, choice?: ApprovalChoice): boolean
   /** Reserve a decision while its durable audit event is being committed. */
-  reserveDecision(approvalId: string, decision: 'allow' | 'deny', reason?: string): boolean
+  reserveDecision(approvalId: string, decision: 'allow' | 'deny', reason?: string, choice?: ApprovalChoice): boolean
   /** Release the waiter only after the reserved audit event is durable. */
   commitDecision(approvalId: string): boolean
   /** Restore a pending approval when audit persistence fails. */

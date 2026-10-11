@@ -1,0 +1,12 @@
+{
+  "toolStatePending": "等待执行",
+  "toolStateRunning": "执行中",
+  "toolStateFailed": "执行失败",
+  "toolStateCanceled": "已取消",
+  "toolStateDuration": "执行耗时",
+  "toolStateExitCode": "退出码",
+  "toolStateExit": "退出码 {{code}}",
+  "toolSummaryFetched_other": "获取 {{count}} 个网页",
+  "toolSummaryFailed_other": "{{count}} 项失败",
+  "toolSummaryCanceled_other": "{{count}} 项取消"
+}

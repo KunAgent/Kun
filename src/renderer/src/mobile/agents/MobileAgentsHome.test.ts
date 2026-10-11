@@ -22,11 +22,13 @@ vi.mock('../../agent/registry', () => ({
 }))
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: () => undefined },
   useTranslation: () => ({
     t: (key: string): string => key,
     i18n: { language: 'en' }
   })
 }))
+vi.mock('../../extensions/protected-user-activation', () => ({ runTrustedUserActivation: (_event: unknown, action: () => void) => action() }))
 
 function row(overrides: Partial<ActivityRow>): ActivityRow {
   return {

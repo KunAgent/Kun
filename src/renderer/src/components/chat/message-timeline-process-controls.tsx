@@ -1,7 +1,8 @@
-import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LoaderCircle, Square } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import { readToolPresentation } from '../../agent/tool-presentation'
 import { parseBackgroundSubagentCompletionNotice } from '@shared/background-subagent-notice'
 import { isBackgroundShellCommandBlock } from './message-timeline-tools'
 import { isSubagentBlock } from './message-timeline-process-grouping'
@@ -78,6 +79,8 @@ function toolCancelRequested(block: ChatBlock): boolean {
 
 function canCancelToolBlock(block: ChatBlock, processing: boolean): block is ToolBlock {
   if (!processing || block.kind !== 'tool' || block.status !== 'running' || !toolCancelCallId(block)) return false
+  const presentation = readToolPresentation(block)
+  if (!presentation.canCancel || presentation.state !== 'running') return false
   // Detached/background work owns its own lifecycle and must keep using its
   // existing control surface rather than the foreground tool cancellation API.
   if (block.meta?.detached === true || isBackgroundShellCommandBlock(block) || isSubagentBlock(block)) {
@@ -97,6 +100,7 @@ export function ToolCancelButton({
 }): ReactElement | null {
   const { t } = useTranslation('common')
   const [requested, setRequested] = useState(() => toolCancelRequested(block))
+  const pendingRequest = useRef(false)
   const cancellable = canCancelToolBlock(block, processing)
   const blockStatus = block.kind === 'tool' ? block.status : undefined
   const blockCancelRequestedAt = block.kind === 'tool' && typeof block.meta?.cancelRequestedAt === 'string'
@@ -105,6 +109,7 @@ export function ToolCancelButton({
   const cancelRequested = toolCancelRequested(block)
 
   useEffect(() => {
+    pendingRequest.current = cancelRequested
     setRequested(cancelRequested)
   }, [block.id, blockStatus, blockCancelRequestedAt, cancelRequested])
 
@@ -113,11 +118,13 @@ export function ToolCancelButton({
   const handleClick = (event: ReactMouseEvent<HTMLButtonElement>): void => {
     event.preventDefault()
     event.stopPropagation()
-    if (stopping) return
+    if (stopping || pendingRequest.current) return
+    pendingRequest.current = true
     setRequested(true)
     void onCancelToolCall(block).then((accepted) => {
-      if (!accepted) setRequested(false)
+      if (!accepted) { pendingRequest.current = false; setRequested(false) }
     }).catch(() => {
+      pendingRequest.current = false
       setRequested(false)
     })
   }

@@ -2,16 +2,18 @@
  * ACP `session/request_permission` handling (docs/ade/03 §8.3).
  * The agent's tool call is translated into a Kun approval envelope and put
  * through the normal approval pipeline (policy → agent reviewer → user
- * gate). Kun approvals have once-only semantics, so an `allow` maps to
- * `allow_once` — `allow_always` is only ever selected when it is the
- * sole option the agent offered.
+ * gate). Unqualified approval authorizes one call only. Standing permission
+ * options require the human to choose that exact option explicitly.
  */
 import {
   createApprovalActionEnvelope,
   createApprovalRequest,
   safeApprovalActionSummary,
-  type ApprovalRequest
+  type ApprovalRequest,
+  type ApprovalResolution
 } from '../../domain/approval.js'
+import { approvalChoiceIsValid } from '../../contracts/approval-choice.js'
+import { validAcpPermissionMenu } from './acp-permission-options.js'
 import type { ApprovalActionEnvelope } from '../../contracts/approvals.js'
 import type { AcpRequestPermissionParams } from './acp-schema.js'
 
@@ -24,7 +26,11 @@ export type AcpPermissionOption = {
 /** What the runtime injects: build + gate + decide, same as tool calls. */
 export type AcpApproveFn = (
   approval: ApprovalRequest
-) => Promise<'allow' | 'deny'>
+) => Promise<'allow' | 'deny' | ApprovalResolution>
+
+export function acpDecision(resolution: 'allow' | 'deny' | ApprovalResolution): 'allow' | 'deny' {
+  return typeof resolution === 'string' ? resolution : resolution.decision
+}
 
 /**
  * Once-approved (kind, target) pairs for the current turn. When an agent
@@ -140,7 +146,7 @@ export function approvalRequestFromAcp(input: {
     (location): location is { path: string; line?: number | null } =>
       typeof location?.path === 'string' && location.path.length > 0
   )
-  const action: ApprovalActionEnvelope = createApprovalActionEnvelope({
+  let action: ApprovalActionEnvelope = createApprovalActionEnvelope({
     toolName,
     providerKind: 'delegation',
     toolKind,
@@ -158,11 +164,17 @@ export function approvalRequestFromAcp(input: {
         : {}),
       ...(toolCall.rawInput !== undefined
         ? { rawInput: truncateForApproval(toolCall.rawInput) }
-        : {})
+        : {}),
+      ...(toolCall.content?.some((item) => item.type === 'diff') ? {
+        changes: toolCall.content.filter((item) => item.type === 'diff')
+      } : {})
     },
     workspace: input.workspace,
     reason: toolCall.title ?? `ACP agent requested permission for ${toolName}`
   })
+  if (input.params.options.length) {
+    action = Object.freeze({ ...action, permissionOptions: input.params.options.map(({ optionId, kind, name }) => ({ optionId, kind, name })) })
+  }
   return createApprovalRequest({
     id: input.approvalId,
     threadId: input.threadId,
@@ -174,21 +186,30 @@ export function approvalRequestFromAcp(input: {
 }
 
 /**
- * Pick the response option for a Kun decision. `allow` prefers
- * `allow_once`; `allow_always` is only selected when no once-option exists
- * (never widening permission beyond this call — §8.3).
+ * Preserve an explicit human choice. Unqualified decisions never grant a
+ * standing permission, even when the agent offers no once-only alternative.
  */
 export function pickPermissionOutcome(
   options: readonly AcpPermissionOption[],
-  decision: 'allow' | 'deny' | 'cancelled'
+  resolution: 'allow' | 'deny' | 'cancelled' | ApprovalResolution
 ): { outcome: { outcome: 'selected'; optionId: string } } | { outcome: { outcome: 'cancelled' } } {
-  if (decision === 'cancelled') return { outcome: { outcome: 'cancelled' } }
+  // Validate the entire menu before every selection path, including automatic
+  // once-only approval. An ID shared with an always/deny option is ambiguous.
+  if (!validAcpPermissionMenu(options)) {
+    return { outcome: { outcome: 'cancelled' } }
+  }
+  if (resolution === 'cancelled') return { outcome: { outcome: 'cancelled' } }
+  const decision = acpDecision(resolution)
+  const choice = typeof resolution === 'object' ? resolution.choice : undefined
+  if (choice) {
+    const valid = approvalChoiceIsValid(options.map((option) => ({ ...option, name: option.name ?? '' })), decision, choice)
+    if (!valid || 'cancelled' in choice || typeof resolution !== 'object' || resolution.reviewer !== 'user') return { outcome: { outcome: 'cancelled' } }
+    return { outcome: { outcome: 'selected', optionId: choice.optionId } }
+  }
   const wanted =
     decision === 'allow'
-      ? (options.find((o) => o.kind === 'allow_once') ??
-        options.find((o) => o.kind === 'allow_always'))
-      : (options.find((o) => o.kind === 'reject_once') ??
-        options.find((o) => o.kind === 'reject_always'))
+      ? options.find((o) => o.kind === 'allow_once')
+      : options.find((o) => o.kind === 'reject_once')
   return wanted
     ? { outcome: { outcome: 'selected', optionId: wanted.optionId } }
     : { outcome: { outcome: 'cancelled' } }

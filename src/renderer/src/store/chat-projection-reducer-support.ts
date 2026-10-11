@@ -4,6 +4,7 @@ import {
   isSyntheticTimelineTextBlock
 } from '../agent/timeline-text-blocks'
 import type { ChatState } from './chat-store-types'
+import { mergeToolPresentations } from '../agent/tool-presentation'
 
 export function monotonicToolStatus(
   current: ToolBlock['status'],
@@ -343,7 +344,9 @@ export function mergeToolProjectionEvents(
     toolKind: update.toolKind ?? base.toolKind,
     detail: staleRunning || preserveTerminalResult ? base.detail : (update.detail ?? base.detail),
     filePath: update.filePath ?? base.filePath,
-    meta: mergeToolProjectionMeta(base.meta, update.meta)
+    meta: mergeToolProjectionMeta(base.meta, update.meta, {
+      preserveResult: staleRunning || preserveTerminalResult, newAttempt, staleAttempt
+    })
   }
 }
 
@@ -365,6 +368,7 @@ function mergedToolProjectionStatus(
   staleAttempt: boolean
 ): ToolEventPayload['status'] {
   if (staleAttempt) return base.status
+  if (!newAttempt && base.meta?.sourceItemKind === 'tool_result' && update.meta?.sourceItemKind === 'tool_call') return base.status
   const childStatus = authoritativeChildStatus(base, update, newAttempt)
   const detached = newAttempt
     ? isDetachedSubagentToolEvent(update)
@@ -403,11 +407,22 @@ function childProjectionStatus(
 
 export function mergeToolProjectionMeta(
   current: ToolBlock['meta'],
-  incoming: ToolEventPayload['meta']
+  incoming: ToolEventPayload['meta'],
+  options: { preserveResult?: boolean; newAttempt?: boolean; staleAttempt?: boolean } = {}
 ): ToolBlock['meta'] {
   if (!current) return incoming
   if (!incoming) return current
   const merged = { ...current, ...incoming }
+  const presentation = options.staleAttempt
+    ? mergeToolPresentations(current.toolPresentation, undefined)
+    : mergeToolPresentations(options.newAttempt ? undefined : current.toolPresentation, incoming.toolPresentation,
+      options.preserveResult || (current.sourceItemKind === 'tool_result' && incoming.sourceItemKind === 'tool_call'))
+  if (presentation) merged.toolPresentation = presentation
+  else if (options.newAttempt) delete merged.toolPresentation
+  if (!options.newAttempt && current.sourceItemKind === 'tool_result' && incoming.sourceItemKind === 'tool_call') {
+    merged.sourceItemKind = current.sourceItemKind
+    merged.sourceItemId = current.sourceItemId
+  }
   const currentChild = current.child
   const incomingChild = incoming.child
   if (

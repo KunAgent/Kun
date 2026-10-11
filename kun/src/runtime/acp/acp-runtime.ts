@@ -412,13 +412,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         signal
       }
     )
-    const approve = async (
-      approval: ApprovalRequest
-    ): Promise<'allow' | 'deny'> => {
-      const resolution = await approveCore(approval)
-      if (resolution === 'allow' || resolution === 'deny') return resolution
-      return resolution.decision === 'allow' ? 'allow' : 'deny'
-    }
+    const approve = (approval: ApprovalRequest) => approveCore(approval)
     const context: AcpClientContext = {
       sessionId: session.sessionId,
       threadId,

@@ -59,6 +59,9 @@ export function externalNotice(view: ExternalSubagentView, t: TFunction<'common'
   if (view.awaitingPermission === 'native') {
     return t('externalSubagentAwaitingNative', { agent: source, defaultValue: 'Waiting for a permission in {{agent}}; Kun cannot approve it' })
   }
+  if (view.awaitingPermission === 'kun') {
+    return t('externalSubagentKunApproval', { defaultValue: 'Approval is pending in the parent conversation.' })
+  }
   if (view.endedWithTurn) {
     return t('externalSubagentEndedWithTurn', { defaultValue: 'The turn ended before it finished' })
   }
@@ -83,14 +86,20 @@ export function ExternalSubagentNotice({
   t: TFunction<'common'>
 }): ReactElement | null {
   const notice = view ? externalNotice(view, t) : undefined
-  if (!notice) return null
+  const controlledAtSource = view && ['queued', 'running', 'awaiting'].includes(view.status)
+  if (!notice && !controlledAtSource) return null
   return (
     <span
       className="mt-0.5 flex min-w-0 items-center gap-1 text-[11.5px] text-ds-faint"
       data-testid="external-subagent-notice"
     >
       <Info className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
-      <span className="truncate" title={notice}>{notice}</span>
+      <span className="min-w-0 whitespace-normal">
+        {notice}
+        {controlledAtSource ? <span className="block" data-testid="external-subagent-controls-source">
+          {t('externalSubagentControlsAtSource', { agent: EXTERNAL_SUBAGENT_SOURCE_LABELS[view.source], defaultValue: 'Independent stop is managed in {{agent}}.' })}
+        </span> : null}
+      </span>
     </span>
   )
 }

@@ -36,6 +36,7 @@ import {
   acpPermissionTargets,
   approvalRequestFromAcp,
   pickPermissionOutcome,
+  acpDecision,
   type AcpApproveFn
 } from './acp-permission.js'
 import {
@@ -209,7 +210,7 @@ export class AcpClientHost {
         'acp:fs.write'
       )
       const decision = await ctx.approve(approval)
-      if (decision !== 'allow') {
+      if (acpDecision(decision) !== 'allow') {
         throw new AcpError('policy_denied', 'write rejected by Kun policy', {
           rpcCode: ACP_RPC_ERROR.policyDenied
         })
@@ -269,7 +270,8 @@ export class AcpClientHost {
         ctx.approve(approval),
         slot.cancelled.then(() => 'cancelled' as const)
       ])
-      if (decision === 'allow') {
+      const outcome = pickPermissionOutcome(parsed.options, decision)
+      if (decision !== 'cancelled' && acpDecision(decision) === 'allow' && outcome.outcome.outcome === 'selected') {
         // Later mediated calls against these targets skip a second prompt.
         const targets = await acpPermissionTargets(parsed, (path) =>
           resolveInside(ctx.writeRoots, path)
@@ -278,7 +280,7 @@ export class AcpClientHost {
           this.memo.mark(ctx.turnId, target.kind, target.target)
         }
       }
-      return pickPermissionOutcome(parsed.options, decision)
+      return outcome
     } finally {
       slot.done()
     }
@@ -322,7 +324,7 @@ export class AcpClientHost {
         }
       )
       const decision = await ctx.approve(approval)
-      if (decision !== 'allow') {
+      if (acpDecision(decision) !== 'allow') {
         throw new AcpError('policy_denied', 'command rejected by Kun policy', {
           rpcCode: ACP_RPC_ERROR.policyDenied
         })
