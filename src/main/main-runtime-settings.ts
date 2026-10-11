@@ -1,4 +1,5 @@
 import { resolveNativeAgentNetworkSnapshot } from './runtime/native-agent-network'
+import { syncModelConnectionGlobals } from './runtime/model-connection-globals-sync'
 import { BrowserWindow } from 'electron'
 import {
   getKunRuntimeSettings,
@@ -322,6 +323,12 @@ export async function applyManagedRuntimeSettingsHot(
   if (!shouldApply()) return { result: 'superseded' }
   const effectiveSettings =
     gatewayReconcile.outcome === 'disabled' ? gatewayReconcile.settings : settings
+  await syncModelConnectionGlobals(effectiveSettings, source).catch((error) => {
+    logWarn(source, 'Model-connection globals sync failed before apply.', {
+      message: error instanceof Error ? error.message : String(error)
+    })
+  })
+  if (!shouldApply()) return { result: 'superseded' }
 
   const runtime = resolveKunRuntimeSettings(effectiveSettings)
   const dataDir = resolveKunDataDir(runtime)
