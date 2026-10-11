@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create as createRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearProviderQuotaListCache } from '../../hooks/provider-quota-list-cache'
 import { resetUsageRequestCacheForTests } from '../../hooks/usage-request-cache'
 import { resetUsageSummaryCacheForTests } from '../../hooks/usage-summary-cache'
 import i18n from '../../i18n'
@@ -136,6 +137,7 @@ function stubWindow(
 
 describe('UsageQuotaPanel', () => {
   beforeEach(async () => {
+    clearProviderQuotaListCache()
     resetUsageRequestCacheForTests()
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     await i18n.changeLanguage('en')

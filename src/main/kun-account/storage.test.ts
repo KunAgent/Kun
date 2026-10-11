@@ -36,14 +36,28 @@ describe('desktop encrypted account storage', () => {
     expect(f.safe.decryptString).not.toHaveBeenCalled()
     await f.storage.clear(); expect(await f.storage.read()).toBeNull()
   })
-  it('never falls back to plaintext on Linux basic_text or a locked keychain', async () => {
+  it('uses an authenticated key-file envelope when Linux has no keyring (basic_text)', async () => {
     const f = await fixture()
     f.safe.getSelectedStorageBackend.mockReturnValue('basic_text')
     const linux = createAccountStorage(f.path, f.safe as unknown as SafeStorage, 'linux')
-    await expect(linux.assertAvailable()).rejects.toMatchObject({ code: 'secure_storage' })
+    const tokens = { accessToken: 'private-access', refreshToken: 'private-refresh', expiresAt: 1000 }
+    await expect(linux.assertAvailable()).resolves.toBeUndefined()
+    await linux.write(tokens)
+    const raw = await readFile(f.path, 'utf8')
+    expect(raw).not.toMatch(/private-access|private-refresh/)
+    expect(JSON.parse(raw)).toMatchObject({ version: 2, mode: 'aes-256-gcm' })
+    expect((await stat(join(f.path, '..', 'session.key'))).mode & 0o777).toBe(0o600)
+    expect(f.safe.encryptString).not.toHaveBeenCalled()
+    expect(await linux.read()).toEqual(tokens)
+    const tampered = JSON.parse(raw); tampered.ciphertext = Buffer.from('x').toString('base64')
+    await writeFile(f.path, JSON.stringify(tampered))
+    await expect(linux.read()).rejects.toMatchObject({ code: 'secure_storage' })
+  })
+  it('keeps OS-encrypted sessions unreadable once the OS store disappears', async () => {
+    const f = await fixture()
+    await f.storage.write({ accessToken: 'a', refreshToken: 'r', expiresAt: 1000 })
     f.safe.isAsyncEncryptionAvailable.mockResolvedValue(false)
-    await expect(f.storage.write({ accessToken: 'a', refreshToken: 'r', expiresAt: 1000 })).rejects.toMatchObject({ code: 'secure_storage' })
-    await expect(stat(f.path)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(f.storage.read()).rejects.toMatchObject({ code: 'secure_storage' })
   })
   it('rejects malformed files instead of treating plaintext tokens as a session', async () => {
     const f = await fixture()

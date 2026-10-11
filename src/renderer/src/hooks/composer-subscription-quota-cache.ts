@@ -1,25 +1,28 @@
 import type { ComposerSubscriptionQuotaRequest, ComposerSubscriptionQuotaResult } from '@shared/composer-subscription-quota'
 import { requestComposerSubscriptionQuota } from '../agent/composer-subscription-quota-client'
+import { QuotaCache } from '../lib/quota-cache'
 
-const MAX_SELECTIONS = 16
-const cache = new Map<string, Promise<ComposerSubscriptionQuotaResult>>()
+/** One answer per exact composer selection, shared by every composer that shows it. */
+export const composerSubscriptionQuotaCache = new QuotaCache<ComposerSubscriptionQuotaResult>()
 
 export function subscriptionQuotaSelectionKey(request: ComposerSubscriptionQuotaRequest): string {
   return JSON.stringify([request.harnessId, request.credentialMode ?? '', request.providerId ?? '',
     request.accountId ?? '', request.gatewayBinding ?? null, request.workspaceRoot ?? ''])
 }
 
-/** Every new read asks the host to resolve account identity; only concurrent reads coalesce. */
-export function readComposerSubscriptionQuota(request: ComposerSubscriptionQuotaRequest): Promise<ComposerSubscriptionQuotaResult> {
-  const key = subscriptionQuotaSelectionKey(request)
-  const existing = cache.get(key)
-  if (existing) return existing
-  const task = requestComposerSubscriptionQuota(request)
-  cache.set(key, task)
-  while (cache.size > MAX_SELECTIONS) cache.delete(cache.keys().next().value!)
-  const cleanup = (): void => { if (cache.get(key) === task) cache.delete(key) }
-  void task.then(cleanup, cleanup)
-  return task
+/**
+ * Served from the shared cache while fresh. A later read re-asks the host,
+ * which resolves the account identity again; `force` also bypasses Kun's cache.
+ */
+export function readComposerSubscriptionQuota(
+  request: ComposerSubscriptionQuotaRequest,
+  { force = false }: { force?: boolean } = {}
+): Promise<ComposerSubscriptionQuotaResult> {
+  return composerSubscriptionQuotaCache.load(
+    subscriptionQuotaSelectionKey(request),
+    () => requestComposerSubscriptionQuota(force ? { ...request, forceRefresh: true } : request),
+    force
+  )
 }
 
-export function clearComposerSubscriptionQuotaCache(): void { cache.clear() }
+export function clearComposerSubscriptionQuotaCache(): void { composerSubscriptionQuotaCache.clear() }

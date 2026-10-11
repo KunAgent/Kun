@@ -27,6 +27,7 @@ import {
   makeUserItem
 } from '../../src/domain/item.js'
 import { createThreadRecord } from '../../src/domain/thread.js'
+import { manualApprovalResolution } from '../../src/domain/approval.js'
 import { createImmutablePrefix, setSystemPrompt } from '../../src/cache/immutable-prefix.js'
 import { InflightTracker } from '../../src/loop/inflight-tracker.js'
 import { SteeringQueue } from '../../src/loop/steering-queue.js'
@@ -339,9 +340,10 @@ describe('AgentLoop', () => {
       request: { prompt: 'hello' }
     })
     h.turnId = response.turnId
-    h.approvalGate.request = async (approval) => {
+    // The loop asks the gate for a full resolution; `request` is only its decision-only wrapper.
+    h.approvalGate.requestResolution = async (approval) => {
       approvalDecisions.push(approval.toolName)
-      return 'allow'
+      return manualApprovalResolution('allow')
     }
 
     const status = await h.loop.runTurn(h.threadId, h.turnId)

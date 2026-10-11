@@ -21,6 +21,9 @@ import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
 import { createApprovalRequest } from '../domain/approval.js'
 import { RoomRuntime } from './room-runtime.js'
 
+// These tests run real git subprocesses; the default 5s is too tight when the whole suite runs in parallel.
+vi.setConfig({ testTimeout: 30_000 })
+
 const exec = promisify(execFile)
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => {

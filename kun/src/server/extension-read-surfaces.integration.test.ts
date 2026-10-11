@@ -107,7 +107,7 @@ describe('extension read surfaces through the managed Runtime broker', () => {
       activeTurns: 2, queuedTurns: 1, maxConcurrentTurns: 3, busy: true
     })
     expect(await context.rooms.list()).toMatchObject({
-      items: [{ id: room.id, name: 'Shared room', memberCount: 5 }], page: { hasMore: false }
+      items: [{ id: room.id, name: 'Shared room', memberCount: room.members.length }], page: { hasMore: false }
     })
     const messages = await context.rooms.listMessages({ roomId: room.id })
     expect(messages).toMatchObject({ items: [{ id: message.id, body: 'Public room message' }] })

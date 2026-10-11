@@ -285,6 +285,8 @@ describe("PiTuiApplication input, exit, steering, and timeline", () => {
     const directory = await mkdtemp(join(tmpdir(), 'kun-pi-editor-'))
     const script = join(directory, 'editor.mjs')
     await writeFile(script, "import { writeFileSync } from 'node:fs'; writeFileSync(process.argv[2], 'edited draft\\n')\n")
+    // VISUAL wins over EDITOR; a developer's own VISUAL must not open a real editor here.
+    vi.stubEnv('VISUAL', '')
     vi.stubEnv('EDITOR', `"${process.execPath}" "${script}"`)
 
     const current = detail()

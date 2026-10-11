@@ -151,9 +151,14 @@ export class ToolExecutionService {
       }
     } finally {
       registration?.dispose()
-      if (registration) await this.deps.turns.updateItem(input.threadId, `item_tool_${input.turnId}_${input.call.callId}`, {
-        meta: { toolPresentation: this.executionPresentation(input, false) }
-      }).catch(() => undefined)
+      if (registration) {
+        const settled = this.deps.turns.updateItem(input.threadId, `item_tool_${input.turnId}_${input.call.callId}`, {
+          meta: { toolPresentation: this.executionPresentation(input, false) }
+        }).catch(() => undefined)
+        // The update only clears "can cancel". An aborted turn must not wait on it, or an interrupt
+        // would stall behind a persistence queue that is itself stuck.
+        if (!input.context.abortSignal.aborted) await settled
+      }
     }
   }
 

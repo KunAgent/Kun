@@ -11,11 +11,20 @@ import {
   type WriteTypographySettingsV1
 } from '@shared/app-settings'
 import type { AppLocale } from '@shared/app-locales'
+import { readBrowserStorageItem, writeBrowserStorageItem } from './browser-storage'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 export type { ChatContentMaxWidthPx, UiFontScale }
 
+/** The theme the user last saw, so the next launch paints it before settings can be read. */
+const THEME_CACHE_KEY = 'kun.theme.cache'
+
 let removeSystemListener: (() => void) | null = null
+
+function readCachedTheme(): ThemePreference | null {
+  const cached = readBrowserStorageItem(THEME_CACHE_KEY)
+  return cached === 'system' || cached === 'light' || cached === 'dark' ? cached : null
+}
 
 function resolvedMode(pref: ThemePreference): 'light' | 'dark' {
   if (pref === 'dark') return 'dark'
@@ -24,9 +33,15 @@ function resolvedMode(pref: ThemePreference): 'light' | 'dark' {
 }
 
 /**
- * Applies `data-theme` on `<html>` for Tailwind `dark:` variants and CSS variables.
+ * Applies `data-theme` on `<html>` for Tailwind `dark:` variants and CSS variables,
+ * and remembers the choice for the next launch's first paint.
  */
 export function applyTheme(pref: ThemePreference): void {
+  applyThemeToDocument(pref)
+  writeBrowserStorageItem(THEME_CACHE_KEY, pref)
+}
+
+function applyThemeToDocument(pref: ThemePreference): void {
   removeSystemListener?.()
   removeSystemListener = null
 
@@ -51,19 +66,13 @@ export function applyTheme(pref: ThemePreference): void {
 }
 
 /**
- * Gives the renderer a theme before the workbench store boots. The system
- * preference is an immediate fallback; saved settings replace it as soon as
- * the existing settings IPC responds without delaying the first React render.
+ * Gives the renderer a theme before the workbench store boots: the one last
+ * applied, else the system preference. Settings live behind IPC that the main
+ * process registers only after its services are up, so they are not read here;
+ * the workbench applies the saved theme once the desktop is ready.
  */
-export function initializeStartupTheme(
-  readSettings?: () => Promise<{ theme: ThemePreference }>
-): void {
-  applyTheme('system')
-  if (!readSettings) return
-  void readSettings().then(
-    (settings) => applyTheme(settings.theme),
-    () => undefined
-  )
+export function initializeStartupTheme(): void {
+  applyThemeToDocument(readCachedTheme() ?? 'system')
 }
 
 export function applyDarkUiColors(colors?: DarkUiColorsPatchV1 | null): void {

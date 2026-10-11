@@ -102,6 +102,18 @@ async function modelServer(projectRoot: string) {
   return { baseUrl: 'http://127.0.0.1:' + address.port, seen }
 }
 
+/**
+ * The bot's own turn can still touch the card while the user accepts it, so the revision read a moment ago may be
+ * stale. A client answers that conflict by reading the card again, which is what this does.
+ */
+async function acceptLink(api: <T>(path: string, body?: unknown, method?: string) => Promise<T>, linkPath: string,
+  body: Record<string, unknown>): Promise<void> {
+  await vi.waitFor(async () => {
+    const { link } = await api<{ link: { revision: number } }>(linkPath)
+    await api(`${linkPath}/confirm`, { ...body, expectedRevision: link.revision })
+  }, { timeout: 20_000, interval: 250 })
+}
+
 async function boot(root: string, model: { baseUrl: string }) {
   const manager = await startServiceManager({ controlDir: join(root, 'control'), dataDir: join(root, 'data'), settingsPath: join(root, 'settings.json'),
     managerToken: 'bridge-manager-token', instanceId: 'bridge-manager', startedAt: new Date().toISOString() })
@@ -164,7 +176,7 @@ describe('Bot to Code hand-off through the real managed Runtime', () => {
     expect(model.seen.codeTurns).toBe(0)
 
     // 2. The user accepts; Kun starts an ordinary Code session and follows it.
-    await api(`${linkPath}/confirm`, { clientRequestId: 'accept', expectedRevision: proposed.revision })
+    await acceptLink(api, linkPath, { clientRequestId: 'accept' })
     await vi.waitFor(async () => {
       expect((await api<{ link: WorkbenchLink }>(linkPath)).link.status).toBe('completed')
     }, { timeout: 60000, interval: 400 })
@@ -217,7 +229,7 @@ describe('Bot to Code hand-off through the real managed Runtime', () => {
     const proposed = (await api<{ link: WorkbenchLink & { revision: number } }>(linkPath)).link
     expect(proposed).toMatchObject({ kind: 'work_document', status: 'awaiting_confirmation', request: { relativePath: 'notes/idea.md' } })
     await expect(readFile(join(work, 'notes/idea.md'))).rejects.toThrow()
-    await api(`${linkPath}/confirm`, { clientRequestId: 'accept', expectedRevision: proposed.revision })
+    await acceptLink(api, linkPath, { clientRequestId: 'accept' })
     await vi.waitFor(async () => {
       expect((await api<{ link: WorkbenchLink }>(linkPath)).link.status).toBe('completed')
     }, { timeout: 30000, interval: 300 })
@@ -242,8 +254,7 @@ describe('Bot to Code hand-off through the real managed Runtime', () => {
       expect(card).toBeTruthy()
     }, { timeout: 40000, interval: 300 })
     const path = `/v1/rooms/${entry.roomId}/workbench-links/${card.workbenchLinkId}`
-    const proposed = (await api<{ link: WorkbenchLink & { revision: number } }>(path)).link
-    await api(`${path}/confirm`, { clientRequestId: 'accept-auto', expectedRevision: proposed.revision })
+    await acceptLink(api, path, { clientRequestId: 'accept-auto' })
     await vi.waitFor(async () => {
       const current = (await api<{ link: WorkbenchLink }>(path)).link
       expect(current.status, JSON.stringify({ error: current.error, seen: model.seen, planPath: current.planPath })).toBe('completed')
@@ -273,9 +284,8 @@ describe('Bot to Code hand-off through the real managed Runtime', () => {
       expect(card).toBeTruthy()
     }, { timeout: 40000, interval: 300 })
     const path = `/v1/rooms/${entry.roomId}/workbench-links/${card.workbenchLinkId}`
-    const proposed = (await api<{ link: WorkbenchLink & { revision: number } }>(path)).link
     const runAt = new Date(Date.now() + 65_000).toISOString()
-    await api(`${path}/confirm`, { clientRequestId: 'accept-schedule', expectedRevision: proposed.revision,
+    await acceptLink(api, path, { clientRequestId: 'accept-schedule',
       edits: { schedule: { kind: 'once', runAt, timeZone: 'UTC' } } })
     expect((await api<{ link: WorkbenchLink }>(path)).link.status).toBe('scheduled')
     await vi.waitFor(async () => {

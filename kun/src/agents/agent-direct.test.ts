@@ -316,7 +316,7 @@ it('keeps ordinary assistant text internal and fails visibly after bounded publi
 
 it('uses the fresh personal Full access policy in both the permission picker and admitted runtime', async () => {
   const f = await fixture()
-  const approvals = vi.spyOn(f.h.approvalGate, 'request')
+  const approvals = vi.spyOn(f.h.approvalGate, 'requestResolution')
   const state = await agentPermissions(f.runtime, f.created.roomId)
   expect(state.mode).toBe('full-access')
   const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'default-policy', body: 'Create hello.txt' })
@@ -330,7 +330,7 @@ it('uses the fresh personal Full access policy in both the permission picker and
 
 it('freezes accepted permissions and applies full access only to the next private turn', async () => {
   const f = await fixture()
-  const approvals = vi.spyOn(f.h.approvalGate, 'request')
+  const approvals = vi.spyOn(f.h.approvalGate, 'requestResolution')
   const state = await agentPermissions(f.runtime, f.created.roomId)
   expect(state.mode).toBe('full-access')
   await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'restrict-first', expectedRevision: state.revision, mode: 'ask-for-approval' })

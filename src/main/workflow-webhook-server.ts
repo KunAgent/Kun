@@ -13,6 +13,7 @@ import {
 } from './schedule-runtime-helpers'
 import { summarizeWorkflowForAgent } from './workflow-runtime-helpers'
 import type { WorkflowPayload } from './workflow-expression'
+import { describeLocalListenError } from './local-listen-error'
 
 type WorkflowWebhookOptions = {
   loadSettings: () => Promise<AppSettingsV1>
@@ -66,9 +67,7 @@ export class WorkflowWebhookServer {
       void this.handleWebhookRequest(req, res)
     })
     server.on('error', (error) => {
-      this.options.logError('workflow-webhook', 'Webhook server failed', {
-        message: error instanceof Error ? error.message : String(error)
-      })
+      this.options.logError('workflow-webhook', 'Webhook server failed', describeLocalListenError(error, settings.workflow.webhookPort, 'Settings > Workflows'))
       if (this.server === server) this.close()
     })
     // Bind to localhost only — never expose the listener to the network.

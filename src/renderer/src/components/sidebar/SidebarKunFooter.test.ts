@@ -8,6 +8,7 @@ import { acceptRoomUserProfile, useRoomUserProfile } from '../rooms/room-user-pr
 import { acceptWardrobe } from '../rooms/room-wardrobe'
 import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
 import { createKunWardrobe, type KunWardrobeDrop } from '@shared/rooms-api'
+import { serverPolicy } from '../../../../../kun/src/test-support/server-policy'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
 
 const roomsRequest = vi.hoisted(() => vi.fn())
@@ -75,7 +76,8 @@ describe('Sidebar Kun footer', () => {
   it('carries the bottles waiting on the shelf, gold once a ten-pull is ready', async () => {
     const drop = (index: number): KunWardrobeDrop => ({ id: `drop-${index}`, kind: 'item', rarity: 'common', item: { category: 'prop', id: 'book' },
       duplicate: false, feathers: 0, runId: `run-${index}`, createdAt: new Date(2026, 9, 10, 9, index).toISOString() })
-    const wardrobe = createKunWardrobe(1)
+    // "Ready" means the server's ten-pull size is reached, so the wardrobe carries the server's policy.
+    const wardrobe = { ...createKunWardrobe(1), progress: serverPolicy() }
     await act(async () => acceptWardrobe({ wardrobe: { ...wardrobe, pending: [1, 2, 3].map(drop) }, revision: 1 }))
     await act(async () => root.render(createElement(SidebarKunStatus)))
     const badge = () => container.querySelector<HTMLElement>('[data-sidebar-bottles]')

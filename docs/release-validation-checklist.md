@@ -94,6 +94,10 @@ npm run smoke:development-graph-workbench
 - [ ] 最终 x86_64 AppImage 被直接执行并通过 Chromium smoke；`linux-unpacked` 成功不能替代此项。
 - [ ] AppImage fixture 使用同一制品提取出的显式 `appRoot`、`appRun` 和 resources，不接受 `undefined`、仓库外路径或其他构建产物。
 - [ ] Linux native evidence 在最终 smoke 之后生成并随制品上传。
+- [ ] Ubuntu 24.04 / GNOME 真机（开启 `kernel.apparmor_restrict_unprivileged_userns=1`）安装 deb：`/etc/apparmor.d/kun-gui` 的挂载路径同时覆盖启动器 `kun-gui` 与改名后的 `kun-gui.electron-bin`（`build/linux-apparmor-profile.tpl`），应用启动后 `ps` 的命令行不含 `--no-sandbox`，Chromium 沙箱生效。直接运行 AppImage 无法安装 AppArmor profile，需管理员按 `docs/extensions/release-troubleshooting-changelog.md` 的 userns 说明处理，不得建议 `--no-sandbox`。
+- [ ] 窗口与图标关联：`xprop WM_CLASS` 的结果与 deb 中 `.desktop` 的 `StartupWMClass` 一致，均来自 `package.json` 的 `desktopName`（`kun-gui`；development 构建为 `kun-gui-dv`），GNOME Dock 不出现重复图标。
+- [ ] Linux 上单独验证图片相关功能（论文图片裁剪、Office 文档图片）：Electron 版 Linux 上 sharp 会输出 `SharpElectronLinux` 警告，这是 sharp 对 Electron 自带 glib 符号泄漏的提示，需确认无 `GLib-GObject` 断言错误。
+- [ ] 同时运行两个实例（例如 deb 与 AppImage）只应在端口被占用的本地服务上报 `EADDRINUSE`，日志会指出端口与对应的设置项；Runtime 主服务不受影响。IM webhook 默认不再占用端口，仅在 IM 启用后才监听。
 
 ### Windows
 

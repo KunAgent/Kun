@@ -15,6 +15,10 @@ vi.mock('./room-avatar-compositor', () => ({
   acquireComposedAvatar: ({ key }: { key: string }) => queued.get(key)!.lease
 }))
 
+// A signed-out user always wears the bundled Kun, so the user-avatar case stands in for a signed-in one.
+vi.mock('./room-wardrobe', async (importOriginal) => ({ ...await importOriginal<typeof import('./room-wardrobe')>(),
+  useWardrobe: () => ({ mode: 'account', unlockAll: false, wardrobe: null, revision: null, error: '', loaded: true }) }))
+
 import { RoomAvatar } from './RoomAvatar'
 
 function enqueue(key: string) {

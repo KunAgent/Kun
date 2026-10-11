@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startServiceManager, type ServiceManagerHandle } from '../manager/service-manager.js'
 import { startKunServe, type KunServeHandle } from './runtime-factory.js'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
+import { defaultRoomMembers } from '../rooms/room-service.js'
 import type { RoomTask } from '../contracts/room-tasks.js'
 import type { RoomPeerTopicSummary } from '../rooms/room-peer-types.js'
 import { RoomRunRecordSchema, type RoomRunRecord } from '../contracts/room-runs.js'
@@ -167,8 +168,9 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       expect(response.ok, JSON.stringify(payload)).toBe(true)
       return payload as T
     }
+    // A new group starts with 小 Kun only; this suite works with the coordinator, developer and reviewer of a legacy group.
     const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'room', name: 'Managed smoke', collaborationMode: 'autonomous',
-      repositories: [{ id: 'repo', displayPath: repo }] })
+      repositories: [{ id: 'repo', displayPath: repo }], members: defaultRoomMembers(['repo']) })
     const message = { clientRequestId: 'message', body: 'Create smoke.txt and have it reviewed.', executionIntent: 'execute' }
     const sent = await api('/v1/rooms/' + room.id + '/messages', message)
     expect(await api('/v1/rooms/' + room.id + '/messages', message)).toEqual(sent)
@@ -228,7 +230,9 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       expect(response.ok, JSON.stringify(value)).toBe(true)
       return value as T
     }
-    const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'peer-room', name: 'Native peer boundary' })
+    // The peers of the addressed member are what the participation check runs over, so the group needs more than 小 Kun.
+    const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'peer-room', name: 'Native peer boundary',
+      members: defaultRoomMembers([]) })
     expect(room.collaborationMode).toBe('peer')
     // Addressing the default member keeps the others on the participation-check path.
     const sent = await api<{ requestId: string }>(`/v1/rooms/${room.id}/messages`, {

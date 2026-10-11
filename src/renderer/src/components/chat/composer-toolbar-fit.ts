@@ -79,7 +79,7 @@ export function composerToolbarFitRef(toolbar: HTMLElement | null): (() => void)
   mutations?.observe(toolbar, { childList: true, subtree: true, characterData: true })
   // Web fonts change text widths after the first measurement.
   let disposed = false
-  void document.fonts?.ready.then(() => { if (!disposed) fit() })
+  void (typeof document === 'undefined' ? undefined : document.fonts?.ready)?.then(() => { if (!disposed) fit() })
   return () => {
     disposed = true
     resize?.disconnect()

@@ -13,6 +13,7 @@ import { roomResultProvider } from './room-result-tools.js'
 import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
 import { buildBuiltinLocalTools } from '../adapters/tool/builtin-tools.js'
 import { RoomRuntime } from './room-runtime.js'
+import { defaultRoomMembers } from './room-service.js'
 import type { RoomRequestState, RoomTaskExecution } from './room-runtime-types.js'
 
 const exec = promisify(execFile)
@@ -92,8 +93,9 @@ async function fixture(structuredResults = false, malformedResults = false) {
     await h.turns.interruptActiveTurns()
     await store.close()
   })
+  // A new group starts with 小 Kun only; this suite assigns work to the coordinator, developer and reviewer of a legacy group.
   const { room } = await runtime.service.create({ clientRequestId: 'create-room', name: '研发室', collaborationMode: 'autonomous',
-    repositories: [{ id: 'repo', displayPath: repo }] })
+    repositories: [{ id: 'repo', displayPath: repo }], members: defaultRoomMembers(['repo']) })
   runtime.start()
   return { root, repo, room, plans, calls, modelRequests, h, store, get runtime() { return runtime },
     restart: async () => { await runtime.close(); runtime = new RoomRuntime(deps); runtime.start() } }

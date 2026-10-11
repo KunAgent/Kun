@@ -42,7 +42,15 @@ const doctorFiles = [
   'tests/thread-store-doctor-race.test.ts',
   'src/manager/usage-query-runner.test.ts',
   'src/manager/remote-thread-workbench.test.ts',
-  'src/services/opencode-go-local-quota.test.ts'
+  'src/services/opencode-go-local-quota.test.ts',
+  // Memory suites that open the better-sqlite3 index directly.
+  'src/adapters/hybrid/hybrid-memory-erasure.test.ts',
+  'src/adapters/hybrid/hybrid-legacy-harness-usage.test.ts',
+  'src/memory/memory-lifecycle.test.ts',
+  'src/memory/memory-lexical-abstention-hybrid.test.ts',
+  'src/memory/memory-project-identity.test.ts',
+  'src/manager/agent-memory-roundtrip.test.ts',
+  'src/server/memory-managed-runtime.integration.test.ts'
 ]
 
 function runVitest(executable, args, env = process.env) {
