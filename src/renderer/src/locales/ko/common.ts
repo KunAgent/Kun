@@ -31,6 +31,7 @@ import kunAccount from './common/kun-account.json'
 import wardrobeAccount from './common/wardrobe-account.json'
 import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
+import wardrobeInvite from './common/wardrobe-invite.json'
 
 const common = {
   ...agentUpdates,
@@ -65,6 +66,7 @@ const common = {
   ...wardrobeAccount,
   ...wardrobeShare,
   ...whatsNew,
+  ...wardrobeInvite,
 }
 
 export default common

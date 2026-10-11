@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   KUN_AVATAR_PRESETS, createKunWardrobe, type KunWardrobe, type KunWardrobeDrop, type RoomAvatarReference
 } from '@shared/rooms-api'
+import type { KunInviteSummary } from '@shared/kun-account-economy'
 
 const mocks = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en' },
@@ -19,12 +20,20 @@ import { acceptWardrobe } from '../rooms/room-wardrobe'
 import { useRoomUserProfile } from '../rooms/room-user-profile'
 import { WardrobePageView } from './WardrobePageView'
 import { requestWardrobeTab } from './wardrobe-tab-request'
+import { acceptWardrobeInvites, useWardrobeInvites } from './wardrobe-invites'
 
 const parts = { color: 'sky', face: 'normal', bg: '#eef6ff', headwear: 'baseball-cap' }
 const bottle = (index: number): KunWardrobeDrop => ({ id: `drop-${index}`, kind: 'item', rarity: 'common', item: { category: 'prop', id: 'book' },
   duplicate: false, feathers: 0, source: 'room', runId: `run-${index}`, createdAt: new Date(2026, 9, 10, 9, index).toISOString() })
 const wardrobe: KunWardrobe = { ...grantKunWardrobeItems(createKunWardrobe(1), ['headwear/baseball-cap', 'headwear/pilot-cap', 'glasses/square']),
   seen: ['headwear/baseball-cap', 'headwear/pilot-cap', 'glasses/square'], pending: [1, 2, 3].map(bottle), roles: [] }
+
+const invites = (patch: Partial<KunInviteSummary> = {}): KunInviteSummary => ({
+  code: '2PFTWXJR', link: 'https://www.kun-agent.com/invite/2PFTWXJR', invited: 2, pending: 1, rewarded: 1, monthlyRewarded: 3, monthlyCap: 10,
+  rewards: { inviter: { bottles: 3 }, invitee: { bottles: 2 } }, invitedBy: null, canClaim: false, claimUntil: null,
+  recent: [{ status: 'pending', claimedAt: '2026-10-10T08:00:00Z', qualifiedAt: null },
+    { status: 'rewarded', claimedAt: '2026-10-09T08:00:00Z', qualifiedAt: '2026-10-09T09:00:00Z' }], ...patch
+})
 
 function setReactActEnvironment(value: boolean): void {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = value
@@ -189,4 +198,66 @@ describe('wardrobe page', () => {
     Object.defineProperty(window, 'kunGui', { configurable: true, value: undefined })
   })
 
+  it('points the shelf at invitations and opens the Invite tab with the ticket, progress and friends', async () => {
+    expect($('[data-shelf-invite]')).toBeNull()
+    await act(async () => acceptWardrobeInvites(invites()))
+    const row = $('[data-shelf-invite]')!
+    expect(row.dataset.shelfInvite).toBe('wardrobeShelfInvitePending')
+    expect(row.textContent).toContain('wardrobeShelfInviteTitle:3')
+    await act(async () => acceptWardrobeInvites(invites({ pending: 0 })))
+    expect($('[data-shelf-invite]')?.dataset.shelfInvite).toBe('wardrobeShelfInviteDefault')
+    await act(async () => acceptWardrobeInvites(invites()))
+    await act(async () => $('[data-shelf-invite]')!.click())
+    expect($$('[data-wardrobe-tab]').find((tab) => tab.getAttribute('aria-pressed') === 'true')?.dataset.wardrobeTab).toBe('invite')
+    expect($('[data-wardrobe-invite-code]')?.textContent).toBe('2PFT-WXJR')
+    expect($('.kun-wardrobe-invite-url')?.textContent).toBe('kun-agent.com/invite/2PFTWXJR')
+    expect($$('.kun-wardrobe-invite-steps li')).toHaveLength(3)
+    expect($$('.kun-wardrobe-invite-plank > span').map((slot) => slot.dataset.slot).join(' '))
+      .toBe('paid paid paid waiting empty empty empty empty empty empty')
+    expect($('.kun-wardrobe-invite-list li[data-status="pending"]')?.textContent).toContain('wardrobeInviteOnTheWay:3')
+    expect($('.kun-wardrobe-invite-list li[data-status="rewarded"]')?.textContent).toContain('wardrobeInviteRewarded:3')
+    expect($('[data-wardrobe-invite-rules]')?.hasAttribute('open')).toBe(false)
+  })
+
+  it('drops the shelf row once this month is paid out and shows a friendly empty Invite tab', async () => {
+    await act(async () => acceptWardrobeInvites(invites({ monthlyRewarded: 10, pending: 0 })))
+    expect($('[data-shelf-invite]')).toBeNull()
+    await act(async () => $('[data-wardrobe-tab="invite"]')!.click())
+    expect($('[data-wardrobe-invite-progress]')?.dataset.full).toBe('true')
+    expect(container.textContent).toContain('wardrobeInviteMonthlyFullBody')
+    await act(async () => acceptWardrobeInvites(invites({ invited: 0, pending: 0, rewarded: 0, monthlyRewarded: 0, recent: [] })))
+    expect($('[data-wardrobe-invite-empty]')?.textContent).toContain('wardrobeInviteNone:3,2')
+    expect($('.kun-wardrobe-invite-stats')).toBeNull()
+  })
+
+  it('formats a pasted invite link into the friend code and claims it', async () => {
+    const claimed = invites({ canClaim: false, invitedBy: { status: 'pending', claimedAt: '2026-10-10T08:00:00Z', qualifiedAt: null } })
+    const claimInvite = vi.fn(async () => ({ ok: true, value: claimed }))
+    Object.defineProperty(window, 'kunGui', { configurable: true, value: { kunAccount: { wardrobe: { claimInvite } } } })
+    await act(async () => acceptWardrobeInvites(invites({ canClaim: true, claimUntil: new Date(Date.now() + 5 * 86_400_000 - 1000).toISOString() })))
+    await act(async () => $('[data-wardrobe-tab="invite"]')!.click())
+    expect($('[data-wardrobe-invite-claim]')?.textContent).toContain('wardrobeInviteClaimDaysLeft:5')
+    const input = $<HTMLInputElement>('#kun-invite-code')!
+    const submit = $<HTMLButtonElement>('[data-wardrobe-invite-claim] button[type="submit"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'https://www.kun-agent.com/invite/q8nr2kla')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(input.value).toBe('Q8NR-2KLA')
+    expect(submit.disabled).toBe(false)
+    await act(async () => submit.click())
+    await vi.waitFor(() => expect(claimInvite).toHaveBeenCalledWith('Q8NR-2KLA'))
+    await vi.waitFor(() => expect($('[data-wardrobe-invite-claim]')).toBeNull())
+    expect($('.kun-wardrobe-invite-by')?.dataset.status).toBe('pending')
+    expect(useWardrobeInvites.getState().summary?.invitedBy?.status).toBe('pending')
+    expect(container.textContent).toContain('wardrobeInviteClaimedPending:2')
+    Object.defineProperty(window, 'kunGui', { configurable: true, value: undefined })
+  })
+
+  it('forgets the invitations when the page closes', async () => {
+    await act(async () => acceptWardrobeInvites(invites()))
+    await act(async () => root.unmount())
+    expect(useWardrobeInvites.getState().summary).toBeNull()
+    root = createRoot(container)
+  })
 })

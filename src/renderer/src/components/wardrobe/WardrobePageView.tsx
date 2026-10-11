@@ -26,6 +26,7 @@ import { WardrobePhotoDialog, readWardrobePhoto } from './WardrobePhotoDialog'
 import { WardrobeShelfCard } from './WardrobeShelfCard'
 import { WardrobeGuestCard, WardrobeLockedPanel } from './WardrobeGuest'
 import { WardrobeInvitePanel } from './WardrobeInvitePanel'
+import { loadWardrobeInvites, resetWardrobeInvites } from './wardrobe-invites'
 import { WardrobeShopPanel } from './WardrobeShopPanel'
 import { wardrobeErrorText } from './wardrobe-account'
 import { WARDROBE_SLOT_LABELS, WardrobeStage } from './WardrobeStage'
@@ -87,6 +88,12 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, on
   const tabs: Tab[] = ['items', 'cards', 'look', 'log', ...(state.mode === 'local' ? [] : ACCOUNT_TABS)]
 
   useEffect(() => { if (guest) { setOptimistic(null); setTrying(null); setPhoto(null); setToast(null) } }, [guest])
+  // Invitations belong to the signed-in account: read once per visit for the shelf row, dropped on the way out.
+  useEffect(() => {
+    if (state.mode === 'account') void loadWardrobeInvites()
+    else resetWardrobeInvites()
+  }, [state.mode])
+  useEffect(() => resetWardrobeInvites, [])
   // A preview must never outlive the pointer: losing window focus (screenshots, app switching) ends it too.
   useEffect(() => {
     if (!trying) return
@@ -224,7 +231,8 @@ export function WardrobePageView({ leftSidebarCollapsed, onToggleLeftSidebar, on
             <Upload size={15} strokeWidth={1.8} aria-hidden="true" />{t('roomsAvatarUpload')}</button>
         </div>
         {guest ? <WardrobeGuestCard />
-          : <WardrobeShelfCard wardrobe={wardrobe} busy={opener.opening} onOpenOne={() => opener.openOne()} onOpenTen={opener.openTen} />}
+          : <WardrobeShelfCard wardrobe={wardrobe} busy={opener.opening} onOpenOne={() => opener.openOne()} onOpenTen={opener.openTen}
+            onInvite={state.mode === 'account' ? () => { setTab('invite'); setSelection(null); setTrying(null) } : undefined} />}
       </div>
       <section className="kun-wardrobe-collection" aria-label={t('roomsWardrobeTitle')}>
         <nav className="kun-wardrobe-tabs" aria-label={t('roomsWardrobeTitle')}>

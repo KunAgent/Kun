@@ -4,11 +4,14 @@ import { kunWardrobeRules, kunWardrobeProgress, type KunWardrobe } from '@shared
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
 import { wardrobeShelfStatus } from '../rooms/RoomWardrobeShelf'
 import { wardrobeSettings, wardrobeShelf } from '../rooms/room-wardrobe'
+import { WardrobeShelfInvite } from './WardrobeShelfInvite'
 
-
-/** Unopened bottles standing on two planks of five, today's drops, and the two ways to open them. */
-export function WardrobeShelfCard({ wardrobe, busy, onOpenOne, onOpenTen }: {
-  wardrobe: KunWardrobe; busy: boolean; onOpenOne: () => void; onOpenTen: () => void
+/**
+ * Unopened bottles standing on two planks of five, today's drops, the two ways to open them, and,
+ * for a Kun account, the invitation row that earns more.
+ */
+export function WardrobeShelfCard({ wardrobe, busy, onOpenOne, onOpenTen, onInvite }: {
+  wardrobe: KunWardrobe; busy: boolean; onOpenOne: () => void; onOpenTen: () => void; onInvite?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const TEN = kunWardrobeRules(wardrobe).tenPull
@@ -49,5 +52,6 @@ export function WardrobeShelfCard({ wardrobe, busy, onOpenOne, onOpenTen }: {
       </button>
     </div>
     <p className="kun-wardrobe-shelf-next">{next}</p>
+    {onInvite ? <WardrobeShelfInvite count={count} tenPull={TEN} dailyFull={Boolean(wardrobe.progress) && today >= cap} onInvite={onInvite} /> : null}
   </section>
 }
