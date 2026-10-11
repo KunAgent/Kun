@@ -126,6 +126,15 @@ describe('listHarnessesForManager', () => {
     expect(claude.modelsTruncated).toBe(3)
   })
 
+  it('lets pickers raise the per-group cap so every provider stays listed', async () => {
+    const providers: HarnessProviderModelGroup[] = [{ providerId: 'deepseek', kind: 'http', gatewayExportable: true,
+      models: Array.from({ length: 11 }, (_, index) => `m${index}`) }]
+    const out = await listHarnessesForManager(deps({ providers: async () => providers }), undefined, { modelsPerGroup: 64 })
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    expect(claude.models.filter((entry) => entry.credentialMode === 'kun-gateway')).toHaveLength(11)
+    expect(claude.modelsTruncated).toBeUndefined()
+  })
+
   it('filters provider-mode groups to the harness connection kind', async () => {
     const providers: HarnessProviderModelGroup[] = [
       { providerId: 'deepseek', kind: 'http', gatewayExportable: true, models: ['deepseek-chat'] },

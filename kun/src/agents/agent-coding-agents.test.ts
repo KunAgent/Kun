@@ -4,6 +4,7 @@ import {
   CODING_AGENT_CATALOG_DISCOVERING_FRESH_MS,
   CODING_AGENT_CATALOG_FAILURE_RETRY_MS,
   CODING_AGENT_CATALOG_FRESH_MS,
+  CODING_AGENT_CATALOG_MODEL_LIMIT,
   codingAgentCatalog
 } from './agent-coding-agents.js'
 
@@ -48,6 +49,12 @@ describe('coding Agent catalog cache', () => {
     const settled = await codingAgentCatalog(f.harnesses)
     expect(settled.discovering).toBeUndefined()
     expect(settled.agents[0]).toMatchObject({ available: true })
+  })
+
+  it('asks discovery for the full model list instead of the compact tool cap', async () => {
+    const f = fakeService(async () => ({ agents: [codex()] }) as unknown as Listed)
+    await codingAgentCatalog(f.harnesses)
+    expect(f.service.list).toHaveBeenCalledWith(undefined, undefined, { modelLimit: CODING_AGENT_CATALOG_MODEL_LIMIT })
   })
 
   it('drops the cached list when settings change which engines are listed', async () => {

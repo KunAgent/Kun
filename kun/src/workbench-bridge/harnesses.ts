@@ -157,9 +157,10 @@ export class WorkbenchHarnessService {
     ])])
   }
 
-  async list(signal?: AbortSignal, ceiling?: WorkbenchCapabilityCeiling) {
+  /** `modelLimit` raises the per-Agent model cap for pickers; tool callers keep the compact default. */
+  async list(signal?: AbortSignal, ceiling?: WorkbenchCapabilityCeiling, options: { modelLimit?: number } = {}) {
     const bounded = AbortSignal.any([AbortSignal.timeout(HARNESS_DISCOVERY_TOTAL_BUDGET_MS), ...(signal ? [signal] : [])])
-    const result = await abortable(this.listWithin(bounded), bounded)
+    const result = await abortable(this.listWithin(bounded, options.modelLimit), bounded)
     if (!hasWorkbenchCapabilityConstraints(ceiling)) return result
     return { ...result, agents: result.agents.map((agent) => {
       let reason = agent.reason
@@ -174,7 +175,8 @@ export class WorkbenchHarnessService {
     }) }
   }
 
-  private async listWithin(signal: AbortSignal) {
+  private async listWithin(signal: AbortSignal, modelLimit?: number) {
+    const perGroup = modelLimit ?? 8, perAgent = modelLimit ?? 24
     signal.throwIfAborted()
     const snapshot = await this.deps.snapshot()
     const providers = snapshot.providers.filter(usable)
@@ -218,7 +220,7 @@ export class WorkbenchHarnessService {
     signal.throwIfAborted()
     const listed = await listHarnessesForManager({ ...this.deps, detector: { status }, providers: async () => providers.map((entry) => ({
       providerId: entry.id, label: entry.name, kind: entry.kind, models: modelIds(entry), gatewayExportable: exposableProvider(entry)
-    })) })
+    })) }, undefined, { modelsPerGroup: perGroup })
     const agents = await Promise.all(listed.agents.slice(0, 30).map(async (agent) => {
       signal.throwIfAborted()
       const definition = this.deps.catalog.get(agent.harnessId)!
@@ -226,7 +228,7 @@ export class WorkbenchHarnessService {
       const models = [...agent.models]
       if (definition.modelSource === 'provider' && definition.credentialModes.includes('native-login')) {
         for (const provider of providers.filter((entry) => entry.kind === legacyProviderKindFor(definition.id))) {
-          models.push(...modelIds(provider).slice(0, 8).map((model) => ({ model, providerId: provider.id, credentialMode: 'native-login' as const })))
+          models.push(...modelIds(provider).slice(0, perGroup).map((model) => ({ model, providerId: provider.id, credentialMode: 'native-login' as const })))
         }
       }
       const detecting = slow.has(agent.harnessId)
@@ -235,7 +237,7 @@ export class WorkbenchHarnessService {
         agent.terminalOnly ? 'Terminal-only Agent' : detecting && !detected ? 'Still checking this Agent' :
           !agent.ready ? availabilityReason(detected) : undefined
       const routes: Model[] = []
-      for (const model of models.slice(0, 24)) {
+      for (const model of models.slice(0, perAgent)) {
         try {
           routes.push(await this.resolveWithSnapshot({ title: 'Code task', goal: '', mode: 'agent', isolation: 'inherit', report: 'final',
             execution: { mode: 'direct', model: { ...model, harnessId: agent.harnessId } } }, snapshot, detected ?? null))
@@ -244,7 +246,7 @@ export class WorkbenchHarnessService {
       return { harnessId: agent.harnessId, displayName: agent.displayName, available: routes.length > 0,
         ...(routes.length ? {} : { reason: reason ?? 'No available models. Configure or refresh this Agent in Code.' }),
         ...(detecting ? { detecting: true as const } : {}),
-        models: routes, ...(models.length > 24 || agent.modelsTruncated ? { modelsTruncated: (models.length - Math.min(models.length, 24)) + (agent.modelsTruncated ?? 0) } : {}),
+        models: routes, ...(models.length > perAgent || agent.modelsTruncated ? { modelsTruncated: (models.length - Math.min(models.length, perAgent)) + (agent.modelsTruncated ?? 0) } : {}),
         executionModes: agent.harnessId === 'kun' ? ['direct', 'plan', 'auto', 'goal'] : ['direct'],
         orchestration: agent.harnessId === 'kun' ? ['direct', 'graph'] : ['direct'] }
     }))

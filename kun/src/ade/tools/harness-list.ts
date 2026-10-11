@@ -89,8 +89,11 @@ const MODELS_PER_GROUP = 8
  */
 export async function listHarnessesForManager(
   deps: HarnessListDeps,
-  currentModel?: string
+  currentModel?: string,
+  /** UI pickers need every model; the tool result keeps the small default cap. */
+  options: { modelsPerGroup?: number } = {}
 ): Promise<HarnessListOutput> {
+  const perGroup = options.modelsPerGroup ?? MODELS_PER_GROUP
   const rules = ADMISSION_RULES['manager-worker']
   const runtimeMap = deps.runtimes?.get() ?? {}
   const providers = await deps.providers?.().catch(() => undefined) ?? []
@@ -107,9 +110,9 @@ export async function listHarnessesForManager(
     const missing = rules.required.filter((key) => !effective.statuses[key].supported)
     let truncated = 0
     const cap = (entries: HarnessListModel[]): HarnessListModel[] => {
-      if (entries.length <= MODELS_PER_GROUP) return entries
-      truncated += entries.length - MODELS_PER_GROUP
-      return entries.slice(0, MODELS_PER_GROUP)
+      if (entries.length <= perGroup) return entries
+      truncated += entries.length - perGroup
+      return entries.slice(0, perGroup)
     }
     const models: HarnessListModel[] = []
     if (def.credentialModes.includes('native-login')) {

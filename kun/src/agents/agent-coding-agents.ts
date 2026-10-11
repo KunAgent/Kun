@@ -50,6 +50,8 @@ export const CODING_AGENT_CATALOG_FRESH_MS = 5 * 60_000
 export const CODING_AGENT_CATALOG_DISCOVERING_FRESH_MS = 5_000
 /** A failed discovery is not retried for every caller; they get the error (or the last list) at once. */
 export const CODING_AGENT_CATALOG_FAILURE_RETRY_MS = 30_000
+/** The new-chat picker lists every engine model (OpenCode spans several providers); bounded only for safety. */
+export const CODING_AGENT_CATALOG_MODEL_LIMIT = 256
 
 /**
  * Same discovery as Code's external Agent list, narrowed to engines that may join conversations.
@@ -89,7 +91,7 @@ export async function codingAgentCatalog(harnesses: WorkbenchHarnessService | un
 }
 
 async function discoverCodingAgents(harnesses: WorkbenchHarnessService): Promise<CodingAgentCatalog> {
-  const listed = await harnesses.list()
+  const listed = await harnesses.list(undefined, undefined, { modelLimit: CODING_AGENT_CATALOG_MODEL_LIMIT })
   const agents: CodingAgentCatalogEntry[] = listed.agents.flatMap((agent) => conversational(agent.harnessId) ? [{
     harnessId: agent.harnessId, displayName: agent.displayName, available: agent.available,
     ...(agent.reason ? { reason: agent.reason } : {}),
