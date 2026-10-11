@@ -35,7 +35,7 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
   const [awayFromBottom, setAwayFromBottom] = useState(false), [error, setError] = useState('')
   const [contextMessages, setContextMessages] = useState<RoomMessage[]>([])
   const [selectedId, setSelectedId] = useState<string>(), [pendingJump, setPendingJump] = useState<string>()
-  const [contextBusy, setContextBusy] = useState(false)
+  const [contextBusy, setContextBusy] = useState(false), [flashId, setFlashId] = useState<string>()
   const lookup = useRef<AbortController | null>(null)
   const prepend = useRef<{ height: number; top: number; firstId?: string } | null>(null)
   const savedPosition = useRef<RoomTimelinePosition | null>(null)
@@ -67,13 +67,20 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
     } catch (cause) { if (!controller.signal.aborted) setError(String(cause)) }
     finally { if (!controller.signal.aborted) setContextBusy(false) }
   }, [room.id, t])
-  const jump = useCallback((id: string, surrounding = false) => {
+  // Automatic jumps (first unread, restored position) only scroll; explicit ones also flash the target row.
+  const jump = useCallback((id: string, surrounding = false, highlight = true) => {
     lookup.current?.abort(); setContextBusy(false)
     atBottom.current = false; setAwayFromBottom(true); setSelectedId(id)
+    if (highlight) setFlashId(id)
     if (surrounding || !messageById.has(id)) void loadContext(id)
     else setPendingJump(id)
   }, [loadContext, messageById])
 
+  useEffect(() => {
+    if (!flashId) return
+    const timer = setTimeout(() => setFlashId(undefined), 2000)
+    return () => clearTimeout(timer)
+  }, [flashId])
   useEffect(() => {
     const controller = new AbortController()
     try { savedPosition.current = JSON.parse(readBrowserStorageItem(`kun.rooms.anchor.${room.id}`) ?? 'null') } catch { /* legacy scroll below */ }
@@ -112,7 +119,7 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
       setAwayFromBottom(!saved.atBottom)
       restorePending.current = saved
       if (restoreTimelinePosition(scroller, saved)) restorePending.current = null
-      else if (saved.messageId) jump(saved.messageId)
+      else if (saved.messageId) jump(saved.messageId, false, false)
     }
     searchWasOpen.current = searchOpen
   }, [searchOpen, jump])
@@ -135,9 +142,9 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
         setAwayFromBottom(!saved.atBottom)
         if (!restoreTimelinePosition(scroller, saved) && saved.messageId) {
           restorePending.current = saved
-          jump(saved.messageId)
+          jump(saved.messageId, false, false)
         }
-      } else if (firstUnreadId) jump(firstUnreadId)
+      } else if (firstUnreadId) jump(firstUnreadId, false, false)
       else {
         const top = readBrowserStorageItem(`kun.rooms.scroll.${room.id}`)
         scroller.scrollTop = top === null ? scroller.scrollHeight : Number(top) || 0
@@ -151,6 +158,8 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
         if (virtual) virtualizer.scrollToIndex(index, { align: 'center' })
         else document.getElementById('room-message-' + pendingJump)?.scrollIntoView({ block: 'center' })
         if (restorePending.current && restoreTimelinePosition(scroller, restorePending.current)) restorePending.current = null
+        // A chat that fits on one screen never leaves the bottom; don't show latest/unread pills for it.
+        if (scroller.scrollHeight <= scroller.clientHeight + 1) { atBottom.current = true; setAwayFromBottom(false) }
         setPendingJump(undefined)
       }
     } else if (prepend.current && prepend.current.firstId !== messages[0]?.id) {
@@ -208,7 +217,7 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
             const message = rows[row.index], layout = roomMessageLayout(rows[row.index - 1], message)
             return <div key={row.key} data-index={row.index} data-timeline-id={message.id}
               ref={virtual ? virtualizer.measureElement : undefined}
-              className={`rooms-timeline-row${selectedId === message.id ? ' is-message-target' : ''}`}>
+              className={`rooms-timeline-row${flashId === message.id ? ' is-message-target' : ''}`}>
               {layout.newDay ? <div className="rooms-timeline-day" role="separator">
                 {new Date(message.createdAt).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })}</div> : null}
               {row.index === unreadIndex ? <div role="separator" className="rooms-unread-boundary">

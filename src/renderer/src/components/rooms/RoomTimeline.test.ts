@@ -378,6 +378,15 @@ describe('RoomTimeline conversation interactions', () => {
     expect(api.request).toHaveBeenCalledWith('/v1/rooms/room/read', 'POST', expect.objectContaining({ seq: 9000 }))
   })
 
+  it('auto-jumps to the first unread without flashing it and hides navigation pills when the chat fits on screen', async () => {
+    scroller.scrollHeight = 400
+    api.request.mockResolvedValue({ seq: 1, firstUnreadMessageId: 'unread' })
+    await render({ messages: [message('one', 1), message('unread', 1000)] })
+    expect(renderer.root.findByProps({ 'data-timeline-id': 'unread' }).props.className).not.toContain('is-message-target')
+    expect(renderer.root.findAllByProps({ className: 'rooms-first-unread' })).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ className: 'rooms-timeline-latest' })).toHaveLength(0)
+  })
+
   it('keeps same-role avatar identity stable after a rename and avoids nested interactive group buttons', async () => {
     await act(async () => {
       renderer = create(
