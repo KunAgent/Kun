@@ -144,6 +144,9 @@ function startBackgroundPrewarm(job: PrewarmJob): void {
       const snapshot = buildPrefetchedThreadSnapshot(job.thread, detail)
       const cached = snapshot ? cacheThreadSnapshot(snapshot, token) : false
       if (cached) {
+        // Handles awaiting this exact request may still adopt its own commit;
+        // independent writers retain their old token and cannot overwrite it.
+        Object.assign(token, captureThreadSnapshotCacheToken(job.thread.id))
         retryAfterByThread.delete(job.thread.id)
       } else {
         retryAfterByThread.set(

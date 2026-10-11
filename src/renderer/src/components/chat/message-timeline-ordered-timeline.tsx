@@ -6,7 +6,7 @@ import type {
 } from './derive-turn-sections'
 import { MessageBubble } from './message-timeline-bubbles'
 import { WorkMetaRow } from './message-timeline-cards'
-import { ProcessSectionRow } from './message-timeline-process'
+import { VirtualProcessTimeline } from './VirtualProcessTimeline'
 import { TimelineRuntimeError } from './message-timeline-jump-preview'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
 
@@ -132,22 +132,17 @@ export function OrderedTurnTimeline({
               />
             ) : null}
             {showSections ? (
-              <div className="flex flex-col gap-1">
-                {sections.map((item) => (
-                  <ProcessSectionRow
-                    key={item.section.id}
-                    section={item.section}
-                    processing={isProcessing}
-                    reasoningDurationMs={reasoningDurationMs}
-                    singleReasoningSection={reasoningSectionCount === 1}
-                    workspaceRoot={workspaceRoot}
-                    viewportRef={viewportRef}
-                    onOpenChildThread={onOpenChildThread}
-                    onCancelToolCall={onCancelToolCall}
-                    allowThreadActions={allowThreadActions}
-                  />
-                ))}
-              </div>
+              <VirtualProcessTimeline
+                entries={sections}
+                processing={isProcessing}
+                reasoningDurationMs={reasoningDurationMs}
+                singleReasoningSection={reasoningSectionCount === 1}
+                workspaceRoot={workspaceRoot}
+                viewportRef={viewportRef}
+                onOpenChildThread={onOpenChildThread}
+                onCancelToolCall={onCancelToolCall}
+                allowThreadActions={allowThreadActions}
+              />
             ) : null}
             {runtimeErrors.map((item) => (
               <TimelineRuntimeError

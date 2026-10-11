@@ -1,3 +1,5 @@
+import { createLiveThreadSubscription } from './chat-store-live-thread-subscription'
+import { threadSnapshotNeedsRefresh } from './thread-snapshot-refresh'
 import { restoreThreadWorkspaceOwner } from './restore-thread-workspace-owner'
 import { loadEarlierThreadHistory } from './chat-store-thread-history'
 import { codexReferenceRevision } from '../history-reference/codex-reference-state'
@@ -230,6 +232,7 @@ export function createThreadSelectionActions(
     const cached = prevId !== id && targetThread
       ? getThreadSnapshotForSelection(targetThread)
       : null
+    const refreshCached = Boolean(cached && targetThread && threadSnapshotNeedsRefresh(targetThread, cached))
     if (!refreshingActiveThread) {
       resetBusyRecoveryAttempts()
       clearBusyWatchdog()
@@ -247,6 +250,7 @@ export function createThreadSelectionActions(
       }, durableQueuedMessages.length > 0
         ? await fetchRuntimeQueuedTurnsBestEffort(p, id)
         : undefined)
+      if (selectionGeneration !== runtime.threadSelectionGeneration || options?.selectionGuard?.() === false) return
       if (historyRevision !== codexReferenceRevision()) {
         if (selectionGeneration !== runtime.threadSelectionGeneration || options?.selectionGuard?.() === false) return
         return get().selectThread(id, options)
@@ -268,8 +272,11 @@ export function createThreadSelectionActions(
       set((state) => ({
         watchTurnCompletion: nextWatch,
         unreadThreadIds: nextUnread,
+        awaitingUserInputThreadIds: cached.blocks.some((block) => block.kind === 'user_input' && block.status === 'pending' && block.live)
+          ? { ...state.awaitingUserInputThreadIds, [id]: true }
+          : Object.fromEntries(Object.entries(state.awaitingUserInputThreadIds ?? {}).filter(([threadId]) => threadId !== id)),
         activeThreadId: id,
-        threadLoadingId: cached.busy ? id : null,
+        threadLoadingId: cached.busy || refreshCached ? id : null,
         threadRefreshingId: null,
         threadHistoryCursor: cached.threadHistoryCursor,
         threadHasMoreHistory: cached.threadHasMoreHistory,
@@ -299,27 +306,29 @@ export function createThreadSelectionActions(
       }))
       saveQueuedMessagesForThread(id, queuedMessages)
       syncTurnCompletionPoll(set, get)
-      const ac = new AbortController()
-      sseAbortRef.current = ac
-      const sink = buildThreadEventSink(set, get, {
-        threadId: id,
-        signal: ac.signal,
-        sinceSeq: cached.lastSeq,
-        awaitReplaySynchronization: cached.busy
-      })
-      subscribeThreadEventsWithRecovery(p, id, cached.lastSeq, sink, ac.signal, get)
-      if (cached.busy) armBusyWatchdog(set, get)
-      if (!(await restoreThreadWorkspaceOwner(p, id, set, get, selectionStillCurrent))) return
-      if (queuedMessages.length > 0) void get().drainQueuedMessages()
-      if (!cached.busy) {
-        void syncThreadAdditionalWorkspaces({
-          set,
-          get,
+      if (!refreshCached) {
+        const ac = new AbortController()
+        sseAbortRef.current = ac
+        const sink = buildThreadEventSink(set, get, {
           threadId: id,
-          mergeExtras: targetThread?.additionalWorkspaces
+          signal: ac.signal,
+          sinceSeq: cached.lastSeq,
+          awaitReplaySynchronization: cached.busy
         })
+        subscribeThreadEventsWithRecovery(p, id, cached.lastSeq, sink, ac.signal, get)
+        if (cached.busy) armBusyWatchdog(set, get)
+        if (!(await restoreThreadWorkspaceOwner(p, id, set, get, selectionStillCurrent))) return
+        if (queuedMessages.length > 0) void get().drainQueuedMessages()
+        if (!cached.busy) {
+          void syncThreadAdditionalWorkspaces({
+            set,
+            get,
+            threadId: id,
+            mergeExtras: targetThread?.additionalWorkspaces
+          })
+        }
+        return
       }
-      return
     }
     // Give the sidebar its selected state in this render frame. The timeline
     // shows a skeleton and the composer is disabled until detail hydration
@@ -331,7 +340,7 @@ export function createThreadSelectionActions(
         threadRefreshingId: id,
         error: null
       })
-    } else {
+    } else if (!cached) {
       const initialComposerState = resolveThreadComposerState(get(), targetThread)
       set({
         watchTurnCompletion: nextWatch,
@@ -437,6 +446,8 @@ export function createThreadSelectionActions(
         turnId: detail.activeTurn !== undefined ? detail.activeTurn?.id : latestTurnId,
         blocks
       }, await fetchRuntimeQueuedTurnsBestEffort(p, id))
+      if (!selectionStillCurrent() || hydrationAbort.signal.aborted) return
+      if (historyRevision !== codexReferenceRevision()) return get().selectThread(id, options)
       if (refreshingActiveThread) {
         sseAbortRef.current?.abort()
         sseAbortRef.current = null
@@ -525,16 +536,28 @@ export function createThreadSelectionActions(
       if (queuedMessages.length > 0) void get().drainQueuedMessages()
     } catch (e) {
       if (hydrationAbort.signal.aborted) return
-      if (isThreadHydrationCancellation(e)) {
+      if (isThreadHydrationCancellation(e) && !cached) {
         // An unrelated in-flight request was cancelled, not a selection failure.
         set({ threadLoadingId: null, threadRefreshingId: get().threadRefreshingId === id ? null : get().threadRefreshingId })
         return
       }
       if (!selectionStillCurrent()) return
+      if (cached) {
+        // Keep the visible, cursor-matched snapshot live if refresh failed.
+        // Never pretend the sidebar's newer sequence was already projected.
+        const ac = new AbortController()
+        sseAbortRef.current = ac
+        const sink = buildThreadEventSink(set, get, {
+          threadId: id, signal: ac.signal, sinceSeq: cached.lastSeq,
+          awaitReplaySynchronization: cached.busy
+        })
+        subscribeThreadEventsWithRecovery(p, id, cached.lastSeq, sink, ac.signal, get)
+        if (cached.busy) armBusyWatchdog(set, get)
+      }
       set({
-        threadLoadingId: null,
+        threadLoadingId: cached?.busy ? id : null,
         threadRefreshingId: get().threadRefreshingId === id ? null : get().threadRefreshingId,
-        error: formatRuntimeError(e),
+        error: isThreadHydrationCancellation(e) ? null : formatRuntimeError(e),
         ...(shouldOpenSettingsForError(e)
           ? { route: 'settings' as const, settingsSection: 'agents' as const }
           : {})
@@ -542,156 +565,6 @@ export function createThreadSelectionActions(
     } finally { finishThreadHydration(runtime, hydrationAbort) }
   },
   loadEarlierThreadHistory: () => loadEarlierThreadHistory(set, get),
-  subscribeThreadEventsLive: async (threadId) => {
-    if (get().runtimeConnection !== 'ready') return
-    const targetThreadId = threadId.trim()
-    if (!targetThreadId) return
-    runtime.threadSelectionGeneration += 1
-    // Live-only entry point for claw channel events (e.g. Feishu / Lark bot
-    // replies). Hydrate the canonical persisted snapshot first, then subscribe
-    // from exactly that snapshot's latestSeq. Events committed after the HTTP
-    // snapshot are replayed by the persisted SSE route, closing the hydrate /
-    // subscribe window without replaying historical non-delta lifecycle events
-    // over terminal snapshot state.
-    sseAbortRef.current?.abort()
-    sseAbortRef.current = null
-    const p = getProvider()
-    const prevState = get()
-    // Same-thread fallback retains a projection that matches its cursor if the
-    // snapshot request fails. Cross-thread fallback starts from an empty
-    // projection/cursor and can safely replay from zero.
-    const keepExistingBlocks = prevState.activeThreadId === targetThreadId
-    const hydratingTarget = !keepExistingBlocks
-    const fallbackSinceSeq = keepExistingBlocks ? prevState.lastSeq : 0
-    resetBusyRecoveryAttempts()
-    clearBusyWatchdog()
-    set({
-      activeThreadId: targetThreadId,
-      threadLoadingId: hydratingTarget ? targetThreadId : prevState.threadLoadingId,
-      threadHistoryCursor: keepExistingBlocks ? prevState.threadHistoryCursor : null,
-      threadHasMoreHistory: keepExistingBlocks ? prevState.threadHasMoreHistory : false,
-      threadHistoryLoading: false,
-      blocks: keepExistingBlocks ? prevState.blocks : [],
-      lastSeq: fallbackSinceSeq,
-      ...(keepExistingBlocks
-        ? copyLiveProjection(prevState)
-        : emptyLiveProjection(fallbackSinceSeq)),
-      unreadThreadIds: { ...prevState.unreadThreadIds, [targetThreadId]: false },
-      busy: true,
-      busyUnconfirmed: keepExistingBlocks ? prevState.busyUnconfirmed : true,
-      ...(keepExistingBlocks && prevState.busy
-        ? turnTimingSnapshotPatch(prevState)
-        : clearedTurnTimingPatch({ keepExistingBlocks, previous: prevState })),
-      inspectorSelectedId: null,
-      queuedMessages: keepExistingBlocks
-        ? prevState.queuedMessages
-        : queuedMessagesForThread(targetThreadId)
-    })
-    const ac = new AbortController()
-    sseAbortRef.current = ac
-    const subscribeFrom = (sinceSeq: number, awaitReplaySynchronization = false): void => {
-      const sink = buildThreadEventSink(set, get, {
-        threadId: targetThreadId,
-        signal: ac.signal,
-        sinceSeq,
-        awaitReplaySynchronization
-      })
-      subscribeThreadEventsWithRecovery(p, targetThreadId, sinceSeq, sink, ac.signal, get)
-    }
-    try {
-      const {
-        activeTurn,
-        blocks: rawBlocks,
-        latestSeq,
-        liveProjection,
-        threadStatus,
-        latestTurnId,
-        latestTurnStatus,
-        latestTurnOrchestration,
-        latestUserMessageId,
-        latestTurnStartedAtMs,
-        turnDurationByUserId = {},
-        goal,
-        todos,
-        historyCursor,
-        hasMoreHistory = false,
-        additionalWorkspaces
-      } = await p.getThreadDetail(targetThreadId)
-      if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return
-      const loaded = hydrateBlockModelLabels(targetThreadId, rawBlocks)
-      const busy = activeTurn !== undefined ? Boolean(activeTurn)
-        : threadSnapshotLooksRunning(loaded, threadStatus, latestTurnStatus)
-      // Settle blocks left open by an interrupted turn when the server has
-      // already settled, so the thread doesn't stay wedged on load (#621).
-      const blocks = busy ? loaded : settlePendingRuntimeWorkAfterInterrupt(loaded)
-      const currentTurnUserId = busy
-        ? latestUserMessageId ?? findLatestUserBlockId(blocks)
-        : null
-      const queuedMessages = reconcileQueuedMessages(get().queuedMessages, {
-        busy,
-        turnId: activeTurn !== undefined ? activeTurn?.id : latestTurnId,
-        blocks
-      })
-      set({
-        activeThreadGoal: goal ?? null,
-        activeThreadTodos: threadTodosForProjection(get(), targetThreadId, todos),
-        threadLoadingId: busy && (hydratingTarget || get().threadLoadingId === targetThreadId)
-          ? targetThreadId : null,
-        threadHistoryCursor: historyCursor ?? null,
-        threadHasMoreHistory: hasMoreHistory,
-        threadHistoryLoading: false,
-        blocks,
-        lastSeq: latestSeq,
-        ...restoredLiveProjection(latestSeq, busy ? liveProjection : undefined),
-        busy,
-        // Replay synchronization confirms the restored running claim.
-        busyUnconfirmed: busy,
-        currentTurnId: activeTurn !== undefined ? activeTurn?.id ?? null : busy ? latestTurnId ?? null : null,
-        currentTurnOrchestration: activeTurn !== undefined ? activeTurn?.orchestration ?? null : busy ? latestTurnOrchestration ?? 'direct' : null,
-        currentTurnUserId,
-        currentTurnStartedAtMs: busy ? latestTurnStartedAtMs ?? null : null,
-        turnDurationByUserId,
-        queuedMessages,
-        threads: get().threads.map((thread) => thread.id === targetThreadId
-          ? {
-              ...thread,
-              status: thread.archived ? thread.status : busy ? 'running' : 'idle',
-              ...(latestTurnId ? { latestTurnId } : {}),
-              ...(latestTurnStatus ? { latestTurnStatus } : {}),
-              ...(additionalWorkspaces ? { additionalWorkspaces } : {})
-            }
-          : thread)
-      })
-      saveQueuedMessagesForThread(targetThreadId, queuedMessages)
-      // The server replays every event persisted after latestSeq, including
-      // events committed while getThreadDetail was in flight.
-      subscribeFrom(latestSeq, busy)
-      if (busy) armBusyWatchdog(set, get)
-      if (!busy && queuedMessages.some(isPendingQueuedMessage)) {
-        void get().drainQueuedMessages()
-      }
-      if (!busy) {
-        void syncThreadAdditionalWorkspaces({
-          set,
-          get,
-          threadId: targetThreadId,
-          mergeExtras: additionalWorkspaces
-        })
-      }
-    } catch (e) {
-      if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return
-      // The fallback cursor matches the projection installed above, so this
-      // cannot replay older lifecycle records over newer on-screen state.
-      subscribeFrom(fallbackSinceSeq)
-      if (get().busy) armBusyWatchdog(set, get)
-      set({
-        threadLoadingId: get().threadLoadingId === targetThreadId ? null : get().threadLoadingId,
-        error: formatRuntimeError(e),
-        ...(shouldOpenSettingsForError(e)
-          ? { route: 'settings' as const, settingsSection: 'agents' as const }
-          : {})
-      })
-    }
-  },
+  subscribeThreadEventsLive: createLiveThreadSubscription(context, runtime)
   }
 }

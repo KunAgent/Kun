@@ -1,15 +1,11 @@
 import { AgentDispatchGroup, isAgentDispatchBlock } from './AgentDispatchCard'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement, RefObject } from 'react'
-import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronDown,
   ChevronRight,
-  LoaderCircle,
-  Square,
 } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
-import { parseBackgroundSubagentCompletionNotice } from '@shared/background-subagent-notice'
 import { useDeferredRender } from '../../hooks/use-deferred-render'
 import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
@@ -17,15 +13,15 @@ import { GeneratedFilesPanel } from './message-timeline-bubbles'
 import {
   isBackgroundSubagentNoticeBlock
 } from './message-timeline-turns'
-import {
-  isBackgroundShellCommandBlock
-} from './message-timeline-tools'
+import { TimelineVirtualList } from './TimelineVirtualList'
+import { useTimelineRowState } from './timeline-row-state'
+import { BackgroundSubagentRowSummary, ToolCancelButton, processBlockIsActive, processBlockIsAutoOpenPending } from './message-timeline-process-controls'
 import { SubagentGroup, type OpenChildThreadHandler } from './SubagentCallCard'
 import {
   getReasoningSectionText,
+  keepInteractiveProcessBlock,
   isPendingApproval,
   isRequestUserInputTool,
-  isSubagentBlock,
   processBlockErrorTone,
   processBlockHasGeneratedMedia,
   processErrorDotClass,
@@ -89,7 +85,7 @@ export function ProcessSectionRow({
   allowThreadActions?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
-  const [userExpanded, setUserExpanded] = useState<boolean | null>(null)
+  const [userExpanded, setUserExpanded] = useTimelineRowState<boolean | null>('expanded', null)
 
   const assistantBlocks =
     section.kind === 'output'
@@ -242,6 +238,7 @@ export function ProcessSectionRow({
               blocks={section.blocks}
               processing={processing}
               workspaceRoot={workspaceRoot}
+              viewportRef={viewportRef}
               onCancelToolCall={onCancelToolCall}
               allowThreadActions={allowThreadActions}
             />
@@ -253,167 +250,32 @@ export function ProcessSectionRow({
   )
 }
 
-function processBlockIsAutoOpenPending(block: ChatBlock, processing: boolean): boolean {
-  return (
-    processing &&
-    ((block.kind === 'compaction' && block.status === 'running') ||
-      (block.kind === 'approval' && block.status === 'pending') ||
-      (block.kind === 'approval_review' && block.status === 'in-progress') ||
-      (block.kind === 'user_input' && block.status === 'pending'))
-  )
-}
-
-function processBlockIsActive(block: ChatBlock, processing: boolean): boolean {
-  // Running tools stay visually quiet in the process timeline; ConversationTurn
-  // owns the bottom "thinking / running" loading row.
-  return (
-    processBlockIsAutoOpenPending(block, processing) ||
-    (processing && block.kind === 'assistant' && block.id === 'live-assistant')
-  )
-}
-
-function processBlockHasError(block: ChatBlock): boolean {
-  return processBlockErrorTone(block) !== null
-}
-
-function BackgroundSubagentRowSummary({
-  block
-}: {
-  block: Extract<ChatBlock, { kind: 'user' }>
-}): ReactElement {
-  const { t } = useTranslation('common')
-  const parsed = parseBackgroundSubagentCompletionNotice(block.text)
-  const failed = parsed?.status === 'failed'
-  const label =
-    parsed?.label ||
-    block.meta?.displayText?.trim() ||
-    t('backgroundSubagentNotice.title', { defaultValue: 'Background subagent completed' })
-
-  return (
-    <span
-      data-background-subagent-row="true"
-      className="flex min-w-0 flex-1 items-center gap-2.5"
-    >
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13.5px] font-semibold text-ds-ink">{label}</span>
-        <span className="block truncate text-[11.5px] text-ds-faint">
-          {t('backgroundSubagentNotice.taskKind', { defaultValue: 'Background task' })}
-        </span>
-      </span>
-      <span
-        className={`inline-flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium ${
-          failed
-            ? 'text-orange-700 dark:text-orange-300'
-            : 'text-emerald-700 dark:text-emerald-300'
-        }`}
-      >
-        <span className={`h-1.5 w-1.5 rounded-full ${failed ? 'bg-orange-500' : 'bg-emerald-500'}`} />
-        {failed
-          ? t('backgroundSubagentNotice.failed', { defaultValue: 'Failed' })
-          : t('backgroundSubagentNotice.completed', { defaultValue: 'Completed' })}
-      </span>
-    </span>
-  )
-}
-
-function toolCancelCallId(block: ChatBlock): string {
-  if (block.kind !== 'tool') return ''
-  const callId = block.meta?.callId
-  return typeof callId === 'string' ? callId.trim() : ''
-}
-
-function toolCancelRequested(block: ChatBlock): boolean {
-  if (block.kind !== 'tool') return false
-  return typeof block.meta?.cancelRequestedAt === 'string' && block.meta.cancelRequestedAt.trim().length > 0
-}
-
-function canCancelToolBlock(block: ChatBlock, processing: boolean): block is ToolBlock {
-  if (!processing || block.kind !== 'tool' || block.status !== 'running' || !toolCancelCallId(block)) return false
-  // Detached/background work owns its own lifecycle and must keep using its
-  // existing control surface rather than the foreground tool cancellation API.
-  if (block.meta?.detached === true || isBackgroundShellCommandBlock(block) || isSubagentBlock(block)) {
-    return false
-  }
-  return true
-}
-
-function ToolCancelButton({
-  block,
-  processing,
-  onCancelToolCall
-}: {
-  block: ChatBlock
-  processing: boolean
-  onCancelToolCall?: (block: ToolBlock) => Promise<boolean>
-}): ReactElement | null {
-  const { t } = useTranslation('common')
-  const [requested, setRequested] = useState(() => toolCancelRequested(block))
-  const cancellable = canCancelToolBlock(block, processing)
-  const blockStatus = block.kind === 'tool' ? block.status : undefined
-  const blockCancelRequestedAt = block.kind === 'tool' && typeof block.meta?.cancelRequestedAt === 'string'
-    ? block.meta.cancelRequestedAt
-    : undefined
-  const cancelRequested = toolCancelRequested(block)
-
-  useEffect(() => {
-    setRequested(cancelRequested)
-  }, [block.id, blockStatus, blockCancelRequestedAt, cancelRequested])
-
-  if (!cancellable || !onCancelToolCall) return null
-  const stopping = requested || toolCancelRequested(block)
-  const handleClick = (event: ReactMouseEvent<HTMLButtonElement>): void => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (stopping) return
-    setRequested(true)
-    void onCancelToolCall(block).then((accepted) => {
-      if (!accepted) setRequested(false)
-    }).catch(() => {
-      setRequested(false)
-    })
-  }
-
-  return (
-    <button
-      type="button"
-      aria-label={stopping ? t('toolCancelling') : t('toolCancel')}
-      title={stopping ? t('toolCancelling') : t('toolCancel')}
-      aria-busy={stopping}
-      disabled={stopping}
-      onClick={handleClick}
-      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition ${
-        stopping ? 'cursor-wait text-accent opacity-80' : 'text-ds-faint hover:bg-ds-hover/70 hover:text-ds-ink'
-      }`}
-    >
-      {stopping ? (
-        <LoaderCircle className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
-      ) : (
-        <Square className="h-3 w-3" fill="currentColor" strokeWidth={1.9} />
-      )}
-    </button>
-  )
-}
+const processBlockKey = (block: ChatBlock): string => block.id
+const containsProcessBlock = (block: ChatBlock, blockId: string): boolean => block.id === blockId
 
 function ProcessStackRows({
   blocks,
   processing,
   workspaceRoot,
+  viewportRef,
   onCancelToolCall,
   allowThreadActions = true
 }: {
   blocks: ChatBlock[]
   processing: boolean
   workspaceRoot: string
+  viewportRef: RefObject<HTMLDivElement | null>
   onCancelToolCall?: (block: ToolBlock) => Promise<boolean>
   allowThreadActions?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
-  const [openBlockId, setOpenBlockId] = useState<string | null>(null)
-  const [closedBlockIds, setClosedBlockIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [openBlockId, setOpenBlockId] = useTimelineRowState<string | null>('openBlock', null)
+  const [closedBlockIds, setClosedBlockIds] = useTimelineRowState<ReadonlySet<string>>('closedBlocks', new Set())
 
   return (
-    <div className="ds-work-stack">
-      {blocks.map((block) => {
+    <TimelineVirtualList items={blocks} viewportRef={viewportRef} itemKey={processBlockKey}
+      keepMounted={keepInteractiveProcessBlock} containsBlock={containsProcessBlock} className="ds-work-stack">
+      {(block) => {
         const summary = describeProcessBlock(block, t)
         const detail = getProcessDetail(block, summary)
         const canExpand = detail.kind !== 'none'
@@ -533,8 +395,8 @@ function ProcessStackRows({
             ) : null}
           </div>
         )
-      })}
-    </div>
+      }}
+    </TimelineVirtualList>
   )
 }
 
@@ -559,7 +421,7 @@ function ProcessEntryRow({
   allowThreadActions?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
-  const [userOpen, setUserOpen] = useState<boolean | null>(null)
+  const [userOpen, setUserOpen] = useTimelineRowState<boolean | null>('expanded', null)
   const summary = describeProcessBlock(block, t)
   const detail = getProcessDetail(block, summary)
   const canExpand = detail.kind !== 'none'

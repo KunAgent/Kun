@@ -58,6 +58,7 @@
     "smoke:development-graph-plan-progress": "node ./scripts/smoke-development-graph-plan-progress.cjs",
     "smoke:development-graph-workbench": "node ./scripts/smoke-development-graph-workbench.cjs",
     "smoke:development-session-summary": "node ./scripts/smoke-development-session-summary.cjs",
+    "smoke:chat-rendering": "node ./scripts/smoke-chat-rendering.mjs",
     "smoke:development-trajectory-layout": "node ./scripts/smoke-development-trajectory-layout.cjs",
     "smoke:development-composer-queue": "node ./scripts/smoke-development-composer-queue.cjs",
     "smoke:composer-scaled-controls": "node ./scripts/smoke-composer-scaled-controls.mjs --electron",

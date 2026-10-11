@@ -10,6 +10,12 @@ export type ProcessSection = {
   blocks: ChatBlock[]
 }
 
+export function keepInteractiveProcessBlock(block: ChatBlock): boolean {
+  return (block.kind === 'approval' && block.status === 'pending') ||
+    (block.kind === 'approval_review' && block.status === 'in-progress') ||
+    (block.kind === 'user_input' && block.status === 'pending')
+}
+
 /**
  * Built-in child-agent tools (or any block carrying child runtime metadata)
  * are rendered as "Kun Crew" subagent cards, not generic tool rows.

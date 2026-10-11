@@ -5,6 +5,7 @@ import { formatChildActivityLabel } from './explore-peek-summary'
 import { useChatStore } from '../../store/chat-store'
 import { deriveTurnSections, groupTurnProcessTimeline } from './derive-turn-sections'
 import { OrderedTurnTimeline } from './message-timeline-ordered-timeline'
+import { VirtualProcessTimeline } from './VirtualProcessTimeline'
 import { GeneratedFilesPanel, MessageBubble } from './message-timeline-bubbles'
 import { GeneratedDocumentFilesPanel } from './GeneratedDocumentFilesPanel'
 import {
@@ -14,7 +15,6 @@ import {
 } from './generated-document-artifacts'
 import { ReviewPlanCard, ReviewSummaryCard, TurnChangeSummary, WorkMetaRow } from './message-timeline-cards'
 import {
-  ProcessSectionRow,
   groupProcessSections
 } from './message-timeline-process'
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
@@ -381,24 +381,17 @@ export function ConversationTurn({
             />
           ) : null}
           {processTimelineEntries.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              {processTimelineEntries.map((entry) => entry.kind === 'runtime_error' ? (
-                <TimelineRuntimeError key={entry.block.id} block={entry.block} />
-              ) : (
-                <ProcessSectionRow
-                  key={entry.section.id}
-                  section={entry.section}
-                  processing={isProcessing}
-                  reasoningDurationMs={reasoningDurationMs}
-                  singleReasoningSection={reasoningSectionCount === 1}
-                  workspaceRoot={filePreviewWorkspaceRoot}
-                  viewportRef={viewportRef}
-                  onOpenChildThread={onOpenChildThread}
-                  onCancelToolCall={onCancelToolCall}
-                  allowThreadActions={allowMainThreadActions}
-                />
-              ))}
-            </div>
+            <VirtualProcessTimeline
+              entries={processTimelineEntries}
+              processing={isProcessing}
+              reasoningDurationMs={reasoningDurationMs}
+              singleReasoningSection={reasoningSectionCount === 1}
+              workspaceRoot={filePreviewWorkspaceRoot}
+              viewportRef={viewportRef}
+              onOpenChildThread={onOpenChildThread}
+              onCancelToolCall={onCancelToolCall}
+              allowThreadActions={allowMainThreadActions}
+            />
           ) : null}
         </div>
       ) : null}

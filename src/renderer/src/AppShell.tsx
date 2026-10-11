@@ -4,6 +4,7 @@ import { appWindowTitleForFlavor } from '@shared/app-environment'
 import { resolveDesktopTitleBarMode, usesCustomDesktopTitleBar } from '@shared/desktop-title-bar'
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
+import { startBackgroundThreadSync } from './store/chat-background-sync'
 import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
 import i18n from './i18n'
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
@@ -112,6 +113,7 @@ export default function AppShell(): React.ReactElement {
   const MobileApp = preparedMobileAppShell ?? MobileAppShell
 
   useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
+  useEffect(() => startBackgroundThreadSync(), [])
 
   // The ADE activity feed is app-level (06 §9): while the lab flag is on it
   // stays live across routes so worker completions and waits still notify —
