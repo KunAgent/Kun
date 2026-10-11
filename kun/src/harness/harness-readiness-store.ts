@@ -3,23 +3,28 @@ import { dirname } from 'node:path'
 import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import type { HarnessRoute } from '../contracts/harness.js'
+import { HarnessReadinessSchema, type HarnessReadiness } from '../contracts/harness-test.js'
 
 /**
  * Display-only readiness evidence kept across Runtime restarts. Identities are
- * sha256 fingerprints and routes carry ids only, so the file holds no secrets.
+ * sha256 fingerprints, routes carry ids only and `readiness` is the check
+ * summary already shown to clients, so the file holds no secrets.
  */
 export type PersistedReadinessProof = {
   route: HarnessRoute
   identity: string
   command?: string
   displayExpires: number
+  readiness?: HarnessReadiness
 }
 
 const PersistedProofSchema = z.object({
   route: z.object({ harnessId: z.string().min(1) }).passthrough(),
   identity: z.string().regex(/^[a-f0-9]{64}$/u),
   command: z.string().min(1).max(4_096).optional(),
-  displayExpires: z.number().finite()
+  displayExpires: z.number().finite(),
+  // An unreadable summary drops only itself; the proof still repaints the picker.
+  readiness: HarnessReadinessSchema.optional().catch(undefined)
 })
 const ProofFileSchema = z.object({
   version: z.literal(1),
