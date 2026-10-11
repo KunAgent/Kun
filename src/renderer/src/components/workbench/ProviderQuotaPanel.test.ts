@@ -3,6 +3,8 @@ import { act, create as createRenderer, type ReactTestRenderer } from 'react-tes
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderQuotaListResult } from '@shared/provider-quota'
 import i18n from '../../i18n'
+import { clearProviderQuotaListCache, providerQuotaListCache } from '../../hooks/provider-quota-list-cache'
+import { QUOTA_FRESH_MS } from '../../lib/quota-cache'
 import { ProviderQuotaPanel, type ProviderQuotaPanelProps } from './ProviderQuotaPanel'
 
 const NOW = Date.parse('2027-01-15T08:00:00.000Z')
@@ -90,6 +92,7 @@ describe('ProviderQuotaPanel', () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(NOW)
+    clearProviderQuotaListCache()
     await i18n.changeLanguage('en')
   })
 
@@ -203,6 +206,68 @@ describe('ProviderQuotaPanel', () => {
     const html = text(renderer)
     expect(html).toContain('No allowances to show yet')
     expect(html).toContain('Add a provider')
+    act(() => renderer.unmount())
+  })
+
+  it('shows the held allowances at once on a later mount, without asking again while fresh', async () => {
+    const listProviderQuotas = vi.fn(async () => result)
+    stubWindow(listProviderQuotas)
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(ProviderQuotaPanel))
+    })
+    act(() => renderer.unmount())
+    expect(listProviderQuotas).toHaveBeenCalledTimes(1)
+
+    // Reopening the panel paints from the cache on the very first render.
+    act(() => {
+      renderer = createRenderer(createElement(ProviderQuotaPanel))
+    })
+    expect(renderer.root.findAllByProps({ role: 'progressbar' })).toHaveLength(2)
+    await act(async () => undefined)
+    expect(listProviderQuotas).toHaveBeenCalledTimes(1)
+    act(() => renderer.unmount())
+  })
+
+  it('re-reads quietly once the held allowances are stale, keeping them on screen meanwhile', async () => {
+    let release!: (value: ProviderQuotaListResult) => void
+    const listProviderQuotas = vi.fn()
+      .mockResolvedValueOnce(result)
+      .mockReturnValueOnce(new Promise<ProviderQuotaListResult>((resolve) => { release = resolve }))
+    stubWindow(listProviderQuotas)
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(ProviderQuotaPanel))
+    })
+    act(() => renderer.unmount())
+
+    vi.setSystemTime(NOW + QUOTA_FRESH_MS + 1)
+    const onStatusChange = vi.fn()
+    await act(async () => {
+      renderer = createRenderer(createElement<ProviderQuotaPanelProps>(ProviderQuotaPanel, { onStatusChange }))
+    })
+    expect(listProviderQuotas).toHaveBeenCalledTimes(2)
+    expect(listProviderQuotas).toHaveBeenLastCalledWith(undefined)
+    expect(renderer.root.findAllByProps({ role: 'progressbar' })).toHaveLength(2)
+    expect(onStatusChange).not.toHaveBeenCalledWith(expect.objectContaining({ loading: true }))
+    await act(async () => release({ ...result, refreshedAt: '2027-01-15T08:01:01.000Z' }))
+    expect(onStatusChange).toHaveBeenLastCalledWith({ loading: false, refreshedAt: '2027-01-15T08:01:01.000Z' })
+    act(() => renderer.unmount())
+  })
+
+  it('re-reads when another surface forced a refresh of the vendors', async () => {
+    const listProviderQuotas = vi.fn(async () => result)
+    stubWindow(listProviderQuotas)
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(ProviderQuotaPanel))
+    })
+    expect(listProviderQuotas).toHaveBeenCalledTimes(1)
+
+    await act(async () => providerQuotaListCache.markStale())
+    expect(listProviderQuotas).toHaveBeenCalledTimes(2)
+    expect(listProviderQuotas).toHaveBeenLastCalledWith(undefined)
+    expect(renderer.root.findAllByProps({ role: 'progressbar' })).toHaveLength(2)
     act(() => renderer.unmount())
   })
 })

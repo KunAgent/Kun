@@ -1,7 +1,8 @@
 import { AlertCircle } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ProviderQuotaListResult } from '@shared/provider-quota'
+import { PROVIDER_QUOTA_LIST_KEY, providerQuotaListCache, readProviderQuotaList } from '../../hooks/provider-quota-list-cache'
+import { useQuotaCacheEntry } from '../../hooks/use-quota-cache-entry'
 import { useChatStore } from '../../store/chat-store'
 import { QuotaBoard, QuotaBoardSkeleton } from '../usage/QuotaBoard'
 
@@ -25,8 +26,11 @@ export function ProviderQuotaPanel({
   onStatusChange
 }: ProviderQuotaPanelProps = {}): ReactElement {
   const { t } = useTranslation('common')
-  const [result, setResult] = useState<ProviderQuotaListResult | null>(null)
-  const [loading, setLoading] = useState(true)
+  // The answer lives in the cache every quota surface shares: it is shown at
+  // once when held, and only read again when it is no longer fresh.
+  const entry = useQuotaCacheEntry(providerQuotaListCache, PROVIDER_QUOTA_LIST_KEY)
+  const result = entry?.value ?? null
+  const [loading, setLoading] = useState(!entry)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const firstRefreshKey = useRef(refreshKey)
@@ -36,14 +40,13 @@ export function ProviderQuotaPanel({
 
   const refresh = useCallback(async (manual = false): Promise<void> => {
     if (manual) setRefreshing(true)
-    else setLoading(true)
+    else if (!providerQuotaListCache.peek(PROVIDER_QUOTA_LIST_KEY)) setLoading(true)
     setError('')
     try {
       if (typeof window.kunGui?.listProviderQuotas !== 'function') {
         throw new Error(tRef.current('providerQuotaUnavailable'))
       }
-      const next = await window.kunGui.listProviderQuotas(manual ? { forceRefresh: true } : undefined)
-      if (next) setResult(next)
+      await readProviderQuotaList({ force: manual })
     } catch (cause) {
       setError(cause instanceof Error && cause.message ? cause.message : tRef.current('providerQuotaLoadFailed'))
     } finally {
@@ -58,6 +61,12 @@ export function ProviderQuotaPanel({
     firstRefreshKey.current = refreshKey
     void refresh(manual)
   }, [refresh, refreshKey])
+
+  // Another surface refreshed the vendors: what is held is older than Kun's now.
+  const stale = entry?.stale ?? false
+  useEffect(() => {
+    if (active && stale) void refresh()
+  }, [active, refresh, stale])
 
   useEffect(() => {
     if (!active) return
