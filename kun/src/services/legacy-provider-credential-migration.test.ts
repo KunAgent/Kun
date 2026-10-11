@@ -65,6 +65,31 @@ describe('LegacyProviderCredentialMigrationService', () => {
     ]))
   })
 
+  it('re-migrates a stable source id when its provider changes', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-legacy-credential-'))
+    const accounts = new ExtensionProviderAccountStore({ dataDir })
+    const credentials = new ExtensionCredentialStore({ dataDir, profileId: 'default' })
+    const migration = new LegacyProviderCredentialMigrationService({ dataDir, accounts, credentials })
+    const override = (providerId: string) => ({
+      sourceId: 'runtime:kun',
+      providerId,
+      providerName: providerId,
+      label: 'Kun runtime override',
+      apiKey: 'runtime-secret'
+    })
+
+    const [first] = await migration.migrate([override('deepseek')])
+    await migration.markSettingsCommitted(['runtime:kun'])
+    const [second] = await migration.migrate([override('kimi')])
+
+    expect(second?.providerId).toBe('kimi')
+    expect(second?.accountId).not.toBe(first?.accountId)
+    expect((await accounts.getAccount(second!.accountId))?.providerId).toBe('kimi')
+    expect(await migration.listBindings()).toEqual([
+      expect.objectContaining({ sourceId: 'runtime:kun', providerId: 'kimi', accountId: second?.accountId })
+    ])
+  })
+
   it('shares an account for the same provider secret but preserves different secrets', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-legacy-credential-'))
     const accounts = new ExtensionProviderAccountStore({ dataDir })
