@@ -172,6 +172,7 @@ export type ManagerSessionStoreOperation =
   | 'allocateEventSeq'
   | 'loadUsageRecords'
   | 'aggregateUsage'
+  | 'loadLatestContextSnapshot'
   | 'loadLatestUsageSnapshots'
   | 'resetMemory'
   | 'clearThreadMemory'

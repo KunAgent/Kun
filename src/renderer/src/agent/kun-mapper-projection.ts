@@ -1,3 +1,4 @@
+import type { ContextSnapshotEvent } from '../../../../kun/src/contracts/context-snapshot'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -218,7 +219,8 @@ export function nullableFinite(value: number | null | undefined): number | null 
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-export function contextSnapshotFromCore(event: CoreRuntimeEventJson): RequestContextSnapshot | null {
+export function contextSnapshotFromCore(event: CoreRuntimeEventJson | ContextSnapshotEvent): RequestContextSnapshot | null {
+  if (event.child) return null
   const threadId = event.threadId?.trim()
   const model = event.model?.trim()
   const contextWindowTokens = positiveInteger(event.contextWindowTokens)

@@ -1,4 +1,6 @@
 import { appendFile, mkdir, readFile, stat } from 'node:fs/promises'
+import type { FileSessionStoreOptions } from './file-session-store-options.js'
+import { readLatestContextSnapshot } from './file-session-context-snapshot.js'
 import { performance } from 'node:perf_hooks'
 import { join, resolve } from 'node:path'
 import type {
@@ -103,19 +105,7 @@ export class FileSessionStore implements SessionStore {
   private readonly usageCompactionDebt: UsageCompactionDebtTracker
   private readonly usageMaintenance: FileSessionUsageMaintenance
 
-  constructor(options: {
-    dataDir: string
-    usageEventCompaction?: {
-      maxBytes?: number
-      retentionDays?: number
-      nowIso?: () => string
-    }
-    itemsCacheMaxBytes?: number
-    itemHistoryCompactionMinBytes?: number
-    eventHistoryCompaction?: { maxBytes?: number; retainBytes?: number }
-    compactionDelayMs?: number
-    fileAccess?: JsonlFileAccessCoordinator
-  }) {
+  constructor(options: FileSessionStoreOptions) {
     this.dataDir = resolve(options.dataDir, 'threads')
     this.fileAccess = options.fileAccess ?? new JsonlFileAccessCoordinator()
     this.liveCheckpoints = new FileSessionLiveCheckpointCoordinator(this)
@@ -406,6 +396,12 @@ export class FileSessionStore implements SessionStore {
     options: { threadIds?: string[] } = {}
   ): Promise<SessionLatestUsageSnapshot[]> {
     return loadLatestUsageSnapshotsFromIndex(this.usageIndex, () => listThreadDirs(this.dataDir), options)
+  }
+
+  async loadLatestContextSnapshot(threadId: string, maxSeq: number) {
+    if (!isSafeThreadId(threadId)) return null
+    const path = this.eventsPath(threadId)
+    return this.fileAccess.withRead(path, () => readLatestContextSnapshot(path, threadId, maxSeq))
   }
 
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {

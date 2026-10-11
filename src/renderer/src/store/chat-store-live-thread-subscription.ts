@@ -1,3 +1,4 @@
+import { restoredThreadContextSnapshot } from './thread-context-snapshot'
 import { getProvider } from '../agent/registry'
 import { formatRuntimeError } from '../lib/format-runtime-error'
 import type { ChatState } from './chat-store-types'
@@ -48,6 +49,7 @@ export function createLiveThreadSubscription(
       threadHasMoreHistory: keepExistingBlocks ? prevState.threadHasMoreHistory : false,
       threadHistoryLoading: false,
       blocks: keepExistingBlocks ? prevState.blocks : [],
+      lastContextSnapshot: keepExistingBlocks ? prevState.lastContextSnapshot : null,
       lastSeq: fallbackSinceSeq,
       ...(keepExistingBlocks
         ? copyLiveProjection(prevState)
@@ -76,6 +78,7 @@ export function createLiveThreadSubscription(
     }
     try {
       const {
+        contextSnapshot,
         activeTurn,
         blocks: rawBlocks,
         latestSeq,
@@ -117,6 +120,7 @@ export function createLiveThreadSubscription(
         threadHasMoreHistory: hasMoreHistory,
         threadHistoryLoading: false,
         blocks,
+        lastContextSnapshot: restoredThreadContextSnapshot(targetThreadId, contextSnapshot, get().lastContextSnapshot),
         lastSeq: latestSeq,
         ...restoredLiveProjection(latestSeq, busy ? liveProjection : undefined),
         busy,

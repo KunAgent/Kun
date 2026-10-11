@@ -1,3 +1,4 @@
+import type { ContextSnapshotEvent } from '../../../../kun/src/contracts/context-snapshot'
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
 import type { RoomThreadSource } from '@shared/rooms-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
@@ -98,6 +99,7 @@ export type CoreThreadSummaryJson = {
 }
 
 export type CoreThreadJson = CoreThreadSummaryJson & {
+  contextSnapshot?: ContextSnapshotEvent | null
   turns?: CoreTurnJson[]
   latestSeq?: number
   /** Request ids the runtime is still actively awaiting (live ask-user gate). */

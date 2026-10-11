@@ -109,6 +109,10 @@ export class HybridSessionStore implements SessionStore {
     this.delegate.setEventIndexRebuildWake(wake)
   }
 
+  async loadLatestContextSnapshot(threadId: string, maxSeq: number) {
+    return this.delegate.loadLatestContextSnapshot(threadId, maxSeq)
+  }
+
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
     return this.delegate.loadEventsSince(threadId, sinceSeq)
   }

@@ -1,3 +1,4 @@
+import { restoredThreadContextSnapshot } from './thread-context-snapshot'
 import { createLiveThreadSubscription } from './chat-store-live-thread-subscription'
 import { threadSnapshotNeedsRefresh } from './thread-snapshot-refresh'
 import { restoreThreadWorkspaceOwner } from './restore-thread-workspace-owner'
@@ -285,6 +286,7 @@ export function createThreadSelectionActions(
         activeThreadParentId: cached.activeThreadParentId,
         activeThreadGoal: cached.activeThreadGoal,
         activeThreadTodos: threadTodosForProjection(state, id, cached.activeThreadTodos),
+        lastContextSnapshot: restoredThreadContextSnapshot(id, cached.contextSnapshot),
         blocks: cached.blocks,
         lastSeq: cached.lastSeq,
         ...copyLiveProjection(cached),
@@ -355,6 +357,7 @@ export function createThreadSelectionActions(
         activeThreadParentId: targetThread?.parentThreadId ?? null,
         activeThreadGoal: targetThread?.goal ?? null,
         activeThreadTodos: targetThread?.todos ?? null,
+        lastContextSnapshot: null,
         blocks: [],
         lastSeq: 0,
         ...emptyLiveProjection(),
@@ -480,6 +483,7 @@ export function createThreadSelectionActions(
         activeThreadGoal: goal ?? null,
         activeThreadTodos: threadTodosForProjection(get(), id, todos),
         blocks,
+        lastContextSnapshot: restoredThreadContextSnapshot(id, detail.contextSnapshot, get().lastContextSnapshot),
         lastSeq: latestSeq,
         ...restoredLiveProjection(latestSeq, busy ? liveProjection : undefined),
         error: null,

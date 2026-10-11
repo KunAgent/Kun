@@ -95,7 +95,7 @@ export const SessionStoreOperationSchema = z.enum([
   'loadEventPage', 'trimEventsFromSeq', 'eventReplayFloorSeq',
   'loadItems', 'searchItemText', 'loadItemPage', 'loadSession', 'upsertSession',
   'highestSeq', 'allocateEventSeq',
-  'loadUsageRecords', 'aggregateUsage', 'loadLatestUsageSnapshots', 'resetMemory', 'clearThreadMemory'
+  'loadUsageRecords', 'aggregateUsage', 'loadLatestContextSnapshot', 'loadLatestUsageSnapshots', 'resetMemory', 'clearThreadMemory'
 ])
 export const ArtifactStoreOperationSchema = z.enum([
   'put', 'releaseOwner', 'delete', 'list', 'get', 'readRange', 'stat'

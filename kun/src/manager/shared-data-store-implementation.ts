@@ -558,6 +558,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         }).strict().parse(value)
         return this.sessionStore.loadEventsSince(body.threadId, body.sinceSeq)
       }
+      case 'loadLatestContextSnapshot': {
+        const body = z.object({ threadId: ThreadIdSchema, maxSeq: z.number().int().nonnegative() }).strict().parse(value)
+        return this.sessionStore.loadLatestContextSnapshot?.(body.threadId, body.maxSeq) ?? null
+      }
       case 'loadEventPage': {
         const body = z.object({
           threadId: ThreadIdSchema,

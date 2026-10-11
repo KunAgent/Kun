@@ -1,3 +1,4 @@
+import { threadContextSnapshot } from './thread-context-snapshot.js'
 import { z } from 'zod'
 import {
   CreateThreadRequest,
@@ -189,6 +190,7 @@ export async function getThread(
     : undefined
   return jsonResponse({
     ...ThreadSchemaReadable.parse(hydratedThread),
+    ...await threadContextSnapshot(sessionStore, threadId, replayFloor),
     activeTurn: thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)
       ? omitTurnItems(projectTimelineTurn(thread.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)!, [])) : null,
     latestSeq: replayFloor,
@@ -417,6 +419,7 @@ export async function getThreadTimeline(
 
   return jsonResponse(ThreadTimelineResponseSchema.parse({
     ...ThreadSchemaReadable.parse(projectTimelineThread(pageThread)),
+    ...(!parsedQuery.data.before ? await threadContextSnapshot(sessionStore, threadId, replayFloor) : {}),
     latestSeq: replayFloor,
     activeTurn: activeTurn ? omitTurnItems(projectTimelineTurn(activeTurn, [])) : null,
     latestTurn: latestTurnMetadata,

@@ -142,6 +142,7 @@ export type ThreadLiveProjection = {
 }
 
 export type ThreadDetail = {
+  contextSnapshot?: RequestContextSnapshot | null
   activeTurn?: { id: string; status: string; orchestration: 'direct' | 'graph' } | null
   blocks: ChatBlock[]
   latestSeq: number

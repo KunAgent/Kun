@@ -1,3 +1,4 @@
+import { restoredThreadContextSnapshot } from './thread-context-snapshot'
 import type { ChatBlock } from '../agent/types'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
 import type { ChatState } from './chat-store-types'
@@ -382,6 +383,7 @@ export function reduceLateChatProjection(
         : context.settlePendingRuntimeWork(snapshot.blocks)
       const shouldClearLive = snapshotTurnIsCurrent
       return {
+        ...(snapshotTurnIsCurrent ? { lastContextSnapshot: restoredThreadContextSnapshot(snapshot.threadId, snapshot.contextSnapshot, state.lastContextSnapshot) } : {}),
         blocks: snapshot.turnId
           ? reconcileSnapshotTurn(
               state.blocks,

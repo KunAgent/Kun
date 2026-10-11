@@ -34,6 +34,7 @@ export async function reconcileCompletedTurnFromThreadDetail(input: {
 
   try {
     const {
+      contextSnapshot,
       blocks: rawBlocks,
       latestSeq,
       threadStatus,
@@ -51,6 +52,7 @@ export async function reconcileCompletedTurnFromThreadDetail(input: {
       payload: {
         threadId,
         blocks: loaded,
+        contextSnapshot,
         latestSeq,
         threadStatus,
         latestTurnId,

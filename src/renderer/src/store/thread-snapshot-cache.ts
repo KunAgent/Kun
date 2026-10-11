@@ -1,4 +1,6 @@
+import { restoredThreadContextSnapshot } from './thread-context-snapshot'
 import type {
+  RequestContextSnapshot,
   ChatBlock,
   NormalizedThread,
   ThreadDetail,
@@ -34,6 +36,7 @@ const UNKNOWN_SNAPSHOT_BYTES = 4 * 1024 * 1024
 const SNAPSHOT_ESTIMATE_OVERFLOW = THREAD_SNAPSHOT_CACHE_MAX_BYTES + 1
 
 export type ThreadSnapshot = {
+  contextSnapshot?: RequestContextSnapshot | null
   threadId: string
   fingerprint: string
   blocks: ChatBlock[]
@@ -353,6 +356,7 @@ export function snapshotThreadProjection(state: ChatState, payloadBytes?: number
     fingerprint: thread
       ? threadSnapshotFingerprint(thread)
       : [threadId, '', '', '', '', '', '', ''].join('\u0000'),
+    contextSnapshot: restoredThreadContextSnapshot(threadId, state.lastContextSnapshot),
     blocks: state.blocks,
     lastSeq: state.lastSeq,
     threadHistoryCursor: state.threadHistoryCursor,
@@ -458,6 +462,7 @@ export function buildPrefetchedThreadSnapshot(
   })
   return {
     threadId: thread.id,
+    contextSnapshot: restoredThreadContextSnapshot(thread.id, detail.contextSnapshot),
     fingerprint: threadSnapshotFingerprint(thread),
     blocks,
     lastSeq: detail.latestSeq,

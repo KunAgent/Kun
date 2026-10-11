@@ -291,6 +291,7 @@ export function collectAssistantTextForTurn(
 export function clearedThreadSelection(): Pick<
   ChatState,
   | 'activeThreadId'
+  | 'lastContextSnapshot'
   | 'composerCollaborationEnabled'
   | 'threadLoadingId'
   | 'threadRefreshingId'
@@ -327,6 +328,7 @@ export function clearedThreadSelection(): Pick<
 > {
   return {
     activeThreadId: null,
+    lastContextSnapshot: null,
     composerCollaborationEnabled: true,
     threadLoadingId: null,
     threadRefreshingId: null,

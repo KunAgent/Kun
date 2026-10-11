@@ -5,6 +5,7 @@ import type { PendingMemoryCandidate } from '../contracts/memory-distillation-ru
 import { MemoryDistillationCommitResult } from '../contracts/memory-distillation-storage.js'
 import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
 import { z } from 'zod'
+import { ContextSnapshotEvent } from '../contracts/context-snapshot.js'
 import { ItemHistoryContentSchema } from '../contracts/item-history.js'
 import type {
   ArtifactStore,
@@ -271,6 +272,10 @@ export class ManagerRemoteSessionStore implements SessionStore {
 
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEventValue[]> {
     return RuntimeEvent.array().parse(await this.call('loadEventsSince', { threadId, sinceSeq }))
+  }
+
+  async loadLatestContextSnapshot(threadId: string, maxSeq: number) {
+    return ContextSnapshotEvent.nullable().parse(await this.call('loadLatestContextSnapshot', { threadId, maxSeq }))
   }
 
   async loadEventPage(threadId: string, options: EventHistoryPageOptions): Promise<EventHistoryPage> {

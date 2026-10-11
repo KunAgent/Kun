@@ -164,6 +164,15 @@ export class InMemorySessionStore implements SessionStore {
     return updated
   }
 
+  async loadLatestContextSnapshot(threadId: string, maxSeq: number) {
+    const events = this.events.get(threadId) ?? []
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index]!
+      if (event.kind === 'context_snapshot' && event.threadId === threadId && !event.child && event.seq <= maxSeq) return event
+    }
+    return null
+  }
+
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {
     const list = this.events.get(threadId) ?? []
     return list

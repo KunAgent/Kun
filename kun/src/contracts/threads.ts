@@ -1,5 +1,6 @@
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
+import { ContextSnapshotEvent } from './context-snapshot.js'
 import { RoomThreadContextSchema } from './thread-room-context.js'
 import { ExecutionTaskStateSchema } from './execution-tasks.js'
 import { ThreadTodoListSchema, ThreadTodoSourceSchema, ThreadTodoStatus, MAX_THREAD_TODOS, MAX_THREAD_TODO_CONTENT_CHARS } from './thread-todos.js'
@@ -377,6 +378,7 @@ export const ThreadSchemaReadable = ThreadSchemaBase
 export type ThreadRecord = z.infer<typeof ThreadSchema>
 
 export const ThreadTimelineResponseSchema = ThreadSchemaReadable.extend({
+  contextSnapshot: ContextSnapshotEvent.nullable().optional(),
   latestSeq: z.number().int().nonnegative(),
   activeTurn: TurnSchema.omit({ items: true }).nullable().optional(),
   latestTurn: TurnSchema.omit({ items: true }).nullable(),

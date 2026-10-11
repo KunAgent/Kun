@@ -1,4 +1,5 @@
 import type { AgentSession } from '../domain/session.js'
+import type { ContextSnapshotEvent } from '../contracts/context-snapshot.js'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
@@ -228,6 +229,8 @@ export interface SessionStore {
   runEventIndexRebuildSlice?(): Promise<boolean>
   /** Register the wake callback used to pull an idle rebuild to now. */
   setEventIndexRebuildWake?(wake: () => void): void
+  /** Latest main-agent context telemetry at the hydration replay boundary. */
+  loadLatestContextSnapshot?(threadId: string, maxSeq: number): Promise<ContextSnapshotEvent | null>
   loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]>
   /** Bounded replay page used by cross-process stores and long backlogs. */
   loadEventPage?(threadId: string, options: EventHistoryPageOptions): Promise<EventHistoryPage>
