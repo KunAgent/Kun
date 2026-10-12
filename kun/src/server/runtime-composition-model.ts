@@ -93,15 +93,17 @@ export async function createRuntimeModelComposition(
     run: defaultSecretCommandRunner,
     canBootstrapKeyFileFallback: async () => !(await hasPersistedSecretKeyMaterial(core.activeOptions.dataDir))
   })
+  const gmailNetworkProxy = async () => {
+    const { proxy } = await modelConnections.snapshot()
+    return proxy?.enabled ? proxy.url : ''
+  }
   const gmail = await createRuntimeGmailComposition({ core, extensionCredentialKeyProvider,
-    networkProxy: async () => {
-      const { proxy } = await modelConnections.snapshot()
-      return proxy?.enabled ? proxy.url : ''
-    } })
+    networkProxy: gmailNetworkProxy })
   startup.registerCleanup?.(() => gmail.dispose())
   bindGmailThreadDataProtection(core.rawThreadStore, gmail)
   bindGmailThreadDataProtection(core.threadStore, gmail)
-  const gmailLocalModel = await ManagedLocalGmailOllama.start(core.activeOptions.dataDir)
+  const gmailLocalModel = await ManagedLocalGmailOllama.start(core.activeOptions.dataDir,
+    { downloadProxy: gmailNetworkProxy })
   if (gmailLocalModel) startup.registerCleanup?.(() => gmailLocalModel.dispose())
   const gmailLocalClient = gmailLocalModel ? new VerifiedLocalOllamaModelClient(gmailLocalModel.proof()) : undefined
   if (gmailLocalModel) core.activeOptions = { ...core.activeOptions, providers: {

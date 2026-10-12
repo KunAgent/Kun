@@ -19,16 +19,25 @@ async function fixture(options: { model?: boolean; remote?: boolean; noCloud?: b
   let clock = 0
   let resolvePull!: (value: Response) => void
   const pull = new Promise<Response>((resolve) => { resolvePull = resolve })
-  const calls: { path: string; body?: unknown }[] = []
+  const calls: { path: string; body?: unknown; origin: string }[] = []
+  const children = [child]
+  let launches = 0
   const spawn = vi.fn<LocalOllamaDependencies['spawn']>(async () => {
-    setImmediate(() => { if (options.noCloud !== false) child.stderr?.emit('data', Buffer.from('Ollama cloud disabled: true\n')) })
-    return child
+    const index = launches++
+    const next = index === 0 ? child : Object.assign(new EventEmitter(), {
+      pid: 24_681 + index, stdout: new PassThrough(), stderr: new PassThrough(),
+      exitCode: null, signalCode: null, killed: false
+    }) as unknown as ChildProcess
+    if (index > 0) children.push(next)
+    setImmediate(() => { if (options.noCloud !== false) next.stderr?.emit('data', Buffer.from('Ollama cloud disabled: true\n')) })
+    return next
   })
-  const stop = vi.fn<LocalOllamaDependencies['stop']>(async () => { Object.assign(child, { exitCode: 0, killed: true }); child.emit('exit', 0) })
+  const stop = vi.fn<LocalOllamaDependencies['stop']>(async (target) => { Object.assign(target, { exitCode: 0, killed: true }); target.emit('exit', 0) })
   const assertEncrypted = vi.fn(async () => undefined)
   const assertPortOwner = vi.fn(async () => { if (!owned) throw new Error('Foreign listener') })
+  let nextPort = 43_123
   const dependencies: Partial<LocalOllamaDependencies> = {
-    platform: 'darwin', installed: async () => true, assertEncrypted, reservePort: async () => 43_123,
+    platform: 'darwin', installed: async () => true, assertEncrypted, reservePort: async () => nextPort++,
     spawn, stop, isOwned: () => owned, assertPortOwner, now: () => (clock += 100),
     pause: async () => { await new Promise((resolve) => setImmediate(resolve)) },
     directFetch: (_origin, assertLive) => async (input, init) => {
@@ -36,7 +45,7 @@ async function fixture(options: { model?: boolean; remote?: boolean; noCloud?: b
       const request = new Request(input, init)
       const path = new URL(request.url).pathname
       const body = request.method === 'POST' ? await request.json() : undefined
-      calls.push({ path, body })
+      calls.push({ path, body, origin: new URL(request.url).origin })
       if (path === '/api/version') return json({ version: '0.32.1' })
       if (path === '/api/show') return model ? json({ model_info: { 'general.architecture': 'qwen3' },
         modelfile: `FROM ${join(directory, 'gmail-model-cache', 'blobs', 'sha256-' + 'a'.repeat(64))}\nPARAMETER num_ctx 32768`,
@@ -46,7 +55,7 @@ async function fixture(options: { model?: boolean; remote?: boolean; noCloud?: b
     }
   }
   const start = () => ManagedLocalGmailOllama.start(join(directory, 'records'), dependencies)
-  return { directory, child, dependencies, spawn, stop, assertEncrypted, assertPortOwner, calls, start,
+  return { directory, child, children, dependencies, spawn, stop, assertEncrypted, assertPortOwner, calls, start,
     completePull: () => resolvePull(json({ status: 'success' })), removeOwnership: () => { owned = false },
     cleanup: async (service?: ManagedLocalGmailOllama) => {
       resolvePull(json({ status: 'success' }))
@@ -56,6 +65,68 @@ async function fixture(options: { model?: boolean; remote?: boolean; noCloud?: b
 }
 
 describe('app-owned cloud-disabled Gmail model', () => {
+  it('isolates an existing proxy in an asset-only sibling and destroys it before inference becomes ready', async () => {
+    const f = await fixture()
+    f.dependencies.downloadProxy = async () => 'http://127.0.0.1:10808'
+    const service = await f.start()
+    try {
+      service?.prepare()
+      await vi.waitFor(() => expect(f.calls.filter((call) => call.path === '/api/pull')).toHaveLength(1))
+      expect(f.spawn).toHaveBeenCalledTimes(2)
+      expect(f.spawn.mock.calls[0][2]?.env).not.toHaveProperty('HTTPS_PROXY')
+      expect(f.spawn.mock.calls[1][2]?.env).toMatchObject({ HTTPS_PROXY: 'http://127.0.0.1:10808/',
+        NO_PROXY: '127.0.0.1,localhost', OLLAMA_NO_CLOUD: '1', OLLAMA_DEBUG: '0', OLLAMA_DEBUG_LOG_REQUESTS: '0' })
+      expect(f.calls.find((call) => call.path === '/api/pull')?.origin).toBe('http://127.0.0.1:43124')
+      const sibling = (service as unknown as { downloader: ManagedLocalGmailOllama }).downloader
+      expect(() => sibling.proof()).toThrow('cannot provide')
+      expect(() => service?.proof().assertCurrent()).toThrow()
+      f.completePull()
+      await vi.waitFor(() => expect(service?.status()).toMatchObject({ ready: true, preparing: false }))
+      expect(f.children[1].killed).toBe(true)
+      expect(f.child.killed).toBe(false)
+      expect(service?.proof().origin).toBe('http://127.0.0.1:43123')
+      expect(f.calls.every((call) => ['/api/version', '/api/show', '/api/pull'].includes(call.path))).toBe(true)
+    } finally { await f.cleanup(service) }
+  })
+
+  it('cleans up the downloader when its asset metadata fails validation and rejects invalid proxy protocols', async () => {
+    const f = await fixture({ remote: true })
+    f.dependencies.downloadProxy = async () => 'https://test-user:fake-secret@proxy.example.com:8443'
+    const service = await f.start()
+    try {
+      service?.prepare()
+      await vi.waitFor(() => expect(f.calls.filter((call) => call.path === '/api/pull')).toHaveLength(1))
+      f.completePull()
+      await vi.waitFor(() => expect(service?.status()).toMatchObject({ ready: false, preparing: false, error: 'model_download_failed' }))
+      expect(f.children[1].killed).toBe(true)
+      expect(f.child.killed).toBe(false)
+      expect(JSON.stringify(service?.status())).not.toContain('fake-secret')
+    } finally { await f.cleanup(service) }
+    const invalid = await fixture()
+    invalid.dependencies.downloadProxy = async () => 'socks5://127.0.0.1:10808'
+    const denied = await invalid.start()
+    try {
+      denied?.prepare()
+      await vi.waitFor(() => expect(denied?.status()).toMatchObject({ preparing: false, error: 'model_download_failed' }))
+      expect(invalid.spawn).toHaveBeenCalledTimes(1)
+    } finally { await invalid.cleanup(denied) }
+  })
+
+  it('aborts and reclaims a private asset downloader when the main service is disposed', async () => {
+    const f = await fixture()
+    f.dependencies.downloadProxy = async () => 'http://127.0.0.1:10808'
+    const service = await f.start()
+    try {
+      service?.prepare()
+      await vi.waitFor(() => expect(f.calls.filter((call) => call.path === '/api/pull')).toHaveLength(1))
+      const closing = service!.dispose()
+      f.completePull()
+      await closing
+      expect(f.children.every((process) => process.killed)).toBe(true)
+      expect(service?.status()).toMatchObject({ running: false, ready: false, error: 'stopped' })
+    } finally { await f.cleanup(service) }
+  })
+
   it('starts a fixed owned binary with isolated cache and no inherited secrets/proxy preferences', async () => {
     const f = await fixture({ model: true })
     const service = await f.start()

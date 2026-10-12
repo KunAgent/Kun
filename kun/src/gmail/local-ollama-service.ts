@@ -31,6 +31,8 @@ export type LocalOllamaDependencies = {
   directFetch(origin: string, assertCurrent: () => void): typeof fetch
   now(): number
   pause(ms: number): Promise<void>
+  /** Existing network proxy is used only by a private public-asset downloader. */
+  downloadProxy?(): Promise<string>
 }
 
 /** A separate app-owned, cloud-disabled Ollama process; existing user servers are untouched. */
@@ -42,6 +44,7 @@ export class ManagedLocalGmailOllama {
   private serverVersion?: string
   private disposed = false
   private downloading?: Promise<void>
+  private downloader?: ManagedLocalGmailOllama
   private readonly shutdown = new AbortController()
   private error?: ManagedLocalGmailOllamaStatus['error']
   private startupTail = ''
@@ -49,10 +52,21 @@ export class ManagedLocalGmailOllama {
   readonly origin: string
   readonly cacheDirectory: string
 
-  private constructor(dataDir: string, private readonly port: number, private readonly deps: LocalOllamaDependencies) {
+  private constructor(private readonly dataDir: string, private readonly port: number,
+    private readonly deps: LocalOllamaDependencies, private readonly assetDownloadProxy?: string) {
     this.origin = `http://127.0.0.1:${port}`
     this.cacheDirectory = join(dirname(resolve(dataDir)), 'gmail-model-cache')
-    this.fetchImpl = deps.directFetch(this.origin, () => this.assertServerLive())
+    const physical = deps.directFetch(this.origin, () => this.assertServerLive())
+    this.fetchImpl = async (input, init) => {
+      if (this.assetDownloadProxy !== undefined) {
+        const request = new Request(input, init)
+        const path = new URL(request.url).pathname
+        if (!['/api/version', '/api/show', '/api/pull'].includes(path)) {
+          throw new GoogleWorkspaceModelPolicyError('The asset downloader does not accept inference requests')
+        }
+      }
+      return physical(input, init)
+    }
   }
 
   static async start(dataDir: string, overrides: Partial<LocalOllamaDependencies> = {}): Promise<ManagedLocalGmailOllama | undefined> {
@@ -79,6 +93,7 @@ export class ManagedLocalGmailOllama {
   }
 
   proof(): VerifiedLocalOllamaProof {
+    if (this.assetDownloadProxy !== undefined) throw new GoogleWorkspaceModelPolicyError('The asset downloader cannot provide a Gmail model proof')
     const directFetch: typeof fetch = async (input, init) => {
         this.assertCurrent()
         const request = new Request(input, init)
@@ -96,7 +111,7 @@ export class ManagedLocalGmailOllama {
   prepare(): ManagedLocalGmailOllamaStatus {
     if (this.disposed || !this.status().running || this.localModelVerified || this.downloading) return this.status()
     this.error = undefined
-    this.downloading = this.downloadModel().catch(() => {
+    this.downloading = this.prepareModel().catch(() => {
       this.localModelVerified = false
       if (!this.disposed) this.error = 'model_download_failed'
     }).finally(() => { this.downloading = undefined })
@@ -107,6 +122,7 @@ export class ManagedLocalGmailOllama {
     this.disposed = true
     this.localModelVerified = false
     this.shutdown.abort()
+    await this.downloader?.dispose()
     if (this.child) await this.deps.stop(this.child, { graceMs: 200, timeoutMs: 4_000 })
     await this.downloading
   }
@@ -117,8 +133,14 @@ export class ManagedLocalGmailOllama {
       await mkdir(this.cacheDirectory, { recursive: true, mode: 0o700 })
       await this.deps.assertEncrypted(this.cacheDirectory)
     } catch { this.error = 'storage_unavailable'; throw new Error('Encrypted local model storage is required') }
+    if (this.disposed) throw new Error('Local model startup was cancelled')
+    const env = localEnvironment(this.origin, this.cacheDirectory)
+    if (this.assetDownloadProxy !== undefined) {
+      env.HTTPS_PROXY = this.assetDownloadProxy
+      env.NO_PROXY = '127.0.0.1,localhost'
+    }
     this.child = await this.deps.spawn(KUN_GMAIL_OLLAMA_BINARY, ['serve'], {
-      env: localEnvironment(this.origin, this.cacheDirectory), cwd: this.cacheDirectory,
+      env, cwd: this.cacheDirectory,
       stdio: ['ignore', 'pipe', 'pipe'], ownerLossGraceMs: 1_000,
       beforeLaunch: () => this.deps.assertEncrypted(this.cacheDirectory)
     })
@@ -161,7 +183,29 @@ export class ManagedLocalGmailOllama {
     throw new Error('The managed local server did not prove cloud-disabled startup')
   }
 
-  private async downloadModel(): Promise<void> {
+  private async prepareModel(): Promise<void> {
+    const proxy = validateAssetProxy(await this.deps.downloadProxy?.() ?? '')
+    if (!proxy) { await this.pullModel(); return }
+    if (this.disposed) throw new Error('Local model preparation was cancelled')
+    const port = await this.deps.reservePort()
+    if (!Number.isInteger(port) || port < 1 || port > 65535 || port === this.port) throw new Error('The private download port is unavailable')
+    const sibling = new ManagedLocalGmailOllama(this.dataDir, port, this.deps, proxy)
+    this.downloader = sibling
+    try {
+      if (this.disposed) throw new Error('Local model preparation was cancelled')
+      await sibling.launch()
+      if (!sibling.status().running) throw new Error('The asset downloader did not prove ownership')
+      if (!sibling.localModelVerified) await sibling.pullModel()
+    } finally {
+      await sibling.dispose()
+      if (this.downloader === sibling) this.downloader = undefined
+    }
+    await this.deps.assertEncrypted(this.cacheDirectory)
+    if (!await this.checkModel()) throw new Error('The downloaded model is not local')
+    this.error = undefined
+  }
+
+  private async pullModel(): Promise<void> {
     await this.deps.assertEncrypted(this.cacheDirectory)
     this.assertServerLive()
     if (!this.observedNoCloud || !this.ownerVerified) throw new Error('Local model ownership is unavailable')
@@ -203,6 +247,17 @@ export class ManagedLocalGmailOllama {
       throw new GoogleWorkspaceModelPolicyError('Prepare Kun’s cloud-disabled local Gmail model before using it')
     }
   }
+}
+
+function validateAssetProxy(value: string): string {
+  const candidate = value.trim()
+  if (!candidate) return ''
+  if (candidate.length > 2_048) throw new Error('The model download proxy is invalid')
+  const url = new URL(candidate)
+  if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('The model download proxy is invalid')
+  }
+  return url.toString()
 }
 
 function localEnvironment(origin: string, cacheDirectory: string): NodeJS.ProcessEnv {

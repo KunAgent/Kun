@@ -16,6 +16,9 @@ provider cannot receive email data. Connecting Google alone remains possible.
 When Ollama is installed but the model is not ready, the Gmail card offers
 **Prepare local email model**. This downloads `qwen3:4b` (about 2.5 GB) if needed;
 the card never downloads on render. Preparation runs through the managed runtime.
+Public model downloads may use the configured network proxy through a temporary
+download-only process. That process cannot supply a mail-inference proof. The
+normal local inference process and transport remain separate and use no proxy.
 After it finishes, choose **Kun Gmail Local / qwen3:4b** in the normal model picker
 for a new private conversation. Existing tasks retain their original model.
 
