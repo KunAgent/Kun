@@ -1,8 +1,9 @@
 import { accountModelRequest } from './request-attempt-accounting.js'
-import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import type { GoogleWorkspaceModelFence, ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 import { ProviderRequestScheduler, ProviderAdmissionError } from '../../services/provider-request-scheduler.js'
 import type { ProviderAdmission } from '../../contracts/provider-configuration.js'
+import { GoogleWorkspaceModelPolicyError } from '../../domain/google-workspace-model-policy.js'
 
 export type ModelClientRouterInput = {
   default: ModelClient
@@ -120,6 +121,20 @@ export class MultiProviderModelClient implements ModelClient {
     }
   }
 
+  googleWorkspaceDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    const client = this.resolve(request.providerId)
+    if (!client.googleWorkspaceDispatchGuard) throw new GoogleWorkspaceModelPolicyError()
+    const guard = client.googleWorkspaceDispatchGuard(request)
+    const generation = this.gatewayGeneration
+    const assertCurrent = () => {
+      if (generation !== this.gatewayGeneration || client !== this.resolve(request.providerId)) {
+        throw new GoogleWorkspaceModelPolicyError('Gmail model selection changed after disclosure. Choose the reviewed route again.')
+      }
+      guard()
+    }
+    return Object.assign(assertCurrent, { mode: guard.mode, providerName: guard.providerName, assertEndpoint: guard.assertEndpoint })
+  }
+
   /** Exact review clients retain account scheduling and cannot silently adopt a replacement credential client. */
   capture(providerId?: string): ModelClient {
     const client = this.resolve(providerId)
@@ -134,6 +149,10 @@ export class MultiProviderModelClient implements ModelClient {
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    if (request.googleWorkspaceData) {
+      request.googleWorkspaceData.assertCurrent()
+      this.googleWorkspaceDispatchGuard(request)()
+    }
     request.paperReadOnly?.assertCurrent()
     request.gatewayRouting?.assertCurrent?.()
     const providerId = request.providerId?.trim().toLowerCase() || 'default'

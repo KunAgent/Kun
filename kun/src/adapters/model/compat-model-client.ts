@@ -1,7 +1,7 @@
 import { modelRequestCapacityFailure } from './model-request-capacity.js'
 import { serialToolStream } from './serial-tool-stream.js'
 import { observeModelAttempts } from './model-attempt-observer.js'
-import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import type { GoogleWorkspaceModelFence, ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { goalContextTexts } from '../../contracts/items.js'
 import { startLlmDebugRoundIfEnabled, type LlmDebugRound } from '../../services/llm-debug-recorder.js'
 import { exponentialRetryDelayMs, normalizeModelRequestRetryConfig, sleepWithAbort } from './compat-retry-policy.js'
@@ -37,6 +37,7 @@ import {
 } from './compat-model-support.js'
 import { resolveModelEndpointFormat, usesChatCompletionsShape, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
 import { gatewaySafeModelChunk, gatewaySafeThrownError } from './gateway-model-privacy.js'
+import { assertGoogleWorkspaceModelEndpoint, GOOGLE_WORKSPACE_MODEL_PROVIDER, GoogleWorkspaceModelPolicyError } from '../../domain/google-workspace-model-policy.js'
 
 export { redactUrlForLog } from './compat-http-diagnostics.js'
 export { DEFAULT_MODEL_STREAM_LIMITS, type ModelStreamLimits } from './model-stream-resource-budget.js'
@@ -47,7 +48,22 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
   paperReadOnlyDispatchGuard(): () => void { return () => undefined }
 
+  googleWorkspaceDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    const check = () => {
+      if (request.model.trim().toLowerCase() === 'auto' || this.config.customEndpointProtocol) throw new GoogleWorkspaceModelPolicyError()
+      const format = this.endpointFormatForModel(request.model || this.config.model)
+      assertGoogleWorkspaceModelEndpoint(this.baseUrlForFormat(format), format)
+    }
+    check()
+    return Object.assign(check, { mode: 'reviewed-cloud' as const, providerName: GOOGLE_WORKSPACE_MODEL_PROVIDER,
+      assertEndpoint: (url: string, protocol: string) => assertGoogleWorkspaceModelEndpoint(url, protocol, true) })
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    if (request.googleWorkspaceData) {
+      request.googleWorkspaceData.assertCurrent()
+      this.googleWorkspaceDispatchGuard(request)()
+    }
     const stream = (current: ModelRequest) => current.parallelToolCalls === false
       ? serialToolStream(this.streamObserved(current)) : this.streamObserved(current)
     return request.attemptObserver ? observeModelAttempts(request, stream) : stream(request)
@@ -56,12 +72,12 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
   private async *streamObserved(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     // External gateway content never enters native prompt/trajectory diagnostics,
     // even when a global or per-thread debug policy requests full capture.
-    if (request.gatewayRouting || request.paperReadOnly) {
+    if (request.gatewayRouting || request.paperReadOnly || request.googleWorkspaceData) {
       try {
         for await (const chunk of this.streamInner(request, null)) {
           const safe = gatewaySafeModelChunk(this.attributeUsage(chunk, request))
-          yield request.paperReadOnly && safe.kind === 'error'
-            ? { ...safe, message: safe.message.replace('Gateway upstream', 'Paper model') } : safe
+          yield (request.paperReadOnly || request.googleWorkspaceData) && safe.kind === 'error'
+            ? { ...safe, message: safe.message.replace('Gateway upstream', request.googleWorkspaceData ? 'Gmail model' : 'Paper model') } : safe
         }
       } catch (error) {
         if (!request.abortSignal.aborted) yield gatewaySafeThrownError(error)
@@ -224,6 +240,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       apiKey: credentials.apiKey,
       ...(request.gatewayRouting ? { gatewayRouting: request.gatewayRouting } : {}),
       ...(request.paperReadOnly ? { paperReadOnly: request.paperReadOnly } : {}),
+      ...(request.googleWorkspaceData ? { googleWorkspaceData: request.googleWorkspaceData } : {}),
       ...(request.routingBudget ? { routingBudget: request.routingBudget } : {}),
       beforeProviderDispatch: request.beforeProviderDispatch,
       beforeWireDispatch: request.beforeWireDispatch,

@@ -5,6 +5,7 @@ import type {
   ToolProviderPolicy
 } from '../../ports/tool-host.js'
 import type { LocalTool } from './local-tool-host.js'
+import { isLocalGmailActingProvider, isNativeGmailToolName } from '../../gmail/tool-policy.js'
 import { isToolAdvertisedInSandbox } from './sandbox-policy.js'
 import { isToolAllowedInOrchestration } from '../../graph/graph-tool-boundary.js'
 import {
@@ -164,6 +165,7 @@ export class CapabilityRegistry {
   }
 
   private canUseProvider(provider: ToolProviderPolicy, context?: ToolHostContext): boolean {
+    if (isLocalGmailActingProvider(context) && (provider.id !== 'gmail' || provider.kind !== 'built-in')) return false
     if (!provider.enabled || !provider.available) return false
     // `gui` is reserved for capabilities that require a live desktop
     // workbench or control the local desktop. Diagnostics may list every
@@ -180,6 +182,7 @@ export class CapabilityRegistry {
 
   private canUseTool(tool: LocalTool, context?: ToolHostContext): boolean {
     const toolName = tool.name
+    if (isLocalGmailActingProvider(context) && !isNativeGmailToolName(toolName)) return false
     if (context && isPlanModeToolContext(context) && !isPlanModeToolAllowed(tool)) {
       return false
     }

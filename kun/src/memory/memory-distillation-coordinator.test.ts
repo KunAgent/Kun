@@ -1,4 +1,5 @@
 import { canonicalMemoryHash } from './memory-record-normalizer.js'
+import { bindGmailThreadDataProtection } from '../gmail/thread-data-state.js'
 import { createHash } from 'node:crypto'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -27,6 +28,17 @@ const normalizedWorkspace = process.platform === 'win32'
   : resolve(workspace)
 
 describe('MemoryDistillationCoordinator', () => {
+  it('does not queue or memorize Gmail-derived conversation content', async () => {
+    const harness = await createHarness({ prompt: 'Summarize a private email', assistant: 'Private email summary' })
+    bindGmailThreadDataProtection(harness.threads, {
+      hasGoogleData: async (id) => id === 'thread:thread_1', markGoogleData: async () => {},
+      status: async () => ({ configured: true, connected: true, reconnectRequired: false, scopes: [], allowModelSharing: true })
+    })
+    expect(await harness.coordinator.distill('thread_1', 'turn_1')).toEqual([])
+    expect(harness.requests).toEqual([])
+    expect(await harness.pending.list()).toEqual([])
+    expect(await harness.memory.list({ all: true })).toEqual([])
+  })
   it('extracts after a completed non-empty turn without writing before approval', async () => {
     const harness = await createHarness()
     const pending = await harness.coordinator.distill('thread_1', 'turn_1')
@@ -481,7 +493,7 @@ async function createHarness(options: {
     ...(options.timeout ? { timeoutMs: options.timeoutMs ?? 5 } : {}),
     onDiagnostic: ({ message }) => diagnostics.push(message)
   })
-  return { coordinator, memory, pending, requests, diagnostics }
+  return { coordinator, memory, pending, requests, diagnostics, threads }
 }
 
 function makeThread(options: {

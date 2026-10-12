@@ -64,6 +64,7 @@ import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
 import wardrobeInvite from './common/wardrobe-invite.json'
 import codeTour from './common/code-tour.json'
+import gmail from './common/gmail.json'
 
 const common = {
   ...composerSubscriptionQuota,
@@ -137,6 +138,7 @@ const common = {
   ...whatsNew,
   ...wardrobeInvite,
   ...codeTour,
+  ...gmail,
 }
 
 export default common

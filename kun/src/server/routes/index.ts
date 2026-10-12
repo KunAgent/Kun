@@ -17,12 +17,14 @@ import { registerReviewRoutes } from './register-review-routes.js'
 import { registerHandoffRoutes } from './register-handoff-routes.js'
 import { registerExecutionUnitRoutes } from './register-execution-unit-routes.js'
 import { registerWorkerCallbackRoutes } from './register-worker-callback-routes.js'
+import { registerGmailRoutes } from './gmail.js'
 
 /** Build the full HTTP router while preserving first-match registration order. */
 export function buildRouter(runtime: ServerRuntime): Router {
   const router = new Router()
   const approvalConsent = new ApprovalConsentVerifier(runtime.runtimeToken)
   registerCoreRoutes(router, runtime)
+  registerGmailRoutes(router, runtime)
   registerHarnessRoutes(router, runtime)
   registerActivityRoutes(router, runtime)
   registerTaskWorkspaceRoutes(router, runtime)

@@ -1,5 +1,6 @@
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
 import {
   join,
   isDeepStrictEqual,
@@ -355,6 +356,7 @@ export function createRuntimeConfigController(
 	      nextSubagentConfig
 	    )
 	    const nextBaseToolProviders = [
+	      buildGmailToolProvider(services.gmail, core.threadStore),
 	      builtinProvider('execution-tasks', buildExecutionTaskLocalTools(threadService.executionTasks)),
 	      builtinProvider('builtin', withBackgroundShellTools(
 	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),

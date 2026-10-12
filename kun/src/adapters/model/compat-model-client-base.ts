@@ -1,4 +1,5 @@
 import { fitModelRequestOutput } from './model-request-capacity.js'
+import { assertGoogleWorkspaceModelEndpoint, GoogleWorkspaceModelPolicyError } from '../../domain/google-workspace-model-policy.js'
 import { modelInputHasNoTextBound } from './model-input-bound.js'
 import { protectInferenceHeaders, ProviderSecretScopeError } from '../../services/provider-request-security.js'
 import { randomUUID } from 'node:crypto'
@@ -161,12 +162,23 @@ export class CompatModelClientBase {
       apiKey: string
       gatewayRouting?: ModelRequest['gatewayRouting']
       paperReadOnly?: ModelRequest['paperReadOnly']
+      googleWorkspaceData?: ModelRequest['googleWorkspaceData']
       routingBudget?: ModelRequest['routingBudget']
       beforeProviderDispatch?: ModelRequest['beforeProviderDispatch']
       beforeWireDispatch?: ModelRequest['beforeWireDispatch']
       onWireDispatch?: ModelRequest['onWireDispatch']
     }
   ): Promise<CompatPostResult> {
+    if (trace.googleWorkspaceData) {
+      try {
+        trace.googleWorkspaceData.assertCurrent()
+        if (trace.googleWorkspaceData.assertEndpoint) trace.googleWorkspaceData.assertEndpoint(url, trace.endpointFormat)
+        else assertGoogleWorkspaceModelEndpoint(url, trace.endpointFormat, true)
+      } catch {
+        return { kind: 'error', code: 'google_data_provider_not_approved', message: new GoogleWorkspaceModelPolicyError().message,
+          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+      }
+    }
     if (trace.paperReadOnly) {
       trace.paperReadOnly.assertCurrent()
       if (!trace.paperReadOnly.takeAttempt()) return { kind: 'error', code: 'paper_request_budget_exhausted',
@@ -214,6 +226,7 @@ export class CompatModelClientBase {
       : undefined
     try {
       trace.paperReadOnly?.assertCurrent()
+      trace.googleWorkspaceData?.assertCurrent()
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       if (trace.beforeWireDispatch) {
@@ -229,6 +242,11 @@ export class CompatModelClientBase {
       }
       if (trace.gatewayRouting?.beforeDispatch) await trace.gatewayRouting.beforeDispatch()
       trace.paperReadOnly?.assertCurrent()
+      trace.googleWorkspaceData?.assertCurrent()
+      if (trace.googleWorkspaceData) {
+        if (trace.googleWorkspaceData.assertEndpoint) trace.googleWorkspaceData.assertEndpoint(url, trace.endpointFormat)
+        else assertGoogleWorkspaceModelEndpoint(url, trace.endpointFormat, true)
+      }
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       trace.onWireDispatch?.()

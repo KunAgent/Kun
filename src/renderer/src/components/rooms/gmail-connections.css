@@ -1,0 +1,16 @@
+.gmail-connection-card { max-width: 540px; min-width: 0; }
+.gmail-connection-card small { line-height: 1.5; }
+.gmail-connection-card small svg { display: inline-block; vertical-align: text-bottom; }
+.gmail-connected-email { overflow-wrap: anywhere; font-weight: 600; }
+.gmail-permissions { margin: 12px 0; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--ds-text-muted); }
+.gmail-sharing-consent { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 10px; font-size: 12px; line-height: 1.5; }
+.gmail-sharing-consent input { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; accent-color: var(--ds-accent); }
+.gmail-sharing-consent small { display: block; margin-top: 5px; color: var(--ds-text-muted); }
+.gmail-sharing-consent span { min-width: 0; overflow-wrap: anywhere; }
+.gmail-waiting { display: flex; align-items: center; gap: 7px; }
+.gmail-actions { flex-wrap: wrap; }
+.gmail-actions button { flex-basis: 145px; }
+.gmail-revoke { margin-top: 10px; padding: 4px 0; font-size: 11px; text-decoration: underline; color: var(--ds-text-muted); }
+.gmail-revoke-confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--ds-border); border-radius: 10px; font-size: 12px; line-height: 1.5; }
+.gmail-connection-card button:focus-visible, .gmail-connection-card input:focus-visible, .gmail-connection-card a:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 3px; }
+@media (max-width: 420px) { .gmail-actions button { flex-basis: 100%; } .gmail-connection-card .rooms-app-connection-content { padding: 12px; } }

@@ -72,6 +72,18 @@ async function enableGatewayInRegistry(runtime: Awaited<ReturnType<typeof serveR
 }
 
 describe('segmented local model gateway apply', () => {
+  it('keeps the native Gmail connection and tools after applying model settings', async () => {
+    const runtime = await serveRuntime()
+    const connection = runtime.gmail
+    const context = { threadId: 'gmail-preview', turnId: 'gmail-preview-turn', workspace: '/tmp',
+      clientSurface: 'gui' as const, harnessId: 'kun', approvalPolicy: 'auto' as const,
+      sandboxMode: 'workspace-write' as const, abortSignal: new AbortController().signal,
+      awaitApproval: async () => 'allow' as const }
+    expect((await runtime.toolHost!.listTools(context)).some((tool) => tool.name === 'gmail_connect')).toBe(true)
+    await runtime.applyConfig({ serve: { model: 'model-after' } })
+    expect(runtime.gmail).toBe(connection)
+    expect((await runtime.toolHost!.listTools(context)).some((tool) => tool.name === 'gmail_connect')).toBe(true)
+  })
   it('applies unrelated sections while rejecting an enabled gateway without a key', async () => {
     const runtime = await serveRuntime()
     await enableGatewayInRegistry(runtime)

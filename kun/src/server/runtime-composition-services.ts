@@ -101,12 +101,14 @@ import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
   const agentDispatchService = createRuntimeAgentDispatch(model)
   const { core } = model
+  const gmail = model.gmail
   const { options } = core
   const {
     stores,
@@ -529,6 +531,7 @@ export async function createRuntimeServices(
   const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
     writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
+    buildGmailToolProvider(gmail, core.threadStore),
     { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
       tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {
@@ -607,6 +610,7 @@ export async function createRuntimeServices(
   const defaultIsCursorSdk = process.env.KUN_RUNTIME_PROVIDER_KIND === 'cursor-sdk'
   return {
     model,
+    gmail,
     agentDispatchService,
     migrationMaintenance,
     executionLeases,

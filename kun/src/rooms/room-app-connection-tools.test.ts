@@ -14,6 +14,9 @@ import { bindRoomPeerStore } from './room-peer-tools.js'
 import { roomRunId } from './room-run-recording.js'
 import { bindRoomAppAccess, roomAppConnectionTools } from './room-app-connection-tools.js'
 import { markRoomAppConnectionResumed, setRoomAppConnectionStatus } from './room-app-connections.js'
+import { GMAIL_SCOPES } from '../gmail/ports.js'
+import { applyRoomToolPolicy } from '../loop/room-turn-policy.js'
+import { gmailToolScope } from '../adapters/tool/gmail-tool-scope.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
@@ -27,7 +30,8 @@ async function fixture() {
   bindRoomAppAccess(threads, () => ({ servers: {
     notion: { enabled: true, oauth: { enabled: true } },
     google_gmail: { enabled: true, oauth: { enabled: true } }
-  }, statuses: {} }))
+  }, statuses: {}, gmail: { configured: true, connected: false, reconnectRequired: false,
+    scopes: [...GMAIL_SCOPES], allowModelSharing: false } }))
   const member = { id: 'agent-member', displayName: 'Bot', participantAgentId: 'agent-1',
     presetId: 'general', role: 'developer' as const, roleNotes: '', enabled: true,
     revision: 0, allowedRepositoryIds: [] }
@@ -46,6 +50,7 @@ async function fixture() {
     input: 'Gmail', attachmentIds: [], status: 'running', createdAt: now, updatedAt: now
   }), null)
   const context: ToolHostContext = { threadId: thread.id, turnId: turn.id, workspace: directory,
+    clientSurface: 'gui',
     sandboxMode: 'workspace-write', approvalPolicy: 'auto', threadMode: 'agent', roomStepKind: 'conversation',
     roomAgent: true, activeToolCallId: 'call-1', abortSignal: new AbortController().signal,
     awaitApproval: async () => 'allow' }
@@ -57,10 +62,12 @@ async function fixture() {
 }
 
 describe('Room app connection cards', () => {
-  it('omits Google and publishes one durable card for a configured app', async () => {
+  it('offers native Gmail and publishes one durable card for a configured app', async () => {
     const f = await fixture()
-    expect((await f.list.execute({}, f.context)).output).toMatchObject({ suggested: [],
-      configured: [expect.objectContaining({ id: 'notion' })] })
+    expect((await f.list.execute({}, f.context)).output).toMatchObject({ suggested: [
+      { id: 'google_gmail', name: 'Gmail', connectionKind: 'native_gmail' }],
+      configured: [expect.objectContaining({ id: 'notion' }),
+        expect.objectContaining({ id: 'google_gmail', status: 'not_connected', connectionKind: 'native_gmail' })] })
     const first = await f.request.execute({ serverId: 'notion', reason: 'I need Notion to search your notes.' }, f.context)
     expect(first.isError).not.toBe(true)
     const id = (first.output as { messageId: string }).messageId
@@ -94,13 +101,51 @@ describe('Room app connection cards', () => {
   it('rejects unknown apps, blocked apps and fabricated turn scope', async () => {
     const f = await fixture()
     expect((await f.request.execute({ serverId: 'unknown', reason: 'Need it' }, f.context)).isError).toBe(true)
-    expect((await f.request.execute({ serverId: 'gmail', reason: 'Need it' }, f.context)).isError).toBe(true)
     expect((await f.request.execute({ serverId: 'google_drive', reason: 'Need it' }, f.context)).isError).toBe(true)
     expect((await f.request.execute({ serverId: 'notion', reason: 'Need it' }, { ...f.context, turnId: 'wrong' })).isError).toBe(true)
     const thread = (await f.threads.get('conv-thread'))!
     thread.roomContext!.blockedProviderIds.push('mcp:notion')
     await f.threads.upsert(thread)
     expect((await f.request.execute({ serverId: 'notion', reason: 'Need it' }, f.context)).isError).toBe(true)
+    expect(await f.store.list('message', { roomId: f.room.id })).toHaveLength(0)
+  })
+
+  it('creates a native Gmail card without requiring MCP OAuth or treating Google connection as model consent', async () => {
+    const f = await fixture()
+    bindRoomAppAccess(f.threads, async (scopeId) => {
+      expect(scopeId).toBe('room:private-room')
+      return { servers: {}, statuses: {}, gmail: { configured: true, connected: true,
+        reconnectRequired: false, scopes: [...GMAIL_SCOPES], allowModelSharing: false } }
+    })
+    const result = await f.request.execute({ serverId: 'gmail', reason: 'Summarize unread mail' }, f.context)
+    expect(result.isError).not.toBe(true)
+    const id = (result.output as { messageId: string }).messageId
+    expect((await f.store.get<RoomMessage>('message', id))!.value.appConnection)
+      .toMatchObject({ serverId: 'google_gmail', status: 'requested' })
+    const thread = (await f.threads.get('conv-thread'))!
+    thread.roomContext!.blockedProviderIds.push('gmail')
+    await f.threads.upsert(thread)
+    expect((await f.request.execute({ serverId: 'google_gmail', reason: 'Need mail' }, f.context)).isError).toBe(true)
+  })
+
+  it('keeps native Gmail available while remote Gmail is hidden, but enforces an explicitly saved Agent deny', async () => {
+    const f = await fixture()
+    const thread = (await f.threads.get('conv-thread'))!
+    const context = applyRoomToolPolicy(f.context, thread)
+    expect(context.blockedProviderIds).toContain('mcp:google_gmail')
+    await expect(gmailToolScope(f.threads, context)).resolves.toBe('room:private-room')
+    thread.roomContext!.blockedProviderIds.push('mcp:google_gmail')
+    await f.threads.upsert(thread)
+    await expect(gmailToolScope(f.threads, applyRoomToolPolicy(f.context, thread)))
+      .rejects.toMatchObject({ code: 'provider_blocked' })
+  })
+
+  it('refuses a Gmail connection proposal in an IM-mirrored private conversation', async () => {
+    const f = await fixture()
+    await f.store.commit({ requestId: 'mirror-create', checks: [{ kind: 'agent_im_connection', id: 'mirror-1', expectedRevision: null }], puts: [{ kind: 'agent_im_connection', id: 'mirror-1',
+      roomId: f.room.id, value: { enabled: true } }] })
+    expect((await f.request.execute({ serverId: 'gmail', reason: 'Read mail' }, f.context)).isError).toBe(true)
+    await expect(gmailToolScope(f.threads, f.context)).rejects.toMatchObject({ code: 'gmail_desktop_only' })
     expect(await f.store.list('message', { roomId: f.room.id })).toHaveLength(0)
   })
 })

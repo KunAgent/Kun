@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({ listRoomApps: vi.fn(), addRoomApp: vi.fn(), au
 vi.mock('./room-apps-client', () => ({ listRoomApps: mocks.listRoomApps, addRoomApp: mocks.addRoomApp,
   authorizeRoomApp: mocks.authorizeRoomApp }))
 vi.mock('./rooms-client', () => ({ roomsRequest: mocks.roomsRequest, roomRequestId: () => 'click-1' }))
+vi.mock('./RoomGmailConnectionCard', () => ({ RoomGmailConnectionCard: () => createElement('span', { 'data-native-gmail': true }, 'Native Gmail') }))
 
 const card = { id: 'card-1', roomId: 'private-room', body: 'I need Notion to search your notes.', bodyRevision: 0,
   presentationKind: 'app_connection', appConnection: { serverId: 'notion', status: 'requested', resumed: false } } as RoomMessage
@@ -47,11 +48,10 @@ describe('Room app connection card', () => {
     expect(mocks.roomsRequest).toHaveBeenCalledWith('/v1/rooms/private-room/app-connections/card-1/skip', 'POST', { clientRequestId: 'click-1' })
   })
 
-  it('only offers Skip on a historical Google connection card', async () => {
+  it('routes Gmail connection cards to the native flow', async () => {
     const oldCard = { ...card, appConnection: { serverId: 'google_gmail', status: 'requested' as const, resumed: false } }
     await act(async () => { renderer = create(createElement(RoomAppConnectionCard, { message: oldCard })) })
-    const labels = renderer!.root.findAllByType('button').flatMap((button) => button.children)
-    expect(labels).toContain('Skip')
-    expect(labels).not.toContain('Continue')
+    expect(renderer!.root.findByProps({ 'data-native-gmail': true }).children).toContain('Native Gmail')
+    expect(mocks.authorizeRoomApp).not.toHaveBeenCalled()
   })
 })

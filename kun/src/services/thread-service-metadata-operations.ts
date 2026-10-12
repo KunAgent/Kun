@@ -1,4 +1,5 @@
 import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { inheritGoogleDataBeforeThreadWrite } from '../gmail/thread-data-state.js'
 import { isAbsolute, relative } from 'node:path'
 import type { ThreadStoreListOptions, ThreadStoreListPage } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -262,6 +263,7 @@ async create(this: ThreadService,
     // Without this, a same-id create could reopen the fence just before a
     // concurrent delete performs raw rm(), losing the new lifetime.
     await this['withThreadMutation'](thread.id, async () => {
+      await inheritGoogleDataBeforeThreadWrite(this['threadStore'], thread)
       // A user-visible create is the only operation allowed to reactivate an
       // id after deletion. It deliberately starts a fresh generation so
       // delayed writes captured by the previous lifetime remain stale.

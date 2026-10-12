@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { inheritGoogleDataBeforeThreadWrite } from '../gmail/thread-data-state.js'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { cloneExecutionTaskState } from '../tasks/execution-task-state.js'
 import { isAbsolute, relative, resolve } from 'node:path'
@@ -282,6 +283,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
       updatedAt: now,
       turns: clonedTurns
     }
+    await inheritGoogleDataBeforeThreadWrite(this['threadStore'], record, clonedSessionItems, [current.id])
     for (const item of clonedSessionItems) {
       await this['sessionStore'].appendItem(record.id, item)
     }
@@ -537,6 +539,7 @@ async resumeSession(this: ThreadService,
       updatedAt: now,
       turns: clonedTurns
     }
+    await inheritGoogleDataBeforeThreadWrite(this['threadStore'], resumed, clonedSessionItems, [sessionId])
     for (const item of clonedSessionItems) {
       await this['sessionStore'].appendItem(resumed.id, item)
     }

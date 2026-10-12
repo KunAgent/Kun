@@ -134,9 +134,10 @@ describe('writable room general-capability parity', () => {
       policy: 'auto', toolKind: 'tool_call', sideEffect: 'read-only', execute: async () => ({ output: {} }) })
     const registry = new CapabilityRegistry([
       { id: 'mcp:google_gmail', kind: 'mcp', enabled: true, available: true, tools: [tool('gmail_search')] },
+      { id: 'gmail', kind: 'built-in', enabled: true, available: true, tools: [tool('native_gmail_search')] },
       { id: 'mcp:notion', kind: 'mcp', enabled: true, available: true, tools: [tool('notion_search')] }
     ])
-    expect(registry.listTools(context).map((entry) => entry.name)).toEqual(['notion_search'])
+    expect(registry.listTools(context).map((entry) => entry.name)).toEqual(['native_gmail_search', 'notion_search'])
     expect(() => registry.resolveTool('gmail_search', context)).toThrow('not advertised')
     expect(registry.resolveTool('notion_search', context).tool.name).toBe('notion_search')
     expect(applyRoomToolPolicy(raw, roomThread({ kind: 'execution', blockedProviderIds: [] })).blockedProviderIds)

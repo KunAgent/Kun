@@ -241,6 +241,13 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  compileEndpoint('/v1/gmail/status', ['GET']),
+  compileEndpoint('/v1/gmail/local-model', ['GET', 'POST']),
+  compileEndpoint('/v1/gmail/authorize', ['POST']),
+  compileEndpoint('/v1/gmail/authorization/{id}', ['GET', 'DELETE']),
+  compileEndpoint('/v1/gmail/sharing', ['PATCH']),
+  compileEndpoint('/v1/gmail/connection', ['DELETE']),
+  compileEndpoint('/v1/gmail/continue', ['POST']),
   compileEndpoint(KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_AGENT_DISPATCH_INTENT_TEMPLATE, ['GET']),
   compileEndpoint(KUN_AGENT_DISPATCH_ACTION_TEMPLATE, ['POST']),

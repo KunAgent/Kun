@@ -10,6 +10,7 @@ export function withModelVerification(client: ModelClient, providerId: string,
   return {
     get provider() { return client.provider }, get model() { return client.model },
     ...(client.paperReadOnlyDispatchGuard ? { paperReadOnlyDispatchGuard: client.paperReadOnlyDispatchGuard.bind(client) } : {}),
+    ...(client.googleWorkspaceDispatchGuard ? { googleWorkspaceDispatchGuard: client.googleWorkspaceDispatchGuard.bind(client) } : {}),
     ...(client.gatewayDispatchGuard ? { gatewayDispatchGuard: client.gatewayDispatchGuard.bind(client) } : {}),
     ...(client.selectsRouteTargetDuringStream ? { selectsRouteTargetDuringStream: client.selectsRouteTargetDuringStream.bind(client) } : {}),
     async *stream(request) {

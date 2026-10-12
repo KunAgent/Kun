@@ -7,12 +7,15 @@ import type { ToolPresentation } from '@shared/tool-presentation'
 import { readToolPresentation } from '../../agent/tool-presentation'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { ToolDetailsContent } from './ToolDetailsContent'
+import { GmailToolCard, gmailToolThread } from './gmail-tool-card'
 
 export function ToolBlockDetails({ block }: { block: ToolBlock }): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useTimelineFilePreviewWorkspaceRoot()
   const presentation = readToolPresentation(block)
   const [expanded, setExpanded] = useState(false)
+  const gmailThread = gmailToolThread(presentation)
+  if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
   return <div className="min-w-0" data-tool-block-details>
     <div className="mb-2 flex justify-end">
       <button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"

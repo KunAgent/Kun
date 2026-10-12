@@ -1,4 +1,5 @@
 import { registerHostActionApprovalGrant } from './action-approval-grants.js'
+import { isLocalGmailActingProvider } from '../../gmail/tool-policy.js'
 import { randomUUID } from 'node:crypto'
 import type { ToolHost, ToolHostContext, ToolHostResult, ToolCallLike, ToolProviderPolicy } from '../../ports/tool-host.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
@@ -90,6 +91,8 @@ export class LocalToolHost implements ToolHost {
     )
     let tool = resolved.tool
     const provider = resolved.provider
+    const toolHooks = isLocalGmailActingProvider(context) || (provider.id === 'gmail' && provider.kind === 'built-in')
+      ? [] : components.hooks
     if (tool.policy === 'never') {
       throw new Error(`tool ${call.toolName} is disabled by policy`)
     }
@@ -103,7 +106,7 @@ export class LocalToolHost implements ToolHost {
     }
     let preHooks: PreToolUseOutcome
     try {
-      preHooks = await runPreToolUseHooks(components.hooks, {
+      preHooks = await runPreToolUseHooks(toolHooks, {
         call,
         context: hookContext(context)
       })
@@ -445,7 +448,7 @@ export class LocalToolHost implements ToolHost {
     const meta = result.meta
     let hookedResult: PostToolUseOutcome
     try {
-      hookedResult = await runPostToolUseHooks(components.hooks, {
+      hookedResult = await runPostToolUseHooks(toolHooks, {
         call: activeCall,
         context: hookContext(context),
         result

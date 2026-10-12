@@ -10,6 +10,7 @@ import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock, isWorker
 import { isAssignmentBlock } from '@shared/assignment-card'
 import { AssignmentCard } from '../workers/AssignmentCard'
 import { ToolBlockDetails } from './ToolBlockDetails'
+import { GmailToolCard, gmailToolThread } from './gmail-tool-card'
 import { ToolStateMeta } from './ToolStateMeta'
 import { readToolPresentation } from '../../agent/tool-presentation'
 import { AssistantMarkdown } from './AssistantMarkdown'
@@ -451,6 +452,8 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
 
   const hasDetail = Boolean(block.meta?.toolPresentation || block.meta?.acpKind || block.detail?.trim())
   const canExpand = hasDetail || running
+  const gmailThread = gmailToolThread(presentation)
+  if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
 
   return (
     <div className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
