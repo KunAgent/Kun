@@ -1,5 +1,5 @@
 import type { TurnItem } from '../contracts/items.js'
-import { GmailScopeIdSchema } from '../contracts/gmail.js'
+import { GmailScopeIdSchema, type GmailModelRecipientBinding } from '../contracts/gmail.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import { GoogleWorkspaceModelPolicyError } from '../domain/google-workspace-model-policy.js'
@@ -12,7 +12,7 @@ const MAX_LINEAGE = 128
 const MAX_HISTORY_REFERENCES = 128
 const GOOGLE_MAIL_TOOLS = new Set(['gmail_read', 'gmail_search', 'gmail_send'])
 const HISTORY_TOOLS = new Set(['read_thread_history', 'read_source_history', 'read_agent_history'])
-type GmailState = Pick<GmailServicePort, 'hasGoogleData' | 'markGoogleData' | 'status'>
+type GmailState = Pick<GmailServicePort, 'hasGoogleData' | 'markGoogleData' | 'status' | 'captureModelSharingFence'>
 type ThreadLookup = Pick<ThreadStore, 'get' | 'getMetadata'>
 const bindings = new WeakMap<ThreadStore, GmailState>()
 
@@ -22,7 +22,7 @@ export function bindGmailThreadDataProtection(threads: ThreadStore, gmail: Gmail
 
 /** Resolve taint from canonical identities, including deleted-but-still-classified ancestors. */
 export async function resolveGmailThreadDataState(
-  threads: ThreadLookup, gmail: GmailState, threadId: string, history: readonly TurnItem[] = [], sourceIds: readonly string[] = []
+  threads: ThreadLookup, gmail: GmailState, threadId: string, history: readonly TurnItem[] = [], sourceIds: readonly string[] = [], recipient?: GmailModelRecipientBinding
 ): Promise<GmailThreadDataState> {
   const queue = [threadId, ...sourceIds]
   const scopes = new Set<string>()
@@ -74,16 +74,24 @@ export async function resolveGmailThreadDataState(
   }
   const sensitive = sensitiveScopes.length > 0 || unboundMailEvidence
   let sharingAllowed = sensitive
+  const sharingFences: (() => void)[] = []
+  const consent = async (scope: string) => {
+    // Capture before the async read: a revocation may arrive after its stale snapshot resolves.
+    const fence = recipient ? gmail.captureModelSharingFence(scope) : undefined
+    const allowed = (await gmail.status(scope, recipient)).allowModelSharing
+    if (allowed && fence) { fence(); sharingFences.push(fence) }
+    return allowed
+  }
   if (sensitive) {
     // Propagate classification, never consent, before any outbound model call.
     // A later deletion of the source conversation cannot remove this fence.
     if (!primaryRecipient) throw new GoogleWorkspaceModelPolicyError('The receiving Google data conversation could not be verified.')
     if (!sensitiveScopes.includes(primaryRecipient)) await gmail.markGoogleData(primaryRecipient)
     let recipientAllowed = false
-    for (const scope of recipientScopes) if ((await gmail.status(scope)).allowModelSharing) recipientAllowed = true
+    for (const scope of recipientScopes) if (await consent(scope)) recipientAllowed = true
     sharingAllowed &&= recipientAllowed
     for (const scope of sensitiveScopes) {
-      if (!recipientScopes.has(scope) && !(await gmail.status(scope)).allowModelSharing) sharingAllowed = false
+      if (!recipientScopes.has(scope) && !await consent(scope)) sharingAllowed = false
     }
     if (messagingOrigin) sharingAllowed = false
     const roomScopes = sensitiveScopes.filter((scope) => scope.startsWith('room:'))
@@ -93,7 +101,10 @@ export async function resolveGmailThreadDataState(
       else for (const scope of roomScopes) if (await hasActiveImMirror(roomStore, scope.slice(5))) sharingAllowed = false
     }
   }
-  return { sensitive, sharingAllowed: sensitive && sharingAllowed }
+  return { sensitive, sharingAllowed: sensitive && sharingAllowed,
+    ...(recipient && sensitive && sharingAllowed ? { assertSharingCurrent: () => {
+      for (const fence of sharingFences) fence()
+    } } : {}) }
 }
 
 function historyEvidence(output: unknown): { googleMail: boolean; sourceThreads: string[] } {
@@ -131,7 +142,7 @@ export function createGmailThreadDataPolicyOptions(
       if (source?.model) return { model: source.model, providerId: source.providerId }
       return thread ? { model: thread.model, providerId: thread.providerId } : fallback()
     },
-    dataState: (threadId, history) => resolveGmailThreadDataState(threads, gmail, threadId, history)
+    dataState: (threadId, history, recipient) => resolveGmailThreadDataState(threads, gmail, threadId, history, [], recipient)
   }
 }
 

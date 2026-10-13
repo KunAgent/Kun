@@ -12,7 +12,8 @@ const binding = { roomId: 'private-room', messageId: 'mail-card' }
 const scopes = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send']
 const connection = (patch: Partial<GmailConversationStatus> = {}): GmailConversationStatus => ({
   configured: true, connected: false, reconnectRequired: false, scopes: [], allowModelSharing: false,
-  modelSharingAvailable: true, ...patch
+  modelSharingAvailable: true, modelProcessingRecipient: 'kun-managed-local', modelProcessingConsentId: 'route-stamp',
+  ...(patch.allowModelSharing ? { modelSharingRecipient: 'kun-managed-local' as const } : {}), ...patch
 })
 const pending = { id: 'auth-id', url: 'https://accounts.google.com/o/oauth2/v2/auth', status: 'pending',
   expiresAt: '2099-01-01T00:00:00.000Z' }
@@ -40,7 +41,7 @@ describe('Gmail human connection and sharing controls', () => {
     expect(mocks.authorize).not.toHaveBeenCalled()
     expect(renderer!.root.findByType('input').props.checked).toBe(false)
     await act(async () => button('Connect in system browser').props.onClick())
-    expect(mocks.authorize).toHaveBeenCalledWith(binding, false)
+    expect(mocks.authorize).toHaveBeenCalledWith(binding, false, 'kun-managed-local', 'route-stamp')
     expect(renderer!.root.findByProps({ className: 'gmail-waiting' })).toBeDefined()
   })
 
@@ -49,7 +50,7 @@ describe('Gmail human connection and sharing controls', () => {
     await act(async () => renderer!.root.findByType('input').props.onChange({ target: { checked: true } }))
     expect(mocks.sharing).not.toHaveBeenCalled()
     await act(async () => button('Connect in system browser').props.onClick())
-    expect(mocks.authorize).toHaveBeenCalledWith(binding, true)
+    expect(mocks.authorize).toHaveBeenCalledWith(binding, true, 'kun-managed-local', 'route-stamp')
   })
 
   it('does not let a connected mailbox resume the task without the conversation grant', async () => {
@@ -59,7 +60,7 @@ describe('Gmail human connection and sharing controls', () => {
     await mount({ onContinue: continued })
     expect(button('Continue this task').props.disabled).toBe(true)
     await act(async () => renderer!.root.findByType('input').props.onChange({ target: { checked: true } }))
-    expect(mocks.sharing).toHaveBeenCalledWith(binding, true)
+    expect(mocks.sharing).toHaveBeenCalledWith(binding, true, 'kun-managed-local', 'route-stamp')
     mocks.status.mockResolvedValue(connection({ connected: true, scopes, allowModelSharing: true }))
     await act(async () => button('Continue this task').props.onClick())
     expect(continued).toHaveBeenCalledOnce()
@@ -139,5 +140,50 @@ describe('Gmail human connection and sharing controls', () => {
     expect(renderer!.root.findAllByType('small').some((entry) => entry.children.join('').includes('start a new conversation'))).toBe(true)
     expect(continued).not.toHaveBeenCalled()
     expect(mocks.authorize).not.toHaveBeenCalled()
+  })
+
+  it('does not convert an old local grant into DeepSeek cloud consent', async () => {
+    mocks.status.mockResolvedValue(connection({ connected: true, scopes, allowModelSharing: true,
+      modelProcessingRecipient: 'deepseek-api', modelSharingRecipient: 'kun-managed-local' }))
+    await mount({ onContinue: vi.fn() })
+    expect(renderer!.root.findByType('input').props.checked).toBe(false)
+    expect(button('Continue this task').props.disabled).toBe(true)
+    expect(mocks.sharing).not.toHaveBeenCalled()
+    expect(JSON.stringify(renderer!.toJSON())).toContain('api.deepseek.com')
+    expect(JSON.stringify(renderer!.toJSON())).toContain('China')
+    expect(JSON.stringify(renderer!.toJSON())).toContain('current conversation context')
+    expect(JSON.stringify(renderer!.toJSON())).toContain('not promise zero retention')
+  })
+
+  it('binds new human cloud consent to the disclosed recipient and rechecks before continuing', async () => {
+    const deepseek = connection({ connected: true, scopes, modelProcessingRecipient: 'deepseek-api' })
+    mocks.status.mockResolvedValue(deepseek)
+    mocks.sharing.mockResolvedValue({ ...deepseek, allowModelSharing: true, modelSharingRecipient: 'deepseek-api' })
+    const continued = vi.fn()
+    await mount({ onContinue: continued })
+    await act(async () => renderer!.root.findByType('input').props.onChange({ target: { checked: true } }))
+    expect(mocks.sharing).toHaveBeenCalledWith(binding, true, 'deepseek-api', 'route-stamp')
+    mocks.status.mockResolvedValue({ ...deepseek, allowModelSharing: true, modelSharingRecipient: 'kun-managed-local' })
+    await act(async () => button('Continue this task').props.onClick())
+    expect(continued).not.toHaveBeenCalled()
+    expect(renderer!.root.findByType('input').props.checked).toBe(false)
+  })
+
+  it('keeps unreviewed API accounts connection-only and explains the host prerequisite', async () => {
+    mocks.status.mockResolvedValue(connection({ modelProcessingRecipient: 'deepseek-api',
+      modelSharingAvailable: false, modelSharingReason: 'deepseek_api_account_not_reviewed' }))
+    await mount()
+    expect(renderer!.root.findByType('input').props.disabled).toBe(true)
+    expect(button('Connect in system browser').props.disabled).toBe(false)
+    expect(JSON.stringify(renderer!.toJSON())).toContain('exact API account and credential')
+    expect(JSON.stringify(renderer!.toJSON())).toContain('cannot create that review')
+  })
+
+  it('does not trust a legacy sharing boolean without a recipient-bound grant', async () => {
+    mocks.status.mockResolvedValue(connection({ connected: true, scopes, allowModelSharing: true,
+      modelProcessingRecipient: undefined, modelSharingRecipient: undefined }))
+    await mount({ onContinue: vi.fn() })
+    expect(renderer!.root.findByType('input').props.checked).toBe(false)
+    expect(button('Continue this task').props.disabled).toBe(true)
   })
 })

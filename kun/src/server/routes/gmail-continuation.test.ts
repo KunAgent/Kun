@@ -1,3 +1,4 @@
+import { LOCAL_GMAIL_RECIPIENT } from '../../contracts/gmail.js'
 import { describe, expect, it, vi } from 'vitest'
 import { InMemoryThreadStore } from '../../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../../domain/thread.js'
@@ -35,7 +36,7 @@ async function fixture() {
     return response
   })
   const runtime = { threadService: { get: (id: string) => threads.get(id) }, turnService: { startTurn },
-    gmailDataPolicy: { availability: vi.fn(async () => ({ allowed: true })), assertAllowed: vi.fn(async () => {}) },
+    gmailDataPolicy: { availability: vi.fn(async () => ({ allowed: true, recipient: 'kun-managed-local' as const, recipientBinding: LOCAL_GMAIL_RECIPIENT, consentId: 'local-proof' })), assertAllowed: vi.fn(async () => {}) },
     runTurn, gmail: { status: vi.fn(async () => status), hasGoogleData: vi.fn(async () => false) } } as unknown as ServerRuntime
   return { runtime, threads, status, runTurn, startTurn }
 }

@@ -531,7 +531,7 @@ export async function createRuntimeServices(
   const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
     writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
-    buildGmailToolProvider(gmail, core.threadStore),
+    buildGmailToolProvider(gmail, core.threadStore, model.gmailDataPolicy),
     { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
       tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {
@@ -600,6 +600,7 @@ export async function createRuntimeServices(
 	  ]
 	  let childRegistry = new CapabilityRegistry(baseToolProviders)
   const childToolHost = new LocalToolHost({
+    threadStore,
     registry: childRegistry,
     readTracker: true,
     ...(executionLeases ? { leaseAuthority: executionLeases } : {}),

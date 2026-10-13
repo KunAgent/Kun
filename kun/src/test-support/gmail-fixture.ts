@@ -1,3 +1,4 @@
+import { LOCAL_GMAIL_RECIPIENT } from '../contracts/gmail.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,7 +47,7 @@ export async function gmailFixture(fetchImpl?: typeof fetch, clock?: () => numbe
       accessToken: 'fake-access', refreshToken: 'fake-refresh', email: EMAIL,
       expiresAt: options.expired ? 0 : (clock?.() ?? Date.now()) + 3_600_000,
       scopes: [...GMAIL_SCOPES]
-    }, grants: [{ scopeId: SCOPE, allowModelSharing: options.sharing ?? true, grantedAt: 1 }] }))
+    }, grants: [{ scopeId: SCOPE, allowModelSharing: options.sharing ?? true, grantedAt: 1, recipient: LOCAL_GMAIL_RECIPIENT }] }))
   }
   return { dataDir, encryptor, store, service, request, calls, opened, openExternal, seed,
     cleanup: async () => { await service.dispose(); await rm(dataDir, { recursive: true, force: true }) } }

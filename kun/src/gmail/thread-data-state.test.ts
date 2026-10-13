@@ -20,6 +20,7 @@ async function fixture() {
   const sensitive = new Set<string>()
   const grants = new Set<string>()
   const gmail = { hasGoogleData: vi.fn(async (id: string) => sensitive.has(id)),
+    captureModelSharingFence: vi.fn(() => () => undefined),
     markGoogleData: vi.fn(async (id: string) => { sensitive.add(id) }),
     status: vi.fn(async (id?: string) => ({ configured: true, connected: true, reconnectRequired: false,
       scopes: [], allowModelSharing: Boolean(id && grants.has(id)) })) }

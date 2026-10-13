@@ -28,6 +28,7 @@ import { subscriptionBillingKind } from '../shared/subscription-billing.js'
 import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
 import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 import { providerCredentialLease } from '../adapters/model/provider-credential-lease.js'
+import type { GmailModelClientEvidence } from './runtime-gmail-model-composition.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -92,7 +93,8 @@ export function buildModelClientRouterInput(
     geminiAuth?: GeminiCodeAssistCredential
     refreshable: boolean
   }>,
-  getRegistry?: () => ModelConnectionRegistry | undefined
+  getRegistry?: () => ModelConnectionRegistry | undefined,
+  gmailEvidence?: GmailModelClientEvidence
 ): { default: ModelClient; providers: Map<string, ModelClient>; gatewayClients: Map<string, ModelClient>;
   defaultProviderId: string; admission: Map<string, { accountId: string; limits: import('../contracts/provider-configuration.js').ProviderAdmission }> } {
   const streamIdleOverride =
@@ -145,6 +147,7 @@ export function buildModelClientRouterInput(
           ...(llmDebug ? { debugSink: llmDebug } : {})
         })
       : new CompatModelClient({
+          ...(gmailEvidence?.default ? { googleWorkspaceAccountEvidence: gmailEvidence.default } : {}),
           providerId: activeProviderId,
           presetSource: activeProvider?.presetSource,
           baseUrl: options.baseUrl,
@@ -216,6 +219,7 @@ export function buildModelClientRouterInput(
           ...(llmDebug ? { debugSink: llmDebug } : {})
         })
       : new CompatModelClient({
+          ...(gmailEvidence?.providers.get(trimmedId) ? { googleWorkspaceAccountEvidence: gmailEvidence.providers.get(trimmedId) } : {}),
           providerId: trimmedId,
           presetSource: provider.presetSource,
           baseUrl: provider.baseUrl ?? options.baseUrl ?? '',

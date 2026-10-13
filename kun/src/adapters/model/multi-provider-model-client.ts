@@ -132,7 +132,8 @@ export class MultiProviderModelClient implements ModelClient {
       }
       guard()
     }
-    return Object.assign(assertCurrent, { mode: guard.mode, providerName: guard.providerName, assertEndpoint: guard.assertEndpoint })
+    return Object.assign(assertCurrent, { mode: guard.mode, providerName: guard.providerName, assertEndpoint: guard.assertEndpoint,
+      recipient: guard.recipient, consentId: guard.consentId, endpoint: guard.endpoint, assertCredentials: guard.assertCredentials })
   }
 
   /** Exact review clients retain account scheduling and cannot silently adopt a replacement credential client. */

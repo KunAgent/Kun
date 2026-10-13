@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { GmailError, type GmailServicePort } from '../gmail/ports.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import { assertEncryptedGmailStorage } from '../gmail/data-protection.js'
+import { EncryptedGmailOAuthClientStore } from '../gmail/oauth-client-config.js'
 import type { SecretEncryptor } from '../security/secret-store.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 
@@ -13,25 +14,30 @@ export async function createRuntimeGmailComposition(
     networkProxy?: () => Promise<string> }
 ): Promise<GmailServicePort> {
   const dataDir = model.core.activeOptions.dataDir
-  const gmail = new NativeGmailService({
-    dataDir,
-    assertDataProtection: () => assertEncryptedGmailStorage(dataDir),
-    encryptor: model.extensionCredentialKeyProvider.encryptor,
-    fetchImpl: async (input, init) => {
-      // Google uses the user's global network proxy, independently of local inference routing.
-      const proxy = createProxyFetch(await model.networkProxy?.() ?? model.core.activeOptions.modelProxyUrl ?? '')
-      return (proxy ?? fetch)(input, init)
-    },
-    openExternal: async (value) => {
-      const url = new URL(value)
-      if (url.origin !== 'https://accounts.google.com' || url.pathname !== '/o/oauth2/v2/auth') {
-        throw new Error('Unexpected Gmail authorization destination')
+  try {
+    const client = await new EncryptedGmailOAuthClientStore(dataDir, model.extensionCredentialKeyProvider.encryptor).read()
+    const gmail = new NativeGmailService({
+      dataDir,
+      clientSecret: client?.clientSecret,
+      requireClientSecret: true,
+      assertDataProtection: () => assertEncryptedGmailStorage(dataDir),
+      encryptor: model.extensionCredentialKeyProvider.encryptor,
+      fetchImpl: async (input, init) => {
+        // Google uses the user's global network proxy, independently of local inference routing.
+        const proxy = createProxyFetch(await model.networkProxy?.() ?? model.core.activeOptions.modelProxyUrl ?? '')
+        return (proxy ?? fetch)(input, init)
+      },
+      openExternal: async (value) => {
+        const url = new URL(value)
+        if (url.origin !== 'https://accounts.google.com' || url.pathname !== '/o/oauth2/v2/auth') {
+          throw new Error('Unexpected Gmail authorization destination')
+        }
+        await openGoogleAuthorization(url)
       }
-      await openGoogleAuthorization(url)
-    }
-  })
-  try { await gmail.initialize() }
-  catch {
+    })
+    await gmail.initialize()
+    return gmail
+  } catch {
     // Preserve damaged credential evidence and keep unrelated Runtime functions available.
     const unavailable = async () => {
       throw new GmailError('storage_unavailable', 'The encrypted Gmail store could not be opened. Restore its key or repair the store before reconnecting.')
@@ -40,6 +46,7 @@ export async function createRuntimeGmailComposition(
       initialize: unavailable,
       hasGoogleData: unavailable,
       markGoogleData: unavailable,
+      captureModelSharingFence: () => { throw new GmailError('service_unavailable', 'Gmail connection is unavailable') },
       status: async () => ({ configured: false, connected: false, reconnectRequired: true,
         scopes: [], allowModelSharing: false }),
       startAuthorize: unavailable, pollAuthorization: unavailable, cancelAuthorization: unavailable,
@@ -47,7 +54,6 @@ export async function createRuntimeGmailComposition(
       send: unavailable, dispose: async () => undefined
     }
   }
-  return gmail
 }
 
 /** System browser launches must report errors without leaving an unhandled child event. */

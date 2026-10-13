@@ -1,9 +1,10 @@
+import { GMAIL_AUTHORIZATION_ERROR_CODES } from '../contracts/gmail-authorization-errors.js'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
 import type { SecretEncryptor } from '../security/secret-store.js'
 import { isEncryptedEnvelope } from '../security/secret-store.js'
-import { GmailScopeIdSchema } from '../contracts/gmail.js'
+import { GmailScopeIdSchema, GmailModelRecipientBindingSchema, LOCAL_GMAIL_RECIPIENT } from '../contracts/gmail.js'
 
 const TokenSchema = z.object({
   accessToken: z.string().min(1).max(16_384),
@@ -15,7 +16,8 @@ const TokenSchema = z.object({
 const GrantSchema = z.object({
   scopeId: GmailScopeIdSchema,
   allowModelSharing: z.boolean(),
-  grantedAt: z.number().finite()
+  grantedAt: z.number().finite(),
+  recipient: GmailModelRecipientBindingSchema.default(LOCAL_GMAIL_RECIPIENT)
 }).strict()
 const AttemptSchema = z.object({
   operationId: z.string().uuid(),
@@ -31,7 +33,9 @@ export const CredentialsStateSchema = z.object({
   reconnectRequired: z.boolean(),
   grants: z.array(GrantSchema).max(256),
   sensitiveScopes: z.array(GmailScopeIdSchema).max(4_096).default([]),
-  attempts: z.array(AttemptSchema).max(64)
+  attempts: z.array(AttemptSchema).max(64),
+  lastAuthorizationError: z.object({ authorizationId: z.string().uuid(), scopeId: GmailScopeIdSchema,
+    errorCode: z.enum(GMAIL_AUTHORIZATION_ERROR_CODES), failedAt: z.iso.datetime() }).strict().optional()
 }).strict()
 export type CredentialsState = z.infer<typeof CredentialsStateSchema>
 export type GmailTokens = z.infer<typeof TokenSchema>

@@ -12,7 +12,8 @@ describe('Gmail copied-history lifecycle', () => {
       text: 'A private email summary without a Gmail tool marker', status: 'completed' })
     await h.sessionStore.appendItem(h.threadId, item)
     const scopes = new Set([`thread:${h.threadId}`])
-    const gmail = { hasGoogleData: async (id: string) => scopes.has(id),
+    const gmail = { captureModelSharingFence: () => () => undefined,
+      hasGoogleData: async (id: string) => scopes.has(id),
       markGoogleData: async (id: string) => { scopes.add(id) },
       status: async () => ({ configured: true, connected: true, reconnectRequired: false, scopes: [], allowModelSharing: false }) }
     bindGmailThreadDataProtection(h.threadStore, gmail)

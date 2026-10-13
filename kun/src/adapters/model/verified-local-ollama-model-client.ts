@@ -60,6 +60,7 @@ export class VerifiedLocalOllamaModelClient extends CompatModelClient {
     if (request.gatewayRouting) throw new GoogleWorkspaceModelPolicyError('The app-managed local Gmail model is not exported through a gateway.')
     const fence = this.googleWorkspaceDispatchGuard(request)
     return super.stream({ ...request, tools: request.tools.filter(isNativeGmailTool),
-      googleWorkspaceData: { assertCurrent: fence, assertEndpoint: fence.assertEndpoint } })
+      googleWorkspaceData: { assertCurrent: () => { request.googleWorkspaceData?.assertCurrent(); fence() },
+        assertEndpoint: fence.assertEndpoint } })
   }
 }

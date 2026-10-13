@@ -44,7 +44,8 @@ export function registerRoomAppConnectionRoutes(add: Add, runtime: ServerRuntime
           catch { throw new RoomStoreConflictError('The Gmail card no longer belongs to an active Agent') }
           try { await assertModelAccess(runtime, bound) }
           catch { throw new RoomStoreConflictError('Start a new Gmail task with Kun’s approved local model; this card keeps its original model route') }
-          if (!gmailReady(await runtime.gmail.status(bound.scopeId))) {
+          const access = await runtime.gmailDataPolicy!.availability(bound.threadId, bound.admittedSelection)
+          if (!access.recipientBinding || !gmailReady(await runtime.gmail.status(bound.scopeId, access.recipientBinding))) {
             throw new RoomStoreConflictError('Connect Gmail and allow this conversation’s model to use mail before continuing')
           }
         }

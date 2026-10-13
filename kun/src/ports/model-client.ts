@@ -83,7 +83,7 @@ export type ModelStreamChunk = (
  */
 export type ModelRequest = {
   /** Host-owned Google data fence; never accepted from public request JSON. */
-  googleWorkspaceData?: { assertCurrent: () => void; assertEndpoint?: (url: string, protocol: string) => void }
+  googleWorkspaceData?: { assertCurrent: () => void; assertEndpoint?: (url: string, protocol: string) => void; assertCredentials?: (apiKey: string, headers: Record<string, string>) => void }
   /** Host-only paper transport fence: single physical attempt and exact provider generation. */
   paperReadOnly?: { assertCurrent: () => void; takeAttempt: () => boolean }
   requestId?: string
@@ -305,6 +305,10 @@ export type ModelToolSpec = {
 export type GoogleWorkspaceModelFence = (() => void) & {
   mode?: 'verified-local' | 'reviewed-cloud'
   providerName?: string
+  recipient?: import('../contracts/gmail.js').GmailModelRecipientBinding
+  consentId?: string
+  endpoint?: string
+  assertCredentials?: (apiKey: string, headers: Record<string, string>) => void
   assertEndpoint?: (url: string, protocol: string) => void
 }
 

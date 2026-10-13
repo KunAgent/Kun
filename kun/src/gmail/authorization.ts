@@ -2,7 +2,9 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { GmailAuthorization } from '../contracts/gmail.js'
+import type { GmailAuthorizationErrorCode, GmailAuthorizationFailure } from '../contracts/gmail-authorization-errors.js'
 import { GMAIL_SCOPES, GmailError } from './ports.js'
+import { authorizationFailureCode, googleCallbackFailureCode } from './authorization-diagnostic.js'
 
 const AUTHORIZATION_TIMEOUT = 5 * 60_000
 const CALLBACK_PATH = '/oauth/gmail/callback'
@@ -21,6 +23,8 @@ export class GmailLoopbackAuthorization {
   private consumed = false
   private authorizationStatus: GmailAuthorization['status'] = 'pending'
   private authorizationError?: GmailAuthorization['error']
+  private authorizationErrorCode?: GmailAuthorizationErrorCode
+  private failurePersistence?: Promise<void>
   private redirect = ''
   private authUrl = ''
   private exchange?: Promise<void>
@@ -29,7 +33,8 @@ export class GmailLoopbackAuthorization {
     readonly scopeId: string,
     private readonly clientId: string,
     private readonly now: () => number,
-    private readonly onCode: (code: string, verifier: string, redirectUri: string) => Promise<void>
+    private readonly onCode: (code: string, verifier: string, redirectUri: string) => Promise<void>,
+    private readonly onFailure?: (failure: GmailAuthorizationFailure) => Promise<void>
   ) {
     this.expiresAt = now() + AUTHORIZATION_TIMEOUT
     this.server = createServer((request, response) => this.receive(request, response))
@@ -45,7 +50,7 @@ export class GmailLoopbackAuthorization {
       this.server.once('error', failed)
       this.server.listen(0, '127.0.0.1', () => {
         this.server.removeListener('error', failed)
-        this.server.on('error', () => this.finish('failed', 'authorization_failed'))
+        this.server.on('error', () => this.finish('failed', 'authorization_failed', 'callback_unavailable'))
         resolve()
       })
     })
@@ -80,13 +85,14 @@ export class GmailLoopbackAuthorization {
     return {
       id: this.id, url: this.authUrl, status: this.authorizationStatus,
       expiresAt: new Date(this.expiresAt).toISOString(),
-      ...(this.authorizationError ? { error: this.authorizationError } : {})
+      ...(this.authorizationError ? { error: this.authorizationError } : {}),
+      ...(this.authorizationErrorCode ? { errorCode: this.authorizationErrorCode } : {})
     }
   }
 
-  failBrowser(): void { this.finish('failed', 'browser_unavailable'); void this.close() }
+  failBrowser(): void { this.finish('failed', 'browser_unavailable', 'browser_unavailable'); void this.close() }
   async cancel(): Promise<void> { this.finish('cancelled'); await this.close() }
-  async dispose(): Promise<void> { await this.cancel(); await this.exchange?.catch(() => undefined) }
+  async dispose(): Promise<void> { await this.cancel(); await this.exchange?.catch(() => undefined); await this.failurePersistence }
 
   private receive(request: IncomingMessage, response: ServerResponse): void {
     secureHeaders(response)
@@ -121,20 +127,28 @@ export class GmailLoopbackAuthorization {
     this.closeTimer.unref()
     if (errors.length) {
       this.finish(errors[0] === 'access_denied' ? 'cancelled' : 'failed',
-        errors[0] === 'access_denied' ? 'access_denied' : 'authorization_failed')
+        errors[0] === 'access_denied' ? 'access_denied' : 'authorization_failed', googleCallbackFailureCode(errors[0]))
       return
     }
     this.exchange = this.onCode(codes[0], this.verifier, this.redirect).then(() => {
       this.finish('connected')
     }, (error: unknown) => {
-      this.finish('failed', error instanceof GmailError && error.code === 'scope_missing' ? 'scope_missing' : 'authorization_failed')
+      this.finish('failed', error instanceof GmailError && error.code === 'scope_missing' ? 'scope_missing' : 'authorization_failed',
+        authorizationFailureCode(error))
     })
   }
 
-  private finish(status: GmailAuthorization['status'], error?: GmailAuthorization['error']): void {
+  private finish(status: GmailAuthorization['status'], error?: GmailAuthorization['error'], errorCode?: GmailAuthorizationErrorCode): void {
     if (this.authorizationStatus !== 'pending') return
     this.authorizationStatus = status
     this.authorizationError = error
+    this.authorizationErrorCode = errorCode ?? (status === 'failed' ? 'authorization_failed' :
+      status === 'expired' ? 'authorization_expired' : status === 'cancelled' ? 'authorization_cancelled' : undefined)
+    if (this.authorizationErrorCode && this.onFailure) {
+      const failure = { authorizationId: this.id, scopeId: this.scopeId, errorCode: this.authorizationErrorCode,
+        failedAt: new Date(this.now()).toISOString() }
+      this.failurePersistence = Promise.resolve().then(() => this.onFailure!(failure)).catch(() => undefined)
+    }
   }
 
   private async close(): Promise<void> {

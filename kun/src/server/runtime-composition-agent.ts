@@ -96,6 +96,7 @@ export async function createRuntimeAgentComposition(
   const { delegationRuntime } = registryComposition
   let prepareExtensionContributions: ((context?: ToolHostContext) => Promise<void>) | undefined
   const toolHost = new LocalToolHost({
+    threadStore,
     registry: registryComposition.registry,
     readTracker: true,
     prepare: (context) => prepareExtensionContributions?.(context),

@@ -23,4 +23,22 @@ describe('Gmail renderer public API', () => {
     await gmailClient.localStatus({ threadId: 'thread' })
     expect(request).toHaveBeenLastCalledWith('/v1/gmail/local-model?threadId=thread', 'GET', undefined, undefined)
   })
+  it('sends recipient comparison only for explicit sharing without sending account evidence', async () => {
+    const binding = { threadId: 'thread' }
+    await gmailClient.sharing(binding, true, 'deepseek-api', 'account-route-stamp')
+    expect(request).toHaveBeenLastCalledWith('/v1/gmail/sharing', 'PATCH', {
+      ...binding, allowModelSharing: true, expectedRecipient: 'deepseek-api', expectedConsentId: 'account-route-stamp'
+    })
+    await gmailClient.authorize(binding, true, 'deepseek-api', 'account-route-stamp')
+    expect(request).toHaveBeenLastCalledWith('/v1/gmail/authorize', 'POST', {
+      ...binding, allowModelSharing: true, expectedRecipient: 'deepseek-api', expectedConsentId: 'account-route-stamp'
+    })
+    await gmailClient.sharing(binding, false, 'deepseek-api')
+    expect(request).toHaveBeenLastCalledWith('/v1/gmail/sharing', 'PATCH', { ...binding, allowModelSharing: false })
+  })
+  it('cannot grant an undisclosed recipient or omit the current account/configuration stamp', () => {
+    expect(() => gmailClient.authorize({ threadId: 'thread' }, true)).toThrow('recipient disclosure')
+    expect(() => gmailClient.sharing({ threadId: 'thread' }, true, 'deepseek-api')).toThrow('recipient disclosure')
+    expect(request).not.toHaveBeenCalled()
+  })
 })

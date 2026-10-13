@@ -31,6 +31,7 @@ describe('MemoryDistillationCoordinator', () => {
   it('does not queue or memorize Gmail-derived conversation content', async () => {
     const harness = await createHarness({ prompt: 'Summarize a private email', assistant: 'Private email summary' })
     bindGmailThreadDataProtection(harness.threads, {
+      captureModelSharingFence: () => () => undefined,
       hasGoogleData: async (id) => id === 'thread:thread_1', markGoogleData: async () => {},
       status: async () => ({ configured: true, connected: true, reconnectRequired: false, scopes: [], allowModelSharing: true })
     })

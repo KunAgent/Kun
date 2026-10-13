@@ -1,3 +1,4 @@
+import { LOCAL_GMAIL_RECIPIENT } from '../../contracts/gmail.js'
 import { describe, expect, it, vi } from 'vitest'
 import { InMemoryThreadStore } from '../../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../../domain/thread.js'
@@ -18,7 +19,7 @@ async function fixture() {
   stored.turns.push(createTurnRecord({ id: 'turn-1', threadId: stored.id, prompt: 'Connect Gmail',
     model: 'admitted-model', providerId: 'admitted-provider', status: 'completed' }))
   await threads.upsert(stored)
-  const policy = { availability: vi.fn(async () => ({ allowed: true })), assertAllowed: vi.fn(async () => {}) }
+  const policy = { availability: vi.fn(async () => ({ allowed: true, recipient: 'kun-managed-local' as const, recipientBinding: LOCAL_GMAIL_RECIPIENT, consentId: 'local-proof' })), assertAllowed: vi.fn(async () => {}) }
   const room = { id: 'room-1', conversationKind: 'user_agent', members: [{ id: 'member-1', enabled: true,
     participantAgentId: 'agent-1' }] }
   const rows = new Map<string, { id: string; roomId: string; revision: number; value: Record<string, unknown> }>([
@@ -55,7 +56,7 @@ describe('native Gmail private Agent continuation', () => {
   it('continues the original task only after actual Google authorization and conversation model consent', async () => {
     const f = await fixture()
     expect(await f.request()).toMatchObject({ message: { appConnection: { status: 'connected', resumed: true } }, resumed: true })
-    expect(f.gmail.status).toHaveBeenCalledWith('room:room-1')
+    expect(f.gmail.status).toHaveBeenCalledWith('room:room-1', LOCAL_GMAIL_RECIPIENT)
     expect(f.continuation).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'room-thread', sourceTurnId: 'turn-1', key: 'card-1' }))
     expect(await f.request()).toMatchObject({ resumed: true })
     expect(f.continuation).toHaveBeenCalledTimes(1)

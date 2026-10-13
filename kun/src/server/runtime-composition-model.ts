@@ -62,8 +62,9 @@ import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 import { createRuntimeGmailComposition } from './runtime-gmail-composition.js'
 import { ManagedLocalGmailOllama } from '../gmail/local-ollama-service.js'
 import { GoogleWorkspaceModelClient } from '../gmail/model-data-policy.js'
-import { createGmailThreadDataPolicyOptions, bindGmailThreadDataProtection } from '../gmail/thread-data-state.js'
-import { assertEncryptedGmailStorage } from '../gmail/data-protection.js'
+import { bindGmailThreadDataProtection } from '../gmail/thread-data-state.js'
+import { DeepSeekAccountEvidenceStore } from '../gmail/deepseek-account-evidence.js'
+import { buildGmailModelClientRouterInput, createRuntimeGmailModelPolicy } from './runtime-gmail-model-composition.js'
 import { VerifiedLocalOllamaModelClient, KUN_GMAIL_LOCAL_PROVIDER_ID, KUN_GMAIL_LOCAL_MODEL } from '../adapters/model/verified-local-ollama-model-client.js'
 
 export async function createRuntimeModelComposition(
@@ -256,25 +257,15 @@ export async function createRuntimeModelComposition(
       ? { pathToClaudeCodeExecutable: claudeCodeSdkExecutable() }
       : {})
   })
-  const gmailThreadPolicy = createGmailThreadDataPolicyOptions(core.threadStore, gmail,
-    () => ({ model: core.activeOptions.model, providerId: core.activeOptions.activeProviderId }))
-  const gmailStorageDir = core.activeOptions.dataDir
-  const gmailPolicyOptions = { ...gmailThreadPolicy,
-    dataState: async (...args: Parameters<typeof gmailThreadPolicy.dataState>) => {
-      const state = await gmailThreadPolicy.dataState(...args)
-      if (state.sensitive) await assertEncryptedGmailStorage(gmailStorageDir)
-      return state
-    },
-    cloudProcessingEnabled: false,
-    ...(gmailLocalClient ? { local: { providerId: KUN_GMAIL_LOCAL_PROVIDER_ID,
-      model: KUN_GMAIL_LOCAL_MODEL, client: gmailLocalClient } as const } : {}) }
-  const initialModelClients = buildModelClientRouterInput(
-    core.activeOptions,
-    modelCapabilities,
-    llmDebug,
-    resolveLegacyRequestCredentials,
-    () => modelConnections
-  )
+  const deepseekAccountEvidence = new DeepSeekAccountEvidenceStore(core.activeOptions.dataDir,
+    extensionCredentialKeyProvider.encryptor)
+  const buildGmailAwareModelClients = (options: KunServeRuntimeOptions, capabilities = modelCapabilities) =>
+    buildGmailModelClientRouterInput(options, capabilities, deepseekAccountEvidence, llmDebug,
+      resolveLegacyRequestCredentials, () => modelConnections)
+  const gmailPolicyOptions = createRuntimeGmailModelPolicy({ threads: core.threadStore, gmail,
+    dataDir: core.activeOptions.dataDir, localClient: gmailLocalClient,
+    fallback: () => ({ model: core.activeOptions.model, providerId: core.activeOptions.activeProviderId }) })
+  const initialModelClients = await buildGmailAwareModelClients(core.activeOptions)
   const accountScheduler = new ProviderRequestScheduler()
   const directModelClient = new MultiProviderModelClient(initialModelClients, accountScheduler)
   const approvalReviewModelClient = new MultiProviderModelClient(
@@ -334,14 +325,10 @@ export async function createRuntimeModelComposition(
       })
     }
   })
-  const replaceRoutedModelClients = (): void => {
-    const next = buildModelClientRouterInput(
-      core.activeOptions,
-      modelCapabilities,
-      llmDebug,
-      resolveLegacyRequestCredentials,
-      () => modelConnections
-    )
+  const replaceRoutedModelClients = async (): Promise<void> => {
+    const options = core.activeOptions
+    const next = await buildGmailAwareModelClients(options)
+    if (core.activeOptions !== options) return
     for (const [providerId, client] of extensionModelProviders.clientMap()) {
       next.providers.set(providerId, client)
     }
@@ -369,7 +356,7 @@ export async function createRuntimeModelComposition(
       }
     },
     resolveCredentialSource: resolveLegacyRequestCredentials,
-    onChanged: (connections) => {
+    onChanged: async (connections) => {
       quotaSourceGeneration++
       const selected = connections.selected
       const providers = Object.fromEntries(connections.providers.entries())
@@ -403,13 +390,7 @@ export async function createRuntimeModelComposition(
         providerFailover: connections.failover,
         localModelGateway: connections.localModelGateway
       }
-      const nextClients = buildModelClientRouterInput(
-        nextOptions,
-        modelCapabilities,
-        llmDebug,
-        resolveLegacyRequestCredentials,
-        () => modelConnections
-      )
+      const nextClients = await buildGmailAwareModelClients(nextOptions)
       for (const [providerId, client] of extensionModelProviders.clientMap()) {
         nextClients.providers.set(providerId, client)
       }
@@ -608,7 +589,7 @@ export async function createRuntimeModelComposition(
     dataDir: core.activeOptions.dataDir,
     registry: modelConnections
   })
-  const stopExtensionModelChanges = extensionModelProviders.onDidChange(replaceRoutedModelClients)
+  const stopExtensionModelChanges = extensionModelProviders.onDidChange(() => { void replaceRoutedModelClients().catch(() => undefined) })
   const stopExtensionModelListener = () => { quotaRouting.stop(); stopExtensionModelChanges() }
   const hasMcpOAuth = Object.values(core.activeOptions.capabilities?.mcp?.servers ?? {}).some((server) =>
     server.oauth?.enabled !== false && Boolean(server.oauth) && server.transport !== 'stdio'
@@ -649,6 +630,7 @@ export async function createRuntimeModelComposition(
     resolveLegacyRequestCredentials,
     migrateLegacyProviderCredentials,
     buildApprovalReviewClients,
+    buildGmailAwareModelClients,
     initialModelClients,
     directModelClient,
     approvalReviewModelClient,

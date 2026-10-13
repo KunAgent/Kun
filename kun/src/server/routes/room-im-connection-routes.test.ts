@@ -75,6 +75,7 @@ describe('private Agent IM runtime boundary', () => {
   it('does not add an external messaging connection to a Gmail-sensitive conversation', async () => {
     const f = await fixture()
     bindGmailThreadDataProtection(f.threads, { hasGoogleData: async (id) => id === 'room:private-room',
+      captureModelSharingFence: () => () => undefined,
       markGoogleData: async () => {}, status: async () => ({ configured: true, connected: true,
         reconnectRequired: false, scopes: [], allowModelSharing: true }) })
     await expect(f.connect()).rejects.toThrow('contains Gmail data')
@@ -85,6 +86,7 @@ describe('private Agent IM runtime boundary', () => {
     const f = await fixture()
     await f.connect()
     bindGmailThreadDataProtection(f.threads, { hasGoogleData: async (id) => id === 'room:private-room',
+      captureModelSharingFence: () => () => undefined,
       markGoogleData: async () => {}, status: async () => ({ configured: true, connected: true,
         reconnectRequired: false, scopes: [], allowModelSharing: true }) })
     await expect(f.call('im-connections/:connectionId/delivery', undefined, {}, '?cursor=0'))

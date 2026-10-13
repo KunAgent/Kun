@@ -9,6 +9,7 @@ import { WorkMetaRow } from './message-timeline-cards'
 import { VirtualProcessTimeline } from './VirtualProcessTimeline'
 import { TimelineRuntimeError } from './message-timeline-jump-preview'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
+import { GmailRequestedCards } from './gmail-tool-card'
 
 export type OrderedTurnTimelineProps = {
   entries: readonly TurnTimelineEntry[]
@@ -144,6 +145,7 @@ export function OrderedTurnTimeline({
                 allowThreadActions={allowThreadActions}
               />
             ) : null}
+            {!isProcessing && !expanded ? <GmailRequestedCards blocks={segment.blocks} /> : null}
             {runtimeErrors.map((item) => (
               <TimelineRuntimeError
                 key={item.block.id}

@@ -1,12 +1,14 @@
 import type { SecretEncryptor } from '../security/secret-store.js'
 import type {
-  GmailAuthorization, GmailAuthorizeInput, GmailConnectionStatus, GmailMessage,
+  GmailAuthorization, GmailAuthorizeInput, GmailModelRecipientBinding, GmailConnectionStatus, GmailMessage,
   GmailReadInput, GmailSearchInput, GmailSearchResult, GmailSendInput, GmailSendResult
 } from '../contracts/gmail.js'
 
 export interface GmailServicePort {
   initialize(): Promise<void>
-  status(scopeId?: string): Promise<GmailConnectionStatus>
+  status(scopeId?: string, recipient?: GmailModelRecipientBinding): Promise<GmailConnectionStatus>
+  /** Host-only synchronous revision fence; capture before awaiting consent status. */
+  captureModelSharingFence(scopeId: string): () => void
   hasGoogleData(scopeId: string): Promise<boolean>
   /** Host-only inherited-history classification; this never grants Gmail access. */
   markGoogleData(scopeId: string): Promise<void>
@@ -14,7 +16,7 @@ export interface GmailServicePort {
   pollAuthorization(id: string, scopeId?: string): Promise<GmailAuthorization>
   cancelAuthorization(id: string, scopeId?: string): Promise<GmailAuthorization>
   disconnect(input: { revoke: boolean }): Promise<void>
-  setModelSharing(scopeId: string, allow: boolean): Promise<GmailConnectionStatus>
+  setModelSharing(scopeId: string, allow: boolean, recipient?: GmailModelRecipientBinding): Promise<GmailConnectionStatus>
   search(input: GmailSearchInput, scopeId: string): Promise<GmailSearchResult>
   read(input: GmailReadInput, scopeId: string): Promise<GmailMessage>
   send(input: GmailSendInput, scopeId: string, operationId: string, expectedSenderEmail?: string): Promise<GmailSendResult>
@@ -27,6 +29,8 @@ export type NativeGmailOptions = {
   clientId?: string
   /** Optional installed-app identifier from Google credentials, never a user token. */
   clientSecret?: string
+  /** Production composition requires the Google Desktop client configuration. */
+  requireClientSecret?: boolean
   fetchImpl?: typeof fetch
   openExternal: (url: string) => Promise<void>
   /** Host checks the protected local storage boundary before reading or granting Gmail access. */

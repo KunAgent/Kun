@@ -1,20 +1,22 @@
+import { LOCAL_GMAIL_RECIPIENT, type GmailModelRecipientBinding, type GmailModelRecipientId } from '../contracts/gmail.js'
 import type { GoogleWorkspaceModelFence, ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
 import type { TurnItem } from '../contracts/items.js'
 import { GOOGLE_WORKSPACE_MODEL_PROVIDER, GoogleWorkspaceModelPolicyError } from '../domain/google-workspace-model-policy.js'
 
-export type GmailModelAvailability = { allowed: boolean; reason?: string; providerName?: string }
+export type GmailModelAvailability = { allowed: boolean; reason?: string; providerName?: string;
+  recipient?: GmailModelRecipientId; endpoint?: string; consentId?: string; recipientBinding?: GmailModelRecipientBinding }
 export interface GmailModelDataPolicyPort {
   availability(threadId: string, selection?: GmailModelSelection): Promise<GmailModelAvailability>
   assertAllowed(threadId: string, selection?: GmailModelSelection): Promise<void>
 }
 export type GmailModelSelection = Pick<ModelRequest, 'model' | 'providerId'>
-export type GmailThreadDataState = { sensitive: boolean; sharingAllowed: boolean }
+export type GmailThreadDataState = { sensitive: boolean; sharingAllowed: boolean; assertSharingCurrent?: () => void }
 export type GmailModelDataPolicyOptions = {
-  /** Future reviewed cloud release only; absent/false keeps public Gmail processing local. */
+  /** Cloud processing additionally requires a host-minted exact-account proof and per-task consent. */
   cloudProcessingEnabled?: boolean
   selection(threadId: string): Promise<GmailModelSelection>
   /** Resolve private-room and inherited parent scope; retain sensitivity after disconnect. */
-  dataState(threadId: string, history?: readonly TurnItem[]): Promise<GmailThreadDataState>
+  dataState(threadId: string, history?: readonly TurnItem[], recipient?: GmailModelRecipientBinding): Promise<GmailThreadDataState>
   /** The host-created local client ignores the display profile's URL, key, and transport settings. */
   local?: { providerId: 'kun-gmail-local'; model: 'qwen3:4b'; client: ModelClient }
 }
@@ -37,8 +39,16 @@ export class GoogleWorkspaceModelClient implements ModelClient, GmailModelDataPo
       const selection = admittedSelection ?? await this.policy.selection(threadId)
       const fence = this.guard(selection)
       fence()
-      return { allowed: true, providerName: fence.providerName ?? GOOGLE_WORKSPACE_MODEL_PROVIDER }
-    } catch { return { allowed: false, reason: 'approved_ollama_required' } }
+      return { allowed: true, providerName: fence.providerName ?? GOOGLE_WORKSPACE_MODEL_PROVIDER,
+        recipient: fence.recipient?.id, endpoint: fence.endpoint, consentId: fence.consentId, recipientBinding: fence.recipient }
+    } catch (error) {
+      const selection = admittedSelection ?? await this.policy.selection(threadId)
+      const config = this.configFor(selection.providerId) as { baseUrl?: string } | undefined
+      const deepseek = config?.baseUrl?.startsWith('https://api.deepseek.com')
+      return { allowed: false, reason: deepseek ? 'deepseek_api_account_not_reviewed' : 'approved_model_required',
+        ...(deepseek ? { recipient: 'deepseek-api', endpoint: 'https://api.deepseek.com', providerName: 'DeepSeek API' } : {}),
+        ...(error instanceof GoogleWorkspaceModelPolicyError && error.message.includes('changed') ? { reason: 'deepseek_api_account_evidence_changed' } : {}) }
+    }
   }
 
   async assertAllowed(threadId: string, admittedSelection?: GmailModelSelection): Promise<void> {
@@ -65,26 +75,33 @@ export class GoogleWorkspaceModelClient implements ModelClient, GmailModelDataPo
     const fence = client.googleWorkspaceDispatchGuard(selection)
     const mode = selection.providerId === 'kun-gmail-local' ? 'verified-local' : 'reviewed-cloud'
     if (fence.mode !== mode || !fence.assertEndpoint) throw new GoogleWorkspaceModelPolicyError()
+    if (mode === 'reviewed-cloud' && (!fence.recipient || !fence.consentId || !fence.assertCredentials)) throw new GoogleWorkspaceModelPolicyError()
+    if (mode === 'verified-local') return Object.assign(fence, { recipient: LOCAL_GMAIL_RECIPIENT,
+      consentId: 'kun-managed-local:v1', endpoint: 'Kun managed local Ollama' })
     return fence
   }
 
   async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
-    const state = await this.policy.dataState(request.threadId, request.history)
+    const classification = await this.policy.dataState(request.threadId, request.history)
     const client = this.client(request)
-    if (!state.sensitive) { yield* client.stream(request); return }
+    if (!classification.sensitive) { yield* client.stream(request); return }
     if (request.gatewayRouting) throw new GoogleWorkspaceModelPolicyError('Gmail conversations cannot be exported through a model gateway.')
-    if (!state.sharingAllowed) throw new GoogleWorkspaceModelPolicyError('Gmail model sharing is disabled for this conversation. Re-enable it or remove the email conversation before continuing.')
     const captured = this.guard(request)
-    const assertCurrent = () => captured()
+    const state = await this.policy.dataState(request.threadId, request.history, captured.recipient)
+    if (!state.sharingAllowed) throw new GoogleWorkspaceModelPolicyError('Gmail sharing has not been granted to this exact model account for this conversation. Review and enable it before continuing.')
+    if (!state.assertSharingCurrent) throw new GoogleWorkspaceModelPolicyError('Gmail sharing could not be fenced before dispatch.')
+    const assertCurrent = () => { captured(); state.assertSharingCurrent!() }
     const assertDataPermission = async () => {
-      const current = await this.policy.dataState(request.threadId, request.history)
-      if (!current.sensitive || !current.sharingAllowed) {
+      assertCurrent()
+      const current = await this.policy.dataState(request.threadId, request.history, captured.recipient)
+      if (!current.sensitive || !current.sharingAllowed || !current.assertSharingCurrent) {
         throw new GoogleWorkspaceModelPolicyError('Gmail data permission changed before the model request.')
       }
+      current.assertSharingCurrent()
       assertCurrent()
     }
     await assertDataPermission()
-    yield* client.stream({ ...request, googleWorkspaceData: { assertCurrent, assertEndpoint: captured.assertEndpoint },
+    yield* client.stream({ ...request, googleWorkspaceData: { assertCurrent, assertEndpoint: captured.assertEndpoint, assertCredentials: captured.assertCredentials },
       beforeProviderDispatch: async () => {
         await assertDataPermission()
         await request.beforeProviderDispatch?.()

@@ -34,7 +34,10 @@ export async function continueGmailTask(runtime: ServerRuntime, input: z.infer<t
     throw new GmailError('task_changed', 'Wait for Kun to finish, or ask Kun to continue Gmail from the current conversation')
   }
   if (!runtime.gmail) throw new GmailError('connection_required', 'Connect Gmail in Kun')
-  const status = await runtime.gmail.status(scopeId)
+  if (!runtime.gmailDataPolicy) throw new GoogleWorkspaceModelPolicyError()
+  const access = await runtime.gmailDataPolicy.availability(thread.id, source.model ? { model: source.model, providerId: source.providerId } : undefined)
+  if (!access.allowed || !access.recipientBinding) throw new GoogleWorkspaceModelPolicyError()
+  const status = await runtime.gmail.status(scopeId, access.recipientBinding)
   if (!status.connected || !status.allowModelSharing || !GMAIL_SCOPES.every((scope) => status.scopes.includes(scope))) {
     throw new GmailError('sharing_consent_required', 'Connect Gmail and allow this conversation’s model to use mail first')
   }

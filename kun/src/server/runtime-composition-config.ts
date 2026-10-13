@@ -64,7 +64,7 @@ import {
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import { isNativeNetworkOnlyApply, OfficeCliRunnerReuse, reusableMcpProviders } from './runtime-config-apply-reuse.js'
-import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
 
@@ -89,7 +89,6 @@ export function createRuntimeConfigController(
   const { core } = model
   const {
     nowIso,
-    llmDebug,
     threadService,
     graphRuntime,
     graphToolsProvider,
@@ -101,9 +100,9 @@ export function createRuntimeConfigController(
     extensionModelProviders,
     legacyCredentialMigration,
     modelConnections,
-    resolveLegacyRequestCredentials,
     migrateLegacyProviderCredentials,
     buildApprovalReviewClients,
+    buildGmailAwareModelClients,
     directModelClient,
     approvalReviewModelClient,
     modelClient,
@@ -356,7 +355,7 @@ export function createRuntimeConfigController(
 	      nextSubagentConfig
 	    )
 	    const nextBaseToolProviders = [
-	      buildGmailToolProvider(services.gmail, core.threadStore),
+	      buildGmailToolProvider(services.gmail, core.threadStore, model.gmailDataPolicy),
 	      builtinProvider('execution-tasks', buildExecutionTaskLocalTools(threadService.executionTasks)),
 	      builtinProvider('builtin', withBackgroundShellTools(
 	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),
@@ -467,12 +466,9 @@ export function createRuntimeConfigController(
               nextOptions = { ...nextOptions, localModelGateway: { ...nextOptions.localModelGateway!, enabled: false } }
             }
             await migrateLegacyProviderCredentials(nextOptions)
-	    const nextModelClients = buildModelClientRouterInput(
+	    const nextModelClients = await buildGmailAwareModelClients(
 	      nextOptions,
-	      (model) => modelCapabilitiesForModel(model, nextModelProfiles),
-	      llmDebug,
-	      resolveLegacyRequestCredentials,
-              () => modelConnections
+	      (model) => modelCapabilitiesForModel(model, nextModelProfiles)
 	    )
             for (const [providerId, client] of extensionModelProviders.clientMap()) {
               nextModelClients.providers.set(providerId, client)

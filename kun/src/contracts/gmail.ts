@@ -1,9 +1,19 @@
+import type { GmailAuthorizationErrorCode } from './gmail-authorization-errors.js'
 import { z } from 'zod'
 
 export const GmailScopeIdSchema = z.string().regex(/^(?:room|thread):[A-Za-z0-9_-]{1,128}$/u)
+export const GmailModelRecipientIdSchema = z.enum(['kun-managed-local', 'deepseek-api'])
+export const GmailModelRecipientBindingSchema = z.object({
+  id: GmailModelRecipientIdSchema, accountBinding: z.string().min(1).max(256)
+}).strict()
+export type GmailModelRecipientId = z.infer<typeof GmailModelRecipientIdSchema>
+export type GmailModelRecipientBinding = z.infer<typeof GmailModelRecipientBindingSchema>
+export const LOCAL_GMAIL_RECIPIENT: GmailModelRecipientBinding = { id: 'kun-managed-local', accountBinding: 'kun-managed-local:v1' }
+
 export const GmailAuthorizeInputSchema = z.object({
   scopeId: GmailScopeIdSchema,
-  allowModelSharing: z.boolean()
+  allowModelSharing: z.boolean(),
+  recipient: GmailModelRecipientBindingSchema.optional()
 }).strict()
 export const GmailSearchInputSchema = z.object({
   query: z.string().trim().min(1).max(1_000),
@@ -33,12 +43,14 @@ export type GmailConnectionStatus = {
   email?: string
   scopes: string[]
   allowModelSharing: boolean
+  modelSharingRecipient?: GmailModelRecipientId
 }
 export type GmailAuthorization = {
   id: string
   url: string
   status: 'pending' | 'connected' | 'cancelled' | 'expired' | 'failed'
   expiresAt: string
+  errorCode?: GmailAuthorizationErrorCode
   error?: 'access_denied' | 'authorization_failed' | 'browser_unavailable' | 'scope_missing'
 }
 export type GmailMessageSummary = {

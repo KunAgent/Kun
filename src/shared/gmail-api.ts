@@ -12,10 +12,16 @@ export type GmailConversationBinding =
   | { roomId: string; messageId: string; threadId?: never }
   | { threadId: string; roomId?: never; messageId?: never }
 
+export type GmailModelRecipient = 'kun-managed-local' | 'deepseek-api'
+
 export type GmailConversationStatus = import('../../kun/src/contracts/gmail').GmailConnectionStatus & {
   modelProviderName?: string
   modelSharingAvailable?: boolean
   modelSharingReason?: string
+  modelProcessingRecipient?: GmailModelRecipient
+  modelProcessingEndpoint?: string
+  modelProcessingConsentId?: string
+  modelSharingRecipient?: GmailModelRecipient
 }
 
 export type GmailLocalModelStatus = {

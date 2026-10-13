@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import {
-  GmailAuthorizeInputSchema, GmailReadInputSchema, GmailScopeIdSchema,
+  GmailAuthorizeInputSchema, GmailReadInputSchema, GmailScopeIdSchema, GmailModelRecipientBindingSchema, LOCAL_GMAIL_RECIPIENT,
   GmailSearchInputSchema, GmailSendInputSchema,
   type GmailAuthorization, type GmailAuthorizeInput, type GmailConnectionStatus,
-  type GmailMessage, type GmailReadInput, type GmailSearchInput,
+  type GmailMessage, type GmailReadInput, type GmailModelRecipientBinding, type GmailSearchInput,
   type GmailSearchResult, type GmailSendInput, type GmailSendResult
 } from '../contracts/gmail.js'
 import { GmailLoopbackAuthorization } from './authorization.js'
@@ -39,15 +39,31 @@ export class NativeGmailService implements GmailServicePort {
 
   async initialize(): Promise<void> { await this.store.read() }
 
-  async status(scopeId?: string): Promise<GmailConnectionStatus> {
+  captureModelSharingFence(scopeId: string): () => void {
+    GmailScopeIdSchema.parse(scopeId)
+    const generation = this.generation
+    const revision = this.consentRevisions.get(scopeId) ?? 0
+    const assertCurrent = () => {
+      if (this.disposed || generation !== this.generation) throw new GmailError('connection_changed', 'The Gmail connection changed before dispatch')
+      this.assertConsentRevision(scopeId, revision)
+      this.assertScopeNotRevoked(scopeId)
+    }
+    assertCurrent()
+    return assertCurrent
+  }
+
+  async status(scopeId?: string, recipient: GmailModelRecipientBinding = LOCAL_GMAIL_RECIPIENT): Promise<GmailConnectionStatus> {
     if (scopeId !== undefined) GmailScopeIdSchema.parse(scopeId)
+    GmailModelRecipientBindingSchema.parse(recipient)
     const state = await this.store.read()
+    const grant = state.grants.find((entry) => entry.scopeId === scopeId)
     const connected = Boolean(state.tokens && !state.reconnectRequired)
     return {
-      configured: Boolean(this.clientId), connected, reconnectRequired: state.reconnectRequired,
+      configured: Boolean(this.clientId && (!this.options.requireClientSecret || this.options.clientSecret)), connected, reconnectRequired: state.reconnectRequired,
       ...(state.tokens?.email ? { email: state.tokens.email } : {}), scopes: state.tokens?.scopes ?? [],
       allowModelSharing: connected && Boolean(scopeId && !this.revokedScopes.has(scopeId) &&
-        state.grants.find((grant) => grant.scopeId === scopeId)?.allowModelSharing)
+        grant?.allowModelSharing && grant.recipient.id === recipient.id && grant.recipient.accountBinding === recipient.accountBinding),
+      ...(grant?.allowModelSharing ? { modelSharingRecipient: grant.recipient.id } : {})
     }
   }
 
@@ -74,6 +90,7 @@ export class NativeGmailService implements GmailServicePort {
 
   private async authorizeScope(value: GmailAuthorizeInput): Promise<GmailAuthorization> {
     if (this.disposed) throw new GmailError('service_unavailable', 'Gmail connection is unavailable')
+    this.assertClientConfiguration()
     const generation = this.generation
     const input = GmailAuthorizeInputSchema.parse(value)
     const consentRevision = this.consentRevisions.get(input.scopeId) ?? 0
@@ -93,16 +110,20 @@ export class NativeGmailService implements GmailServicePort {
     let authorization: GmailLoopbackAuthorization
     authorization = new GmailLoopbackAuthorization(input.scopeId, this.clientId, this.now,
       async (code, verifier, redirectUri) => {
+        // Reconnecting, including to the same address, invalidates in-flight model permissions.
+        if (this.disposed || generation !== this.generation) throw new GmailError('authorization_cancelled', 'This Gmail authorization was cancelled')
+        this.generation += 1
+        const callbackGeneration = this.generation
         await this.assertDataProtection()
         const tokens = await this.client.exchange(code, verifier, redirectUri)
         await this.assertDataProtection()
         await this.store.update((current) => {
-          if (generation !== this.generation || this.disposed || authorization.status().status !== 'pending') {
+          if (callbackGeneration !== this.generation || this.disposed || authorization.status().status !== 'pending') {
             throw new GmailError('authorization_cancelled', 'This Gmail authorization was cancelled')
           }
           this.assertConsentRevision(input.scopeId, consentRevision)
           const grants = current.tokens?.email === tokens.email ? current.grants : []
-          const grant = { scopeId: input.scopeId, allowModelSharing: input.allowModelSharing, grantedAt: this.now() }
+          const grant = { scopeId: input.scopeId, allowModelSharing: input.allowModelSharing, grantedAt: this.now(), recipient: input.recipient ?? LOCAL_GMAIL_RECIPIENT }
           return { ...current, tokens, reconnectRequired: false,
             sensitiveScopes: input.allowModelSharing ? markSensitiveScope(current.sensitiveScopes, input.scopeId) : current.sensitiveScopes,
             grants: [...grants.filter((entry) => entry.scopeId !== input.scopeId).slice(-255), grant] }
@@ -110,7 +131,7 @@ export class NativeGmailService implements GmailServicePort {
         if (input.allowModelSharing && (this.consentRevisions.get(input.scopeId) ?? 0) === consentRevision) {
           this.revokedScopes.delete(input.scopeId)
         }
-      })
+      }, async (failure) => { await this.store.update((current) => ({ ...current, lastAuthorizationError: failure })) })
     this.authorizations.set(authorization.id, authorization)
     const result = await authorization.start()
     // Browser launching is independent of the short HTTP request that starts authorization.
@@ -146,12 +167,13 @@ export class NativeGmailService implements GmailServicePort {
     if (input.revoke && previous.tokens) await this.client.revoke(previous.tokens.refreshToken ?? previous.tokens.accessToken)
   }
 
-  async setModelSharing(scopeId: string, allow: boolean): Promise<GmailConnectionStatus> {
-    return this.track(() => this.changeModelSharing(scopeId, allow))
+  async setModelSharing(scopeId: string, allow: boolean, recipient: GmailModelRecipientBinding = LOCAL_GMAIL_RECIPIENT): Promise<GmailConnectionStatus> {
+    return this.track(() => this.changeModelSharing(scopeId, allow, recipient))
   }
 
-  private async changeModelSharing(scopeId: string, allow: boolean): Promise<GmailConnectionStatus> {
+  private async changeModelSharing(scopeId: string, allow: boolean, recipient: GmailModelRecipientBinding): Promise<GmailConnectionStatus> {
     GmailScopeIdSchema.parse(scopeId)
+    GmailModelRecipientBindingSchema.parse(recipient)
     if (this.disposed) throw new GmailError('service_unavailable', 'Gmail connection is unavailable')
     const generation = this.generation
     const revision = ++this.nextConsentRevision
@@ -167,14 +189,14 @@ export class NativeGmailService implements GmailServicePort {
       this.assertConsentRevision(scopeId, revision)
       if (allow && (this.disposed || generation !== this.generation)) throw new GmailError('cancelled', 'Gmail sharing was cancelled')
       if (!current.tokens || current.reconnectRequired) throw new GmailError('connection_required', 'Connect Gmail first')
-      const grant = { scopeId, allowModelSharing: allow, grantedAt: this.now() }
+      const grant = { scopeId, allowModelSharing: allow, grantedAt: this.now(), recipient }
       return { ...current, sensitiveScopes: allow ? markSensitiveScope(current.sensitiveScopes, scopeId) :
         current.grants.some((entry) => entry.scopeId === scopeId && entry.allowModelSharing)
           ? markSensitiveScope(current.sensitiveScopes, scopeId) : current.sensitiveScopes,
         grants: [...current.grants.filter((entry) => entry.scopeId !== scopeId).slice(-255), grant] }
     })
     if (allow && this.consentRevisions.get(scopeId) === revision) this.revokedScopes.delete(scopeId)
-    return this.status(scopeId)
+    return this.status(scopeId, recipient)
   }
 
   async search(value: GmailSearchInput, scopeId: string): Promise<GmailSearchResult> {
@@ -184,12 +206,12 @@ export class NativeGmailService implements GmailServicePort {
   private async searchGranted(value: GmailSearchInput, scopeId: string): Promise<GmailSearchResult> {
     const input = GmailSearchInputSchema.parse(value)
     await this.requireSharing(scopeId)
-    return this.readRequest(scopeId, async (token) => {
+    return this.readRequest(scopeId, async (token, assertCurrent) => {
       const found = await this.client.list(input.query, input.maxResults, token)
       const messages = []
       for (let offset = 0; offset < found.messages.length; offset += 5) {
         messages.push(...await Promise.all(found.messages.slice(offset, offset + 5)
-          .map(async (entry) => summarizeMessage(await this.client.message(entry.id, token, true)))))
+          .map(async (entry) => { assertCurrent(); return summarizeMessage(await this.client.message(entry.id, token, true)) })))
       }
       return { messages, hasMore: found.hasMore, untrusted: true }
     })
@@ -305,18 +327,24 @@ export class NativeGmailService implements GmailServicePort {
     }
   }
 
-  private async readRequest<T>(scopeId: string, read: (token: string) => Promise<T>): Promise<T> {
+  private async readRequest<T>(scopeId: string, read: (token: string, assertCurrent: () => void) => Promise<T>): Promise<T> {
     const generation = this.generation
     const consentRevision = this.consentRevisions.get(scopeId) ?? 0
+    const assertCurrent = () => {
+      if (this.disposed || generation !== this.generation) throw new GmailError('cancelled', 'Gmail reading was cancelled')
+      this.assertConsentRevision(scopeId, consentRevision)
+      this.assertScopeNotRevoked(scopeId)
+    }
     const tokens = await this.accessTokens()
-    if (this.disposed || generation !== this.generation) throw new GmailError('cancelled', 'Gmail reading was cancelled')
-    this.assertConsentRevision(scopeId, consentRevision)
-    this.assertScopeNotRevoked(scopeId)
+    assertCurrent()
     let result: T
-    try { result = await read(tokens.accessToken) }
+    try { result = await read(tokens.accessToken, assertCurrent) }
     catch (error) {
       if (!(error instanceof GmailError) || error.code !== 'access_expired') throw error
-      result = await read((await this.accessTokens(tokens.accessToken)).accessToken)
+      assertCurrent()
+      const refreshed = await this.accessTokens(tokens.accessToken)
+      assertCurrent()
+      result = await read(refreshed.accessToken, assertCurrent)
     }
     await this.requireSharing(scopeId)
     const current = await this.store.read()
@@ -343,6 +371,7 @@ export class NativeGmailService implements GmailServicePort {
 
   private async accessTokens(rejected?: string): Promise<GmailTokens> {
     if (this.disposed) throw new GmailError('service_unavailable', 'Gmail connection is unavailable')
+    this.assertClientConfiguration()
     const current = await this.store.read()
     if (this.disposed) throw new GmailError('service_unavailable', 'Gmail connection is unavailable')
     if (!current.tokens || current.reconnectRequired) throw new GmailError('reconnect_required', 'Reconnect Gmail to continue')
@@ -362,7 +391,8 @@ export class NativeGmailService implements GmailServicePort {
         return tokens
       } catch (error) {
         if (error instanceof GmailError && error.code === 'reconnect_required') {
-          await this.store.update((state) => generation === this.generation && state.tokens?.refreshToken === previous.refreshToken
+          const reconnectGeneration = generation === this.generation ? ++this.generation : undefined
+          await this.store.update((state) => reconnectGeneration === this.generation && state.tokens?.refreshToken === previous.refreshToken
             ? { ...state, tokens: undefined, reconnectRequired: true, grants: [] } : state)
         }
         throw error
@@ -374,6 +404,12 @@ export class NativeGmailService implements GmailServicePort {
   private assertConsentRevision(scopeId: string, revision: number): void {
     if ((this.consentRevisions.get(scopeId) ?? 0) !== revision) {
       throw new GmailError('consent_changed', 'Gmail sharing changed while this request was pending')
+    }
+  }
+
+  private assertClientConfiguration(): void {
+    if (this.options.requireClientSecret && !this.options.clientSecret) {
+      throw new GmailError('client_configuration_required', 'Close Kun and install the reviewed Desktop OAuth Client Secret with the local operator command before connecting Gmail')
     }
   }
 

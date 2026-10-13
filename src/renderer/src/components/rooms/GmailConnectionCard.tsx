@@ -3,6 +3,7 @@ import { Check, ExternalLink, Loader2, Mail, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { GmailAuthorization, GmailConversationStatus, GmailConversationBinding, GmailLocalModelStatus } from '@shared/gmail-api'
 import { gmailClient } from './gmail-client'
+import { GmailModelConsent, gmailModelRecipient, gmailModelSharingAvailable, hasCurrentGmailModelConsent } from './GmailModelConsent'
 import './rooms-app-connections.css'
 import './gmail-connections.css'
 
@@ -34,7 +35,7 @@ export function GmailConnectionCard({ binding, body, skipped = false, resumed = 
     const requestedBinding = bindingRef.current
     const next = await gmailClient.status(requestedBinding, signal)
     if (!signal?.aborted && JSON.stringify(requestedBinding) === JSON.stringify(bindingRef.current)) {
-      setStatus(next); setSharing(next.allowModelSharing)
+      setStatus(next); setSharing(hasCurrentGmailModelConsent(next))
     }
     return next
   }
@@ -110,7 +111,8 @@ export function GmailConnectionCard({ binding, body, skipped = false, resumed = 
           else if (!next.preparing) setError(t('gmailLocalPrepareFailed'))
         }
       } else if (action === 'connect') {
-        const next = await gmailClient.authorize(bindingRef.current, sharing && status?.modelSharingAvailable === true)
+        const next = await gmailClient.authorize(bindingRef.current, sharing && gmailModelSharingAvailable(status),
+          gmailModelRecipient(status), status?.modelProcessingConsentId)
         if (current === generation.current) {
           setAttempt(next)
           if (next.status === 'connected') await load()
@@ -131,7 +133,7 @@ export function GmailConnectionCard({ binding, body, skipped = false, resumed = 
         await onSkip?.()
       } else if (action === 'continue') {
         const next = await load()
-        if (!next.connected || !next.allowModelSharing || next.modelSharingAvailable !== true || !REQUIRED_SCOPES.every((scope) => next.scopes.includes(scope))) {
+        if (!next.connected || !hasCurrentGmailModelConsent(next) || !gmailModelSharingAvailable(next) || !REQUIRED_SCOPES.every((scope) => next.scopes.includes(scope))) {
           setError(t('gmailGrantRequired')); return
         }
         await onContinue?.()
@@ -154,20 +156,20 @@ export function GmailConnectionCard({ binding, body, skipped = false, resumed = 
     setBusy(true); setError('')
     const current = ++generation.current
     try {
-      const next = await gmailClient.sharing(bindingRef.current, value)
+      const next = await gmailClient.sharing(bindingRef.current, value, gmailModelRecipient(status), status?.modelProcessingConsentId)
       if (current === generation.current) {
         setStatus({ ...next, modelProviderName: next.modelProviderName ?? status?.modelProviderName,
           modelSharingAvailable: next.modelSharingAvailable ?? status?.modelSharingAvailable,
           modelSharingReason: next.modelSharingReason ?? status?.modelSharingReason })
-        setSharing(next.allowModelSharing)
+        setSharing(hasCurrentGmailModelConsent(next))
       }
     } catch { if (current === generation.current) setError(t('gmailActionFailed')) }
     finally { if (current === generation.current) setBusy(false) }
   }
   const connected = status?.connected === true
   const pending = attempt?.status === 'pending'
-  const sharingAvailable = status?.modelSharingAvailable === true
-  const ready = connected && status.allowModelSharing && sharingAvailable && REQUIRED_SCOPES.every((scope) => status.scopes.includes(scope))
+  const sharingAvailable = gmailModelSharingAvailable(status)
+  const ready = connected && hasCurrentGmailModelConsent(status) && sharingAvailable && REQUIRED_SCOPES.every((scope) => status.scopes.includes(scope))
   return <section className="rooms-app-connection-card gmail-connection-card" aria-label={t('gmailTitle')} aria-busy={busy}>
     <div className="rooms-app-connection-hero"><span className="rooms-app-connection-icon"><Mail size={25} /></span></div>
     <div className="rooms-app-connection-content">
@@ -178,17 +180,13 @@ export function GmailConnectionCard({ binding, body, skipped = false, resumed = 
       <small><ShieldCheck size={13} /> {t('gmailApprovalRequired')}</small>
       <small>{t('gmailLocalCredentials')}</small>
       {status?.modelProviderName ? <small>{t('gmailProvider', { name: status.modelProviderName })}</small> : null}
-      {status && !sharingAvailable ? <p role="status">{t('gmailModelRestricted')}</p> : null}
       {local?.installed && !local.ready ? <div className="gmail-local-preparation">
         <small>{t('gmailLocalDownloadDetails')}</small>
         {local.preparing ? <p role="status" className="gmail-waiting"><Loader2 size={14} className="animate-spin" />{t('gmailLocalPreparing')}</p> :
           <div className="rooms-app-connection-actions"><button type="button" disabled={busy || pending} onClick={() => void act('prepare-local')}>{t('gmailPrepareLocal')}</button></div>}
       </div> : local?.ready && !sharingAvailable ? <small>{t('gmailLocalChooseNewTask')}</small> : null}
-      {!skipped ? <label className="gmail-sharing-consent">
-        <input type="checkbox" checked={sharing} disabled={busy || pending || !status?.configured || (!sharingAvailable && !sharing)} onChange={(event) => void toggleSharing(event.target.checked)} />
-        <span>{t('gmailSharingConsent')}<small>{t('gmailSharingDetails')}</small></span>
-      </label> : null}
-      <small>{t('gmailSharingScope')}</small>
+      <GmailModelConsent status={status} sharing={sharing} busy={busy} pending={pending} skipped={skipped}
+        onChange={(value) => void toggleSharing(value)} />
       <a className="rooms-app-connection-guide" href="https://www.kun-agent.com/privacy" target="_blank" rel="noreferrer"
         onClick={(event) => { if (window.kunGui?.openExternal) { event.preventDefault(); void window.kunGui.openExternal('https://www.kun-agent.com/privacy') } }}>{t('gmailPrivacy')}</a>
       {!status?.configured && status ? <p role="status">{t('gmailNotConfigured')}</p> : null}

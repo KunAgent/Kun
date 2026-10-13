@@ -1,5 +1,6 @@
 import { registerHostActionApprovalGrant } from './action-approval-grants.js'
-import { isLocalGmailActingProvider } from '../../gmail/tool-policy.js'
+import { isGmailRestrictedToolContext } from '../../gmail/tool-policy.js'
+import { GmailToolContextPolicy } from '../../gmail/tool-context-policy.js'
 import { randomUUID } from 'node:crypto'
 import type { ToolHost, ToolHostContext, ToolHostResult, ToolCallLike, ToolProviderPolicy } from '../../ports/tool-host.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
@@ -33,6 +34,7 @@ export class LocalToolHost implements ToolHost {
   private readonly operationJournal: ToolOperationJournal
   private prepare?: (context?: ToolHostContext) => Promise<void> | void
   private readonly leaseAuthority?: ToolDispatchLeaseAuthority
+  private readonly gmailToolContexts: GmailToolContextPolicy
   private generation = 0
   private readonly turnComponents = new Map<string, {
     registry: CapabilityRegistry
@@ -51,6 +53,7 @@ export class LocalToolHost implements ToolHost {
     this.operationJournal = options.operationJournal ?? new ToolOperationJournal()
     this.prepare = options.prepare
     this.leaseAuthority = options.leaseAuthority
+    this.gmailToolContexts = new GmailToolContextPolicy(options.threadStore)
   }
 
   replaceRuntimeComponents(input: {
@@ -65,7 +68,8 @@ export class LocalToolHost implements ToolHost {
     this.pruneTurnComponents()
   }
 
-  listTools(context?: ToolHostContext) {
+  async listTools(context?: ToolHostContext) {
+    if (this.gmailToolContexts.requiresCanonicalLookup) context = await this.gmailToolContexts.apply(context)
     const components = this.componentsFor(context)
     return this.prepareCatalog(components, context).then(() => components.registry.listTools(context))
   }
@@ -79,6 +83,7 @@ export class LocalToolHost implements ToolHost {
     context: ToolHostContext,
     onUpdate?: (item: TurnItem) => Promise<void> | void
   ): Promise<ToolHostResult> {
+    context = (await this.gmailToolContexts.apply(context))!
     const components = this.componentsFor(context)
     await this.prepareCatalog(components, context)
     if (context.abortSignal.aborted) {
@@ -91,7 +96,7 @@ export class LocalToolHost implements ToolHost {
     )
     let tool = resolved.tool
     const provider = resolved.provider
-    const toolHooks = isLocalGmailActingProvider(context) || (provider.id === 'gmail' && provider.kind === 'built-in')
+    const toolHooks = isGmailRestrictedToolContext(context) || (provider.id === 'gmail' && provider.kind === 'built-in')
       ? [] : components.hooks
     if (tool.policy === 'never') {
       throw new Error(`tool ${call.toolName} is disabled by policy`)
@@ -344,6 +349,8 @@ export class LocalToolHost implements ToolHost {
     if (context.abortSignal.aborted) {
       throw new Error('tool call aborted while waiting for approval')
     }
+    context = (await this.gmailToolContexts.apply(context))!
+    components.registry.resolveTool(activeCall.toolName, context, activeCall.providerId)
     const operationIdentity = createToolOperationIdentity({
       threadId: context.threadId,
       turnId: context.turnId,
@@ -448,7 +455,8 @@ export class LocalToolHost implements ToolHost {
     const meta = result.meta
     let hookedResult: PostToolUseOutcome
     try {
-      hookedResult = await runPostToolUseHooks(toolHooks, {
+      const postContext = await this.gmailToolContexts.apply(context)
+      hookedResult = await runPostToolUseHooks(isGmailRestrictedToolContext(postContext) ? [] : toolHooks, {
         call: activeCall,
         context: hookContext(context),
         result

@@ -323,4 +323,22 @@ describe('approved Gmail sends', () => {
       expect((await fixture.store.read()).attempts[0].status).toBe('sent')
     } finally { resolveSend?.(json({ id: 'sent1' })); await fixture.cleanup() }
   })
+  it('keeps legacy local consent separate from the exact reviewed DeepSeek account', async () => {
+    const f = await gmailFixture()
+    const accountA = { id: 'deepseek-api' as const, accountBinding: 'evidence-account-a' }
+    const accountB = { id: 'deepseek-api' as const, accountBinding: 'evidence-account-b' }
+    try {
+      await f.seed()
+      expect((await f.service.status(SCOPE)).allowModelSharing).toBe(true)
+      expect((await f.service.status(SCOPE, accountA)).allowModelSharing).toBe(false)
+      await f.service.setModelSharing(SCOPE, true, accountA)
+      expect(await f.service.status(SCOPE, accountA)).toMatchObject({ allowModelSharing: true, modelSharingRecipient: 'deepseek-api' })
+      expect((await f.service.status(SCOPE)).allowModelSharing).toBe(false)
+      expect((await f.service.status(SCOPE, accountB)).allowModelSharing).toBe(false)
+      await f.service.setModelSharing(SCOPE, false)
+      expect((await f.service.status(SCOPE, accountA)).allowModelSharing).toBe(false)
+      expect(await f.service.hasGoogleData(SCOPE)).toBe(true)
+    } finally { await f.cleanup() }
+  })
+
 })

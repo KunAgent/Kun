@@ -60,10 +60,10 @@ describe('host-proven local Ollama Gmail model', () => {
     const f = fixture()
     const untrusted = { provider: 'user-sdk', model: 'user-model', stream: vi.fn(async function* () {}) }
     const policy = { selection: async () => ({ providerId: 'kun-gmail-local', model: 'qwen3:4b' }),
-      dataState: async () => ({ sensitive: true, sharingAllowed: true }),
+      dataState: async () => ({ sensitive: true, sharingAllowed: true, assertSharingCurrent: () => undefined }),
       local: { providerId: 'kun-gmail-local' as const, model: 'qwen3:4b' as const, client: f.client } }
     const wrapper = new GoogleWorkspaceModelClient(untrusted, policy)
-    expect(await wrapper.availability('mail-thread')).toEqual({ allowed: true, providerName: 'Ollama Local (cloud disabled)' })
+    expect(await wrapper.availability('mail-thread')).toMatchObject({ allowed: true, providerName: 'Ollama Local (cloud disabled)', recipient: 'kun-managed-local' })
     await collect(wrapper.stream(request()))
     expect(untrusted.stream).not.toHaveBeenCalled()
     expect(f.directFetch).toHaveBeenCalledOnce()
@@ -79,11 +79,11 @@ describe('host-proven local Ollama Gmail model', () => {
     const cloud = new CompatModelClient({ baseUrl: 'https://ollama.com/v1', model: 'qwen3:4b', apiKey: 'not-real', fetchImpl: directFetch })
     const wrapper = new GoogleWorkspaceModelClient(cloud, {
       selection: async () => ({ providerId: 'kun-gmail-local', model: 'qwen3:4b' }),
-      dataState: async () => ({ sensitive: true, sharingAllowed: true }),
+      dataState: async () => ({ sensitive: true, sharingAllowed: true, assertSharingCurrent: () => undefined }),
       local: { providerId: 'kun-gmail-local', model: 'qwen3:4b', client: cloud }
     })
     expect(await wrapper.availability('mail-thread')).toMatchObject({ allowed: false })
-    await expect(collect(wrapper.stream(request()))).rejects.toThrow('Gmail data requires')
+    await expect(collect(wrapper.stream(request()))).rejects.toMatchObject({ code: 'google_data_provider_not_approved' })
     expect(directFetch).not.toHaveBeenCalled()
   })
 
@@ -92,7 +92,8 @@ describe('host-proven local Ollama Gmail model', () => {
     let sharing = true
     const wrapper = new GoogleWorkspaceModelClient(f.client, {
       selection: async () => ({ providerId: 'kun-gmail-local', model: 'qwen3:4b' }),
-      dataState: async () => ({ sensitive: true, sharingAllowed: sharing }),
+      dataState: async () => ({ sensitive: true, sharingAllowed: sharing,
+        assertSharingCurrent: () => { if (!sharing) throw new Error('Gmail consent revoked') } }),
       local: { providerId: 'kun-gmail-local', model: 'qwen3:4b', client: f.client }
     })
     const chunks = await collect(wrapper.stream(request({ beforeWireDispatch: async () => { sharing = false } })))

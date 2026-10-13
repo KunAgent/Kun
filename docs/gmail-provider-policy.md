@@ -1,9 +1,12 @@
 # Gmail model provider gate
 
-This gate was researched and implemented on 2026-10-12. The initial public release
-permits only a verified Kun-managed local Ollama process with cloud disabled.
-Cloud processing is disabled by default; its endpoint checks remain for future
-operator-controlled review and do not declare any account approved for public use.
+This gate was researched on 2026-10-12 and updated on 2026-10-13 for the user's
+explicit DeepSeek choice. It supports a verified Kun-managed local Ollama process
+with cloud disabled and an exact direct DeepSeek API account after a trusted host
+review of its disabled training setting. An endpoint label or conversation checkbox
+does not create that review. Other cloud recipients stay disabled by default.
+The actual review evidence and remaining release checks are recorded separately in
+[Gmail DeepSeek review](gmail-deepseek-review.md).
 
 The local client receives an opaque proof containing the owned numeric loopback
 origin, exact `qwen3:4b` model, direct physical fetch, and current-process assertion.
@@ -18,10 +21,11 @@ transport kinds, models, and proxy selection. Neither this profile nor the provi
 catalog declares verified Google-data processing, training, retention, or onward
 transfer controls. A preset label cannot supply that assurance.
 
-The current profile's selected route is `stepfun-token-plan / step-5-preview`.
-A narrow settings projection found no direct `api.openai.com` or loopback-model
-profile. Credentials are managed separately, so absent inline keys are not evidence
-that existing profiles are unusable. No credentials were read or printed.
+The original narrow profile projection selected `stepfun-token-plan /
+step-5-preview`; the user subsequently chose DeepSeek for Gmail. Neither this
+selection nor a model name proves an API account's data-sharing state. Credentials
+are managed separately, so absent inline keys are not evidence that an existing
+profile is unusable. The renderer receives no credential or raw credential hash.
 
 The runtime supports endpoint overrides, per-model protocol changes, nested route
 pools, account failover, subscriptions, and extension/gateway clients. Checking only
@@ -29,6 +33,17 @@ the selected provider ID at the time a checkbox is clicked leaves those alternat
 destinations outside the check.
 
 ## Provider evidence
+
+DeepSeek's official Open Platform terms expressly cover developer API use and
+incorporate its general terms and privacy policy. The general terms include API
+services and provide a model-training opt-out; the Open Platform uses the same
+account as its chat service. The user confirmed disabling the setting for the same
+API account. This supports an account-specific review based on contractual terms
+and trusted user confirmation; it is not independent verification of an API-side
+control. Bind the review to the exact credential and route. Replacing that credential
+must invalidate the review. DeepSeek describes China storage and automatic disk
+context caching, so neither `store:false` nor the training opt-out means zero
+retention. See the [primary sources and limits](gmail-deepseek-review.md).
 
 OpenAI's [API data controls](https://developers.openai.com/api/docs/guides/your-data)
 describe default non-training and retention behavior. Its

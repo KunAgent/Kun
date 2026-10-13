@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { assertDeepSeekEvidenceProof } from '../../gmail/deepseek-account-evidence.js'
 import { modelRequestCapacityFailure } from './model-request-capacity.js'
 import { serialToolStream } from './serial-tool-stream.js'
 import { observeModelAttempts } from './model-attempt-observer.js'
@@ -46,16 +48,25 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 
 /** Multi-provider HTTP model client with compatible endpoint formats. */
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
+  private readonly gmailConsentId = randomUUID()
+
   paperReadOnlyDispatchGuard(): () => void { return () => undefined }
 
   googleWorkspaceDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    const evidence = this.config.googleWorkspaceAccountEvidence
     const check = () => {
+      assertDeepSeekEvidenceProof(evidence)
+      if (this.config.googleWorkspaceAccountEvidence !== evidence) throw new GoogleWorkspaceModelPolicyError()
+      if (!this.config.resolveCredentials) evidence.assertCredentials(this.config.apiKey)
       if (request.model.trim().toLowerCase() === 'auto' || this.config.customEndpointProtocol) throw new GoogleWorkspaceModelPolicyError()
       const format = this.endpointFormatForModel(request.model || this.config.model)
       assertGoogleWorkspaceModelEndpoint(this.baseUrlForFormat(format), format)
     }
     check()
     return Object.assign(check, { mode: 'reviewed-cloud' as const, providerName: GOOGLE_WORKSPACE_MODEL_PROVIDER,
+      recipient: { id: 'deepseek-api' as const, accountBinding: evidence!.accountBinding },
+      consentId: this.gmailConsentId, endpoint: 'https://api.deepseek.com',
+      assertCredentials: (key: string, headers: Record<string, string>) => { check(); evidence!.assertCredentials(key, headers) },
       assertEndpoint: (url: string, protocol: string) => assertGoogleWorkspaceModelEndpoint(url, protocol, true) })
   }
 

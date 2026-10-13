@@ -1,6 +1,7 @@
 import { GmailError, GMAIL_SCOPES } from './ports.js'
 import type { GmailTokens } from './store.js'
 import type { GmailWireMessage } from './mail.js'
+import { GmailAuthorizationDiagnosticError, tokenFailureCode } from './authorization-diagnostic.js'
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const API_URL = 'https://gmail.googleapis.com/gmail/v1/users/me'
@@ -20,9 +21,16 @@ export class GoogleGmailClient {
       grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri
     })
     const tokens = this.parseTokens(payload)
-    const profile = await this.get('/profile', tokens.accessToken, new URLSearchParams({ fields: 'emailAddress' }))
+    let profile: RecordValue
+    try { profile = await this.get('/profile', tokens.accessToken, new URLSearchParams({ fields: 'emailAddress' })) }
+    catch (error) {
+      const category = error instanceof GmailError && error.code === 'access_expired' ? 'profile_access_expired' :
+        error instanceof GmailError && error.code === 'scope_missing' ? 'profile_access_denied' :
+          error instanceof GmailError && error.code === 'invalid_response' ? 'profile_invalid_response' : 'profile_unavailable'
+      throw new GmailAuthorizationDiagnosticError('authorization_failed', 'Google could not confirm the connected Gmail address', category)
+    }
     if (typeof profile.emailAddress !== 'string' || !/^[^\s@]+@[^\s@]+$/u.test(profile.emailAddress)) {
-      throw new GmailError('authorization_failed', 'Google did not return the connected Gmail address')
+      throw new GmailAuthorizationDiagnosticError('authorization_failed', 'Google did not return the connected Gmail address', 'profile_invalid_response')
     }
     return { ...tokens, email: profile.emailAddress }
   }
@@ -115,11 +123,18 @@ export class GoogleGmailClient {
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ client_id: this.clientId, ...(this.clientSecret ? { client_secret: this.clientSecret } : {}), ...fields })
       })
-    } catch { throw new GmailError('google_unavailable', 'Google authorization could not be completed. Try connecting again') }
-    const payload = await boundedJson(response, 64 * 1024)
+    } catch {
+      throw new GmailAuthorizationDiagnosticError('google_unavailable', 'Google authorization could not be completed. Try connecting again', 'token_network_error')
+    }
+    let payload: RecordValue
+    try { payload = await boundedJson(response, 64 * 1024) }
+    catch {
+      throw new GmailAuthorizationDiagnosticError('authorization_failed', 'Google returned an incomplete authorization response', 'token_invalid_response')
+    }
     if (!response.ok) {
-      throw new GmailError(payload.error === 'invalid_grant' ? 'reconnect_required' : 'authorization_failed',
-        payload.error === 'invalid_grant' ? 'Reconnect Gmail to continue' : 'Google authorization could not be completed. Try connecting again')
+      throw new GmailAuthorizationDiagnosticError(payload.error === 'invalid_grant' ? 'reconnect_required' : 'authorization_failed',
+        payload.error === 'invalid_grant' ? 'Reconnect Gmail to continue' : 'Google authorization could not be completed. Try connecting again',
+        tokenFailureCode(payload.error, response.status, payload.error_description))
     }
     return payload
   }
@@ -128,7 +143,10 @@ export class GoogleGmailClient {
     const accessToken = string(payload.access_token)
     const expiresIn = typeof payload.expires_in === 'number' ? payload.expires_in : 0
     const scopes = typeof payload.scope === 'string' ? payload.scope.split(/\s+/u).filter(Boolean) : fallbackScopes ?? []
-    if (!accessToken || expiresIn <= 0 || expiresIn > 86_400 || !GMAIL_SCOPES.every((scope) => scopes.includes(scope)) ||
+    if (!accessToken || expiresIn <= 0 || expiresIn > 86_400) {
+      throw new GmailAuthorizationDiagnosticError('authorization_failed', 'Google returned an incomplete authorization response', 'token_invalid_response')
+    }
+    if (!GMAIL_SCOPES.every((scope) => scopes.includes(scope)) ||
       scopes.some((scope) => !(GMAIL_SCOPES as readonly string[]).includes(scope))) {
       throw new GmailError('scope_missing', 'Allow both Gmail reading and sending permissions to connect')
     }

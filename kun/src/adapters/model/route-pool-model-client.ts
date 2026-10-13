@@ -149,7 +149,8 @@ export class RoutePoolModelClient implements ModelClient {
       if (this.poolForRequest(request)) throw new GoogleWorkspaceModelPolicyError('Gmail model routing changed after disclosure.')
       guard()
     }
-    return Object.assign(assertCurrent, { mode: guard.mode, providerName: guard.providerName, assertEndpoint: guard.assertEndpoint })
+    return Object.assign(assertCurrent, { mode: guard.mode, providerName: guard.providerName, assertEndpoint: guard.assertEndpoint,
+      recipient: guard.recipient, consentId: guard.consentId, endpoint: guard.endpoint, assertCredentials: guard.assertCredentials })
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {

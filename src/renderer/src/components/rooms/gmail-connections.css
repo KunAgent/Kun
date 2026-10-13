@@ -7,6 +7,8 @@
 .gmail-sharing-consent input { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; accent-color: var(--ds-accent); }
 .gmail-sharing-consent small { display: block; margin-top: 5px; color: var(--ds-text-muted); }
 .gmail-sharing-consent span { min-width: 0; overflow-wrap: anywhere; }
+.gmail-data-recipient { padding: 10px; border: 1px solid var(--ds-border); border-radius: 8px; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.gmail-data-recipient small { display: block; margin-top: 5px; color: var(--ds-text-muted); }
 .gmail-waiting { display: flex; align-items: center; gap: 7px; }
 .gmail-actions { flex-wrap: wrap; }
 .gmail-actions button { flex-basis: 145px; }

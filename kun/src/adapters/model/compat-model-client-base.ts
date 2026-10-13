@@ -227,6 +227,7 @@ export class CompatModelClientBase {
     try {
       trace.paperReadOnly?.assertCurrent()
       trace.googleWorkspaceData?.assertCurrent()
+      trace.googleWorkspaceData?.assertCredentials?.(trace.apiKey, headers)
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       if (trace.beforeWireDispatch) {
@@ -243,6 +244,7 @@ export class CompatModelClientBase {
       if (trace.gatewayRouting?.beforeDispatch) await trace.gatewayRouting.beforeDispatch()
       trace.paperReadOnly?.assertCurrent()
       trace.googleWorkspaceData?.assertCurrent()
+      trace.googleWorkspaceData?.assertCredentials?.(trace.apiKey, headers)
       if (trace.googleWorkspaceData) {
         if (trace.googleWorkspaceData.assertEndpoint) trace.googleWorkspaceData.assertEndpoint(url, trace.endpointFormat)
         else assertGoogleWorkspaceModelEndpoint(url, trace.endpointFormat, true)
@@ -250,6 +252,9 @@ export class CompatModelClientBase {
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       trace.onWireDispatch?.()
+      // The observer is synchronous but can revoke consent or replace credentials itself.
+      trace.googleWorkspaceData?.assertCurrent()
+      trace.googleWorkspaceData?.assertCredentials?.(trace.apiKey, headers)
       const response = await this.fetchImpl(url, {
         method: 'POST',
         redirect: 'error',
