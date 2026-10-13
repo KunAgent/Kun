@@ -1,3 +1,4 @@
+import { referenceUnchangedItems } from './session-history-rewrite.js'
 import { MemoryErasureIncompleteError } from '../memory/memory-erasure-error.js'
 import { MemoryLifecycleResult, MemoryHistoryResult, type MemoryLifecycleRequest } from '../contracts/memory-lifecycle.js'
 import { MemoryRevisionConflictError } from '../memory/memory-revisions.js'
@@ -240,10 +241,12 @@ export class ManagerRemoteSessionStore implements SessionStore {
     expectedRevision: number,
     items: TurnItemValue[]
   ): Promise<ItemHistoryCommit> {
+    const snapshot = await this.loadItemSnapshot(threadId)
+    if (snapshot.revision !== expectedRevision) {
+      return { applied: false, reason: 'conflict', revision: snapshot.revision }
+    }
     return ItemCommitSchema.parse(await this.call('rewriteItemsIfRevision', {
-      threadId,
-      expectedRevision,
-      items
+      threadId, expectedRevision, itemReferences: referenceUnchangedItems(snapshot, items)
     }))
   }
 

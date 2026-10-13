@@ -155,7 +155,7 @@ async compact(this: TurnService, input: {
           await staged?.cleanup()
           throw new TurnConflictError('history changed while archive was being committed')
         }
-        await this['threadItems'].syncFromSession(input.threadId)
+        await this['threadItems'].syncWithinMutation(input.threadId)
         await this['deps'].events.record({
           kind: 'compaction_completed',
           threadId: input.threadId,
