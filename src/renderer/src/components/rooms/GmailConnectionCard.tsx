@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ExternalLink, Loader2, Mail, RefreshCw, ShieldCheck } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { GmailAuthorization, GmailConversationStatus, GmailConversationBinding } from '@shared/gmail-api'
 import { gmailClient } from './gmail-client'
-import { GmailModelConsent, hasCurrentGmailModelConsent } from './GmailModelConsent'
+import { GmailAccountMenu } from './GmailAccountMenu'
+import { GmailLogo, GoogleGLogo } from './gmail-brand'
+import { GmailConsentNote, hasCurrentGmailModelConsent } from './GmailModelConsent'
 import './rooms-app-connections.css'
 import './gmail-connections.css'
 
@@ -16,40 +18,63 @@ type Props = {
   onSkip?: () => Promise<void>
 }
 const REQUIRED_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send']
-type Action = 'connect' | 'cancel' | 'disconnect' | 'revoke' | 'continue' | 'skip' | 'refresh'
+type Action = 'connect' | 'switch' | 'grant' | 'stop' | 'cancel' | 'disconnect' | 'revoke' | 'continue' | 'skip' | 'refresh'
 
-/** Only an explicit human action starts Google authorization or grants conversation access. */
+const hasScopes = (status: GmailConversationStatus | null) => REQUIRED_SCOPES.every((scope) => status?.scopes.includes(scope))
+const isReady = (status: GmailConversationStatus | null) =>
+  status?.configured === true && status.connected && hasCurrentGmailModelConsent(status) && hasScopes(status)
+
+/**
+ * One explicit human click signs in to Google and allows this conversation; the consent text sits beside
+ * that button. Nothing authorizes or grants access on mount, and the task resumes only after a fresh check.
+ */
 export function GmailConnectionCard({ binding, body, skipped = false, resumed = false, onContinue, onSkip }: Props) {
   const { t } = useTranslation('common')
   const [status, setStatus] = useState<GmailConversationStatus | null>(null)
   const [attempt, setAttempt] = useState<GmailAuthorization | null>(null)
-  const [sharing, setSharing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState(false)
   const generation = useRef(0)
+  const resumeAfterAuthorization = useRef(false)
   const bindingKey = binding.threadId ?? `${binding.roomId}:${binding.messageId}`
   const bindingRef = useRef(binding)
   bindingRef.current = binding
+  const continueRef = useRef({ onContinue, resumed })
+  continueRef.current = { onContinue, resumed }
   const load = async (signal?: AbortSignal) => {
     const requestedBinding = bindingRef.current
     const next = await gmailClient.status(requestedBinding, signal)
-    if (!signal?.aborted && JSON.stringify(requestedBinding) === JSON.stringify(bindingRef.current)) {
-      setStatus(next); setSharing(hasCurrentGmailModelConsent(next))
-    }
+    if (!signal?.aborted && JSON.stringify(requestedBinding) === JSON.stringify(bindingRef.current)) setStatus(next)
     return next
+  }
+  /** Re-reads account, scopes and grant before resuming the recorded task. */
+  const resume = async (signal?: AbortSignal, isCurrent = () => true) => {
+    try {
+      const next = await load(signal)
+      if (signal?.aborted || !isCurrent()) return
+      if (!isReady(next)) {
+        // Missing scopes already show the reconnect banner; only a missing grant needs its own message.
+        if (next.connected && hasScopes(next)) setError(t('gmailGrantRequired'))
+        return
+      }
+      const { onContinue: run, resumed: done } = continueRef.current
+      if (run && !done) await run()
+    } catch { if (!signal?.aborted && isCurrent()) setError(t('gmailActionFailed')) }
   }
   useEffect(() => {
     const controller = new AbortController()
-    setStatus(null); setAttempt(null); setSharing(false); setError(''); setNotice('')
-    setBusy(false); setLoading(true); setConfirmRevoke(false)
+    setStatus(null); setAttempt(null); setError(''); setNotice('')
+    setBusy(false); setLoading(true); setMenuOpen(false); setConfirmRevoke(false)
+    resumeAfterAuthorization.current = false
     void load(controller.signal)
       .catch(() => { if (!controller.signal.aborted) setError(t('gmailStatusFailed')) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => { controller.abort(); generation.current += 1 }
-  // Scope changes reset the checkbox and invalidate pending view updates.
+  // Scope changes reset the card and invalidate pending view updates.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bindingKey])
   useEffect(() => {
@@ -60,129 +85,140 @@ export function GmailConnectionCard({ binding, body, skipped = false, resumed = 
       try {
         const next = await gmailClient.poll(bindingRef.current, attempt.id, controller.signal)
         if (controller.signal.aborted) return
-        if (next.status === 'pending') timer = setTimeout(() => void poll(), 1000)
-        else {
-          setAttempt(next)
-          if (next.status === 'connected') { await load(controller.signal); setError(''); setNotice('') }
-          else if (next.status === 'cancelled') { setError(''); setNotice(t('gmailCancelled')) }
-          else setError(t(next.status === 'expired' ? 'gmailExpired' : 'gmailAuthorizationFailed'))
-        }
+        if (next.status === 'pending') { timer = setTimeout(() => void poll(), 1000); return }
+        if (next.status === 'connected') {
+          // Finish the follow-up before recording the attempt: a new attempt status re-runs this effect
+          // and aborts its signal, and the waiting bar stays up while the task resumes.
+          setError(''); setNotice('')
+          if (resumeAfterAuthorization.current) {
+            resumeAfterAuthorization.current = false
+            setBusy(true)
+            try { await resume(controller.signal) } finally { if (!controller.signal.aborted) setBusy(false) }
+          } else await load(controller.signal)
+          if (controller.signal.aborted) return
+        } else if (next.status === 'cancelled') { setError(''); setNotice(t('gmailCancelled')) }
+        else setError(t(next.status === 'expired' ? 'gmailExpired' : 'gmailAuthorizationFailed'))
+        setAttempt(next)
       } catch {
         if (!controller.signal.aborted) { setError(t('gmailPollFailed')); timer = setTimeout(() => void poll(), 1000) }
       }
     }
     timer = setTimeout(() => void poll(), 1000)
     return () => { controller.abort(); if (timer) clearTimeout(timer) }
+  // The poll only follows the explicit attempt; resume reads the latest props through refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt?.id, attempt?.status, bindingKey, t])
   const act = async (action: Action) => {
     if (busy) return
     const current = ++generation.current
+    const isCurrent = () => current === generation.current
     setBusy(true); setError(''); setNotice('')
     try {
-      if (action === 'connect') {
-        const next = await gmailClient.authorize(bindingRef.current, sharing)
-        if (current === generation.current) {
-          setAttempt(next)
-          if (next.status === 'connected') await load()
-          else if (next.status !== 'pending') setError(t('gmailAuthorizationFailed'))
+      if (action === 'connect' || action === 'switch') {
+        // Connecting is the conversation grant; switching accounts keeps whatever grant already exists.
+        const allow = action === 'connect' || hasCurrentGmailModelConsent(status)
+        resumeAfterAuthorization.current = action === 'connect'
+        const next = await gmailClient.authorize(bindingRef.current, allow)
+        if (isCurrent()) {
+          setAttempt(next); setMenuOpen(false); setConfirmRevoke(false)
+          if (next.status === 'connected') {
+            resumeAfterAuthorization.current = false
+            if (action === 'connect') await resume(undefined, isCurrent)
+            else await load()
+          } else if (next.status !== 'pending') setError(t('gmailAuthorizationFailed'))
+        }
+      } else if (action === 'grant' || action === 'stop') {
+        const next = await gmailClient.sharing(bindingRef.current, action === 'grant')
+        if (isCurrent()) {
+          setStatus(next); setMenuOpen(false)
+          if (action === 'grant') await resume(undefined, isCurrent)
         }
       } else if (action === 'cancel' && attempt) {
+        resumeAfterAuthorization.current = false
         const next = await gmailClient.cancel(bindingRef.current, attempt.id)
-        if (current === generation.current) {
+        if (isCurrent()) {
           setAttempt(next)
           if (next.status === 'connected') await load()
           else setNotice(t('gmailCancelled'))
         }
       } else if (action === 'disconnect' || action === 'revoke') {
         const next = await gmailClient.disconnect(bindingRef.current, action === 'revoke')
-        if (current === generation.current) { setStatus(next); setSharing(false); setAttempt(null); setConfirmRevoke(false) }
+        if (isCurrent()) { setStatus(next); setAttempt(null); setMenuOpen(false); setConfirmRevoke(false) }
       } else if (action === 'skip') {
         if (attempt?.status === 'pending') await gmailClient.cancel(bindingRef.current, attempt.id)
-        if (current === generation.current) await onSkip?.()
+        if (isCurrent()) await onSkip?.()
       } else if (action === 'continue') {
-        const next = await load()
-        if (current !== generation.current) return
-        if (!next.configured || !next.connected || !hasCurrentGmailModelConsent(next) || !REQUIRED_SCOPES.every((scope) => next.scopes.includes(scope))) {
-          setError(t('gmailGrantRequired')); return
-        }
-        await onContinue?.()
-      } else {
+        await resume(undefined, isCurrent)
+      } else if (action === 'refresh') {
         if (attempt?.status === 'pending') {
           const next = await gmailClient.poll(bindingRef.current, attempt.id)
-          if (current !== generation.current) return
+          if (!isCurrent()) return
           setAttempt(next)
           if (next.status !== 'connected' && next.status !== 'pending') setError(t('gmailAuthorizationFailed'))
         }
         await load()
       }
-    } catch { if (current === generation.current) setError(t('gmailActionFailed')) }
-    finally { if (current === generation.current) { setBusy(false); setLoading(false) } }
-  }
-  const toggleSharing = async (value: boolean) => {
-    if (busy) return
-    if (!status?.connected) { setSharing(value); return }
-    setBusy(true); setError(''); setNotice('')
-    const current = ++generation.current
-    try {
-      const next = await gmailClient.sharing(bindingRef.current, value)
-      if (current === generation.current) { setStatus(next); setSharing(hasCurrentGmailModelConsent(next)) }
-    } catch { if (current === generation.current) setError(t('gmailActionFailed')) }
-    finally { if (current === generation.current) setBusy(false) }
+    } catch { if (isCurrent()) setError(t('gmailActionFailed')) }
+    finally { if (isCurrent()) { setBusy(false); setLoading(false) } }
   }
   const connected = status?.connected === true
   const pending = attempt?.status === 'pending'
-  const ready = status?.configured === true && connected && hasCurrentGmailModelConsent(status) && REQUIRED_SCOPES.every((scope) => status.scopes.includes(scope))
-  const stateKey = loading ? 'gmailChecking' : skipped ? 'gmailSkipped' : pending ? 'gmailConnecting' : connected ? 'gmailConnectedStatus' : 'gmailDisconnectedStatus'
-  const retrying = !!attempt && !pending && attempt.status !== 'connected'
-  return <section className="rooms-app-connection-card gmail-connection-card" aria-label={t('gmailTitle')} aria-busy={loading || busy || pending}>
-    <div className="rooms-app-connection-content">
-      <div className="gmail-card-header">
-        <span className="gmail-card-icon"><Mail size={21} /></span>
-        <strong>{t('gmailTitle')}</strong>
-        <span className={`gmail-status-badge${connected ? ' is-connected' : ''}`}>
-          {loading || pending ? <Loader2 size={12} className="animate-spin" /> : connected ? <Check size={12} /> : null}{t(stateKey)}
+  const ready = isReady(status)
+  const needsScopes = connected && !hasScopes(status)
+  const linked = connected && !needsScopes && !hasCurrentGmailModelConsent(status)
+  const unavailable = !loading && status !== null && !status.configured
+  const retrying = (!!attempt && !pending && attempt.status !== 'connected') || status?.reconnectRequired === true || needsScopes
+  const banner = unavailable ? 'gmailNotConfigured' : status?.reconnectRequired ? 'gmailReconnectRequired' : needsScopes ? 'gmailScopesMissing' : ''
+  const toggleMenu = () => { setMenuOpen(!menuOpen); setConfirmRevoke(false) }
+  const menu = menuOpen ? <GmailAccountMenu busy={busy || pending} canStop={ready} confirmRevoke={confirmRevoke}
+    onSwitch={() => void act('switch')} onStop={() => void act('stop')} onDisconnect={() => void act('disconnect')}
+    onAskRevoke={() => setConfirmRevoke(true)} onCancelRevoke={() => setConfirmRevoke(false)} onRevoke={() => void act('revoke')} /> : null
+  const alert = error ? <p role="alert" className="gmail-alert"><CircleAlert size={14} /><span>{error}</span>
+    <button type="button" className="gmail-link-button" disabled={loading || busy} onClick={() => void act('refresh')}>{t('gmailRefresh')}</button></p> : null
+  const manageButton = <button type="button" className="gmail-manage-button" aria-expanded={menuOpen} onClick={toggleMenu}>
+    {t('gmailManage')}<ChevronDown size={14} className={menuOpen ? 'is-open' : undefined} /></button>
+
+  if (skipped || (ready && !pending)) {
+    return <section className="rooms-app-connection-card gmail-connection-card is-compact" aria-label={t('gmailTitle')} aria-busy={busy}>
+      <div className="gmail-compact">
+        <span className={`gmail-logo-tile is-small${skipped ? ' is-muted' : ''}`}><GmailLogo size={20} /></span>
+        <span className="gmail-compact-text">
+          <strong>{t(skipped ? 'gmailSkipped' : 'gmailConnected')}{skipped ? null : <Check size={14} strokeWidth={2.5} />}</strong>
+          <small>{skipped ? t('gmailSkippedDetails') : [status?.email, t('gmailReadyDetails')].filter(Boolean).join(' · ')}</small>
         </span>
+        {!skipped && onContinue && !resumed ? <button type="button" className="gmail-primary-button is-small" disabled={busy} onClick={() => void act('continue')}>
+          {busy ? <Loader2 size={13} className="animate-spin" /> : null}{t('gmailContinue')}</button> : null}
+        {skipped ? null : manageButton}
       </div>
-      {body ? <p className="gmail-request-description">{body}</p> : <p>{t('gmailIntro')}</p>}
-      {connected && status.email ? <p className="gmail-connected-email">{status.email}</p> : null}
-      {!loading && status?.modelProviderName ? <small className="gmail-selected-model" title={status.modelProviderName}>{t('gmailProvider', { name: status.modelProviderName })}</small> : null}
-      <ul className="gmail-permissions"><li>{t('gmailReadPermission')}</li><li>{t('gmailSendPermission')}</li></ul>
-      <p className="gmail-send-approval"><ShieldCheck size={14} />{t('gmailApprovalRequired')}</p>
-      <GmailModelConsent status={status} sharing={sharing} busy={busy} pending={pending} skipped={skipped}
-        onChange={(value) => void toggleSharing(value)} />
-      {!status?.configured && status ? <p role="status">{t('gmailNotConfigured')}</p> : null}
-      {status?.reconnectRequired ? <p role="status">{t('gmailReconnectRequired')}</p> : null}
-      {pending ? <p role="status" className="gmail-waiting"><Loader2 size={14} className="animate-spin" />{t('gmailWaiting')}</p> : null}
-      {notice ? <p role="status" className="gmail-notice">{notice}</p> : null}
-      {error ? <p role="alert" className="rooms-app-connection-error">{error}</p> : null}
-      {!skipped ? <div className="rooms-app-connection-actions gmail-actions">
-        {pending ? <button type="button" disabled={busy} onClick={() => void act('cancel')}>{t('gmailCancel')}</button> : <>
-          {onSkip && !resumed ? <button type="button" disabled={busy} onClick={() => void act('skip')}>{t('gmailSkip')}</button> : null}
-          {!connected ? <button type="button" className="is-primary" disabled={loading || busy || !status?.configured} onClick={() => void act('connect')}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}{t(retrying ? 'gmailRetry' : 'gmailConnectBrowser')}</button> : null}
-          {connected && onContinue && !resumed ? <button type="button" className="is-primary" disabled={busy || !ready} onClick={() => void act('continue')}>{t('gmailContinue')}</button> : null}
-        </>}
-        <button type="button" disabled={loading || busy} onClick={() => void act('refresh')}><RefreshCw size={14} />{t('gmailRefresh')}</button>
-      </div> : null}
-      {connected && !skipped ? <div className="gmail-connection-management">
-        <button type="button" disabled={busy || pending} onClick={() => void act('connect')}>{t('gmailSwitchAccount')}</button>
-        <button type="button" disabled={busy || pending} onClick={() => void act('disconnect')}>{t('gmailDisconnect')}</button>
-      </div> : null}
-      {connected && !skipped ? <details className="gmail-account-options">
-        <summary>{t('gmailAccountOptions')}</summary>
-        <small>{t('gmailDisconnectDetails')}</small>
-        <button type="button" className="gmail-revoke" disabled={busy || pending} onClick={() => setConfirmRevoke(true)}>{t('gmailRevoke')}</button>
-      </details> : null}
-      {confirmRevoke ? <div className="gmail-revoke-confirm" role="group" aria-label={t('gmailRevoke')}>
-        <p>{t('gmailRevokeWarning')}</p><div className="rooms-app-connection-actions">
-          <button type="button" disabled={busy} onClick={() => setConfirmRevoke(false)}>{t('gmailCancel')}</button>
-          <button type="button" disabled={busy} onClick={() => void act('revoke')}>{t('gmailConfirmRevoke')}</button>
-        </div></div> : null}
-      <div className="gmail-card-footer"><small>{t('gmailLocalCredentials')}</small>
-        <a className="rooms-app-connection-guide" href="https://www.kun-agent.com/privacy" target="_blank" rel="noreferrer"
-          onClick={(event) => { if (window.kunGui?.openExternal) { event.preventDefault(); void window.kunGui.openExternal('https://www.kun-agent.com/privacy') } }}>{t('gmailPrivacy')}</a>
-      </div>
-      {resumed && ready ? <span className="rooms-app-connection-done"><Check size={14} />{t('gmailReady')}</span> : null}
+      {skipped ? null : menu}
+      {alert ? <div className="gmail-compact-alert">{alert}</div> : null}
+    </section>
+  }
+  return <section className="rooms-app-connection-card gmail-connection-card" aria-label={t('gmailTitle')} aria-busy={loading || busy || pending}>
+    <div className="gmail-card-main">
+      <span className="gmail-logo-tile"><GmailLogo size={22} /></span>
+      <span className="gmail-card-heading">
+        <strong>{t('gmailTitle')}</strong>
+        <span>{linked && status?.email ? t('gmailLinkedIntro', { email: status.email }) : t('gmailIntro')}</span>
+      </span>
     </div>
+    {body ? <p className="gmail-request-description">{body}</p> : null}
+    {banner ? <p role="status" className="gmail-banner"><CircleAlert size={14} />{t(banner)}</p> : null}
+    {notice ? <p role="status" className="gmail-notice">{notice}</p> : null}
+    {alert}
+    {pending ? <div role="status" className="gmail-waiting">
+      <Loader2 size={15} className="animate-spin" /><span>{t('gmailWaiting')}</span>
+      <button type="button" className="gmail-ghost-button" disabled={busy} onClick={() => void act('cancel')}>{t('gmailCancel')}</button>
+    </div> : <div className="gmail-actions">
+      {linked ? <button type="button" className="gmail-primary-button" disabled={busy} onClick={() => void act('grant')}>
+        {busy ? <Loader2 size={15} className="animate-spin" /> : null}{t('gmailGrant')}</button>
+        : <button type="button" className="gmail-google-button" disabled={loading || busy || !status?.configured} onClick={() => void act('connect')}>
+          {busy ? <Loader2 size={18} className="animate-spin" /> : <GoogleGLogo />}{t(retrying ? 'gmailRetry' : 'gmailConnectBrowser')}</button>}
+      {loading ? <span className="gmail-checking"><Loader2 size={13} className="animate-spin" />{t('gmailChecking')}</span> : null}
+      {linked ? manageButton : null}
+      {onSkip && !resumed ? <button type="button" className="gmail-link-button is-muted" disabled={busy} onClick={() => void act('skip')}>{t('gmailSkip')}</button> : null}
+    </div>}
+    {linked ? menu : null}
+    <GmailConsentNote status={status} granting={linked} />
   </section>
 }

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { readToolPresentation } from '../../agent/tool-presentation'
+import { GmailGlyph } from '../rooms/gmail-brand'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import {
@@ -275,6 +276,11 @@ export function toolBlockIcon(block: ToolBlock): LucideIcon {
     case 'create_plan':
     case 'update_plan':
       return ListTodo
+    case 'gmail_connect':
+    case 'gmail_search':
+    case 'gmail_read':
+    case 'gmail_send':
+      return GmailGlyph
     default:
       break
   }

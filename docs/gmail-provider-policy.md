@@ -11,10 +11,14 @@ Normal provider availability, credentials and routing settings still apply.
 ## Conversation permission
 
 The Gmail card has one default-off permission to process requested mail using the
-configured models. The permission covers the requested headers, addresses,
-snippets, plain-text bodies, related conversation context, summaries and drafts.
-It applies only to the selected private conversation. Other conversations require
-their own permission. Connecting Google alone does not grant this permission.
+configured models. It is given by the card's single action (**Connect Google
+account**, or **Use Gmail in this conversation** when the account is already
+connected), with the permission stated beside that button. The permission covers
+the requested headers, addresses, snippets, plain-text bodies, related
+conversation context, summaries and drafts. It applies only to the selected
+private conversation. Other conversations require their own permission. A Google
+account connected from another conversation does not grant it, and **Manage ›
+Stop using Gmail in this conversation** withdraws it.
 
 Model selection, automatic routing, provider/account failover and configured
 model gateways can change which provider receives the data. The card explains

@@ -19,26 +19,34 @@ utility and cached for ten seconds. Disabled, missing, malformed or unsupported
 settings use direct networking. PAC scripts, scoped proxy routes and system proxy
 authentication are unsupported. This fallback changes no system or application
 preferences and never applies to managed local inference or model provider requests.
-When the Agent needs email access, it presents a compact Gmail connection card.
-Connect your Google account and enable the one default-off permission to process
-requested mail with the currently configured models. The card explains that
-requested mail headers, addresses, snippets, plain-text bodies and related chat
-context can be provided to those models. Longer data-use and connection-management
-information is collapsed. The card has no model preparation or provider-review
-instructions, and loading never displays a guessed local-model recipient.
+When the Agent needs email access, it presents a compact Gmail connection card
+with one action: **Connect Google account**. The sentence beside that button says
+that connecting lets this conversation use the currently configured models to
+process the email you ask for, and that sending always needs approval; clicking it
+is the conversation permission. Requested mail headers, addresses, snippets,
+plain-text bodies and related chat context can be provided to those models. The
+longer data-use text is behind **How your data is used**. The card has no model
+preparation or provider-review instructions, and loading never displays a guessed
+local-model recipient. Nothing is authorized or granted when the card mounts.
 
 Each private conversation needs its own permission. Google authorization alone
-does not let the Agent read mail. Existing local-only or exact-DeepSeek grants
-need a fresh generic conversation confirmation; they are not automatically
-expanded to all configured models. After that confirmation, provider changes do
-not require another account review or permission checkbox. Turning permission
-off stops further Gmail use for that conversation.
+does not let the Agent read mail: if the account is already connected but this
+conversation has no grant, the card offers **Use Gmail in this conversation**
+instead. Existing local-only or exact-DeepSeek grants need a fresh generic
+conversation confirmation; they are not automatically expanded to all configured
+models. After that confirmation, provider changes do not require another account
+review or confirmation.
 
-After authorization, return to Kun, then choose **Continue this task**. Kun checks
-the current Google scopes and conversation grant before resuming the recorded task.
-Cancelling or skipping leaves email unavailable. A failed or expired authorization
-can be retried from the card. **Switch Google account** opens a new Google account
-selection; it does not choose an account silently.
+When Google authorization started from the card completes, Kun re-checks the
+current Google scopes and conversation grant and then resumes the recorded task
+automatically; the card collapses to one line. If the conversation is reopened
+before that, the collapsed card offers **Continue task**. Missing Gmail scopes ask
+for a reconnect instead of resuming. Cancelling or skipping leaves email
+unavailable, and a failed or expired authorization can be retried from the card.
+**Manage** holds **Switch Google account** (a new Google account selection that
+keeps the existing grant and never chooses an account silently), **Stop using
+Gmail in this conversation**, **Disconnect**, and Google-wide revocation, which
+needs a second confirmation.
 
 Searching and reading return plain text. Email HTML is not executed and embedded
 remote images are not loaded. Mail content is untrusted evidence; instructions in
