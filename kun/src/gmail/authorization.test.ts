@@ -133,7 +133,7 @@ describe('native Gmail authorization boundary', () => {
     } finally { await fixture.cleanup() }
   })
 
-  it('does not save credentials after disconnect cancels an in-flight callback', async () => {
+  it('does not fetch a profile or save credentials after disconnect cancels an in-flight callback', async () => {
     let resolveToken!: (value: Response) => void
     const pending = new Promise<Response>((resolve) => { resolveToken = resolve })
     const request = vi.fn<typeof fetch>(async (url) => String(url).includes('/token') ? pending : json({ emailAddress: EMAIL }))
@@ -147,7 +147,8 @@ describe('native Gmail authorization boundary', () => {
       await fetch(callback, { redirect: 'manual' })
       await fixture.service.disconnect({ revoke: false })
       resolveToken(json({ access_token: 'fake-access', expires_in: 3_600, scope: GMAIL_SCOPES.join(' ') }))
-      await vi.waitFor(async () => expect(request).toHaveBeenCalledTimes(2))
+      await fixture.service.dispose()
+      expect(request).toHaveBeenCalledOnce()
       expect((await fixture.service.status(SCOPE)).connected).toBe(false)
       expect((await fixture.service.pollAuthorization(authorization.id)).status).toBe('cancelled')
     } finally { resolveToken?.(json({})); await fixture.cleanup() }

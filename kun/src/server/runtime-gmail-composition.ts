@@ -1,11 +1,13 @@
 import { NativeGmailService } from '../gmail/service.js'
 import { spawn } from 'node:child_process'
-import { GmailError, type GmailServicePort } from '../gmail/ports.js'
-import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
+import type { GmailServicePort } from '../gmail/ports.js'
+import { createGmailGoogleFetch } from '../gmail/google-network-transport.js'
 import { assertEncryptedGmailStorage } from '../gmail/data-protection.js'
-import { EncryptedGmailOAuthClientStore } from '../gmail/oauth-client-config.js'
+import { EncryptedGmailOAuthClientStore, type GmailDesktopOAuthConfiguration } from '../gmail/oauth-client-config.js'
+import { bootstrapPackagedGmailOAuthClient } from '../gmail/packaged-oauth-client.js'
 import type { SecretEncryptor } from '../security/secret-store.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import { createUnavailableRuntimeGmail } from './runtime-gmail-unavailable.js'
 
 /** Native mailbox credentials remain inside the local Runtime's encrypted store. */
 export async function createRuntimeGmailComposition(
@@ -14,19 +16,25 @@ export async function createRuntimeGmailComposition(
     networkProxy?: () => Promise<string> }
 ): Promise<GmailServicePort> {
   const dataDir = model.core.activeOptions.dataDir
+  let client: GmailDesktopOAuthConfiguration | undefined
   try {
-    const client = await new EncryptedGmailOAuthClientStore(dataDir, model.extensionCredentialKeyProvider.encryptor).read()
+    client = await bootstrapPackagedGmailOAuthClient({
+      store: new EncryptedGmailOAuthClientStore(dataDir, model.extensionCredentialKeyProvider.encryptor),
+      assertDataProtection: () => assertEncryptedGmailStorage(dataDir)
+    })
+  } catch {
+    // Missing or invalid client config disables Gmail access, not healthy account-store classification.
+  }
+  try {
     const gmail = new NativeGmailService({
       dataDir,
       clientSecret: client?.clientSecret,
       requireClientSecret: true,
       assertDataProtection: () => assertEncryptedGmailStorage(dataDir),
       encryptor: model.extensionCredentialKeyProvider.encryptor,
-      fetchImpl: async (input, init) => {
-        // Google uses the user's global network proxy, independently of local inference routing.
-        const proxy = createProxyFetch(await model.networkProxy?.() ?? model.core.activeOptions.modelProxyUrl ?? '')
-        return (proxy ?? fetch)(input, init)
-      },
+      // Google networking stays independent of managed local inference's mandatory NoProxy transport.
+      fetchImpl: createGmailGoogleFetch({ appProxy: async () =>
+        await model.networkProxy?.() ?? model.core.activeOptions.modelProxyUrl ?? '' }),
       openExternal: async (value) => {
         const url = new URL(value)
         if (url.origin !== 'https://accounts.google.com' || url.pathname !== '/o/oauth2/v2/auth') {
@@ -36,23 +44,10 @@ export async function createRuntimeGmailComposition(
       }
     })
     await gmail.initialize()
-    return gmail
+    return client ? gmail : createUnavailableRuntimeGmail(gmail)
   } catch {
-    // Preserve damaged credential evidence and keep unrelated Runtime functions available.
-    const unavailable = async () => {
-      throw new GmailError('storage_unavailable', 'The encrypted Gmail store could not be opened. Restore its key or repair the store before reconnecting.')
-    }
-    return {
-      initialize: unavailable,
-      hasGoogleData: unavailable,
-      markGoogleData: unavailable,
-      captureModelSharingFence: () => { throw new GmailError('service_unavailable', 'Gmail connection is unavailable') },
-      status: async () => ({ configured: false, connected: false, reconnectRequired: true,
-        scopes: [], allowModelSharing: false }),
-      startAuthorize: unavailable, pollAuthorization: unavailable, cancelAuthorization: unavailable,
-      disconnect: unavailable, setModelSharing: unavailable, search: unavailable, read: unavailable,
-      send: unavailable, dispose: async () => undefined
-    }
+    // Unknown classification from damaged account credentials must still fail closed.
+    return createUnavailableRuntimeGmail()
   }
 }
 

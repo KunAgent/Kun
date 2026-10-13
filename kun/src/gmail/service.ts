@@ -114,8 +114,14 @@ export class NativeGmailService implements GmailServicePort {
         if (this.disposed || generation !== this.generation) throw new GmailError('authorization_cancelled', 'This Gmail authorization was cancelled')
         this.generation += 1
         const callbackGeneration = this.generation
+        const assertAuthorizationCurrent = () => {
+          if (this.disposed || callbackGeneration !== this.generation || authorization.status().status !== 'pending') {
+            throw new GmailError('authorization_cancelled', 'This Gmail authorization was cancelled')
+          }
+          this.assertConsentRevision(input.scopeId, consentRevision)
+        }
         await this.assertDataProtection()
-        const tokens = await this.client.exchange(code, verifier, redirectUri)
+        const tokens = await this.client.exchange(code, verifier, redirectUri, assertAuthorizationCurrent)
         await this.assertDataProtection()
         await this.store.update((current) => {
           if (callbackGeneration !== this.generation || this.disposed || authorization.status().status !== 'pending') {
@@ -207,11 +213,11 @@ export class NativeGmailService implements GmailServicePort {
     const input = GmailSearchInputSchema.parse(value)
     await this.requireSharing(scopeId)
     return this.readRequest(scopeId, async (token, assertCurrent) => {
-      const found = await this.client.list(input.query, input.maxResults, token)
+      const found = await this.client.list(input.query, input.maxResults, token, assertCurrent)
       const messages = []
       for (let offset = 0; offset < found.messages.length; offset += 5) {
         messages.push(...await Promise.all(found.messages.slice(offset, offset + 5)
-          .map(async (entry) => { assertCurrent(); return summarizeMessage(await this.client.message(entry.id, token, true)) })))
+          .map(async (entry) => { assertCurrent(); return summarizeMessage(await this.client.message(entry.id, token, true, assertCurrent)) })))
       }
       return { messages, hasMore: found.hasMore, untrusted: true }
     })
@@ -224,7 +230,7 @@ export class NativeGmailService implements GmailServicePort {
   private async readGranted(value: GmailReadInput, scopeId: string): Promise<GmailMessage> {
     const input = GmailReadInputSchema.parse(value)
     await this.requireSharing(scopeId)
-    return this.readRequest(scopeId, async (token) => parseMessage(await this.client.message(input.messageId, token, false)))
+    return this.readRequest(scopeId, async (token, assertCurrent) => parseMessage(await this.client.message(input.messageId, token, false, assertCurrent)))
   }
 
   /** Only a human-approved tool adapter may call this; never expose an HTTP send endpoint. */
@@ -275,7 +281,11 @@ export class NativeGmailService implements GmailServicePort {
     this.assertConsentRevision(scopeId, consentRevision)
     this.assertScopeNotRevoked(scopeId)
     let result: GmailSendResult
-    try { result = await this.client.send(outgoing.raw, tokens.accessToken) }
+    try { result = await this.client.send(outgoing.raw, tokens.accessToken, () => {
+      if (this.disposed || generation !== this.generation) throw new GmailError('cancelled', 'Gmail sending was cancelled before contacting Google')
+      this.assertConsentRevision(scopeId, consentRevision)
+      this.assertScopeNotRevoked(scopeId)
+    }) }
     catch (error) {
       const status = error instanceof GmailError && error.code === 'send_rejected' ? 'failed' : 'unknown'
       try {
@@ -381,7 +391,9 @@ export class NativeGmailService implements GmailServicePort {
     const previous = current.tokens
     this.refresh = (async () => {
       try {
-        const tokens = await this.client.refresh(previous)
+        const tokens = await this.client.refresh(previous, () => {
+          if (this.disposed || generation !== this.generation) throw new GmailError('connection_changed', 'Gmail connection changed before token refresh')
+        })
         await this.store.update((state) => {
           if (generation !== this.generation || state.tokens?.refreshToken !== previous.refreshToken || state.tokens?.email !== previous.email) {
             throw new GmailError('connection_changed', 'Gmail connection changed during refresh')

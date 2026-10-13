@@ -2,6 +2,7 @@ import { GmailError, GMAIL_SCOPES } from './ports.js'
 import type { GmailTokens } from './store.js'
 import type { GmailWireMessage } from './mail.js'
 import { GmailAuthorizationDiagnosticError, tokenFailureCode } from './authorization-diagnostic.js'
+import { withGmailWireFence } from './google-wire-fence.js'
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const API_URL = 'https://gmail.googleapis.com/gmail/v1/users/me'
@@ -16,13 +17,13 @@ export class GoogleGmailClient {
     private readonly now: () => number
   ) {}
 
-  async exchange(code: string, verifier: string, redirectUri: string): Promise<GmailTokens> {
+  async exchange(code: string, verifier: string, redirectUri: string, assertCurrent?: () => void): Promise<GmailTokens> {
     const payload = await this.tokenRequest({
       grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri
-    })
+    }, assertCurrent)
     const tokens = this.parseTokens(payload)
     let profile: RecordValue
-    try { profile = await this.get('/profile', tokens.accessToken, new URLSearchParams({ fields: 'emailAddress' })) }
+    try { profile = await this.get('/profile', tokens.accessToken, new URLSearchParams({ fields: 'emailAddress' }), assertCurrent) }
     catch (error) {
       const category = error instanceof GmailError && error.code === 'access_expired' ? 'profile_access_expired' :
         error instanceof GmailError && error.code === 'scope_missing' ? 'profile_access_denied' :
@@ -35,9 +36,9 @@ export class GoogleGmailClient {
     return { ...tokens, email: profile.emailAddress }
   }
 
-  async refresh(tokens: GmailTokens): Promise<GmailTokens> {
+  async refresh(tokens: GmailTokens, assertCurrent?: () => void): Promise<GmailTokens> {
     if (!tokens.refreshToken) throw new GmailError('reconnect_required', 'Reconnect Gmail to continue')
-    const payload = await this.tokenRequest({ grant_type: 'refresh_token', refresh_token: tokens.refreshToken })
+    const payload = await this.tokenRequest({ grant_type: 'refresh_token', refresh_token: tokens.refreshToken }, assertCurrent)
     return { ...tokens, ...this.parseTokens(payload, tokens.scopes), email: tokens.email,
       refreshToken: string(payload.refresh_token) ?? tokens.refreshToken }
   }
@@ -53,10 +54,10 @@ export class GoogleGmailClient {
     if (!response.ok) throw new GmailError('revocation_failed', 'Local Gmail connection was removed; Google revocation could not be confirmed')
   }
 
-  async list(query: string, maxResults: number, token: string): Promise<{ messages: { id: string }[]; hasMore: boolean }> {
+  async list(query: string, maxResults: number, token: string, assertCurrent?: () => void): Promise<{ messages: { id: string }[]; hasMore: boolean }> {
     const result = await this.get('/messages', token, new URLSearchParams({
       q: query, maxResults: String(maxResults), fields: 'messages(id),nextPageToken'
-    }))
+    }), assertCurrent)
     const entries = Array.isArray(result.messages) ? result.messages : []
     const messages = entries.slice(0, maxResults).flatMap((entry) => {
       const id = record(entry).id
@@ -65,24 +66,25 @@ export class GoogleGmailClient {
     return { messages, hasMore: typeof result.nextPageToken === 'string' }
   }
 
-  async message(id: string, token: string, metadataOnly: boolean): Promise<GmailWireMessage> {
+  async message(id: string, token: string, metadataOnly: boolean, assertCurrent?: () => void): Promise<GmailWireMessage> {
     const params = new URLSearchParams({
       format: metadataOnly ? 'metadata' : 'full',
       fields: metadataOnly ? 'id,threadId,snippet,payload(headers)' : 'id,threadId,snippet,payload'
     })
     if (metadataOnly) for (const header of ['From', 'To', 'Subject', 'Date']) params.append('metadataHeaders', header)
-    return await this.get(`/messages/${encodeURIComponent(id)}`, token, params) as GmailWireMessage
+    return await this.get(`/messages/${encodeURIComponent(id)}`, token, params, assertCurrent) as GmailWireMessage
   }
 
   /** Exactly one POST; ambiguous transport failure is deliberately not retried. */
-  async send(raw: string, token: string): Promise<{ id: string; threadId?: string; status: 'sent' }> {
+  async send(raw: string, token: string, assertCurrent?: () => void): Promise<{ id: string; threadId?: string; status: 'sent' }> {
+    assertCurrent?.()
     let response: Response
     try {
-      response = await this.fetchImpl(`${API_URL}/messages/send`, {
+      response = await this.fetchImpl(`${API_URL}/messages/send`, withGmailWireFence({
         method: 'POST', redirect: 'error', signal: AbortSignal.timeout(30_000),
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         body: JSON.stringify({ raw })
-      })
+      }, assertCurrent))
     } catch { throw new GmailError('send_unknown', 'Send result is uncertain. Check Gmail Sent before creating a new send request') }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined)
@@ -98,13 +100,14 @@ export class GoogleGmailClient {
     return { id: value.id, ...(typeof value.threadId === 'string' ? { threadId: value.threadId.slice(0, 128) } : {}), status: 'sent' }
   }
 
-  private async get(path: string, token: string, params: URLSearchParams): Promise<RecordValue> {
+  private async get(path: string, token: string, params: URLSearchParams, assertCurrent?: () => void): Promise<RecordValue> {
+    assertCurrent?.()
     let response: Response
     try {
-      response = await this.fetchImpl(`${API_URL}${path}?${params}`, {
+      response = await this.fetchImpl(`${API_URL}${path}?${params}`, withGmailWireFence({
         method: 'GET', redirect: 'error', signal: AbortSignal.timeout(20_000),
         headers: { authorization: `Bearer ${token}` }
-      })
+      }, assertCurrent))
     } catch { throw new GmailError('google_unavailable', 'Gmail could not be reached. Try again later') }
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined)
@@ -115,14 +118,15 @@ export class GoogleGmailClient {
     return boundedJson(response)
   }
 
-  private async tokenRequest(fields: Record<string, string>): Promise<RecordValue> {
+  private async tokenRequest(fields: Record<string, string>, assertCurrent?: () => void): Promise<RecordValue> {
+    assertCurrent?.()
     let response: Response
     try {
-      response = await this.fetchImpl(TOKEN_URL, {
+      response = await this.fetchImpl(TOKEN_URL, withGmailWireFence({
         method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ client_id: this.clientId, ...(this.clientSecret ? { client_secret: this.clientSecret } : {}), ...fields })
-      })
+      }, assertCurrent))
     } catch {
       throw new GmailAuthorizationDiagnosticError('google_unavailable', 'Google authorization could not be completed. Try connecting again', 'token_network_error')
     }

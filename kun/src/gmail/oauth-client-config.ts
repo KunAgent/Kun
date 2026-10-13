@@ -10,6 +10,16 @@ const Configuration = z.object({ schemaVersion: z.literal(1), clientId: z.litera
   clientSecret: Secret, installedAt: z.iso.datetime() }).strict()
 const Envelope = z.object({ schemaVersion: z.literal(1), __enc: z.string() }).strict()
 export type GmailDesktopOAuthConfiguration = z.infer<typeof Configuration>
+const PackagedConfiguration = z.object({ schemaVersion: z.literal(1), distribution: z.literal('kun-desktop-macos'),
+  clientId: z.literal(KUN_GMAIL_CLIENT_ID), clientSecret: Secret }).strict()
+export type PackagedGmailOAuthConfiguration = z.infer<typeof PackagedConfiguration>
+
+/** A shared native app identifier is extractable from its package, never a user token. */
+export function parsePackagedGmailOAuthClient(value: unknown): PackagedGmailOAuthConfiguration {
+  const parsed = PackagedConfiguration.safeParse(value)
+  if (!parsed.success) throw invalidConfiguration()
+  return parsed.data
+}
 
 /** Google requires this Desktop client identifier for both code exchange and refresh. */
 export class EncryptedGmailOAuthClientStore {

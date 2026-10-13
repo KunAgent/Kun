@@ -21,6 +21,14 @@ the card never downloads on render. Preparation runs through the managed runtime
 Public model downloads may use the configured network proxy through a temporary
 download-only process. That process cannot supply a mail-inference proof. The
 normal local inference process and transport remain separate and use no proxy.
+
+Google OAuth token exchange and Gmail API requests use the application's explicit
+global network proxy first. When none is configured on macOS, they use the system's
+enabled global HTTPS proxy; settings are read with the fixed `scutil --proxy`
+utility and cached for ten seconds. Disabled, missing, malformed or unsupported
+settings use direct networking. PAC scripts, scoped proxy routes and system proxy
+authentication are unsupported. This fallback changes no system or application
+preferences and never applies to managed local inference or model provider requests.
 After it finishes, choose **Kun Gmail Local / qwen3:4b** in the normal model picker
 for a new private conversation. Existing tasks retain their original model.
 
@@ -122,7 +130,45 @@ the Gmail card still requires separate recipient-specific consent. Replacing the
 API key requires a new account review. The timestamp records the operator check,
 not an independent provider audit.
 
-Public distribution also needs a reviewed native client-configuration provisioning
-or packaging arrangement. Ordinary users should only grant Google permissions;
-they should not be asked for the operator's developer credentials. That release
-arrangement and real Gmail verification are separate from this local setup.
+## Publisher-configured macOS packages
+
+Ordinary users connect Gmail by granting Google permissions; they do not install
+developer credentials or run terminal commands. For an explicitly Gmail-enabled
+official macOS package, the publisher supplies Google's downloaded credentials
+for the fixed Kun Desktop client from a private file outside this repository:
+
+```sh
+KUN_GMAIL_RELEASE_ENABLED=1 \
+KUN_GMAIL_CLIENT_CONFIG_FILE=/private/publisher/kun-desktop-client.json \
+npm run dist:mac:signed
+```
+
+The build hook accepts only the reviewed Desktop client ID and Google's expected
+credentials structure, and writes the Git-ignored
+`kun/dist/resources/gmail-native-client.json`. The flag must be `1`, the package
+target must be macOS, and missing or invalid configuration stops packaging. A
+build with the flag absent or `0` removes any stale generated configuration, so
+unrelated CI packages remain Gmail-disabled without needing publisher credentials.
+The environment contains a file path only, never the Client Secret itself.
+
+Runtime reads only that fixed resource next to its own modules. On first startup,
+the application-owned Manager stores it in the existing encrypted local store
+after storage-protection validation. A changed fixed-client configuration in an
+official package updates the encrypted copy; identical configurations cause no
+write. Invalid package data or damaged encrypted local state fails closed. Local
+review installations can still use the operator command when no resource exists.
+
+Google treats native applications as public clients. The shared Desktop Client
+Secret is extractable from an installation and does not prove client identity;
+package signing protects distribution integrity, not credential confidentiality.
+OAuth tokens remain user-specific and encrypted, with S256 PKCE, state validation
+and explicit Gmail consent. Do not commit publisher credentials or publish them
+as source artifacts. See [Google's native app flow](https://developers.google.com/identity/protocols/oauth2/native-app)
+and [OAuth credential handling policy](https://developers.google.com/identity/protocols/oauth2/policies).
+
+This bootstrap currently supports macOS with verified FileVault-protected storage.
+It does not enable unsupported Windows/Linux Gmail storage or bypass per-account
+DeepSeek training-opt-out evidence and conversation consent. An end user's own
+DeepSeek API account needs its own account review; ticking the Gmail conversation
+consent checkbox is not a training-policy review. Packaged configuration also
+does not establish Google Gmail scope approval or security-assessment completion.
