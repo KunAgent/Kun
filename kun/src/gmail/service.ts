@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import {
-  GmailAuthorizeInputSchema, GmailReadInputSchema, GmailScopeIdSchema, GmailModelRecipientBindingSchema, LOCAL_GMAIL_RECIPIENT,
+  GmailAuthorizeInputSchema, GmailReadInputSchema, GmailScopeIdSchema, GMAIL_MODEL_SHARING_POLICY,
   GmailSearchInputSchema, GmailSendInputSchema,
   type GmailAuthorization, type GmailAuthorizeInput, type GmailConnectionStatus,
-  type GmailMessage, type GmailReadInput, type GmailModelRecipientBinding, type GmailSearchInput,
+  type GmailMessage, type GmailReadInput, type GmailSearchInput,
   type GmailSearchResult, type GmailSendInput, type GmailSendResult
 } from '../contracts/gmail.js'
 import { GmailLoopbackAuthorization } from './authorization.js'
@@ -52,9 +52,8 @@ export class NativeGmailService implements GmailServicePort {
     return assertCurrent
   }
 
-  async status(scopeId?: string, recipient: GmailModelRecipientBinding = LOCAL_GMAIL_RECIPIENT): Promise<GmailConnectionStatus> {
+  async status(scopeId?: string): Promise<GmailConnectionStatus> {
     if (scopeId !== undefined) GmailScopeIdSchema.parse(scopeId)
-    GmailModelRecipientBindingSchema.parse(recipient)
     const state = await this.store.read()
     const grant = state.grants.find((entry) => entry.scopeId === scopeId)
     const connected = Boolean(state.tokens && !state.reconnectRequired)
@@ -62,8 +61,9 @@ export class NativeGmailService implements GmailServicePort {
       configured: Boolean(this.clientId && (!this.options.requireClientSecret || this.options.clientSecret)), connected, reconnectRequired: state.reconnectRequired,
       ...(state.tokens?.email ? { email: state.tokens.email } : {}), scopes: state.tokens?.scopes ?? [],
       allowModelSharing: connected && Boolean(scopeId && !this.revokedScopes.has(scopeId) &&
-        grant?.allowModelSharing && grant.recipient.id === recipient.id && grant.recipient.accountBinding === recipient.accountBinding),
-      ...(grant?.allowModelSharing ? { modelSharingRecipient: grant.recipient.id } : {})
+        grant?.allowModelSharing && grant.modelSharingPolicy === GMAIL_MODEL_SHARING_POLICY),
+      ...(grant?.allowModelSharing && grant.modelSharingPolicy === GMAIL_MODEL_SHARING_POLICY
+        ? { modelSharingRecipient: 'configured-models' as const } : {})
     }
   }
 
@@ -129,7 +129,7 @@ export class NativeGmailService implements GmailServicePort {
           }
           this.assertConsentRevision(input.scopeId, consentRevision)
           const grants = current.tokens?.email === tokens.email ? current.grants : []
-          const grant = { scopeId: input.scopeId, allowModelSharing: input.allowModelSharing, grantedAt: this.now(), recipient: input.recipient ?? LOCAL_GMAIL_RECIPIENT }
+          const grant = { scopeId: input.scopeId, allowModelSharing: input.allowModelSharing, grantedAt: this.now(), modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY }
           return { ...current, tokens, reconnectRequired: false,
             sensitiveScopes: input.allowModelSharing ? markSensitiveScope(current.sensitiveScopes, input.scopeId) : current.sensitiveScopes,
             grants: [...grants.filter((entry) => entry.scopeId !== input.scopeId).slice(-255), grant] }
@@ -173,13 +173,12 @@ export class NativeGmailService implements GmailServicePort {
     if (input.revoke && previous.tokens) await this.client.revoke(previous.tokens.refreshToken ?? previous.tokens.accessToken)
   }
 
-  async setModelSharing(scopeId: string, allow: boolean, recipient: GmailModelRecipientBinding = LOCAL_GMAIL_RECIPIENT): Promise<GmailConnectionStatus> {
-    return this.track(() => this.changeModelSharing(scopeId, allow, recipient))
+  async setModelSharing(scopeId: string, allow: boolean): Promise<GmailConnectionStatus> {
+    return this.track(() => this.changeModelSharing(scopeId, allow))
   }
 
-  private async changeModelSharing(scopeId: string, allow: boolean, recipient: GmailModelRecipientBinding): Promise<GmailConnectionStatus> {
+  private async changeModelSharing(scopeId: string, allow: boolean): Promise<GmailConnectionStatus> {
     GmailScopeIdSchema.parse(scopeId)
-    GmailModelRecipientBindingSchema.parse(recipient)
     if (this.disposed) throw new GmailError('service_unavailable', 'Gmail connection is unavailable')
     const generation = this.generation
     const revision = ++this.nextConsentRevision
@@ -195,14 +194,14 @@ export class NativeGmailService implements GmailServicePort {
       this.assertConsentRevision(scopeId, revision)
       if (allow && (this.disposed || generation !== this.generation)) throw new GmailError('cancelled', 'Gmail sharing was cancelled')
       if (!current.tokens || current.reconnectRequired) throw new GmailError('connection_required', 'Connect Gmail first')
-      const grant = { scopeId, allowModelSharing: allow, grantedAt: this.now(), recipient }
+      const grant = { scopeId, allowModelSharing: allow, grantedAt: this.now(), modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY }
       return { ...current, sensitiveScopes: allow ? markSensitiveScope(current.sensitiveScopes, scopeId) :
         current.grants.some((entry) => entry.scopeId === scopeId && entry.allowModelSharing)
           ? markSensitiveScope(current.sensitiveScopes, scopeId) : current.sensitiveScopes,
         grants: [...current.grants.filter((entry) => entry.scopeId !== scopeId).slice(-255), grant] }
     })
     if (allow && this.consentRevisions.get(scopeId) === revision) this.revokedScopes.delete(scopeId)
-    return this.status(scopeId, recipient)
+    return this.status(scopeId)
   }
 
   async search(value: GmailSearchInput, scopeId: string): Promise<GmailSearchResult> {
@@ -267,7 +266,9 @@ export class NativeGmailService implements GmailServicePort {
       if (expectedSenderEmail !== undefined && current.tokens?.email !== expectedSenderEmail) {
         throw new GmailError('account_changed', 'The connected Gmail account changed after this message was approved')
       }
-      if (current.tokens?.email !== tokens.email || current.tokens.accessToken !== tokens.accessToken || !current.grants.find((grant) => grant.scopeId === scopeId)?.allowModelSharing) {
+      const grant = current.grants.find((entry) => entry.scopeId === scopeId)
+      if (current.tokens?.email !== tokens.email || current.tokens.accessToken !== tokens.accessToken ||
+          !grant?.allowModelSharing || grant.modelSharingPolicy !== GMAIL_MODEL_SHARING_POLICY) {
         throw new GmailError('connection_changed', 'Gmail connection changed before this send request')
       }
       return { ...current, attempts: [...current.attempts.slice(-63), {
@@ -332,7 +333,8 @@ export class NativeGmailService implements GmailServicePort {
     const state = await this.store.read()
     this.assertScopeNotRevoked(scopeId)
     if (!state.tokens || state.reconnectRequired) throw new GmailError('connection_required', 'Connect Gmail before using email tools')
-    if (!state.grants.find((grant) => grant.scopeId === scopeId)?.allowModelSharing) {
+    const grant = state.grants.find((entry) => entry.scopeId === scopeId)
+    if (!grant?.allowModelSharing || grant.modelSharingPolicy !== GMAIL_MODEL_SHARING_POLICY) {
       throw new GmailError('model_sharing_required', 'Enable Gmail sharing for this conversation before using email tools')
     }
   }

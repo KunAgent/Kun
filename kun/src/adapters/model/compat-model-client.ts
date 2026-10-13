@@ -1,5 +1,4 @@
-import { randomUUID } from 'node:crypto'
-import { assertDeepSeekEvidenceProof } from '../../gmail/deepseek-account-evidence.js'
+import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
 import { modelRequestCapacityFailure } from './model-request-capacity.js'
 import { serialToolStream } from './serial-tool-stream.js'
 import { observeModelAttempts } from './model-attempt-observer.js'
@@ -39,7 +38,6 @@ import {
 } from './compat-model-support.js'
 import { resolveModelEndpointFormat, usesChatCompletionsShape, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
 import { gatewaySafeModelChunk, gatewaySafeThrownError } from './gateway-model-privacy.js'
-import { assertGoogleWorkspaceModelEndpoint, GOOGLE_WORKSPACE_MODEL_PROVIDER, GoogleWorkspaceModelPolicyError } from '../../domain/google-workspace-model-policy.js'
 
 export { redactUrlForLog } from './compat-http-diagnostics.js'
 export { DEFAULT_MODEL_STREAM_LIMITS, type ModelStreamLimits } from './model-stream-resource-budget.js'
@@ -48,32 +46,15 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 
 /** Multi-provider HTTP model client with compatible endpoint formats. */
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
-  private readonly gmailConsentId = randomUUID()
-
   paperReadOnlyDispatchGuard(): () => void { return () => undefined }
 
-  googleWorkspaceDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
-    const evidence = this.config.googleWorkspaceAccountEvidence
-    const check = () => {
-      assertDeepSeekEvidenceProof(evidence)
-      if (this.config.googleWorkspaceAccountEvidence !== evidence) throw new GoogleWorkspaceModelPolicyError()
-      if (!this.config.resolveCredentials) evidence.assertCredentials(this.config.apiKey)
-      if (request.model.trim().toLowerCase() === 'auto' || this.config.customEndpointProtocol) throw new GoogleWorkspaceModelPolicyError()
-      const format = this.endpointFormatForModel(request.model || this.config.model)
-      assertGoogleWorkspaceModelEndpoint(this.baseUrlForFormat(format), format)
-    }
-    check()
-    return Object.assign(check, { mode: 'reviewed-cloud' as const, providerName: GOOGLE_WORKSPACE_MODEL_PROVIDER,
-      recipient: { id: 'deepseek-api' as const, accountBinding: evidence!.accountBinding },
-      consentId: this.gmailConsentId, endpoint: 'https://api.deepseek.com',
-      assertCredentials: (key: string, headers: Record<string, string>) => { check(); evidence!.assertCredentials(key, headers) },
-      assertEndpoint: (url: string, protocol: string) => assertGoogleWorkspaceModelEndpoint(url, protocol, true) })
+  googleWorkspaceDispatchGuard(_request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    return Object.assign(() => undefined, { mode: 'configured-models' as const, recipient: GMAIL_CONVERSATION_RECIPIENT })
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     if (request.googleWorkspaceData) {
       request.googleWorkspaceData.assertCurrent()
-      this.googleWorkspaceDispatchGuard(request)()
     }
     const stream = (current: ModelRequest) => current.parallelToolCalls === false
       ? serialToolStream(this.streamObserved(current)) : this.streamObserved(current)

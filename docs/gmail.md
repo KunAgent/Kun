@@ -4,23 +4,13 @@ Gmail is an optional connection for private Agent and Code conversations. Kun
 Google sign-in and Gmail authorization are separate. Connecting Gmail requests
 `gmail.readonly` and `gmail.send` in the system browser.
 
-Email model processing supports a verified Kun-managed local Ollama process with
-cloud disabled and a direct DeepSeek API account with a trusted host review of its
-disabled model-training setting. The DeepSeek route remains unavailable until the
-review matches the exact API credential and current endpoint configuration.
-Automatic model routing and account/provider failover are disabled for Gmail data.
-Arbitrary localhost providers and other unreviewed cloud models are not approved.
-Other configured model providers remain usable for ordinary conversations. The
-Gmail card explains when a selected provider cannot receive email data. Connecting
-Google alone remains possible. See [DeepSeek review evidence](gmail-deepseek-review.md)
-for the terms, account-confirmation limits and remaining release checks.
-
-When Ollama is installed but the model is not ready, the Gmail card offers
-**Prepare local email model**. This downloads `qwen3:4b` (about 2.5 GB) if needed;
-the card never downloads on render. Preparation runs through the managed runtime.
-Public model downloads may use the configured network proxy through a temporary
-download-only process. That process cannot supply a mail-inference proof. The
-normal local inference process and transport remain separate and use no proxy.
+Email processing follows the conversation's configured models and routes. The
+Gmail card does not require a specific provider, a reviewed API account, a
+training-opt-out record, or a dedicated local model. Model changes, automatic
+routing and configured failover remain available under the user's normal
+settings. These choices can change which service receives requested email data.
+Kun makes no universal training, retention, location or local-only guarantee for
+those providers. See [model processing](gmail-provider-policy.md).
 
 Google OAuth token exchange and Gmail API requests use the application's explicit
 global network proxy first. When none is configured on macOS, they use the system's
@@ -29,33 +19,20 @@ utility and cached for ten seconds. Disabled, missing, malformed or unsupported
 settings use direct networking. PAC scripts, scoped proxy routes and system proxy
 authentication are unsupported. This fallback changes no system or application
 preferences and never applies to managed local inference or model provider requests.
-After it finishes, choose **Kun Gmail Local / qwen3:4b** in the normal model picker
-for a new private conversation. Existing tasks retain their original model.
+When the Agent needs email access, it presents a compact Gmail connection card.
+Connect your Google account and enable the one default-off permission to process
+requested mail with the currently configured models. The card explains that
+requested mail headers, addresses, snippets, plain-text bodies and related chat
+context can be provided to those models. Longer data-use and connection-management
+information is collapsed. The card has no model preparation or provider-review
+instructions, and loading never displays a guessed local-model recipient.
 
-The dedicated local email model and any Gmail-bearing conversation receive only
-the four native Gmail tools:
-connect, search, read, and send. Kun's tool host rejects guessed Bash, web, file,
-memory, and delegation calls for that acting model. Native Gmail calls do not run
-PreToolUse or PostToolUse hooks, so configured hook commands do not receive email
-arguments or results. Sending still requires the separate exact-message human
-approval below.
-
-When the Agent needs email access, it presents a Gmail connection card. Review the
-permissions and the Gmail privacy disclosure, then connect. The card starts with
-model sharing disabled. The card identifies the actual recipient before consent:
-the managed local model, or **DeepSeek API / api.deepseek.com**. The data includes
-requested mail headers, addresses, snippets and plain-text bodies, current chat
-context, summaries and reply drafts. A local-model grant never authorizes DeepSeek.
-Each private conversation and recipient needs its own grant. A connected account
-without the applicable grant cannot be read by the Agent.
-
-For DeepSeek, the disclosure explains processing and storage in China, automatic
-disk context caching and possible service/legal retention. It makes no zero-retention
-claim. The API account must keep training disabled. Kun sends no Gmail OAuth
-credential in a model request. A checked conversation box cannot approve a model
-provider account. Before granting, the host compares the displayed recipient and
-opaque configuration stamp with the current frozen route; account or route changes
-require a refreshed disclosure and a new grant.
+Each private conversation needs its own permission. Google authorization alone
+does not let the Agent read mail. Existing local-only or exact-DeepSeek grants
+need a fresh generic conversation confirmation; they are not automatically
+expanded to all configured models. After that confirmation, provider changes do
+not require another account review or permission checkbox. Turning permission
+off stops further Gmail use for that conversation.
 
 After authorization, return to Kun, then choose **Continue this task**. Kun checks
 the current Google scopes and conversation grant before resuming the recorded task.
@@ -78,8 +55,8 @@ There is no separate full-inbox cache.
 If you enable paired-device remote access, your authenticated paired device can
 view canonical conversation history and live SSE messages, including Gmail
 content, summaries, and replies. The data uses your selected direct connection or
-tunnel and its transport service. Inference follows the recipient explicitly
-authorized above; Gmail OAuth tokens and model credentials are not sent to remote clients. IM bridges are
+tunnel and its transport service. Model processing follows the configured providers and routes covered by the
+conversation permission; Gmail OAuth tokens and model credentials are not sent to remote clients. IM bridges are
 blocked for Gmail conversations. Use the existing pairing and connection controls
 to manage remote viewing. Using the local model does not mean all email-derived
 content is confined to the desktop, and does not establish a security-assessment exemption.
@@ -116,19 +93,9 @@ Only the registered Kun Desktop client is accepted. The installer reserves the
 normal Service Manager owner, encrypts the configuration, and never prints the
 secret. Google client credentials belong outside Git, URLs and chat messages.
 
-After confirming that training is disabled for the exact DeepSeek API account,
-the operator can record that confirmation against its currently configured key:
-
-```sh
-node kun/dist/cli/gmail-deepseek-evidence-entry.js --data-dir ~/.kun/data \
-  --provider-id deepseek --source user-confirmed-unified-account-opt-out \
-  --checked-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-```
-
-This creates encrypted installation evidence. It grants no conversation access;
-the Gmail card still requires separate recipient-specific consent. Replacing the
-API key requires a new account review. The timestamp records the operator check,
-not an independent provider audit.
+The earlier `gmail-deepseek-evidence-entry` operator record is not a prerequisite
+for this model-neutral flow. The generic conversation permission is the current
+model-processing control; it does not attest to any provider's training policy.
 
 ## Publisher-configured macOS packages
 
@@ -167,8 +134,9 @@ as source artifacts. See [Google's native app flow](https://developers.google.co
 and [OAuth credential handling policy](https://developers.google.com/identity/protocols/oauth2/policies).
 
 This bootstrap currently supports macOS with verified FileVault-protected storage.
-It does not enable unsupported Windows/Linux Gmail storage or bypass per-account
-DeepSeek training-opt-out evidence and conversation consent. An end user's own
-DeepSeek API account needs its own account review; ticking the Gmail conversation
-consent checkbox is not a training-policy review. Packaged configuration also
-does not establish Google Gmail scope approval or security-assessment completion.
+It does not enable unsupported Windows/Linux Gmail storage or bypass Google
+account authorization, conversation permission or exact-message send approval.
+Packaged configuration does not establish Google Gmail scope approval or
+security-assessment completion. The previous fixed-model public disclosure and
+review video do not validate this broader model-neutral flow; privacy publication
+and verification submission remain separate pending steps.

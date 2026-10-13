@@ -1,4 +1,4 @@
-import { LOCAL_GMAIL_RECIPIENT } from '../../contracts/gmail.js'
+import { GMAIL_CONVERSATION_RECIPIENT, GMAIL_MODEL_SHARING_POLICY } from '../../contracts/gmail.js'
 import { describe, expect, it, vi } from 'vitest'
 import { InMemoryThreadStore } from '../../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../../domain/thread.js'
@@ -32,7 +32,7 @@ function fixture() {
     roomId: 'room-1', memberId: 'member-1', participantAgentId: 'agent-1', blockedProviderIds: [] } })
   const room = { id: 'room-1', conversationKind: 'user_agent', members: [{ id: 'member-1', enabled: true,
     participantAgentId: 'agent-1' }] }
-  const policy = { availability: vi.fn(async () => ({ allowed: true, recipient: 'kun-managed-local' as const, recipientBinding: LOCAL_GMAIL_RECIPIENT, consentId: 'local-proof' })), assertAllowed: vi.fn(async () => {}) }
+  const policy = { availability: vi.fn(async () => ({ allowed: true, recipient: 'configured-models' as const, recipientBinding: GMAIL_CONVERSATION_RECIPIENT })), assertAllowed: vi.fn(async () => {}) }
   const localStatus = { installed: true, running: true, ready: false, preparing: false, model: 'qwen3:4b' }
   const localModel = { status: vi.fn(() => localStatus), prepare: vi.fn(() => ({ ...localStatus, preparing: true })) }
   const runtime = { runtimeToken: 'test-token', insecure: true, gmail, gmailDataPolicy: policy, gmailLocalModel: localModel,
@@ -61,19 +61,19 @@ describe('native Gmail authenticated host routes', () => {
     expect(result.headers['cache-control']).toBe('no-store')
     expect(JSON.parse(result.body)).toMatchObject({ connected: true, allowModelSharing: false, modelProviderName: 'test-provider' })
     expect(JSON.parse(result.body)).toMatchObject({ modelSharingAvailable: true })
-    expect(f.gmail.status).toHaveBeenCalledWith('thread:thread-1', LOCAL_GMAIL_RECIPIENT)
+    expect(f.gmail.status).toHaveBeenCalledWith('thread:thread-1')
     expect(f.router.match('POST', '/v1/gmail/send')).toBeUndefined()
   })
 
   it('binds authorization, polling and cancellation to an existing host thread and defaults consent off', async () => {
     const f = fixture()
     expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'thread-1' })).status).toBe(200)
-    expect(f.gmail.startAuthorize).toHaveBeenCalledWith({ scopeId: 'thread:thread-1', allowModelSharing: false, recipient: undefined })
+    expect(f.gmail.startAuthorize).toHaveBeenCalledWith({ scopeId: 'thread:thread-1', allowModelSharing: false })
     expect((await f.request('GET', `/v1/gmail/authorization/${authId}?threadId=thread-1`)).status).toBe(200)
     expect(f.gmail.pollAuthorization).toHaveBeenCalledWith(authId, 'thread:thread-1')
     expect((await f.request('DELETE', `/v1/gmail/authorization/${authId}?threadId=thread-1`)).status).toBe(200)
     expect(f.gmail.cancelAuthorization).toHaveBeenCalledWith(authId, 'thread:thread-1')
-    expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'absent', allowModelSharing: true, expectedRecipient: 'kun-managed-local', expectedConsentId: 'local-proof' })).status).toBe(404)
+    expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'absent', allowModelSharing: true, modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY })).status).toBe(404)
     expect(f.gmail.startAuthorize).toHaveBeenCalledTimes(1)
   })
 
@@ -89,19 +89,19 @@ describe('native Gmail authenticated host routes', () => {
 
   it('grants and revokes model sharing only for the current persisted conversation', async () => {
     const f = fixture()
-    expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: true, expectedRecipient: 'kun-managed-local', expectedConsentId: 'local-proof' })).status).toBe(200)
-    expect(f.gmail.setModelSharing).toHaveBeenCalledWith('thread:thread-1', true, LOCAL_GMAIL_RECIPIENT)
+    expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: true, modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY })).status).toBe(200)
+    expect(f.gmail.setModelSharing).toHaveBeenCalledWith('thread:thread-1', true)
     expect((await f.request('PATCH', '/v1/gmail/sharing', { roomId: 'room-1', messageId: 'message-1', allowModelSharing: false })).status).toBe(200)
-    expect(f.gmail.setModelSharing).toHaveBeenCalledWith('room:room-1', false, undefined)
+    expect(f.gmail.setModelSharing).toHaveBeenCalledWith('room:room-1', false)
     expect((await f.request('DELETE', '/v1/gmail/connection', { threadId: 'thread-1' })).status).toBe(200)
     expect(f.gmail.disconnect).toHaveBeenCalledWith({ revoke: true })
   })
 
   it('checks the card, run, member and thread identity before opening Google or changing grants', async () => {
     const f = fixture()
-    const input = { roomId: 'room-1', messageId: 'message-1', allowModelSharing: true, expectedRecipient: 'kun-managed-local', expectedConsentId: 'local-proof' }
+    const input = { roomId: 'room-1', messageId: 'message-1', allowModelSharing: true, modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY }
     expect((await f.request('POST', '/v1/gmail/authorize', input)).status).toBe(200)
-    expect(f.gmail.startAuthorize).toHaveBeenCalledWith({ scopeId: 'room:room-1', allowModelSharing: true, recipient: LOCAL_GMAIL_RECIPIENT })
+    expect(f.gmail.startAuthorize).toHaveBeenCalledWith({ scopeId: 'room:room-1', allowModelSharing: true })
     f.room.members[0].enabled = false
     expect((await f.request('POST', '/v1/gmail/authorize', input)).status).toBe(404)
     f.room.members[0].enabled = true
@@ -124,13 +124,18 @@ describe('native Gmail authenticated host routes', () => {
     expect(f.gmail.startAuthorize).not.toHaveBeenCalled()
   })
 
-  it('denies Google data grants for an unsupported admitted model route while allowing revocation', async () => {
+  it('allows configured native models without consulting vendor-specific eligibility or evidence', async () => {
     const f = fixture()
-    f.policy.assertAllowed.mockRejectedValue(new Error('unsupported'))
-    expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'thread-1', allowModelSharing: true, expectedRecipient: 'kun-managed-local', expectedConsentId: 'local-proof' })).status).not.toBe(200)
-    expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: true, expectedRecipient: 'kun-managed-local', expectedConsentId: 'local-proof' })).status).not.toBe(200)
-    expect(f.gmail.startAuthorize).not.toHaveBeenCalled()
-    expect(f.gmail.setModelSharing).not.toHaveBeenCalled()
+    f.policy.assertAllowed.mockRejectedValue(new Error('old vendor gate must not run'))
+    for (const providerId of ['deepseek', 'openai', 'anthropic', 'local-ollama', 'configured-pool']) {
+      const thread = f.threads.get('thread-1') as { model: string; providerId: string }
+      thread.providerId = providerId
+      thread.model = providerId === 'configured-pool' ? 'auto' : 'configured-model'
+      expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'thread-1', allowModelSharing: true, modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY })).status).toBe(200)
+      expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: true, modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY })).status).toBe(200)
+    }
+    expect(f.policy.assertAllowed).not.toHaveBeenCalled()
+    expect(f.policy.availability).not.toHaveBeenCalled()
     expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: false })).status).toBe(200)
   })
 
@@ -148,21 +153,44 @@ describe('native Gmail authenticated host routes', () => {
   it('cannot grant Gmail access to an IM-mirrored Room or messaging thread', async () => {
     const f = fixture()
     f.runtime.rooms!.deps.store.list = vi.fn(async () => [{ value: { enabled: true } }]) as never
-    expect((await f.request('POST', '/v1/gmail/authorize', { roomId: 'room-1', messageId: 'message-1', allowModelSharing: true, expectedRecipient: 'kun-managed-local', expectedConsentId: 'local-proof' })).status).toBe(409)
+    expect((await f.request('POST', '/v1/gmail/authorize', { roomId: 'room-1', messageId: 'message-1', allowModelSharing: true, modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY })).status).toBe(409)
     const thread = f.threads.get('thread-1') as { turns: unknown[] }
     thread.turns.push({ id: 'im-turn', clientSurface: 'im', imContext: true })
-    expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'thread-1', allowModelSharing: true, expectedRecipient: 'kun-managed-local', expectedConsentId: 'local-proof' })).status).toBe(409)
+    expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'thread-1', allowModelSharing: true, modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY })).status).toBe(409)
     expect(f.gmail.startAuthorize).not.toHaveBeenCalled()
   })
-  it('rejects stale or missing recipient disclosure without creating a grant', async () => {
-    const f = await fixture()
+  it('requires the new conversation disclosure and cannot broaden a legacy renderer grant', async () => {
+    const f = fixture()
     for (const consent of [{}, { expectedRecipient: 'deepseek-api', expectedConsentId: 'local-proof' },
-      { expectedRecipient: 'kun-managed-local', expectedConsentId: 'stale' }]) {
-      const response = await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: true, ...consent })
-      expect(response.status).toBe(409)
-      expect(JSON.parse(response.body).code).toBe('model_consent_changed')
+      { expectedRecipient: 'kun-managed-local', expectedConsentId: 'stale' },
+      { modelSharingPolicy: 'unknown-policy' },
+      { modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY, expectedRecipient: 'deepseek-api' }]) {
+      for (const [method, path] of [['PATCH', '/v1/gmail/sharing'], ['POST', '/v1/gmail/authorize']]) {
+        const response = await f.request(method, path, { threadId: 'thread-1', allowModelSharing: true, ...consent })
+        expect(response.status).toBe(409)
+        expect(JSON.parse(response.body)).toMatchObject({ code: 'sharing_consent_required' })
+      }
     }
     expect(f.gmail.setModelSharing).not.toHaveBeenCalled()
+    expect(f.gmail.startAuthorize).not.toHaveBeenCalled()
+    expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: true,
+      modelSharingPolicy: GMAIL_MODEL_SHARING_POLICY })).status).toBe(200)
+    expect(f.gmail.setModelSharing).toHaveBeenCalledOnce()
+    expect(f.gmail.setModelSharing).toHaveBeenCalledWith('thread:thread-1', true)
+    expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: false,
+      expectedRecipient: 'deepseek-api', expectedConsentId: 'old-proof' })).status).toBe(200)
+  })
+
+  it('keeps external Agent SDK and missing host-policy boundaries while allowing revocation', async () => {
+    const f = fixture()
+    const thread = f.threads.get('thread-1') as { harnessId?: string }
+    thread.harnessId = 'claude-code'
+    expect((await f.request('POST', '/v1/gmail/authorize', { threadId: 'thread-1' })).status).toBe(409)
+    expect(f.gmail.startAuthorize).not.toHaveBeenCalled()
+    thread.harnessId = 'kun'
+    f.runtime.gmailDataPolicy = undefined
+    expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: true })).status).toBe(409)
+    expect((await f.request('PATCH', '/v1/gmail/sharing', { threadId: 'thread-1', allowModelSharing: false })).status).toBe(200)
   })
 
 })

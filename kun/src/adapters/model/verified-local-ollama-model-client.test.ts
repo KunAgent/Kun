@@ -56,17 +56,17 @@ describe('host-proven local Ollama Gmail model', () => {
     expect(f.directFetch).not.toHaveBeenCalled()
   })
 
-  it('binds the reserved display profile to the host client without using user profile transport', async () => {
+  it('no longer replaces configured model routing with the legacy local-only option', async () => {
     const f = fixture()
     const untrusted = { provider: 'user-sdk', model: 'user-model', stream: vi.fn(async function* () {}) }
     const policy = { selection: async () => ({ providerId: 'kun-gmail-local', model: 'qwen3:4b' }),
       dataState: async () => ({ sensitive: true, sharingAllowed: true, assertSharingCurrent: () => undefined }),
       local: { providerId: 'kun-gmail-local' as const, model: 'qwen3:4b' as const, client: f.client } }
     const wrapper = new GoogleWorkspaceModelClient(untrusted, policy)
-    expect(await wrapper.availability('mail-thread')).toMatchObject({ allowed: true, providerName: 'Ollama Local (cloud disabled)', recipient: 'kun-managed-local' })
+    expect(await wrapper.availability('mail-thread')).toMatchObject({ allowed: true, recipient: 'configured-models' })
     await collect(wrapper.stream(request()))
-    expect(untrusted.stream).not.toHaveBeenCalled()
-    expect(f.directFetch).toHaveBeenCalledOnce()
+    expect(untrusted.stream).toHaveBeenCalledOnce()
+    expect(f.directFetch).not.toHaveBeenCalled()
   })
 
   it('does not export the local model to gateway callers', () => {
@@ -74,17 +74,17 @@ describe('host-proven local Ollama Gmail model', () => {
     expect(() => f.client.stream(request({ gatewayRouting: { allowedTargets: [{ providerId: 'kun-gmail-local', modelId: 'qwen3:4b' }] } }))).toThrow('not exported')
     expect(f.directFetch).not.toHaveBeenCalled()
   })
-  it('does not accept a cloud client mislabeled as the reserved local profile', async () => {
-    const directFetch = vi.fn()
+  it('allows configured cloud transport without a legacy reserved-profile gate', async () => {
+    const directFetch = vi.fn(async () => response())
     const cloud = new CompatModelClient({ baseUrl: 'https://ollama.com/v1', model: 'qwen3:4b', apiKey: 'not-real', fetchImpl: directFetch })
     const wrapper = new GoogleWorkspaceModelClient(cloud, {
       selection: async () => ({ providerId: 'kun-gmail-local', model: 'qwen3:4b' }),
       dataState: async () => ({ sensitive: true, sharingAllowed: true, assertSharingCurrent: () => undefined }),
       local: { providerId: 'kun-gmail-local', model: 'qwen3:4b', client: cloud }
     })
-    expect(await wrapper.availability('mail-thread')).toMatchObject({ allowed: false })
-    await expect(collect(wrapper.stream(request()))).rejects.toMatchObject({ code: 'google_data_provider_not_approved' })
-    expect(directFetch).not.toHaveBeenCalled()
+    expect(await wrapper.availability('mail-thread')).toMatchObject({ allowed: true })
+    await collect(wrapper.stream(request()))
+    expect(directFetch).toHaveBeenCalledOnce()
   })
 
   it('rechecks consent after asynchronous wire admission, immediately before the HTTP call', async () => {

@@ -1,12 +1,12 @@
 import type { SecretEncryptor } from '../security/secret-store.js'
 import type {
-  GmailAuthorization, GmailAuthorizeInput, GmailModelRecipientBinding, GmailConnectionStatus, GmailMessage,
+  GmailAuthorization, GmailAuthorizeInput, GmailConnectionStatus, GmailMessage,
   GmailReadInput, GmailSearchInput, GmailSearchResult, GmailSendInput, GmailSendResult
 } from '../contracts/gmail.js'
 
 export interface GmailServicePort {
   initialize(): Promise<void>
-  status(scopeId?: string, recipient?: GmailModelRecipientBinding): Promise<GmailConnectionStatus>
+  status(scopeId?: string): Promise<GmailConnectionStatus>
   /** Host-only synchronous revision fence; capture before awaiting consent status. */
   captureModelSharingFence(scopeId: string): () => void
   hasGoogleData(scopeId: string): Promise<boolean>
@@ -16,7 +16,7 @@ export interface GmailServicePort {
   pollAuthorization(id: string, scopeId?: string): Promise<GmailAuthorization>
   cancelAuthorization(id: string, scopeId?: string): Promise<GmailAuthorization>
   disconnect(input: { revoke: boolean }): Promise<void>
-  setModelSharing(scopeId: string, allow: boolean, recipient?: GmailModelRecipientBinding): Promise<GmailConnectionStatus>
+  setModelSharing(scopeId: string, allow: boolean): Promise<GmailConnectionStatus>
   search(input: GmailSearchInput, scopeId: string): Promise<GmailSearchResult>
   read(input: GmailReadInput, scopeId: string): Promise<GmailMessage>
   send(input: GmailSendInput, scopeId: string, operationId: string, expectedSenderEmail?: string): Promise<GmailSendResult>

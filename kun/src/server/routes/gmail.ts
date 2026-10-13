@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { GmailScopeIdSchema, GmailModelRecipientIdSchema } from '../../contracts/gmail.js'
+import { GmailScopeIdSchema, GMAIL_CONVERSATION_RECIPIENT, GMAIL_MODEL_SHARING_POLICY } from '../../contracts/gmail.js'
 import { RoomIdSchema } from '../../contracts/rooms.js'
 import { GmailError, type GmailServicePort } from '../../gmail/ports.js'
 import { roomAppConnectionMessage } from '../../rooms/room-app-connections.js'
@@ -20,7 +20,9 @@ const BindingSchema = z.object({
 }).strict().refine((value) => Boolean(value.threadId) !== Boolean(value.roomId && value.messageId) &&
   (!value.threadId || (!value.roomId && !value.messageId)) && Boolean(value.roomId) === Boolean(value.messageId),
   { message: 'Select the current thread or its private Agent connection card' })
-const ConsentFields = { expectedRecipient: GmailModelRecipientIdSchema.optional(), expectedConsentId: z.string().min(1).max(256).optional() }
+// Legacy hints remain decodable for revoke/disconnect during upgrade; they cannot grant broader consent.
+const ConsentFields = { modelSharingPolicy: z.string().min(1).max(64).optional(),
+  expectedRecipient: z.string().min(1).max(256).optional(), expectedConsentId: z.string().min(1).max(256).optional() }
 const AuthorizeSchema = BindingSchema.safeExtend({ allowModelSharing: z.boolean().default(false), ...ConsentFields })
 const SharingSchema = BindingSchema.safeExtend({ allowModelSharing: z.boolean(), ...ConsentFields })
 const DisconnectSchema = BindingSchema.safeExtend({ revoke: z.boolean().default(true) })
@@ -49,6 +51,9 @@ export async function gmailRequestScope(runtime: ServerRuntime, binding: Binding
       throw new GmailError('gmail_desktop_only', 'Use a separate desktop conversation for Gmail; this thread is linked to messaging')
     }
     const source = thread.turns.at(-1)
+    if ((source?.harnessId ?? thread.harnessId ?? 'kun') !== 'kun') {
+      throw new GmailError('model_transport_not_allowed', 'Use Gmail in a native Kun conversation rather than an external Agent SDK')
+    }
     return { scopeId: GmailScopeIdSchema.parse(`thread:${thread.id}`), threadId: thread.id,
       admittedSelection: source?.model ? { model: source.model, providerId: source.providerId } : undefined,
       modelProviderName: thread.providerId ?? thread.model }
@@ -80,6 +85,9 @@ export async function gmailRequestScope(runtime: ServerRuntime, binding: Binding
   catch { throw new GmailError('invalid_context', 'The private Agent identity is no longer active') }
   const source = thread.turns.find((turn) => turn.id === card.run.value.turnId)
   if (!source?.model) throw new GmailError('invalid_context', 'The Gmail card’s admitted model route is unavailable')
+  if ((source.harnessId ?? thread.harnessId ?? 'kun') !== 'kun') {
+    throw new GmailError('model_transport_not_allowed', 'Use Gmail in a native Kun conversation rather than an external Agent SDK')
+  }
   if (source.imContext || source.clientSurface === 'im') throw new GmailError('gmail_desktop_only', 'Open a dedicated desktop Gmail conversation')
   return { scopeId: GmailScopeIdSchema.parse(`room:${room.id}`), threadId: thread.id,
     admittedSelection: { model: source.model, providerId: source.providerId },
@@ -103,8 +111,8 @@ export function registerGmailRoutes(router: Router, runtime: ServerRuntime): voi
       if (error instanceof GmailError) return jsonResponse({ code: error.code, message: error.message },
         error.code === 'invalid_context' ? 404 : 409)
       if (error instanceof GoogleWorkspaceModelPolicyError) return jsonResponse({
-        code: 'approved_model_required',
-        message: 'This Gmail task keeps its original model route. Start a new task with the reviewed direct DeepSeek API account or Kun’s approved local Gmail model, then connect Gmail there.'
+        code: 'sharing_consent_required',
+        message: 'This conversation’s Gmail data permission is unavailable. Review the Gmail sharing checkbox before continuing.'
       }, 409)
       if (error instanceof TurnConflictError || error instanceof TurnInProgressError || error instanceof TurnCapacityError) {
         return ERRORS.conflict('Kun cannot continue this Gmail task while its execution state is changing')
@@ -115,19 +123,17 @@ export function registerGmailRoutes(router: Router, runtime: ServerRuntime): voi
   const query = (request: Request) => BindingSchema.parse(Object.fromEntries(new URL(request.url).searchParams))
   add('GET', '/v1/gmail/status', async (gmail, request) => {
     const bound = await gmailRequestScope(runtime, query(request))
-    const access = runtime.gmailDataPolicy ? await runtime.gmailDataPolicy.availability(bound.threadId, bound.admittedSelection)
-      : { allowed: false, reason: 'model_data_policy_unavailable', providerName: undefined,
-        recipientBinding: undefined, recipient: undefined, endpoint: undefined, consentId: undefined }
-    const status = await gmail.status(bound.scopeId, access.recipientBinding)
-    return { ...status, allowModelSharing: Boolean(access.allowed && access.recipientBinding && status.allowModelSharing), modelProviderName: access.providerName ?? bound.modelProviderName,
-      modelSharingAvailable: access.allowed, modelSharingReason: access.reason,
-      modelProcessingRecipient: access.recipient, modelProcessingEndpoint: access.endpoint, modelProcessingConsentId: access.consentId }
+    const status = await gmail.status(bound.scopeId)
+    const available = Boolean(runtime.gmailDataPolicy)
+    return { ...status, allowModelSharing: available && status.allowModelSharing, modelProviderName: bound.modelProviderName,
+      modelSharingAvailable: available, ...(!available ? { modelSharingReason: 'model_data_policy_unavailable' } : {}),
+      modelProcessingRecipient: GMAIL_CONVERSATION_RECIPIENT.id }
   })
   add('POST', '/v1/gmail/authorize', async (gmail, request) => {
     const input = AuthorizeSchema.parse(await body(request))
     const bound = await gmailRequestScope(runtime, input)
-    const recipient = input.allowModelSharing ? await assertModelConsent(runtime, bound, input) : undefined
-    return gmail.startAuthorize({ scopeId: bound.scopeId, allowModelSharing: input.allowModelSharing, recipient })
+    if (input.allowModelSharing) { assertConversationConsentAcknowledged(input); await assertModelAccess(runtime, bound) }
+    return gmail.startAuthorize({ scopeId: bound.scopeId, allowModelSharing: input.allowModelSharing })
   })
   for (const method of ['GET', 'DELETE'] as const) {
     add(method, '/v1/gmail/authorization/:id', async (gmail, request, context) => {
@@ -139,8 +145,8 @@ export function registerGmailRoutes(router: Router, runtime: ServerRuntime): voi
   add('PATCH', '/v1/gmail/sharing', async (gmail, request) => {
     const input = SharingSchema.parse(await body(request))
     const bound = await gmailRequestScope(runtime, input)
-    const recipient = input.allowModelSharing ? await assertModelConsent(runtime, bound, input) : undefined
-    return gmail.setModelSharing(bound.scopeId, input.allowModelSharing, recipient)
+    if (input.allowModelSharing) { assertConversationConsentAcknowledged(input); await assertModelAccess(runtime, bound) }
+    return gmail.setModelSharing(bound.scopeId, input.allowModelSharing)
   })
   add('DELETE', '/v1/gmail/connection', async (gmail, request) => {
     const input = DisconnectSchema.parse(await body(request))
@@ -163,18 +169,12 @@ export function registerGmailRoutes(router: Router, runtime: ServerRuntime): voi
 }
 
 export async function assertModelAccess(runtime: ServerRuntime,
-  bound: { threadId: string; admittedSelection?: GmailModelSelection }): Promise<void> {
+  _bound: { threadId: string; admittedSelection?: GmailModelSelection }): Promise<void> {
   if (!runtime.gmailDataPolicy) throw new GoogleWorkspaceModelPolicyError()
-  await runtime.gmailDataPolicy.assertAllowed(bound.threadId, bound.admittedSelection)
 }
 
-async function assertModelConsent(runtime: ServerRuntime, bound: { threadId: string; admittedSelection?: GmailModelSelection },
-  input: { expectedRecipient?: string; expectedConsentId?: string }) {
-  await assertModelAccess(runtime, bound)
-  const access = await runtime.gmailDataPolicy!.availability(bound.threadId, bound.admittedSelection)
-  if (!access.allowed || !access.recipientBinding || !access.consentId ||
-      input.expectedRecipient !== access.recipient || input.expectedConsentId !== access.consentId) {
-    throw new GmailError('model_consent_changed', 'The model recipient or API account changed. Reload the Gmail card and review its data-sharing consent again.')
+function assertConversationConsentAcknowledged(input: { modelSharingPolicy?: string; expectedRecipient?: string; expectedConsentId?: string }): void {
+  if (input.modelSharingPolicy !== GMAIL_MODEL_SHARING_POLICY || input.expectedRecipient !== undefined || input.expectedConsentId !== undefined) {
+    throw new GmailError('sharing_consent_required', 'Refresh the Gmail card and review the updated conversation sharing checkbox before enabling access')
   }
-  return access.recipientBinding
 }

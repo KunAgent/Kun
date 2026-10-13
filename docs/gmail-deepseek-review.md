@@ -1,10 +1,13 @@
-# Gmail processing through DeepSeek API
+# Historical Gmail DeepSeek review
 
-Review preparation updated: 2026-10-13. This document records the implemented
-disclosure and evidence basis; it does not state that Google has approved the
-Gmail scopes or that the real integration demonstration has passed.
+Archived implementation notes, updated 2026-10-13. The user subsequently requested
+model-neutral Gmail processing. This document records the previous fixed-DeepSeek
+approach and its evidence limits; its recipient/account checks are no longer active
+feature prerequisites. Current behavior is documented in
+[gmail-provider-policy.md](gmail-provider-policy.md). It does not state that Google
+approved the Gmail scopes, the new model-neutral flow or a security assessment.
 
-## Exact recipient and permission
+## Previous exact-recipient implementation (superseded)
 
 - The cloud recipient is DeepSeek's direct API, `https://api.deepseek.com`.
 - Only an exact host-reviewed API account/credential and supported fixed HTTP

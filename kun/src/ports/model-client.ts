@@ -303,9 +303,9 @@ export type ModelToolSpec = {
  * double. The loop never depends on a concrete implementation.
  */
 export type GoogleWorkspaceModelFence = (() => void) & {
-  mode?: 'verified-local' | 'reviewed-cloud'
+  mode?: 'verified-local' | 'reviewed-cloud' | 'configured-models'
   providerName?: string
-  recipient?: import('../contracts/gmail.js').GmailModelRecipientBinding
+  recipient?: { id: string; accountBinding?: string }
   consentId?: string
   endpoint?: string
   assertCredentials?: (apiKey: string, headers: Record<string, string>) => void
@@ -317,7 +317,7 @@ export interface ModelClient {
   readonly model: string
   /** Returns a trusted exact-route fence, or throws before any paper text is transmitted. */
   paperReadOnlyDispatchGuard?(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void
-  /** Requires the reviewed exact HTTP recipient; opaque SDKs and routing fail closed. */
+  /** Legacy compatibility metadata; active Gmail dispatch uses conversation permission only. */
   googleWorkspaceDispatchGuard?(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence
   /** Host-only pre-export check for SDK/CLI handoffs that bypass ModelClient.stream. */
   assertGoogleWorkspaceDelegatedHistory?(threadId: string, history?: readonly TurnItem[]): Promise<void>

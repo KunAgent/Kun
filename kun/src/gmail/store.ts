@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
 import type { SecretEncryptor } from '../security/secret-store.js'
 import { isEncryptedEnvelope } from '../security/secret-store.js'
-import { GmailScopeIdSchema, GmailModelRecipientBindingSchema, LOCAL_GMAIL_RECIPIENT } from '../contracts/gmail.js'
+import { GmailScopeIdSchema, GmailModelRecipientBindingSchema, GMAIL_MODEL_SHARING_POLICY } from '../contracts/gmail.js'
 
 const TokenSchema = z.object({
   accessToken: z.string().min(1).max(16_384),
@@ -17,7 +17,11 @@ const GrantSchema = z.object({
   scopeId: GmailScopeIdSchema,
   allowModelSharing: z.boolean(),
   grantedAt: z.number().finite(),
-  recipient: GmailModelRecipientBindingSchema.default(LOCAL_GMAIL_RECIPIENT)
+  modelSharingPolicy: z.literal(GMAIL_MODEL_SHARING_POLICY).optional(),
+  // Read legacy encrypted records without silently broadening their vendor-specific consent.
+  recipient: z.union([GmailModelRecipientBindingSchema, z.object({
+    id: z.enum(['kun-managed-local', 'deepseek-api']), accountBinding: z.string().min(1).max(256)
+  }).strict()]).optional()
 }).strict()
 const AttemptSchema = z.object({
   operationId: z.string().uuid(),

@@ -92,6 +92,28 @@ describe('native Gmail conversation tools', () => {
     expect(await f.tool('gmail_read').execute({ messageId: 'message-1' }, { ...f.context, harnessId: 'claude-code' }))
       .toMatchObject({ isError: true, output: { code: 'model_transport_not_allowed' } })
     expect(f.gmail.read).not.toHaveBeenCalled()
+    expect(await f.tool('gmail_connect').execute({ reason: 'Connect Gmail' }, { ...f.context, harnessId: 'claude-code' }))
+      .toMatchObject({ isError: true, output: { code: 'model_transport_not_allowed' } })
+  })
+
+  it('permits configured native model providers and automatic routes without supplier evidence', async () => {
+    const f = await fixture()
+    const policy = { availability: vi.fn(async () => { throw new Error('old vendor eligibility must not run') }),
+      assertAllowed: vi.fn(async () => { throw new Error('old vendor eligibility must not run') }) }
+    const read = gmailTools(f.gmail, f.threads, policy).find((tool) => tool.name === 'gmail_read')!
+    for (const modelProviderId of ['deepseek', 'openai', 'anthropic', 'local-ollama', 'configured-pool']) {
+      expect(await read.execute({ messageId: 'message-1' }, { ...f.context, harnessId: 'kun', modelProviderId }))
+        .toMatchObject({ output: { id: 'message-1' } })
+    }
+    expect(f.gmail.read).toHaveBeenCalledTimes(5)
+    expect(policy.availability).not.toHaveBeenCalled()
+    expect(policy.assertAllowed).not.toHaveBeenCalled()
+    const thread = (await f.threads.get(f.context.threadId))!
+    thread.turns[0].harnessId = 'claude-code'
+    await f.threads.upsert(thread)
+    expect(await read.execute({ messageId: 'message-1' }, { ...f.context, harnessId: 'kun' }))
+      .toMatchObject({ isError: true, output: { code: 'model_transport_not_allowed' } })
+    expect(f.gmail.read).toHaveBeenCalledTimes(5)
   })
 
   it('does not fetch or send Gmail data from messaging, API or non-desktop turns', async () => {

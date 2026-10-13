@@ -78,7 +78,7 @@ export async function resolveGmailThreadDataState(
   const consent = async (scope: string) => {
     // Capture before the async read: a revocation may arrive after its stale snapshot resolves.
     const fence = recipient ? gmail.captureModelSharingFence(scope) : undefined
-    const allowed = (await gmail.status(scope, recipient)).allowModelSharing
+    const allowed = (await gmail.status(scope)).allowModelSharing
     if (allowed && fence) { fence(); sharingFences.push(fence) }
     return allowed
   }

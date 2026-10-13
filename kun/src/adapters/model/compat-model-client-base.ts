@@ -1,5 +1,4 @@
 import { fitModelRequestOutput } from './model-request-capacity.js'
-import { assertGoogleWorkspaceModelEndpoint, GoogleWorkspaceModelPolicyError } from '../../domain/google-workspace-model-policy.js'
 import { modelInputHasNoTextBound } from './model-input-bound.js'
 import { protectInferenceHeaders, ProviderSecretScopeError } from '../../services/provider-request-security.js'
 import { randomUUID } from 'node:crypto'
@@ -172,10 +171,8 @@ export class CompatModelClientBase {
     if (trace.googleWorkspaceData) {
       try {
         trace.googleWorkspaceData.assertCurrent()
-        if (trace.googleWorkspaceData.assertEndpoint) trace.googleWorkspaceData.assertEndpoint(url, trace.endpointFormat)
-        else assertGoogleWorkspaceModelEndpoint(url, trace.endpointFormat, true)
       } catch {
-        return { kind: 'error', code: 'google_data_provider_not_approved', message: new GoogleWorkspaceModelPolicyError().message,
+        return { kind: 'error', code: 'gmail_conversation_permission_changed', message: 'Gmail permission changed before model dispatch. Enable sharing for this private conversation to continue.',
           failure: { category: 'request', reason: 'request', failoverAllowed: false } }
       }
     }
@@ -227,7 +224,6 @@ export class CompatModelClientBase {
     try {
       trace.paperReadOnly?.assertCurrent()
       trace.googleWorkspaceData?.assertCurrent()
-      trace.googleWorkspaceData?.assertCredentials?.(trace.apiKey, headers)
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       if (trace.beforeWireDispatch) {
@@ -244,17 +240,11 @@ export class CompatModelClientBase {
       if (trace.gatewayRouting?.beforeDispatch) await trace.gatewayRouting.beforeDispatch()
       trace.paperReadOnly?.assertCurrent()
       trace.googleWorkspaceData?.assertCurrent()
-      trace.googleWorkspaceData?.assertCredentials?.(trace.apiKey, headers)
-      if (trace.googleWorkspaceData) {
-        if (trace.googleWorkspaceData.assertEndpoint) trace.googleWorkspaceData.assertEndpoint(url, trace.endpointFormat)
-        else assertGoogleWorkspaceModelEndpoint(url, trace.endpointFormat, true)
-      }
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       trace.onWireDispatch?.()
       // The observer is synchronous but can revoke consent or replace credentials itself.
       trace.googleWorkspaceData?.assertCurrent()
-      trace.googleWorkspaceData?.assertCredentials?.(trace.apiKey, headers)
       const response = await this.fetchImpl(url, {
         method: 'POST',
         redirect: 'error',

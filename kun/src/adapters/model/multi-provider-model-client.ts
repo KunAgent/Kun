@@ -3,7 +3,7 @@ import type { GoogleWorkspaceModelFence, ModelClient, ModelRequest, ModelStreamC
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 import { ProviderRequestScheduler, ProviderAdmissionError } from '../../services/provider-request-scheduler.js'
 import type { ProviderAdmission } from '../../contracts/provider-configuration.js'
-import { GoogleWorkspaceModelPolicyError } from '../../domain/google-workspace-model-policy.js'
+import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
 
 export type ModelClientRouterInput = {
   default: ModelClient
@@ -121,19 +121,8 @@ export class MultiProviderModelClient implements ModelClient {
     }
   }
 
-  googleWorkspaceDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
-    const client = this.resolve(request.providerId)
-    if (!client.googleWorkspaceDispatchGuard) throw new GoogleWorkspaceModelPolicyError()
-    const guard = client.googleWorkspaceDispatchGuard(request)
-    const generation = this.gatewayGeneration
-    const assertCurrent = () => {
-      if (generation !== this.gatewayGeneration || client !== this.resolve(request.providerId)) {
-        throw new GoogleWorkspaceModelPolicyError('Gmail model selection changed after disclosure. Choose the reviewed route again.')
-      }
-      guard()
-    }
-    return Object.assign(assertCurrent, { mode: guard.mode, providerName: guard.providerName, assertEndpoint: guard.assertEndpoint,
-      recipient: guard.recipient, consentId: guard.consentId, endpoint: guard.endpoint, assertCredentials: guard.assertCredentials })
+  googleWorkspaceDispatchGuard(_request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    return Object.assign(() => undefined, { mode: 'configured-models' as const, recipient: GMAIL_CONVERSATION_RECIPIENT })
   }
 
   /** Exact review clients retain account scheduling and cannot silently adopt a replacement credential client. */
@@ -152,7 +141,6 @@ export class MultiProviderModelClient implements ModelClient {
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     if (request.googleWorkspaceData) {
       request.googleWorkspaceData.assertCurrent()
-      this.googleWorkspaceDispatchGuard(request)()
     }
     request.paperReadOnly?.assertCurrent()
     request.gatewayRouting?.assertCurrent?.()

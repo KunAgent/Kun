@@ -5,7 +5,7 @@ vi.mock('./rooms-client', () => ({ roomsRequest: request }))
 
 describe('Gmail renderer public API', () => {
   beforeEach(() => request.mockReset().mockResolvedValue({}))
-  it('sends verified conversation references instead of claiming an arbitrary scope ID', async () => {
+  it('uses verified conversation references rather than caller-owned scope IDs', async () => {
     const binding = { roomId: 'room/with-space', messageId: 'card&1' }
     expect(gmailBindingQuery(binding)).toBe('roomId=room%2Fwith-space&messageId=card%261')
     await gmailClient.authorize(binding, false)
@@ -17,28 +17,23 @@ describe('Gmail renderer public API', () => {
     await gmailClient.cancel({ threadId: 'thread' }, 'id/one')
     expect(request).toHaveBeenLastCalledWith('/v1/gmail/authorization/id%2Fone?threadId=thread', 'DELETE')
   })
-  it('prepares only the bound conversation’s host model and never accepts a caller-supplied URL', async () => {
-    await gmailClient.prepareLocal({ threadId: 'thread' })
-    expect(request).toHaveBeenCalledWith('/v1/gmail/local-model', 'POST', { threadId: 'thread' })
-    await gmailClient.localStatus({ threadId: 'thread' })
-    expect(request).toHaveBeenLastCalledWith('/v1/gmail/local-model?threadId=thread', 'GET', undefined, undefined)
-  })
-  it('sends recipient comparison only for explicit sharing without sending account evidence', async () => {
+  it('grants conversation-wide model processing without provider proofs or route stamps', async () => {
     const binding = { threadId: 'thread' }
-    await gmailClient.sharing(binding, true, 'deepseek-api', 'account-route-stamp')
+    await gmailClient.sharing(binding, true)
     expect(request).toHaveBeenLastCalledWith('/v1/gmail/sharing', 'PATCH', {
-      ...binding, allowModelSharing: true, expectedRecipient: 'deepseek-api', expectedConsentId: 'account-route-stamp'
+      ...binding, allowModelSharing: true, modelSharingPolicy: 'configured-models-v1'
     })
-    await gmailClient.authorize(binding, true, 'deepseek-api', 'account-route-stamp')
+    await gmailClient.authorize(binding, true)
     expect(request).toHaveBeenLastCalledWith('/v1/gmail/authorize', 'POST', {
-      ...binding, allowModelSharing: true, expectedRecipient: 'deepseek-api', expectedConsentId: 'account-route-stamp'
+      ...binding, allowModelSharing: true, modelSharingPolicy: 'configured-models-v1'
     })
-    await gmailClient.sharing(binding, false, 'deepseek-api')
+    await gmailClient.sharing(binding, false)
     expect(request).toHaveBeenLastCalledWith('/v1/gmail/sharing', 'PATCH', { ...binding, allowModelSharing: false })
   })
-  it('cannot grant an undisclosed recipient or omit the current account/configuration stamp', () => {
-    expect(() => gmailClient.authorize({ threadId: 'thread' }, true)).toThrow('recipient disclosure')
-    expect(() => gmailClient.sharing({ threadId: 'thread' }, true, 'deepseek-api')).toThrow('recipient disclosure')
-    expect(request).not.toHaveBeenCalled()
+  it('preserves the exact recorded source turn and tool call when continuing', async () => {
+    await gmailClient.continueTask('thread', 'source-turn', 'source-call')
+    expect(request).toHaveBeenLastCalledWith('/v1/gmail/continue', 'POST', {
+      threadId: 'thread', sourceTurnId: 'source-turn', toolCallId: 'source-call'
+    })
   })
 })

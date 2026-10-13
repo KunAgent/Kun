@@ -2,13 +2,16 @@ import type { GmailAuthorizationErrorCode } from './gmail-authorization-errors.j
 import { z } from 'zod'
 
 export const GmailScopeIdSchema = z.string().regex(/^(?:room|thread):[A-Za-z0-9_-]{1,128}$/u)
-export const GmailModelRecipientIdSchema = z.enum(['kun-managed-local', 'deepseek-api'])
+export const GmailModelRecipientIdSchema = z.literal('configured-models')
 export const GmailModelRecipientBindingSchema = z.object({
-  id: GmailModelRecipientIdSchema, accountBinding: z.string().min(1).max(256)
+  id: GmailModelRecipientIdSchema
 }).strict()
 export type GmailModelRecipientId = z.infer<typeof GmailModelRecipientIdSchema>
 export type GmailModelRecipientBinding = z.infer<typeof GmailModelRecipientBindingSchema>
-export const LOCAL_GMAIL_RECIPIENT: GmailModelRecipientBinding = { id: 'kun-managed-local', accountBinding: 'kun-managed-local:v1' }
+export const GMAIL_CONVERSATION_RECIPIENT: GmailModelRecipientBinding = { id: 'configured-models' }
+export const GMAIL_MODEL_SHARING_POLICY = 'configured-models-v1' as const
+/** Compatibility export for isolated local-model code; this no longer selects a model or account. */
+export const LOCAL_GMAIL_RECIPIENT = GMAIL_CONVERSATION_RECIPIENT
 
 export const GmailAuthorizeInputSchema = z.object({
   scopeId: GmailScopeIdSchema,

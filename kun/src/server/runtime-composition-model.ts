@@ -60,12 +60,9 @@ import { GatewayUsageService } from '../services/gateway-usage-service.js'
 import { createApprovalReviewModelContextResolver } from '../services/approval-review-context-resolver.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 import { createRuntimeGmailComposition } from './runtime-gmail-composition.js'
-import { ManagedLocalGmailOllama } from '../gmail/local-ollama-service.js'
 import { GoogleWorkspaceModelClient } from '../gmail/model-data-policy.js'
 import { bindGmailThreadDataProtection } from '../gmail/thread-data-state.js'
-import { DeepSeekAccountEvidenceStore } from '../gmail/deepseek-account-evidence.js'
-import { buildGmailModelClientRouterInput, createRuntimeGmailModelPolicy } from './runtime-gmail-model-composition.js'
-import { VerifiedLocalOllamaModelClient, KUN_GMAIL_LOCAL_PROVIDER_ID, KUN_GMAIL_LOCAL_MODEL } from '../adapters/model/verified-local-ollama-model-client.js'
+import { createRuntimeGmailModelPolicy } from './runtime-gmail-model-composition.js'
 
 export async function createRuntimeModelComposition(
   core: Awaited<ReturnType<typeof createRuntimeCore>>,
@@ -103,16 +100,6 @@ export async function createRuntimeModelComposition(
   startup.registerCleanup?.(() => gmail.dispose())
   bindGmailThreadDataProtection(core.rawThreadStore, gmail)
   bindGmailThreadDataProtection(core.threadStore, gmail)
-  const gmailLocalModel = await ManagedLocalGmailOllama.start(core.activeOptions.dataDir,
-    { downloadProxy: gmailNetworkProxy })
-  if (gmailLocalModel) startup.registerCleanup?.(() => gmailLocalModel.dispose())
-  const gmailLocalClient = gmailLocalModel ? new VerifiedLocalOllamaModelClient(gmailLocalModel.proof()) : undefined
-  if (gmailLocalModel) core.activeOptions = { ...core.activeOptions, providers: {
-    ...core.activeOptions.providers,
-    [KUN_GMAIL_LOCAL_PROVIDER_ID]: { kind: 'http', authType: 'none', apiKey: '',
-      baseUrl: `${gmailLocalModel.proof().origin}/v1`, modelProxyUrl: '', endpointFormat: 'chat_completions',
-      models: [KUN_GMAIL_LOCAL_MODEL], selectedModel: KUN_GMAIL_LOCAL_MODEL }
-  } }
   const extensionCredentials = new ExtensionCredentialStore({
     dataDir: core.activeOptions.dataDir,
     profileId: 'default',
@@ -257,13 +244,11 @@ export async function createRuntimeModelComposition(
       ? { pathToClaudeCodeExecutable: claudeCodeSdkExecutable() }
       : {})
   })
-  const deepseekAccountEvidence = new DeepSeekAccountEvidenceStore(core.activeOptions.dataDir,
-    extensionCredentialKeyProvider.encryptor)
   const buildGmailAwareModelClients = (options: KunServeRuntimeOptions, capabilities = modelCapabilities) =>
-    buildGmailModelClientRouterInput(options, capabilities, deepseekAccountEvidence, llmDebug,
+    buildModelClientRouterInput(options, capabilities, llmDebug,
       resolveLegacyRequestCredentials, () => modelConnections)
   const gmailPolicyOptions = createRuntimeGmailModelPolicy({ threads: core.threadStore, gmail,
-    dataDir: core.activeOptions.dataDir, localClient: gmailLocalClient,
+    dataDir: core.activeOptions.dataDir,
     fallback: () => ({ model: core.activeOptions.model, providerId: core.activeOptions.activeProviderId }) })
   const initialModelClients = await buildGmailAwareModelClients(core.activeOptions)
   const accountScheduler = new ProviderRequestScheduler()
@@ -405,8 +390,7 @@ export async function createRuntimeModelComposition(
   })
   directModelClient.setDispatchAuthority(() => modelConnections.assertActiveConfiguration())
   approvalReviewModelClient.setDispatchAuthority(() => modelConnections.assertActiveConfiguration())
-  await modelConnections.initialize(modelConnectionSeedsForOptions(core.activeOptions).map((seed) =>
-    seed.id === KUN_GMAIL_LOCAL_PROVIDER_ID ? { ...seed, name: 'Kun Gmail Local' } : seed), {
+  await modelConnections.initialize(modelConnectionSeedsForOptions(core.activeOptions), {
     proxy: { enabled: Boolean(core.activeOptions.modelProxyUrl), url: core.activeOptions.modelProxyUrl ?? '' },
     routePools: core.activeOptions.routePools ?? [],
     failover: core.activeOptions.providerFailover ?? [],
@@ -638,7 +622,7 @@ export async function createRuntimeModelComposition(
     routeHealth,
     modelClient,
     gmail,
-    gmailLocalModel,
+    gmailLocalModel: undefined as import('../gmail/local-ollama-service.js').ManagedLocalGmailOllama | undefined,
     gmailDataPolicy,
     timedModelClient,
     routePoolTests,

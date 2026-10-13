@@ -1,5 +1,5 @@
 import { accountModelRequest } from './request-attempt-accounting.js'
-import { GoogleWorkspaceModelPolicyError } from '../../domain/google-workspace-model-policy.js'
+import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type {
   ModelFailoverGroup,
@@ -142,21 +142,13 @@ export class RoutePoolModelClient implements ModelClient {
     }
   }
 
-  googleWorkspaceDispatchGuard(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
-    if (this.poolForRequest(request) || !this.direct.googleWorkspaceDispatchGuard) throw new GoogleWorkspaceModelPolicyError()
-    const guard = this.direct.googleWorkspaceDispatchGuard(request)
-    const assertCurrent = () => {
-      if (this.poolForRequest(request)) throw new GoogleWorkspaceModelPolicyError('Gmail model routing changed after disclosure.')
-      guard()
-    }
-    return Object.assign(assertCurrent, { mode: guard.mode, providerName: guard.providerName, assertEndpoint: guard.assertEndpoint,
-      recipient: guard.recipient, consentId: guard.consentId, endpoint: guard.endpoint, assertCredentials: guard.assertCredentials })
+  googleWorkspaceDispatchGuard(_request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    return Object.assign(() => undefined, { mode: 'configured-models' as const, recipient: GMAIL_CONVERSATION_RECIPIENT })
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     if (request.googleWorkspaceData) {
       request.googleWorkspaceData.assertCurrent()
-      this.googleWorkspaceDispatchGuard(request)()
     }
     request.paperReadOnly?.assertCurrent()
     return accountModelRequest(request, (accounted) => this.streamWithBudget(accounted))

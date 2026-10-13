@@ -26,6 +26,9 @@ export async function continueGmailTask(runtime: ServerRuntime, input: z.infer<t
       marker.sourceTurnId !== source.id || marker.toolCallId !== input.toolCallId) {
     throw new GmailError('invalid_context', 'The Gmail connection request was not issued by this task')
   }
+  if ((source.harnessId ?? thread.harnessId ?? 'kun') !== 'kun' || source.imContext || source.clientSurface !== 'gui') {
+    throw new GmailError('gmail_desktop_only', 'Continue Gmail in the native Kun desktop conversation')
+  }
   const clientRequestId = 'gmail-continue-' + createHash('sha256').update(JSON.stringify([
     thread.id, source.id, input.toolCallId
   ])).digest('hex')
@@ -35,15 +38,10 @@ export async function continueGmailTask(runtime: ServerRuntime, input: z.infer<t
   }
   if (!runtime.gmail) throw new GmailError('connection_required', 'Connect Gmail in Kun')
   if (!runtime.gmailDataPolicy) throw new GoogleWorkspaceModelPolicyError()
-  const access = await runtime.gmailDataPolicy.availability(thread.id, source.model ? { model: source.model, providerId: source.providerId } : undefined)
-  if (!access.allowed || !access.recipientBinding) throw new GoogleWorkspaceModelPolicyError()
-  const status = await runtime.gmail.status(scopeId, access.recipientBinding)
+  const status = await runtime.gmail.status(scopeId)
   if (!status.connected || !status.allowModelSharing || !GMAIL_SCOPES.every((scope) => status.scopes.includes(scope))) {
     throw new GmailError('sharing_consent_required', 'Connect Gmail and allow this conversation’s model to use mail first')
   }
-  if (!runtime.gmailDataPolicy) throw new GoogleWorkspaceModelPolicyError()
-  await runtime.gmailDataPolicy.assertAllowed(thread.id,
-    source.model ? { model: source.model, providerId: source.providerId } : undefined)
   return runtime.turnService.startTurn({ threadId: thread.id, request: {
     clientRequestId,
     prompt: 'The user connected Gmail through Kun and allowed email data to be shared with this conversation’s selected model. Continue the original task using the Gmail tools. Do not repeat completed external actions. Sending email still requires a separate human approval of the exact message.',

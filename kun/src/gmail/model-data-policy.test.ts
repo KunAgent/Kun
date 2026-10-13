@@ -1,183 +1,121 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { randomBytes } from 'node:crypto'
-import { createAesEncryptor } from '../security/secret-store.js'
-import { DeepSeekAccountEvidenceStore, type DeepSeekAccountEvidenceProof } from './deepseek-account-evidence.js'
-import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { GMAIL_CONVERSATION_RECIPIENT } from '../contracts/gmail.js'
 import type { ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
+import type { ModelRoutePoolConfig } from '../contracts/model-route-pool.js'
+import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
 import { GoogleWorkspaceModelClient } from './model-data-policy.js'
-import { assertGoogleWorkspaceModelEndpoint } from '../domain/google-workspace-model-policy.js'
 import { CompatModelClient } from '../adapters/model/compat-model-client.js'
 import { MultiProviderModelClient } from '../adapters/model/multi-provider-model-client.js'
 import { RoutePoolModelClient } from '../adapters/model/route-pool-model-client.js'
-import { withModelVerification } from '../services/model-verification-client.js'
 
-let evidence: DeepSeekAccountEvidenceProof
-let evidenceDir: string
-beforeAll(async () => {
-  evidenceDir = await mkdtemp(join(tmpdir(), 'kun-deepseek-proof-'))
-  const store = new DeepSeekAccountEvidenceStore(evidenceDir, createAesEncryptor(randomBytes(32)))
-  await store.install({ apiKey: 'not-real', source: 'user-confirmed-unified-account-opt-out', checkedAt: new Date().toISOString() })
-  evidence = (await store.proof('not-real'))!
-})
-afterAll(async () => { await rm(evidenceDir, { recursive: true, force: true }) })
-
-const request = (patch: Partial<ModelRequest> = {}): ModelRequest => ({ threadId: 'mail-thread', turnId: 'turn',
-  providerId: 'reviewed', model: 'gpt-oss:20b', tools: [], history: [], prefix: [],
-  abortSignal: new AbortController().signal, maxRetryAttempts: 0, stream: false, ...patch })
-const response = () => new Response(JSON.stringify({ id: 'reply', model: 'gpt-oss:20b',
-  choices: [{ message: { content: 'Email summary' }, finish_reason: 'stop' }] }), { headers: { 'Content-Type': 'application/json' } })
+const request = (patch: Partial<ModelRequest> = {}): ModelRequest => ({ threadId: 'private-mail', turnId: 'turn',
+  providerId: 'configured', model: 'arbitrary-model', tools: [], history: [], prefix: [], stream: false,
+  maxRetryAttempts: 0, abortSignal: new AbortController().signal, ...patch })
+const response = () => Response.json({ id: 'reply', model: 'arbitrary-model',
+  choices: [{ message: { content: 'Email summary' }, finish_reason: 'stop' }] })
 async function collect(stream: AsyncIterable<ModelStreamChunk>) {
   const result: ModelStreamChunk[] = []
   for await (const chunk of stream) result.push(chunk)
   return result
 }
-const policy = (sensitive = true, sharingAllowed = true) => ({
-  // Account evidence and exact recipient consent are required in addition to this release switch.
-  cloudProcessingEnabled: true,
-  selection: vi.fn(async () => ({ model: 'gpt-oss:20b', providerId: 'reviewed' })),
-  dataState: vi.fn(async () => ({ sensitive, sharingAllowed, assertSharingCurrent: () => undefined }))
-})
+function controls(sensitive = true) {
+  let sharing = true
+  let revision = 1
+  return { revoke() { sharing = false; revision += 1 },
+    policy: { selection: async () => ({ model: 'auto', providerId: 'configured' }),
+      dataState: async () => { const captured = revision; return { sensitive, sharingAllowed: sharing,
+        assertSharingCurrent: () => { if (!sharing || captured !== revision) throw new Error('Mail permission revoked') } } } } }
+}
+function compatible(fetchImpl: typeof fetch, baseUrl = 'https://custom.provider.example/v1') {
+  return new CompatModelClient({ apiKey: 'fixture-key', baseUrl, model: 'arbitrary-model', fetchImpl, retry: { maxAttempts: 0 } })
+}
+const pool: ModelRoutePoolConfig = { id: 'any-pool', name: 'Configured pool', modelId: 'auto', enabled: true,
+  strategy: 'priority', targets: [
+    { id: 'a', providerId: 'a', modelId: 'model-a', enabled: true, weight: 1 },
+    { id: 'b', providerId: 'b', modelId: 'model-b', enabled: true, weight: 1 } ],
+  failurePolicy: { failoverHttpStatusCodes: [503], failoverOnNetworkError: true, failoverOnTimeout: true, failoverOnAuthError: true },
+  healthPolicy: { failureThreshold: 2, cooldownMs: 1000, halfOpenMaxAttempts: 1 } }
+function routed(first: typeof fetch, second: typeof fetch) {
+  const a = compatible(first, 'https://first.example/v1')
+  const b = compatible(second, 'https://second.example/v1')
+  const direct = new MultiProviderModelClient({ default: a, defaultProviderId: 'a', providers: new Map([['a', a], ['b', b]]), gatewayClients: new Map([['a', a], ['b', b]]) })
+  return new RoutePoolModelClient(direct, [pool], (id) => ({ id, inputModalities: ['text'], outputModalities: ['text'],
+    supportsToolCalling: true, messageParts: ['text'] }))
+}
 
-describe('Google Workspace model recipient policy', () => {
-  it('keeps cloud Gmail processing disabled by default even for the reviewed vendor endpoint', async () => {
-    const fetchImpl = vi.fn()
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const controls = policy()
-    const wrapped = new GoogleWorkspaceModelClient(client, { selection: controls.selection, dataState: controls.dataState })
-    expect(await wrapped.availability('mail-thread')).toMatchObject({ allowed: false })
-    await expect(collect(wrapped.stream(request()))).rejects.toThrow('currently requires Kun')
-    expect(fetchImpl).not.toHaveBeenCalled()
-  })
-  it('accepts only the exact reviewed HTTPS API and refuses lookalikes, query routes and protocols', () => {
-    expect(() => assertGoogleWorkspaceModelEndpoint('https://api.deepseek.com/v1', 'chat_completions')).not.toThrow()
-    expect(() => assertGoogleWorkspaceModelEndpoint('https://api.deepseek.com/v1/chat/completions', 'chat_completions', true)).not.toThrow()
-    for (const url of ['http://api.deepseek.com/v1', 'https://api.deepseek.com.attacker.test/v1', 'https://relay.test/ollama/v1',
-      'http://localhost:11434/v1', 'https://api.deepseek.com/v1?route=other', 'https://api.deepseek.com:444/v1',
-      'https://user@ollama.com/v1', 'https://api.openai.com/v1']) {
-      expect(() => assertGoogleWorkspaceModelEndpoint(url, 'chat_completions')).toThrow('Gmail data requires')
-    }
-    expect(() => assertGoogleWorkspaceModelEndpoint('https://api.deepseek.com/v1', 'responses')).toThrow()
-  })
-
-  it('transmits sensitive data only to the reviewed API with the reviewed account and no unsupported storage parameter', async () => {
-    const fetchImpl = vi.fn(async () => response())
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const observed = withModelVerification(client, 'reviewed', () => undefined)
-    const direct = new MultiProviderModelClient({ default: observed, providers: new Map([['reviewed', observed]]) })
-    const wrapped = new GoogleWorkspaceModelClient(direct, policy())
-    expect(await wrapped.availability('mail-thread')).toMatchObject({ allowed: true, providerName: 'DeepSeek API', recipient: 'deepseek-api' })
-    await collect(wrapped.stream(request()))
-    expect(fetchImpl).toHaveBeenCalledOnce()
-    const [url, options] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe('https://api.deepseek.com/v1/chat/completions')
-    expect(options.redirect).toBe('error')
-    expect(JSON.parse(String(options.body))).not.toHaveProperty('store')
-  })
-
-  it('blocks all old mail history after consent is revoked or the mailbox is disconnected', async () => {
-    const fetchImpl = vi.fn()
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const wrapped = new GoogleWorkspaceModelClient(client, policy(true, false))
-    await expect(collect(wrapped.stream(request()))).rejects.toThrow('sharing has not been granted')
-    expect(fetchImpl).not.toHaveBeenCalled()
+describe('model-neutral Gmail conversation permission', () => {
+  it('allows arbitrary configured endpoints, auto and rotated API credentials without account evidence', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => response())
+    let key = 'first-fixture-key'
+    const client = new CompatModelClient({ baseUrl: 'https://custom.endpoint.example/inference', endpointFormat: 'custom_endpoint',
+      customEndpointProtocol: 'chat_completions', apiKey: '', model: 'auto', fetchImpl,
+      resolveCredentials: async () => ({ apiKey: key, refreshable: false }) })
+    const wrapped = new GoogleWorkspaceModelClient(client, { ...controls().policy, cloudProcessingEnabled: false })
+    expect(await wrapped.availability('private-mail')).toMatchObject({ allowed: true, recipientBinding: GMAIL_CONVERSATION_RECIPIENT })
+    await collect(wrapped.stream(request({ model: 'auto' })))
+    key = 'second-fixture-key'
+    await collect(wrapped.stream(request({ turnId: 'second-turn', model: 'auto' })))
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe('https://custom.endpoint.example/inference')
+    expect(new Headers(fetchImpl.mock.calls[1]?.[1]?.headers).get('authorization')).toBe('Bearer second-fixture-key')
   })
 
-  it('refuses another API key returned by a live credential resolver before physical fetch', async () => {
-    const fetchImpl = vi.fn()
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', model: 'deepseek-chat',
-      googleWorkspaceAccountEvidence: evidence, fetchImpl,
-      resolveCredentials: async () => ({ apiKey: 'different-account', refreshable: false }) })
-    const wrapped = new GoogleWorkspaceModelClient(client, policy())
-    expect(await wrapped.availability('mail-thread')).toMatchObject({ allowed: true })
-    const chunks = await collect(wrapped.stream(request({ model: 'deepseek-chat' })))
-    expect(chunks.at(-1)).toMatchObject({ kind: 'error' })
-    expect(fetchImpl).not.toHaveBeenCalled()
-  })
-
-  it('rejects a final Cookie even when the protected Bearer key matches the reviewed account', async () => {
-    const fetchImpl = vi.fn()
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', model: 'deepseek-chat',
-      googleWorkspaceAccountEvidence: evidence, fetchImpl, headers: { Cookie: 'synthetic-cookie' } })
-    const wrapped = new GoogleWorkspaceModelClient(client, policy())
-    const chunks = await collect(wrapped.stream(request({ model: 'deepseek-chat' })))
-    expect(chunks.at(-1)).toMatchObject({ kind: 'error' })
-    expect(fetchImpl).not.toHaveBeenCalled()
-  })
-
-  it('rejects an HTTPS API configuration without host-owned opt-out evidence', async () => {
-    const fetchImpl = vi.fn()
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', model: 'deepseek-chat', fetchImpl })
-    const wrapped = new GoogleWorkspaceModelClient(client, policy())
-    expect(await wrapped.availability('mail-thread')).toMatchObject({ allowed: false, reason: 'deepseek_api_account_not_reviewed' })
-    await expect(collect(wrapped.stream(request({ model: 'deepseek-chat' })))).rejects.toMatchObject({ code: 'google_data_provider_not_approved' })
-    expect(fetchImpl).not.toHaveBeenCalled()
-  })
-
-  it('refuses a changed recipient for future titles, compaction and normal requests', async () => {
-    const fetchImpl = vi.fn()
-    const client = new CompatModelClient({ baseUrl: 'https://relay.example/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const wrapped = new GoogleWorkspaceModelClient(client, policy())
-    expect(await wrapped.availability('mail-thread')).toMatchObject({ allowed: false, reason: 'approved_model_required' })
-    for (const purpose of ['assistant', 'title', 'compaction'] as const) {
-      await expect(collect(wrapped.stream(request({ trace: { roundId: 'r', step: 0, purpose } })))).rejects.toThrow('Gmail data requires')
-    }
-    expect(fetchImpl).not.toHaveBeenCalled()
-  })
-
-  it('checks the task’s admitted source route instead of substituting the current composer route', async () => {
-    const fetchImpl = vi.fn()
-    const reviewed = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const original = new CompatModelClient({ baseUrl: 'https://original.example/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'original-model', fetchImpl })
-    const direct = new MultiProviderModelClient({ default: reviewed, providers: new Map([['reviewed', reviewed], ['original', original]]) })
-    const wrapped = new GoogleWorkspaceModelClient(direct, policy())
-    expect(await wrapped.availability('mail-thread')).toMatchObject({ allowed: true })
-    const admitted = { model: 'original-model', providerId: 'original' }
-    expect(await wrapped.availability('mail-thread', admitted)).toMatchObject({ allowed: false })
-    await expect(wrapped.assertAllowed('mail-thread', admitted)).rejects.toThrow('Gmail data requires')
-    expect(fetchImpl).not.toHaveBeenCalled()
-  })
-
-  it('refuses opaque SDK recipients without executing their stream', async () => {
-    const stream = vi.fn(async function* () { yield { kind: 'completed', stopReason: 'stop' } as ModelStreamChunk })
-    const wrapped = new GoogleWorkspaceModelClient({ provider: 'sdk', model: 'model', stream }, policy())
-    await expect(collect(wrapped.stream(request()))).rejects.toThrow('Gmail data requires')
-    expect(stream).not.toHaveBeenCalled()
-  })
-
-  it('preserves ordinary conversations with their existing provider', async () => {
-    const fetchImpl = vi.fn(async () => response())
-    const client = new CompatModelClient({ baseUrl: 'https://custom.example/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const wrapped = new GoogleWorkspaceModelClient(client, policy(false, false))
-    await collect(wrapped.stream(request()))
-    expect(fetchImpl).toHaveBeenCalledOnce()
-  })
-
-  it('rejects account failover and never sends to the fallback', async () => {
-    const fetchImpl = vi.fn()
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const direct = new MultiProviderModelClient({ default: client, providers: new Map([['reviewed', client]]) })
-    const routed = new RoutePoolModelClient(direct, [], () => ({ id: 'gpt-oss:20b', supportsToolCalling: true,
-      inputModalities: ['text'], outputModalities: ['text'], messageParts: ['text'] }))
-    routed.replaceFailoverGroups([{ providerId: 'reviewed', strategy: 'order',
-      members: [{ providerId: 'reviewed', models: ['gpt-oss:20b'], enabled: true }],
-      fallbackTargets: [{ providerId: 'other', modelId: 'model' }] }])
-    const wrapped = new GoogleWorkspaceModelClient(routed, policy())
-    await expect(collect(wrapped.stream(request()))).rejects.toThrow('Gmail data requires')
-    expect(fetchImpl).not.toHaveBeenCalled()
-  })
-
-  it('invalidates the captured recipient generation before a physical retry', async () => {
-    const fetchImpl = vi.fn(async () => {
-      direct.replace({ default: client, providers: new Map([['reviewed', client]]) })
-      return new Response('stream_options unsupported', { status: 400 })
+  for (const format of ['chat_completions', 'messages', 'responses'] as const) {
+    it(`allows the configured ${format} protocol`, async () => {
+      const fetchImpl = vi.fn<typeof fetch>(async () => format === 'messages'
+        ? Response.json({ id: 'message', type: 'message', role: 'assistant', content: [{ type: 'text', text: 'Summary' }], stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } })
+        : format === 'responses' ? Response.json({ id: 'response', object: 'response', status: 'completed', model: 'arbitrary-model',
+          output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Summary' }] }], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } }) : response())
+      const wrapped = new GoogleWorkspaceModelClient(new CompatModelClient({ baseUrl: 'https://configured.example/v1',
+        apiKey: 'fixture-key', model: 'arbitrary-model', endpointFormat: format, fetchImpl }), controls().policy)
+      const chunks = await collect(wrapped.stream(request()))
+      expect(fetchImpl).toHaveBeenCalledOnce()
+      expect(chunks.some((chunk) => chunk.kind === 'assistant_text_delta')).toBe(true)
     })
-    const client = new CompatModelClient({ baseUrl: 'https://api.deepseek.com/v1', apiKey: 'not-real', googleWorkspaceAccountEvidence: evidence, model: 'gpt-oss:20b', fetchImpl })
-    const direct = new MultiProviderModelClient({ default: client, providers: new Map([['reviewed', client]]) })
-    const wrapped = new GoogleWorkspaceModelClient(direct, policy())
-    const chunks = await collect(wrapped.stream(request({ stream: true })))
-    expect(fetchImpl).toHaveBeenCalledOnce()
+  }
+
+  it('permits normal route-pool failover and the authorized gateway route', async () => {
+    for (const providerId of [undefined, LOCAL_MODEL_GATEWAY_PROVIDER_ID]) {
+      const first = vi.fn<typeof fetch>(async () => Response.json({ error: { message: 'Unavailable' } }, { status: 503 }))
+      const second = vi.fn<typeof fetch>(async () => response())
+      const wrapped = new GoogleWorkspaceModelClient(routed(first, second), controls().policy)
+      const chunks = await collect(wrapped.stream(request({ providerId, model: 'auto',
+        ...(providerId ? { gatewayRouting: { assertCurrent: () => undefined,
+          allowedTargets: [{ providerId: 'a', modelId: 'model-a' }, { providerId: 'b', modelId: 'model-b' }] } } : {}) })))
+      expect(first).toHaveBeenCalledOnce()
+      expect(second).toHaveBeenCalledOnce()
+      expect(chunks.some((chunk) => chunk.kind === 'assistant_text_delta')).toBe(true)
+    }
+  })
+
+  it('blocks a fallback physical request after the private conversation grant is revoked', async () => {
+    const gate = controls()
+    const first = vi.fn<typeof fetch>(async () => { gate.revoke(); return Response.json({ error: {} }, { status: 503 }) })
+    const second = vi.fn<typeof fetch>(async () => response())
+    await collect(new GoogleWorkspaceModelClient(routed(first, second), gate.policy).stream(request({ providerId: undefined, model: 'auto' })))
+    expect(first).toHaveBeenCalledOnce()
+    expect(second).not.toHaveBeenCalled()
+  })
+
+  it('does not send mail without sharing or after a final asynchronous wire admission revokes it', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => response())
+    const denied = controls(); denied.revoke()
+    await expect(collect(new GoogleWorkspaceModelClient(compatible(fetchImpl), denied.policy).stream(request()))).rejects.toThrow('Enable Gmail sharing')
+    const gate = controls()
+    const chunks = await collect(new GoogleWorkspaceModelClient(compatible(fetchImpl), gate.policy)
+      .stream(request({ beforeWireDispatch: async () => gate.revoke() })))
     expect(chunks.at(-1)).toMatchObject({ kind: 'error' })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('keeps ordinary conversations independent of Gmail and retains the external Agent boundary', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => response())
+    const ordinary = controls(false); ordinary.revoke()
+    const wrapped = new GoogleWorkspaceModelClient(compatible(fetchImpl), ordinary.policy)
+    await collect(wrapped.stream(request()))
+    expect(fetchImpl).toHaveBeenCalledOnce()
+    await expect(wrapped.assertGoogleWorkspaceDelegatedHistory('ordinary')).resolves.toBeUndefined()
+    await expect(new GoogleWorkspaceModelClient(compatible(fetchImpl), controls().policy).assertGoogleWorkspaceDelegatedHistory('private-mail'))
+      .rejects.toThrow('separate external Agent')
   })
 })

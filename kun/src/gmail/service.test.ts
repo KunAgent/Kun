@@ -323,20 +323,23 @@ describe('approved Gmail sends', () => {
       expect((await fixture.store.read()).attempts[0].status).toBe('sent')
     } finally { resolveSend?.(json({ id: 'sent1' })); await fixture.cleanup() }
   })
-  it('keeps legacy local consent separate from the exact reviewed DeepSeek account', async () => {
+  it('preserves legacy credentials and taint but requires refreshed model-neutral conversation consent', async () => {
     const f = await gmailFixture()
-    const accountA = { id: 'deepseek-api' as const, accountBinding: 'evidence-account-a' }
-    const accountB = { id: 'deepseek-api' as const, accountBinding: 'evidence-account-b' }
     try {
       await f.seed()
-      expect((await f.service.status(SCOPE)).allowModelSharing).toBe(true)
-      expect((await f.service.status(SCOPE, accountA)).allowModelSharing).toBe(false)
-      await f.service.setModelSharing(SCOPE, true, accountA)
-      expect(await f.service.status(SCOPE, accountA)).toMatchObject({ allowModelSharing: true, modelSharingRecipient: 'deepseek-api' })
-      expect((await f.service.status(SCOPE)).allowModelSharing).toBe(false)
-      expect((await f.service.status(SCOPE, accountB)).allowModelSharing).toBe(false)
+      await f.store.update((state) => ({ ...state, grants: [{ scopeId: SCOPE, allowModelSharing: true, grantedAt: 1,
+        recipient: { id: 'deepseek-api', accountBinding: 'old-account-evidence' } }] }))
+      expect(await f.service.status(SCOPE)).toMatchObject({ connected: true, allowModelSharing: false })
+      expect(await f.service.hasGoogleData(SCOPE)).toBe(true)
+      await expect(f.service.read({ messageId: 'msg1' }, SCOPE)).rejects.toMatchObject({ code: 'model_sharing_required' })
+      expect(f.calls).toHaveLength(0)
+      await f.service.setModelSharing(SCOPE, true)
+      expect(await f.service.status(SCOPE)).toMatchObject({ allowModelSharing: true, modelSharingRecipient: 'configured-models' })
+      expect((await f.store.read()).grants[0]).toMatchObject({ modelSharingPolicy: 'configured-models-v1' })
+      expect((await f.store.read()).grants[0].recipient).toBeUndefined()
+      expect(await f.service.read({ messageId: 'msg1' }, SCOPE)).toMatchObject({ id: 'msg1' })
       await f.service.setModelSharing(SCOPE, false)
-      expect((await f.service.status(SCOPE, accountA)).allowModelSharing).toBe(false)
+      expect((await f.service.status(SCOPE)).allowModelSharing).toBe(false)
       expect(await f.service.hasGoogleData(SCOPE)).toBe(true)
     } finally { await f.cleanup() }
   })

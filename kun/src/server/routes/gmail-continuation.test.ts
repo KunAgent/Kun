@@ -94,4 +94,24 @@ describe('Gmail Code connection continuation', () => {
     await expect(continueGmailTask(f.runtime, input)).rejects.toThrow('allow this conversation')
     expect(f.startTurn).not.toHaveBeenCalled()
   })
+
+  it('continues configured model routes without a vendor gate but preserves native desktop boundaries', async () => {
+    const f = await fixture()
+    vi.mocked(f.runtime.gmailDataPolicy!.assertAllowed).mockRejectedValue(new Error('obsolete vendor gate'))
+    expect(await continueGmailTask(f.runtime, input)).toMatchObject({ threadId: 'thread-1' })
+    expect(f.runtime.gmailDataPolicy!.assertAllowed).not.toHaveBeenCalled()
+    for (const surface of ['api', 'im', 'tui'] as const) {
+      const blocked = await fixture()
+      const thread = (await blocked.threads.get('thread-1'))!
+      thread.turns[0].clientSurface = surface
+      await blocked.threads.upsert(thread)
+      await expect(continueGmailTask(blocked.runtime, input)).rejects.toThrow('native Kun desktop')
+      expect(blocked.startTurn).not.toHaveBeenCalled()
+    }
+    const external = await fixture()
+    const thread = (await external.threads.get('thread-1'))!
+    thread.turns[0].harnessId = 'claude-code'
+    await external.threads.upsert(thread)
+    await expect(continueGmailTask(external.runtime, input)).rejects.toThrow('native Kun desktop')
+  })
 })

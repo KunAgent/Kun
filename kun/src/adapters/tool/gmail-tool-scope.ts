@@ -10,6 +10,9 @@ const blockedIds = ['gmail', 'google_gmail', 'mcp:google_gmail', 'native:gmail']
 
 /** Resolve only persisted host identity. Model arguments cannot select an account or scope. */
 export async function gmailToolScope(threads: ThreadStore, context: ToolHostContext): Promise<string> {
+  if ((context.harnessId ?? 'kun') !== 'kun') {
+    throw new GmailError('model_transport_not_allowed', 'Use Gmail inside a native Kun conversation; external Agent SDKs cannot access mail')
+  }
   if (context.clientSurface !== 'gui' || context.imContext) {
     throw new GmailError('gmail_desktop_only', 'Gmail is currently available only from Kun’s desktop conversation')
   }
@@ -19,6 +22,9 @@ export async function gmailToolScope(threads: ThreadStore, context: ToolHostCont
   if (!thread || thread.status === 'archived' || thread.status === 'deleted' ||
       !turn || turn.status !== 'running' || !context.activeToolCallId) {
     throw new GmailError('invalid_context', 'An active Kun conversation and tool call are required')
+  }
+  if ((turn.harnessId ?? thread.harnessId ?? 'kun') !== 'kun') {
+    throw new GmailError('model_transport_not_allowed', 'This conversation belongs to an external Agent SDK')
   }
   const scope = thread.roomContext
   if (thread.turns.some((item) => item.imContext || item.clientSurface === 'im')) {

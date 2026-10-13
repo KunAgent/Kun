@@ -1,9 +1,9 @@
-/** Label for the fixed direct cloud recipient; exact account evidence is required before dispatch. */
+/** Legacy recipient label retained for isolated operator records; it does not gate model selection. */
 export const GOOGLE_WORKSPACE_MODEL_PROVIDER = 'DeepSeek API'
 
 export class GoogleWorkspaceModelPolicyError extends Error {
   readonly code = 'google_data_provider_not_approved'
-  constructor(message = 'Gmail data requires an explicitly consented, verified model account and a fixed direct route without automatic routing or failover.') {
+  constructor(message = 'Enable Gmail sharing for this private conversation before using its email data.') {
     super(message)
     this.name = 'GoogleWorkspaceModelPolicyError'
   }
