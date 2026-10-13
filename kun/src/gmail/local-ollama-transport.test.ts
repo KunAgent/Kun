@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
-import { createDirectLocalOllamaFetch } from './local-ollama-transport.js'
+import { createDirectLocalOllamaFetch, localOllamaIdleTimeoutMs } from './local-ollama-transport.js'
 
 async function listening(server: Server): Promise<string> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -12,6 +12,13 @@ async function closing(server: Server): Promise<void> {
 }
 
 describe('direct private model transport', () => {
+  it('permits silent public-asset preparation without extending inference or other endpoints', () => {
+    expect(localOllamaIdleTimeoutMs('POST', '/api/pull')).toBe(120 * 60_000)
+    for (const [method, path] of [['GET', '/api/pull'], ['POST', '/v1/chat/completions'],
+      ['POST', '/api/show'], ['POST', '/api/pull/']]) {
+      expect(localOllamaIdleTimeoutMs(method, path)).toBe(30 * 60_000)
+    }
+  })
   it('bypasses global fetch and proxies, strips forged Host, and rejects foreign origins or redirects', async () => {
     let receivedHost = ''
     const server = createServer((request, response) => {

@@ -3,6 +3,11 @@ import { createServer } from 'node:net'
 import { Readable } from 'node:stream'
 import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 
+/** Non-streaming asset pulls stay silent while downloading; inference keeps its existing bound. */
+export function localOllamaIdleTimeoutMs(method: string, pathname: string): number {
+  return method === 'POST' && pathname === '/api/pull' ? 120 * 60_000 : 30 * 60_000
+}
+
 /** Binds only loopback; the managed server must subsequently prove ownership of this port. */
 export async function reserveLocalOllamaPort(): Promise<number> {
   const server = createServer()
@@ -59,7 +64,8 @@ export function createDirectLocalOllamaFetch(origin: string, assertCurrent: () =
       source.signal.addEventListener('abort', abort, { once: true })
       request.on('error', () => reject(new Error('The app-owned local model is unavailable')))
       request.on('close', () => source.signal.removeEventListener('abort', abort))
-      request.setTimeout(30 * 60_000, () => request.destroy(new Error('Local model request timed out')))
+      request.setTimeout(localOllamaIdleTimeoutMs(source.method, url.pathname),
+        () => request.destroy(new Error('Local model request timed out')))
       try {
         assertCurrent()
         if (source.body) {
