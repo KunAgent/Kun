@@ -619,7 +619,7 @@
   "ikunMode": "iKun",
   "focusMode": "Focus",
   "focusModeToggleLabel": "Toggle focus mode",
-  "focusModeToggleTitle": "Focus mode: quiet Kun animations",
+  "focusModeToggleTitle": "Focus mode: hide the account card, conversation avatars and Kun animations",
   "switchOn": "On",
   "switchOff": "Off",
   "newChat": "New chat",
