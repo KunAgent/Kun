@@ -4,11 +4,11 @@ Purpose: record the Google OAuth verification video for `gmail.readonly` and
 `gmail.send`. This branch changes no application code. The demo shows the real
 product route, with the model the user configured displayed exactly as it is.
 
-Kun provides no model. The recording user configures one. This recording uses the
-DeepSeek Open Platform API (`https://api.deepseek.com`, model `deepseek-chat`), shown
-in the app exactly as configured. Because this is a cloud model, Gmail content that
-the user asks about is sent to DeepSeek, and the reply to Google must say so (see
-section 7). Do not describe this setup as local or offline anywhere.
+Kun provides no model. The recording user configures one. For the review we use a
+model that runs on the same computer through Ollama, shown in the app exactly as
+configured, so that "application and model both run locally" is literally true.
+Other users may configure other models; Gmail data then follows their choice, which
+the card names and the privacy page discloses.
 
 ## 1. Environment
 
@@ -19,16 +19,26 @@ section 7). Do not describe this setup as local or offline anywhere.
 | Scopes | exactly `https://www.googleapis.com/auth/gmail.readonly` and `https://www.googleapis.com/auth/gmail.send` |
 | Demo mailbox | a Google account added as a test user of the demo project |
 | Recipient mailbox | a second inbox you control, for the sent message |
-| Model | DeepSeek API key saved in Kun's provider settings, model chip shows DeepSeek |
+| Local model | Ollama on `http://127.0.0.1:11434` |
 
-Training controls. The DeepSeek platform offers no account setting that turns off
-use of API data for model improvement, and the API has no per-request flag. There is
-therefore no opt-out to show or to claim. Do not record a settings screen for it and
-do not describe one in the reply to Google.
+Local model choice. The model must support tool calling, because Kun reaches Gmail
+through the `gmail_search`, `gmail_read` and `gmail_send` tools.
+
+```sh
+ollama serve            # leave running
+ollama pull qwen3:4b    # supports tools; about 2.5 GB
+```
+
+A DeepSeek-family model can also run locally (`ollama pull deepseek-r1:8b`), but
+check that `ollama show deepseek-r1:8b` lists tool support before relying on it.
+
+In Kun, add Ollama as a custom provider: Base URL `http://127.0.0.1:11434/v1`, any
+non-empty API key, model id exactly as `ollama list` prints it. Select it for the
+conversation. The Gmail card names this model as the recipient; do not rename it.
 
 ## 2. Dry run (do this before recording)
 
-1. New private Code or Agent conversation with the DeepSeek model selected.
+1. New private Code or Agent conversation with the Ollama model selected.
 2. Ask: "Find the email with the subject Invoice 2041 and summarize it."
 3. Confirm the Gmail card appears, the connect click opens Google, and the task
    resumes after authorization.
@@ -36,8 +46,10 @@ do not describe one in the reply to Google.
 5. Ask for a send, confirm the approval dialog lists From, To, Cc, Bcc, Subject and
    the full body, deny once, then approve once.
 6. Check **Sent** in the demo mailbox and the inbox of the recipient.
-7. Open the model chip and confirm it reads DeepSeek, and that no other provider or
-   failover route is enabled in the provider settings.
+7. Quit Ollama and ask again: the request should fail rather than fall back to any
+   cloud route, which proves no other model is configured.
+8. While a summary runs, `lsof -i -nP | grep -i ollama` should show only
+   `127.0.0.1:11434` connections for the model.
 
 ## 3. Sample emails to seed
 
@@ -82,7 +94,7 @@ Negative checks worth showing briefly:
 
 | Time | Scene |
 |---|---|
-| 0:00 | Say what Kun is: a desktop app on the user's computer; it provides no model; the user configures one. Show the DeepSeek provider settings (Base URL `https://api.deepseek.com`, key hidden) and the model chip. Say plainly that mail content you ask about is sent to this provider. |
+| 0:00 | Say what Kun is: a desktop app on the user's computer; it provides no model; the user configures one. Show the Ollama provider (Base URL `127.0.0.1:11434`) and the model chip. Say that Kun ships no model and that other users may choose other models. |
 | 0:30 | Google Cloud Console > Google Auth Platform > Data Access: the two scopes only. Show the OAuth client ID. Publishing status "In production" for the live project. |
 | 1:00 | Run the first read prompt. Gmail card appears. Click **Connect Google account**. |
 | 1:30 | Browser consent screen, address bar visible, client ID in the URL. Expand until both permissions are fully readable. Pause three seconds. Allow. |
@@ -104,13 +116,10 @@ Negative checks worth showing briefly:
 - The privacy page already carries the Limited Use statement and the model
   disclosure before you reply to Google.
 
-## 7. What to tell Google about DeepSeek
+## 7. What to tell Google
 
-DeepSeek is a third-party AI service with no training opt-out available to us, so
-this route does not meet Google's requirement that Gmail data not reach services
-that train on it. Expect the review to fail on this point if the video and reply
-disclose it accurately. Use a model whose data stays on the user's computer (a local
-Ollama model) or a provider whose API terms exclude training by default, and say
-exactly which one in the reply. Do not claim an opt-out, zero retention, or that the
-data stays on the device for DeepSeek. See `docs/gmail-deepseek-review.md` for the
-source links.
+Say that Kun provides no model, that the demo uses a local Ollama model so Gmail
+data is processed on the user's computer, that the connection card names the model
+that receives the data, and that the privacy page recommends a local model or a
+service whose terms exclude training. Do not say Kun prevents other configurations,
+and do not say the data cannot leave the device for every user.

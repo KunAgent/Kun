@@ -12,7 +12,7 @@
   "gmailConsentTail": "to process the email you ask for. Sending always needs your approval.",
   "gmailLocalCredentials": "Google authorization credentials are encrypted on this device and never provided to models or remote devices. Each conversation is turned on separately.",
   "gmailDataDetails": "How your data is used",
-  "gmailModelDataPolicy": "Email follows your selected models, routing and failover settings. Retention and training policies depend on those providers and account settings; Kun makes no universal guarantee. Gmail authorization credentials are never provided to models.",
+  "gmailModelDataPolicy": "Email follows your selected models, routing and failover settings. Retention and training policies depend on those providers and account settings; Kun makes no universal guarantee. Kun provides no model; we recommend a local model or a service whose terms exclude training on your data. Gmail authorization credentials are never provided to models.",
   "gmailHistoryAndRemoteViewing": "Email-related conversation and operational records may remain on this device. If you enable paired-device access, your authenticated device can view this conversation through your selected connection or tunnel. Gmail credentials are not sent to remote devices.",
   "gmailPrivacy": "Gmail data and privacy",
   "gmailNotConfigured": "Gmail is not configured in this app. Update Kun or contact the administrator.",

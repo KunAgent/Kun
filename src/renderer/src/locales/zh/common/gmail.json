@@ -12,7 +12,7 @@
   "gmailConsentTail": "处理你要求的邮件；发送前都会先请你确认。",
   "gmailLocalCredentials": "Google 授权凭据加密保存在本机，不会交给模型或远程设备。每个对话需要单独开启。",
   "gmailDataDetails": "数据说明",
-  "gmailModelDataPolicy": "邮件会按照你的模型、路由及故障切换设置发送给相应服务商。数据保留及训练政策取决于服务商和账号设置，Kun 不作统一保证。Gmail 授权凭据不会交给模型。",
+  "gmailModelDataPolicy": "邮件会按照你的模型、路由及故障切换设置发送给相应服务商。数据保留及训练政策取决于服务商和账号设置，Kun 不作统一保证。Kun 不提供模型，建议选择本地模型，或条款明确不使用你的数据训练的服务。Gmail 授权凭据不会交给模型。",
   "gmailHistoryAndRemoteViewing": "邮件相关对话和记录可能保存在本机。开启配对设备远程访问后，已认证设备可通过你选择的连接或隧道查看这个对话；Gmail 授权凭据不会发送给远程设备。",
   "gmailPrivacy": "Gmail 数据与隐私说明",
   "gmailNotConfigured": "当前版本未配置 Gmail，请更新 Kun 或联系管理员。",
