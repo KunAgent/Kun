@@ -5,6 +5,7 @@ import type { AttachmentReference } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
 import { formatRuntimeError } from '../../lib/format-runtime-error'
 import { createClientTurnRequestId } from '../../store/chat-store-thread-actions-support'
+import { threadSnapshotLooksRunning } from '../../store/chat-store-runtime-helpers'
 import { groupTurns, stableTurnKey } from '../chat/message-timeline-turns'
 import { ConversationTurn } from '../chat/MessageTimeline'
 import { TimelineFilePreviewWorkspaceProvider } from '../chat/timeline-file-preview-workspace'
@@ -163,8 +164,15 @@ export function WorkerInspector({
   const workspaceRoot = row.activityRow?.workspace.path ?? ''
   const liveReasoning = detail?.liveProjection?.reasoning?.text ?? ''
   const liveAssistant = detail?.liveProjection?.assistant?.text ?? ''
-  const hasLive = Boolean(liveReasoning || liveAssistant)
-  const visibleTurns = turns.length === 0 && hasLive ? [{ blocks: [] }] : turns
+  // Live text only exists while a model call streams; a worker running tools
+  // or waiting on approval is still mid-turn and must keep its process open.
+  const turnRunning = detail
+    ? detail.activeTurn !== undefined
+      ? Boolean(detail.activeTurn)
+      : threadSnapshotLooksRunning(detail.blocks, detail.threadStatus, detail.latestTurnStatus)
+    : false
+  const processing = turnRunning || Boolean(liveReasoning || liveAssistant)
+  const visibleTurns = turns.length === 0 && processing ? [{ blocks: [] }] : turns
 
   return (
     <section className="flex min-h-0 flex-1 flex-col border-t border-ds-border bg-ds-sidebar" data-worker-inspector={workerId}>
@@ -248,9 +256,10 @@ export function WorkerInspector({
                     key={stableTurnKey(turn, index)}
                     turn={turn}
                     threadId={workerId}
-                    isProcessing={index === visibleTurns.length - 1 && hasLive}
+                    isProcessing={index === visibleTurns.length - 1 && processing}
                     liveReasoning={index === visibleTurns.length - 1 ? liveReasoning : ''}
                     live={index === visibleTurns.length - 1 ? liveAssistant : ''}
+                    liveStartedAtMs={index === visibleTurns.length - 1 ? detail.latestTurnStartedAtMs : undefined}
                     filePreviewWorkspaceRoot={workspaceRoot}
                     viewportRef={viewportRef}
                     compactCards

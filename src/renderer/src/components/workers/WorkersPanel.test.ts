@@ -199,6 +199,30 @@ describe('WorkersPanel', () => {
     expect(useChatStore.getState().activeThreadId).toBe(MGR)
   })
 
+  it('keeps a running worker process live between model streams and folds it once settled', async () => {
+    const blocks = [
+      { kind: 'user', id: 'worker-user', turnId: 'worker-turn', text: 'run the checks' },
+      { kind: 'tool', id: 'worker-tool', turnId: 'worker-turn', summary: 'Edited src/foo.ts', status: 'running', toolKind: 'file_change' }
+    ]
+    // No liveProjection: the worker is executing a tool, not streaming text.
+    provider.getThreadDetail.mockResolvedValue({
+      latestSeq: 3, blocks, activeTurn: { id: 'worker-turn', status: 'running', orchestration: 'direct' }
+    })
+    const renderer = await render(createElement(WorkersPanel))
+    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
+    await vi.waitFor(() => expect(renderer.root.findAll((node) => node.props['data-worker-preview-seq'] === 3)).toHaveLength(1))
+    expect(renderer.root.findAll((node) => node.props['data-turn-live-status-owner'])).not.toHaveLength(0)
+    expect(JSON.stringify(renderer.toJSON())).toContain('Edited src/foo.ts')
+
+    provider.getThreadDetail.mockResolvedValue({
+      latestSeq: 4, blocks: [blocks[0], { ...blocks[1], status: 'success' }], activeTurn: null
+    })
+    const refresh = renderer.root.findAll((node) => node.type === 'button' && node.props['aria-label'] === 'Refresh')[0]!
+    await act(async () => refresh.props.onClick())
+    await vi.waitFor(() => expect(renderer.root.findAll((node) => node.props['data-worker-preview-seq'] === 4)).toHaveLength(1))
+    expect(renderer.root.findAll((node) => node.props['data-turn-live-status-owner'])).toHaveLength(0)
+  })
+
   it('keeps a separate draft for each worker without changing the main thread', async () => {
     const renderer = await render(createElement(WorkersPanel))
     await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
