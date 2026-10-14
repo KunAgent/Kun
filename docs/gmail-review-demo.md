@@ -21,10 +21,10 @@ section 7). Do not describe this setup as local or offline anywhere.
 | Recipient mailbox | a second inbox you control, for the sent message |
 | Model | DeepSeek API key saved in Kun's provider settings, model chip shows DeepSeek |
 
-DeepSeek account setting: in the DeepSeek platform data settings, turn off the
-option that lets your data be used to improve models, and keep a screenshot of it
-dated before the recording. This is an account-level setting, not a request
-parameter.
+Training controls. The DeepSeek platform offers no account setting that turns off
+use of API data for model improvement, and the API has no per-request flag. There is
+therefore no opt-out to show or to claim. Do not record a settings screen for it and
+do not describe one in the reply to Google.
 
 ## 2. Dry run (do this before recording)
 
@@ -106,9 +106,11 @@ Negative checks worth showing briefly:
 
 ## 7. What to tell Google about DeepSeek
 
-The reply must list DeepSeek as the third-party AI service, state the plan
-(DeepSeek Open Platform API, pay-as-you-go), and say that the account's data
-improvement setting is off. Do not claim zero retention: DeepSeek's automatic
-context caching is on by default and the API has no documented training opt-out
-parameter. Do not claim the data stays on the device. See
-`docs/gmail-deepseek-review.md` for the source links.
+DeepSeek is a third-party AI service with no training opt-out available to us, so
+this route does not meet Google's requirement that Gmail data not reach services
+that train on it. Expect the review to fail on this point if the video and reply
+disclose it accurately. Use a model whose data stays on the user's computer (a local
+Ollama model) or a provider whose API terms exclude training by default, and say
+exactly which one in the reply. Do not claim an opt-out, zero retention, or that the
+data stays on the device for DeepSeek. See `docs/gmail-deepseek-review.md` for the
+source links.
