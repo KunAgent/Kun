@@ -1,4 +1,5 @@
 import { appendFile, mkdir, readFile, stat } from 'node:fs/promises'
+import { bindItemHistoryVersion, advanceItemHistoryVersion } from './file-session-history-version.js'
 import type { FileSessionStoreOptions } from './file-session-store-options.js'
 import { readLatestContextSnapshot } from './file-session-context-snapshot.js'
 import { performance } from 'node:perf_hooks'
@@ -78,6 +79,7 @@ const EVENT_HISTORY_REVISION_MAX_THREADS = 512
  * canonical small session snapshot.
  */
 export class FileSessionStore implements SessionStore {
+  readonly itemHistoryVersion = bindItemHistoryVersion((id) => this.messagesPath(id))
   private readonly dataDir: string
   private readonly usageEventCompaction: {
     maxBytes: number
@@ -276,6 +278,7 @@ export class FileSessionStore implements SessionStore {
     const path = this.messagesPath(threadId)
     await this.withThreadWrite(threadId, () => this.fileAccess.withReplacement(path, async () => {
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
+      await advanceItemHistoryVersion(path)
       await atomicWriteFile(path, serializeItemRecords(items))
       await this.liveItems.reconcileAfterRewrite(this.liveItemsPath(threadId), threadId, items)
       await this.refreshItemIndex(threadId, items)
@@ -314,6 +317,7 @@ export class FileSessionStore implements SessionStore {
         return { applied: false, reason: 'conflict', revision }
       }
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
+      await advanceItemHistoryVersion(path)
       await atomicWriteFile(path, serializeItemRecords(items))
       await this.liveItems.reconcileAfterRewrite(this.liveItemsPath(threadId), threadId, items)
       await this.refreshItemIndex(threadId, items)

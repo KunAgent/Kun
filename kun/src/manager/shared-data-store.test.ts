@@ -145,6 +145,9 @@ describe('manager shared data store', () => {
     expect(finalized.items).toMatchObject([
       { id: running.id, text: 'streaming complete', status: 'completed' }
     ])
+    const version = await store.executeSession('itemHistoryVersion', { threadId })
+    await store.executeSession('rewriteItems', { threadId, items: [] })
+    expect(await store.executeSession('itemHistoryVersion', { threadId })).not.toBe(version)
     await store.close()
   })
 

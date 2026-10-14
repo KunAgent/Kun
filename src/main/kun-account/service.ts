@@ -5,6 +5,8 @@ import type { AccountStorage } from './storage'
 import type { AccountCallback } from './callback'
 import { AccountError, accountErrorCode } from './errors'
 import { KUN_ACCOUNT_ISSUER, KUN_ACCOUNT_REDIRECT } from './config'
+import type { AccountSessionEnding } from '../art-assets/account-access'
+import { notifySessionEnding } from './session-ending'
 
 export type AccountDependencies = {
   clientId: string
@@ -13,6 +15,7 @@ export type AccountDependencies = {
   listen(state: string, signal: AbortSignal): Promise<AccountCallback>
   openBrowser(url: string): Promise<void>
   changed(state: KunAccountState): void
+  sessionEnding?(session: AccountSessionEnding): Promise<void>
   focus(): void
   now?: () => number
 }
@@ -41,6 +44,12 @@ export class KunAccountService {
     return this.state
   }
   private active(epoch: number): void { if (this.disposed || epoch !== this.generation) throw new AccountError('cancelled') }
+  private async endSession(): Promise<void> {
+    // Listeners fence access synchronously and may use the old token for cleanup.
+    await notifySessionEnding(this.deps.sessionEnding, {
+      userId: this.state.user?.id ?? null, accessToken: this.tokens?.accessToken ?? null
+    })
+  }
   private serialize(operation: () => Promise<void>): Promise<void> {
     const result = this.persistence.catch(() => {}).then(operation)
     this.persistence = result.catch(() => {})
@@ -68,7 +77,9 @@ export class KunAccountService {
     if (epoch !== this.generation || this.disposed) return this.state
     const code = accountErrorCode(error)
     if (code === 'expired') {
-      this.generation++
+      const endingEpoch = ++this.generation
+      await this.endSession()
+      if (endingEpoch !== this.generation || this.disposed) return this.state
       this.tokens = null
       clearTimeout(this.timer)
       await this.serialize(() => this.deps.storage.clear()).catch(() => {})
@@ -131,7 +142,7 @@ export class KunAccountService {
   /** A valid access token for Kunserve APIs, or null when signed out; `force` rotates it first. */
   async accessToken(force = false): Promise<string | null> {
     await this.getState()
-    if (this.pending || !this.tokens || this.disposed) return null
+    if (this.pending || this.signingOut || !this.tokens || this.disposed) return null
     const epoch = this.generation
     try { return (await this.validTokens(force, epoch))?.accessToken ?? null }
     catch (error) { await this.failure(error, epoch); throw error }
@@ -149,9 +160,12 @@ export class KunAccountService {
     const controller = new AbortController()
     this.pending = controller
     this.authorizationUrl = undefined
+    const ending = this.endSession()
     this.publish('authorizing', null)
     let callback: AccountCallback | undefined
     try {
+      await ending
+      this.active(epoch)
       if (!this.deps.clientId) throw new AccountError('configuration')
       await this.deps.storage.assertAvailable()
       this.active(epoch)
@@ -222,6 +236,8 @@ export class KunAccountService {
       clearTimeout(this.timer)
       try {
         const accessToken = this.tokens?.accessToken
+        this.active(epoch)
+        await this.endSession()
         this.active(epoch)
         await this.serialize(() => this.deps.storage.clear())
         this.tokens = null

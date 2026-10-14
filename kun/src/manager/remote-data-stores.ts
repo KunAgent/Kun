@@ -199,6 +199,9 @@ export function createManagerRemoteStores(manager: ServiceManagerConnection): {
 }
 
 export class ManagerRemoteSessionStore implements SessionStore {
+  async itemHistoryVersion(threadId: string): Promise<string> {
+    return z.string().parse(await this.call('itemHistoryVersion', { threadId }))
+  }
   /** Used by the HTTP SSE route to bridge events emitted by the other flavor. */
   readonly isManagerBacked = true
 

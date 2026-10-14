@@ -1,3 +1,4 @@
+import { MobileLinkPanel } from './MobileLinkPanel'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
   Check,
@@ -235,6 +236,7 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
       className={`flex min-h-0 flex-col overflow-y-auto bg-ds-sidebar ${className}`}
       aria-label={t('rightPanelRemote')}
     >
+      <MobileLinkPanel />
       <header className="flex items-center gap-2.5 border-b border-ds-border-muted px-4 py-3">
         <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent/10 text-accent">
           <Radio size={15} aria-hidden="true" />

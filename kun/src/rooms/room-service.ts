@@ -155,7 +155,7 @@ export class RoomService {
     return saved.result as typeof result
   }
 
-  async send(id: string, input: unknown, internal?: { ruleAdoption?: import('../contracts/rooms-product.js').RoomRule; clientSurface?: 'im'; imConnectionId?: string }): Promise<{ message: RoomMessage; requestId: string }> {
+  async send(id: string, input: unknown, internal?: { ruleAdoption?: import('../contracts/rooms-product.js').RoomRule; clientSurface?: 'im' | 'api'; imConnectionId?: string; remoteDeviceId?: string }): Promise<{ message: RoomMessage; requestId: string }> {
     const body = SendRoomMessageSchema.parse(input)
     // Sharing a card alone supplies reference data, not an implementation goal.
     if (!body.body.trim() && body.references?.length && body.executionIntent === 'auto') body.executionIntent = 'discussion'
@@ -214,7 +214,7 @@ export class RoomService {
           taskParticipants,
           ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
           ...(internal?.ruleAdoption ? { ruleAdoption: internal.ruleAdoption } : {}),
-          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId } : {})
+          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId, remoteDeviceId: internal.remoteDeviceId } : {})
         }
       : {
           taskParticipants, id: requestId, roomId: id, status: 'pending',
@@ -224,7 +224,7 @@ export class RoomService {
           ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
           roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
           threadId: 'room-discussion-' + roomId(), ...(internal?.ruleAdoption ? { ruleAdoption: internal.ruleAdoption } : {}),
-          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId } : {}) }
+          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId, remoteDeviceId: internal.remoteDeviceId } : {}) }
     const result = { message, requestId: request.id }
     const commit: RoomStoreCommit = { requestId: key, fingerprint: roomFingerprint(identity),
       checks: [{ kind: 'room', id, expectedRevision: room.revision },

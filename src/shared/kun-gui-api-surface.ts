@@ -349,6 +349,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   openGatewayMiddlewareFolder: () => Promise<{ ok: boolean; message?: string }>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
+  mobileLink?: import('./mobile-link').MobileLinkApi
   remoteAccessGetStatus: () => Promise<RemoteAccessStatus>
   remoteAccessSetConfig: (patch: RemoteAccessConfigPatch) => Promise<RemoteAccessStatus>
   remoteAccessSetPassword: (password: string) => Promise<RemoteAccessStatus>

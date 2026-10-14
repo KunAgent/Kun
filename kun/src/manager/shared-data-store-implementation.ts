@@ -509,6 +509,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         await this.sessionStore.rewriteItems(body.threadId, body.items)
         return null
       }
+      case 'itemHistoryVersion': {
+        const { threadId } = parseThreadId(value)
+        return this.sessionStore.itemHistoryVersion?.(threadId) ?? 'legacy'
+      }
       case 'loadItemSnapshot': {
         const { threadId } = parseThreadId(value)
         return this.sessionStore.loadItemSnapshot(threadId)

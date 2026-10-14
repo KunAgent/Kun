@@ -1,3 +1,4 @@
+import { mobileLink } from './mobile-link'
 import { kunArtApi } from './kun-art'
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { KunGuiApi } from '../shared/kun-gui-api'
@@ -41,6 +42,7 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 )
 
 const api = {
+  mobileLink,
   kunAccount: kunAccountApi,
   kunArt: kunArtApi,
   platform: process.platform,

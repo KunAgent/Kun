@@ -20,7 +20,7 @@ function fixture(kind: 'cli' | 'code-assist') {
     retry: { maxAttempts: 0 }, oauthSource: new GeminiCliOAuthSource({ fetchImpl,
       loadCredential: async () => ({ accessToken: 'fixture-access', expiresAt: Date.now() + 3_600_000 }) }) })
     : new GeminiCodeAssistModelClient({ model: 'gemini-2.5-flash', fetchImpl,
-      auth: { kind: 'gemini-oauth', accessToken: 'fixture-access', expiresAt: Date.now() + 3_600_000, projectId: 'fixture-project' } })
+      auth: { kind: 'gemini-oauth', accessToken: 'fixture-access', refreshToken: 'fixture-refresh', expiresAt: Date.now() + 3_600_000, projectId: 'fixture-project' } })
   const request: ModelRequest = { threadId: 'private-mail', turnId: 'turn', model: 'gemini-2.5-flash',
     prefix: [], history: [], tools: [], abortSignal: new AbortController().signal,
     googleWorkspaceData: { assertCurrent: () => { if (!sharing) throw new Error('Mail sharing revoked') } } }

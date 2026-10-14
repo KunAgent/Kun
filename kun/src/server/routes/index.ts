@@ -1,3 +1,4 @@
+import { registerRemoteRoutes } from '../../remote/routes.js'
 import { Router } from '../router.js'
 import { ApprovalConsentVerifier } from '../approval-consent.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -40,5 +41,6 @@ export function buildRouter(runtime: ServerRuntime): Router {
   registerWorkbenchDirectoryRoutes(router, runtime)
   registerHistoryReferenceRoutes(router, runtime)
   registerThreadRoutes(router, runtime, approvalConsent)
+  registerRemoteRoutes(router, runtime)
   return router
 }

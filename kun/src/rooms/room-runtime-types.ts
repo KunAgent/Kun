@@ -49,7 +49,8 @@ export type RoomRequestState = {
   peerCoordinationDone?: boolean
   status: 'pending' | 'running' | 'completed' | 'needs_input' | 'failed' | 'stopping' | 'cancelled' | 'recovery_required'
   message: SendRoomMessage
-  clientSurface?: 'gui' | 'im'
+  clientSurface?: 'gui' | 'im' | 'api'
+  remoteDeviceId?: string
   imConnectionId?: string
   sourceMessageId: string
   roomSnapshot: Room

@@ -110,7 +110,8 @@
     "yaml": "^2.9.0",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.1.2.tgz"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

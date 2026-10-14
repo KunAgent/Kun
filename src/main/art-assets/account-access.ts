@@ -1,9 +1,15 @@
 import type { KunAccountState } from '../../shared/kun-account'
+/** Main-process-only lifecycle snapshot. Credentials never cross IPC. */
+export type AccountSessionEnding = {
+  userId: string | null
+  accessToken: string | null
+}
 export type ArtAccountAccess = {
   getState(): Promise<KunAccountState>
   accessToken(force?: boolean): Promise<string | null>
   expire(): Promise<void>
   onState(listener: (state: KunAccountState) => void): () => void
+  onSessionEnding?(listener: (session: AccountSessionEnding) => Promise<void>): () => void
 }
 /** Tokens stay in main and are only attached to the fixed Kunserve origin. */
 export function authenticatedArtFetch(account: ArtAccountAccess, fetcher: typeof fetch, current: () => boolean): typeof fetch {

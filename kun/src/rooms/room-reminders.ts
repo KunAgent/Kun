@@ -56,7 +56,7 @@ export async function createRoomReminder(store: RoomStore, input: RoomReminderOp
   anchorMessageId?: string
   chainDepth: number
   createdByRunId: string
-  clientSurface?: 'gui' | 'im'
+  clientSurface?: 'gui' | 'im' | 'api'
   imConnectionId?: string
 }): Promise<RoomReminderEntry> {
   const receipt = interactionId('reminder-create', input.roomId, input.clientRequestId)

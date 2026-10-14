@@ -27,6 +27,10 @@ import {
  * - the canonical session projection (used to rehydrate on restart)
  */
 export class InMemorySessionStore implements SessionStore {
+  private historyGenerations = new Map<string, number>()
+  async itemHistoryVersion(threadId: string): Promise<string> {
+    return String(this.historyGenerations.get(threadId) ?? 0)
+  }
   private readonly events = new Map<string, RuntimeEvent[]>()
   private readonly cursorCheckpoints = new Map<string, number>()
   private readonly items = new Map<string, TurnItem[]>()
@@ -90,6 +94,7 @@ export class InMemorySessionStore implements SessionStore {
 
   async rewriteItems(threadId: string, items: TurnItem[]): Promise<void> {
     serializeItemRecords(items)
+    this.historyGenerations.set(threadId, (this.historyGenerations.get(threadId) ?? 0) + 1)
     const nextItems = [...items]
     this.items.set(threadId, nextItems)
     this.reconcileLiveItems(threadId, nextItems)
@@ -125,6 +130,7 @@ export class InMemorySessionStore implements SessionStore {
       return { applied: false, reason: 'conflict', revision }
     }
     serializeItemRecords(items)
+    this.historyGenerations.set(threadId, (this.historyGenerations.get(threadId) ?? 0) + 1)
     const nextItems = [...items]
     this.items.set(threadId, nextItems)
     this.reconcileLiveItems(threadId, nextItems)

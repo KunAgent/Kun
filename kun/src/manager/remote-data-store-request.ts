@@ -55,7 +55,7 @@ export function resolveManagerDataRequestTimeoutMs(
 export function isManagerStoreRead(store: ManagerStore, operation: string): boolean {
   const reads: Record<ManagerStore, readonly string[]> = {
     thread: ['list', 'listPage', 'get', 'getMetadata', 'hasHistoryReference'],
-    session: ['loadItemSnapshot', 'loadEventsSince', 'loadEventPage', 'eventReplayFloorSeq',
+    session: ['itemHistoryVersion', 'loadItemSnapshot', 'loadEventsSince', 'loadEventPage', 'eventReplayFloorSeq',
       'loadItems', 'searchItemText', 'loadItemPage', 'loadSession', 'highestSeq',
       'loadUsageRecords', 'aggregateUsage', 'loadLatestContextSnapshot', 'loadLatestUsageSnapshots'],
     artifact: ['list', 'get', 'readRange', 'stat'],

@@ -157,6 +157,8 @@ export type ItemTextSearchOptions = {
  * JSONL and keep a small in-memory window for fast access.
  */
 export interface SessionStore {
+  /** Stable across appends; changes when canonical history is replaced or deleted. */
+  itemHistoryVersion?(threadId: string): Promise<string>
   /**
    * Atomically reserve the next durable event sequence number.
    *
