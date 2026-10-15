@@ -46,5 +46,19 @@
   "remoteAccessTailscaleHint": "LAN 외부에서 Kun에 접근하려면 이 호스트의 Tailscale 설정을 확인하세요.",
   "remoteAccessTailscaleFound": "Tailscale 연결됨 — 같은 tailnet의 기기가 이 주소로 접근할 수 있습니다.",
   "remoteAccessTailscaleInstalled": "Tailscale이 설치되어 있지만 연결되어 있지 않습니다. 연결 후 다시 감지하세요.",
-  "remoteAccessTailscaleMissing": "이 호스트에서 Tailscale이 감지되지 않았습니다."
+  "remoteAccessTailscaleMissing": "이 호스트에서 Tailscale이 감지되지 않았습니다.",
+  "remoteAccessChannels": "접속 방식",
+  "remoteAccessBrowserChannel": "브라우저 · LAN",
+  "remoteAccessBrowserOff": "꺼짐 · 켜면 같은 네트워크의 브라우저에서 열 수 있습니다",
+  "remoteAccessOtherUrls": "다른 주소 ({{n}})",
+  "remoteAccessCopy": "복사",
+  "remoteAccessCopied": "복사됨",
+  "remoteAccessDevicesSection": "연결된 기기",
+  "remoteAccessNoDevices": "연결된 기기가 없습니다",
+  "remoteAccessSettingsSection": "설정",
+  "remoteAccessBrowserClient": "브라우저",
+  "remoteAccessTailscaleShortIdle": "확인 안 함",
+  "remoteAccessTailscaleShortConnected": "Tailscale 연결됨",
+  "remoteAccessTailscaleShortInstalled": "설치됨, 연결 안 됨",
+  "remoteAccessTailscaleShortMissing": "이 호스트에서 찾을 수 없음"
 }

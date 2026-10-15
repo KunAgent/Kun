@@ -46,5 +46,19 @@
   "remoteAccessTailscaleHint": "Проверьте, настроен ли на этом хосте Tailscale для доступа к Kun вне LAN.",
   "remoteAccessTailscaleFound": "Tailscale подключён — устройства в вашем tailnet могут использовать этот адрес.",
   "remoteAccessTailscaleInstalled": "Tailscale установлен, но не подключён. Подключитесь и повторите проверку.",
-  "remoteAccessTailscaleMissing": "Tailscale на этом хосте не обнаружен."
+  "remoteAccessTailscaleMissing": "Tailscale на этом хосте не обнаружен.",
+  "remoteAccessChannels": "Способы доступа",
+  "remoteAccessBrowserChannel": "Браузер · LAN",
+  "remoteAccessBrowserOff": "Выключено · после включения браузеры в вашей сети смогут открыть Kun",
+  "remoteAccessOtherUrls": "Другие адреса ({{n}})",
+  "remoteAccessCopy": "Копировать",
+  "remoteAccessCopied": "Скопировано",
+  "remoteAccessDevicesSection": "Подключённые устройства",
+  "remoteAccessNoDevices": "Нет подключённых устройств",
+  "remoteAccessSettingsSection": "Настройки",
+  "remoteAccessBrowserClient": "Браузер",
+  "remoteAccessTailscaleShortIdle": "Не проверено",
+  "remoteAccessTailscaleShortConnected": "Tailscale подключён",
+  "remoteAccessTailscaleShortInstalled": "Установлен, не подключён",
+  "remoteAccessTailscaleShortMissing": "Не найден на этом компьютере"
 }

@@ -46,5 +46,19 @@
   "remoteAccessTailscaleHint": "LAN से बाहर Kun तक पहुँचने के लिए इस होस्ट पर Tailscale जाँचें।",
   "remoteAccessTailscaleFound": "Tailscale जुड़ा है — आपके tailnet के डिवाइस इस पते का उपयोग कर सकते हैं।",
   "remoteAccessTailscaleInstalled": "Tailscale इंस्टॉल है पर कनेक्ट नहीं है। कनेक्ट करके दोबारा जाँचें।",
-  "remoteAccessTailscaleMissing": "इस होस्ट पर Tailscale नहीं मिला।"
+  "remoteAccessTailscaleMissing": "इस होस्ट पर Tailscale नहीं मिला।",
+  "remoteAccessChannels": "एक्सेस के तरीके",
+  "remoteAccessBrowserChannel": "ब्राउज़र · LAN",
+  "remoteAccessBrowserOff": "बंद · चालू करने पर आपके नेटवर्क के ब्राउज़र Kun खोल सकते हैं",
+  "remoteAccessOtherUrls": "अन्य पते ({{n}})",
+  "remoteAccessCopy": "कॉपी करें",
+  "remoteAccessCopied": "कॉपी हो गया",
+  "remoteAccessDevicesSection": "कनेक्टेड डिवाइस",
+  "remoteAccessNoDevices": "कोई कनेक्टेड डिवाइस नहीं",
+  "remoteAccessSettingsSection": "सेटिंग्स",
+  "remoteAccessBrowserClient": "ब्राउज़र",
+  "remoteAccessTailscaleShortIdle": "जाँचा नहीं गया",
+  "remoteAccessTailscaleShortConnected": "Tailscale कनेक्टेड है",
+  "remoteAccessTailscaleShortInstalled": "इंस्टॉल है, कनेक्टेड नहीं",
+  "remoteAccessTailscaleShortMissing": "इस होस्ट पर नहीं मिला"
 }

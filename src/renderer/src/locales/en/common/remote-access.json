@@ -46,5 +46,19 @@
   "remoteAccessTailscaleHint": "Check whether Tailscale is set up on this host to reach Kun from outside your LAN.",
   "remoteAccessTailscaleFound": "Tailscale is connected — devices on your tailnet can use this address.",
   "remoteAccessTailscaleInstalled": "Tailscale is installed but not connected. Open Tailscale and connect, then detect again.",
-  "remoteAccessTailscaleMissing": "Tailscale was not detected on this host."
+  "remoteAccessTailscaleMissing": "Tailscale was not detected on this host.",
+  "remoteAccessChannels": "Access methods",
+  "remoteAccessBrowserChannel": "Browser · LAN",
+  "remoteAccessBrowserOff": "Off · browsers on your network can open Kun once on",
+  "remoteAccessOtherUrls": "Other addresses ({{n}})",
+  "remoteAccessCopy": "Copy",
+  "remoteAccessCopied": "Copied",
+  "remoteAccessDevicesSection": "Connected devices",
+  "remoteAccessNoDevices": "No connected devices",
+  "remoteAccessSettingsSection": "Settings",
+  "remoteAccessBrowserClient": "Browser",
+  "remoteAccessTailscaleShortIdle": "Not checked",
+  "remoteAccessTailscaleShortConnected": "Tailscale connected",
+  "remoteAccessTailscaleShortInstalled": "Installed, not connected",
+  "remoteAccessTailscaleShortMissing": "Not found on this host"
 }

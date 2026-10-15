@@ -46,5 +46,19 @@
   "remoteAccessTailscaleHint": "ตรวจสอบว่าโฮสต์นี้ตั้งค่า Tailscale ไว้เพื่อเข้าถึง Kun จากภายนอก LAN",
   "remoteAccessTailscaleFound": "Tailscale เชื่อมต่อแล้ว — อุปกรณ์ใน tailnet เดียวกันใช้ที่อยู่นี้ได้",
   "remoteAccessTailscaleInstalled": "ติดตั้ง Tailscale แล้วแต่ยังไม่ได้เชื่อมต่อ เชื่อมต่อแล้วตรวจอีกครั้ง",
-  "remoteAccessTailscaleMissing": "ไม่พบ Tailscale บนโฮสต์นี้"
+  "remoteAccessTailscaleMissing": "ไม่พบ Tailscale บนโฮสต์นี้",
+  "remoteAccessChannels": "วิธีเข้าถึง",
+  "remoteAccessBrowserChannel": "เบราว์เซอร์ · LAN",
+  "remoteAccessBrowserOff": "ปิดอยู่ · เมื่อเปิด เบราว์เซอร์ในเครือข่ายของคุณจะเปิด Kun ได้",
+  "remoteAccessOtherUrls": "ที่อยู่อื่น ({{n}})",
+  "remoteAccessCopy": "คัดลอก",
+  "remoteAccessCopied": "คัดลอกแล้ว",
+  "remoteAccessDevicesSection": "อุปกรณ์ที่เชื่อมต่อ",
+  "remoteAccessNoDevices": "ไม่มีอุปกรณ์ที่เชื่อมต่อ",
+  "remoteAccessSettingsSection": "การตั้งค่า",
+  "remoteAccessBrowserClient": "เบราว์เซอร์",
+  "remoteAccessTailscaleShortIdle": "ยังไม่ได้ตรวจ",
+  "remoteAccessTailscaleShortConnected": "Tailscale เชื่อมต่อแล้ว",
+  "remoteAccessTailscaleShortInstalled": "ติดตั้งแล้ว แต่ยังไม่เชื่อมต่อ",
+  "remoteAccessTailscaleShortMissing": "ไม่พบในเครื่องนี้"
 }
