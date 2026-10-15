@@ -39,6 +39,7 @@ export function applyPortableSettingsMigration(
       : {}),
     ...(typeof value.cursorSpotlight === 'boolean' ? { cursorSpotlight: value.cursorSpotlight } : {}),
     ...(typeof value.cursorSpotlightColor === 'string' ? { cursorSpotlightColor: value.cursorSpotlightColor } : {}),
+    ...(typeof value.homeGlyphRipple === 'boolean' ? { homeGlyphRipple: value.homeGlyphRipple } : {}),
     ...(value.colorPalette && typeof value.colorPalette === 'object'
       ? { colorPalette: value.colorPalette as AppSettingsV1['colorPalette'] }
       : {}),

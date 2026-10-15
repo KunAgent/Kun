@@ -43,6 +43,9 @@ import { trajectoryUiState, useTrajectoryUiStore } from '../../store/trajectory-
 import { useTrajectoryData } from '../trajectory/useTrajectoryData'
 import { TrajectoryView } from '../trajectory/TrajectoryView'
 import { CodeHomeQuickStart } from '../chat/CodeHomeQuickStart'
+import { HomeGlyphRipple } from '../chat/HomeGlyphRipple'
+import { useComposerDockHandoff } from './use-composer-dock-handoff'
+import { prefetchSharedDefaultModelSelection } from '../../agent/kun-runtime-shared-default'
 
 const CodeTour = lazy(() =>
   import('../code-tour/CodeTour').then((module) => ({ default: module.CodeTour }))
@@ -225,6 +228,14 @@ export function WorkbenchChatStage({
     runtimeReady: runtimeConnection === 'ready',
     hasWorkspace: Boolean(effectiveConversationDropWorkspaceRoot)
   })
+  useComposerDockHandoff(composerDockRef, emptyTaskLayout)
+  // Warm the new-thread model defaults while a first message is being typed,
+  // so Enter does not wait on that runtime read before creating the task.
+  const homeDraftStarted = emptyTaskLayout && !activeThreadId && composerProps.input.trim().length > 0
+  const homeDraftLength = homeDraftStarted ? composerProps.input.length : 0
+  useEffect(() => {
+    if (homeDraftLength > 0 && runtimeConnection === 'ready') prefetchSharedDefaultModelSelection()
+  }, [homeDraftLength, runtimeConnection])
   const conversationFileDropOptions = {
     canPickAttachment:
       canComposeForConversationDrop &&
@@ -339,6 +350,12 @@ export function WorkbenchChatStage({
               : ''
           }`}
         >
+          {onOpenThread ? (
+            <HomeGlyphRipple
+              hostRef={mainStackRef}
+              active={emptyTaskLayout && !focusModeEnabled && !trajectoryOpen}
+            />
+          ) : null}
           <ChatFindBar activeThreadId={activeThreadId} blocks={blocks} />
           <ConversationFileDropZone
             className={`${trajectoryOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}

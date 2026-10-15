@@ -207,6 +207,16 @@ export function AppearanceSettingsSection({ ctx }: { ctx: Record<string, any> })
             />
           </div>
         </SettingsReveal>
+        <SettingRow
+          title={t('homeGlyphRipple')}
+          description={t('homeGlyphRippleDesc')}
+          control={
+            <Toggle
+              checked={form.homeGlyphRipple !== false}
+              onChange={(enabled) => update({ homeGlyphRipple: enabled })}
+            />
+          }
+        />
       </SettingsCard>
 
     </>

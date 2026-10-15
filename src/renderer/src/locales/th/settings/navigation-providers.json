@@ -310,6 +310,8 @@
   "cursorSpotlightColorReset": "ค่าเริ่มต้น",
   "cursorSpotlightColorShade": "เฉดสีเอฟเฟกต์การโต้ตอบ {{index}}",
   "cursorSpotlightColorTone": "แถบโทนเอฟเฟกต์การโต้ตอบ",
+  "homeGlyphRipple": "ระลอกคลื่นเมื่อคลิกหน้าแรก",
+  "homeGlyphRippleDesc": "แสดงพื้นหลังตัวอักษรจาง ๆ บนหน้าแรกงานใหม่ของ Code คลิกพื้นที่ว่างเพื่อให้เกิดระลอกคลื่น",
   "darkUiColorsTitle": "สีอินเทอร์เฟซโหมดมืด",
   "darkUiColorsBackground": "พื้นหลัง",
   "darkUiColorsBackgroundDesc": "สีพื้นฐานสำหรับแอป แถบด้านข้าง แคนวาส และพื้นผิวโปร่งใส",

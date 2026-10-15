@@ -310,6 +310,8 @@
   "cursorSpotlightColorReset": "По умолчанию",
   "cursorSpotlightColorShade": "Оттенок эффекта {{index}}",
   "cursorSpotlightColorTone": "Ползунок оттенка эффекта",
+  "homeGlyphRipple": "Волны по клику на главной",
+  "homeGlyphRippleDesc": "Бледное поле символов на главной Code: клик по пустому месту запускает волну.",
   "darkUiColorsTitle": "Цвета тёмного интерфейса",
   "darkUiColorsBackground": "Фон",
   "darkUiColorsBackgroundDesc": "Основной цвет приложения, боковой панели, холста и прозрачных поверхностей.",

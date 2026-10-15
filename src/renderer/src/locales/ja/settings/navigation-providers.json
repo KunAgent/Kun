@@ -310,6 +310,8 @@
   "cursorSpotlightColorReset": "デフォルト",
   "cursorSpotlightColorShade": "インタラクション エフェクト シェード {{index}}",
   "cursorSpotlightColorTone": "インタラクションエフェクトトーンバー",
+  "homeGlyphRipple": "ホームのクリック波紋",
+  "homeGlyphRippleDesc": "Code の新規タスク画面に淡い文字の背景を敷き、空白をクリックすると波紋が広がります。",
   "darkUiColorsTitle": "ダークインターフェースの色",
   "darkUiColorsBackground": "背景",
   "darkUiColorsBackgroundDesc": "アプリ、サイドバー、キャンバス、ゴーストサーフェスの基本色です。",

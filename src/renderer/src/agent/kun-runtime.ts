@@ -25,7 +25,6 @@ import {
   KUN_MEMORY_DIAGNOSTICS_PATH,
   KUN_MEMORY_PATH,
   KUN_MCP_OAUTH_PATH,
-  KUN_MODEL_CONNECTIONS_PATH,
   KUN_RUNTIME_INFO_PATH,
   KUN_RUNTIME_TOOLS_PATH,
   KUN_SKILLS_PATH,
@@ -97,6 +96,7 @@ import {
   threadFromCore
 } from './kun-mapper'
 import { rendererRuntimeClient } from './runtime-client'
+import { sharedDefaultModelSelection } from './kun-runtime-shared-default'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { KunRuntimeThreadServices } from './kun-runtime-thread-services'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
@@ -120,62 +120,6 @@ function normalizeApprovalPolicy(value: string | undefined): NormalizedThread['a
       return value
     default:
       return undefined
-  }
-}
-
-async function sharedDefaultModelSelection(): Promise<{
-  registryAvailable: boolean
-  providerId?: string
-  accountId?: string
-  model?: string
-  providers?: Array<{
-    id: string
-    accountId?: string
-    configured: boolean
-    models: string[]
-  }>
-}> {
-  const response = await rendererRuntimeClient.runtimeRequest(KUN_MODEL_CONNECTIONS_PATH, 'GET')
-  if (!response.ok) return { registryAvailable: false }
-  try {
-    const value = JSON.parse(response.body) as {
-      defaultProviderId?: unknown
-      defaultAccountId?: unknown
-      defaultModel?: unknown
-      providers?: unknown
-    }
-    return {
-      registryAvailable: true,
-      ...(typeof value.defaultProviderId === 'string' && value.defaultProviderId.trim()
-        ? { providerId: value.defaultProviderId.trim() }
-        : {}),
-      ...(typeof value.defaultAccountId === 'string' && value.defaultAccountId.trim()
-        ? { accountId: value.defaultAccountId.trim() }
-        : {}),
-      ...(typeof value.defaultModel === 'string' && value.defaultModel.trim()
-        ? { model: value.defaultModel.trim() }
-        : {}),
-      providers: Array.isArray(value.providers)
-        ? value.providers.flatMap((entry) => {
-            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
-            const profile = entry as Record<string, unknown>
-            if (typeof profile.id !== 'string' || !profile.id.trim()) return []
-            return [{
-              id: profile.id.trim(),
-              ...(typeof profile.accountId === 'string' && profile.accountId.trim()
-                ? { accountId: profile.accountId.trim() }
-                : {}),
-              configured: profile.configured === true,
-              models: Array.isArray(profile.models)
-                ? profile.models.filter((model): model is string =>
-                    typeof model === 'string' && Boolean(model.trim()))
-                : []
-            }]
-          })
-        : []
-    }
-  } catch {
-    return { registryAvailable: false }
   }
 }
 

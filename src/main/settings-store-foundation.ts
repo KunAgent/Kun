@@ -306,6 +306,7 @@ export const defaultSettings = (): AppSettingsV1 => ({
   composerSendKey: DEFAULT_COMPOSER_SEND_KEY,
   cursorSpotlight: true,
   cursorSpotlightColor: DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  homeGlyphRipple: true,
   darkUiColors: { ...DEFAULT_DARK_UI_COLORS },
   colorPalette: normalizeColorPaletteSettings(),
   provider: defaultModelProviderSettings(),

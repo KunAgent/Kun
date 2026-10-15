@@ -511,6 +511,7 @@ const settingsPatchObjectSchema = z.object({
   composerSendKey: z.enum(['enter', 'shiftEnter']).optional(),
   cursorSpotlight: z.boolean().optional(),
   cursorSpotlightColor: hexColorSchema.optional(),
+  homeGlyphRipple: z.boolean().optional(),
   darkUiColors: darkUiColorsPatchSchema.optional(),
   colorPalette: colorPalettePatchSchema.optional(),
   provider: modelProviderPatchSchema.optional(),
