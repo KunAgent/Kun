@@ -1,3 +1,4 @@
+import { USER_ATTENTION_CHANNEL } from '../shared/user-attention'
 import { mobileLink } from './mobile-link'
 import { kunArtApi } from './kun-art'
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
@@ -493,6 +494,7 @@ const api = {
   },
   showTurnCompleteNotification: (payload) => ipcRenderer.invoke('notification:turn-complete', payload),
   setAppBadgeCount: (count) => ipcRenderer.invoke('app:badge-count', count),
+  requestUserAttention: (request) => ipcRenderer.invoke(USER_ATTENTION_CHANNEL, request),
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getGuiUpdateState: () => ipcRenderer.invoke('gui:update-state'),
   checkGuiUpdate: (channel) =>

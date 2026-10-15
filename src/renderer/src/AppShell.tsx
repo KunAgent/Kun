@@ -15,6 +15,7 @@ import { DataMigrationActivityIndicator } from './components/DataMigrationActivi
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
 import { WhatsNewHost } from './components/whats-new/WhatsNewHost'
 import { AgentActivityToasts } from './components/ade/AgentActivityToasts'
+import { MobilePairingDialog } from './components/remote/MobilePairingDialog'
 import { useRoomEvents } from './components/rooms/useRoomEvents'
 import { useWorkbenchDirectorySync } from './components/rooms/workbench-bridge-actions'
 import { WorkbenchFlash } from './components/rooms/workbench-flash'
@@ -204,6 +205,7 @@ export default function AppShell(): React.ReactElement {
         </div>
         <SpeakDownloadToast />
         {surface === 'desktop' ? <AgentActivityToasts /> : null}
+        {surface === 'desktop' && !window.kunGui?.isRemoteWeb ? <MobilePairingDialog /> : null}
         {surface === 'desktop' ? <WhatsNewHost /> : null}
         <WorkbenchFlash />
         {initialSetupOpen ? (

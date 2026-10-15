@@ -47,6 +47,7 @@ import {
 } from '../../extensions/contribution-ids'
 import { boundedPlainText } from '../../extensions/safe-text'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useMobilePairings } from '../remote/mobile-pairing-store'
 import { switchRemoteSurface } from '../../mobile/use-remote-surface'
 
 export type { RightPanelMode } from '../../extensions/contribution-ids'
@@ -382,6 +383,7 @@ export function WorkbenchSideRail({
   // The Remote panel configures this host; hide the entry inside Remote clients.
   const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
   const bottles = useWardrobe().wardrobe?.pending.length ?? 0
+  const pairings = useMobilePairings().length
   const panel = (mode: Exclude<RightPanelMode, null>, label: string, icon: LucideIcon): RailEntry => ({
     key: mode, label, icon, active: rightPanelMode === mode, onClick: () => onToggleRightPanelMode(mode)
   })
@@ -403,7 +405,7 @@ export function WorkbenchSideRail({
     panel(BUILTIN_RIGHT_PANEL_IDS.mcpSkills, t('rightPanelMcpSkills'), Blocks),
     panel(BUILTIN_RIGHT_PANEL_IDS.providerQuotas, t('rightPanelProviderQuotas'), Gauge),
     { ...panel(BUILTIN_RIGHT_PANEL_IDS.wardrobe, t('rightPanelWardrobe'), Shirt), badge: bottles },
-    ...(isRemoteWeb ? [] : [panel(BUILTIN_RIGHT_PANEL_IDS.remote, t('rightPanelRemote'), Radio)])
+    ...(isRemoteWeb ? [] : [{ ...panel(BUILTIN_RIGHT_PANEL_IDS.remote, t('rightPanelRemote'), Radio), badge: pairings }])
   ]]
 
   if (presentation === 'sheet') {

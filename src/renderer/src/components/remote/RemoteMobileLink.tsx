@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { Smartphone } from 'lucide-react'
+import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
 import {
   REMOTE_BUTTON_CLASS,
@@ -33,7 +34,7 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
             type="button"
             className={REMOTE_PRIMARY_BUTTON_CLASS}
             disabled={Boolean(busy)}
-            onClick={() => confirm(pairing.id)}
+            onClick={(event) => runTrustedUserActivation(event, () => confirm(pairing.id))}
           >
             {zh ? '允许访问' : 'Allow access'}
           </button>

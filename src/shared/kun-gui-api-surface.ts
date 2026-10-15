@@ -1,3 +1,4 @@
+import type { UserAttentionRequest } from './user-attention'
 import type {
   AppSettingsPatch,
   AppSettingsV1,
@@ -660,6 +661,8 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   /** Main shows allowance reminders itself; a click asks the renderer to open provider settings. */
   onQuotaReminderClicked: (handler: () => void) => () => void
   setAppBadgeCount: (count: number) => Promise<AppBadgeCountResult>
+  /** Notification + Dock bounce + badge while Kun is in the background. */
+  requestUserAttention: (request: UserAttentionRequest) => Promise<{ shown: boolean }>
   getAppVersion: () => Promise<string>
   getGuiUpdateState: () => Promise<GuiUpdateState>
   checkGuiUpdate: (channel?: GuiUpdateChannel) => Promise<GuiUpdateInfo>

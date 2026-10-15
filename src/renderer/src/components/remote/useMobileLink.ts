@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { MobileLinkStatus } from '@shared/mobile-link'
 import { hasKunAccountSession } from '@shared/kun-account'
 import { useKunAccount } from '../account/useKunAccount'
+import { publishMobilePairings } from './mobile-pairing-store'
 
 export type MobileLinkBusy = 'start' | 'stop' | 'other' | null
 
@@ -23,6 +24,9 @@ export function useMobileLink() {
   const unavailable = zh
     ? '连接不可用，请检查 Kun 账号登录和服务状态。'
     : 'Connection unavailable. Check your Kun account and service status.'
+  useEffect(() => {
+    publishMobilePairings(signedIn && state?.enabled ? state.pairings : [])
+  }, [signedIn, state])
   useEffect(() => {
     let active = true
     ++operation.current
