@@ -21,7 +21,21 @@ const SendSchema = GmailSendInputSchema.extend({ body: z.string().min(1).max(32_
     { message: 'Send at most 16 recipients in one approved email' })
 const ConnectSchema = z.object({ reason: z.string().trim().min(1).max(300) }).strict()
 const available = (context: ToolHostContext) => !context.roomAgent || context.roomStepKind === 'conversation'
-const schema = (input: z.ZodType) => z.toJSONSchema(input, { unrepresentable: 'any' }) as Record<string, unknown>
+const LOOKAROUND = /\(\?<?[=!]/u
+/**
+ * Providers such as Codex reject regex lookaround in tool schemas, and zod's email pattern uses it.
+ * Drop only those patterns from the advertised schema; arguments are still parsed by zod before use.
+ */
+function withoutLookaroundPatterns(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withoutLookaroundPatterns)
+  if (!node || typeof node !== 'object') return node
+  const entries = Object.entries(node as Record<string, unknown>)
+    .filter(([key, value]) => !(key === 'pattern' && typeof value === 'string' && LOOKAROUND.test(value)))
+    .map(([key, value]) => [key, withoutLookaroundPatterns(value)] as const)
+  return Object.fromEntries(entries)
+}
+const schema = (input: z.ZodType) => withoutLookaroundPatterns(
+  z.toJSONSchema(input, { unrepresentable: 'any' })) as Record<string, unknown>
 
 function errorResult(error: unknown) {
   const code = error instanceof GmailError ? error.code : error instanceof z.ZodError ? 'invalid_arguments' : 'gmail_unavailable'

@@ -47,6 +47,16 @@ function proof(context: ToolHostContext, source: 'user' | 'agent' | 'full-access
 }
 
 describe('native Gmail conversation tools', () => {
+  it('advertises schemas without regex lookaround that Codex rejects, yet still validates addresses', async () => {
+    const f = await fixture()
+    for (const tool of f.tools) {
+      expect(JSON.stringify(tool.inputSchema)).not.toMatch(/\(\?<?[=!]/u)
+    }
+    const send = JSON.stringify(f.tool('gmail_send').inputSchema)
+    expect(send).toContain('"bcc"')
+    expect(() => f.tool('gmail_send').normalizeArguments!({ ...mail, bcc: ['not-an-address'] })).toThrow()
+  })
+
   it('requires separate model-sharing consent before any mail leaves Gmail', async () => {
     const f = await fixture()
     f.status.allowModelSharing = false
