@@ -1,15 +1,16 @@
 import { ApprovalDetails } from './ApprovalDetails'
 import { ApprovalActions } from './ApprovalActions'
+import { ApprovalEmailPreview, approvalEmail } from './ApprovalEmailPreview'
+import { setDockedApprovalIds } from './approval-dock-registry'
 import { useEffect, useState, type ReactElement } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
-  Loader2,
+  Mail,
   ShieldAlert,
   Square
 } from 'lucide-react'
 import type { ChatBlock } from '../../agent/types'
-import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import { useChatStore } from '../../store/chat-store'
 import { MemoryApprovalHint } from './memory-approval-hint'
 
@@ -42,9 +43,21 @@ export function FloatingComposerApprovalPanel({
     setIndex((current) => Math.min(current, Math.max(0, approvals.length - 1)))
   }, [approvals.length])
 
+  const dockedIds = approvals.map((approval) => approval.id).join('\n')
+  useEffect(() => {
+    setDockedApprovalIds(dockedIds ? dockedIds.split('\n') : [])
+    return () => setDockedApprovalIds([])
+  }, [dockedIds])
+
   const current = approvals[Math.min(index, approvals.length - 1)]
   if (!current) return null
   const submitting = current.status === 'submitting'
+  const email = approvalEmail(current.action)
+  const title = email
+    ? t('approvalEmailQuestion')
+    : current.toolName ? t('approvalToolQuestion', { name: current.toolName }) : t('approvalTitle')
+  const subtitle = email ? t('approvalEmailSubtitle') : t('approvalPending')
+  const Icon = email ? Mail : ShieldAlert
 
   return (
     <section
@@ -54,18 +67,20 @@ export function FloatingComposerApprovalPanel({
         compact ? 'rounded-[16px]' : 'rounded-[20px]'
       }`}
     >
-      <header className={`shrink-0 border-b border-ds-border-muted ${compact ? 'px-4 py-3' : 'px-5 py-3.5'}`}>
+      <header className={`shrink-0 ${compact ? 'px-4 pb-2 pt-3.5' : 'px-5 pb-2.5 pt-4'}`}>
         <div className="flex min-w-0 items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300">
-              <ShieldAlert className="h-4 w-4" strokeWidth={2} />
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] ${
+              email ? 'bg-accent-tint/10 text-accent' : 'bg-amber-500/10 text-amber-600 dark:text-amber-300'
+            }`}>
+              <Icon className="h-4 w-4" strokeWidth={2} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-[14px] font-semibold leading-5 text-ds-ink">
-                {t('approvalTitle')}
+              <h2 className="break-words text-[14px] font-semibold leading-5 text-ds-ink [overflow-wrap:anywhere]">
+                {title}
               </h2>
               <p className="mt-0.5 text-[12px] leading-5 text-ds-faint">
-                {t('approvalPending')}
+                {subtitle}
               </p>
             </div>
           </div>
@@ -97,28 +112,25 @@ export function FloatingComposerApprovalPanel({
         </div>
       </header>
 
-      <div className={`min-h-0 overflow-y-auto ${compact ? 'px-4 py-3' : 'px-5 py-4'}`} data-approval-evidence-scroll>
-        {current.toolName ? (
-          <div className="mb-2 inline-flex max-w-full items-center gap-1.5 rounded-lg border border-ds-border-muted bg-ds-subtle px-2 py-0.5 text-[11.5px] font-semibold text-ds-muted">
-            <span className="truncate font-mono">{current.toolName}</span>
+      <div className={`min-h-0 overflow-y-auto ${compact ? 'px-4 pb-3' : 'px-5 pb-4'}`} data-approval-evidence-scroll>
+        {email ? <ApprovalEmailPreview email={email} t={t} compact={compact} /> : <>
+          <div
+            tabIndex={0}
+            className={`overflow-y-auto whitespace-pre-wrap break-words rounded-[10px] border border-ds-border-muted bg-ds-main/40 font-mono text-[12px] leading-5 text-ds-ink [overflow-wrap:anywhere] ${
+              compact ? 'max-h-28 px-2.5 py-2' : 'max-h-40 px-3 py-2.5'
+            }`}
+          >
+            {current.summary}
           </div>
-        ) : null}
-        <div
-          tabIndex={0}
-          className={`overflow-y-auto whitespace-pre-wrap break-words rounded-[10px] border border-ds-border-muted bg-ds-main/40 font-mono text-[12px] leading-5 text-ds-ink [overflow-wrap:anywhere] ${
-            compact ? 'max-h-28 px-2.5 py-2' : 'max-h-40 px-3 py-2.5'
-          }`}
-        >
-          {current.summary}
-        </div>
-        <ApprovalDetails action={current.action} />
+          <ApprovalDetails action={current.action} />
+        </>}
         <MemoryApprovalHint toolName={current.toolName} action={current.action} t={t} />
         {current.errorMessage ? (
           <p className="mt-2 text-[12px] text-red-700 dark:text-red-300">{current.errorMessage}</p>
         ) : null}
       </div>
 
-      <footer className={`flex min-h-14 shrink-0 items-center justify-between gap-3 border-t border-ds-border-muted bg-ds-main/25 ${
+      <footer className={`flex min-h-14 shrink-0 items-center justify-between gap-3 border-t border-ds-border-muted ${
         compact ? 'px-4 py-2.5' : 'px-5 py-3'
       }`}>
         <button
@@ -133,6 +145,7 @@ export function FloatingComposerApprovalPanel({
         </button>
 
         <ApprovalActions options={current.action?.permissionOptions} submitting={submitting} t={t}
+          allowLabel={email ? t('approvalEmailSend') : undefined}
           onDecide={(decision, choice) => void resolveApproval(current.id, decision, choice)} />
       </footer>
     </section>

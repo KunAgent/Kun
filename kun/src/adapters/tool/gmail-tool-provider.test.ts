@@ -141,11 +141,11 @@ describe('native Gmail conversation tools', () => {
     const f = await fixture(), send = f.tool('gmail_send')
     expect(await send.execute(mail, f.context)).toMatchObject({ isError: true })
     expect(await send.execute(mail, { ...f.context, kunActionApprovalGrant: proof(f.context) })).toMatchObject({ isError: true })
-    for (const source of ['agent', 'full-access'] as const) {
-      const grant = proof(f.context, source)
-      registerHostActionApprovalGrant(grant)
-      expect(await send.execute(mail, { ...f.context, kunActionApprovalGrant: grant })).toMatchObject({ isError: true })
-    }
+    const automated = proof(f.context, 'agent')
+    registerHostActionApprovalGrant(automated)
+    expect(await send.execute(mail, { ...f.context, kunActionApprovalGrant: automated })).toMatchObject({ isError: true })
+    expect(await send.execute(mail, { ...f.context, kunActionApprovalGrant: proof(f.context, 'full-access') }))
+      .toMatchObject({ isError: true })
     const grant = proof(f.context)
     registerHostActionApprovalGrant(grant)
     await send.buildApprovalAction!({ toolName: 'gmail_send', callId: f.context.activeToolCallId!, arguments: mail }, f.context)
@@ -162,8 +162,20 @@ describe('native Gmail conversation tools', () => {
     expect(await send.execute(mail, { ...f.context, kunActionApprovalGrant: stale })).toMatchObject({ isError: true })
   })
 
-  it('uses Kun human approval even under Full access and includes every recipient and the complete body', async () => {
+  it('sends under Full access without asking, exactly once per call', async () => {
     const f = await fixture()
+    const host = new LocalToolHost({ tools: f.tools })
+    const result = await host.execute({ toolName: 'gmail_send', callId: 'gmail-call', arguments: mail }, f.context)
+    expect(result.item).toMatchObject({ isError: false, output: { status: 'sent' } })
+    expect(f.context.awaitApproval).not.toHaveBeenCalled()
+    expect(f.gmail.send).toHaveBeenCalledWith(mail, 'thread:gmail-thread', expect.any(String), 'owner@example.com')
+    await host.execute({ toolName: 'gmail_send', callId: 'gmail-call', arguments: mail }, f.context)
+    expect(f.gmail.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks for Kun human approval outside Full access and includes every recipient and the complete body', async () => {
+    const f = await fixture()
+    f.context = { ...f.context, sandboxMode: 'workspace-write', approvalPolicy: 'on-request' }
     const host = new LocalToolHost({ tools: f.tools })
     const result = await host.execute({ toolName: 'gmail_send', callId: 'gmail-call', arguments: mail }, f.context)
     expect(result.item).toMatchObject({ isError: false, output: { status: 'sent' } })
@@ -183,7 +195,8 @@ describe('native Gmail conversation tools', () => {
   it('denies automated reviewer approval and never retries an ambiguous send', async () => {
     const f = await fixture()
     const host = new LocalToolHost({ tools: f.tools })
-    const automated = { ...f.context, approvalReviewer: 'agent' as const,
+    const automated = { ...f.context, sandboxMode: 'workspace-write' as const, approvalPolicy: 'on-request' as const,
+      approvalReviewer: 'agent' as const,
       awaitApproval: vi.fn(async () => ({ decision: 'allow' as const, reviewer: 'agent' as const })) }
     expect((await host.execute({ toolName: 'gmail_send', callId: 'gmail-call', arguments: mail }, automated)).item)
       .toMatchObject({ isError: true, output: { code: 'approval_denied' } })
@@ -197,7 +210,8 @@ describe('native Gmail conversation tools', () => {
   it('binds human approval to the displayed Gmail sender and rejects an account switch during approval', async () => {
     const f = await fixture()
     const host = new LocalToolHost({ tools: f.tools })
-    const context = { ...f.context, awaitApproval: vi.fn(async (approval) => {
+    const context = { ...f.context, sandboxMode: 'workspace-write' as const, approvalPolicy: 'on-request' as const,
+      awaitApproval: vi.fn(async (approval) => {
       expect(approval.summary).toContain('From: owner@example.com')
       f.status.email = 'switched@example.com'
       return 'allow' as const

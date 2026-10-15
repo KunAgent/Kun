@@ -345,6 +345,7 @@ export class LocalToolHost implements ToolHost {
           issuedAt.getTime() + KUN_ACTION_APPROVAL_GRANT_TTL_MS
         ).toISOString()
       })
+      registerHostActionApprovalGrant(kunActionApprovalGrant)
     }
     if (context.abortSignal.aborted) {
       throw new Error('tool call aborted while waiting for approval')

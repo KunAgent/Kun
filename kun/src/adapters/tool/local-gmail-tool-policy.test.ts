@@ -83,7 +83,7 @@ describe('dedicated Gmail acting-model host tool boundary', () => {
     expect(post).toHaveBeenCalledOnce()
   })
 
-  it('retains a mandatory human send approval even in full access', async () => {
+  it('retains a human send approval outside full access', async () => {
     const threads = new InMemoryThreadStore()
     const thread = createThreadRecord({ id: 'gmail-thread', title: 'Gmail', workspace: '/tmp', model: 'qwen3:4b' })
     thread.turns.push(createTurnRecord({ id: 'gmail-turn', threadId: thread.id, prompt: 'Mail', status: 'running' }))
@@ -95,7 +95,8 @@ describe('dedicated Gmail acting-model host tool boundary', () => {
     const host = new LocalToolHost({ registry: new CapabilityRegistry([buildGmailToolProvider(gmail, threads)]) })
     const awaitApproval = vi.fn(async () => ({ decision: 'allow' as const, reviewer: 'agent' as const }))
     const result = await host.execute({ toolName: 'gmail_send', callId: 'send', arguments: {
-      to: ['recipient@example.com'], subject: 'Review', body: 'The complete message' } }, context({ awaitApproval }))
+      to: ['recipient@example.com'], subject: 'Review', body: 'The complete message' } },
+      context({ awaitApproval, sandboxMode: 'workspace-write', approvalPolicy: 'on-request' }))
     expect(awaitApproval).toHaveBeenCalledOnce()
     expect(result.item).toMatchObject({ isError: true, output: { code: 'approval_denied' } })
     expect(send).not.toHaveBeenCalled()

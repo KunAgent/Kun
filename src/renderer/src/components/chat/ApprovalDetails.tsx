@@ -6,6 +6,6 @@ import { approvalToolPresentation } from './approval-tool-presentation'
 export function ApprovalDetails({ action }: { action?: CoreApprovalActionJson }) {
   const presentation = useMemo(() => approvalToolPresentation(action), [action])
   return presentation ? <div className="mt-2" data-testid="approval-tool-details">
-    <ToolDetailsContent presentation={presentation} workspaceRoot={action?.workspace} />
+    <ToolDetailsContent presentation={presentation} workspaceRoot={action?.workspace} approval />
   </div> : null
 }

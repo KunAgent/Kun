@@ -4,8 +4,10 @@ import { runTrustedUserActivation } from '../../extensions/protected-user-activa
 type Translate = (key: string, options?: Record<string, unknown>) => string
 type Action = { label: string; decision: 'allow' | 'deny'; choice?: ApprovalChoice; scope?: string }
 
-export function ApprovalActions({ options, submitting, onDecide, t }: {
+export function ApprovalActions({ options, submitting, onDecide, t, allowLabel }: {
   options?: ApprovalPermissionOption[]
+  /** Verb for the primary button when the runtime offers plain allow/deny (e.g. "Send"). */
+  allowLabel?: string
   submitting: boolean
   onDecide: (decision: 'allow' | 'deny', choice?: ApprovalChoice) => void
   t: Translate
@@ -20,7 +22,7 @@ export function ApprovalActions({ options, submitting, onDecide, t }: {
     { label: t('approvalCancelRequest'), decision: 'deny', choice: { cancelled: true } }
   ] : [
     { label: t('approvalDeny'), decision: 'deny' },
-    { label: t('approvalAllow'), decision: 'allow' }
+    { label: allowLabel ?? t('approvalAllow'), decision: 'allow' }
   ]
   return <div className="flex max-h-[30dvh] min-w-0 flex-wrap items-center gap-2 overflow-y-auto" data-testid="approval-actions">
     {actions.map((action, index) => <button key={index} type="button" disabled={submitting}
