@@ -16,5 +16,16 @@
   "approvalEmailNoSubject": "(no subject)",
   "approvalEmailSend": "Send",
   "approvalDockedHint": "Waiting for your decision in the panel above the composer",
-  "approvalEmailSubtitle": "Sends from your connected Gmail account"
+  "approvalCommandQuestion": "Run this command?",
+  "approvalCommandIn": "In {{cwd}}",
+  "approvalCommandRun": "Allow once",
+  "approvalEmailDontSend": "Don't send",
+  "approvalEmailSummary": "To {{to}} · Subject “{{subject}}”",
+  "approvalEmailFromLine": "Sends from {{email}}",
+  "approvalEmailNotePlaceholder": "Tell Kun what to change (optional)",
+  "approvalDenyNotePlaceholder": "Tell Kun what to do instead (optional)",
+  "approvalExpand": "Show all",
+  "approvalCollapse": "Show less",
+  "approvalQueueCount": "{{index}} of {{total}} waiting",
+  "approvalStopTurn": "Stop this turn"
 }

@@ -1,11 +1,12 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowDown, Mail, ShieldAlert } from 'lucide-react'
+import { ArrowDown } from 'lucide-react'
 import type { ChatBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { ApprovalActions } from './ApprovalActions'
 import { ApprovalDetails } from './ApprovalDetails'
-import { ApprovalEmailPreview, approvalEmail } from './ApprovalEmailPreview'
+import { ApprovalEmailPreview } from './ApprovalEmailPreview'
+import { ApprovalKindIcon, approvalKind, approvalQuestion } from './approval-kind'
 import { useIsApprovalDocked } from './approval-dock-registry'
 import { MemoryApprovalHint } from './memory-approval-hint'
 import { useTimelineSurface } from './timeline-surface'
@@ -27,18 +28,10 @@ export function TimelineApprovalCard({ block, allowThreadActions }: {
   const docked = useIsApprovalDocked(block.id)
   const submitting = block.status === 'submitting'
   const pending = block.status === 'pending' || submitting
-  const email = approvalEmail(block.action)
-  const title = email
-    ? t('approvalEmailQuestion')
-    : block.toolName ? t('approvalToolQuestion', { name: block.toolName }) : t('approvalTitle')
-  const Icon = email ? Mail : ShieldAlert
-  const icon = (
-    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] ${
-      email ? 'bg-accent-tint/10 text-accent' : 'bg-amber-500/10 text-amber-600 dark:text-amber-300'
-    }`}>
-      <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-    </span>
-  )
+  const kind = approvalKind(block.action)
+  const email = kind.kind === 'email' ? kind.email : null
+  const title = approvalQuestion(kind, block.toolName, t)
+  const icon = <ApprovalKindIcon kind={kind.kind} size="sm" />
 
   if (pending && docked && allowThreadActions) {
     return (

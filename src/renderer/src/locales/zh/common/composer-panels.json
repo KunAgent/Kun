@@ -15,5 +15,16 @@
   "approvalEmailNoSubject": "（无主题）",
   "approvalEmailSend": "发送",
   "approvalDockedHint": "请在输入框上方的面板中确认",
-  "approvalEmailSubtitle": "将从你已连接的 Gmail 账号发出"
+  "approvalCommandQuestion": "运行这条命令？",
+  "approvalCommandIn": "在 {{cwd}}",
+  "approvalCommandRun": "允许一次",
+  "approvalEmailDontSend": "不发送",
+  "approvalEmailSummary": "给 {{to}} · 主题「{{subject}}」",
+  "approvalEmailFromLine": "从 {{email}} 发出",
+  "approvalEmailNotePlaceholder": "告诉 Kun 要怎么改（可选）",
+  "approvalDenyNotePlaceholder": "告诉 Kun 换个做法（可选）",
+  "approvalExpand": "展开全文",
+  "approvalCollapse": "收起",
+  "approvalQueueCount": "{{index}} / {{total}} 个待确认",
+  "approvalStopTurn": "停止本轮"
 }
