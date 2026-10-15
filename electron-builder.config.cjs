@@ -141,6 +141,7 @@ module.exports = {
     '**/kun/dist/**/*',
     '**/kun/package*.json',
     '**/kun/node_modules/**/*',
+    '**/vendor/kun-remote/*.tgz',
     '**/packages/extension-api/**/*',
     '**/packages/provider-catalog/**/*',
     '**/packages/create-kun-extension/**/*',
@@ -198,6 +199,9 @@ module.exports = {
     'kun/package.json',
     'kun/package-lock.json',
     'kun/node_modules/**/*',
+    // kun/package.json depends on file:../vendor/kun-remote/*.tgz; the packed
+    // dependency prune resolves it from the unpacked app root.
+    'vendor/kun-remote/*.tgz',
     'packages/extension-api/package.json',
     'packages/extension-api/dist/**/*',
     'packages/extension-api/schema/**/*',

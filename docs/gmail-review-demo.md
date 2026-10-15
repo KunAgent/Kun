@@ -10,6 +10,24 @@ shown in the app exactly as configured. This is a cloud model: the Gmail content
 user asks about is sent to OpenAI, and the reply to Google must say so. Do not
 describe this setup as local or offline anywhere.
 
+## 0. Test app
+
+A Gmail-enabled, unsigned macOS arm64 build is at `dist/mac-arm64/Kun.app` (git-ignored). It
+embeds the registered Kun Desktop OAuth client, so no operator command is needed.
+To rebuild it:
+
+```sh
+npm run build && npm run prepare:macos-native:arm64
+KUN_GMAIL_RELEASE_ENABLED=1 \
+KUN_GMAIL_CLIENT_CONFIG_FILE=~/Downloads/<desktop-client>.json \
+npx electron-builder --config electron-builder.config.cjs --publish never --mac dir --arm64
+```
+
+Quit any running Kun first (all builds share one bundle id), then start it with
+`open -n dist/mac-arm64/Kun.app`. It shares the normal Kun data directory, so existing
+providers and sign-ins are present. The package must not be shared: it contains the
+Desktop client secret.
+
 ## 1. Environment
 
 | Item | Value |
