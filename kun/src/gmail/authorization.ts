@@ -5,10 +5,12 @@ import type { GmailAuthorization } from '../contracts/gmail.js'
 import type { GmailAuthorizationErrorCode, GmailAuthorizationFailure } from '../contracts/gmail-authorization-errors.js'
 import { GMAIL_SCOPES, GmailError } from './ports.js'
 import { authorizationFailureCode, googleCallbackFailureCode } from './authorization-diagnostic.js'
+import { sendGmailAuthorizationPage, type GmailAuthorizationPageState } from './authorization-page.js'
 
 const AUTHORIZATION_TIMEOUT = 5 * 60_000
 const CALLBACK_PATH = '/oauth/gmail/callback'
-const COMPLETE_TEXT = '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Kun Gmail authorization</title><body><h1>Return to Kun</h1><p>Kun received the authorization response. You can close this tab and check the Gmail connection card.</p></body></html>'
+/** How long the result page waits for the token exchange before showing "finishing". */
+const COMPLETE_PAGE_WAIT = 4_000
 
 /** Ephemeral, IP-bound callback receiver. The renderer polls a separate safe status. */
 export class GmailLoopbackAuthorization {
@@ -28,12 +30,14 @@ export class GmailLoopbackAuthorization {
   private redirect = ''
   private authUrl = ''
   private exchange?: Promise<void>
+  private connectedEmail?: string
 
   constructor(
     readonly scopeId: string,
     private readonly clientId: string,
     private readonly now: () => number,
-    private readonly onCode: (code: string, verifier: string, redirectUri: string) => Promise<void>,
+    /** Resolves with the connected address so the result page can name it. */
+    private readonly onCode: (code: string, verifier: string, redirectUri: string) => Promise<string | void>,
     private readonly onFailure?: (failure: GmailAuthorizationFailure) => Promise<void>
   ) {
     this.expiresAt = now() + AUTHORIZATION_TIMEOUT
@@ -105,8 +109,7 @@ export class GmailLoopbackAuthorization {
     try { incoming = new URL(request.url, `http://${expectedHost}`) }
     catch { return end(response, 400) }
     if (incoming.pathname === this.completePath && !incoming.search && this.consumed) {
-      response.setHeader('content-type', 'text/html; charset=utf-8')
-      response.end(COMPLETE_TEXT)
+      void this.sendCompletePage(request, response)
       return
     }
     if (incoming.pathname !== CALLBACK_PATH) return end(response, 404)
@@ -130,12 +133,29 @@ export class GmailLoopbackAuthorization {
         errors[0] === 'access_denied' ? 'access_denied' : 'authorization_failed', googleCallbackFailureCode(errors[0]))
       return
     }
-    this.exchange = this.onCode(codes[0], this.verifier, this.redirect).then(() => {
+    this.exchange = this.onCode(codes[0], this.verifier, this.redirect).then((email) => {
+      if (typeof email === 'string' && email) this.connectedEmail = email
       this.finish('connected')
     }, (error: unknown) => {
       this.finish('failed', error instanceof GmailError && error.code === 'scope_missing' ? 'scope_missing' : 'authorization_failed',
         authorizationFailureCode(error))
     })
+  }
+
+  private async sendCompletePage(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    if (this.exchange && this.authorizationStatus === 'pending') {
+      let timer: NodeJS.Timeout | undefined
+      await Promise.race([
+        this.exchange.catch(() => undefined),
+        new Promise<void>((resolve) => { timer = setTimeout(resolve, COMPLETE_PAGE_WAIT); timer.unref() })
+      ])
+      if (timer) clearTimeout(timer)
+    }
+    if (response.destroyed || response.headersSent) return
+    const status = this.authorizationStatus
+    const state: GmailAuthorizationPageState = status === 'connected' ? 'connected'
+      : status === 'cancelled' ? 'cancelled' : status === 'pending' ? 'finishing' : 'failed'
+    sendGmailAuthorizationPage(request, response, state, state === 'connected' ? this.connectedEmail : undefined)
   }
 
   private finish(status: GmailAuthorization['status'], error?: GmailAuthorization['error'], errorCode?: GmailAuthorizationErrorCode): void {

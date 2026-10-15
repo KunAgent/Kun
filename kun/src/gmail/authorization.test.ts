@@ -71,7 +71,11 @@ describe('native Gmail authorization boundary', () => {
       expect(received.headers.get('location')).not.toContain('sensitive-code')
       expect(received.headers.get('referrer-policy')).toBe('no-referrer')
       const complete = await fetch(new URL(received.headers.get('location')!, callback))
-      expect(await complete.text()).not.toContain('sensitive-code')
+      const page = await complete.text()
+      expect(page).not.toContain('sensitive-code')
+      expect(page).toContain('Gmail connected')
+      expect(complete.headers.get('content-security-policy')).toContain("img-src data:")
+      expect(complete.headers.get('content-security-policy')).not.toContain('script-src')
       await vi.waitFor(async () => expect((await fixture.service.pollAuthorization(authorization.id, SCOPE)).status).toBe('connected'))
       const tokenCall = fixture.calls.find(([request]) => String(request).includes('/token'))!
       const body = tokenCall[1]?.body as URLSearchParams

@@ -137,6 +137,7 @@ export class NativeGmailService implements GmailServicePort {
         if (input.allowModelSharing && (this.consentRevisions.get(input.scopeId) ?? 0) === consentRevision) {
           this.revokedScopes.delete(input.scopeId)
         }
+        return tokens.email
       }, async (failure) => { await this.store.update((current) => ({ ...current, lastAuthorizationError: failure })) })
     this.authorizations.set(authorization.id, authorization)
     const result = await authorization.start()
