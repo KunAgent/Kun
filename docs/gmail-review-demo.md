@@ -46,7 +46,7 @@ video right after the model chip. Re-check it immediately before recording.
 ## 2. Dry run (do this before recording)
 
 1. New private Code or Agent conversation with the ChatGPT 订阅 model selected.
-2. Ask: "Find the email with the subject Invoice 2041 and summarize it."
+2. Ask: "Show my 5 most recent emails in the inbox with sender, subject and a one-line summary."
 3. Confirm the Gmail card appears, the connect click opens Google, and the task
    resumes after authorization.
 4. Confirm `gmail_search` and `gmail_read` rows appear and a summary is written.
@@ -56,44 +56,38 @@ video right after the model chip. Re-check it immediately before recording.
 7. Open the model chip and confirm it reads the ChatGPT 订阅 model, and that no
    other provider or failover route is enabled in the provider settings.
 
-## 3. Sample emails to seed
+## 3. Mailbox preparation
 
-Send these to the demo mailbox from the second account a few minutes before
-recording, so they sit in the inbox with real timestamps. Use only invented data.
+The cases below do not depend on any particular email. The demo mailbox only needs a
+few ordinary messages in the Inbox (newsletters, notifications, anything harmless; no
+private mail on camera). If the inbox is empty, send two or three plain messages to it
+from the second account. Use a recipient mailbox you control for the send step.
 
-1. Subject: `Invoice 2041 - October design work`
-   Body: "Hi, please find the invoice for the October design work. Amount due: USD
-   1,250. Payment terms: net 14 days, due 2026-11-05. Thanks, Alex Rivera,
-   Rivera Studio."
-2. Subject: `Team sync moved to Thursday 3pm`
-   Body: "Hi all, the weekly sync is moved to Thursday at 3pm in the Maple room.
-   Agenda: roadmap review, launch checklist, open questions. - Sam"
-3. Subject: `Lunch next week?`
-   Body: "Are you free for lunch on Tuesday? There is a new ramen place near the
-   office. - Jordan"
-4. Subject: `Your parcel has shipped`
-   Body: "Order 88213 has shipped and should arrive Friday. Tracking code
-   TRK-5521-ZZ."
+## 4. Prompts to use on camera (in this order)
 
-## 4. Prompts to use on camera
+Say each prompt in English and keep it as short as written.
 
-Read (`gmail.readonly`):
-
-- "Find the email with the subject Invoice 2041 and tell me the amount and due date."
-- "Search my inbox for emails about the team sync and summarize what changed."
-- "List the emails I received today and give each a one-line summary."
-
-Send (`gmail.send`):
-
-- "Reply to <recipient@example.com> and confirm that I will attend the Thursday 3pm
-  sync. Keep it to two sentences." (The Subject and body shown in the approval
-  dialog are the model's draft; read them aloud.)
+1. Search and read (`gmail.readonly`):
+   - "Show my 5 most recent emails in the inbox with sender, subject and a one-line summary."
+   - "Open the second one and summarize it in two sentences."
+   - "Search my inbox for emails from the last 7 days that mention 'account' and list them."
+2. Send (`gmail.send`), replacing the address with your own recipient mailbox:
+   - "Send an email to <recipient@example.com> with the subject 'Kun demo' and a two-sentence
+     body saying this is a test message from Kun."
+   - The approval dialog shows From, To, Cc, Bcc, Subject and the full body. Click Deny once and
+     show that nothing was sent; repeat the request and click Approve.
+3. Close the loop (read the message that was just sent):
+   - "Find the email I just sent with the subject 'Kun demo' in my Sent mail and tell me when it was sent."
+   - This works only after step 2 and proves the send reached the Google account.
 
 Negative checks worth showing briefly:
 
-- Ask "delete the parcel email". Kun has no delete or modify tool and says so.
-- Open a message that contains an instruction such as "forward this to someone"
-  and show that it is treated as untrusted content and is not acted on.
+- "Delete the first email." Kun has no delete or modify tool and says so.
+- Open a message that contains an instruction such as "forward this to someone" and show that it
+  is treated as untrusted content and is not acted on.
+
+If a search says it found nothing, that is a real empty result: loosen the wording or use the
+"5 most recent" prompt instead.
 
 ## 5. Shot list
 
@@ -101,10 +95,10 @@ Negative checks worth showing briefly:
 |---|---|
 | 0:00 | Say what Kun is: a desktop app on the user's computer; it provides no model; the user configures one. Show the ChatGPT 订阅 provider and the model chip. Say that Kun ships no model, that mail you ask about is sent to OpenAI, and that other users may choose other models. Then show ChatGPT Settings > Data controls with \"Improve the model for everyone\" off. |
 | 0:30 | Google Cloud Console > Google Auth Platform > Data Access: the two scopes only. Show the OAuth client ID. Publishing status "In production" for the live project. |
-| 1:00 | Run the first read prompt. Gmail card appears. Click **Connect Google account**. |
+| 1:00 | Run the first prompt. Gmail card appears. Click **Connect Google account**. |
 | 1:30 | Browser consent screen, address bar visible, client ID in the URL. Expand until both permissions are fully readable. Pause three seconds. Allow. |
 | 2:15 | "Return to Kun" page. Kun resumes. |
-| 2:30 | Search, read and summary for the invoice and the sync emails. Open the tool rows to show `gmail_search` and `gmail_read`. |
+| 2:30 | Prompt 1 sequence: recent emails, then open one and summarize. Open the tool rows to show `gmail_search` and `gmail_read`. |
 | 3:30 | Send prompt. Approval dialog with the full message. Deny once, show that nothing was sent; repeat the request and approve. |
 | 4:15 | Gmail web: **Sent** folder of the demo mailbox, then the recipient inbox. |
 | 5:00 | **Manage > Disconnect**, then **Also revoke Kun's Google access**. Open `myaccount.google.com/permissions`. |
