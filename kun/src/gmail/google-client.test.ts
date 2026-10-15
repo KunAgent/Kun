@@ -100,3 +100,11 @@ describe('credential-safe OAuth failure diagnostics', () => {
     expect(request).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('Gmail list responses', () => {
+  it('treats a 204 answer to a search with no matches as an empty result', async () => {
+    const request = vi.fn<typeof fetch>(async () => new Response(null, { status: 204 }))
+    const client = new GoogleGmailClient(request, 'fake-client', undefined, Date.now)
+    await expect(client.list('subject:nothing', 5, 'fake-token')).resolves.toEqual({ messages: [], hasMore: false })
+  })
+})

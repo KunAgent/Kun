@@ -115,6 +115,8 @@ export class GoogleGmailClient {
       if (response.status === 403) throw new GmailError('scope_missing', 'Google denied the requested Gmail permission')
       throw new GmailError('google_unavailable', 'Gmail could not complete this request. Try again later')
     }
+    // With a `fields` mask, Gmail answers "nothing to return" (e.g. a search with no matches) as 204.
+    if (response.status === 204) { await response.body?.cancel().catch(() => undefined); return {} }
     return boundedJson(response)
   }
 
