@@ -1,0 +1,111 @@
+/* Focus mode pill switch in the standard sidebar footer (SidebarFocusModeSwitch). */
+.ds-sidebar-footer-bar {
+  container-type: inline-size;
+}
+
+.ds-focus-mode-switch {
+  --ds-focus-switch-track-off: #cdd3dd;
+  --ds-focus-switch-thumb-off: #ffffff;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 5px 0 9px;
+  border: 1px solid var(--ds-sidebar-row-ring);
+  border-radius: 999px;
+  background: var(--ds-sidebar-row-active);
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 1px 1px rgba(20, 32, 60, 0.04);
+  outline: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.ds-focus-mode-switch:hover {
+  border-color: color-mix(in srgb, var(--ds-text-muted) 38%, var(--ds-sidebar-row-ring));
+  color: var(--ds-text);
+}
+
+.ds-focus-mode-switch:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 2px;
+}
+
+.ds-focus-mode-switch[aria-checked='true'] {
+  border-color: color-mix(in srgb, var(--ds-accent) 42%, transparent);
+  background: var(--ds-accent-soft);
+  color: color-mix(in srgb, var(--ds-accent) 80%, var(--ds-text));
+}
+
+.ds-focus-mode-switch[aria-checked='true']:hover {
+  border-color: var(--ds-accent);
+}
+
+.ds-focus-mode-switch-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.ds-focus-mode-switch-track {
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--ds-focus-switch-track-off);
+  transition: background-color 160ms ease;
+}
+
+.ds-focus-mode-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ds-focus-switch-thumb-off);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.28);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ds-focus-mode-switch[aria-checked='true'] .ds-focus-mode-switch-track {
+  background: var(--ds-accent);
+}
+
+.ds-focus-mode-switch[aria-checked='true'] .ds-focus-mode-switch-thumb {
+  background: #ffffff;
+  transform: translateX(10px);
+}
+
+[data-theme='dark'] .ds-focus-mode-switch {
+  --ds-focus-switch-track-off: rgba(255, 255, 255, 0.2);
+  --ds-focus-switch-thumb-off: #e8eaee;
+  box-shadow: none;
+}
+
+/* A narrow sidebar keeps the icon and the track; the aria-label still names it. */
+@container (max-width: 216px) {
+  .ds-focus-mode-switch {
+    padding-left: 7px;
+  }
+
+  .ds-focus-mode-switch-label {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-focus-mode-switch,
+  .ds-focus-mode-switch-track,
+  .ds-focus-mode-switch-thumb {
+    transition: none;
+  }
+}

@@ -57,7 +57,7 @@ export function SidebarStandardFooter({
           {account ? <KunAccountControl /> : <SidebarKunStatus />}
         </div>
       ) : null}
-      <div className="flex items-center gap-1">
+      <div className="ds-sidebar-footer-bar flex items-center gap-1">
         <div className="min-w-0 flex-1">
           <SidebarCommandRow
             icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}

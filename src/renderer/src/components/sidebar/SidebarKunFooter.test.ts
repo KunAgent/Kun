@@ -100,18 +100,21 @@ describe('Sidebar Kun footer', () => {
     expect(face()).toBe('designer')
   })
 
-  it('keeps Focus mode a switch with an icon-only control', async () => {
+  it('shows Focus mode as a labeled pill switch', async () => {
     const onChange = vi.fn()
     await act(async () => root.render(createElement(SidebarFocusModeSwitch, { enabled: false, onChange })))
     const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!
     expect(toggle.getAttribute('aria-checked')).toBe('false')
     expect(toggle.getAttribute('aria-label')).toBe('focusModeToggleLabel')
-    expect(toggle.textContent).toBe('')
+    expect(toggle.querySelector('.ds-focus-mode-switch-label')?.textContent).toBe('focusMode')
+    expect(toggle.querySelector('.ds-focus-mode-switch-track .ds-focus-mode-switch-thumb')).not.toBeNull()
+    expect(toggle.title).toBe('focusModeToggleTitle')
     await act(async () => toggle.click())
     expect(onChange).toHaveBeenLastCalledWith(true)
     await act(async () => root.render(createElement(SidebarFocusModeSwitch, { enabled: true, onChange })))
     expect(toggle.getAttribute('aria-checked')).toBe('true')
-    expect(toggle.title).toContain('switchOn')
+    await act(async () => toggle.click())
+    expect(onChange).toHaveBeenLastCalledWith(false)
   })
 
   it('keeps the original footer only for theme packs with sidebar scene chrome', async () => {

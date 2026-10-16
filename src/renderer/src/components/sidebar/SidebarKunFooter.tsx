@@ -10,6 +10,7 @@ import { useRoomUserProfileSync } from '../rooms/room-user-profile'
 import { useWardrobe, wardrobeShelf } from '../rooms/room-wardrobe'
 import { toggleWardrobePage } from '../wardrobe/wardrobe-route'
 import '../rooms/room-wardrobe.css'
+import './sidebar-focus-switch.css'
 
 /**
  * Theme packs with their own sidebar scene chrome style the original
@@ -81,7 +82,11 @@ export function SidebarKunStatus({ onOpen = toggleWardrobePage }: { onOpen?: () 
   )
 }
 
-/** Focus mode as an icon switch beside the phone and theme buttons. */
+/**
+ * Focus mode as a labeled pill switch beside the phone and theme buttons:
+ * icon, "Focus" and a track whose thumb shows the state. The label drops
+ * out when the footer bar gets too narrow (sidebar-focus-switch.css).
+ */
 export function SidebarFocusModeSwitch({ enabled, onChange }: {
   enabled: boolean
   onChange: (enabled: boolean) => void
@@ -94,13 +99,15 @@ export function SidebarFocusModeSwitch({ enabled, onChange }: {
       role="switch"
       aria-checked={enabled}
       aria-label={t('focusModeToggleLabel')}
-      title={`${t('focusModeToggleTitle')} · ${enabled ? t('switchOn') : t('switchOff')}`}
+      title={t('focusModeToggleTitle')}
       onClick={() => onChange(!enabled)}
-      className={`ds-focus-mode-switch inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--ds-radius-control)] outline-none transition focus-visible:ring-2 focus-visible:ring-accent-tint/25 ${
-        enabled ? 'bg-accent-soft text-accent' : 'text-ds-muted hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-ink'
-      }`}
+      className="ds-focus-mode-switch"
     >
-      <Focus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+      <Focus className="ds-focus-mode-switch-icon" strokeWidth={1.8} aria-hidden="true" />
+      <span className="ds-focus-mode-switch-label">{t('focusMode')}</span>
+      <span className="ds-focus-mode-switch-track" aria-hidden="true">
+        <span className="ds-focus-mode-switch-thumb" />
+      </span>
     </button>
   )
 }
