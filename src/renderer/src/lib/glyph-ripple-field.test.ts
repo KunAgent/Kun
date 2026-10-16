@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { crestStrength, litStrength, patchLevel, rippleLifetimeMs } from './glyph-ripple-field'
+import {
+  crestStrength, glyphScriptForLanguage, glyphSetFor, litStrength, patchLevel, rippleLifetimeMs
+} from './glyph-ripple-field'
 
 const ripple = { id: 1, x: 0, y: 0, startedAt: 0, reach: 600 }
 const frontRadius = (age: number): number => 600 * (1 - Math.pow(1 - age / 1700, 3))
@@ -39,5 +41,22 @@ describe('glyph ripple wave', () => {
     }
     expect(low).toBeGreaterThan(0)
     expect(high).toBeGreaterThan(0)
+  })
+
+  it('draws Chinese for Chinese UI languages and Latin glyphs otherwise', () => {
+    expect(glyphScriptForLanguage('zh')).toBe('han')
+    expect(glyphScriptForLanguage('zh-CN')).toBe('han')
+    expect(glyphScriptForLanguage('zh-Hant-TW')).toBe('han')
+    expect(glyphScriptForLanguage('en')).toBe('latin')
+    expect(glyphScriptForLanguage('ja')).toBe('latin')
+    expect(glyphScriptForLanguage(undefined)).toBe('latin')
+  })
+
+  it('keeps each glyph set to single characters of its script', () => {
+    const han = glyphSetFor('han')
+    expect(han).toContain('鲲')
+    expect(han.length).toBeGreaterThan(100)
+    expect(han.every((glyph) => /^\p{Script=Han}$/u.test(glyph))).toBe(true)
+    expect(glyphSetFor('latin').every((glyph) => /^[A-Za-z0-9]$/.test(glyph))).toBe(true)
   })
 })

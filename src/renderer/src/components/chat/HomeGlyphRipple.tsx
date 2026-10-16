@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type ReactElement, type RefObject } from 'react'
-import { GlyphRippleField, type GlyphClearRect, type GlyphFieldColors } from '../../lib/glyph-ripple-field'
+import { useTranslation } from 'react-i18next'
+import {
+  GlyphRippleField,
+  glyphScriptForLanguage,
+  type GlyphClearRect,
+  type GlyphFieldColors
+} from '../../lib/glyph-ripple-field'
 import { useHomeGlyphRippleEnabled } from './use-home-glyph-ripple-enabled'
 
 /** Content the glyphs fade away from, with its padding and fade distance in field units. */
@@ -45,6 +51,11 @@ export function HomeGlyphRipple({ hostRef, active }: {
   active: boolean
 }): ReactElement | null {
   const enabled = useHomeGlyphRippleEnabled()
+  const { i18n } = useTranslation()
+  // Chinese UI draws Han characters, every other language Latin glyphs.
+  const script = glyphScriptForLanguage(i18n.resolvedLanguage ?? i18n.language)
+  const scriptRef = useRef(script)
+  scriptRef.current = script
   const shown = active && enabled === true
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const shownRef = useRef(shown)
@@ -105,7 +116,8 @@ export function HomeGlyphRipple({ hostRef, active }: {
         })
       }
       for (const child of Array.from(host.children)) if (child !== canvas) watch(child)
-      field.layout(host.clientWidth, host.clientHeight, zoom * (window.devicePixelRatio || 1), clear, readColors(canvas))
+      field.layout(host.clientWidth, host.clientHeight, zoom * (window.devicePixelRatio || 1), clear, readColors(canvas),
+        scriptRef.current)
     }
     function schedule(): void {
       if (!frame) frame = requestAnimationFrame(relayout)
@@ -148,6 +160,11 @@ export function HomeGlyphRipple({ hostRef, active }: {
       field.release()
     }
   }, [hostRef, mounted])
+
+  // A language switch rebuilds the grid in the other script.
+  useEffect(() => {
+    refreshRef.current?.()
+  }, [script])
 
   if (!mounted) return null
   return (
