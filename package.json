@@ -121,7 +121,7 @@
     "@google/design.md": "0.3.0",
     "@kun/extension-api": "1.5.0",
     "@kun/provider-catalog": "0.1.0",
-    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.1.2.tgz",
+    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.16.0.tgz",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@napi-rs/canvas": "^0.1.100",
@@ -218,6 +218,7 @@
     "@types/semver": "^7.8.0",
     "@types/ssh2": "^1.15.5",
     "@types/tar-stream": "3.1.4",
+    "@types/ws": "8.18.1",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
     "@univerjs/preset-sheets-core": "0.25.1",
@@ -261,8 +262,7 @@
     "typescript-eslint": "^8.59.4",
     "vite": "^6.2.0",
     "vitest": "^4.1.7",
-    "zustand": "^5.0.3",
-    "@types/ws": "8.18.1"
+    "zustand": "^5.0.3"
   },
   "overrides": {
     "@hono/node-server": "2.0.11",

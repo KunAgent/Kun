@@ -26,6 +26,7 @@ import type {
 } from '../contracts/turns.js'
 import type { KnowledgeBaseMount } from '../contracts/threads.js'
 import type { PrivateDeliveryState } from '../rooms/room-im-delivery.js'
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 
 /** Terminal status exposed by the public AgentLoop turn boundary. */
 export type TurnExecutionStatus = 'completed' | 'failed' | 'aborted'
@@ -114,6 +115,7 @@ export type PreparedTurnContext = Readonly<{
  * real approval or persist interactive state.
  */
 export type ToolTurnContextInput = {
+  attachmentAliases?: AttachmentAliases
   threadId: string
   turnId: string
   workspace: string

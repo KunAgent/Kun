@@ -75,6 +75,7 @@ async compact(this: TurnService, input: {
   }): Promise<CompactResponse> {
     const thread = await this['deps'].threadStore.get(input.threadId)
     if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+    if (thread.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
     // An external Agent owns its own context window. Compacting Kun's copy of
     // the history would not shrink the Agent's context, and the changed
     // history makes the next turn discard the Agent's native session.
@@ -87,6 +88,7 @@ async compact(this: TurnService, input: {
       return this['withThreadMutation'](input.threadId, async () => {
         const current = await this['deps'].threadStore.get(input.threadId)
         if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        if (current.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         if (current.turns.some(isActiveTurn)) {
           throw new TurnConflictError('thread has an active turn')
         }
@@ -214,6 +216,7 @@ async compact(this: TurnService, input: {
       build: async (snapshot, attempt) => {
         const current = await this['deps'].threadStore.get(input.threadId)
         if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        if (current.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         const executableItems = executableHistory(snapshot.items, current)
         const history = effectiveHistoryAfterLatestCompaction(executableItems)
           .filter((item) => item.kind !== 'error')

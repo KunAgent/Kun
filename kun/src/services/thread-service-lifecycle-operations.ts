@@ -1,5 +1,7 @@
+import { REMOTE_FORK, REMOTE_FORK_LOCKED, remoteForkLocked, type RemoteForkOptions } from './thread-service-remote-fork.js'
 import { createHash } from 'node:crypto'
 import { inheritGoogleDataBeforeThreadWrite } from '../gmail/thread-data-state.js'
+import { ThreadRevisionConflict } from '../domain/thread-revision-conflict.js'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { cloneExecutionTaskState } from '../tasks/execution-task-state.js'
 import { isAbsolute, relative, resolve } from 'node:path'
@@ -71,14 +73,17 @@ type InternalResumeSessionOptions = ResumeSessionOptions & {
 }
 
 export const threadServiceLifecycleOperations = {
-async delete(this: ThreadService, threadId: string): Promise<boolean> {
+async delete(this: ThreadService, threadId: string, options?: { expectedRevision: number }): Promise<boolean> {
     if ((await this.getMetadata(threadId))?.roomContext) {
       throw new Error('room execution history is retained; archive the room instead')
     }
     let rawDeleteCommitted = false
     try {
       return await withHistoryReferenceLifecycle(this, threadId, () => this['withThreadMutation'](threadId, async () => {
-        if ((await this.getMetadata(threadId))?.roomContext) {
+        const current = await this.getMetadata(threadId)
+        if (options && current && (current.revision ?? 0) !== options.expectedRevision)
+          throw new ThreadRevisionConflict(current.revision ?? 0)
+        if (current?.roomContext) {
           throw new Error('room execution history is retained; archive the room instead')
         }
         // A concurrent delete that arrives after this service already removed
@@ -109,6 +114,7 @@ async delete(this: ThreadService, threadId: string): Promise<boolean> {
         return true
       }))
     } catch (error) {
+      if (error instanceof ThreadRevisionConflict) throw error
       // Once raw deletion succeeds, keep the fence closed even when a
       // best-effort cleanup callback fails; reopening here would let a later
       // delayed write recreate the directory that was just removed.
@@ -143,6 +149,8 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
         ...options, [HISTORY_REFERENCE_MUTATION]: true
       } as InternalForkThreadOptions))
     }
+    const remote = (options as RemoteForkOptions)[REMOTE_FORK]
+    if (remote && !(options as RemoteForkOptions)[REMOTE_FORK_LOCKED]) return remoteForkLocked(this, threadId, options)
     if (options.designCloneOperationId && !internalOptions[DESIGN_CLONE_COMMIT]) {
       const source = await this['threadStore'].get(threadId)
       if (!source) throw new Error(`thread not found: ${threadId}`)
@@ -160,6 +168,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
     }
     const current = await this['threadStore'].get(threadId)
     if (!current) throw new Error(`thread not found: ${threadId}`)
+    if (current.remoteRewind?.phase === 'pending') throw new Error('history reconciliation required')
     if (
       options.approvalReviewer !== undefined &&
       options.approvalReviewer !== current.approvalReviewer
@@ -183,7 +192,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
       throw new Error('a Design fork must use a different document target')
     }
     const now = this['nowIso']()
-    const forkId = internalOptions[DESIGN_CLONE_COMMIT] ?? this['ids'].next('thr')
+    const forkId = remote?.id ?? internalOptions[DESIGN_CLONE_COMMIT] ?? this['ids'].next('thr')
     const relation: ThreadRelation = options.relation ?? 'fork'
     const targetTurnId = options.turnId?.trim()
     const targetTurnIndex = targetTurnId
@@ -279,6 +288,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
     })
     const record: ThreadRecord = {
       ...fork,
+      ...(remote ? { remoteFork: structuredClone(remote.provenance), harnessId: current.harnessId } : {}),
       ...(forkIncludesLatestTurn && current.executionTasks ? { executionTasks: cloneExecutionTaskState(current.executionTasks, forkId, now) } : {}),
       updatedAt: now,
       turns: clonedTurns

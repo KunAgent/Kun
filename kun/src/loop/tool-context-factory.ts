@@ -37,6 +37,7 @@ export function createToolExecutionContext(
     threadId: input.threadId,
     turnId: input.turnId,
     workspace: input.workspace,
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: input.attachmentAliases } : {}),
     ...(input.workspaceCheckpointRequestId
       ? { workspaceCheckpointRequestId: input.workspaceCheckpointRequestId }
       : {}),

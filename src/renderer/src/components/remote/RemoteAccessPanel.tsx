@@ -313,9 +313,10 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
             onError={setError}
           />
 
-          <p className="px-1 text-[11px] leading-4 text-ds-faint">
-            {t('remoteAccessSecurityHint')} {t('remoteAccessExternalHint')}
-          </p>
+          <div className="space-y-2 px-1 text-[11px] leading-4 text-ds-faint">
+            <p>{t('remoteAccessSecurityHint')} {t('remoteAccessExternalHint')}</p>
+            {link.api ? <p>{t('remoteAccessMobileSecurityHint')}</p> : null}
+          </div>
         </div>
       )}
     </section>

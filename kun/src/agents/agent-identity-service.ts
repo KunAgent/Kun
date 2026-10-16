@@ -1,3 +1,4 @@
+import { withManagerDataMutex } from '../manager/data-mutex.js'
 import { migrateAgentPermissions } from './agent-permission-migration.js'
 import { observeRoomRepository } from '../rooms/task-workspace-service.js'
 import { createHash, randomUUID } from 'node:crypto'
@@ -35,7 +36,7 @@ export class AgentIdentityService {
     return result.result
   }
   async initialize(): Promise<void> {
-    if (!this.initializing) this.initializing = this.migrate().then(() => migrateAgentPermissions(this.store)).catch((error) => { this.initializing = undefined; throw error })
+    if (!this.initializing) this.initializing = withManagerDataMutex('agent-directory', () => this.migrate().then(() => migrateAgentPermissions(this.store))).catch((error) => { this.initializing = undefined; throw error })
     return this.initializing
   }
   private async migrate(): Promise<void> {
@@ -79,6 +80,9 @@ export class AgentIdentityService {
       ...(rows.length > input.limit ? { nextCursor: String(rows[input.limit - 1].seq) } : {}) }
   }
   async create(raw: unknown): Promise<{ agent: AgentIdentity }> {
+    return withManagerDataMutex('agent-directory', () => this.createNow(raw))
+  }
+  private async createNow(raw: unknown): Promise<{ agent: AgentIdentity }> {
     const input = CreateAgentRequest.parse(raw)
     const key = 'agent-create:' + input.clientRequestId, hash = fingerprint(input)
     const replay = await this.store.getRequest(key)
@@ -107,6 +111,9 @@ export class AgentIdentityService {
     return saved.result as typeof result
   }
   async update(id: string, raw: unknown): Promise<{ agent: AgentIdentity }> {
+    return withManagerDataMutex('agent-directory', () => this.updateNow(id, raw))
+  }
+  private async updateNow(id: string, raw: unknown): Promise<{ agent: AgentIdentity }> {
     const parsed = UpdateAgentRequest.parse(raw)
     // Zod defaults inside optional fields must not turn a partial update into a reset.
     const input = Object.fromEntries(Object.entries(parsed).filter(([key]) =>

@@ -14,6 +14,8 @@ import type {
 import type { TurnItem } from '../contracts/items.js'
 import type { ToolResultImage } from './tool-result-image.js'
 import type { ResolvedTurnAttachments } from './turn-execution-types.js'
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
+import { projectSharedAttachment } from '../attachments/shared-attachment-content.js'
 
 const MAX_TURN_DOCUMENT_CHARS = 400_000
 
@@ -33,6 +35,7 @@ export class TurnAttachmentService {
     threadId: string
     workspace: string
     modelCapabilities: ModelCapabilityMetadata
+    attachmentAliases?: AttachmentAliases
   }): Promise<ResolvedTurnAttachments> {
     if (input.attachmentIds.length === 0) {
       return { imageAttachments: [], textFallbacks: [], documents: [] }
@@ -54,10 +57,11 @@ export class TurnAttachmentService {
     let remainingDocumentChars = MAX_TURN_DOCUMENT_CHARS
     let totalAttachmentBytes = 0
     for (const id of input.attachmentIds) {
-      const attachment = await attachmentStore.resolveContent(id, {
+      const original = await attachmentStore.resolveContent(id, {
         threadId: input.threadId,
         workspace: input.workspace
       })
+      const attachment = await projectSharedAttachment(original, input.threadId, input.attachmentAliases)
       totalAttachmentBytes += attachment.data.byteLength
       if (totalAttachmentBytes > MAX_TURN_ATTACHMENT_BYTES) {
         throw new Error(`turn attachments exceed ${MAX_TURN_ATTACHMENT_BYTES} byte limit`)
@@ -128,6 +132,7 @@ export class TurnAttachmentService {
     threadId: string
     workspace: string
     modelCapabilities: ModelCapabilityMetadata
+    restrictMetadata?: boolean
   }): Promise<NonNullable<import('../ports/model-client.js').ModelRequest['messageAttachments']>> {
     const users = input.items.filter(
       (item): item is Extract<TurnItem, { kind: 'user_message' }> =>
@@ -139,7 +144,8 @@ export class TurnAttachmentService {
         attachmentIds,
         threadId: input.threadId,
         workspace: input.workspace,
-        modelCapabilities: input.modelCapabilities
+        modelCapabilities: input.modelCapabilities,
+        attachmentAliases: item.attachmentAliases ?? (input.restrictMetadata ? [] : undefined)
       })
       return [item.id, payload] as const
     }))
@@ -151,6 +157,7 @@ export class TurnAttachmentService {
     threadId: string
     workspace: string
     modelCapabilities: ModelCapabilityMetadata
+    attachmentAliases?: AttachmentAliases
   }): Promise<ModelMessageAttachments> {
     try {
       const attachments = await this.resolveTurnAttachments(input)

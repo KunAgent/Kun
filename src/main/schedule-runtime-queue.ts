@@ -1,3 +1,4 @@
+import { runAuditedSchedule } from './schedule-run-audit'
 import type {
   AppSettingsV1,
   ClawImChannelV1,
@@ -420,7 +421,8 @@ export class ScheduleExecutionQueue {
         model: task.model,
         reasoningEffort: task.reasoningEffort
       })
-      const result = await this.runPrompt(settings, {
+      const result = await runAuditedSchedule(this.deps, settings, task.id, (clientRequestId) => this.runPrompt(settings, {
+        clientRequestId,
         prompt: task.prompt,
         title: scheduledThreadTitle(task.title),
         workspaceRoot,
@@ -434,7 +436,7 @@ export class ScheduleExecutionQueue {
         waitForResult: false,
         responseTimeoutMs: TASK_RESPONSE_TIMEOUT_MS,
         signal: this.stopController.signal
-      })
+      }))
       if (this.stopped) return { ok: false, message: 'Schedule runtime stopped.' }
       if (!result.ok) {
         const finishedAt = new Date()
@@ -550,6 +552,7 @@ export class ScheduleExecutionQueue {
       workspaceRoot: options.workspaceRoot.trim() || this.resolveDefaultWorkspaceRoot(settings),
       ...(options.threadId ? { threadId: options.threadId } : {}),
       model: options.model,
+      ...(options.clientRequestId ? { clientRequestId: options.clientRequestId } : {}),
       ...(options.providerId ? { providerId: options.providerId } : {}),
       reasoningEffort: options.reasoningEffort,
       mode: options.mode,

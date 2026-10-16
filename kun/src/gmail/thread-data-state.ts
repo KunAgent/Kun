@@ -5,7 +5,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import { GoogleWorkspaceModelPolicyError } from '../domain/google-workspace-model-policy.js'
 import type { GmailServicePort } from './ports.js'
 import type { GmailModelDataPolicyOptions, GmailModelSelection, GmailThreadDataState } from './model-data-policy.js'
-import { roomPeerStoreBinding } from '../rooms/room-peer-tools.js'
+import { roomPeerStoreBinding } from '../rooms/room-peer-store-binding.js'
 import { hasActiveImMirror } from './room-data-boundary.js'
 
 const MAX_LINEAGE = 128

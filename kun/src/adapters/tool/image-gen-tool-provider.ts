@@ -13,6 +13,7 @@ import type { CapabilityToolProvider } from './capability-registry.js'
 import { resolveWorkspacePath } from './builtin-tool-utils.js'
 import { LocalToolHost } from './local-tool-host.js'
 import { createImageGenClient } from './image-gen-clients.js'
+import { sharedAttachmentName } from '../../attachments/shared-attachment-content.js'
 import {
   ImageGenHttpError,
   SIZE_TIERS,
@@ -398,7 +399,7 @@ export function buildImageGenToolProviders(
           })
           attachments.push({
             id: attachment.id,
-            name: attachment.name,
+            name: context.attachmentAliases !== undefined ? fileName : attachment.name,
             mimeType: attachment.mimeType,
             ...(attachment.width ? { width: attachment.width } : {}),
             ...(attachment.height ? { height: attachment.height } : {})
@@ -520,7 +521,7 @@ async function collectReferenceImages(
       'invalid_reference_attachment'
     )
     if ('error' in validated) return validated
-    images.push({ name: attachment.name, mimeType: validated.mimeType, data: attachment.data })
+    images.push({ name: sharedAttachmentName(attachment, context.attachmentAliases), mimeType: validated.mimeType, data: attachment.data })
   }
   return { images }
 }

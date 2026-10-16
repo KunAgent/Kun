@@ -1,3 +1,4 @@
+import { contextGeneration } from './agent-lifecycle-state.js'
 import { realpath, stat } from 'node:fs/promises'
 import { isDeepStrictEqual } from 'node:util'
 import type { Room, RoomMember } from '../contracts/rooms.js'
@@ -29,6 +30,7 @@ export async function privateExecutionBinding(rooms: RoomRuntime, room: Room,
     request.cancellationRequested || !request.admissionAttempted || (request.clientSurface ?? 'gui') !== 'gui' ||
     !request.turnId || !request.privateRunId || !request.privateWorkspace ||
     accepted.id !== room.id || accepted.conversationKind !== 'user_agent' ||
+    contextGeneration(accepted) !== contextGeneration(room) ||
     (accepted.privateEpoch ?? 0) !== (room.privateEpoch ?? 0) || accepted.privateWorkspace !== room.privateWorkspace ||
     accepted.defaultMemberId !== room.defaultMemberId) return
   const member = accepted.members.find((item) => item.id === accepted.defaultMemberId)

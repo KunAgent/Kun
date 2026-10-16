@@ -1,3 +1,4 @@
+import { contextGeneration, lifecycleRow } from '../agents/agent-lifecycle-state.js'
 import { resultFingerprint } from './room-result-inbox.js'
 import type { RoomResultInbox } from '../contracts/room-result-inbox.js'
 import { isDeepStrictEqual } from 'node:util'
@@ -68,6 +69,8 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
   const room = await deps.store.get<Room>('room', scope.roomId)
   const agent = await deps.store.get<AgentIdentity>('agent_identity', scope.participantAgentId)
   if (!room || room.value.archivedAt || room.value.conversationKind !== 'user_agent' || !agent || agent.value.archivedAt) return null
+  const lifecycle = await lifecycleRow(deps.store, room.value)
+  if (lifecycle?.value.state === 'restarting' || contextGeneration(room.value) !== contextGeneration(base.value.roomSnapshot)) return null
   if ((room.value.privateEpoch ?? 0) !== (base.value.roomSnapshot.privateEpoch ?? 0) ||
     room.value.privateWorkspace !== base.value.roomSnapshot.privateWorkspace || !deps.agentDirectory) return null
   let snapshot: Room

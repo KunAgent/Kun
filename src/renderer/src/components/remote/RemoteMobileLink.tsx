@@ -1,4 +1,7 @@
-import type { ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
+import type { MobileLinkScope } from '@shared/mobile-link-scopes'
+import type { MobileLinkStatus } from '@shared/mobile-link'
+import { MobileScopeOptions, PERSONAL_SCOPES } from './MobileScopeOptions'
 import { Smartphone } from 'lucide-react'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
@@ -15,13 +18,14 @@ import {
 /** iOS pairing requests, pinned to the top of the panel until allowed. */
 export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElement | null {
   const { zh, enabled, state, busy, confirm } = link
+  const [choices, setChoices] = useState<Record<string, MobileLinkScope[]>>({})
   if (!enabled || !state?.pairings.length) return null
   return (
     <div className="flex flex-col gap-2">
       {state.pairings.map((pairing) => (
         <div
           key={pairing.id}
-          className="flex items-center gap-2.5 rounded-xl border border-accent-tint/30 bg-accent-soft px-3 py-2.5"
+          className="flex flex-wrap items-center gap-2.5 rounded-xl border border-accent-tint/30 bg-accent-soft px-3 py-2.5"
         >
           <RemoteIconTile active>
             <Smartphone size={15} />
@@ -34,10 +38,12 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
             type="button"
             className={REMOTE_PRIMARY_BUTTON_CLASS}
             disabled={Boolean(busy)}
-            onClick={(event) => runTrustedUserActivation(event, () => confirm(pairing.id))}
+            onClick={(event) => runTrustedUserActivation(event, () => confirm(pairing.id, choices[pairing.id] ?? PERSONAL_SCOPES))}
           >
             {zh ? '允许访问' : 'Allow access'}
           </button>
+          <MobileScopeOptions zh={zh} disabled={Boolean(busy)} value={choices[pairing.id] ?? PERSONAL_SCOPES}
+            onChange={(value) => setChoices((current) => ({ ...current, [pairing.id]: value }))} />
         </div>
       ))}
     </div>
@@ -110,17 +116,28 @@ export function MobileChannelRow({ link }: { link: MobileLink }): ReactElement |
   )
 }
 
-/** Granted iOS devices, listed with browser clients under connected devices. */
+function MobileGrantRow({ link, grant }: { link: MobileLink; grant: MobileLinkStatus['grants'][number] }): ReactElement {
+  const { zh, busy, revoke, setScopes } = link
+  const serialized = JSON.stringify(grant.scopes ?? PERSONAL_SCOPES)
+  const [draft, setDraft] = useState<MobileLinkScope[]>(grant.scopes ?? PERSONAL_SCOPES)
+  useEffect(() => { setDraft(JSON.parse(serialized)) }, [grant.id, serialized])
+  const dirty = [...draft].sort().join(',') !== [...(grant.scopes ?? PERSONAL_SCOPES)].sort().join(',')
+  return <RemoteRow className="flex-wrap">
+    <RemoteStatusDot on />
+    <RemoteRowText title={grant.name ?? grant.controllerId} subtitle={zh ? 'Kun iOS · 中继' : 'Kun iOS · relay'} />
+    <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={() => revoke(grant.id)}>
+      {zh ? '撤销' : 'Revoke'}
+    </button>
+    <MobileScopeOptions zh={zh} value={draft} onChange={setDraft} disabled={Boolean(busy)} />
+    {dirty ? <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={Boolean(busy)}
+      onClick={(event) => runTrustedUserActivation(event, () => setScopes(grant.id, draft))}>
+      {zh ? '保存访问权限' : 'Save access permissions'}
+    </button> : null}
+  </RemoteRow>
+}
+
+/** Granted iOS devices retain advanced permissions only for this access session. */
 export function MobileGrantRows({ link }: { link: MobileLink }): ReactElement[] {
-  const { zh, enabled, state, busy, revoke } = link
-  if (!enabled || !state) return []
-  return state.grants.map((grant) => (
-    <RemoteRow key={grant.id}>
-      <RemoteStatusDot on />
-      <RemoteRowText title={grant.name ?? grant.controllerId} subtitle={zh ? 'Kun iOS · 中继' : 'Kun iOS · relay'} />
-      <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={() => revoke(grant.id)}>
-        {zh ? '撤销' : 'Revoke'}
-      </button>
-    </RemoteRow>
-  ))
+  if (!link.enabled || !link.state) return []
+  return link.state.grants.map((grant) => <MobileGrantRow key={grant.id} link={link} grant={grant} />)
 }

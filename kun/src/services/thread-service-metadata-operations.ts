@@ -62,6 +62,7 @@ import { type ThreadService, type ThreadServiceOptions, type ListThreadsOptions,
 import { adeProjectDefaultsRevision, canonicalProjectIdentity } from '../shared/project-identity.js'
 import { ProjectDefaultsStaleError, resolveThreadExecutionConfig } from '../domain/thread-execution-config.js'
 import { stampThreadExecutionConfig } from '../domain/thread-execution-config.js'
+import { ThreadRevisionConflict } from '../domain/thread-revision-conflict.js'
 
 function toThreadStoreListOptions(options: ListThreadsOptions): ThreadStoreListOptions {
   const storeOptions: ListThreadsOptions = { ...options }
@@ -312,10 +313,12 @@ async update(this: ThreadService, threadId: string, patch: {
     relation?: ThreadRelation
     /** Host-only provenance update; omitted from the public thread-update schema. */
     workbenchOrigin?: ThreadRecord['workbenchOrigin']
-  }): Promise<ThreadRecord> {
+  }, options?: { expectedRevision: number }): Promise<ThreadRecord> {
     const updated = await this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
+      if (options && (current.revision ?? 0) !== options.expectedRevision)
+        throw new ThreadRevisionConflict(current.revision ?? 0)
       if (current.roomContext) {
         const protectedFields = ['workspace', 'taskWorkspaceId', 'additionalWorkspaces', 'knowledgeBases', 'mode',
           'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation', 'harnessId', 'collaboration'] as const
@@ -401,14 +404,21 @@ async update(this: ThreadService, threadId: string, patch: {
         delete (merged as { parentThreadId?: string }).parentThreadId
       }
       const next = touchThread(merged, this['nowIso']())
-      await this['threadStore'].upsert(next)
+      let committed = next
+      if (options) {
+        const conditional = this['threadStore'].upsertIfRevision
+        if (!conditional) throw new Error('CONDITIONAL_WRITE_UNAVAILABLE')
+        const result = await conditional.call(this['threadStore'], next, options.expectedRevision)
+        if (!result.applied) throw new ThreadRevisionConflict(result.revision)
+        committed = result.thread ?? { ...next, revision: result.revision }
+      } else await this['threadStore'].upsert(next)
       if (next.historyRefId && patch.workspace !== undefined) {
         const snapshot = await this['sessionStore'].loadSession(threadId) ??
           toSessionSnapshot(next, next.updatedAt, await this['sessionStore'].loadItems(threadId))
         await this['sessionStore'].upsertSession({ ...snapshot, historyRefId: next.historyRefId,
           workspace: next.workspace, updatedAt: next.updatedAt })
       }
-      return next
+      return committed
     })
     await this['events'].record({
       kind: 'thread_updated',

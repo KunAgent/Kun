@@ -124,6 +124,8 @@ gh pr create --base develop --head <branch> --title "<title>" --body-file <file>
 ## Repository Hygiene
 
 - Keep every tracked authored text file at or below 700 physical lines. Split files by cohesive feature or operation before they cross the limit; do not bypass the gate with generated formatting or line compaction.
+- Name maintained modules, contracts, fixtures, and tests after their feature or operation, not delivery phases or numbered fragments such as `p1`, `p2`, or `part3`. Mixed feature dispatchers must be separated by responsibility, not hidden behind renamed phase buckets.
+- Keep only protocol archives currently referenced by the root and `kun/` manifests and lockfiles in `vendor/kun-remote/`. Verify installation and active script/test references before removing superseded versions; preserve needed history outside the checkout instead of accumulating release artifacts here.
 - Do not commit build artifacts, extracted apps, temporary logs, or local investigation notes.
 - Keep changes local to the requested area. Do not reformat the whole repository, reorder unrelated files, or remove existing comments as drive-by cleanup.
 - New content should stay ASCII unless the surrounding file or user-facing requirement clearly needs otherwise.

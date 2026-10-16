@@ -1,66 +1,60 @@
 import { z } from 'zod'
+import { REMOTE_METHOD_ORDER } from './method-order.js'
+import { CodeManagementParamSchemas, CodeTaskParamSchemas } from './code/contracts.js'
+import { AgentParamSchemas } from './agents/contracts.js'
+import { AgentSearchParamSchemas } from './agents/search-contracts.js'
+import { AgentConversationParamSchemas } from './agents/conversation-contracts.js'
+import { MessageParamSchemas } from './messages/contracts.js'
+import { AttentionParamSchemas } from './attention/contracts.js'
+import { ArtifactDirectoryParamSchemas } from './files/artifact-contracts.js'
+import { ExecutionQueueParamSchemas, ExecutionStopParamSchemas } from './execution/contracts.js'
+import { GoalParamSchemas } from './goals/contracts.js'
+import { ProjectFilesParamSchemas } from './files/project-contracts.js'
+import { CodeHistoryParamSchemas } from './code/history/contracts.js'
+import { GroupParamSchemas } from './groups/contracts.js'
+import { CollaborationParamSchemas } from './collaboration/contracts.js'
+import { ScheduleParamSchemas } from './schedules/contracts.js'
+import { PluginParamSchemas } from './plugins/contracts.js'
+import { AgentDirectoryParams } from './agents/directory.js'
+import { RequestParamSchemas } from './requests/contracts.js'
+import { ApprovalParamSchemas } from './approvals/contracts.js'
 export const RemoteId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
-const Page = { cursor: z.string().max(2048).optional() }
-const Thread = { threadId: RemoteId }
-const Message = {
-  text: z.string().max(64000),
-  attachmentIds: z.array(RemoteId).max(8).default([])
-}
-export const ParamSchemas = {
-  'catalog.get': z.object({}).strict(),
-  'agent.list': z.object(Page).strict(),
-  'agent.history': z.object({ agentId: RemoteId, ...Page }).strict(),
-  'agent.message.send': z.object({ agentId: RemoteId, ...Message }).strict(),
-  'code.list': z.object(Page).strict(),
-  'code.history': z.object({ ...Thread, ...Page }).strict(),
-  'code.create': z
-    .object({
-      projectId: RemoteId,
-      title: z.string().max(160).default('Mobile task'),
-      model: z.string().max(256).optional(),
-      // An Agent pick from `catalog.get` agents; re-validated server side.
-      harnessId: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/).optional(),
-      credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
-      providerId: z.string().min(1).max(128).optional()
-    })
-    .strict(),
-  'code.turn.start': z.object({ ...Thread, ...Message }).strict(),
-  'execution.stop': z
-    .object({
-      threadId: RemoteId.optional(),
-      turnId: RemoteId.optional(),
-      agentId: RemoteId.optional(),
-      executionId: RemoteId.optional()
-    })
-    .strict()
-    .refine((p) =>
-      p.agentId
-        ? Boolean(p.executionId) && !p.threadId && !p.turnId
-        : Boolean(p.threadId && p.turnId) && !p.executionId
-    ),
-  'request.get': z.object({ requestId: RemoteId }).strict(),
-  'approval.list': z
-    .object({ threadId: RemoteId.optional(), agentId: RemoteId.optional() })
-    .strict(),
-  'approval.prepare': z.object({ approvalId: RemoteId }).strict(),
-  'approval.resolve': z
-    .object({
-      approvalId: RemoteId,
-      challenge: z.string().max(256),
-      decision: z.enum(['allow', 'deny']),
-      choice: z.unknown().optional()
-    })
-    .strict(),
-  'input.resolve': z
-    .object({ inputId: RemoteId, answers: z.array(z.unknown()).max(20) })
-    .strict()
+const schemas = {
+  ...CodeManagementParamSchemas,
+  ...CodeTaskParamSchemas,
+  ...AgentParamSchemas,
+  ...AgentSearchParamSchemas,
+  ...AgentConversationParamSchemas,
+  ...MessageParamSchemas,
+  ...AttentionParamSchemas,
+  ...ArtifactDirectoryParamSchemas,
+  ...ExecutionQueueParamSchemas,
+  ...ExecutionStopParamSchemas,
+  ...GoalParamSchemas,
+  ...ProjectFilesParamSchemas,
+  ...CodeHistoryParamSchemas,
+  ...GroupParamSchemas,
+  ...CollaborationParamSchemas,
+  ...ScheduleParamSchemas,
+  ...PluginParamSchemas,
+  ...RequestParamSchemas,
+  ...ApprovalParamSchemas,
+  'agent.directory.list': AgentDirectoryParams,
+  'catalog.get': z.object({}).strict()
 } as const
+const orderedMethods = new Set<string>(REMOTE_METHOD_ORDER)
+if (orderedMethods.size !== REMOTE_METHOD_ORDER.length || orderedMethods.size !== Object.keys(schemas).length ||
+  Object.keys(schemas).some((method) => !orderedMethods.has(method))) {
+  throw new Error('REMOTE_SCHEMA_REGISTRATION_INCOMPLETE')
+}
+export const ParamSchemas = Object.fromEntries(REMOTE_METHOD_ORDER.map((method) => [method, schemas[method]])) as typeof schemas
 export type Method = keyof typeof ParamSchemas
 export const Envelope = z
   .object({
     accountId: RemoteId,
     deviceId: RemoteId,
     authorizationId: RemoteId,
+    scopes: z.array(z.enum(['personal', 'groups.read', 'groups.write', 'collaboration.read', 'collaboration.control', 'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage'])).max(9).default(['personal']),
     call: z
       .object({
         method: z.enum(Object.keys(ParamSchemas) as [Method, ...Method[]]),

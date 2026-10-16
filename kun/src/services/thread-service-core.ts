@@ -250,11 +250,11 @@ export interface ThreadService {
     relation?: ThreadRelation
     /** Host-only provenance update; omitted from the public thread-update schema. */
     workbenchOrigin?: ThreadRecord['workbenchOrigin']
-  }): Promise<ThreadRecord>;
+  }, options?: { expectedRevision: number }): Promise<ThreadRecord>;
   getGoal(threadId: string): Promise<ThreadGoal | null>;
-  setGoal(threadId: string, request: SetThreadGoalRequest): Promise<ThreadGoal>;
+  setGoal(threadId: string, request: SetThreadGoalRequest, options?: { expectedRevision: string }): Promise<ThreadGoal>;
   recordGoalUsage(threadId: string, tokenDelta: number): Promise<ThreadGoal | null>;
-  clearGoal(threadId: string): Promise<boolean>;
+  clearGoal(threadId: string, options?: { expectedRevision: string }): Promise<boolean>;
   getTodos(threadId: string): Promise<ThreadTodoList | null>;
   setTodos(threadId: string, request: SetThreadTodosRequest): Promise<ThreadTodoList>;
   setTodosFromTool(threadId: string, request: SetThreadTodosRequest): Promise<ThreadTodoList>;
@@ -267,7 +267,7 @@ export interface ThreadService {
   ): Promise<ThreadTodoList>;
   clearTodos(threadId: string): Promise<boolean>;
   syncTodosFromPlan(threadId: string, options: SyncPlanTodosOptions): Promise<ThreadTodoList>;
-  delete(threadId: string): Promise<boolean>;
+  delete(threadId: string, options?: { expectedRevision: number }): Promise<boolean>;
   fork(threadId: string, options?: ForkThreadOptions ): Promise<ThreadRecord>;
   resumeSession(
     sessionId: string,

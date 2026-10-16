@@ -1,3 +1,4 @@
+import type { RoomStoreEvent } from '../../rooms/room-store.js'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import type { ServerRuntime } from './server-runtime.js'
 
@@ -8,6 +9,7 @@ export function roomEventStream(input: {
   roomId: string
   request: Request
   sinceSeq: number
+  projectEvent?(event: RoomStoreEvent): RoomStoreEvent | null
 }): Response {
   const encoder = new TextEncoder()
   let cursor = input.sinceSeq
@@ -31,11 +33,15 @@ export function roomEventStream(input: {
         const events = await input.rooms.service.store.events(input.roomId, cursor, 100)
         if (closed) return
         if (events.length) {
-          streamController.enqueue(encoder.encode(events.map((event) =>
-            `id: ${event.seq}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`).join('')))
+          const projected = input.projectEvent ? events.flatMap((event) => { const value = input.projectEvent!(event); return value ? [value] : [] }) : events
+          if (projected.length) {
+            streamController.enqueue(encoder.encode(projected.map((event) =>
+              `id: ${event.seq}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`).join('')))
+            lastSentAt = Date.now()
+          }
           cursor = events.at(-1)!.seq
-          lastSentAt = Date.now()
-        } else if (Date.now() - lastSentAt > 15_000) {
+        }
+        if (Date.now() - lastSentAt > 15_000) {
           streamController.enqueue(encoder.encode(': heartbeat\n\n'))
           lastSentAt = Date.now()
         }

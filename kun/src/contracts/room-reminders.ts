@@ -46,6 +46,7 @@ export const RoomReminderSchema = z.object({
   schemaVersion: z.literal(1), reminderId: RoomIdSchema, roomId: RoomIdSchema,
   participantAgentId: ParticipantAgentId, memberId: RoomIdSchema,
   clientSurface: z.enum(['gui', 'im', 'api']).optional(), imConnectionId: RoomIdSchema.optional(),
+  remoteDeviceId: RoomIdSchema.optional(),
   note: z.string().trim().min(1).max(1000), anchorMessageId: RoomIdSchema.optional(),
   fireAt: Timestamp, status: z.enum(['scheduled', 'paused', 'fired', 'cancelled', 'expired']),
   ...RoomReminderOptionsShape,

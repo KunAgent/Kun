@@ -135,6 +135,11 @@ export class AgentSdkModelProbe {
       : undefined
   }
 
+  /** Spawn-free cached model facts, under the same freshness rule as `peek`. */
+  peekInfo(definition: HarnessDefinition): HarnessModelCatalog['modelInfo'] | undefined {
+    return this.peek(definition) ? this.cache.get(this.cacheKey(definition))?.catalog.modelInfo : undefined
+  }
+
   /**
    * Best-effort probe; never throws — a harness that cannot start or answer
    * the control request returns `[]` so the route falls back to

@@ -6,6 +6,7 @@ import {
 export const mobileLink: MobileLinkApi = {
   status: () => ipcRenderer.invoke(channels.status),
   enable: (value) => ipcRenderer.invoke(channels.enable, value),
-  confirm: (id) => ipcRenderer.invoke(channels.confirm, id),
+  confirm: (id, scopes) => ipcRenderer.invoke(channels.confirm, id, scopes),
+  setScopes: (id, scopes) => ipcRenderer.invoke(channels.setScopes, id, scopes),
   revoke: (id) => ipcRenderer.invoke(channels.revoke, id)
 }

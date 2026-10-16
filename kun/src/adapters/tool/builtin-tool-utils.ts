@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { effectiveSandboxMode, pathAllowedByScopes } from './sandbox-policy.js'
 import { isBackgroundShellOutputPath } from '../../services/background-shell-output.js'
+import { isSharedAttachmentCachePath, sharedAttachmentReadPath } from '../../attachments/shared-attachment-content.js'
 import type {
   EditInstruction,
   FsStats,
@@ -51,6 +52,14 @@ export async function resolveWorkspacePath(
   const roots = [...new Set([context.workspace, ...(context.additionalWorkspaces ?? [])].map(workspaceRoot))]
   const root = roots[0]!
   const lexicalAbsolutePath = isAbsolute(inputPath) ? resolve(inputPath) : resolve(root, inputPath)
+  if (context.attachmentAliases !== undefined || isSharedAttachmentCachePath(lexicalAbsolutePath)) {
+    const physical = await resolvePathThroughSymlinks(lexicalAbsolutePath)
+    if (isSharedAttachmentCachePath(physical)) {
+      const allowed = await sharedAttachmentReadPath(physical, context)
+      if (!allowed) throw new Error('SHARED_ATTACHMENT_PATH_REJECTED')
+      return { workspaceRoot: root, absolutePath: allowed, relativePath: normalizeToolPath(relative(root, allowed)) }
+    }
+  }
   const delegatedPathBoundary = context.allowedReadPaths !== undefined
   if (
     delegatedPathBoundary &&

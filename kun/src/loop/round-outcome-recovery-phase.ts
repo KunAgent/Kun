@@ -450,6 +450,7 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
       threadId: input.threadId,
       turnId: input.turnId,
       workspace: prepared.workspace,
+      ...(input.turn.attachmentAliases !== undefined ? { attachmentAliases: input.turn.attachmentAliases } : {}),
       ...(input.turn.workspaceCheckpointRequestId
         ? { workspaceCheckpointRequestId: input.turn.workspaceCheckpointRequestId }
         : {}),

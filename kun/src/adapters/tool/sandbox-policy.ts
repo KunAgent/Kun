@@ -13,6 +13,7 @@ import type {
   ToolProviderKind
 } from '../../ports/tool-host.js'
 import type { LocalTool } from './local-tool-host.js'
+import { isSharedAttachmentCachePath } from '../../attachments/shared-attachment-content.js'
 import {
   isPathInsideOrEqual,
   resolveExistingWorkspaceRoot,
@@ -191,6 +192,9 @@ export function canWritePath(
     | 'allowedWritePaths'
   >
 ): { ok: true } | { ok: false; block: SandboxBlock } {
+  const candidate = isAbsolute(absolutePath) ? resolve(absolutePath) : resolve(context.workspace, absolutePath)
+  if (isSharedAttachmentCachePath(candidate)) return { ok: false,
+    block: { code: 'sandbox_write_blocked', message: 'shared attachment copies are read only' } }
   if (
     context.allowedWritePaths &&
     !pathAllowedByScopes(absolutePath, context.workspace, context.allowedWritePaths)

@@ -1,3 +1,4 @@
+import { registerAgentLifecycleRoutes } from './register-agent-lifecycle-routes.js'
 import { registerAgentWorkRoutes } from './register-agent-work-routes.js'
 import { registerRoomResultInboxRoutes } from './register-room-result-inbox-routes.js'
 import { registerRoomPermissionRoutes } from './register-room-permission-routes.js'
@@ -103,6 +104,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerRoomProfileRoutes(add, runtime)
   registerRoomWardrobeRoutes(add)
   registerAgentIdentityRoutes(add)
+  registerAgentLifecycleRoutes(add)
   registerAgentHandoffRoutes(add)
   registerRoomEvidenceRoutes(add)
   registerRoomRunRoutes(add, runtime)

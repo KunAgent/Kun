@@ -53,6 +53,11 @@ export class CodexModelProbe {
       : undefined
   }
 
+  /** Spawn-free cached model facts, under the same freshness rule as `peek`. */
+  peekInfo(definition: HarnessDefinition): HarnessModelCatalog['modelInfo'] | undefined {
+    return this.peek(definition) ? this.cache.get(this.cacheKey(definition))?.catalog.modelInfo : undefined
+  }
+
   async probe(definition: HarnessDefinition): Promise<string[]> {
     return (await this.probeCatalog(definition)).models
   }

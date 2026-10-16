@@ -8,6 +8,7 @@ import { uploadRuntimeDocumentAttachment } from '../services/runtime-document-at
 import { uploadRuntimeImageAttachment } from '../services/runtime-image-attachment-service'
 import { readLocalPdfText } from '../services/write-pdf-text-service'
 import type { LinkDependencies } from './service'
+import { runtimeExportSource } from './export-source'
 const Receive = z
   .object({
     transferId: z.string().uuid(),
@@ -21,23 +22,6 @@ const Receive = z
     sha256: z.string().regex(/^[a-f0-9]{64}$/)
   })
   .strict()
-const Id = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
-const Export = z.union([
-  z
-    .object({
-      attachmentId: z.string().regex(/^att_[a-f0-9]{24}$/),
-      threadId: Id
-    })
-    .strict(),
-  z.object({ artifactId: Id, threadId: Id }).strict(),
-  z
-    .object({
-      artifactId: Id,
-      agentId: Id,
-      version: z.number().int().positive().optional()
-    })
-    .strict()
-])
 async function bytes(response: Response, max: number) {
   if (!response.body) throw new Error('FILE_UNAVAILABLE')
   const reader = response.body.getReader(),
@@ -94,20 +78,10 @@ const performTransfer: NonNullable<LinkDependencies['files']> = async (
 ) => {
   const lease = await scope.lease()
   if (call.method === 'attachment.export') {
-    const p = Export.parse(call.params)
     if (!lease.baseUrl) throw new Error('RUNTIME_UNAVAILABLE')
-    const path =
-      'attachmentId' in p
-        ? '/v1/remote/attachments/' + p.attachmentId + '?threadId=' + p.threadId
-        : 'agentId' in p
-          ? '/v1/remote/artifacts/agent/' +
-            p.agentId +
-            '/' +
-            p.artifactId +
-            (p.version ? '?version=' + p.version : '')
-          : '/v1/remote/artifacts/code/' + p.threadId + '/' + p.artifactId
-    const response = await fetch(lease.baseUrl + path, {
-      headers: { Authorization: 'Bearer ' + lease.runtimeToken },
+    const source = runtimeExportSource(call.params, scope, lease.runtimeToken)
+    const response = await fetch(lease.baseUrl + source.path, {
+      headers: source.headers,
       signal: AbortSignal.timeout(30000)
     })
     if (!response.ok) throw new Error('FILE_NOT_ALLOWED')

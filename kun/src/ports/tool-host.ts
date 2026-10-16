@@ -13,6 +13,7 @@ import type {
 } from '../contracts/turns.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { ExtensionToolCatalogEpoch, KnowledgeBaseMount } from '../contracts/threads.js'
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import type {
   UserInputRequest,
   UserInputResolution
@@ -155,6 +156,8 @@ export type PptWorkflowScope = Readonly<{
 }>
 
 export type ToolHostContext = {
+  /** Host-authored shared metadata snapshot. [] keeps the restricted fallback, undefined is an ordinary turn. */
+  attachmentAliases?: AttachmentAliases
   /** Host-authored room step scope, never accepted from model arguments. */
   roomAgent?: boolean
   roomStepKind?: 'coordination' | 'discussion' | 'execution' | 'review' | 'conversation'

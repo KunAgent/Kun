@@ -451,6 +451,8 @@ export type ServerRuntime = {
     accountId?: string
     reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
   }): Promise<'completed' | 'failed' | 'aborted'> | void
+  /** Canonical private runtime/config authorities excluded from remote project browsing. */
+  remoteProtectedPaths?: string[]
   runtimeToken: string
   insecure: boolean
   allocateSeq: (threadId: string) => number | Promise<number>
@@ -491,5 +493,6 @@ export type ServerRuntime = {
     id: 'attachments' | 'memory',
     enabled: boolean
   ): Promise<RuntimeConfigApplyResponse>
+  registerRemoteCleanup?(cleanup: () => Promise<void>): void
   shutdown?(): Promise<void>
 }

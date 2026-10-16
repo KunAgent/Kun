@@ -409,13 +409,14 @@ export abstract class AgentLoopBase {
 
   protected async dispatchToolCalls(input: ToolDispatchInput): Promise<ToolDispatchOutcome> {
     const thread = await this.opts.threadStore.get(input.threadId)
+    const turn = thread?.turns.find((candidate) => candidate.id === input.turnId)
     // Resolve the durable ceiling again before execution, including callbacks
     // that otherwise capture a per-turn request's broader approval settings.
     const guardedInput = thread?.roomContext ? {
       ...input, workspace: thread.workspace, approvalPolicy: thread.approvalPolicy,
       approvalReviewer: thread.approvalReviewer, sandboxMode: thread.sandboxMode
     } : input
-    const executionContext = createToolExecutionContext(guardedInput, {
+    const executionContext = createToolExecutionContext(turn ? { ...guardedInput, attachmentAliases: turn.attachmentAliases } : guardedInput, {
       memoryEnabled: Boolean(this.opts.memoryStore),
       ...(this.opts.allowedModelProviderIds
         ? { allowedModelProviderIds: this.opts.allowedModelProviderIds }
@@ -439,7 +440,6 @@ export abstract class AgentLoopBase {
       interactiveToolBridge: this.interactiveToolBridge
     })
     const context = thread ? applyRoomToolPolicy(executionContext, thread) : executionContext
-    const turn = thread?.turns.find((candidate) => candidate.id === input.turnId)
     if (turn?.paperContext) {
       await this.toolCallDispatcher.suppressAll(input, 'Frozen paper reading has no tools or context expansion')
       return 'budget_exhausted'

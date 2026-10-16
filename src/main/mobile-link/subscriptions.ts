@@ -10,11 +10,12 @@ export class MobileSubscriptions {
       fetch: typeof fetch
     }
   ) {}
-  clear() {
-    for (const c of this.streams.values()) c.abort()
-    this.streams.clear()
+  clear(device?: string) {
+    for (const [key, control] of this.streams) if (!device || key.startsWith(device + ':')) {
+      control.abort(); this.streams.delete(key)
+    }
   }
-  async subscribe(device: string, input: unknown) {
+  async subscribe(device: string, input: unknown, authority?: { accountId: string; deviceId: string; authorizationId: string; scopes: readonly string[] }) {
     const p = input as {
       kind?: string
       id?: string
@@ -23,13 +24,14 @@ export class MobileSubscriptions {
     }
     if (
       !p ||
-      !['agent', 'code'].includes(p.kind ?? '') ||
+      !['agent', 'code', 'group'].includes(p.kind ?? '') ||
       typeof p.id !== 'string' ||
       !/^[a-zA-Z0-9_-]{1,128}$/.test(p.id) ||
       !Number.isSafeInteger(p.since ?? 0) ||
       (p.since ?? 0) < 0
     )
       throw new Error('INVALID_SUBSCRIPTION')
+    if (p.kind === 'group' && !authority?.scopes.includes('groups.read')) throw new Error('REMOTE_SCOPE_REQUIRED')
     const key = device + ':' + p.kind + ':' + p.id
     this.streams.get(key)?.abort()
     this.streams.delete(key)
@@ -55,7 +57,9 @@ export class MobileSubscriptions {
           '?since=' +
           (p.since ?? 0),
         {
-          headers: { Authorization: 'Bearer ' + lease.runtimeToken },
+          headers: { Authorization: 'Bearer ' + lease.runtimeToken, ...(authority ? {
+            'X-Kun-Remote-Account': authority.accountId, 'X-Kun-Remote-Device': authority.deviceId,
+            'X-Kun-Remote-Authorization': authority.authorizationId, 'X-Kun-Remote-Scopes': authority.scopes.join(',') } : {}) },
           signal: control.signal
         }
       )

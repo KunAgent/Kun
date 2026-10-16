@@ -1,3 +1,4 @@
+import { contextGeneration } from './agent-lifecycle-state.js'
 import { z } from 'zod'
 import { stopDirectRequest } from './agent-direct-cancellation.js'
 import { privateExecutionBinding } from './agent-direct-execution.js'
@@ -33,7 +34,8 @@ export async function directActivity(rooms: RoomRuntime, roomId: string) {
     clientRequestId: row.value.message.clientRequestId, steer: row.value.steer, error: row.value.error,
     failureAcknowledged: row.value.status === 'failed' && row.value.failureAcknowledgedRevision === row.revision })
   const requests = rows.filter((row) => row.value.privateProtocol).map(requestSummary)
-  const activeRow = activeRows.find((row) => row.value.privateProtocol)
+  const activeRow = activeRows.find((row) => row.value.privateProtocol &&
+    (contextGeneration(row.value.roomSnapshot) === contextGeneration(room) || row.value.cancellationRequested))
   const active = activeRow ? requestSummary(activeRow) : undefined
   const run = activeRow?.value.privateRunId
     ? await rooms.deps.store.get<RoomRunRecord>('room_run', activeRow.value.privateRunId) : null

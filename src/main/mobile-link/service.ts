@@ -1,10 +1,18 @@
+import { appendHostMetadata } from './catalog-metadata'
+import type { SharedFileTransfer } from './share-files'
+import { MobileShareHosts } from './share-host'
+import { desktopScheduleDescriptors } from './desktop-schedules'
+import { MobileNotifications } from './notifications'
+import { MobileLinkAuthorities } from './authorities'
+import { mobileLinkScopes } from '../../shared/mobile-link-scopes'
 import { randomUUID } from 'node:crypto'
 import {
   RemoteApi,
+  RequestBudget,
   RemoteClient,
   validateCall,
+  hasRemoteOperationScope,
   READ_METHODS,
-  LIMITS,
   type DeviceIdentity,
   type Frame,
   type Socket
@@ -28,9 +36,15 @@ export type LinkDependencies = {
   origin: string
   name: string
   platform: string
+  appVersion?: string
   fetch: typeof fetch
   socket(url: string, headers: Record<string, string>): Socket
   lease(): Promise<ProtectedRuntimeRequestLease>
+  diagnostic?(code: string, details?: { attempt?: number; elapsedMs?: number }): void
+  sharedFiles?: SharedFileTransfer
+  desktopSchedules?(method: string, params: unknown, scope: {
+    accountId: string; deviceId: string; authorizationId: string; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[]
+  }, lease: ProtectedRuntimeRequestLease): Promise<unknown>
   files?(
     scope: {
       api: RemoteApi
@@ -44,8 +58,17 @@ export type LinkDependencies = {
   ): Promise<unknown>
 }
 export class MobileLinkService {
+  private authorities = new MobileLinkAuthorities()
+  private notifications: MobileNotifications
+  private shared: MobileShareHosts
+  private requestBudget = new RequestBudget()
+  private totalRequestBudget = new RequestBudget()
   private authorizationId = randomUUID()
   private authorizationExpiresAt = 0
+  private authorizationTimer?: ReturnType<typeof setTimeout>
+  private transportEpoch = 0
+  private lastRecoveryAt = -Infinity
+  private suspended = false
   private client?: RemoteClient
   private api?: RemoteApi
   private owner?: string
@@ -63,11 +86,6 @@ export class MobileLinkService {
   private deniedGrants = new Map<string, string | undefined>()
   private pairingPeers = new Map<string, string>()
   private grantsVersion = 0
-  private normal = 0
-  private control = 0
-  private bytes = 0
-  private normalBytes = 0
-  private controlBytes = 0
   private filePeers = new Set<string>()
   private enabling = false
   private enableOperation = 0
@@ -76,7 +94,14 @@ export class MobileLinkService {
   private unsubscribe: () => void
   private unsubscribeEnding: () => void
   private disconnecting: Promise<void> = Promise.resolve()
+  private statusRequest?: { generation: number; version: number; task: Promise<MobileLinkStatus> }
   constructor(private deps: LinkDependencies) {
+    this.notifications = new MobileNotifications(deps)
+    this.shared = new MobileShareHosts({ ...deps, files: deps.sharedFiles, budget: this.requestBudget, totalBudget: this.totalRequestBudget,
+      reserveFile: (peer) => {
+        if (this.filePeers.size >= 2 || this.filePeers.has(peer)) throw new Error('BACKPRESSURE')
+        this.filePeers.add(peer); return () => { this.filePeers.delete(peer) }
+      } })
     this.subscriptions = new MobileSubscriptions({
       lease: deps.lease,
       fetch: deps.fetch,
@@ -119,12 +144,20 @@ export class MobileLinkService {
   }
   stop() {
     ++this.generation
+    ++this.transportEpoch
+    clearTimeout(this.authorizationTimer)
+    this.authorizationTimer = undefined
+    this.statusRequest = undefined
+    this.suspended = false
     this.connectionAbort?.abort()
     this.connectionAbort = undefined
     this.client?.stop()
     this.client = undefined
     this.subscriptions.clear()
     this.peers.clear()
+    this.authorities.clear()
+    this.notifications.stop()
+    this.shared.stop()
     this.grantPeers.clear()
     this.deniedPeers.clear()
     this.deniedGrants.clear()
@@ -144,7 +177,80 @@ export class MobileLinkService {
     this.unsubscribe()
     this.unsubscribeEnding()
   }
-  async status(): Promise<MobileLinkStatus> {
+  suspend() {
+    if (!this.enabled || this.suspended) return
+    this.suspended = true
+    this.fenceTransport()
+    this.shared.suspend()
+    this.deps.diagnostic?.('HOST_SUSPENDED')
+    this.client?.stop()
+  }
+  reconnect(reason = 'NETWORK_RECOVERY') {
+    if (!this.enabled || this.sessionEnding || !this.client) return
+    this.shared.recover(reason)
+    if (reason === 'NETWORK_ONLINE' && this.online) return
+    if (reason === 'NETWORK_CHANGED' && this.online) {
+      // USB/debug/VPN interfaces can churn while the active route is healthy.
+      // Probe it; the existing pong deadline decides whether recovery is needed.
+      this.deps.diagnostic?.('NETWORK_HINT_CHECK')
+      try { this.client.send({ kind: 'ping' }) }
+      catch { this.reconnect('NETWORK_RECOVERY') }
+      return
+    }
+    if (!this.suspended && !this.online && Date.now() - this.lastRecoveryAt < 1000) return
+    this.lastRecoveryAt = Date.now()
+    const wasSuspended = this.suspended
+    this.suspended = false
+    this.fenceTransport()
+    this.deps.diagnostic?.(reason)
+    if (wasSuspended) this.client.start()
+    else this.client.reconnect()
+  }
+  private fenceTransport() {
+    ++this.transportEpoch
+    clearTimeout(this.authorizationTimer)
+    this.authorizationTimer = undefined
+    this.authorizationExpiresAt = 0
+    this.online = false
+    this.authorizationId = randomUUID()
+    this.subscriptions.clear()
+    this.peers.clear()
+  }
+  private transportCurrent(generation: number, epoch: number, signal?: AbortSignal) {
+    if (generation !== this.generation || epoch !== this.transportEpoch || signal?.aborted || this.suspended)
+      throw new Error('ACCOUNT_CHANGED')
+  }
+  private authorizeUntil(expiresAt: number) {
+    this.authorizationExpiresAt = expiresAt
+    clearTimeout(this.authorizationTimer)
+    this.authorizationTimer = setTimeout(() => {
+      if (this.authorizationExpiresAt === expiresAt) this.reconnect('LOCAL_LEASE_EXPIRED')
+    }, Math.max(1, expiresAt - Date.now()))
+  }
+  private notifyReconnected() {
+    // The phone may miss a sub-second host presence gap while its own WSS
+    // remains open. Rebuild lost subscriptions; never replay business calls.
+    for (const peer of [...this.peers].slice(0, 16)) {
+      if (!this.online) break
+      try {
+        this.client?.send({ kind: 'resync_required', id: randomUUID(), dst: peer,
+          payload: { reason: 'host_reconnected' } })
+      } catch {
+        this.deps.diagnostic?.('PEER_RESYNC_FAILED')
+      }
+    }
+  }
+  status(): Promise<MobileLinkStatus> {
+    if (this.statusRequest?.generation === this.generation && this.statusRequest.version === this.grantsVersion)
+      return this.statusRequest.task
+    const generation = this.generation, task = this.loadStatus()
+    this.statusRequest = { generation, version: this.grantsVersion, task }
+    void task.finally(() => {
+      if (this.statusRequest?.task === task) this.statusRequest = undefined
+    }).catch(() => {})
+    return task
+  }
+  private async loadStatus(): Promise<MobileLinkStatus> {
     const generation = this.generation
     const grantsVersion = this.grantsVersion
     let pairings: MobileLinkStatus['pairings'] = [],
@@ -163,7 +269,7 @@ export class MobileLinkService {
           this.error = undefined
         }
       } catch {
-        if (generation === this.generation)
+        if (generation === this.generation && grantsVersion === this.grantsVersion)
           this.error = 'CONNECTION_UNAVAILABLE'
       }
     }
@@ -174,7 +280,7 @@ export class MobileLinkService {
       error: this.error,
       deviceId: this.identity?.id,
       pairings,
-      grants
+      grants: grants.map((grant) => ({ ...grant, scopes: this.authorities.scopes(grant.controllerId, grant.id) }))
     }
   }
   async enable(value: boolean) {
@@ -227,6 +333,12 @@ export class MobileLinkService {
       if (this.deniedGrants.has(grant.id)) this.deniedGrants.set(grant.id, grant.controllerId)
     this.peers = new Set(grants.filter((grant) => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id)).map((grant) => grant.controllerId))
     this.grantPeers = new Map(grants.map((grant) => [grant.id, grant.controllerId]))
+    for (const peer of this.authorities.sync(grants)) this.permissionsChanged(peer)
+    const api = this.api, generation = this.generation
+    const eligible = () => this.enabled && !this.sessionEnding && this.api === api && generation === this.generation &&
+      [...this.grantPeers].some(([id, peer]) => !this.deniedGrants.has(id) && !this.deniedPeers.has(peer))
+    if (api && eligible()) this.notifications.start(api, eligible)
+    else this.notifications.stop()
   }
   private async setEnabled(value: boolean) {
     if (!value) {
@@ -277,47 +389,65 @@ export class MobileLinkService {
       throw error
     }
     this.enabled = true
-    const refreshPeers = async () => {
+    this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
+      current: () => this.enabled && generation === this.generation && !this.sessionEnding })
+    const refreshPeers = async (epoch: number, signal?: AbortSignal) => {
       const grantsVersion = this.grantsVersion
-      const { grants } = await api.request('/grants')
-      if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
-      if (grantsVersion !== this.grantsVersion) throw new Error('AUTHORIZATION_CHANGED')
+      const { grants } = await api.request('/grants', 'GET', undefined, false, signal)
+      this.transportCurrent(generation, epoch, signal)
+      if (grantsVersion !== this.grantsVersion) return
       this.updateGrants(grants)
     }
-    this.client = new RemoteClient({
-      ticket: async () => {
-        const started = Date.now()
-        await refreshPeers()
-        const ticket = await api.ticket()
-        this.authorizationExpiresAt = started + 60000
+    const transport = {
+      ticket: async (signal?: AbortSignal) => {
+        const started = Date.now(), epoch = ++this.transportEpoch
+        const [ticket] = await Promise.all([
+          api.request<{ url: string; ticket: string }>('/relay-tickets', 'POST', undefined, false, signal),
+          refreshPeers(epoch, signal)
+        ])
+        this.transportCurrent(generation, epoch, signal)
+        this.authorizeUntil(started + 60000)
         return ticket
       },
-      renew: async () => {
-        const started = Date.now()
-        await refreshPeers()
-        const result = await api.renew()
-        this.authorizationExpiresAt = started + 60000
+      renew: async (signal?: AbortSignal) => {
+        const started = Date.now(), epoch = this.transportEpoch
+        // Lease renewal must never wait behind noncritical grants/UI metadata.
+        const result = await api.request('/relay-lease', 'POST', undefined, false, signal)
+        this.transportCurrent(generation, epoch, signal)
+        this.authorizeUntil(started + 60000)
+        void refreshPeers(epoch, signal).catch(() => {
+          if (generation === this.generation && epoch === this.transportEpoch)
+            this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED')
+        })
         return result
       },
       socket: this.deps.socket,
-      state: (online) => {
+      budget: this.requestBudget,
+      state: (online: boolean) => {
         if (generation === this.generation) {
           this.online = online
-          if (online) this.authorizationId = randomUUID()
+          if (online) {
+            this.authorizationId = randomUUID()
+            this.notifyReconnected()
+          }
           else {
-            this.subscriptions.clear()
-            this.peers.clear()
+            this.fenceTransport()
           }
         }
       },
-      frame: (frame) => {
+      frame: (frame: Frame) => {
         if (generation === this.generation) void this.receive(frame, generation)
+      },
+      diagnostic: (code: string, details?: { attempt?: number; elapsedMs?: number }) => {
+        if (generation === this.generation) this.deps.diagnostic?.(code, details)
       }
-    })
+    }
+    this.client = new RemoteClient(transport)
     this.client.start()
     return this.status()
   }
-  async confirm(id: string) {
+  async confirm(id: string, rawScopes?: unknown) {
+    const scopes = mobileLinkScopes(rawScopes)
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
       throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)
@@ -329,7 +459,31 @@ export class MobileLinkService {
       for (const [grantId, controllerId] of this.deniedGrants)
         if (controllerId === peer) this.deniedGrants.delete(grantId)
     }
+    const status = await this.status()
+    if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
+    const grant = peer ? status.grants.find((grant) => grant.controllerId === peer && this.grantPeers.get(grant.id) === peer) : undefined
+    if (grant && this.authorities.set(peer!, grant.id, scopes)) this.permissionsChanged(peer!)
+    else if (scopes.length > 1 && !grant) throw new Error('AUTHORIZATION_NOT_READY')
+    return { ...status, grants: status.grants.map((g) => ({ ...g, scopes: this.authorities.scopes(g.controllerId, g.id) })) }
+  }
+  async setScopes(id: string, rawScopes: unknown) {
+    const scopes = mobileLinkScopes(rawScopes), peer = this.grantPeers.get(id)
+    if (!this.enabled || !peer || this.deniedGrants.has(id)) throw new Error('INVALID_GRANT')
+    if (this.authorities.set(peer, id, scopes)) this.permissionsChanged(peer)
     return this.status()
+  }
+  private peerAuthority(peer: string) {
+    const grantId = [...this.grantPeers].find(([, controllerId]) => controllerId === peer)?.[0]
+    return { id: this.authorities.identity(this.authorizationId, peer, grantId), scopes: this.authorities.scopes(peer, grantId) }
+  }
+  private permissionsChanged(peer: string) {
+    ++this.grantsVersion
+    this.statusRequest = undefined
+    this.subscriptions.clear(peer)
+    if (this.online && this.peers.has(peer)) {
+      try { this.client?.send({ kind: 'resync_required', id: randomUUID(), dst: peer, payload: { reason: 'permissions_changed' } }) }
+      catch { this.deps.diagnostic?.('PEER_RESYNC_FAILED') }
+    }
   }
   async revoke(id: string) {
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
@@ -340,13 +494,16 @@ export class MobileLinkService {
     if (peer) {
       this.peers.delete(peer)
       this.deniedPeers.add(peer)
+      this.authorities.remove(peer)
     }
     this.grantPeers.delete(id)
+    if (!this.grantPeers.size) this.notifications.stop()
     this.subscriptions.clear()
     await this.api.request('/grants/' + id, 'DELETE')
     return this.status()
   }
   private async receive(frame: Frame, generation: number) {
+    if (Object.hasOwn(frame, 'shared')) return
     const src = frame.src
     if (
       !src ||
@@ -356,24 +513,27 @@ export class MobileLinkService {
     )
       return
     if (frame.kind === 'subscribe') {
-      void this.subscriptions.subscribe(src, frame.payload).catch(() => {})
+      const authority = this.peerAuthority(src)
+      void this.subscriptions.subscribe(src, frame.payload, { accountId: this.owner!, deviceId: src,
+        authorizationId: authority.id, scopes: authority.scopes }).catch(() => {})
       return
     }
     if (frame.kind !== 'invoke' || !frame.id) return
     let fileReserved = false
-    let reserved = false,
-      control = false,
+    let release: (() => void) | undefined
+    let control = false,
       size = 0
-    const authority = this.authorizationId
+    const authority = this.peerAuthority(src)
     const current = () =>
       generation === this.generation &&
       this.online &&
       Date.now() < this.authorizationExpiresAt &&
-      authority === this.authorizationId &&
+      authority.id === this.peerAuthority(src).id &&
       this.peers.has(src)
     try {
       const call = validateCall(frame.payload)
       if (call.requestId !== frame.id) throw new Error('INVALID_REQUEST')
+      if (!hasRemoteOperationScope(call.method, authority.scopes)) throw new Error('REMOTE_SCOPE_REQUIRED')
       if (call.method.startsWith('attachment.')) {
         if (this.filePeers.size >= 2 || this.filePeers.has(src))
           throw new Error('BACKPRESSURE')
@@ -382,17 +542,11 @@ export class MobileLinkService {
       }
       control = call.method === 'execution.stop'
       size = Buffer.byteLength(JSON.stringify(call))
-      if (
-        (control
-          ? this.control >= LIMITS.controlPending || this.controlBytes + size > LIMITS.controlBytes
-          : this.normal >= LIMITS.pending - LIMITS.controlPending || this.normalBytes + size > LIMITS.bytes - LIMITS.controlBytes) ||
-        this.bytes + size > LIMITS.bytes
-      )
-        throw new Error('BACKPRESSURE')
-      if (control) { this.control++; this.controlBytes += size }
-      else { this.normal++; this.normalBytes += size }
-      this.bytes += size
-      reserved = true
+      const releasePeer = this.requestBudget.reserve(src, size, control)
+      try {
+        const releaseTotal = this.totalRequestBudget.reserve('all', size, control)
+        release = () => { releasePeer(); releaseTotal() }
+      } catch (error) { releasePeer(); throw error }
       if (call.expiresAt < Date.now() && !READ_METHODS.has(call.method))
         throw new Error('REQUEST_EXPIRED')
       const lease = await this.deps.lease()
@@ -409,20 +563,28 @@ export class MobileLinkService {
             api: this.api,
             peer: src,
             owner: this.owner,
-            authorizationId: authority,
+            authorizationId: authority.id,
             current,
             lease: async () => lease
           },
           call
         )
+      } else if (call.method === 'shares.list' || call.method === 'shares.manage') {
+        result = await this.shared.ownerInvoke(call.method, call, src, current)
+      } else if (call.method.startsWith('desktop.schedule.')) {
+        if (!this.deps.desktopSchedules || !this.owner) throw new Error('UNSUPPORTED_OPERATION')
+        result = await this.deps.desktopSchedules(call.method, call.params, {
+          accountId: this.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes }, lease)
       } else {
-        const response = await lease.request(
+        const shareReceipt = call.method === 'request.get' ? await this.shared.ownerInvoke(call.method, call, src, current) : null
+        const response = shareReceipt ? { ok: true, status: 200, body: JSON.stringify(shareReceipt) } : await lease.request(
           '/v1/remote/invoke',
           'POST',
           JSON.stringify({
             accountId: this.owner,
             deviceId: src,
-            authorizationId: authority,
+            authorizationId: authority.id,
+            scopes: authority.scopes,
             call
           })
         )
@@ -431,7 +593,10 @@ export class MobileLinkService {
           throw new Error(
             typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED'
           )
-        result = value
+        if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []),
+          ...(this.deps.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...this.shared.descriptors(authority.scopes)]
+        result = call.method === 'catalog.get' ? appendHostMetadata(value, {
+          deviceId: this.identity?.id, appVersion: this.deps.appVersion, platform: this.deps.platform }) : value
       }
       if (current())
         this.client?.send({
@@ -455,7 +620,7 @@ export class MobileLinkService {
               error: {
                 code,
                 uncertain:
-                  reserved &&
+                  Boolean(release) &&
                   !READ_METHODS.has(frame.payload?.method) &&
                   !CERTAIN_REJECTIONS.has(code)
               }
@@ -465,11 +630,7 @@ export class MobileLinkService {
       }
     } finally {
       if (fileReserved) this.filePeers.delete(src)
-      if (reserved) {
-        if (control) { this.control--; this.controlBytes -= size }
-        else { this.normal--; this.normalBytes -= size }
-        this.bytes -= size
-      }
+      release?.()
     }
   }
 }

@@ -1,3 +1,4 @@
+import { queueRevision, requirePolicyRevision } from '../domain/remote-policy-revision.js'
 import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { TurnService } from './turn-service-core.js'
@@ -23,11 +24,12 @@ export const turnServiceQueueControlOperations = {
     })
   },
 
-  async resumeQueuedTurns(this: TurnService, threadId: string): Promise<void> {
+  async resumeQueuedTurns(this: TurnService, threadId: string, options?: { expectedRevision: string }): Promise<void> {
     await this['withQueueDataMutation'](threadId, async () => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const thread = await this['deps'].threadStore.get(threadId)
         if (!thread) throw new Error(`thread not found: ${threadId}`)
+        requirePolicyRevision(queueRevision(thread), options?.expectedRevision)
         const sourceTurnId = thread.queueControl?.sourceTurnId ?? latestExecutedTurn(thread)?.id
         if (!thread.queueControl && !sourceTurnId) return
         const next = { ...thread, queueControl: undefined, queueResumeSourceTurnId: sourceTurnId }

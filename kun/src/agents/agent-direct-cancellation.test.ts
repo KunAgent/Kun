@@ -124,6 +124,27 @@ it('atomically rejects a publication already in flight when Stop wins the commit
   } finally { held.resolve(); await publication }
 })
 
+it('rechecks publication after an unrelated room revision changes without losing the reply', async () => {
+  const f = await fixture(), held = deferred(), entered = deferred()
+  const commit = f.store.commit.bind(f.store)
+  let delayed = false
+  vi.spyOn(f.store, 'commit').mockImplementation(async (input) => {
+    if (!delayed && input.puts?.some((put) => put.kind === 'message' && (put.value as RoomMessage).body === 'Still publish.')) {
+      delayed = true; entered.resolve(); await held.promise
+    }
+    return commit(input)
+  })
+  const publication = f.publish('Still publish.')
+  try {
+    await entered.promise
+    const room = (await f.store.get<import('../contracts/rooms.js').Room>('room', f.created.roomId))!
+    await putRoomDocument(f.store, 'room', room.id, room.id, { ...room.value, name: 'Renamed while replying' }, room)
+    held.resolve()
+    expect((await publication).isError).not.toBe(true)
+    expect(await f.messages()).toEqual(['Still publish.'])
+  } finally { held.resolve(); await publication }
+})
+
 it.each(['stopping', 'cancelled', 'recovery_required'] as const)('rejects a new private publication while request is %s', async (status) => {
   const f = await fixture(), row = await f.row()
   await putRoomDocument(f.store, 'request', row.id, row.roomId!, { ...row.value, status }, row)

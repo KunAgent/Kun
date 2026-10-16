@@ -38,6 +38,7 @@ export function createToolDiscoveryContext(
     threadId: input.threadId,
     turnId: input.turnId,
     workspace: input.workspace,
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: input.attachmentAliases } : {}),
     ...(input.orchestration ? { orchestration: input.orchestration } : {}),
     ...(input.messageSource && input.messageSource !== 'design_continuation'
       ? { messageSource: input.messageSource }

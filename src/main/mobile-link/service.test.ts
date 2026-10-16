@@ -436,7 +436,7 @@ describe('desktop phone boundary', () => {
       await tick()
       const methods = f.request.mock.calls.map((call) => JSON.parse(String(call[2])).call.method)
       expect(methods).toEqual(['catalog.get', 'catalog.get', 'execution.stop'])
-      expect(vi.mocked(f.socket.send).mock.calls.some(([raw]) => {
+      await expect.poll(() => vi.mocked(f.socket.send).mock.calls.some(([raw]) => {
         const frame = JSON.parse(raw)
         return frame.id === 'large-2' && frame.payload?.error?.code === 'BACKPRESSURE'
       })).toBe(true)

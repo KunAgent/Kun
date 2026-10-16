@@ -53,6 +53,15 @@ describe('mobile runtime subscription recovery', () => {
     await watching
     expect(f.send).not.toHaveBeenCalled()
   })
+  it('never opens a group stream without trusted scope and forwards trusted scope headers only', async () => {
+    const f = fixture(new Response('data: {"seq":5}\n\n'))
+    const group = { kind: 'group', id: 'group', since: 0 }
+    await expect(f.service.subscribe('phone', group)).rejects.toThrow('REMOTE_SCOPE_REQUIRED')
+    expect(f.fetcher).not.toHaveBeenCalled()
+    await f.service.subscribe('phone', group, { accountId: 'owner', deviceId: 'phone', authorizationId: 'authority', scopes: ['personal', 'groups.read'] })
+    expect(f.fetcher).toHaveBeenCalledWith('http://runtime.test/v1/remote/events/group/group?since=0', expect.objectContaining({
+      headers: expect.objectContaining({ 'X-Kun-Remote-Scopes': 'personal,groups.read', 'X-Kun-Remote-Account': 'owner' }) }))
+  })
   it('requires recovery for oversized events instead of forwarding an unbounded frame', async () => {
     const f = fixture(new Response('data: ' + 'x'.repeat(4 * 1024 * 1024)))
     await f.service.subscribe('phone', input)

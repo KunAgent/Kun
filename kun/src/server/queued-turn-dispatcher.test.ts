@@ -18,6 +18,21 @@ import type { ThreadExecutionLeasePort } from '../ports/thread-execution-lease.j
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { TurnService } from '../services/turn-service.js'
 import { QueuedTurnDispatcher } from './queued-turn-dispatcher.js'
+import { currentManagerDataMutexContext, runWithManagerDataMutexContext } from '../manager/data-mutex-context.js'
+
+it('does not inherit the emitting mutation lease in a scheduled promotion', async () => {
+  const threadStore = new InMemoryThreadStore()
+  const seen: unknown[] = []
+  const dispatcher = new QueuedTurnDispatcher({ threadStore, runTurn: () => {}, turns: {
+    startNextQueuedTurn: async () => { seen.push(currentManagerDataMutexContext()); return null }
+  } })
+  try {
+    await runWithManagerDataMutexContext({ resource: 'agent-lifecycle:fixture', signal: new AbortController().signal,
+      assertCurrent: async () => {}, withCommit: operation => operation() }, async () => dispatcher.requestDrain('missing'))
+    await vi.waitFor(() => expect(seen.length).toBe(1))
+    expect(seen).toEqual([undefined])
+  } finally { await dispatcher.dispose() }
+})
 
 type RunTurnFn = (threadId: string, turnId: string) => Promise<unknown> | void
 

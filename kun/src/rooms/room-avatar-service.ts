@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { RoomAvatarAssetSchema, type RoomAvatarAsset, type RoomAvatarReference, type RoomPreviewImage } from '../contracts/room-content.js'
 import type { AttachmentMetadata } from '../contracts/attachments.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
@@ -17,6 +17,19 @@ export async function recordRoomAvatarAsset(store: RoomStore, metadata: Attachme
   await store.commit({ requestId: `room-avatar:${asset.attachmentId}`,
     checks: [{ kind: 'room_avatar', id: asset.attachmentId, expectedRevision: null }],
     puts: [{ kind: 'room_avatar', id: asset.attachmentId, value: asset }], result: { attachmentId: asset.attachmentId } })
+}
+
+/** Share the existing inert 128px avatar storage path between HTTP and trusted remote callers. */
+export async function saveRoomAvatarImage(store: RoomStore, attachments: AttachmentStore, image: RoomPreviewImage) {
+  if (image.width !== 128 || image.height !== 128 || image.mimeType !== 'image/jpeg') throw new Error('invalid avatar image')
+  const data = Buffer.from(image.dataBase64, 'base64')
+  if (!data.length || data.length > 192 * 1024 || data.toString('base64') !== image.dataBase64) throw new Error('invalid avatar image')
+  const leaseId = `room-avatar:${randomUUID()}`
+  const attachment = await attachments.create({ name: `rooms-avatar-${createHash('sha256').update(data).digest('hex').slice(0, 12)}.jpg`,
+    data, mimeType: image.mimeType, leaseId })
+  await recordRoomAvatarAsset(store, attachment)
+  if (attachments.releaseLease) await attachments.releaseLease(attachment.id, leaseId, true).catch(() => undefined)
+  return { avatar: { kind: 'uploaded' as const, attachmentId: attachment.id }, image }
 }
 
 async function verifiedAvatarMetadata(store: RoomStore, attachments: AttachmentStore | undefined, id: string) {

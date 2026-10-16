@@ -44,6 +44,7 @@ export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
   config: ReturnType<typeof createRuntimeConfigController>
 ): ServerRuntime {
+  const remoteCleanups = new Set<() => Promise<void>>()
   const { agent } = extensions
   const { registryComposition } = agent
   const { services } = registryComposition
@@ -174,6 +175,8 @@ export function createServerRuntimeComposition(
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
+      activeBackgroundTurns: () => backgroundShellRuntime.listSessions().filter(item => item.status === 'running')
+        .map(item => ({ threadId: item.threadId, turnId: item.turnId })),
       backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
       ...workbenchExecutionControl({ turns: turnService, threads: threadService, sessions: sessionStore,
         backgroundShells: backgroundShellRuntime, executionLeases }) }
@@ -390,6 +393,9 @@ export function createServerRuntimeComposition(
       return runReview(input)
 	    },
 	    runtimeToken: config.activeOptions.runtimeToken,
+        remoteProtectedPaths: [config.activeOptions.dataDir,
+          ...(config.activeOptions.configPath ? [config.activeOptions.configPath] : []),
+          ...(core.options.serviceManager ? [core.options.serviceManager.discovery.settingsPath] : [])],
 	    insecure: config.activeOptions.insecure,
 	    ...(core.options.serviceManager
 	      ? { managerProtocolVersion: KUN_MANAGER_PROTOCOL_VERSION }
@@ -540,6 +546,7 @@ export function createServerRuntimeComposition(
       }
       return result
     },
+    registerRemoteCleanup(cleanup) { remoteCleanups.add(cleanup) },
     shutdown: async () => {
       beginOwnedProcessShutdown()
       await settleCleanupSteps([
@@ -547,6 +554,8 @@ export function createServerRuntimeComposition(
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
               eventStreamRegistry.closeAll()
+              await Promise.allSettled([...remoteCleanups].map((cleanup) => cleanup()))
+              remoteCleanups.clear()
               await services.agentDispatchService.stop()
               await roomComposition.close()
               agent.shuttingDown = true

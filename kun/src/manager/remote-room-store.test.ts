@@ -132,6 +132,43 @@ describe('room data over the real Manager HTTP boundary', () => {
     expect(await store.list('peer_topic', { rootRequestId: 'root' })).toHaveLength(1)
   })
 
+  it('requires the runtime coordinator fence for remote attachment confirmations', async () => {
+    const { store, connection } = await manager()
+    const input = { requestId: 'attachment-confirmation', checks: [{ kind: 'remote_attachment_admission' as const,
+      id: 'proof', expectedRevision: null }], puts: [{ kind: 'remote_attachment_admission' as const,
+      id: 'proof', value: { attachmentId: 'attachment', sourceDeviceId: 'phone' } }] }
+    await expect(store.commit(input)).rejects.toBeInstanceOf(RoomStoreConflictError)
+    expect(await store.get('remote_attachment_admission', 'proof')).toBeNull()
+    const lease = new RoomExecutionLease({ manager: connection, flavor: 'production', instanceId: 'production-runtime' })
+    leases.push(lease)
+    expect(await lease.start()).toBe(true)
+    const fenced = new RemoteRoomStore(connection, { getFence: () => lease.getFence() })
+    await expect(fenced.commit(input)).resolves.toMatchObject({ duplicate: false })
+    expect((await fenced.get<any>('remote_attachment_admission', 'proof'))?.value.sourceDeviceId).toBe('phone')
+  })
+
+  it('requires a live coordinator fence for desktop scheduler audit writes', async () => {
+    const { store, connection } = await manager()
+    const input = { requestId: 'schedule-audit', checks: [{ kind: 'desktop_schedule_run' as const, id: 'run', expectedRevision: null }],
+      puts: [{ kind: 'desktop_schedule_run' as const, id: 'run', taskId: 'schedule', value: { id: 'run', clientRequestId: 'scheduled' } }] }
+    await expect(store.commit(input)).rejects.toBeInstanceOf(RoomStoreConflictError)
+    const lease = new RoomExecutionLease({ manager: connection, flavor: 'production', instanceId: 'production-runtime' })
+    leases.push(lease); expect(await lease.start()).toBe(true)
+    const fenced = new RemoteRoomStore(connection, { getFence: () => lease.getFence() })
+    await expect(fenced.commit(input)).resolves.toMatchObject({ duplicate: false })
+    expect(await fenced.list('desktop_schedule_run', { taskId: 'schedule' })).toHaveLength(1)
+  })
+
+  it.each(['agent_lifecycle', 'agent_import', 'remote_history', 'shared_attachment', 'shared_resource', 'shared_receipt', 'shared_actor', 'shared_block'] as const)('fences remote namespace %s at the real Manager boundary', async (kind) => {
+    const { store, connection } = await manager()
+    const input = { requestId: kind, checks: [{ kind, id: 'shared', expectedRevision: null }], puts: [{ kind, id: 'shared', value: { metadata: true } }] }
+    await expect(store.commit(input)).rejects.toBeInstanceOf(RoomStoreConflictError)
+    const lease = new RoomExecutionLease({ manager: connection, flavor: 'production', instanceId: 'production-runtime' })
+    leases.push(lease); expect(await lease.start()).toBe(true)
+    const fenced = new RemoteRoomStore(connection, { getFence: () => lease.getFence() })
+    await expect(fenced.commit(input)).resolves.toMatchObject({ duplicate: false })
+  })
+
   it('preserves the internal activity projection across the Manager boundary', async () => {
     const { store } = await manager()
     await store.commit({ requestId: 'activity', checks: [{ kind: 'integration', id: 'integration', expectedRevision: null }],

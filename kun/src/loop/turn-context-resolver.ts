@@ -37,6 +37,7 @@ import type {
 } from './turn-execution-types.js'
 import { collectTurnAttachmentIds } from './turn-steering-attachments.js'
 import { applyRoomToolPolicy, mergeRoomDeniedIds } from './room-turn-policy.js'
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 
 const EMPTY_SKILL_RESOLUTION: SkillTurnResolution = {
   activeSkillIds: [],
@@ -80,6 +81,7 @@ export type TurnContextResolverDeps = {
     threadId: string
     workspace: string
     modelCapabilities: ModelCapabilityMetadata
+    attachmentAliases?: AttachmentAliases
   }) => Promise<ResolvedTurnAttachments>
   skillRuntime?: Pick<SkillRuntime, 'resolveTurn'>
   instructionRuntime?: Pick<InstructionRuntime, 'resolveTurn'>
@@ -134,7 +136,8 @@ export class TurnContextResolver {
         attachmentIds: collectTurnAttachmentIds(input.turn),
         threadId: input.threadId,
         workspace,
-        modelCapabilities: input.modelCapabilities
+        modelCapabilities: input.modelCapabilities,
+        attachmentAliases: input.turn.attachmentAliases
       }),
       (input.thread.roomContext?.skillsEnabled === false || workbenchCeiling?.skillsEnabled === false ? undefined : this.deps.skillRuntime)?.resolveTurn({
         prompt: input.turn.prompt,
@@ -190,6 +193,7 @@ export class TurnContextResolver {
       additionalWorkspaces: input.thread.additionalWorkspaces,
       knowledgeBases: input.thread.knowledgeBases,
       clientSurface,
+      attachmentAliases: input.turn.attachmentAliases,
       threadMode: input.mode.effectiveMode,
       ...(input.mode.activePlanContext ? { activePlanContext: input.mode.activePlanContext } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),

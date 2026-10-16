@@ -1,3 +1,4 @@
+import { AttachmentAliasesSchema } from './attachment-aliases.js'
 import { z } from 'zod'
 import { MAX_REVIEW_REQUEST_CHARS, ReviewOutputSchema, ReviewTargetSchema } from './review.js'
 import { RuntimeErrorSeverity } from './errors.js'
@@ -102,6 +103,7 @@ export const UserTurnItem = TurnItemBase.extend({
   displayText: z.string().optional(),
   messageSource: UserMessageSource.optional(),
   attachmentIds: z.array(z.string().min(1)).optional(),
+  attachmentAliases: AttachmentAliasesSchema.optional(),
   composerContexts: z.array(ComposerContextAttachmentSchema).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),
   /** Host-resolved immutable review bodies; not accepted in StartTurnRequest. */
   reviewRequests: z.array(z.object({

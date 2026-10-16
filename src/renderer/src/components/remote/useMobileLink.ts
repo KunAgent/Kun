@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { MobileLinkScope } from '@shared/mobile-link-scopes'
 import type { MobileLinkStatus } from '@shared/mobile-link'
 import { hasKunAccountSession } from '@shared/kun-account'
 import { useKunAccount } from '../account/useKunAccount'
@@ -82,7 +83,8 @@ export function useMobileLink() {
     enabled,
     connectionError,
     toggle: () => api && void action(() => api.enable(!canStop), canStop ? 'stop' : 'start'),
-    confirm: (id: string) => api && void action(() => api.confirm(id)),
+    confirm: (id: string, scopes?: MobileLinkScope[]) => api && void action(() => api.confirm(id, scopes)),
+    setScopes: (id: string, scopes: MobileLinkScope[]) => api && void action(() => api.setScopes(id, scopes)),
     revoke: (id: string) => api && void action(() => api.revoke(id))
   }
 }

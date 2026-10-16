@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Envelope, ParamSchemas } from './contracts.js'
-import { allowedThread, requireCode } from './routing.js'
+import { requireCode } from './code/access.js'
+import { allowedThread } from './authorization/thread-access.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 describe('mobile capability boundary', () => {
   it('rejects arbitrary IPC, directory paths and privilege fields', () => {

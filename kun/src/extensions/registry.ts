@@ -1,3 +1,4 @@
+import { checkEnablement, enablementProof, enablementBusiness, pluginRevision, type EnablementControl } from './enablement-control.js'
 import { isAbsolute } from 'node:path'
 import {
   ExtensionRegistrySchema as PublicExtensionRegistrySchema,
@@ -249,15 +250,23 @@ export class ExtensionRegistry {
     return result!
   }
 
-  async setGlobalEnabled(extensionId: string, enabled: boolean): Promise<ExtensionRegistryEntry> {
-    let result: ExtensionRegistryEntry | undefined
-    await this.mutate((registry) => {
-      const entry = requireEntry(registry, extensionId)
-      entry.globallyEnabled = enabled
-      result = structuredClone(entry)
+  async setGlobalEnabled(extensionId: string, enabled: boolean, control?: EnablementControl): Promise<ExtensionRegistryEntry> {
+    const committed = await this.mutate((registry) => {
+      const entry = registry.extensions[extensionId]
+      if (control) {
+        checkEnablement(entry, control, enabled)
+        if (enablementProof(entry!, control, enabled)) return registry
+      }
+      const target = requireEntry(registry, extensionId)
+      target.globallyEnabled = enabled
+      if (control) {
+        target.controlRevision = (target.controlRevision ?? 0) + 1
+        target.enablementProofs = [...(target.enablementProofs ?? []), { requestId: control.requestId,
+          fingerprint: control.fingerprint, enabled, revision: pluginRevision(target) }].slice(-64)
+      }
       return registry
     })
-    return result!
+    return structuredClone(committed.extensions[extensionId]!)
   }
 
   async setWorkspaceEnabled(
@@ -520,6 +529,12 @@ export class ExtensionRegistry {
       () => emptyRegistry(this.now()),
       (current) => {
         const next = mutate(structuredClone(current))
+        for (const [id, entry] of Object.entries(next.extensions)) {
+          const prior = current.extensions[id]
+          if (prior && enablementBusiness(prior) !== enablementBusiness(entry) &&
+              (entry.controlRevision ?? 0) === (prior.controlRevision ?? 0))
+            entry.controlRevision = (prior.controlRevision ?? 0) + 1
+        }
         next.revision = current.revision + 1
         next.updatedAt = this.now().toISOString()
         return next

@@ -1,3 +1,7 @@
+import { AttachmentAliasesSchema } from './attachment-aliases.js'
+import { GraphLeadLifecycleSchema, GraphPlanningLifecycleSchema } from './turn-graph-lifecycle.js'
+export { GraphLeadLifecycleSchema, GraphPlanningLifecycleSchema, type GraphLeadLifecycle, type GraphPlanningLifecycle } from './turn-graph-lifecycle.js'
+import { QueuedEditSchema } from './queued-edit.js'
 import { RequiredToolGateSchema } from './turn-required-tool-gate.js'
 export { RequiredToolGateSchema, type RequiredToolGate } from './turn-required-tool-gate.js'
 import { PaperTurnContextSchema, validatePaperTurnCombination } from './paper-turn-context.js'
@@ -17,7 +21,6 @@ import {
   MAX_COMPOSER_CONTEXT_ATTACHMENTS
 } from './composer-context.js'
 import { GraphOrchestrationStrategySchema } from './graph.js'
-import { GraphPlanningDraftStatusSchema } from './graph-planning.js'
 import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 import { ThreadRetentionPolicySchema } from './thread-retention.js'
 import {
@@ -129,32 +132,6 @@ export const InjectedInstructionSourceSchema = z.object({
 export type InjectedInstructionSource = z.infer<typeof InjectedInstructionSourceSchema>
 
 
-/**
- * Durable ownership state for a Graph source Lead. The turn remains logically
- * running while its process-local execution lease is suspended between
- * material Graph events.
- */
-export const GraphLeadLifecycleSchema = z.object({
-  version: z.literal(1),
-  runId: z.string().min(1),
-  state: z.enum(['supervising', 'awaiting_user', 'finalizing']),
-  lastDeliveredSeq: z.number().int().nonnegative().default(0),
-  suspendedAt: z.string().optional(),
-  resumedAt: z.string().optional()
-}).strict()
-export type GraphLeadLifecycle = z.infer<typeof GraphLeadLifecycleSchema>
-
-export const GraphPlanningLifecycleSchema = z.object({
-  version: z.literal(1),
-  draftId: z.string().min(1),
-  reservedRunId: z.string().min(1),
-  state: GraphPlanningDraftStatusSchema,
-  draftRevision: z.number().int().positive(),
-  /** Process shutdown parked execution without changing the durable draft state. */
-  suspendedAt: z.string().optional()
-}).strict()
-export type GraphPlanningLifecycle = z.infer<typeof GraphPlanningLifecycleSchema>
-
 export const TurnSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
@@ -205,6 +182,9 @@ export const TurnSchema = z.object({
   /** Steered text queued by the user mid-turn. Cleared on completion. */
   steering: z.array(z.string()).default([]),
   steeringDeliveries: z.array(SteeringDeliverySchema).max(256).optional(),
+  queueEdit: QueuedEditSchema.optional(),
+  /** Trusted shared-turn view metadata; never parsed from StartTurnRequest. */
+  attachmentAliases: AttachmentAliasesSchema.optional(),
   steeredToTurnId: z.string().optional(),
   createdAt: z.string(),
   startedAt: z.string().optional(),

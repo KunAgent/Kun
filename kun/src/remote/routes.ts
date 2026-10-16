@@ -1,4 +1,10 @@
-import { transferReceipt } from './transfer-receipts.js'
+import { registerSharedTaskRoutes } from './sharing/routes.js'
+import { registerRemoteAvatarRoute } from './agents/avatar-route.js'
+import { registerDesktopScheduleAudit } from './schedules/desktop-audit.js'
+import { RemoteNotificationFeed } from './notifications/feed.js'
+import { projectRemoteGroupEvent } from './groups/events.js'
+import { REMOTE_SCOPES } from '@kun/remote-protocol'
+import { transferReceipt } from './files/transfer-receipts.js'
 import { z } from 'zod'
 import type { Router } from '../server/router.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
@@ -8,12 +14,32 @@ import { readJsonBody } from '../server/read-json-body.js'
 import { buildEventStreamResponse } from '../server/routes/events.js'
 import { roomEventStream } from '../server/routes/room-event-stream.js'
 import { RemoteFacade } from './facade.js'
-import { requireCode } from './routing.js'
+import { requireCode } from './code/access.js'
 import { RemoteId } from './contracts.js'
-import { remoteAttachmentContent } from './attachment-access.js'
+import { remoteAttachmentContent } from './files/access.js'
 export function registerRemoteRoutes(router: Router, runtime: ServerRuntime) {
   if (!runtime.rooms) return
   const facade = new RemoteFacade(runtime, router)
+  registerDesktopScheduleAudit(router, runtime)
+  registerSharedTaskRoutes(router, runtime)
+  registerRemoteAvatarRoute(router, runtime)
+  const notifications = new RemoteNotificationFeed(runtime)
+  router.add('GET', '/v1/remote/notification-events', (request) => {
+    if (!authorize(request, runtime)) return jsonResponse({ code: 'unauthorized' }, 401)
+    return notifications.stream(request)
+  })
+  router.add('GET', '/v1/remote/project-files/:projectId/:fileRef', async (request, { params }) => {
+    if (!authorize(request, runtime)) return jsonResponse({ code: 'unauthorized' }, 401)
+    try {
+      const scope = { accountId: RemoteId.parse(request.headers.get('X-Kun-Remote-Account')),
+        deviceId: RemoteId.parse(request.headers.get('X-Kun-Remote-Device')),
+        authorizationId: RemoteId.parse(request.headers.get('X-Kun-Remote-Authorization')) }
+      const revision = z.string().regex(/^file-v1:[a-f0-9]{64}$/).parse(new URL(request.url).searchParams.get('revision'))
+      const file = await facade.projectFiles.read(scope, RemoteId.parse(params.projectId), RemoteId.parse(params.fileRef), revision)
+      return new Response(new Uint8Array(file.data), { headers: { 'Content-Type': file.mimeType,
+        'X-Kun-File-Name': encodeURIComponent(file.name), 'Cache-Control': 'no-store' } })
+    } catch { return jsonResponse({ code: 'FILE_NOT_ALLOWED' }, 403) }
+  })
   router.add(
     'GET',
     '/v1/remote/artifacts/:kind/:resource/:id',
@@ -118,6 +144,17 @@ export function registerRemoteRoutes(router: Router, runtime: ServerRuntime) {
             .int()
             .nonnegative()
             .parse(new URL(request.url).searchParams.get('since') ?? 0)
+        if (params.kind === 'group') {
+          const scopes = (request.headers.get('X-Kun-Remote-Scopes') ?? 'personal').split(',')
+          if (scopes.some((scope) => !(REMOTE_SCOPES as readonly string[]).includes(scope))) throw new Error('REMOTE_SCOPE_REQUIRED')
+          const authority = { accountId: RemoteId.parse(request.headers.get('X-Kun-Remote-Account')),
+            deviceId: RemoteId.parse(request.headers.get('X-Kun-Remote-Device')),
+            authorizationId: RemoteId.parse(request.headers.get('X-Kun-Remote-Authorization')),
+            scopes: scopes as import('@kun/remote-protocol').RemoteScopeName[] }
+          await facade.groups.requireGroup(authority, id)
+          return roomEventStream({ runtime, rooms: runtime.rooms!, roomId: id, request, sinceSeq,
+            projectEvent: (event) => projectRemoteGroupEvent(event, authority) })
+        }
         if (params.kind === 'agent') {
           const { room } = await facade.conversation(id)
           return roomEventStream({

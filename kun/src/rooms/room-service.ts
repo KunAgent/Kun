@@ -1,3 +1,4 @@
+import { privateAdmissionChecks } from '../agents/agent-lifecycle-state.js'
 import { newAgentExecutionPolicy } from '../agents/agent-permission-snapshot.js'
 import { freezeAgentPermissions } from '../agents/agent-permission-snapshot.js'
 import { prepareAgentTaskParticipants } from '../agents/agent-task-participants.js'
@@ -16,6 +17,7 @@ import type { RoomRequestState } from './room-runtime-types.js'
 import { assertRoomMemberRemovalAllowed } from './room-member-dependencies.js'
 import { appendRoomReplyChecks, attachRoomPublicationReply, prepareRoomReplyContext } from './room-replies.js'
 import { prepareRoomPollInvitation } from './room-poll-invitations.js'
+import { retryRoomInteraction } from './room-interaction-store.js'
 
 export const roomId = (): string => randomUUID()
 export const roomFingerprint = (value: unknown): string =>
@@ -167,6 +169,7 @@ export class RoomService {
     if (storedRoom.conversationKind === 'agent_agent') throw new RoomStoreConflictError('continue collaboration from its source conversation')
     if (this.agents && !(await this.agents.features()).identities && storedRoom.conversationKind === 'user_agent') throw new RoomStoreConflictError('independent conversations are disabled')
     const room = this.agents ? await this.agents.freeze(storedRoom) : storedRoom
+    const lifecycleChecks = await privateAdmissionChecks(this.store, room)
     if (room.archivedAt) throw new RoomStoreConflictError('restore the room before sending')
     if (body.references?.length) {
       if (!this.contentReferenceValidator) throw new Error('Room content reference validation is unavailable')
@@ -227,7 +230,7 @@ export class RoomService {
           ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId, remoteDeviceId: internal.remoteDeviceId } : {}) }
     const result = { message, requestId: request.id }
     const commit: RoomStoreCommit = { requestId: key, fingerprint: roomFingerprint(identity),
-      checks: [{ kind: 'room', id, expectedRevision: room.revision },
+      checks: [{ kind: 'room', id, expectedRevision: room.revision }, ...lifecycleChecks,
         { kind: 'message', id: message.id, expectedRevision: null },
         { kind: 'request', id: request.id, expectedRevision: null },
         ...(root && protocol === 'peer' ? [{ kind: 'request' as const, id: root.id, expectedRevision: root.revision }] : [])],
@@ -271,6 +274,10 @@ export class RoomService {
   }
 
   async append(id: string, key: string, body: string, memberId?: string, taskId?: string, originRunId?: string, status: 'streaming' | 'final' | 'failed' = 'final') {
+    return retryRoomInteraction(() => this.appendOnce(id, key, body, memberId, taskId, originRunId, status))
+  }
+
+  private async appendOnce(id: string, key: string, body: string, memberId?: string, taskId?: string, originRunId?: string, status: 'streaming' | 'final' | 'failed' = 'final') {
     const room = await this.get(id)
     const execution = taskId ? await this.store.get<import('./room-runtime-types.js').RoomTaskExecution>('task', taskId) : null
     const member = room.members.find((member) => member.id === memberId) ??
@@ -292,11 +299,15 @@ export class RoomService {
   }
 
   async publish(id: string, key: string, body: string, memberId: string, taskId?: string, originRunId?: string) {
+    return retryRoomInteraction(() => this.publishOnce(id, key, body, memberId, taskId, originRunId))
+  }
+
+  private async publishOnce(id: string, key: string, body: string, memberId: string, taskId?: string, originRunId?: string) {
     if (!body.trim()) return
     const run = originRunId ? await this.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', originRunId) : null
     const status = run && ['running', 'queued', 'recovery_required'].includes(run.value.status) ? 'streaming' : run && ['failed', 'cancelled'].includes(run.value.status) ? 'failed' : 'final'
     const old = await this.store.get<RoomMessage>('message', key)
-    if (!old) return this.append(id, key, body, memberId, taskId, originRunId, status)
+    if (!old) return this.appendOnce(id, key, body, memberId, taskId, originRunId, status)
     if (old.roomId !== id || old.value.authorMemberId !== memberId) throw new Error('message identity mismatch')
     const text = body.slice(0, 64000)
     if (old.value.body === text && old.value.status === status && (!originRunId || old.value.originRunId === originRunId)) return
@@ -323,6 +334,10 @@ export class RoomService {
     references?: RoomContentReference[]
     displayThreadRootId?: string
   }): Promise<void> {
+    return retryRoomInteraction(() => this.publishSegmentOnce(id, input))
+  }
+
+  private async publishSegmentOnce(id: string, input: Parameters<RoomService['publishSegment']>[1]): Promise<void> {
     const text = input.body.slice(0, 64000)
     // An explicit send_im_message call may publish an attachment-only bubble.
     if (!text.trim() && !input.references?.length) return

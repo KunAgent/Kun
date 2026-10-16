@@ -1,310 +1,223 @@
-import { RemoteArtifacts } from './artifacts.js'
-import { agentAttachmentSources } from './agent-attachments.js'
-import { versionedHistory } from './versioned-history.js'
-import { createHash } from 'node:crypto'
-import { READ_METHODS } from '@kun/remote-protocol'
+import { OPERATION_METHODS, OPERATION_READ_METHODS, READ_METHODS, validateOperationParams } from '@kun/remote-protocol'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Router } from '../server/router.js'
-import { CreateThreadRequest } from '../contracts/threads.js'
-import {
-  currentAgentConversation,
-  openAgentConversation
-} from '../agents/agent-conversations.js'
-import {
-  directActivity,
-  controlDirectRequest
-} from '../agents/agent-direct-service.js'
-import { agentDirectoryPage } from '../agents/agent-directory-query.js'
-import { Envelope, ParamSchemas } from './contracts.js'
-import { RemoteReceipts, receiptKey } from './receipts.js'
-import { RemoteApprovals } from './approvals.js'
-import { localCaller, allowedThread, projects, requireCode } from './routing.js'
-import { codeAgents, resolveCodeRoute } from './agents.js'
+import { PolicyMutationRejected } from '../domain/remote-policy-revision.js'
+import { Envelope, ParamSchemas, type Method } from './contracts.js'
+import { AgentParamSchemas } from './agents/contracts.js'
+import { AgentConversationParamSchemas } from './agents/conversation-contracts.js'
+import { CodeTaskParamSchemas } from './code/contracts.js'
+import { ApprovalParamSchemas } from './approvals/contracts.js'
+import { MessageParamSchemas } from './messages/contracts.js'
+import { RequestParamSchemas } from './requests/contracts.js'
+import { RemoteReceipts } from './requests/receipts.js'
+import { RemoteNoEffect } from './requests/rejections.js'
+import { localCaller } from './runtime/local-call.js'
+import { authorizeRemoteOperation } from './authorization/scopes.js'
+import { RemoteAttachmentAdmissions } from './files/admissions.js'
+import { RemoteArtifacts } from './files/artifacts.js'
+import { RemoteProjectFiles } from './files/projects.js'
+import { RemoteArtifactDirectory } from './files/artifact-directory.js'
+import { ProjectFilesParamSchemas } from './files/project-contracts.js'
+import { RemoteApprovals } from './approvals/service.js'
+import { RemoteApprovalQueries } from './approvals/queries.js'
+import { RemoteAgents } from './agents/service.js'
+import { RemoteAgentConversations } from './agents/conversations.js'
+import { RemoteAgentSearch } from './agents/search.js'
+import { remoteAgentDirectory } from './agents/directory.js'
+import { RemoteCodeManagement } from './code/management.js'
+import { CodeManagementParamSchemas } from './code/contracts.js'
+import { RemoteCodeTasks } from './code/tasks.js'
+import { RemoteCodeHistory } from './code/history/service.js'
+import { CodeHistoryParamSchemas } from './code/history/contracts.js'
+import { RemoteExecutionQueue } from './execution/queue.js'
+import { RemoteExecutionStop } from './execution/stop.js'
+import { ExecutionQueueParamSchemas } from './execution/contracts.js'
+import { RemoteGoals } from './goals/service.js'
+import { GoalParamSchemas } from './goals/contracts.js'
+import { RemoteMessages } from './messages/service.js'
+import { RemoteSourceContent } from './messages/source/content.js'
+import { RemoteAttention } from './attention/service.js'
+import { RemoteGroups } from './groups/service.js'
+import { GroupParamSchemas, GroupWriteParamSchemas } from './groups/contracts.js'
+import { RemoteCollaboration } from './collaboration/service.js'
+import { RemoteSchedules } from './schedules/service.js'
+import { RemotePlugins } from './plugins/service.js'
+import { remoteCatalog, remoteCapabilityDescriptors } from './catalog.js'
+
+const strictMethods = new Set<string>(OPERATION_METHODS)
+const readMethods = new Set<string>([...READ_METHODS, ...OPERATION_READ_METHODS, 'approval.prepare'])
+
+/** Fixed remote use cases over native services; transport admission and receipts stay here. */
 export class RemoteFacade {
   readonly artifacts: RemoteArtifacts
-  private call
-  private receipts
-  private approvals
-  constructor(
-    private runtime: ServerRuntime,
-    router: Router
-  ) {
+  readonly projectFiles: RemoteProjectFiles
+  readonly groups: RemoteGroups
+  private readonly receipts: RemoteReceipts
+  private readonly approvals: RemoteApprovals
+  private readonly approvalQueries: RemoteApprovalQueries
+  private readonly agents: RemoteAgents
+  private readonly conversations: RemoteAgentConversations
+  private readonly agentSearch: RemoteAgentSearch
+  private readonly code: RemoteCodeManagement
+  private readonly tasks: RemoteCodeTasks
+  private readonly history: RemoteCodeHistory
+  private readonly queue: RemoteExecutionQueue
+  private readonly stop: RemoteExecutionStop
+  private readonly goals: RemoteGoals
+  private readonly messages: RemoteMessages
+  private readonly source: RemoteSourceContent
+  private readonly attention: RemoteAttention
+  private readonly artifactDirectory: RemoteArtifactDirectory
+  private readonly collaboration: RemoteCollaboration
+  private readonly schedules: RemoteSchedules
+  private readonly plugins: RemotePlugins
+  private readonly attachmentAdmissions: RemoteAttachmentAdmissions
+  private readonly handlers = new Map<string, (scope: Envelope, params: any) => Promise<unknown>>()
+
+  constructor(private runtime: ServerRuntime, router: Router) {
+    const call = localCaller(router, runtime)
     this.artifacts = new RemoteArtifacts(runtime)
-    this.call = localCaller(router, runtime)
     this.receipts = new RemoteReceipts(runtime.rooms!)
-    this.approvals = new RemoteApprovals(runtime, this.call)
+    this.approvals = new RemoteApprovals(runtime, call)
+    this.conversations = new RemoteAgentConversations(runtime, call)
+    this.approvalQueries = new RemoteApprovalQueries(runtime, call, this.conversations)
+    this.agents = new RemoteAgents(runtime, call)
+    this.agentSearch = new RemoteAgentSearch(runtime)
+    this.code = new RemoteCodeManagement(runtime, () => this.tasks.models())
+    this.history = new RemoteCodeHistory(runtime)
+    this.tasks = new RemoteCodeTasks(runtime, call, this.code, this.history, this.artifacts)
+    this.queue = new RemoteExecutionQueue(runtime, call)
+    this.stop = new RemoteExecutionStop(runtime, call, this.conversations)
+    this.goals = new RemoteGoals(runtime)
+    this.projectFiles = new RemoteProjectFiles(runtime)
+    this.messages = new RemoteMessages(runtime)
+    this.source = new RemoteSourceContent(runtime)
+    this.attention = new RemoteAttention(runtime)
+    this.artifactDirectory = new RemoteArtifactDirectory(runtime, this.artifacts)
+    this.groups = new RemoteGroups(runtime)
+    this.collaboration = new RemoteCollaboration(runtime)
+    this.schedules = new RemoteSchedules(runtime)
+    this.plugins = new RemotePlugins(runtime)
+    this.attachmentAdmissions = new RemoteAttachmentAdmissions(runtime)
+    this.registerHandlers()
   }
+
   async execute(raw: unknown) {
-    const envelope = Envelope.parse(raw),
-      { method } = envelope.call
+    const envelope = Envelope.parse(raw), { method } = envelope.call
+    authorizeRemoteOperation(envelope, method)
+    try {
+      if (strictMethods.has(method)) validateOperationParams(method as import('@kun/remote-protocol').RemoteMethod, envelope.call.params)
+    } catch { throw new Error('INVALID_REQUEST') }
     const params = ParamSchemas[method].parse(envelope.call.params)
-    if (method === 'request.get')
-      return this.lookup(envelope, (params as { requestId: string }).requestId)
+    if (method === 'request.get') return this.lookup(envelope, (params as { requestId: string }).requestId)
+    if (strictMethods.has(method) && !readMethods.has(method) && !await this.receipts.get(envelope, envelope.call.requestId)) {
+      try { await this.preflight(envelope, params) }
+      catch (error) {
+        if (!(error instanceof RemoteNoEffect)) throw error
+        return { receipt: await this.receipts.execute(envelope, async () => { throw error }) }
+      }
+    }
     // Agent/model picks are refused before a receipt exists, so the refusal is certain.
-    if (
-      method === 'code.create' &&
-      !(await this.receipts.get(envelope, envelope.call.requestId))
-    )
-      await this.codeRoute(params)
+    if (method === 'code.create' && !await this.receipts.get(envelope, envelope.call.requestId)) await this.tasks.route(params)
     const run = () => this.dispatch(envelope, params)
-    if (READ_METHODS.has(method) || method === 'approval.prepare') return run()
+    if (readMethods.has(method)) return run()
     return { receipt: await this.receipts.execute(envelope, run) }
   }
+
+  private async preflight(envelope: Envelope, params: any) {
+    const { method } = envelope.call
+    if (Object.hasOwn(GroupParamSchemas, method)) return this.groups.preflight(method, params, envelope)
+    if (method === 'plugin.setEnabled') return this.plugins.preflight(envelope, params)
+    if (Object.hasOwn(CodeManagementParamSchemas, method)) return this.code.preflight(method, params)
+    try {
+      if (this.history.supports(method)) return await this.history.preflight(method, params)
+      if (this.agents.supports(method)) return await this.agents.preflight(method, params)
+      if (Object.hasOwn(ExecutionQueueParamSchemas, method)) return await this.queue.preflight(method, params)
+      if (Object.hasOwn(GoalParamSchemas, method)) return await this.goals.preflight(method, params)
+    } catch (error) {
+      if (error instanceof PolicyMutationRejected) throw new RemoteNoEffect(error.code)
+      throw error
+    }
+  }
+
   private async lookup(scope: Envelope, id: string) {
-    const receipt = await this.receipts.get(scope, id),
-      key = receiptKey(scope, id),
-      params = receipt?.params
-    if (receipt?.status !== 'reconciliation_required' || !params)
-      return { receipt }
+    const receipt = await this.receipts.get(scope, id)
+    if (receipt) authorizeRemoteOperation(scope, receipt.method, true)
+    if (receipt?.status !== 'reconciliation_required' || !receipt.params) return { receipt }
+    const method = receipt.method
     let result: unknown
-    if (receipt.method === 'code.create') {
-      const thread = await this.runtime.threadService.get(
-        'thr_mobile_' +
-          createHash('sha256').update(key).digest('hex').slice(0, 32)
-      )
-      if (thread) result = { thread }
-    } else if (
-      receipt.method === 'code.turn.start' &&
-      typeof params.threadId === 'string'
-    ) {
-      const thread = await this.runtime.threadService.get(params.threadId),
-        turn = thread?.turns.find((t) => t.clientRequestId === key)
-      if (turn)
-        result = { threadId: thread!.id, turnId: turn.id, status: turn.status }
-    } else if (
-      receipt.method === 'agent.message.send' &&
-      typeof params.agentId === 'string'
-    ) {
-      const room = await currentAgentConversation(
-        this.runtime.rooms!.agents,
-        params.agentId
-      )
-      if (room) {
-        const prior = await this.runtime.rooms!.deps.store.getRequest(
-          'room-message:' + room.id + ':' + key
-        )
-        if (prior) result = prior.result
+    if (method === 'code.create' || method === 'code.turn.start') result = await this.tasks.recover(scope, receipt)
+    else if (method === 'agent.message.send') result = await this.conversations.recover(scope, receipt)
+    else if (this.history.supports(method)) result = await this.history.recover(scope, receipt)
+    else if (this.agents.supports(method)) result = await this.agents.recover(scope, receipt)
+    else if (Object.hasOwn(ExecutionQueueParamSchemas, method)) result = await this.queue.recover(scope, receipt)
+    else if (Object.hasOwn(GroupWriteParamSchemas, method)) result = await this.groups.recoverMutation(scope, receipt)
+    else if (method === 'plugin.setEnabled') result = await this.plugins.recover(scope, receipt)
+    else if (method === 'group.message.send' && typeof receipt.params.roomId === 'string')
+      result = await this.groups.recover(scope, receipt.params.roomId, receipt.requestId)
+    return { receipt: result === undefined ? receipt : await this.receipts.recovered(scope, id, result) }
+  }
+
+  conversation(agentId: string) { return this.conversations.conversation(agentId) }
+
+  operationMethods(): readonly string[] { return [...this.handlers.keys()] }
+
+  private registerHandlers() {
+    const add = (schemas: object, handler: (scope: Envelope, params: any) => Promise<unknown>) => {
+      for (const method of Object.keys(schemas)) {
+        if (this.handlers.has(method)) throw new Error('DUPLICATE_REMOTE_OPERATION')
+        this.handlers.set(method, handler)
       }
     }
-    return {
-      receipt:
-        result === undefined
-          ? receipt
-          : await this.receipts.recovered(scope, id, result)
-    }
-  }
-  private async legacyModels() {
-    const threads = await this.runtime.threadService.list({
-      workbenchScope: 'code',
-      limit: 1000
+    add(CodeManagementParamSchemas, async ({ call }, p) => {
+      if (call.method === 'code.search') return this.code.search(p)
+      if (call.method === 'code.settings.get') return this.code.settings(p.threadId)
+      if (call.method === 'code.settings.update') return this.code.updateSettings(p)
+      return this.code.mutate(call.method, p)
     })
-    return [
-      ...new Set(
-        [this.runtime.defaultModel, ...threads.map((t) => t.model)].filter(
-          (model): model is string => Boolean(model)
-        )
-      )
-    ]
-  }
-  private async codeRoute(p: any) {
-    return resolveCodeRoute(this.runtime, p, await this.legacyModels())
-  }
-  async conversation(agentId: string) {
-    const rooms = this.runtime.rooms!
-    if (!await rooms.agents.store.get('agent_identity', agentId)) throw new Error('NOT_FOUND')
-    return rooms.exclusive(() =>
-      openAgentConversation(rooms.agents, rooms.service, agentId)
-    )
-  }
-  private async dispatch(envelope: Envelope, p: any): Promise<unknown> {
-    const runtime = this.runtime,
-      rooms = runtime.rooms!,
-      { method, requestId } = envelope.call
-    switch (method) {
-      case 'catalog.get': {
-        const list = await projects(runtime)
-        const models = await this.legacyModels()
-        return {
-          projects: list.map(({ id, name }) => ({ id, name })),
-          models,
-          defaultModel: runtime.defaultModel,
-          agents: await codeAgents(runtime, models),
-          capabilities: [
-            'agent',
-            'code',
-            'code.agents',
-            'approvals',
-            'attachments'
-          ],
-          attachmentMaxBytes: 10 * 1024 * 1024
-        }
-      }
-      case 'agent.list': {
-        const page = await agentDirectoryPage(rooms.agents, p)
-        return {
-          agents: page.agents.map((a) => ({
-            id: a.id,
-            name: a.name,
-            title: a.title
-          })),
-          activities: page.activities,
-          nextCursor: page.nextCursor
-        }
-      }
-      case 'agent.history': {
-        const { room } = await this.conversation(p.agentId)
-        const cursor = await rooms.deps.store.latestEventSeq?.()
-        const history = await this.call(
-          '/v1/rooms/' +
-            room.id +
-            '/messages' +
-            (p.cursor ? '?cursor=' + encodeURIComponent(p.cursor) : '')
-        )
-        return {
-          ...history,
-          messages: await agentAttachmentSources(runtime, room.id, history.messages ?? []),
-          artifacts: (
-            await rooms.artifactLibrary.list(p.agentId)
-          ).artifacts.map((a) => ({
-            id: a.artifactId,
-            version: a.version,
-            name: a.title,
-            size: a.byteSize,
-            mimeType: a.mimeType,
-            available: a.byteSize <= 25 * 1024 * 1024
-          })),
-          roomId: room.id,
-          name: room.name,
-          activity: await directActivity(rooms, room.id),
-          eventScope: await rooms.deps.store.eventScope?.(),
-          historyVersion: String(room.privateEpoch ?? 0),
-          cursor
-        }
-      }
-      case 'agent.message.send': {
-        const { room } = await this.conversation(p.agentId)
-        const result = await rooms.exclusive(() =>
-          rooms.service.send(
-            room.id,
-            {
-              clientRequestId: receiptKey(envelope, requestId),
-              body: p.text,
-              attachmentIds: p.attachmentIds
-            },
-            { clientSurface: 'api', remoteDeviceId: envelope.deviceId }
-          )
-        )
-        rooms.wake()
-        return { ...result, roomId: room.id }
-      }
-      case 'code.list':
-        return this.call(
-          '/v1/threads?workbench_scope=code&lean=true&limit=50' +
-            (p.cursor ? '&cursor=' + encodeURIComponent(p.cursor) : '')
-        )
-      case 'code.history': {
-        await requireCode(runtime, p.threadId)
-        const { history, historyVersion } = await versionedHistory(runtime.sessionStore, p.threadId, () => this.call(
-          '/v1/threads/' +
-            p.threadId +
-            '/timeline' +
-            (p.cursor ? '?before=' + encodeURIComponent(p.cursor) : '')
-        ))
-        return {
-          ...history,
-          historyVersion,
-          artifacts: await this.artifacts.codeHistory(history)
-        }
-      }
-      case 'code.create': {
-        const project = (await projects(runtime)).find(
-          (v) => v.id === p.projectId
-        )
-        if (!project) throw new Error('PROJECT_NOT_ALLOWED')
-        const id =
-          'thr_mobile_' +
-          createHash('sha256')
-            .update(receiptKey(envelope, requestId))
-            .digest('hex')
-            .slice(0, 32)
-        const old = await runtime.threadService.get(id)
-        if (old) return { thread: old }
-        const { harnessId, credentialMode, providerId, model } =
-          await this.codeRoute(p)
-        const explicit = Boolean(p.harnessId || p.credentialMode || p.providerId)
-        const thread = await runtime.threadService.create(
-          CreateThreadRequest.parse({
-            title: p.title,
-            workspace: project.path,
-            model,
-            ...(explicit ? { harnessId } : {}),
-            ...(credentialMode ? { credentialMode } : {}),
-            ...(providerId ? { providerId } : {}),
-            agentSurface: 'code',
-            workspaceMode: 'code'
-          }),
-          { id }
-        )
-        return { thread }
-      }
-      case 'code.turn.start': {
-        await requireCode(runtime, p.threadId)
-        return this.call('/v1/threads/' + p.threadId + '/turns', 'POST', {
-          prompt: p.text,
-          attachmentIds: p.attachmentIds,
-          clientRequestId: receiptKey(envelope, requestId),
-          clientSurface: 'api'
-        })
-      }
-      case 'execution.stop': {
-        if (p.agentId) {
-          const { room } = await this.conversation(p.agentId),
-            target = await rooms.deps.store.get('request', p.executionId)
-          if (!target || target.roomId !== room.id)
-            throw new Error('INVALID_TARGET')
-          return rooms.exclusive(() =>
-            controlDirectRequest(rooms, room.id, target.id, {
-              clientRequestId: receiptKey(envelope, requestId),
-              expectedRevision: target.revision,
-              action: 'stop'
-            })
-          )
-        }
-        if (!p.threadId || !p.turnId) throw new Error('INVALID_TARGET')
-        await requireCode(runtime, p.threadId)
-        return this.call(
-          '/v1/threads/' + p.threadId + '/turns/' + p.turnId + '/interrupt',
-          'POST',
-          {}
-        )
-      }
-      case 'approval.list': {
-        let threadId = p.threadId
-        if (p.agentId) {
-          const { room } = await this.conversation(p.agentId)
-          const activity = await directActivity(rooms, room.id)
-          threadId = activity.active?.threadId
-          if (!threadId) return { approvals: [], inputs: [] }
-        }
-        if (!threadId) throw new Error('INVALID_TARGET')
-        await allowedThread(runtime, threadId)
-        return {
-          approvals: runtime.approvalGate.pending(threadId),
-          inputs: runtime.userInputGate.pending(threadId)
-        }
-      }
-      case 'approval.prepare':
-        return this.approvals.prepare(envelope, p.approvalId)
-      case 'approval.resolve':
-        return this.approvals.resolve(envelope, p)
-      case 'input.resolve': {
-        const pending = runtime.userInputGate.get(p.inputId)
-        if (!pending) throw new Error('INPUT_EXPIRED')
-        await allowedThread(runtime, pending.threadId)
-        return this.call('/v1/user-inputs/' + p.inputId, 'POST', {
-          answers: p.answers
-        })
-      }
+    add(AgentParamSchemas, (scope, p) => this.agents.dispatch(scope.call.method, p, scope))
+    add(AgentConversationParamSchemas, (scope, p) => this.conversations.dispatch(scope, p))
+    add(CodeTaskParamSchemas, (scope, p) => this.tasks.dispatch(scope, p))
+    add(ExecutionQueueParamSchemas, (scope, p) => this.queue.dispatch(scope.call.method, p, scope))
+    add(GoalParamSchemas, (scope, p) => this.goals.dispatch(scope.call.method, p))
+    add(ProjectFilesParamSchemas, (scope, p) => scope.call.method === 'file.preview'
+      ? this.projectFiles.preview(scope, p) : this.projectFiles.page(scope, p))
+    add(GroupWriteParamSchemas, (scope, p) => this.groups.mutate(scope, scope.call.method, p, scope.call.requestId))
+    add(MessageParamSchemas, (scope, p) => scope.call.method === 'message.source.get' ? this.source.get(p)
+      : scope.call.method === 'message.search' ? this.messages.search(p) : this.messages.get(p))
+    add(ApprovalParamSchemas, (scope, p) => scope.call.method === 'approval.prepare' ? this.approvals.prepare(scope, p.approvalId)
+      : scope.call.method === 'approval.resolve' ? this.approvals.resolve(scope, p) : this.approvalQueries.dispatch(scope, p))
+    add(RequestParamSchemas, (scope, p) => this.lookup(scope, p.requestId))
+    add(CodeHistoryParamSchemas, (scope, p) => this.history.dispatch(scope.call.method, p, scope))
+    const single: Partial<Record<Method, (scope: Envelope, p: any) => Promise<unknown>>> = {
+      'catalog.get': (scope) => remoteCatalog(this.runtime, scope, () => this.tasks.models(),
+        () => remoteCapabilityDescriptors(this.runtime, scope, this.agents, this.source)),
+      'agent.search': (_scope, p) => this.agentSearch.search(p),
+      'agent.directory.list': (scope, p) => remoteAgentDirectory(this.runtime, scope, p),
+      'attention.list': (_scope, p) => this.attention.list(p),
+      'artifact.list': (_scope, p) => this.artifactDirectory.list(p),
+      'execution.stop': (scope, p) => this.stop.stop(scope, p),
+      'group.get': (scope, p) => this.groups.get(scope, p),
+      'group.list': (scope, p) => this.groups.list(scope, p),
+      'group.history': (scope, p) => this.groups.history(scope, p),
+      'group.message.send': (scope, p) => this.groups.send(scope, p, scope.call.requestId),
+      'collaboration.runs.list': (scope, p) => this.collaboration.runs(scope, p),
+      'collaboration.tasks.list': (scope, p) => this.collaboration.tasks(scope, p),
+      'schedule.list': (scope, p) => this.schedules.list(scope, p),
+      'schedule.runs.list': (scope, p) => this.schedules.runs(scope, p),
+      'plugin.catalog': (scope, p) => this.plugins.catalog(scope, p),
+      'plugin.view': (scope, p) => this.plugins.view(scope, p),
+      'plugin.setEnabled': (scope, p) => this.plugins.setEnabled(scope, p, scope.call.requestId)
     }
+    for (const [method, handler] of Object.entries(single)) add({ [method]: true }, handler!)
+    if (this.handlers.size !== Object.keys(ParamSchemas).length || Object.keys(ParamSchemas).some((method) => !this.handlers.has(method)))
+      throw new Error('REMOTE_OPERATION_REGISTRATION_INCOMPLETE')
+  }
+
+  private async dispatch(envelope: Envelope, params: any): Promise<unknown> {
+    await this.attachmentAdmissions.assert(envelope, envelope.call.method, params)
+    const handler = this.handlers.get(envelope.call.method)
+    if (!handler) throw new Error('UNSUPPORTED_OPERATION')
+    return handler(envelope, params)
   }
 }
