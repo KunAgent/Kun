@@ -36,9 +36,9 @@ function reducedMotion(): boolean {
 
 /**
  * The Code home's glyph field: a canvas laid under the hero and composer of
- * `hostRef` (the chat main stack). At rest a few faint patches flicker and
- * drift; pressing empty space sends a ripple that lights the field up. It
- * fades out with the home layout and gives its backing stores back.
+ * `hostRef` (the chat main stack). It is blank until a press on empty space
+ * sends a ripple of flickering characters, which then dissolves back to
+ * nothing. It fades out with the home layout and gives its backing stores back.
  */
 export function HomeGlyphRipple({ hostRef, active }: {
   hostRef: RefObject<HTMLElement | null>
@@ -48,7 +48,7 @@ export function HomeGlyphRipple({ hostRef, active }: {
   const shown = active && enabled === true
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const shownRef = useRef(shown)
-  /** Re-measure and resync the ambient tick when `shown` changes. */
+  /** Re-measure when the home comes back before the fade-out finished. */
   const refreshRef = useRef<(() => void) | null>(null)
   const [mounted, setMounted] = useState(shown)
   const [visible, setVisible] = useState(false)
@@ -63,7 +63,6 @@ export function HomeGlyphRipple({ hostRef, active }: {
       return () => cancelAnimationFrame(frame)
     }
     setVisible(false)
-    refreshRef.current?.()
     const timer = window.setTimeout(() => setMounted(false), FADE_MS)
     return () => window.clearTimeout(timer)
   }, [shown])
@@ -75,9 +74,6 @@ export function HomeGlyphRipple({ hostRef, active }: {
     const field = new GlyphRippleField(canvas)
     let frame = 0
     const zoomOf = (box: DOMRect): number => (host.clientWidth > 0 ? box.width / host.clientWidth : 1)
-    // The resting flicker runs only while the home is shown, visible and motion is allowed.
-    const syncAmbient = (): void =>
-      field.setAmbient(shownRef.current && !reducedMotion() && document.visibilityState === 'visible')
 
     const resizeObserver = new ResizeObserver(() => schedule())
     const observed = new Set<Element>()
@@ -110,7 +106,6 @@ export function HomeGlyphRipple({ hostRef, active }: {
       }
       for (const child of Array.from(host.children)) if (child !== canvas) watch(child)
       field.layout(host.clientWidth, host.clientHeight, zoom * (window.devicePixelRatio || 1), clear, readColors(canvas))
-      syncAmbient()
     }
     function schedule(): void {
       if (!frame) frame = requestAnimationFrame(relayout)
@@ -137,23 +132,13 @@ export function HomeGlyphRipple({ hostRef, active }: {
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] })
 
     watch(host)
-    refreshRef.current = () => {
-      syncAmbient()
-      schedule()
-    }
+    refreshRef.current = schedule
     schedule()
-    const motionQuery = typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)')
-      : null
-    motionQuery?.addEventListener('change', syncAmbient)
-    document.addEventListener('visibilitychange', syncAmbient)
     // Lazy timeline chunks and home cards settle after the first frame.
     const settleTimers = [320, 1200].map((delay) => window.setTimeout(schedule, delay))
     host.addEventListener('pointerdown', onPointerDown)
     return () => {
       host.removeEventListener('pointerdown', onPointerDown)
-      motionQuery?.removeEventListener('change', syncAmbient)
-      document.removeEventListener('visibilitychange', syncAmbient)
       resizeObserver.disconnect()
       themeObserver.disconnect()
       settleTimers.forEach((timer) => window.clearTimeout(timer))

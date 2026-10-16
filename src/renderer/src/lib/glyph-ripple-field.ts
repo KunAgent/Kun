@@ -1,31 +1,31 @@
 /**
- * Canvas glyph field behind the Code home. At rest only a few faint patches
- * of monospace characters show; the glyphs keep flickering and the patches
- * drift. A click sends a ripple: its crest scrambles, lifts and rewrites the
- * glyphs it crosses, and behind it the whole field lights up, then settles
- * back to the sparse resting patches.
+ * Canvas glyph field behind the Code home. At rest it is empty. A click sends
+ * a ripple: its crest scrambles, lifts and rewrites monospace glyphs as it
+ * spreads, and behind it a field of flickering characters lights up, then
+ * dissolves in drifting patches until the page is blank again.
  *
- * Three canvases: the visible one, an offscreen `base` (resting patches) and
- * an offscreen `dense` (every glyph at its lit strength). A ripple frame masks
- * `dense` with one radial gradient per ripple, slides `base` underneath, and
- * redraws only the cells inside the crest rings. The ambient tick (10 Hz)
- * repaints only the cells it changes, then blits `base`.
+ * The lit field lives on one offscreen `dense` canvas whose per-cell strength
+ * follows moving noise, so a fading mask leaves patches behind instead of a
+ * flat fade. A frame masks `dense` with one radial gradient per ripple and
+ * redraws only the cells inside the crest rings. While ripples are alive the
+ * same frame loop re-rolls a few glyphs and drifts a band of rows (110 ms
+ * steps); with no ripple there is no frame, timer or paint at all.
  */
 
 const GLYPHS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-/** Front travel time; the lit wake then fades by `LIT_END_MS` after the front passed. */
+/** Front travel time; the lit wake then dissolves by `LIT_END_MS` after the front passed. */
 const TRAVEL_MS = 1700
 const LIT_START_MS = 60
 const LIT_FULL_MS = 260
-const LIT_FADE_FROM_MS = 500
-const LIT_END_MS = 2400
+const LIT_FADE_FROM_MS = 700
+const LIT_END_MS = 3400
 const MAX_RIPPLES = 6
 const ECHO_RADIUS = 0.58
-const AMBIENT_TICK_MS = 110
-/** Share of all cells re-rolled per ambient tick. */
-const FLICKER_SHARE = 0.04
-/** The drift recomputes this share of rows per tick, so the field turns over about once a second. */
-const DRIFT_ROW_SHARE = 0.1
+const AMBIENT_STEP_MS = 110
+/** Share of all cells re-rolled per ambient step. */
+const FLICKER_SHARE = 0.05
+/** Share of rows whose patch strength is recomputed per ambient step. */
+const DRIFT_ROW_SHARE = 0.08
 
 export type GlyphFieldColors = {
   ink: string
@@ -81,12 +81,15 @@ function fbm(x: number, y: number, seed: number): number {
   return valueNoise(x, y, seed) * 0.62 + valueNoise(x * 2.03 + 11.3, y * 2.03 + 5.7, seed + 17) * 0.38
 }
 
-/** Resting strength 0..1 at a point and time (seconds): two noise layers drifting apart. */
-export function restingLevel(x: number, y: number, seconds: number): number {
-  const n = 0.62 * fbm(x / 150 + seconds * 0.018, y / 126 + seconds * 0.006, SEED) +
-    0.38 * fbm(x / 96 - seconds * 0.014, y / 88 + seconds * 0.011, SEED + 9)
-  // About a fifth of the cells clear the floor; only the densest few reach full strength.
-  return smoothstep(0.585, 0.7, n)
+/**
+ * How strongly a lit cell shows at a point and time (seconds): two noise
+ * layers drifting apart. The floor keeps the fully lit field dense; the
+ * spread makes the fade leave patches.
+ */
+export function patchLevel(x: number, y: number, seconds: number): number {
+  const n = 0.62 * fbm(x / 150 + seconds * 0.05, y / 126 + seconds * 0.02, SEED) +
+    0.38 * fbm(x / 96 - seconds * 0.04, y / 88 + seconds * 0.03, SEED + 9)
+  return 0.16 + 0.84 * smoothstep(0.42, 0.68, n)
 }
 
 function signedDistance(px: number, py: number, box: ClearBox): number {
@@ -119,13 +122,13 @@ export function crestStrength(ripple: GlyphRipple, d: number, age: number): numb
   return crest
 }
 
-/** How lit the dense field is at distance `d`: rises just behind the front, then fades. */
+/** How lit the field is at distance `d`: rises just behind the front, then dissolves. */
 export function litStrength(ripple: GlyphRipple, d: number, age: number): number {
   const q = d / ripple.reach
   if (q >= 1) return 0
   const since = age - TRAVEL_MS * (1 - Math.cbrt(1 - q))
   if (since <= 0) return 0
-  return (1 - 0.45 * q) * smoothstep(LIT_START_MS, LIT_FULL_MS, since) *
+  return (1 - 0.4 * q) * smoothstep(LIT_START_MS, LIT_FULL_MS, since) *
     (1 - smoothstep(LIT_FADE_FROM_MS, LIT_END_MS, since))
 }
 
@@ -135,15 +138,13 @@ export function rippleLifetimeMs(): number {
 
 export class GlyphRippleField {
   private readonly ctx: CanvasRenderingContext2D | null
-  private readonly base = document.createElement('canvas')
-  private readonly baseCtx = this.base.getContext('2d')
   private readonly dense = document.createElement('canvas')
   private readonly denseCtx = this.dense.getContext('2d')
   private colors: GlyphFieldColors = { ink: '#20242d', accent: '#5b78ff', dark: false }
   private ripples: GlyphRipple[] = []
   private rippleSeq = 0
   private frameHandle = 0
-  private ambientTimer = 0
+  private lastAmbientAt = 0
   private readonly epoch = performance.now()
   private driftRow = 0
   private width = 0
@@ -179,17 +180,17 @@ export class GlyphRippleField {
    */
   layout(width: number, height: number, pixelRatio: number, clear: readonly GlyphClearRect[], colors: GlyphFieldColors): void {
     const ctx = this.ctx
-    if (!ctx || !this.baseCtx || !this.denseCtx || width < 1 || height < 1) return
+    if (!ctx || !this.denseCtx || width < 1 || height < 1) return
     this.colors = colors
     this.width = width
     this.height = height
     const backingWidth = Math.max(1, Math.round(width * pixelRatio))
     const backingHeight = Math.max(1, Math.round(height * pixelRatio))
-    for (const target of [this.canvas, this.base, this.dense]) {
+    for (const target of [this.canvas, this.dense]) {
       if (target.width !== backingWidth) target.width = backingWidth
       if (target.height !== backingHeight) target.height = backingHeight
     }
-    for (const context of [ctx, this.baseCtx, this.denseCtx]) {
+    for (const context of [ctx, this.denseCtx]) {
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
       context.font = fontFor(500)
       context.textBaseline = 'top'
@@ -226,8 +227,8 @@ export class GlyphRippleField {
         const y = (r + 0.5) * LINE_HEIGHT
         if (!sameGrid) {
           this.glyph[index] = Math.floor(hash(c, r, SEED + 3) * GLYPHS.length)
-          this.level[index] = restingLevel(x, y, seconds)
-          this.grain[index] = 0.45 + 0.55 * hash(c, r, SEED + 41)
+          this.level[index] = patchLevel(x, y, seconds)
+          this.grain[index] = 0.55 + 0.45 * hash(c, r, SEED + 41)
           this.tint[index] = fbm(x / 230 + 40, y / 196, SEED + 29) > 0.64 && hash(c, r, SEED + 5) < 0.55 ? 1 : 0
         }
         let veil = 1
@@ -253,28 +254,16 @@ export class GlyphRippleField {
     this.start()
   }
 
-  /** The resting flicker and drift; off while hidden, off-screen or under reduced motion. */
-  setAmbient(enabled: boolean): void {
-    if (enabled === Boolean(this.ambientTimer)) return
-    if (!enabled) {
-      window.clearInterval(this.ambientTimer)
-      this.ambientTimer = 0
-      return
-    }
-    this.ambientTimer = window.setInterval(() => this.ambientTick(), AMBIENT_TICK_MS)
-  }
-
   stop(): void {
     if (this.frameHandle) cancelAnimationFrame(this.frameHandle)
     this.frameHandle = 0
-    this.setAmbient(false)
   }
 
   /** Stop and give the backing stores back; the next `layout` rebuilds them. */
   release(): void {
     this.stop()
     this.ripples = []
-    for (const target of [this.canvas, this.base, this.dense]) {
+    for (const target of [this.canvas, this.dense]) {
       target.width = 0
       target.height = 0
     }
@@ -295,27 +284,24 @@ export class GlyphRippleField {
     this.frameHandle = requestAnimationFrame(tick)
   }
 
-  private restAlpha(index: number): number {
-    const dark = this.colors.dark
-    const scale = this.tint[index] ? (dark ? 0.22 : 0.26) : (dark ? 0.09 : 0.13)
-    return this.level[index] * this.veil[index] * scale
-  }
-
   private litAlpha(index: number): number {
     const dark = this.colors.dark
-    const scale = this.tint[index] ? (dark ? 0.3 : 0.34) : (dark ? 0.15 : 0.21)
-    return this.grain[index] * this.veil[index] * scale
+    const scale = this.tint[index] ? (dark ? 0.34 : 0.38) : (dark ? 0.18 : 0.24)
+    return this.level[index] * this.grain[index] * this.veil[index] * scale
   }
 
   private paintGlyph(context: CanvasRenderingContext2D, glyph: number, c: number, r: number, dx: number, dy: number): void {
     context.fillText(GLYPHS[glyph] ?? 'a', c * this.cellWidth + dx, r * LINE_HEIGHT + (LINE_HEIGHT - FONT_SIZE) / 2 + dy)
   }
 
-  /** Paint one cell into `context` at `alpha`; `clear` first wipes its box. */
-  private paintCell(context: CanvasRenderingContext2D, index: number, alpha: number, clear: boolean): void {
+  /** Repaint one cell of the lit field; `clear` first wipes its box. */
+  private paintCell(index: number, clear: boolean): void {
+    const context = this.denseCtx
+    if (!context) return
     const c = index % this.cols
     const r = (index / this.cols) | 0
     if (clear) context.clearRect(c * this.cellWidth - 0.5, r * LINE_HEIGHT, this.cellWidth + 1, LINE_HEIGHT)
+    const alpha = this.litAlpha(index)
     if (alpha < 0.01) return
     context.globalAlpha = Math.min(1, alpha)
     context.fillStyle = this.tint[index] ? this.colors.accent : this.colors.ink
@@ -323,49 +309,38 @@ export class GlyphRippleField {
   }
 
   private paintAll(): void {
-    const base = this.baseCtx
     const dense = this.denseCtx
-    if (!base || !dense) return
-    base.clearRect(0, 0, this.width, this.height)
+    if (!dense) return
     dense.clearRect(0, 0, this.width, this.height)
-    for (let index = 0; index < this.cols * this.rows; index += 1) {
-      this.paintCell(base, index, this.restAlpha(index), false)
-      this.paintCell(dense, index, this.litAlpha(index), false)
-    }
-    base.globalAlpha = 1
+    for (let index = 0; index < this.cols * this.rows; index += 1) this.paintCell(index, false)
     dense.globalAlpha = 1
     this.draw(performance.now())
   }
 
-  private ambientTick(): void {
-    const base = this.baseCtx
+  /** Keep the lit field alive: drift a band of rows and re-roll a few glyphs. */
+  private ambientStep(): void {
     const dense = this.denseCtx
-    if (!base || !dense || this.cols === 0) return
-    // Drift: recompute a band of rows from the moving noise and repaint them.
+    if (!dense || this.cols === 0) return
     const seconds = this.seconds()
     const band = Math.max(1, Math.ceil(this.rows * DRIFT_ROW_SHARE))
     for (let step = 0; step < band; step += 1) {
       const r = (this.driftRow + step) % this.rows
-      base.clearRect(0, r * LINE_HEIGHT, this.width, LINE_HEIGHT)
+      dense.clearRect(0, r * LINE_HEIGHT, this.width, LINE_HEIGHT)
       for (let c = 0; c < this.cols; c += 1) {
         const index = r * this.cols + c
-        this.level[index] = restingLevel((c + 0.5) * this.cellWidth, (r + 0.5) * LINE_HEIGHT, seconds)
-        this.paintCell(base, index, this.restAlpha(index), false)
+        this.level[index] = patchLevel((c + 0.5) * this.cellWidth, (r + 0.5) * LINE_HEIGHT, seconds)
+        this.paintCell(index, false)
       }
     }
     this.driftRow = (this.driftRow + band) % this.rows
-    // Flicker: re-roll a few glyphs everywhere, in both layers.
     const size = this.cols * this.rows
     const flips = Math.ceil(size * FLICKER_SHARE)
     for (let n = 0; n < flips; n += 1) {
       const index = Math.floor(Math.random() * size)
       this.glyph[index] = Math.floor(Math.random() * GLYPHS.length)
-      this.paintCell(base, index, this.restAlpha(index), true)
-      this.paintCell(dense, index, this.litAlpha(index), true)
+      this.paintCell(index, true)
     }
-    base.globalAlpha = 1
     dense.globalAlpha = 1
-    if (!this.frameHandle) this.draw(performance.now())
   }
 
   /** Mark and collect the cells whose centres lie in the ring [inner, outer]. */
@@ -397,13 +372,13 @@ export class GlyphRippleField {
     ctx.globalCompositeOperation = 'source-over'
     ctx.globalAlpha = 1
     ctx.clearRect(0, 0, this.width, this.height)
-    if (this.ripples.length === 0) {
-      ctx.drawImage(this.base, 0, 0, this.width, this.height)
-      return false
+    if (this.ripples.length === 0) return false
+    if (now - this.lastAmbientAt >= AMBIENT_STEP_MS) {
+      this.lastAmbientAt = now
+      this.ambientStep()
     }
 
-    // Lit wake: one gradient mask per ripple, filled with the dense field,
-    // then the resting patches slid in underneath.
+    // Lit wake: one gradient mask per ripple, filled with the dense field.
     for (const ripple of this.ripples) {
       const age = now - ripple.startedAt
       const radius = radiusAt(ripple, age)
@@ -417,8 +392,6 @@ export class GlyphRippleField {
     }
     ctx.globalCompositeOperation = 'source-in'
     ctx.drawImage(this.dense, 0, 0, this.width, this.height)
-    ctx.globalCompositeOperation = 'destination-over'
-    ctx.drawImage(this.base, 0, 0, this.width, this.height)
     ctx.globalCompositeOperation = 'source-over'
 
     this.ring.length = 0
@@ -470,8 +443,7 @@ export class GlyphRippleField {
       if (strongest && crest > 0.2) {
         glyph = Math.floor(hash(index, Math.floor((now - strongest.startedAt) / 70), strongest.id) * GLYPHS.length)
       }
-      const alpha = this.restAlpha(index) + (1 - unlit) * this.litAlpha(index) +
-        crest * crestAlpha * Math.pow(this.veil[index], 0.6)
+      const alpha = (1 - unlit) * this.litAlpha(index) + crest * crestAlpha * Math.pow(this.veil[index], 0.6)
       if (alpha < 0.01) continue
       const lift = crest * 3.5
       if (crest >= BOLD_CREST) {
@@ -494,14 +466,8 @@ export class GlyphRippleField {
       ctx.font = fontFor(500)
     }
     ctx.globalAlpha = 1
-    if (this.baseCtx && this.denseCtx) {
-      for (const index of this.rewritten) {
-        this.paintCell(this.baseCtx, index, this.restAlpha(index), true)
-        this.paintCell(this.denseCtx, index, this.litAlpha(index), true)
-      }
-      this.baseCtx.globalAlpha = 1
-      this.denseCtx.globalAlpha = 1
-    }
+    for (const index of this.rewritten) this.paintCell(index, true)
+    if (this.denseCtx) this.denseCtx.globalAlpha = 1
     return true
   }
 }
