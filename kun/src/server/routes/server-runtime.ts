@@ -47,6 +47,7 @@ import type { MemoryDiagnostics } from '../../contracts/memory.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import type { MemoryFeedbackRuntime } from '../../memory/memory-feedback-runtime.js'
 import type { MemoryDistillationCoordinator } from '../../memory/memory-distillation-coordinator.js'
+import type { SessionConsolidationService } from '../../services/session-consolidation-service.js'
 import type { ReviewTarget } from '../../contracts/review.js'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import type { BackgroundShellRuntime } from '../../services/background-shell-runtime.js'
@@ -228,6 +229,7 @@ export type ServerRuntime = {
   memoryStore?: MemoryStore
   memoryFeedback?: MemoryFeedbackRuntime
   memoryDistillation?: MemoryDistillationCoordinator
+  sessionConsolidation?: SessionConsolidationService
   knowledgeBaseService?: KnowledgeBaseService
   migrationService?: RuntimeMigrationService
   migrationImportService?: RuntimeMigrationImportService

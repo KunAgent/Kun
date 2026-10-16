@@ -4,10 +4,12 @@ export const THREAD_GUARDIAN_DELAY_MS = 45_000
 export const THREAD_GUARDIAN_INTERVAL_MS = 6 * 60 * 60 * 1_000
 export const EVENT_INDEX_REBUILD_DELAY_MS = 120_000
 export const EVENT_INDEX_REBUILD_INTERVAL_MS = 12 * 60 * 60 * 1_000
+export const SESSION_CONSOLIDATION_DELAY_MS = 60_000
+export const SESSION_CONSOLIDATION_INTERVAL_MS = 24 * 60 * 60 * 1_000
 export const MAINTENANCE_SLICE_RETRY_MS = 250
 
 type MaintenanceTask = () => Promise<boolean | void>
-type TaskName = 'attachment pruning' | 'thread guardian' | 'event index rebuild'
+type TaskName = 'attachment pruning' | 'thread guardian' | 'event index rebuild' | 'session consolidation'
 
 type TaskEntry = {
   name: TaskName
@@ -34,6 +36,9 @@ export function createRuntimeBackgroundMaintenance(input: {
   guardianIntervalMs?: number
   eventIndexRebuildDelayMs?: number
   eventIndexRebuildIntervalMs?: number
+  consolidateSessions?: MaintenanceTask
+  consolidationDelayMs?: number
+  consolidationIntervalMs?: number
   sliceRetryMs?: number
 }): RuntimeBackgroundMaintenance {
   let started = false
@@ -63,6 +68,15 @@ export function createRuntimeBackgroundMaintenance(input: {
       run: input.rebuildEventIndex,
       delayMs: input.eventIndexRebuildDelayMs ?? EVENT_INDEX_REBUILD_DELAY_MS,
       intervalMs: input.eventIndexRebuildIntervalMs ?? EVENT_INDEX_REBUILD_INTERVAL_MS,
+      dueAt: Number.POSITIVE_INFINITY
+    })
+  }
+  if (input.consolidateSessions) {
+    tasks.push({
+      name: 'session consolidation',
+      run: input.consolidateSessions,
+      delayMs: input.consolidationDelayMs ?? SESSION_CONSOLIDATION_DELAY_MS,
+      intervalMs: input.consolidationIntervalMs ?? SESSION_CONSOLIDATION_INTERVAL_MS,
       dueAt: Number.POSITIVE_INFINITY
     })
   }
