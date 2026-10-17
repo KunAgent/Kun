@@ -76,7 +76,9 @@ it('real Agent and Code admission keeps API surface and replays durable receipts
                   expiresAt: new Date(Date.now() + 60000).toISOString()
                 }
               ]
-            : []
+            : [],
+        warmProfiles: () => {},
+        checking: () => false
       },
       probedModels: () => ['claude-sonnet-4-5'],
       detector: {}

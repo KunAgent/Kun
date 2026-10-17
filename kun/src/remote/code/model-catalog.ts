@@ -7,6 +7,8 @@ import type { ModelConnectionSnapshot } from '../../contracts/model-connections.
 import { freezeHarnessGatewayAliases } from '../../harness/gateway-alias-binding.js'
 import { harnessProfileKey } from '../../harness/harness-readiness-profile.js'
 import { providerModelIds } from '../../server/routes/model-gateway-core.js'
+import { kunAgent, usableProvider } from './kun-routes.js'
+import { settleNativeModels } from './native-models.js'
 import type { TurnReasoningEffort } from '../../contracts/turn-reasoning.js'
 import { RemoteNoEffect } from '../requests/rejections.js'
 import { allowsEffort, checkedProfiles, modelProfile, probedModelInfo, routeProfiles, type ModelProfiles } from './model-profiles.js'
@@ -51,54 +53,6 @@ type CodeCatalog = { agents: RemoteCodeAgent[]; bindings: Map<string, HarnessGat
 /** A stable, bounded stand-in for a gateway profile, so the route id and approved connections stay here. */
 export function gatewayRouteKey(profile: Pick<HarnessEnabledProfile, 'harnessId' | 'credentialMode' | 'gatewayBinding'>): string {
   return 'alias-v1:' + createHash('sha256').update(harnessProfileKey(profile)).digest('hex')
-}
-
-type Provider = {
-  id: string
-  name: string
-  kind: string
-  configured: boolean
-  enabled?: boolean
-  credentialStatus?: string
-  models?: string[]
-  selectedModel?: string
-}
-
-function usable(provider: Provider) {
-  return provider.configured && provider.enabled !== false &&
-    (!provider.credentialStatus || provider.credentialStatus === 'ready' || provider.credentialStatus === 'not-required')
-}
-
-/** Kun's own loop: one route per configured HTTP model connection. */
-async function kunAgent(runtime: ServerRuntime, legacyModels: string[]): Promise<RemoteCodeAgent> {
-  const snapshot = await runtime.modelConnections?.snapshot().catch(() => undefined)
-  const routes: RemoteAgentRoute[] = (snapshot?.providers ?? [])
-    .filter((provider) => provider.kind === 'http' && usable(provider))
-    .map((provider) => {
-      const models = providerModelIds(provider)
-      const isDefault = provider.id === snapshot?.defaultProviderId
-      return {
-        credentialMode: 'provider' as const,
-        providerId: provider.id,
-        label: provider.name,
-        models,
-        defaultModel: isDefault && snapshot?.defaultModel && models.includes(snapshot.defaultModel)
-          ? snapshot.defaultModel
-          : provider.selectedModel ?? models[0],
-        // The provider's declared reasoning metadata is what Kun's own loop sends.
-        ...routeProfiles(models, (model) => {
-          const reasoning = provider.modelCapabilities?.[model]?.reasoning
-          return modelProfile(reasoning?.supportedEfforts, reasoning?.defaultEffort)
-        })
-      }
-    })
-    .filter((route) => route.models.length > 0)
-    .sort((a, b) => Number(b.providerId === snapshot?.defaultProviderId) - Number(a.providerId === snapshot?.defaultProviderId))
-  // Without a model-connection registry the runtime's default route is the only one.
-  if (routes.length === 0 && legacyModels.length > 0)
-    routes.push({ label: 'Kun', models: legacyModels, defaultModel: runtime.defaultModel ?? legacyModels[0] })
-  const definition = runtime.harnesses?.catalog.get('kun')
-  return { id: 'kun', name: definition?.displayName ?? 'Kun', routes: routes.map(checkedProfiles) }
 }
 
 function nativeModels(runtime: ServerRuntime, definition: HarnessDefinition): string[] {
@@ -157,11 +111,15 @@ async function externalAgents(runtime: ServerRuntime, bindings: CodeCatalog['bin
   await settleReadiness(runtime, candidates.map((definition) => definition.id))
   const snapshot = await runtime.modelConnections?.snapshot().catch(() => undefined)
   const providers = new Map((snapshot?.providers ?? []).map((provider) => [provider.id, provider]))
+  const now = Date.now()
+  const ready = await Promise.all(candidates.map(async (definition) => ({ definition,
+    profiles: (await harnesses.readiness!.readyProfiles(definition.id).catch(() => []))
+      .filter((profile) => Date.parse(profile.expiresAt) > now) })))
+  const signedIn = (profile: HarnessEnabledProfile) => profile.credentialMode === 'native-login' && !profile.gatewayBinding &&
+    !(profile.providerId && providers.has(profile.providerId))
+  await settleNativeModels(runtime, ready.filter((entry) => entry.profiles.some(signedIn)).map((entry) => entry.definition))
   const agents: RemoteCodeAgent[] = []
-  for (const definition of candidates) {
-    const now = Date.now()
-    const profiles = (await harnesses.readiness.readyProfiles(definition.id).catch(() => []))
-      .filter((profile) => Date.parse(profile.expiresAt) > now)
+  for (const { definition, profiles } of ready) {
     const routes: RemoteAgentRoute[] = []
     const info = new Map((probedModelInfo(runtime, definition) ?? []).map((entry) => [entry.id, entry]))
     for (const profile of profiles) {
@@ -171,7 +129,7 @@ async function externalAgents(runtime: ServerRuntime, bindings: CodeCatalog['bin
         continue
       }
       const provider = profile.providerId ? providers.get(profile.providerId) : undefined
-      if (profile.providerId && (!provider || !usable(provider))) continue
+      if (profile.providerId && (!provider || !usableProvider(provider))) continue
       const native = profile.credentialMode === 'native-login' && !provider
       const models = native ? nativeModels(runtime, definition) : provider ? providerModelIds(provider) : []
       if (models.length === 0) continue
@@ -180,7 +138,8 @@ async function externalAgents(runtime: ServerRuntime, bindings: CodeCatalog['bin
         ...(profile.providerId ? { providerId: profile.providerId } : {}),
         label: provider?.name ?? definition.displayName,
         models,
-        defaultModel: models[0],
+        // The Agent's own recommended model, as the desktop picker preselects it.
+        defaultModel: (native ? models.find((model) => info.get(model)?.isDefault) : undefined) ?? models[0],
         // Native catalog facts describe only the Agent's own login.
         ...(native ? routeProfiles(models, (model) => {
           const entry = info.get(model)
