@@ -68,9 +68,10 @@ describe('send_im_message', () => {
     const first = await f.tool.execute({ text: 'I will inspect the files.', phase: 'start' }, f.context)
     const firstId = (first.output as { messageId: string }).messageId
     expect((await f.store.get<RoomMessage>('message', firstId))?.value.deliveryPhase).toBe('start')
+    expect(first.output).not.toHaveProperty('instruction')
     const second = await f.tool.execute({ text: 'The cause is clear.', phase: 'final' },
       { ...f.context, activeToolCallId: 'call-final' })
-    expect((second.output as { phase: string }).phase).toBe('final')
+    expect(second.output).toMatchObject({ phase: 'final', instruction: expect.stringContaining('finish this turn now') })
     const run = (await f.store.get<RoomRunRecord>('room_run', f.runId))?.value
     expect(run).toMatchObject({ firstVisibleAt: expect.any(String), lastVisibleAt: expect.any(String),
       lastDeliveryPhase: 'final', publishedMessageId: firstId })

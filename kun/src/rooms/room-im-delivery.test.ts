@@ -28,12 +28,17 @@ describe('private Room delivery state', () => {
     expect(privateDeliveryState([start, ...five, six, publish('update', 'progress', 11)], 'turn', at + 31000, true).gate).toBe('none')
   })
 
-  it('invalidates a final answer when later work occurs and accepts a user card', () => {
+  it('keeps a final answer current through later checks until a newer bubble, and accepts a user card', () => {
     const final = publish('final', 'final', 0)
     expect(privateDeliveryState([final], 'turn', at + 1000, true).finalCurrent).toBe(true)
-    expect(privateDeliveryState([final, result('work', 'bash', 2)], 'turn', at + 32000, true)).toMatchObject({
-      finalCurrent: false, gate: 'progress'
+    // Post-final re-checks once forced a duplicate final every 30 seconds and
+    // then failed the turn when the model kept checking.
+    const checks = [1, 2, 3, 4, 5, 6, 7].map((n) => result('check-' + n, 'bash', n))
+    expect(privateDeliveryState([final, ...checks], 'turn', at + 32000, true)).toMatchObject({
+      finalCurrent: true, gate: 'none', workSinceVisible: 7
     })
+    expect(privateDeliveryState([final, publish('more', 'progress', 1), ...checks], 'turn', at + 32000, true))
+      .toMatchObject({ finalCurrent: false, gate: 'progress' })
     expect(privateDeliveryState([result('card', 'request_app_connection', 1, { requested: true })], 'turn', at + 1000, true))
       .toMatchObject({ published: true, waitingOnUser: true, gate: 'none' })
   })
