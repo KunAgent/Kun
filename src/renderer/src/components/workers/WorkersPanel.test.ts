@@ -375,6 +375,38 @@ describe('WorkersPanel', () => {
     await act(async () => input!.props.onKeyDown({ key: 'Enter' }))
     expect(provider.answerTeamQuestion).toHaveBeenCalledWith('q_1', 'yes, flag it')
   })
+
+  it('keeps showing the loading state only while the team lookup is pending', async () => {
+    let settle!: (value: AdeTeamOverview | null) => void
+    provider.getTeamOverview.mockReturnValue(new Promise((resolve) => { settle = resolve }))
+    const renderer = await render(createElement(WorkersPanel))
+    expect(JSON.stringify(renderer.toJSON())).toContain('Loading team')
+    expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(0)
+    await act(async () => settle(null))
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('Loading team')
+  })
+
+  it('shows the empty state instead of loading forever for a thread that owns no team', async () => {
+    // The runtime answers 404 for threads without a team (for example one that
+    // only ran subagents) and the client maps that to null.
+    provider.getTeamOverview.mockResolvedValue(null)
+    const renderer = await render(createElement(WorkersPanel))
+    expect(provider.getTeamOverview).toHaveBeenCalledWith(MGR)
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('Loading team')
+    expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(1)
+    expect(renderer.root.findAll((n) => n.props['data-workers-error'] !== undefined)).toHaveLength(0)
+  })
+
+  it('picks up a team created after the first lookup found none', async () => {
+    provider.getTeamOverview.mockResolvedValueOnce(null).mockResolvedValue(overview())
+    const renderer = await render(createElement(WorkersPanel))
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('backend')
+    await act(async () => {
+      useActivityStore.setState({ rows: { wrk_1: workerRow({ unitId: 'wrk_1', threadId: 'wrk_1' }) } })
+    })
+    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain('backend'), { timeout: 3000 })
+    expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(0)
+  })
 })
 
 describe('FloatingComposerWorkersPill', () => {

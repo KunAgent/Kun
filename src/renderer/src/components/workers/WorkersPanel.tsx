@@ -38,7 +38,10 @@ export function WorkersPanel({
     () => (managerThreadId ? selectWorkerRowsForParent(activityRows, managerThreadId) : []),
     [activityRows, managerThreadId]
   )
+  // `null` overview means the thread owns no team (the runtime answers 404);
+  // `loaded` tells that apart from a request that has not settled yet.
   const [overview, setOverview] = useState<AdeTeamOverview | null>(null)
+  const [loaded, setLoaded] = useState(false)
   const view = useWorkerViewStore((s) => managerThreadId ? s.managers[managerThreadId] : undefined)
   const selectedWorkerId = view?.selectedWorkerId ?? null
   const workerDrafts = view?.drafts ?? {}
@@ -50,11 +53,15 @@ export function WorkersPanel({
   const reload = useCallback(async (threadId: string): Promise<void> => {
     const request = ++loadGeneration.current
     const provider = getProvider()
-    if (!provider.getTeamOverview) return
+    if (!provider.getTeamOverview) {
+      if (managerThreadRef.current === threadId && request === loadGeneration.current) setLoaded(true)
+      return
+    }
     try {
       const next = await provider.getTeamOverview(threadId)
       if (managerThreadRef.current !== threadId || request !== loadGeneration.current) return
       setOverview(next)
+      setLoaded(true)
       setLoadFailed(false)
     } catch {
       if (managerThreadRef.current === threadId && request === loadGeneration.current) setLoadFailed(true)
@@ -64,6 +71,7 @@ export function WorkersPanel({
   useEffect(() => {
     if (!active) return
     setOverview(null)
+    setLoaded(false)
     setLoadFailed(false)
     if (managerThreadId) {
       ensureWorkerView(managerThreadId)
@@ -73,16 +81,16 @@ export function WorkersPanel({
   }, [managerThreadId, active, reload])
 
   // Debounced refetch when worker activity rows move.
-  const hasOverview = overview !== null
+  // A thread without a team still refetches so a team created later shows up.
   const rowStamp = workerRows.map((row) => `${row.unitId}:${row.updatedAt}`).join('|')
   useEffect(() => {
-    if (!active || !managerThreadId || !hasOverview) return
+    if (!active || !managerThreadId || !loaded) return
     if (refreshTimer.current) clearTimeout(refreshTimer.current)
     refreshTimer.current = setTimeout(() => void reload(managerThreadId), 800)
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current)
     }
-  }, [rowStamp, managerThreadId, hasOverview, active, reload])
+  }, [rowStamp, managerThreadId, loaded, active, reload])
 
   const rows = useMemo(
     () => (overview ? mergeWorkerRows(overview, workerRows) : []),
@@ -204,12 +212,12 @@ export function WorkersPanel({
             />
           </div>
         ))}
-        {overview && rows.length === 0 ? (
-          <p className="px-1 py-6 text-center text-[12.5px] text-ds-faint">
+        {loaded && rows.length === 0 ? (
+          <p className="px-1 py-6 text-center text-[12.5px] text-ds-faint" data-workers-empty>
             {t('workersEmpty')}
           </p>
         ) : null}
-        {!overview && !loadFailed ? (
+        {!loaded && !loadFailed ? (
           <p className="px-1 py-6 text-center text-[12.5px] text-ds-faint">
             {t('workersLoading')}
           </p>
