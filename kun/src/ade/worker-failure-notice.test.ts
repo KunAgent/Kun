@@ -31,9 +31,9 @@ describe('worker failure notices', () => {
     })
     const harness = makeHarness(stores)
     const events: RuntimeEvent[] = [{
-      kind: 'error', threadId: 'wrk_1', turnId: 'turn_w1', seq: 7, createdAt: '2026-09-26T00:00:00.000Z',
+      kind: 'error', threadId: 'wrk_1', turnId: 'turn_w1', seq: 7, timestamp: '2026-09-26T00:00:00.000Z',
       message: 'turn exceeded 128 model steps', code: 'turn_step_limit', severity: 'warning'
-    } as RuntimeEvent]
+    }]
     harness.deps.sessionStore = {
       loadItems: vi.fn(async () => [{
         kind: 'assistant_text', id: 'item_1', threadId: 'wrk_1', turnId: 'turn_w1', text: 'Now let me check the remaining files.'
