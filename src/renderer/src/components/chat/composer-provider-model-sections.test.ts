@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  initialOpenProviderSections, providerModelSections, providerQualifiedModel, providerSectionIconPreset, providerSectionModelName
+  agentModelGroupSections, initialOpenProviderSections, providerModelSections, providerQualifiedModel, providerSectionIconPreset, providerSectionModelName
 } from './composer-provider-model-sections'
 
 const info = (entries: Record<string, string>) => Object.fromEntries(Object.entries(entries).map(([id, displayName]) => [id, { id, displayName }]))
@@ -43,5 +43,36 @@ describe('provider sections in an Agent catalog', () => {
     expect([...initialOpenProviderSections(sections, 'opencode/big-pickle', 12)]).toEqual(['openai', 'opencode', 'google'])
     expect([...initialOpenProviderSections(sections, 'opencode/big-pickle', 2)]).toEqual(['opencode'])
     expect([...initialOpenProviderSections(sections, 'default', 2)]).toEqual(['openai'])
+  })
+})
+
+const route = (route: string, model: string) => `["${route}","${model}"]`
+const DSH_IDS = [route('deepseek-official', 'deepseek-v4-flash'), route('deepseek-official', 'deepseek-flash'), route('deepseek-account', 'deepseek-flash')]
+const DSH_INFO = Object.fromEntries(DSH_IDS.map((id, index) => [id, { id, displayName: index === 0 ? 'deepseek-v4-flash' : 'DeepSeek-V4.1-Flash',
+  group: index < 2 ? 'DeepSeek' : 'DeepSeek Account' }]))
+
+describe('Agent option groups in an Agent catalog', () => {
+  it('splits same-named models by the group the Agent files them under, in the Agent\'s order', () => {
+    expect(agentModelGroupSections(DSH_IDS, DSH_INFO)).toEqual([
+      { key: 'DeepSeek', label: 'DeepSeek', kind: 'group', modelIds: DSH_IDS.slice(0, 2) },
+      { key: 'DeepSeek Account', label: 'DeepSeek Account', kind: 'group', modelIds: DSH_IDS.slice(2) }
+    ])
+  })
+  it('keeps a flat list for one group, a missing group or no info', () => {
+    expect(agentModelGroupSections(DSH_IDS.slice(0, 2), DSH_INFO)).toBeUndefined()
+    expect(agentModelGroupSections(DSH_IDS, { ...DSH_INFO, [DSH_IDS[2]!]: { id: DSH_IDS[2]!, displayName: 'No group' } })).toBeUndefined()
+    expect(agentModelGroupSections(DSH_IDS, undefined)).toBeUndefined()
+    expect(agentModelGroupSections([], DSH_INFO)).toBeUndefined()
+  })
+  it('sections an Agent catalog whose ids are not provider-qualified and names rows by display name', () => {
+    const group = { nativeHarnessId: 'deepseek-harness', modelInfo: DSH_INFO }
+    expect(providerModelSections(group, DSH_IDS)?.map((section) => section.label)).toEqual(['DeepSeek', 'DeepSeek Account'])
+    expect(providerSectionModelName(group, DSH_IDS[2]!)).toBe('DeepSeek-V4.1-Flash')
+  })
+  it('lets provider-qualified ids keep their provider sections and never groups Kun providers or Devin', () => {
+    const info = Object.fromEntries(Object.entries(OPENCODE.modelInfo).map(([id, entry]) => [id, { ...entry, group: 'Everything' }]))
+    expect(providerModelSections({ ...OPENCODE, modelInfo: info }, IDS)?.map((section) => section.key)).toEqual(['openai', 'opencode', 'google'])
+    expect(providerModelSections({ modelInfo: DSH_INFO }, DSH_IDS)).toBeUndefined()
+    expect(providerModelSections({ nativeHarnessId: 'devin', modelInfo: DSH_INFO }, DSH_IDS)).toBeUndefined()
   })
 })

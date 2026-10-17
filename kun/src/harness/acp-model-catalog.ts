@@ -37,6 +37,14 @@ function foldLegacyVariants(rows: Map<string, HarnessModelInfo>, selected: strin
   return selected
 }
 
+/** Display label of an ACP select option group: its name, else its id. */
+function groupLabel(entry: Record<string, unknown>): string | undefined {
+  for (const candidate of [entry.name, entry.group]) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+  return undefined
+}
+
 /** Keep native labels, order and capabilities. Modern selectors are authoritative over legacy aliases. */
 export function acpModelCatalog(input: {
   harnessId: string; configOptions?: AcpConfigOption[] | null; models?: unknown; defaultModel?: string
@@ -48,15 +56,16 @@ export function acpModelCatalog(input: {
   for (const option of input.configOptions ?? []) {
     if (option.category !== 'model' || option.type !== 'select') continue
     selected = option.currentValue
-    const visit = (entries: unknown[]) => {
+    const visit = (entries: unknown[], group?: string) => {
       for (const raw of entries) {
         if (!raw || typeof raw !== 'object') continue
         const entry = raw as Record<string, unknown>
-        if (Array.isArray(entry.options)) { visit(entry.options); continue }
+        if (Array.isArray(entry.options)) { visit(entry.options, groupLabel(entry) ?? group); continue }
         if (typeof entry.value !== 'string' || !entry.value.trim() || rows.has(entry.value)) continue
         const meta = entry._meta as Record<string, unknown> | undefined
         const images = meta?.['cognition.ai/supportsImages']
         rows.set(entry.value, { id: entry.value,
+          ...(group ? { group } : {}),
           ...(typeof entry.name === 'string' ? { displayName: entry.name } : {}),
           ...(typeof entry.description === 'string' ? { description: entry.description } : {}),
           ...(modelCategory ? { category: modelCategory(entry.value) } : {}),

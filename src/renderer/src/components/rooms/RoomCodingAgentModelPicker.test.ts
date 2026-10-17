@@ -8,6 +8,7 @@ import i18n from '../../i18n'
 import { useHarnessStore } from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
 import { FloatingComposerModelPicker } from '../chat/FloatingComposerModelPicker'
+import { providerModelSections } from '../chat/composer-provider-model-sections'
 import { RoomCodingAgentModelPicker } from './RoomCodingAgentModelPicker'
 import { RoomDirectModelPicker } from './RoomDirectModelPicker'
 
@@ -52,6 +53,24 @@ describe('coding Agent conversation model selection', () => {
     await act(async () => picker().onComposerModelChange('new-model', 'ade-cred:native-login'))
     expect(changed).toHaveBeenCalledExactlyOnceWith('new-model', 'auto')
     expect(useChatStore.getState().composerModelGroups[0].providerId).toBe('deepseek')
+  })
+
+  it('hands an Agent\'s option groups to the shared picker so same-named routes can be told apart', async () => {
+    const route = (name: string, model: string) => `["${name}","${model}"]`
+    const modelInfo = [
+      { id: route('deepseek-official', 'deepseek-flash'), displayName: 'DeepSeek-V4.1-Flash', group: 'DeepSeek' },
+      { id: route('deepseek-account', 'deepseek-flash'), displayName: 'DeepSeek-V4.1-Flash', group: 'DeepSeek Account' }
+    ]
+    const dsh = { id: 'dsh-agent', revision: 1,
+      executor: { kind: 'harness', harnessId: 'deepseek-harness', credentialMode: 'native-login', model: modelInfo[1]!.id } } as unknown as AgentIdentity
+    const dshRow: AdeHarnessRow = { definition: { ...row.definition, id: 'deepseek-harness', displayName: 'DeepSeek Harness', transport: 'acp',
+      credentialModes: ['native-login'] }, status: { ...row.status, harnessId: 'deepseek-harness' } }
+    useHarnessStore.setState({ rows: [withHarnessReadiness(dshRow)],
+      models: { 'deepseek-harness': { loading: false, models: modelInfo.map((entry) => entry.id), modelInfo } } })
+    await mount(dsh)
+    const [group] = picker().composerModelGroups
+    expect(group.nativeHarnessId).toBe('deepseek-harness')
+    expect(providerModelSections(group, group.modelIds)?.map((section) => section.label)).toEqual(['DeepSeek', 'DeepSeek Account'])
   })
 
   it('keeps a gateway identity in its configured provider instead of switching account or engine', async () => {

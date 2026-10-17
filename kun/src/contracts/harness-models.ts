@@ -11,6 +11,8 @@ export type HarnessModelInfo = {
   reasoningEfforts?: string[]
   defaultReasoningEffort?: string
   category?: 'model' | 'fusion'
+  /** Section the Agent files the model under (an ACP select option group); absent when its list is flat. */
+  group?: string
 }
 
 /** Why a live native catalog lookup returned no models (never contains secrets). */

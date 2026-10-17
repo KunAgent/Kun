@@ -6,6 +6,7 @@ import { loadHarnessModels, loadHarnessProviderGroups, useHarnessStore } from '.
 import { AgentSection } from './AgentCenterParts'
 import { settingsButtonClass } from '../settings-button'
 import { AgentDraftBar } from './AgentDraftBar'
+import { agentModelGroupSections } from '../chat/composer-provider-model-sections'
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
@@ -47,7 +48,23 @@ export function AgentModelsTab({ row, entry, profile, dirty, busy, onChange, onD
   const visible = modelIds.filter((model) => `${info[model]?.displayName ?? ''} ${model}`.toLocaleLowerCase().includes(needle))
   const loadedAt = native ? nativeModels?.catalogStatus?.fetchedAt : undefined
 
+  // Whether the list is grouped is decided on the full catalog so a filter never drops the headings.
+  const sections = agentModelGroupSections(modelIds, info)
+  const visibleIds = new Set(visible)
   const rowClass = 'flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2'
+  const renderModel = (model: string): ReactElement => {
+    const details = info[model]
+    return <div key={model} data-agent-model-row={model} className={rowClass}>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-mono text-[12.5px] text-ds-ink">{model}</span>
+        {details?.displayName && details.displayName !== model ? <span className="block truncate text-[11.5px] text-ds-faint">{details.displayName}</span> : null}
+      </span>
+      {details?.reasoningEfforts?.length ? <span className="flex flex-wrap gap-1">{details.reasoningEfforts.map((effort) =>
+        <span key={effort} className="rounded-md bg-ds-subtle px-1.5 text-[11px] leading-[18px] text-ds-muted">{effort}</span>)}</span> : null}
+      {current === model ? <span className="rounded-md bg-accent-tint/10 px-1.5 text-[11px] font-medium leading-[18px] text-accent">{t('agentCenter.models.current')}</span>
+        : <button type="button" onClick={() => onChange({ model })} className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.models.use')}</button>}
+    </div>
+  }
   return <AgentSection title={t('agentCenter.models.title')}
     description={loadedAt ? t('agentCenter.models.updated', { source: t(native ? 'agentCenter.models.fromAgent' : 'agentCenter.models.fromProvider'), time: new Date(loadedAt).toLocaleTimeString() })
       : t(native ? 'agentCenter.models.fromAgent' : 'agentCenter.models.fromProvider')}
@@ -70,19 +87,13 @@ export function AgentModelsTab({ row, entry, profile, dirty, busy, onChange, onD
         {current === '' ? <span className="rounded-md bg-accent-tint/10 px-1.5 text-[11px] font-medium leading-[18px] text-accent">{t('agentCenter.models.current')}</span>
           : <button type="button" onClick={() => onChange({ model: undefined })} className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.models.use')}</button>}
       </div>
-      {visible.map((model) => {
-        const details = info[model]
-        return <div key={model} data-agent-model-row={model} className={rowClass}>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-mono text-[12.5px] text-ds-ink">{model}</span>
-            {details?.displayName && details.displayName !== model ? <span className="block truncate text-[11.5px] text-ds-faint">{details.displayName}</span> : null}
-          </span>
-          {details?.reasoningEfforts?.length ? <span className="flex flex-wrap gap-1">{details.reasoningEfforts.map((effort) =>
-            <span key={effort} className="rounded-md bg-ds-subtle px-1.5 text-[11px] leading-[18px] text-ds-muted">{effort}</span>)}</span> : null}
-          {current === model ? <span className="rounded-md bg-accent-tint/10 px-1.5 text-[11px] font-medium leading-[18px] text-accent">{t('agentCenter.models.current')}</span>
-            : <button type="button" onClick={() => onChange({ model })} className="text-[12px] font-medium text-accent hover:underline">{t('agentCenter.models.use')}</button>}
-        </div>
-      })}
+      {sections ? sections.map((section) => {
+        const rows = section.modelIds.filter((model) => visibleIds.has(model))
+        return rows.length ? <div key={section.key} role="group" aria-label={section.label} data-agent-model-group={section.key}>
+          <p className="px-3 pb-0.5 pt-2.5 text-[11.5px] font-semibold text-ds-faint">{section.label}</p>
+          {rows.map(renderModel)}
+        </div> : null
+      }) : visible.map(renderModel)}
       {loading ? <div role="status" className="flex items-center gap-2 px-3 py-3 text-[12px] text-ds-faint"><LoaderCircle aria-hidden size={13} className="animate-spin" />{t('loading')}</div> : null}
       {failed && !modelIds.length ? <p role="alert" className="px-3 py-3 text-[12px] text-ds-status-danger">{t('agentEnablement.modelsUnavailable')}</p> : null}
       {!loading && !failed && !visible.length ? <p className="px-3 py-3 text-[12px] text-ds-faint">{t(needle ? 'composerNoMatchingModels' : 'agentEnablement.noModels')}</p> : null}
