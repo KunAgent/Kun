@@ -102,10 +102,31 @@
   }
 }
 
+/* pulseFocusModeSwitch(): after the what's-new card, show where the switch lives. */
+html[data-focus-switch-pulse='on'] .ds-focus-mode-switch {
+  animation: ds-focus-switch-pulse 1.2s ease-out 2;
+}
+
+@keyframes ds-focus-switch-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ds-accent) 55%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--ds-accent) 0%, transparent);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ds-focus-mode-switch,
   .ds-focus-mode-switch-track,
   .ds-focus-mode-switch-thumb {
     transition: none;
+  }
+
+  html[data-focus-switch-pulse='on'] .ds-focus-mode-switch {
+    animation: none;
+    outline: 2px solid var(--ds-accent);
+    outline-offset: 2px;
   }
 }

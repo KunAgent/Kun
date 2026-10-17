@@ -75,6 +75,16 @@ describe('parseReleaseNotes', () => {
     ])
   })
 
+  it('files a heading that names features and improvements by its first term', () => {
+    const notes = '# Kun 0.4.1\n\n## ✨ 新功能与体验改进\n\n- **专注模式**：新开关。\n\n## 🐛 修复与改进\n\n- **长会话**：不再受阻。\n'
+    const summary = parseReleaseNotes(notes, '0.4.1', 'zh')
+    expect(summary?.features.map((item) => item.title)).toEqual(['专注模式'])
+    expect(summary?.fixes.map((item) => item.title)).toEqual(['长会话'])
+
+    const english = '## English\n\n### Features and improvements\n\n- **Focus mode**: a switch.\n\n### Fixes and improvements\n\n- **Long chats**: unblocked.\n'
+    expect(parseReleaseNotes(english, '0.4.1', 'en')?.features.map((item) => item.title)).toEqual(['Focus mode'])
+  })
+
   it('returns null for text with nothing to summarize', () => {
     expect(parseReleaseNotes('# Kun 1.0.0\n\n## 更新方式\n\n- 重启即可。\n', '1.0.0', 'zh')).toBeNull()
   })
@@ -86,6 +96,13 @@ describe('pickHighlights', () => {
     const picked = pickHighlights({ version: '1.0.0', intro: '', features, fixes: [] })
     expect(picked.highlights.map((item) => item.title)).toEqual(['A', 'B', 'C'])
     expect(picked.alsoUpdated).toEqual(['D', 'E', 'F', 'G'])
+  })
+
+  it('leaves out titles a spotlight already tells and honours a smaller limit', () => {
+    const features = ['Code 首页与 Focus 模式', 'A', 'B', 'C'].map((title) => ({ title, body: `${title} 的说明。` }))
+    const picked = pickHighlights({ version: '0.4.1', intro: '', features, fixes: [] }, { exclude: /focus/i, limit: 2 })
+    expect(picked.highlights.map((item) => item.title)).toEqual(['A', 'B'])
+    expect(picked.alsoUpdated).toEqual(['C'])
   })
 })
 

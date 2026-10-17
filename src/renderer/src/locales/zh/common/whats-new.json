@@ -20,5 +20,14 @@
   "whatsNewHintReopen": "再看一次",
   "whatsNewSettingTitle": "本版更新说明",
   "whatsNewSettingDesc": "重新打开更新后首次启动时看到的版本摘要。",
-  "whatsNewSettingOpen": "查看"
+  "whatsNewSettingOpen": "查看",
+  "whatsNewFocusTag": "专注模式",
+  "whatsNewFocusTitle": "一键隐藏 Kun 标志和账号卡",
+  "whatsNewFocusBody": "打开后，回复时游动的 Kun 标志、侧栏账号卡、会话头像和 Kun 动画都会收起，只留下对话本身。",
+  "whatsNewFocusTry": "现在试试专注模式",
+  "whatsNewFocusOn": "专注模式已开启",
+  "whatsNewFocusWhere": "以后在侧栏底部的「专注」开关随时切换",
+  "whatsNewFocusPreviewLogo": "Kun 标志",
+  "whatsNewFocusPreviewAccount": "账号卡",
+  "whatsNewFocusPreviewCalm": "只留下对话"
 }

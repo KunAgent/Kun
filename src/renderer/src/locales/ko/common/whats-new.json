@@ -20,5 +20,14 @@
   "whatsNewHintReopen": "다시 보기",
   "whatsNewSettingTitle": "이 버전의 새로운 기능",
   "whatsNewSettingDesc": "업데이트 후 처음 실행할 때 표시된 요약을 다시 엽니다.",
-  "whatsNewSettingOpen": "보기"
+  "whatsNewSettingOpen": "보기",
+  "whatsNewFocusTag": "초점 모드",
+  "whatsNewFocusTitle": "Kun 로고와 계정 카드 숨기기",
+  "whatsNewFocusBody": "켜면 응답 중에 헤엄치는 Kun 로고, 사이드바 계정 카드, 대화 아바타와 Kun 애니메이션이 사라지고 대화만 남습니다.",
+  "whatsNewFocusTry": "초점 모드 사용해 보기",
+  "whatsNewFocusOn": "초점 모드가 켜져 있습니다",
+  "whatsNewFocusWhere": "사이드바 아래쪽의 '초점' 스위치로 언제든 전환할 수 있습니다",
+  "whatsNewFocusPreviewLogo": "Kun 로고",
+  "whatsNewFocusPreviewAccount": "계정 카드",
+  "whatsNewFocusPreviewCalm": "대화만"
 }

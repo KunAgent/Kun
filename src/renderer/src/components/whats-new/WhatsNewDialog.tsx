@@ -1,11 +1,14 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, Sparkles, Wrench, X } from 'lucide-react'
 import { firstSentence, pickHighlights, type ReleaseNoteItem } from '@shared/release-notes-summary'
 import kunCheerUrl from '../../../../asset/img/kun_cheer.png'
 import kunMagicUrl from '../../../../asset/img/kun_magic.png'
+import { pulseFocusModeSwitch } from '../../lib/focus-mode'
 import type { WhatsNewContent } from './whats-new-content'
+import { WhatsNewFocusSpotlight } from './WhatsNewFocusSpotlight'
 import { WhatsNewOlderVersions } from './WhatsNewOlderVersions'
+import { SPOTLIGHT_HIGHLIGHT_LIMIT, whatsNewSpotlight } from './whats-new-spotlights'
 
 type Props = {
   content: WhatsNewContent
@@ -29,17 +32,25 @@ function FixRow({ item }: { item: ReleaseNoteItem }): ReactElement {
   )
 }
 
-export default function WhatsNewDialog({ content, onClose }: Props): ReactElement {
+export default function WhatsNewDialog({ content, onClose: dismiss }: Props): ReactElement {
   const { t } = useTranslation('common')
   const titleId = useId()
   const dialogRef = useRef<HTMLElement>(null)
   const primaryRef = useRef<HTMLButtonElement>(null)
   const summary = content.current
-  const picked = useMemo(() => (summary ? pickHighlights(summary) : null), [summary])
-  const fixesOnly = Boolean(summary && !picked?.highlights.length && summary.fixes.length)
+  const spotlight = summary ? whatsNewSpotlight(content.version) : null
+  const picked = useMemo(() => (summary
+    ? pickHighlights(summary, spotlight ? { exclude: spotlight.covers, limit: SPOTLIGHT_HIGHLIGHT_LIMIT } : {})
+    : null), [spotlight, summary])
+  const fixesOnly = Boolean(summary && !spotlight && !picked?.highlights.length && summary.fixes.length)
   const [fixesOpen, setFixesOpen] = useState(fixesOnly)
   const fixesRef = useRef<HTMLDivElement>(null)
   const skipped = content.older.length
+  // Closing after the Focus card rings the sidebar switch, so the user sees where it lives.
+  const onClose = useCallback((): void => {
+    if (spotlight?.id === 'focus-mode') pulseFocusModeSwitch()
+    dismiss()
+  }, [dismiss, spotlight])
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -127,6 +138,7 @@ export default function WhatsNewDialog({ content, onClose }: Props): ReactElemen
         className="kun-wn-dialog"
         data-whats-new-dialog={fixesOnly ? 'patch' : skipped ? 'skipped' : 'release'}
         data-variant={fixesOnly ? 'patch' : undefined}
+        data-spotlight={spotlight?.id}
         onKeyDown={onKeyDown}
       >
         <header className="kun-wn-hero">
@@ -156,6 +168,8 @@ export default function WhatsNewDialog({ content, onClose }: Props): ReactElemen
 
         <div className="kun-wn-body">
           {summary.intro && !fixesOnly ? <p className="kun-wn-intro">{summary.intro}</p> : null}
+
+          {spotlight?.id === 'focus-mode' ? <WhatsNewFocusSpotlight /> : null}
 
           {highlights.length ? (
             <>
