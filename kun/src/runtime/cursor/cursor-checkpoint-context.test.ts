@@ -39,7 +39,8 @@ describe('Cursor checkpoint token details', () => {
     ]))).toEqual({
       usedTokens: 89_727,
       maxTokens: 256_000,
-      breakdown: { system: 2_859, tools: 12_888, skills: 0, messages: 73_980, other: 0 }
+      breakdown: { system: 2_859, tools: 12_888, skills: 0, messages: 73_980, other: 0 },
+      categorized: true
     })
     // Unknown categories and an uncounted remainder land in "other".
     expect(cursorTokenDetails(root(1_000, 8_000, [category('conversation', 600), category('images', 100)]))?.breakdown)
@@ -47,8 +48,12 @@ describe('Cursor checkpoint token details', () => {
   })
 
   test('without a usable breakdown the whole count is conversation', () => {
-    expect(cursorTokenDetails(root(5_000, 200_000))?.breakdown).toEqual({ system: 0, tools: 0, skills: 0, messages: 5_000, other: 0 })
-    expect(cursorTokenDetails(root(5_000, 200_000, [category('tools', 9_000)]))?.breakdown.messages).toBe(5_000)
+    expect(cursorTokenDetails(root(5_000, 200_000))).toMatchObject({
+      breakdown: { system: 0, tools: 0, skills: 0, messages: 5_000, other: 0 }, categorized: false
+    })
+    expect(cursorTokenDetails(root(5_000, 200_000, [category('tools', 9_000)]))).toMatchObject({
+      breakdown: { messages: 5_000 }, categorized: false
+    })
   })
 
   test('a blob without token details, or not a protobuf at all, reports nothing', () => {
@@ -59,10 +64,9 @@ describe('Cursor checkpoint token details', () => {
   })
 
   test('the snapshot is Agent-reported against Cursor\'s own window', () => {
+    const input = { threadId: 'thr', turnId: 'turn', model: 'grok-4.6', providerId: 'cursor-subscription', toolCount: 3, activeSkillIds: [] }
     const details = cursorTokenDetails(root(89_727, 256_000, [category('conversation', 89_727)]))!
-    expect(cursorContextSnapshot({
-      threadId: 'thr', turnId: 'turn', model: 'grok-4.6', providerId: 'cursor-subscription', toolCount: 3, activeSkillIds: []
-    }, details)).toMatchObject({
+    expect(cursorContextSnapshot(input, details)).toMatchObject({
       kind: 'context_snapshot',
       contextWindowTokens: 256_000,
       contextWindowKnown: true,
@@ -70,8 +74,11 @@ describe('Cursor checkpoint token details', () => {
       breakdown: { messages: 89_727 },
       contextManagement: 'sdk-managed',
       nativeHistory: 'known',
-      occupancySource: 'agent'
+      occupancySource: 'agent',
+      breakdownSource: 'agent'
     })
+    // Without Cursor's own categories the total is not presented as split.
+    expect(cursorContextSnapshot(input, cursorTokenDetails(root(5_000, 200_000))!)).not.toHaveProperty('breakdownSource')
   })
 })
 

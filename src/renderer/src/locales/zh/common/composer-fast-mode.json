@@ -25,5 +25,6 @@
   "contextCapacityAgentReported": "{{agent}} 最近一次请求",
   "contextCapacityAgentThresholdLabel": "约 {{percent}} 自动压缩",
   "contextCapacityAgentUsed": "已用（{{agent}} 报告）",
-  "contextCapacityAgentReportedNote": "数值由 {{agent}} 报告，是它最近一次请求的上下文占用。Kun 无法细分其中的系统提示词、工具和消息；累计消耗见下方用量。"
+  "contextCapacityAgentReportedNote": "数值由 {{agent}} 报告，是它最近一次请求的上下文占用。Kun 无法细分其中的系统提示词、工具和消息；累计消耗见下方用量。",
+  "contextCapacityAgentBreakdownNote": "数值和分类均由 {{agent}} 报告，是它最近一次请求的上下文占用；累计消耗见下方用量。"
 }

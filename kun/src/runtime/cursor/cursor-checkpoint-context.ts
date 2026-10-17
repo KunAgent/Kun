@@ -21,6 +21,8 @@ export type CursorTokenDetails = {
   maxTokens: number
   /** Cursor's categories folded into Kun's; sums to `usedTokens`. */
   breakdown: Record<CursorContextCategory, number>
+  /** False when Cursor's categories were missing or inconsistent, so `breakdown.messages` holds it all. */
+  categorized: boolean
 }
 
 /** Cursor category ids (`PromptTokenBreakdownCategory.id`) → Kun's gauge categories. */
@@ -103,10 +105,10 @@ export function cursorTokenDetails(root: Uint8Array): CursorTokenDetails | undef
     const counted = Object.values(breakdown).reduce((sum, tokens) => sum + tokens, 0)
     // The gauge sums the categories, so they must add up to Cursor's total.
     if (counted === 0 || counted > usedTokens) {
-      return { usedTokens, maxTokens, breakdown: { tools: 0, system: 0, skills: 0, messages: usedTokens, other: 0 } }
+      return { usedTokens, maxTokens, breakdown: { tools: 0, system: 0, skills: 0, messages: usedTokens, other: 0 }, categorized: false }
     }
     breakdown.other += usedTokens - counted
-    return { usedTokens, maxTokens, breakdown }
+    return { usedTokens, maxTokens, breakdown, categorized: true }
   } catch {
     return undefined
   }
@@ -193,6 +195,7 @@ export function cursorContextSnapshot(
     activeSkillIds: input.activeSkillIds,
     contextManagement: 'sdk-managed',
     nativeHistory: 'known',
-    occupancySource: 'agent'
+    occupancySource: 'agent',
+    ...(details.categorized ? { breakdownSource: 'agent' as const } : {})
   }
 }

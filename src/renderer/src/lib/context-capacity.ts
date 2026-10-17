@@ -28,8 +28,10 @@ export type ContextCapacity = {
   windowUnknown?: boolean
   /** The Agent (not Kun) owns this context and compacts it itself. */
   agentManaged: boolean
-  /** The Agent measured the total itself; there is no category breakdown. */
+  /** The Agent measured the total itself; categories exist only with `agentBreakdown`. */
   agentReported: boolean
+  /** The Agent also split its total into categories, so they are its own, not Kun's estimate. */
+  agentBreakdown: boolean
   /** Whether the soft threshold is a real compaction point for this context. */
   thresholdKnown: boolean
   /** Threshold that colors the gauge: the compaction point, else the window. */
@@ -72,6 +74,7 @@ export function buildContextCapacity(snapshot: RequestContextSnapshot): ContextC
   const freeTokens = Math.max(0, windowTokens - usedTokens)
   const agentManaged = snapshot.contextManagement === 'sdk-managed'
   const agentReported = snapshot.occupancySource === 'agent'
+  const agentBreakdown = agentReported && snapshot.breakdownSource === 'agent'
   const softThresholdRatio = clamp(snapshot.softThresholdTokens / windowTokens, 0, 1)
   const hardThresholdRatio = clamp(snapshot.hardThresholdTokens / windowTokens, 0, 1)
   // Kun's own thresholds describe Kun's compaction. An Agent compacts at its
@@ -94,6 +97,7 @@ export function buildContextCapacity(snapshot: RequestContextSnapshot): ContextC
     nativeHistoryUnknown: agentManaged && snapshot.nativeHistory === 'unknown',
     agentManaged,
     agentReported,
+    agentBreakdown,
     thresholdKnown,
     alertRatio: thresholdKnown ? softThresholdRatio : Math.max(hardThresholdRatio, 1)
   }

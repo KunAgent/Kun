@@ -60,6 +60,7 @@ export function contextSnapshotFromCore(event: CoreRuntimeEventJson | ContextSna
       : {}),
     ...(event.nativeHistory === 'known' || event.nativeHistory === 'unknown' || event.nativeHistory === 'none'
       ? { nativeHistory: event.nativeHistory } : {}),
-    ...(event.occupancySource === 'agent' || event.occupancySource === 'estimate' ? { occupancySource: event.occupancySource } : {})
+    ...(event.occupancySource === 'agent' || event.occupancySource === 'estimate' ? { occupancySource: event.occupancySource } : {}),
+    ...(event.breakdownSource === 'agent' || event.breakdownSource === 'estimate' ? { breakdownSource: event.breakdownSource } : {})
   }
 }

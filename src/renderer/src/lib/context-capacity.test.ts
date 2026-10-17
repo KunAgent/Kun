@@ -131,4 +131,21 @@ describe('buildContextCapacity', () => {
     // Kun's own context keeps its compaction threshold.
     expect(buildContextCapacity(snapshot())).toMatchObject({ agentManaged: false, thresholdKnown: true, alertRatio: 0.75 })
   })
+
+  it('exposes categories as the Agent\'s own only when it split the total itself', () => {
+    const agentContext = { contextManagement: 'sdk-managed', nativeHistory: 'known', occupancySource: 'agent' } as const
+    // Codex/ACP: a bare total, booked under messages.
+    const codex = buildContextCapacity(snapshot({ ...agentContext, breakdown: { tools: 0, system: 0, skills: 0, messages: 60_000, other: 0 } }))
+    expect(codex).toMatchObject({ agentReported: true, agentBreakdown: false })
+    // Claude Code: live total over Kun's estimated categories.
+    const claude = buildContextCapacity(snapshot({ ...agentContext, breakdownSource: 'estimate' }))
+    expect(claude).toMatchObject({ agentReported: true, agentBreakdown: false })
+    // Cursor: its checkpoint carries its own categories.
+    const cursor = buildContextCapacity(snapshot({ ...agentContext, contextWindowTokens: 256_000, softThresholdTokens: 256_000,
+      hardThresholdTokens: 256_000, breakdownSource: 'agent' }))
+    expect(cursor).toMatchObject({ agentReported: true, agentBreakdown: true, usedTokens: 60_000, thresholdKnown: false })
+    expect(cursor.categories.map((category) => category.tokens)).toEqual([10_000, 8_000, 7_000, 30_000, 5_000])
+    // An Agent split never applies to Kun's own estimate.
+    expect(buildContextCapacity(snapshot({ breakdownSource: 'agent' }))).toMatchObject({ agentReported: false, agentBreakdown: false })
+  })
 })

@@ -25,5 +25,6 @@
   "contextCapacityAgentReported": "{{agent}}'s latest request",
   "contextCapacityAgentThresholdLabel": "Compacts at ~{{percent}}",
   "contextCapacityAgentUsed": "Used (reported by {{agent}})",
-  "contextCapacityAgentReportedNote": "Reported by {{agent}}: the context of its latest request. Kun cannot split it into system prompt, tools and messages; cumulative consumption is in the usage bar below."
+  "contextCapacityAgentReportedNote": "Reported by {{agent}}: the context of its latest request. Kun cannot split it into system prompt, tools and messages; cumulative consumption is in the usage bar below.",
+  "contextCapacityAgentBreakdownNote": "Reported by {{agent}}, categories included: the context of its latest request. Cumulative consumption is in the usage bar below."
 }
