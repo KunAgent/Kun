@@ -223,7 +223,8 @@ export async function createRuntimeAgentComposition(
   const adeManagerContext = createAdeManagerContext({
     ...services.adeStores,
     harnessSummary: graphHarnessSummary,
-    canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false
+    canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false,
+    dispatchIntents: services.agentDispatchService
   })
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(

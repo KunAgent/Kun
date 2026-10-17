@@ -41,7 +41,7 @@ import {
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHost } from '../ports/tool-host.js'
-import { findSessionEvent } from '../adapters/session-event-query.js'
+import { findSessionEvent, findTurnLimitStop } from '../adapters/session-event-query.js'
 import type { SkillRuntime } from '../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -595,10 +595,14 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         : childToolEvidence(items, started.turnId)
       : undefined
     if (status !== 'completed') {
-      throw new ChildResultExecutionError(result.summary || `child agent ${status}`, structuredResult, {
-        ...settlement,
-        failure: { source: 'runtime' }
-      })
+      const limit = status === 'failed'
+        ? await findTurnLimitStop(sessionStore, thread.id, started.turnId).catch(() => null)
+        : null
+      throw new ChildResultExecutionError(
+        limit ? `Child stopped: ${limit.message}` : result.summary || `child agent ${status}`,
+        structuredResult,
+        { ...settlement, failure: { source: 'runtime', ...(limit ? { code: limit.code } : {}) } }
+      )
     }
     return {
       ...result,

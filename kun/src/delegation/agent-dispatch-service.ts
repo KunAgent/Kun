@@ -18,6 +18,8 @@ import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js
 import type { AgentDispatchIntentStore } from './agent-dispatch-intent-store.js'
 
 export const AGENT_DISPATCH_COUNTDOWN_MS = 60_000
+/** Proven-absent start failures before the card fails visibly instead of retrying forever. */
+export const AGENT_DISPATCH_MAX_START_ATTEMPTS = 3
 const terminal = new Set<AgentDispatchState>(['completed', 'failed', 'cancelled'])
 const editable = new Set<AgentDispatchState>(['pending_confirmation', 'reviewing', 'countdown', 'paused'])
 const active = new Set<AgentDispatchState>(['starting', 'uncertain', 'running', 'awaiting_parent', 'stopping'])
@@ -71,6 +73,7 @@ export class AgentDispatchService {
   private readonly handlers = new Map<AgentDispatchKind, AgentDispatchHandler>()
   private readonly inFlight = new Map<string, Promise<void>>()
   private readonly takeoverOperations = new Map<string, Promise<void>>()
+  private readonly startFailures = new Map<string, { count: number; error: string }>()
   private readonly commands = new Set<Promise<unknown>>()
   private readonly controller = new AbortController()
   private timer?: ReturnType<typeof setTimeout>
@@ -234,6 +237,8 @@ export class AgentDispatchService {
     expectedRevision?: number
   }): Promise<AgentDispatchIntent> {
     this.assertAdmission()
+    // A replacement has a new start identity, so it gets a fresh retry budget.
+    this.startFailures.delete(intentId)
     const snapshot = required((await this.get(intentId)) ?? undefined)
     const candidate = AgentDispatchIntentSchema.parse({
       ...snapshot, payload: input.payload, recommendation: { ...input.recommendation, agentSelection: 'auto',
@@ -382,8 +387,18 @@ export class AgentDispatchService {
       const reconciled = await handler.reconcile?.(intent, this.controller.signal)
       if (!reconciled) return
       if (reconciled.state === 'absent' || reconciled.state === 'resume') {
+        const failures = this.startFailures.get(intentId)
+        const exhausted = reconciled.state === 'absent' &&
+          (failures?.count ?? 0) >= AGENT_DISPATCH_MAX_START_ATTEMPTS
         intent = await this.mutate(intentId, (current) => {
           if (current.state !== 'uncertain') return false
+          if (exhausted && !current.cancellationRequested) {
+            // Absence is proven, so failing cannot orphan admitted work.
+            current.state = 'failed'
+            current.error = (`Dispatch could not start after ${failures!.count} attempts and nothing was admitted. ` +
+              `Last error: ${failures!.error}`).slice(0, 8_000)
+            return true
+          }
           current.state = current.cancellationRequested ? 'cancelled' : 'queued'
           if (reconciled.state === 'resume') delete current.target
           return true
@@ -435,6 +450,7 @@ export class AgentDispatchService {
         delete current.error
         return true
       })
+      this.startFailures.delete(intent.intentId)
       if (admitted?.cancellationRequested && this.accepting) await handler.cancel?.(admitted, this.controller.signal)
       if (admitted && this.accepting && handler.reconcile) {
         const status = await handler.reconcile(admitted, this.controller.signal)
@@ -449,6 +465,8 @@ export class AgentDispatchService {
     } catch (error) {
       // A transport error cannot prove that the scheduler did not accept work.
       // Recovery must query the stable startRequestId before it ever retries.
+      const failures = this.startFailures.get(intent.intentId)
+      this.startFailures.set(intent.intentId, { count: (failures?.count ?? 0) + 1, error: message(error) })
       await this.mutate(intent.intentId, (current) => {
         if (!['starting', 'stopping'].includes(current.state)) return false
         current.state = 'uncertain'; current.error = `Dispatch startup needs reconciliation: ${message(error)}`

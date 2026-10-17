@@ -82,6 +82,7 @@ import {
 import { FileTeamStore } from '../ade/team-store.js'
 import { FileDispatchStore } from '../ade/dispatch-store.js'
 import { reconcileWorkerReviewActivity } from '../ade/worker-review-activity.js'
+import { restoreWorkerActivityRows } from '../ade/worker-activity-restore.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 import { FileQuestionStore } from '../ade/question-store.js'
 import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
@@ -504,6 +505,8 @@ export async function createRuntimeServices(
     }, artifactStore),
     races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
   }
+  await restoreWorkerActivityRows({ teams: adeStores.teams, dispatches: adeStores.dispatches,
+    threads: threadStore, activity: core.activityStore, taskWorkspaces: core.taskWorkspaces })
   await reconcileWorkerReviewActivity(
     adeStores.dispatches, core.activityStore, adeStores.teams, core.taskWorkspaces
   )

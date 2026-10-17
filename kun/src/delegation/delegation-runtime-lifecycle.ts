@@ -308,6 +308,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       lastResumeAt: queuedAt,
       updatedAt: queuedAt
     })
+    this.ownedChildIds.add(record.id)
     await this.options.store.upsert(record)
     await this.recordChildEvent(record)
     await notifyLifecycle(input.onQueued, record)
@@ -464,8 +465,9 @@ export class DelegationRuntime extends DelegationRuntimeRun {
    * a runtime restart doesn't leave subagent records stuck "running" forever —
    * the GUI subagent cards and delegation diagnostics would otherwise show them
    * in-flight indefinitely, and the parent thread stays wedged (KunAgent/Kun#621).
-   * Mirrors TurnService.reconcileOrphanedTurns; run once at startup before any
-   * new child spawns. Detached runs owned by this process are skipped defensively.
+   * Mirrors TurnService.reconcileOrphanedTurns. The sweep can still be running
+   * after the server starts accepting requests, so any child queued or resumed
+   * by this process is live work, not an orphan, and is always skipped.
    * Returns the number of records reconciled.
    */
   async reconcileOrphanedChildRuns(): Promise<number> {
@@ -473,7 +475,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     let reconciled = 0
     for (const record of records) {
       if (record.status !== 'queued' && record.status !== 'running') continue
-      if (this.detachedAborts.has(record.id)) continue
+      if (this.ownedChildIds.has(record.id) || this.detachedAborts.has(record.id)) continue
       const updated = ChildRunRecord.parse({
         ...record,
         status: 'failed',

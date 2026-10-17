@@ -124,6 +124,7 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     const f = await setup('full-access')
     const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
     expect(result.dispatchIntentId).toBeTruthy(); expect(await f.service.list('parent')).toHaveLength(1)
+    expect(result.followUp).toContain(`dispatch_intent_status with intentId=${result.dispatchIntentId}`)
     expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
     f.clock.now += 60_000; await f.service.reconcile(); expect(f.runChild).toHaveBeenCalledTimes(2)
   })

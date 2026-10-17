@@ -64,6 +64,8 @@ export type WorkerCreateResult = {
   admission?: AdmissionResult
   refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable' | 'budget_exceeded' | 'collaboration_disabled'
   userReport: string
+  /** Model-facing note while a saved dispatch card has no worker yet. */
+  followUp?: string
 }
 
 type RaceServiceDepsWithIds =
@@ -172,6 +174,7 @@ export class ManagerRuntime {
     dispatched: number
     items: Array<{ index: number; label: string; result: WorkerCreateResult | 'skipped' }>
     userReport: string
+    followUp?: string
   }> {
     if (this.deps.agentDispatchService && toolContext.activeToolCallId) {
       return this.workerDispatch.createBatch(ctx, rawInput, toolContext)

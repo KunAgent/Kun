@@ -12,6 +12,14 @@ import type { TeamControls } from './team-controls.js'
 import type { QualityVerdicts } from './quality-verdict.js'
 import { refreshWorkerReviewActivity } from './worker-review-activity.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
+import { settleStrandedWorkerDispatches } from './worker-stranded-dispatch.js'
+import { findTurnFailureCause, type SessionEventSource } from '../adapters/session-event-query.js'
+
+const CHILD_TERMINAL_EVENTS: ReadonlySet<RuntimeEvent['kind']> = new Set([
+  'turn_completed',
+  'turn_failed',
+  'turn_aborted'
+])
 
 /**
  * ADE worker lifecycle events (ephemeral release; startup
@@ -32,7 +40,15 @@ export class ManagerWorkerLifecycle {
    * workspace captures or store writes.
    */
   handleRuntimeEvent(event: RuntimeEvent): void {
-    if (event.child || !event.turnId) return
+    if (event.child) {
+      if (event.child.childLauncher === 'manager-worker' && CHILD_TERMINAL_EVENTS.has(event.kind)) {
+        void this.handleWorkerChildSettled(event.child.parentThreadId, event.child.childId).catch((error) => {
+          console.warn('[kun] ade stranded dispatch settlement failed:', error)
+        })
+      }
+      return
+    }
+    if (!event.turnId) return
     const turnId = event.turnId
     switch (event.kind) {
       case 'turn_started':
@@ -181,6 +197,10 @@ export class ManagerWorkerLifecycle {
     const resultExcerpt = dispatch.workerReport
       ? undefined
       : await this.lastAssistantExcerpt(workerThreadId, turnId)
+    // A step/time budget stop is otherwise reported only as the last sentence.
+    const failureReason = outcome === 'failed' && !dispatch.failureReason
+      ? await this.turnFailureCause(workerThreadId, turnId)
+      : undefined
     // A turn admitted but terminated before the deliverer marked `accepted`
     // is still completing a dispatch; normalize through 'accepted' first so
     // the terminal transition is legal.
@@ -202,7 +222,8 @@ export class ManagerWorkerLifecycle {
         ...(revision && dispatch.workerReport
           ? { workerReport: { ...dispatch.workerReport, revision } }
           : {}),
-        ...(resultExcerpt ? { resultExcerpt } : {})
+        ...(resultExcerpt ? { resultExcerpt } : {}),
+        ...(failureReason ? { failureReason: failureReason.slice(0, 4_000) } : {})
       },
       { expect: ['accepted'] }
     )
@@ -227,9 +248,7 @@ export class ManagerWorkerLifecycle {
         console.warn(`[kun] ade reviewer merge failed for ${worker.reviewOf}:`, error)
       })
     }
-    const dispatchIntent = worker.dispatchIntentId
-      ? await this.deps.agentDispatchService?.get(worker.dispatchIntentId).catch(() => null) : undefined
-    const userOwned = worker.control === 'user' || dispatchIntent?.cancellationRequested || dispatchIntent?.takenOver
+    const userOwned = worker.control === 'user' || await this.intentUserOwned(worker)
     if (!userOwned) {
       await this.deps.notices.enqueue(this.noticeForDispatch(updated, worker)).catch((error) => {
         console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
@@ -261,6 +280,35 @@ export class ManagerWorkerLifecycle {
     if (worker.lifecycle === 'ephemeral' && outcome === 'completed') {
       this.scheduleRelease(team.teamId, worker.workerId)
     }
+  }
+
+  /**
+   * Worker child settled (child-run event or startup replay): a dispatch
+   * whose turn never started is settled from the child record and reported
+   * to the manager, then the worker's next queued dispatch is delivered.
+   */
+  async handleWorkerChildSettled(managerThreadId: string, workerId: string): Promise<boolean> {
+    const settlement = await settleStrandedWorkerDispatches(this.deps, managerThreadId, workerId)
+    if (!settlement) return false
+    const { team, worker } = settlement
+    const userOwned = worker.control === 'user' || await this.intentUserOwned(worker)
+    if (!userOwned) {
+      for (const dispatch of settlement.dispatches) {
+        await this.deps.notices.enqueue(this.noticeForDispatch(dispatch, worker)).catch((error) => {
+          console.warn(`[kun] ade stranded dispatch notice failed for ${dispatch.dispatchId}:`, error)
+        })
+      }
+      await this.deps.deliverer.tryDeliverNext(team.teamId, worker.workerId).catch((error) => {
+        console.warn(`[kun] ade next-dispatch delivery failed for ${worker.workerId}:`, error)
+      })
+    }
+    return true
+  }
+
+  private async intentUserOwned(worker: WorkerRecord): Promise<boolean> {
+    if (!worker.dispatchIntentId) return false
+    const intent = await this.deps.agentDispatchService?.get(worker.dispatchIntentId).catch(() => null)
+    return Boolean(intent?.cancellationRequested || intent?.takenOver)
   }
 
   /**
@@ -299,7 +347,11 @@ export class ManagerWorkerLifecycle {
   }
 
   private noticeForDispatch(dispatch: DispatchRecord, worker: WorkerRecord): WorkerNotice {
-    const detail = dispatch.workerReport?.summary ?? dispatch.resultExcerpt
+    const output = dispatch.workerReport?.summary ?? dispatch.resultExcerpt
+    // Unfinished dispatches lead with why they stopped (budget, error, restart).
+    const detail = dispatch.state !== 'completed' && dispatch.failureReason
+      ? output ? `${dispatch.failureReason}\n\nLast worker output: ${output}` : dispatch.failureReason
+      : output
     return {
       noticeId: `ntc_${dispatch.dispatchId}`,
       teamId: dispatch.teamId,
@@ -334,6 +386,15 @@ export class ManagerWorkerLifecycle {
     return label.length <= 160 ? label : label.slice(0, 160)
   }
 
+  private async turnFailureCause(workerThreadId: string, turnId: string): Promise<string | undefined> {
+    const store = this.deps.sessionStore
+    if (!store.loadEventsSince) return undefined
+    const cause = await findTurnFailureCause(
+      store as SessionEventSource, workerThreadId, turnId
+    ).catch(() => null)
+    return cause ?? undefined
+  }
+
   /** Tail of the worker's last assistant message for this turn (<=1500). */
   private async lastAssistantExcerpt(
     workerThreadId: string,
@@ -353,21 +414,32 @@ export class ManagerWorkerLifecycle {
    * Startup reconciliation: re-resolve stuck `delivering`/`uncertain`
    * dispatches against the worker thread's turns, then replay the terminal
    * hook for `accepted` dispatches whose turns ended while the app was off.
+   * Accepted dispatches whose turn never started are settled from the worker
+   * child record (the restart orphan sweep may already have failed it).
    */
   async reconcileOnStartup(): Promise<void> {
     await this.deps.deliverer.reconcileAll()
     for (const team of await this.deps.teams.list()) {
+      const unstarted = new Set<string>()
       for (const dispatch of await this.deps.dispatches.listByState(team.teamId, ['accepted'])) {
         const thread = await this.deps.threads.get(dispatch.workerId).catch(() => null)
         const turn = thread?.turns.find((entry) => entry.id === dispatch.turnId)
           ?? thread?.turns.find((entry) => entry.clientRequestId === dispatch.dispatchId)
-        if (!turn) continue
+        if (!turn) {
+          unstarted.add(dispatch.workerId)
+          continue
+        }
         if (turn.status === 'completed' || turn.status === 'failed' || turn.status === 'aborted') {
           await this.handleWorkerTurnTerminal(dispatch.workerId, turn.id, turn.status)
             .catch((error) => {
               console.warn(`[kun] ade terminal replay failed for ${dispatch.dispatchId}:`, error)
             })
         }
+      }
+      for (const workerId of unstarted) {
+        await this.handleWorkerChildSettled(team.managerThreadId, workerId).catch((error) => {
+          console.warn(`[kun] ade stranded dispatch replay failed for ${workerId}:`, error)
+        })
       }
     }
   }

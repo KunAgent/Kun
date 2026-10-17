@@ -371,6 +371,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       createdAt: queuedAt,
       updatedAt: queuedAt
     })
+    this.ownedChildIds.add(record.id)
     await this.options.store.upsert(record)
     await this.recordChildEvent(record)
     // Surface allocation as queued. Running is emitted only after a scheduler
