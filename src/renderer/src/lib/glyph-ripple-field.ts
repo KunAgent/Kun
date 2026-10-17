@@ -11,8 +11,11 @@
  * flat fade. A frame masks `dense` with one radial gradient per ripple and
  * redraws only the cells inside the crest rings. While ripples are alive the
  * same frame loop re-rolls a few glyphs and drifts a band of rows (110 ms
- * steps); with no ripple there is no frame, timer or paint at all.
+ * steps). At rest a faint wind (`glyph-wind-mask`) drifts through the same
+ * field on a ~15 fps timer, only while the owner keeps it enabled.
  */
+
+import { createWindTile, paintWind } from './glyph-wind-mask'
 
 /** Front travel time; the lit wake then dissolves by `LIT_END_MS` after the front passed. */
 const TRAVEL_MS = 1700
@@ -23,6 +26,10 @@ const LIT_END_MS = 3400
 const MAX_RIPPLES = 6
 const ECHO_RADIUS = 0.58
 const AMBIENT_STEP_MS = 110
+/** Resting wind: frame interval, and how often / how many glyphs it re-rolls. */
+const WIND_FRAME_MS = 66
+const WIND_FLICKER_MS = 220
+const WIND_FLICKER_SHARE = 0.012
 /** Share of rows whose patch strength is recomputed per ambient step. */
 const DRIFT_ROW_SHARE = 0.08
 
@@ -204,6 +211,10 @@ export class GlyphRippleField {
   private rippleSeq = 0
   private frameHandle = 0
   private lastAmbientAt = 0
+  private windEnabled = false
+  private windTimer = 0
+  private windTile: HTMLCanvasElement | null = null
+  private windPattern: CanvasPattern | null = null
   private readonly epoch = performance.now()
   private driftRow = 0
   private width = 0
@@ -309,6 +320,7 @@ export class GlyphRippleField {
       }
     }
     this.paintAll()
+    this.scheduleWind()
   }
 
   /** Recolour without touching the grid (theme or palette switch). */
@@ -328,14 +340,31 @@ export class GlyphRippleField {
     this.start()
   }
 
+  /** The resting wind; the owner turns it off while hidden, off-screen or under reduced motion. */
+  setWind(enabled: boolean): void {
+    if (enabled === this.windEnabled) return
+    this.windEnabled = enabled
+    if (enabled) {
+      this.scheduleWind()
+      return
+    }
+    if (this.windTimer) window.clearTimeout(this.windTimer)
+    this.windTimer = 0
+    if (!this.frameHandle) this.draw(performance.now())
+  }
+
   stop(): void {
     if (this.frameHandle) cancelAnimationFrame(this.frameHandle)
     this.frameHandle = 0
+    if (this.windTimer) window.clearTimeout(this.windTimer)
+    this.windTimer = 0
   }
 
   /** Stop and give the backing stores back; the next `layout` rebuilds them. */
   release(): void {
     this.stop()
+    this.windEnabled = false
+    this.windPattern = null
     this.ripples = []
     for (const target of [this.canvas, this.dense]) {
       target.width = 0
@@ -362,11 +391,32 @@ export class GlyphRippleField {
 
   private start(): void {
     if (this.frameHandle) return
+    if (this.windTimer) window.clearTimeout(this.windTimer)
+    this.windTimer = 0
     const tick = (): void => {
       this.frameHandle = 0
       if (this.draw(performance.now())) this.frameHandle = requestAnimationFrame(tick)
+      else this.scheduleWind()
     }
     this.frameHandle = requestAnimationFrame(tick)
+  }
+
+  /** Resting wind frames run on a slow timer; ripples take over with animation frames. */
+  private scheduleWind(): void {
+    if (!this.windEnabled || this.windTimer || this.frameHandle || this.cols === 0) return
+    this.windTimer = window.setTimeout(() => {
+      this.windTimer = 0
+      if (this.frameHandle) return
+      this.draw(performance.now())
+      this.scheduleWind()
+    }, WIND_FRAME_MS)
+  }
+
+  private windPatternFor(context: CanvasRenderingContext2D): CanvasPattern | null {
+    if (this.windPattern) return this.windPattern
+    this.windTile ??= createWindTile()
+    this.windPattern = this.windTile ? context.createPattern(this.windTile, 'repeat') : null
+    return this.windPattern
   }
 
   private litAlpha(index: number): number {
@@ -420,8 +470,15 @@ export class GlyphRippleField {
       }
     }
     this.driftRow = (this.driftRow + band) % this.rows
+    this.flickerStep(this.style.flicker)
+  }
+
+  /** Re-roll `share` of all glyphs in the lit field. */
+  private flickerStep(share: number): void {
+    const dense = this.denseCtx
+    if (!dense || this.cols === 0) return
     const size = this.cols * this.rows
-    const flips = Math.ceil(size * this.style.flicker)
+    const flips = Math.ceil(size * share)
     for (let n = 0; n < flips; n += 1) {
       const index = Math.floor(Math.random() * size)
       this.glyph[index] = Math.floor(Math.random() * this.style.glyphs.length)
@@ -460,13 +517,22 @@ export class GlyphRippleField {
     ctx.globalCompositeOperation = 'source-over'
     ctx.globalAlpha = 1
     ctx.clearRect(0, 0, this.width, this.height)
-    if (this.ripples.length === 0) return false
-    if (now - this.lastAmbientAt >= AMBIENT_STEP_MS) {
+    const rippling = this.ripples.length > 0
+    if (!rippling && !this.windEnabled) return false
+    if (rippling && now - this.lastAmbientAt >= AMBIENT_STEP_MS) {
       this.lastAmbientAt = now
       this.ambientStep()
+    } else if (!rippling && now - this.lastAmbientAt >= WIND_FLICKER_MS) {
+      this.lastAmbientAt = now
+      this.flickerStep(WIND_FLICKER_SHARE)
     }
 
-    // Lit wake: one gradient mask per ripple, filled with the dense field.
+    // The mask: the resting wind plus one lit-wake gradient per ripple, then
+    // filled with the dense field.
+    if (this.windEnabled) {
+      const pattern = this.windPatternFor(ctx)
+      if (pattern) paintWind(ctx, pattern, this.width, this.height, this.seconds())
+    }
     for (const ripple of this.ripples) {
       const age = now - ripple.startedAt
       const radius = radiusAt(ripple, age)
@@ -558,6 +624,6 @@ export class GlyphRippleField {
     ctx.globalAlpha = 1
     for (const index of this.rewritten) this.paintCell(index, true)
     if (this.denseCtx) this.denseCtx.globalAlpha = 1
-    return true
+    return rippling
   }
 }
