@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isNativeNetworkOnlyApply, OfficeCliRunnerReuse, reusableMcpProviders } from './runtime-config-apply-reuse.js'
+import { isNativeNetworkOnlyApply, isUnchangedNativeNetworkApply, OfficeCliRunnerReuse, reusableMcpProviders } from './runtime-config-apply-reuse.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 
 const mcpOptions = (servers: Record<string, unknown>) => ({
@@ -13,6 +13,15 @@ describe('runtime config apply reuse', () => {
     expect(isNativeNetworkOnlyApply({ nativeAgentNetwork: { mode: 'system' }, roles: {} } as never)).toBe(false)
     expect(isNativeNetworkOnlyApply({ nativeAgentNetwork: { mode: 'system' }, roles: undefined } as never)).toBe(true)
     expect(isNativeNetworkOnlyApply({} as never)).toBe(false)
+  })
+
+  it('treats a re-sent identical network policy as a no-op so readiness proofs stay valid', () => {
+    const policy = { codex: { source: 'system', proxyUrl: 'http://127.0.0.1:7890/' }, harnesses: { devin: { source: 'direct' } } }
+    const current = { nativeAgentNetwork: policy } as never
+    expect(isUnchangedNativeNetworkApply({ nativeAgentNetwork: structuredClone(policy) } as never, current)).toBe(true)
+    expect(isUnchangedNativeNetworkApply({ nativeAgentNetwork: { ...policy, codex: { source: 'direct' } } } as never, current)).toBe(false)
+    expect(isUnchangedNativeNetworkApply({ nativeAgentNetwork: policy } as never, {} as never)).toBe(false)
+    expect(isUnchangedNativeNetworkApply({ nativeAgentNetwork: policy, roles: {} } as never, current)).toBe(false)
   })
 
   it('reuses live MCP connections only for an unchanged MCP section with healthy servers', () => {

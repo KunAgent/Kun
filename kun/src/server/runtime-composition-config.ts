@@ -63,7 +63,7 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
-import { isNativeNetworkOnlyApply, OfficeCliRunnerReuse, reusableMcpProviders } from './runtime-config-apply-reuse.js'
+import { isNativeNetworkOnlyApply, isUnchangedNativeNetworkApply, OfficeCliRunnerReuse, reusableMcpProviders } from './runtime-config-apply-reuse.js'
 import { hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
@@ -255,6 +255,7 @@ export function createRuntimeConfigController(
 	    request: RuntimeConfigApplyRequest
 	  ): Promise<RuntimeConfigApplyResponse> => {
 	    if (isNativeNetworkOnlyApply(request)) {
+	      if (isUnchangedNativeNetworkApply(request, activeOptions)) return { ok: true }
 	      activeOptions = { ...activeOptions, nativeAgentNetwork: request.nativeAgentNetwork }
 	      core.activeOptions = activeOptions
 	      return { ok: true }
