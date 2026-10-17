@@ -34,6 +34,7 @@ import {
   runConcurrently,
   usage
 } from './publish-r2-support.mjs'
+import { pruneReleases } from './publish-r2-prune.mjs'
 
 export {
   artifactVersionForTag,
@@ -487,6 +488,10 @@ async function main() {
   }
   if (command === 'promote') {
     await promoteRelease({ flags, dryRun })
+    return
+  }
+  if (command === 'prune') {
+    await pruneReleases({ flags, dryRun })
     return
   }
   throw new Error(`Unknown command: ${command}`)
