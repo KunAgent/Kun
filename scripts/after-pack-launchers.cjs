@@ -63,6 +63,21 @@ case "$0" in
     fi
     ;;
 esac
+# deb exposes /usr/bin/${executableName} as an update-alternatives symlink chain to
+# /opt/<product>/${executableName}; the payload sits beside the real launcher.
+link_hops=0
+while [ -L "$launcher_path" ]; do
+  link_hops=$((link_hops + 1))
+  if [ "$link_hops" -gt 40 ]; then
+    echo "${executableName}: too many symbolic links while resolving launcher" >&2
+    exit 1
+  fi
+  link_target=$(readlink "$launcher_path")
+  case "$link_target" in
+    /*) launcher_path=$link_target ;;
+    *) launcher_path=\${launcher_path%/*}/$link_target ;;
+  esac
+done
 launcher_dir=\${launcher_path%/*}
 launcher_dir=$(CDPATH= cd -P "$launcher_dir" && pwd -P)
 real_executable="$launcher_dir/${realExecutableName}"

@@ -440,6 +440,34 @@ test('Linux launcher resolves a bare AppImage product name through APPDIR', () =
   assert.match(content, /launcher_path="\$\{APPDIR\}\/kun-gui"/)
 })
 
+test('Linux launcher follows the deb /usr/bin symlink chain to its payload', {
+  skip: process.platform === 'win32' && 'requires executing a POSIX shell launcher'
+}, (t) => {
+  const paths = executableLauncherFixture(t)
+  const root = mkdtempSync(join(tmpdir(), 'kun-linux-launcher-deb-links-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const usrBin = join(root, 'usr', 'bin')
+  const alternatives = join(root, 'etc', 'alternatives')
+  mkdirSync(usrBin, { recursive: true })
+  mkdirSync(alternatives, { recursive: true })
+  // update-alternatives: /usr/bin/kun-gui -> /etc/alternatives/kun-gui -> /opt/Kun/kun-gui
+  symlinkSync(paths.executable, join(alternatives, 'kun-gui'))
+  symlinkSync(join(alternatives, 'kun-gui'), join(usrBin, 'kun-gui'))
+  symlinkSync(join('..', 'etc', 'alternatives', 'kun-gui'), join(root, 'usr', 'kun-gui-relative'))
+
+  for (const entry of [join(usrBin, 'kun-gui'), join(root, 'usr', 'kun-gui-relative')]) {
+    assert.deepEqual(runLauncher(entry, ['--user-argument']).args, [
+      LINUX_SANDBOX_LAUNCHER_FLAG,
+      '--user-argument'
+    ])
+  }
+  const cli = runLauncher(join(usrBin, 'kun-gui'), ['runtime', 'status'], '', { KUN_CLI_ENTRY: '1' })
+  assert.equal(
+    cli.args[0],
+    join(realpathSync(paths.appOutDir), 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli', 'serve-entry.js')
+  )
+})
+
 test('does not add a Chromium flag to ELECTRON_RUN_AS_NODE commands', {
   skip: process.platform === 'win32' && 'requires executing a POSIX shell launcher'
 }, (t) => {

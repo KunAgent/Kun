@@ -333,9 +333,14 @@ check(
   approvedLinuxLauncher.includes('launcher_path=$PWD/$0') &&
     approvedLinuxLauncher.includes('pwd -P') &&
     !approvedLinuxLauncher.includes('dirname') &&
-    !approvedLinuxLauncher.includes('readlink') &&
     !approvedLinuxLauncher.includes('--no-sandbox'),
   'Linux product launcher must never disable all Chromium sandboxing'
+)
+check(
+  approvedLinuxLauncher.includes('while [ -L "$launcher_path" ]; do') &&
+    approvedLinuxLauncher.includes('link_target=$(readlink "$launcher_path")') &&
+    !approvedLinuxLauncher.includes('readlink -'),
+  'Linux product launcher must follow the deb /usr/bin symlink chain to its payload'
 )
 for (const marker of [
   '--appimage-extract',
