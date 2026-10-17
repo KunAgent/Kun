@@ -4,6 +4,7 @@ import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-poo
 import { PROVIDER_MODULES } from '../../harness/providers/registry.js'
 import { providerModelIds } from '../../server/routes/model-gateway-core.js'
 import { checkedProfiles, modelProfile, routeProfiles } from './model-profiles.js'
+import { checkedModelInfo, providerModelInfo, routeModelInfo } from './model-info.js'
 import type { RemoteAgentRoute, RemoteCodeAgent } from './model-catalog.js'
 
 type Provider = ModelConnectionSnapshot['providers'][number]
@@ -65,7 +66,9 @@ export async function kunAgent(runtime: ServerRuntime, legacyModels: string[]): 
         ...routeProfiles(models, (model) => {
           const reasoning = provider.modelCapabilities?.[model]?.reasoning
           return modelProfile(reasoning?.supportedEfforts, reasoning?.defaultEffort)
-        })
+        }),
+        // Vision and Fast exactly as the desktop Code picker shows them for this connection.
+        ...routeModelInfo(models, (model) => providerModelInfo(provider, model))
       }
     })
     .filter((route) => route.models.length > 0)
@@ -76,5 +79,5 @@ export async function kunAgent(runtime: ServerRuntime, legacyModels: string[]): 
   if (routes.length === 0 && legacyModels.length > 0)
     routes.push({ label: 'Kun', models: legacyModels, defaultModel: runtime.defaultModel ?? legacyModels[0] })
   const definition = runtime.harnesses?.catalog.get('kun')
-  return { id: 'kun', name: definition?.displayName ?? 'Kun', routes: routes.map(checkedProfiles) }
+  return { id: 'kun', name: definition?.displayName ?? 'Kun', routes: routes.map((route) => checkedModelInfo(checkedProfiles(route))) }
 }

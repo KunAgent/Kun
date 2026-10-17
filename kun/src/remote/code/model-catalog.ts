@@ -12,6 +12,7 @@ import { settleNativeModels } from './native-models.js'
 import type { TurnReasoningEffort } from '../../contracts/turn-reasoning.js'
 import { RemoteNoEffect } from '../requests/rejections.js'
 import { allowsEffort, checkedProfiles, modelProfile, probedModelInfo, routeProfiles, type ModelProfiles } from './model-profiles.js'
+import { checkedModelInfo, nativeModelInfo, providerModelInfo, routeModelInfo, type ModelInfoMap } from './model-info.js'
 
 /**
  * One selectable credential path for a Code Agent. A phone pick pins the
@@ -27,6 +28,8 @@ export type RemoteAgentRoute = {
   models: string[]
   defaultModel?: string
   profiles?: ModelProfiles
+  /** Names, vision and Fast per listed model (remote protocol 0.18, `code.modelInfo`). */
+  modelInfo?: ModelInfoMap
 }
 export type RemoteCodeAgent = { id: string; name: string; routes: RemoteAgentRoute[] }
 export type CodeRouteChoice = {
@@ -133,7 +136,7 @@ async function externalAgents(runtime: ServerRuntime, bindings: CodeCatalog['bin
       const native = profile.credentialMode === 'native-login' && !provider
       const models = native ? nativeModels(runtime, definition) : provider ? providerModelIds(provider) : []
       if (models.length === 0) continue
-      routes.push(checkedProfiles({
+      routes.push(checkedModelInfo(checkedProfiles({
         credentialMode: profile.credentialMode,
         ...(profile.providerId ? { providerId: profile.providerId } : {}),
         label: provider?.name ?? definition.displayName,
@@ -144,8 +147,11 @@ async function externalAgents(runtime: ServerRuntime, bindings: CodeCatalog['bin
         ...(native ? routeProfiles(models, (model) => {
           const entry = info.get(model)
           return modelProfile(entry?.reasoningEfforts, entry?.defaultReasoningEffort)
-        }) : {})
-      }))
+        }) : {}),
+        // The Agent's own names and inputs for its login; a Kun connection's inputs otherwise (Fast is Kun's loop only).
+        ...routeModelInfo(models, (model) => native ? nativeModelInfo(model, info.get(model))
+          : provider ? providerModelInfo(provider, model, false) : undefined)
+      })))
     }
     if (routes.length) agents.push({ id: definition.id, name: definition.displayName, routes })
   }

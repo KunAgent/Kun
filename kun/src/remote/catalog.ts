@@ -1,4 +1,4 @@
-import { VERSION as REMOTE_PROTOCOL_VERSION, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
+import { VERSION as REMOTE_PROTOCOL_VERSION, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
 import { KUN_VERSION, KUN_RELEASE_CHANNEL } from '../version.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Envelope } from './contracts.js'
@@ -84,7 +84,7 @@ export async function remoteCatalog(runtime: ServerRuntime, scope: Envelope, mod
     projects: list.map(({ id, name }) => ({ id, name })), models: availableModels,
     defaultModel: runtime.defaultModel,
     agents: await codeAgents(runtime, availableModels),
-    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, 'approvals', 'attachments'],
+    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, 'approvals', 'attachments'],
     scopes: scope.scopes, capabilityDescriptors: await descriptors(), attachmentMaxBytes: 10 * 1024 * 1024
   }
 }

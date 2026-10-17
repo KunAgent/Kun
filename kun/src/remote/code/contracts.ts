@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { UpdatedTime, validUpdatedRange } from './search-filters.js'
 import { TurnReasoningEffortSchema } from '../../contracts/turn-reasoning.js'
+import { TurnServiceTierSchema } from '../../contracts/turns.js'
 const Id = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
 const Page = { cursor: z.string().max(2048).optional(), limit: z.number().int().min(1).max(50).default(20) }
 const Thread = { threadId: Id }
@@ -48,5 +49,6 @@ export const CodeTaskParamSchemas = {
       reasoningEffort: TurnReasoningEffortSchema.optional()
     })
     .strict(),
-  'code.turn.start': z.object({ ...Thread, ...Message }).strict()
+  // Fast mode (remote protocol 0.18, `code.modelInfo`): a sender preference the route it runs on may not take.
+  'code.turn.start': z.object({ ...Thread, ...Message, serviceTier: TurnServiceTierSchema.optional() }).strict()
 } as const

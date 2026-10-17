@@ -12,6 +12,7 @@ import { RemoteCodeHistory } from './history/service.js'
 import type { RemoteArtifacts } from '../files/artifacts.js'
 import { versionedHistory } from '../messages/history-version.js'
 import { continuationRoute, movedTurn } from './session-route.js'
+import { fastServiceTier } from './model-info.js'
 
 /**
  * The task depth a new turn inherits. A fresh admission promotes pending settings first, so they win; the
@@ -116,13 +117,15 @@ case 'code.turn.start': {
         const moved = thread.pendingExecutionConfig ? undefined
           : movedTurn({ ...thread, turns: thread.turns.filter((turn) => turn.clientRequestId !== clientRequestId) })
         const reasoningEffort = moved ? undefined : storedEffort(thread)
+        const serviceTier = await fastServiceTier(runtime, thread.pendingExecutionConfig?.route ?? moved ?? thread, p.serviceTier)
         return this.call('/v1/threads/' + p.threadId + '/turns', 'POST', {
           prompt: p.text,
           attachmentIds: p.attachmentIds,
           clientRequestId,
           clientSurface: 'api',
           ...(moved ? continuationRoute(moved) : {}),
-          ...(reasoningEffort ? { reasoningEffort } : {})
+          ...(reasoningEffort ? { reasoningEffort } : {}),
+          ...(serviceTier ? { serviceTier } : {})
         })
       }
     }

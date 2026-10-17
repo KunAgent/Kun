@@ -89,7 +89,7 @@
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
-    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.17.0.tgz",
+    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.18.0.tgz",
     "@modelcontextprotocol/client": "^2.2.0",
     "@xmldom/xmldom": "^0.9.12",
     "ajv": "^8.20.0",
