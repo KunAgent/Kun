@@ -60,6 +60,8 @@ Also included: a plugin and skill marketplace (MCP / Skills), reminders and sche
 | Windows | `.exe` | x64 |
 | Linux | `.AppImage` / `.deb` | x64 |
 
+Install the Linux `.deb` with `sudo apt install ./Kun-*.deb` so apt also pulls in dependencies such as `libnotify4`; `dpkg -i` does not resolve dependencies and fails on minimal systems.
+
 ## A quick look
 
 <table>

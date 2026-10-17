@@ -60,6 +60,8 @@ Kun 是跑在你电脑上的桌面应用。代码、文档和 Agent 对话共用
 | Windows | `.exe` | x64 |
 | Linux | `.AppImage` / `.deb` | x64 |
 
+Linux 的 `.deb` 请用 `sudo apt install ./Kun-*.deb` 安装，apt 会一并装上 `libnotify4` 等依赖；`dpkg -i` 不处理依赖，在精简系统上会装不上。
+
 ## 看一眼
 
 <table>
