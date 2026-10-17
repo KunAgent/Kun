@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Socket } from '@kun/remote-protocol'
 import type { KunAccountState } from '../../shared/kun-account'
-import { MobileLinkService, type LinkDependencies } from './service'
+import { MobileLinkService, PEER_LIST_INTERVAL_MS, type LinkDependencies } from './service'
 import { MobileLinkRecovery } from './recovery'
 
 afterEach(() => vi.useRealTimers())
@@ -144,8 +144,9 @@ describe('desktop mobile link under network disruption', () => {
         return original(input, init)
       })
       f.fetcher.mockClear()
-      await vi.advanceTimersByTimeAsync(31000)
+      await vi.advanceTimersByTimeAsync(PEER_LIST_INTERVAL_MS + 11000)
       expect(f.fetcher.mock.calls.some(([url]) => String(url).endsWith('/relay-lease'))).toBe(true)
+      expect(f.fetcher.mock.calls.some(([url]) => String(url).endsWith('/grants'))).toBe(true)
       expect(socket.close).not.toHaveBeenCalled()
       expect((f.service as any).authorizationExpiresAt).toBeGreaterThan(Date.now() + 20000)
       await vi.advanceTimersByTimeAsync(15000)
@@ -163,10 +164,30 @@ describe('desktop mobile link under network disruption', () => {
       const original = f.fetcher.getMockImplementation()!
       f.fetcher.mockImplementation(async (input, init) => String(input).endsWith('/grants')
         ? Response.json({ error: 'data_unavailable' }, { status: 503 }) : original(input, init))
-      await vi.advanceTimersByTimeAsync(31000)
+      await vi.advanceTimersByTimeAsync(PEER_LIST_INTERVAL_MS + 21000)
       expect(f.sockets[0].close).not.toHaveBeenCalled()
       expect((f.service as any).online).toBe(true)
       expect(f.deps.diagnostic).toHaveBeenCalledWith('PEER_METADATA_REFRESH_FAILED')
+    } finally { await cleanup(f) }
+  })
+
+  it('lists grants on every connection but only every five minutes across lease renewals', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    try {
+      await f.service.enable(true)
+      await settle()
+      const count = (suffix: string) => f.fetcher.mock.calls.filter(([url]) => String(url).endsWith(suffix)).length
+      const renewals = count('/relay-lease'), listings = count('/grants')
+      await vi.advanceTimersByTimeAsync(2 * PEER_LIST_INTERVAL_MS)
+      // 30 renewals in ten minutes used to list grants 30 times.
+      expect(count('/relay-lease') - renewals).toBe(30)
+      expect(count('/grants') - listings).toBe(2)
+      expect(f.sockets[0].close).not.toHaveBeenCalled()
+      f.service.reconnect('HOST_RESUMED')
+      await settle()
+      expect(f.sockets).toHaveLength(2)
+      expect(count('/grants') - listings).toBe(3)
     } finally { await cleanup(f) }
   })
 

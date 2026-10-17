@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RemoteApi, RequestBudget, type Socket } from '@kun/remote-protocol'
 import { MobileShareHosts } from './share-host'
+import { EVENT_FRAME_SPACING_MS } from './event-coalescer'
 import { shareFixture } from '../../../kun/src/remote/sharing/guest.test-support'
 import { registerSharedTaskRoutes } from '../../../kun/src/remote/sharing/routes'
 afterEach(() => vi.useRealTimers())
@@ -84,6 +85,27 @@ describe('independent Main ShareHost with real local Runtime and Manager store',
       expect((await f.store.get<any>('shared_actor', actor.id))!.value).toMatchObject({ sessionId: actor.value.sessionId, active: true })
       expect(f.calls.filter((p) => p.endsWith('/guest-fence'))).toHaveLength(0)
     } finally { vi.useRealTimers(); await f.close() }
+  })
+  it('relays a burst of task events to a guest as at most one frame per spacing with the newest cursor', async () => {
+    const f = await fixture()
+    try {
+      f.hello()
+      await vi.waitFor(() => expect(f.frames.some((v) => v.kind === 'resync_required')).toBe(true))
+      f.guestFrame('subscribe', { kind: 'code', id: f.task.id, since: 0 }, 'subscribe')
+      await vi.waitFor(() => expect(f.frames.some((v) => v.kind === 'event' && v.payload?.kind === 'subscribed')).toBe(true))
+      await new Promise((resolve) => setTimeout(resolve, 2 * EVENT_FRAME_SPACING_MS))
+      const before = f.frames.length, cursors = () => f.frames.slice(before).filter((v) => v.kind === 'event').map((v) => v.payload.event.seq)
+      // A streamed reply: one delta every 5 ms (a synchronous burst would trip the runtime's own slow-reader close).
+      const started = Date.now()
+      for (let seq = 1000; seq < 1060; seq++) {
+        f.runtime.eventBus.publish({ kind: 'error', threadId: f.task.id, seq,
+          timestamp: '2026-10-18T00:00:00.000Z', message: 'delta', code: 'test', severity: 'warning' })
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+      await vi.waitFor(() => expect(cursors().at(-1)).toBe(1059))
+      expect(cursors().length).toBeLessThanOrEqual(Math.floor((Date.now() - started) / EVENT_FRAME_SPACING_MS) + 1)
+      expect(cursors()).toEqual([...cursors()].sort((a, b) => a - b))
+    } finally { await f.close() }
   })
   it('persists a session tombstone before a delayed guest-admit finishes after Stop', async () => {
     const f = await fixture(); let release!: () => void

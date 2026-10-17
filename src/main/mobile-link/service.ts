@@ -30,6 +30,12 @@ const CERTAIN_REJECTIONS = new Set([
   'AGENT_NOT_AVAILABLE',
   'MODEL_NOT_AVAILABLE'
 ])
+/**
+ * The relay enforces grants itself: each lease renewal re-reads the peer set into the lease, and a grant change
+ * closes this socket so the next ticket lists grants again. Renewal only refreshes local grant metadata, so it
+ * lists grants at most this often instead of on every 20 s renewal.
+ */
+export const PEER_LIST_INTERVAL_MS = 300000
 export type LinkDependencies = {
   account: ArtAccountAccess
   identity(owner: string): Promise<DeviceIdentity>
@@ -391,12 +397,14 @@ export class MobileLinkService {
     this.enabled = true
     this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
       current: () => this.enabled && generation === this.generation && !this.sessionEnding })
+    let peersListedAt = -Infinity
     const refreshPeers = async (epoch: number, signal?: AbortSignal) => {
       const grantsVersion = this.grantsVersion
       const { grants } = await api.request('/grants', 'GET', undefined, false, signal)
       this.transportCurrent(generation, epoch, signal)
       if (grantsVersion !== this.grantsVersion) return
       this.updateGrants(grants)
+      peersListedAt = Date.now()
     }
     const transport = {
       ticket: async (signal?: AbortSignal) => {
@@ -415,6 +423,8 @@ export class MobileLinkService {
         const result = await api.request('/relay-lease', 'POST', undefined, false, signal)
         this.transportCurrent(generation, epoch, signal)
         this.authorizeUntil(started + 60000)
+        if (Date.now() - peersListedAt < PEER_LIST_INTERVAL_MS) return result
+        peersListedAt = Date.now()
         void refreshPeers(epoch, signal).catch(() => {
           if (generation === this.generation && epoch === this.transportEpoch)
             this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED')

@@ -9,6 +9,7 @@ import { projects } from '../files/project-directory.js'
 import { resolveCodeRoute } from './model-catalog.js'
 import { RemoteCodeManagement, metadataRevision } from './management.js'
 import { RemoteCodeHistory } from './history/service.js'
+import { relayHistoryPage } from './history/relay-page.js'
 import type { RemoteArtifacts } from '../files/artifacts.js'
 import { versionedHistory } from '../messages/history-version.js'
 import { continuationRoute, movedTurn } from './session-route.js'
@@ -68,12 +69,13 @@ case 'code.history': {
             (p.cursor ? '?before=' + encodeURIComponent(p.cursor) : '')
         ))
         const metadata = await requireCode(runtime, p.threadId)
+        const { relayed, retained } = relayHistoryPage(history, p.cursor)
         return {
-          ...history,
+          ...relayed,
           revision: metadataRevision(metadata),
           historyState: metadata.remoteRewind?.phase === 'pending' ? 'reconciliation_required' : 'ready',
           historyVersion,
-          artifacts: await this.artifacts.codeHistory(history)
+          artifacts: await this.artifacts.codeHistory(retained)
         }
       }
 case 'code.create': {

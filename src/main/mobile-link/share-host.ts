@@ -3,11 +3,14 @@ import { randomUUID } from 'node:crypto'
 import { ShareClient, validateCall, SHARED_READ_METHODS, SHARED_WRITE_METHODS, type Call, type RequestBudget, type RemoteApi, type ShareLease, type SharedFrame } from '@kun/remote-protocol'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
 import { ShareOwnerOperations, shareRuntime, shareLease, type ShareOwner } from './share-owner'
+import { EventCoalescer } from './event-coalescer'
 type HostContext = { api: RemoteApi; ownerAccountId: string; hostDeviceId: string; current(): boolean }
 type Connection = { client: ShareClient; metadata: any; lease: Readonly<ShareLease> | null; sessionId: string;
   ready: Promise<unknown>; streams: Map<string, AbortController> }
 type Dependencies = { origin: string; fetch: typeof fetch; socket(url: string, headers: Record<string, string>): import('@kun/remote-protocol').Socket;
-  lease(): Promise<ProtectedRuntimeRequestLease>; budget: RequestBudget; totalBudget: RequestBudget; files?: SharedFileTransfer; reserveFile?(peer: string): () => void; diagnostic?(code: string): void }
+  lease(): Promise<ProtectedRuntimeRequestLease>; budget: RequestBudget; totalBudget: RequestBudget; files?: SharedFileTransfer; reserveFile?(peer: string): () => void; diagnostic?(code: string, details?: { attempt?: number }): void }
+/** Consecutive failed refreshes retry after 2 s, doubling to this cap, whichever cloud request failed. */
+const FAILURE_BACKOFF_CAP = 300000
 /** Independent ShareRelay host. No personal frame can enter this dispatcher. */
 export class MobileShareHosts {
   private context?: HostContext
@@ -20,7 +23,7 @@ export class MobileShareHosts {
   private available = false
   private featureKnown = false
   private featureAt = 0
-  private featureFailures = 0
+  private failures = 0
   private suspended = false
   constructor(private deps: Dependencies) {}
   start(context: HostContext) { this.stop(); this.context = context; this.suspended = false; void this.refresh(true) }
@@ -28,7 +31,7 @@ export class MobileShareHosts {
     ++this.generation; clearTimeout(this.timer); this.timer = undefined
     for (const connection of this.connections.values()) this.close(connection)
     this.connections.clear(); this.context = undefined; this.refreshAgain = false; this.available = false; this.suspended = false
-    this.featureKnown = false; this.featureAt = 0; this.featureFailures = 0
+    this.featureKnown = false; this.featureAt = 0; this.failures = 0
   }
   suspend() {
     this.suspended = true; ++this.generation; clearTimeout(this.timer)
@@ -43,7 +46,9 @@ export class MobileShareHosts {
         if (reason === 'NETWORK_CHANGED') try { c.client.send({ kind: 'ping' }) } catch { c.client.reconnect() }
       } else c.client.reconnect()
     }
-    if (!this.connections.size) void this.refresh(true)
+    // An interface-change hint says nothing about the cloud feature or the share list. It fired every 5-20 s on a
+    // churning network and, with no live share, forced a capability request past the failure backoff each time.
+    if (!this.connections.size && reason !== 'NETWORK_CHANGED') void this.refresh(true)
   }
   private valid(context: HostContext, generation: number) {
     return this.context === context && generation === this.generation && !this.suspended && context.current()
@@ -59,12 +64,12 @@ export class MobileShareHosts {
     if (this.refreshingGeneration === generation) { this.refreshAgain = true; return }
     this.refreshingGeneration = generation
     const check = checkFeature || !this.featureKnown || Date.now() - this.featureAt >= 300000
-    let checked = false
+    let checked = false, failed = false
     try {
       if (check) {
         const available = (await context.api.request<any>('/capabilities'))?.sharing?.available === true
         if (!this.valid(context, generation)) return
-        this.available = available; this.featureKnown = true; this.featureAt = Date.now(); this.featureFailures = 0; checked = true
+        this.available = available; this.featureKnown = true; this.featureAt = Date.now(); checked = true
         if (!available) { for (const connection of this.connections.values()) this.close(connection); this.connections.clear() }
       }
       if (!this.valid(context, generation) || !this.available) return
@@ -85,9 +90,11 @@ export class MobileShareHosts {
         this.connections.set(share.id, connection); connection.client.start()
       }
     } catch {
+      failed = true
       if (this.valid(context, generation)) {
-        if (check && !checked) { this.featureKnown = false; this.featureFailures++ }
-        this.deps.diagnostic?.('SHARE_METADATA_UNAVAILABLE')
+        if (check && !checked) this.featureKnown = false
+        this.failures++
+        this.deps.diagnostic?.(check && !checked ? 'SHARE_CAPABILITIES_UNAVAILABLE' : 'SHARE_METADATA_UNAVAILABLE', { attempt: this.failures })
       }
     }
     finally {
@@ -95,9 +102,11 @@ export class MobileShareHosts {
       if (this.valid(context, generation)) {
         clearTimeout(this.timer)
         const immediate = this.refreshAgain; this.refreshAgain = false
-        // Unknown availability retries with backoff. A known disabled feature only rechecks metadata every five minutes.
-        const delay = !this.featureKnown ? Math.min(30000, 2000 * 2 ** Math.min(Math.max(0, this.featureFailures - 1), 4))
-          : this.available ? immediate ? 0 : 30000 : 300000
+        if (!failed) this.failures = 0
+        // Failures back off to five minutes. A known disabled feature only rechecks metadata every five minutes.
+        const delay = immediate && this.featureKnown && this.available ? 0
+          : this.failures ? Math.min(FAILURE_BACKOFF_CAP, 2000 * 2 ** Math.min(this.failures - 1, 8))
+            : this.available ? 30000 : 300000
         this.timer = setTimeout(() => void this.refresh(), delay)
       }
     }
@@ -203,7 +212,7 @@ export class MobileShareHosts {
     prior?.abort(); connection.streams.delete(key)
     if (raw.active === false) return
     const abort = new AbortController(); connection.streams.set(key, abort)
-    let failed = false, watchdog = setTimeout(() => { failed = true; abort.abort() }, 15000)
+    let failed = false, watchdog = setTimeout(() => { failed = true; abort.abort() }, 15000), relay: EventCoalescer | undefined
     const resetWatchdog = () => { clearTimeout(watchdog); watchdog = setTimeout(() => { failed = true; abort.abort() }, 35000) }
     try {
       const local = await shareRuntime(lease, 'resource', { owner: this.owner(this.context!), resourceHandle: actor.resourceHandle })
@@ -220,6 +229,10 @@ export class MobileShareHosts {
       if (current() && !abort.signal.aborted) connection.client.send({ kind: 'event', id: randomUUID(), dst: actor.deviceId, payload: { kind: 'subscribed', resource: 'code', resourceId: raw.id } })
       const reader = response.body.getReader(), decoder = new TextDecoder(); let text = ''
       const cancel = () => { void reader.cancel().catch(() => {}) }
+      const events = relay = new EventCoalescer((event) => {
+        if (current() && !abort.signal.aborted) connection.client.send({ kind: 'event', id: randomUUID(), dst: actor.deviceId, payload: { resource: 'code', resourceId: raw.id, event } })
+      }, cancel)
+      abort.signal.addEventListener('abort', () => events.stop(), { once: true })
       abort.signal.addEventListener('abort', cancel, { once: true })
       try { while (!abort.signal.aborted && current()) {
         const next = await reader.read(); resetWatchdog(); if (next.done) throw new Error('STREAM_ENDED')
@@ -228,11 +241,13 @@ export class MobileShareHosts {
         while ((end = text.indexOf('\n\n')) >= 0) {
           const block = text.slice(0, end); text = text.slice(end + 2)
           const data = block.split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n')
-          if (data && current() && !abort.signal.aborted) connection.client.send({ kind: 'event', id: randomUUID(), dst: actor.deviceId, payload: { resource: 'code', resourceId: raw.id, event: JSON.parse(data) } })
+          if (data && current() && !abort.signal.aborted) events.push(JSON.parse(data))
         }
       } } finally { abort.signal.removeEventListener('abort', cancel); await reader.cancel().catch(() => {}) }
-    } catch { if ((!abort.signal.aborted || failed) && current()) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: actor.deviceId, payload: { resource: 'code', resourceId: raw.id } }) } catch { /* best-effort resync notice */ } }
-    finally { clearTimeout(watchdog); if (connection.streams.get(key) === abort) connection.streams.delete(key) }
+    } catch {
+      if (!abort.signal.aborted) try { relay?.flush() } catch { /* the resync notice below still recovers */ }
+      if ((!abort.signal.aborted || failed) && current()) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: actor.deviceId, payload: { resource: 'code', resourceId: raw.id } }) } catch { /* best-effort resync notice */ }
+    } finally { relay?.stop(); clearTimeout(watchdog); if (connection.streams.get(key) === abort) connection.streams.delete(key) }
   }
   descriptors(scopes: readonly string[]) {
     return this.available && scopes.includes('shares.manage') ? ['shares.list', 'shares.manage'].map((operation) => ({ operation,

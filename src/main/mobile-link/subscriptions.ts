@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Frame } from '@kun/remote-protocol'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
+import { EventCoalescer } from './event-coalescer'
 export class MobileSubscriptions {
   private streams = new Map<string, AbortController>()
   constructor(
@@ -44,6 +45,7 @@ export class MobileSubscriptions {
       throw new Error('SUBSCRIPTION_LIMIT')
     const control = new AbortController()
     this.streams.set(key, control)
+    let relay: EventCoalescer | undefined
     try {
       const lease = await this.deps.lease()
       if (control.signal.aborted) return
@@ -77,6 +79,16 @@ export class MobileSubscriptions {
       const reader = response.body.getReader(),
         decoder = new TextDecoder()
       let text = ''
+      const events = relay = new EventCoalescer((event) => {
+        if (control.signal.aborted) return
+        this.deps.send({
+          kind: 'event',
+          id: randomUUID(),
+          dst: device,
+          payload: { resource: p.kind, resourceId: p.id, event }
+        })
+      }, () => { void reader.cancel().catch(() => {}) })
+      control.signal.addEventListener('abort', () => events.stop(), { once: true })
       try {
         while (!control.signal.aborted) {
           const { done, value } = await reader.read()
@@ -95,16 +107,7 @@ export class MobileSubscriptions {
               .map((l) => l.slice(5).trimStart())
               .join('\n')
             if (!data) continue
-            this.deps.send({
-              kind: 'event',
-              id: randomUUID(),
-              dst: device,
-              payload: {
-                resource: p.kind,
-                resourceId: p.id,
-                event: JSON.parse(data)
-              }
-            })
+            events.push(JSON.parse(data))
           }
         }
       } finally {
@@ -112,6 +115,7 @@ export class MobileSubscriptions {
       }
     } catch {
       if (!control.signal.aborted) {
+        try { relay?.flush() } catch { /* the resync notice below still recovers */ }
         try {
           this.deps.send({
             kind: 'resync_required',
@@ -122,6 +126,7 @@ export class MobileSubscriptions {
         } catch { /* best-effort resync notice */ }
       }
     } finally {
+      relay?.stop()
       if (this.streams.get(key) === control) this.streams.delete(key)
     }
   }

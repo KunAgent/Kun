@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MobileSubscriptions } from './subscriptions'
+import { EVENT_FRAME_SPACING_MS } from './event-coalescer'
 
 const input = { kind: 'code', id: 'thread-one', since: 4 }
 const tick = () => new Promise((resolve) => setImmediate(resolve))
@@ -66,5 +67,45 @@ describe('mobile runtime subscription recovery', () => {
     const f = fixture(new Response('data: ' + 'x'.repeat(4 * 1024 * 1024)))
     await f.service.subscribe('phone', input)
     expect(f.send.mock.calls.map(([frame]) => frame.kind)).toEqual(['event', 'resync_required'])
+  })
+  it('relays a burst of deltas as one frame per spacing carrying the newest cursor', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      let writer!: ReadableStreamDefaultController<Uint8Array>
+      const f = fixture(new Response(new ReadableStream<Uint8Array>({ start(controller) { writer = controller } })))
+      const watching = f.service.subscribe('phone', input)
+      const deltas = (from: number, to: number) => writer.enqueue(new TextEncoder().encode(
+        Array.from({ length: to - from + 1 }, (_, i) => `id: ${from + i}\nevent: item.delta\ndata: {"kind":"item.delta","seq":${from + i}}\n\n`).join('')))
+      await tick()
+      deltas(5, 54)
+      await tick()
+      const relayed = () => f.send.mock.calls.filter(([frame]) => frame.payload?.event).map(([frame]) => frame.payload.event.seq)
+      expect(relayed()).toEqual([5])
+      await vi.advanceTimersByTimeAsync(EVENT_FRAME_SPACING_MS)
+      expect(relayed()).toEqual([5, 54])
+      deltas(55, 60)
+      await tick()
+      writer.close()
+      await watching
+      // The held cursor reaches the phone before the resync notice that follows a stream end.
+      expect(relayed()).toEqual([5, 54, 60])
+      expect(f.send.mock.calls.at(-1)![0].kind).toBe('resync_required')
+    } finally { vi.useRealTimers() }
+  })
+  it('drops a held event when the subscription is fenced before the next frame is due', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      let writer!: ReadableStreamDefaultController<Uint8Array>
+      const f = fixture(new Response(new ReadableStream<Uint8Array>({ start(controller) { writer = controller } })))
+      const watching = f.service.subscribe('phone', input)
+      await tick()
+      writer.enqueue(new TextEncoder().encode('data: {"kind":"item.delta","seq":5}\n\ndata: {"kind":"item.delta","seq":6}\n\n'))
+      await tick()
+      f.service.clear('phone')
+      await vi.advanceTimersByTimeAsync(EVENT_FRAME_SPACING_MS * 2)
+      writer.enqueue(new TextEncoder().encode('data: {"kind":"item.delta","seq":7}\n\n'))
+      await watching
+      expect(f.send.mock.calls.map(([frame]) => frame.payload?.event?.seq ?? frame.payload?.kind)).toEqual(['subscribed', 5])
+    } finally { vi.useRealTimers() }
   })
 })
