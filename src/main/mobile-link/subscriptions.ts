@@ -119,7 +119,7 @@ export class MobileSubscriptions {
             dst: device,
             payload: { resource: p.kind, resourceId: p.id }
           })
-        } catch {}
+        } catch { /* best-effort resync notice */ }
       }
     } finally {
       if (this.streams.get(key) === control) this.streams.delete(key)

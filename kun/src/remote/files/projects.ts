@@ -42,7 +42,7 @@ export class RemoteProjectFiles {
     if (this.expiryTimer) clearTimeout(this.expiryTimer)
     if (this.closed || !this.scans.size) return
     const next = Math.min(...[...this.scans.values()].map((scan) => scan.expires))
-    this.expiryTimer = setTimeout(() => { try { this.prune() } catch {} this.armExpiry() }, Math.max(1000, next - Date.now() + 1))
+    this.expiryTimer = setTimeout(() => { try { this.prune() } catch { /* re-arm even if pruning fails */ } this.armExpiry() }, Math.max(1000, next - Date.now() + 1))
     this.expiryTimer.unref()
   }
   private prune() {

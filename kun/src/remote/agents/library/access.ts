@@ -20,6 +20,7 @@ export async function readableAgentArtifact(runtime: ServerRuntime, agentId: str
 export function artifactDownloadName(meta: Pick<AgentArtifact, 'title' | 'relativePath'>) {
   const extension = extname(meta.relativePath).toLowerCase()
   const suffix = /^\.[a-z0-9]{1,10}$/.test(extension) ? extension : ''
+  // eslint-disable-next-line no-control-regex -- artifact names drop ASCII controls
   const candidate = basename(meta.title.replace(/\\/g, '/')).replace(/[\u0000-\u001F\u007F]/g, '').trim()
   const name = !candidate || candidate === '.' || candidate === '..' ? 'artifact' : candidate
   const prefix = suffix && name.toLowerCase().endsWith(suffix) ? name.slice(0, -suffix.length) : name

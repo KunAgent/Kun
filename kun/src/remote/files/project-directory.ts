@@ -30,7 +30,7 @@ export async function projects(runtime: ServerRuntime) {
           path: canonical
         })
       }
-    } catch {}
+    } catch { /* missing or unreadable root: skipped */ }
   }
   return result
 }

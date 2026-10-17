@@ -626,7 +626,7 @@ export class MobileLinkService {
               }
             }
           })
-        } catch {}
+        } catch { /* best-effort error reply; the peer may be gone */ }
       }
     } finally {
       if (fileReserved) this.filePeers.delete(src)

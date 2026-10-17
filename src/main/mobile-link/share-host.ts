@@ -130,7 +130,7 @@ export class MobileShareHosts {
           if (!value || !current() || connection.lease !== value || connection.sessionId !== sessionId) return
           for (const peer of value.peers) await shareRuntime(runtime, 'guest-admit', { actor: this.actor(connection, peer.deviceId) })
           if (previous && current() && connection.client.online) for (const peer of value.peers) {
-            if (!previous.peers.some((old) => old.deviceId === peer.deviceId)) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: peer.deviceId, payload: { reason: 'permissions_changed' } }) } catch {}
+            if (!previous.peers.some((old) => old.deviceId === peer.deviceId)) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: peer.deviceId, payload: { reason: 'permissions_changed' } }) } catch { /* best-effort resync notice */ }
           }
         })
         void connection.ready.catch(() => { if (current()) this.deps.diagnostic?.('SHARE_AUTHORIZATION_UNAVAILABLE') })
@@ -138,7 +138,7 @@ export class MobileShareHosts {
       state: (online) => {
         if (online) void connection.ready.then(() => {
           if (!current()) return
-          for (const peer of connection.lease?.peers ?? []) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: peer.deviceId, payload: { reason: 'host_reconnected' } }) } catch {}
+          for (const peer of connection.lease?.peers ?? []) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: peer.deviceId, payload: { reason: 'host_reconnected' } }) } catch { /* best-effort resync notice */ }
         }).catch(() => {})
       },
       frame: (frame) => { if (current()) void this.receive(connection, frame, current) },
@@ -194,7 +194,7 @@ export class MobileShareHosts {
       if (authorized()) connection.client.send({ kind: 'result', id: frame.id, dst: src, payload: result })
     } catch (error) {
       if (authorized() && src && frame.id) try { connection.client.send({ kind: 'result', id: frame.id, dst: src,
-        payload: { error: { code: error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'SHARED_REQUEST_FAILED', uncertain: dispatchStarted && !(error instanceof SharedFileNotStarted) } } }) } catch {}
+        payload: { error: { code: error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'SHARED_REQUEST_FAILED', uncertain: dispatchStarted && !(error instanceof SharedFileNotStarted) } } }) } catch { /* best-effort error reply */ }
     } finally { release?.(); releaseFile?.() }
   }
   private async subscribe(connection: Connection, actor: ReturnType<MobileShareHosts['actor']>, raw: any, lease: ProtectedRuntimeRequestLease, current: () => boolean) {
@@ -231,7 +231,7 @@ export class MobileShareHosts {
           if (data && current() && !abort.signal.aborted) connection.client.send({ kind: 'event', id: randomUUID(), dst: actor.deviceId, payload: { resource: 'code', resourceId: raw.id, event: JSON.parse(data) } })
         }
       } } finally { abort.signal.removeEventListener('abort', cancel); await reader.cancel().catch(() => {}) }
-    } catch { if ((!abort.signal.aborted || failed) && current()) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: actor.deviceId, payload: { resource: 'code', resourceId: raw.id } }) } catch {} }
+    } catch { if ((!abort.signal.aborted || failed) && current()) try { connection.client.send({ kind: 'resync_required', id: randomUUID(), dst: actor.deviceId, payload: { resource: 'code', resourceId: raw.id } }) } catch { /* best-effort resync notice */ } }
     finally { clearTimeout(watchdog); if (connection.streams.get(key) === abort) connection.streams.delete(key) }
   }
   descriptors(scopes: readonly string[]) {

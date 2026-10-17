@@ -110,7 +110,7 @@ export class RemoteNotificationFeed {
             this.graceTimer = setTimeout(() => { this.activated = false; this.ring = []; this.seen.clear(); this.roomCursor = undefined }, 60000)
             this.graceTimer.unref?.()
           }
-          try { controller.close() } catch {}
+          try { controller.close() } catch { /* stream already closed */ }
         }
         const wasEmpty = !listeners.size
         listeners.add(send); this.closers.add(close)

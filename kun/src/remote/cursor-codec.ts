@@ -9,7 +9,7 @@ export function readCursor<T>(raw: string | undefined, scope: string, fallback: 
     const parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'))
     if (parsed.v === 1 && parsed.scope === scope && parsed.position && typeof parsed.position === 'object')
       return parsed.position as T
-  } catch {}
+  } catch { /* malformed cursor: rejected below */ }
   throw new Error('INVALID_CURSOR')
 }
 export function writeCursor(scope: string, position: unknown) {

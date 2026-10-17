@@ -19,7 +19,7 @@ export class RemoteCodeManagement {
   constructor(private runtime: ServerRuntime, private legacyModels: () => Promise<string[]>) {}
   async summary(thread: ThreadRecord) {
     let projectId: string | undefined
-    try { projectId = createHash('sha256').update(await realpath(thread.workspace)).digest('hex') } catch {}
+    try { projectId = createHash('sha256').update(await realpath(thread.workspace)).digest('hex') } catch { /* workspace no longer resolves */ }
     return { id: thread.id, title: thread.title, status: thread.status,
       pinned: thread.pinned === true, archived: thread.status === 'archived', revision: metadataRevision(thread),
       ...sessionRoute(thread),
@@ -78,7 +78,7 @@ export class RemoteCodeManagement {
       ...(hasMore ? { nextCursor: writeCursor(scope, { after, coverage, ...(pending ? { pending } : {}) }) } : {}) })
     if (pending) return finish()
     if (threads.length >= limit) { hasMore = true; return finish() }
-    do {
+    for (;;) {
       const page = await this.runtime.threadService.listPage({ workbenchScope: 'code', lean: true,
         archivedOnly: p.status === 'archived',
         cursor: after, limit: Math.min(100, Math.max(limit, 20)) })
@@ -98,7 +98,7 @@ export class RemoteCodeManagement {
       if (!hasMore) break
       if (!page.nextCursor || page.nextCursor === position.after) throw new Error('INVALID_CURSOR')
       after = page.nextCursor
-    } while (true)
+    }
     return finish()
   }
   async preflight(method: string, p: any) {

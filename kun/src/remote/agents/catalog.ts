@@ -19,7 +19,8 @@ type CatalogPage = { agentId: string; agentRevision: number; appliesTo: 'next_ap
   enabled: boolean; reason?: Reason; revision?: string; items: Entry[]; hasMore: boolean; complete: boolean; nextCursor?: string }
 const ref = (agentId: string, kind: string, id: string) => createHash('sha256').update(canonical([agentId, kind, id])).digest('hex')
 function label(value: unknown, fallback: string) {
-  if (typeof value !== 'string' || /(?:https?:\/\/|^[\/\\]|^[A-Za-z]:[\/\\]|\b(?:token|secret|password|bearer|api[_-]?key)\s*[:=])/i.test(value)) return fallback
+  if (typeof value !== 'string' || /(?:https?:\/\/|^[/\\]|^[A-Za-z]:[/\\]|\b(?:token|secret|password|bearer|api[_-]?key)\s*[:=])/i.test(value)) return fallback
+  // eslint-disable-next-line no-control-regex -- labels drop ASCII controls
   return value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 160) || fallback
 }
 const work = new WeakMap<ServerRuntime, { active: number }>()

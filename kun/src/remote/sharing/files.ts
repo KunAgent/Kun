@@ -90,6 +90,7 @@ export class SharedTaskFiles {
     for (const attachmentId of new Set(ids)) {
       const meta = await this.runtime.attachmentStore?.get(attachmentId)
       if (!meta) throw new RemoteNoEffect('ATTACHMENT_NOT_CONFIRMED')
+      // eslint-disable-next-line no-control-regex -- alias display names replace ASCII controls
       const name = basename((await this.name(actor, threadId, meta)).replace(/\\/g, '/')).replace(/[\u0000-\u001f\u007f]/g, '_').slice(0, 180).trim()
       aliases.push({ attachmentId, displayName: name && !['.', '..'].includes(name) ? name : 'attachment', mimeType: meta.mimeType, byteSize: meta.byteSize })
     }

@@ -3,7 +3,9 @@ const Id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
 export const SharedAttachmentId = z.string().regex(/^att_[a-f0-9]{24}$/)
 const Hash = z.string().regex(/^[a-f0-9]{64}$/)
 export const SHARED_FILE_MAX = 25 * 1024 * 1024
+// eslint-disable-next-line no-control-regex -- shared file names reject ASCII controls
 const Name = z.string().min(1).max(180).refine((value) => !/[\u0000-\u001f\u007f]/.test(value))
+// eslint-disable-next-line no-control-regex -- MIME types reject header-splitting controls
 const Mime = z.string().min(1).max(120).refine((value) => !/[\r\n\u0000]/.test(value))
 export const SharedReceiveParams = z.object({ transferId: z.string().uuid(), name: Name, mimeType: Mime,
   size: z.number().int().positive().max(SHARED_FILE_MAX), sha256: Hash }).strict()

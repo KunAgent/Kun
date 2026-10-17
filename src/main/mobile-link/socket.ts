@@ -37,7 +37,7 @@ export class MobileLinkSockets {
     resolveRules: (url: string) => Promise<string> = electronSystemProxyRules,
     diagnostic: (code: string) => void = () => {}
   ) {
-    const note = (code: string) => { try { diagnostic(code) } catch {} }
+    const note = (code: string) => { try { diagnostic(code) } catch { /* diagnostics never break the socket */ } }
     this.agent = new ProxyAgent({
       keepAlive: true,
       getProxyForUrl: async (url) => {

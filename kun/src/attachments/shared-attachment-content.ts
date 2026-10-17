@@ -18,6 +18,7 @@ export const sharedAttachmentDirectory = (threadId: string) => join(root, create
 export function sharedAttachmentName(content: Pick<AttachmentContent, 'id' | 'name' | 'mimeType'>, aliases: AttachmentAliases | undefined) {
   if (aliases === undefined) return content.name
   const raw = aliases.find((alias) => alias.attachmentId === content.id)?.displayName
+  // eslint-disable-next-line no-control-regex -- display names replace ASCII controls
   const safe = raw ? basename(raw.replace(/\\/g, '/')).replace(/[\u0000-\u001f\u007f]/g, '_').slice(0, 180).trim() : ''
   return safe && !['.', '..'].includes(safe) ? safe : 'attachment' + (extensions[content.mimeType] ?? '.bin')
 }
@@ -38,7 +39,7 @@ export async function projectSharedAttachment(content: AttachmentContent, thread
       const info = await lstat(path)
       valid = info.isFile() && !info.isSymbolicLink() && info.nlink === 1 && info.size === content.data.length &&
         createHash('sha256').update(await readFile(path)).digest('hex') === hash
-    } catch {}
+    } catch { /* missing or unreadable: rewritten below */ }
     if (!valid) {
       const temporary = join(directory, '.incoming-' + randomUUID())
       try { await writeFile(temporary, content.data, { flag: 'wx', mode: 0o600 }); await rename(temporary, path) }

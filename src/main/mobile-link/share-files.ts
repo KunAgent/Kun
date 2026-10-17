@@ -100,6 +100,7 @@ export function createSharedFileTransfer(services: SharedFileServices): SharedFi
         const data = await bytes(response, p.size, control.signal, current, work)
         if (data.length !== p.size || createHash('sha256').update(data).digest('hex') !== p.sha256) throw new Error('FILE_INTEGRITY')
         if (!current()) throw new Error('ACCOUNT_CHANGED')
+        // eslint-disable-next-line no-control-regex -- stored file names replace ASCII controls
         const root = services.root(actor), name = basename(p.name).replace(/[\u0000-\u001f]/g, '_') || 'attachment'
         await run(() => mkdir(root, { recursive: true, mode: 0o700 }))
         const extension = extname(name).toLowerCase(), suffix = /^\.[a-z0-9]{1,8}$/.test(extension) ? extension : '.blob'
