@@ -71,8 +71,11 @@ function parseItem(raw: string): ReleaseNoteItem {
 
 function headingCategory(heading: string, inherited: Category): Category {
   if (SKIP_HEADING.test(heading)) return 'skip'
-  if (FIX_HEADING.test(heading)) return 'fixes'
-  if (FEATURE_HEADING.test(heading)) return 'features'
+  // "新功能与体验改进" and "Features and improvements" name both kinds: the first one wins.
+  const fixAt = heading.search(FIX_HEADING)
+  const featureAt = heading.search(FEATURE_HEADING)
+  if (fixAt >= 0 && (featureAt < 0 || fixAt < featureAt)) return 'fixes'
+  if (featureAt >= 0) return 'features'
   return inherited
 }
 
@@ -184,13 +187,22 @@ export type ReleaseNotesHighlights = {
   alsoUpdated: string[]
 }
 
-/** Up to three highlight rows plus up to four "also updated" chips. */
-export function pickHighlights(summary: ReleaseNotesSummary): ReleaseNotesHighlights {
-  const named = summary.features.filter((item) => item.title && !isCatchAllItem(item))
-  const highlights = named.slice(0, 3).map((item) => ({ title: item.title, body: firstSentence(item.body) }))
-  const alsoUpdated = named.slice(3, 7).map((item) => item.title)
+export type PickHighlightsOptions = {
+  /** Titles another part of the dialog already tells, such as a spotlight card. */
+  exclude?: RegExp
+  limit?: number
+}
+
+/** Up to `limit` (three) highlight rows plus up to four "also updated" chips. */
+export function pickHighlights(
+  summary: ReleaseNotesSummary,
+  { exclude, limit = 3 }: PickHighlightsOptions = {}
+): ReleaseNotesHighlights {
+  const named = summary.features.filter((item) => item.title && !isCatchAllItem(item) && !exclude?.test(item.title))
+  const highlights = named.slice(0, limit).map((item) => ({ title: item.title, body: firstSentence(item.body) }))
+  const alsoUpdated = named.slice(limit, limit + 4).map((item) => item.title)
   if (!highlights.length) {
-    const untitled = summary.features.filter((item) => !isCatchAllItem(item)).slice(0, 3)
+    const untitled = summary.features.filter((item) => !isCatchAllItem(item)).slice(0, limit)
     return { highlights: untitled.map((item) => ({ title: '', body: firstSentence(item.body) })), alsoUpdated }
   }
   return { highlights, alsoUpdated }

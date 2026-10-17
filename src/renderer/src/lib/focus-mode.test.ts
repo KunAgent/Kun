@@ -4,6 +4,7 @@ import {
   readFocusModePreference,
   writeFocusModePreference
 } from './focus-mode'
+import { useFocusModeStore } from '../store/focus-mode-store'
 
 class MemoryStorage {
   private values = new Map<string, string>()
@@ -63,6 +64,18 @@ describe('focus mode preference', () => {
     expect(storage.getItem(FOCUS_MODE_STORAGE_KEY)).toBe('1')
 
     writeFocusModePreference(false)
+    expect(storage.getItem(FOCUS_MODE_STORAGE_KEY)).toBe('0')
+  })
+
+  it('shares one switch through the store and persists each change', () => {
+    const storage = installStorage()
+
+    useFocusModeStore.getState().setEnabled(true)
+    expect(useFocusModeStore.getState().enabled).toBe(true)
+    expect(storage.getItem(FOCUS_MODE_STORAGE_KEY)).toBe('1')
+
+    useFocusModeStore.getState().setEnabled(false)
+    expect(useFocusModeStore.getState().enabled).toBe(false)
     expect(storage.getItem(FOCUS_MODE_STORAGE_KEY)).toBe('0')
   })
 })

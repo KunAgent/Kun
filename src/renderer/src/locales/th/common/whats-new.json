@@ -20,5 +20,14 @@
   "whatsNewHintReopen": "แสดงอีกครั้ง",
   "whatsNewSettingTitle": "มีอะไรใหม่ในเวอร์ชันนี้",
   "whatsNewSettingDesc": "เปิดสรุปที่แสดงเมื่อเปิด Kun ครั้งแรกหลังอัปเดตอีกครั้ง",
-  "whatsNewSettingOpen": "ดู"
+  "whatsNewSettingOpen": "ดู",
+  "whatsNewFocusTag": "โหมดโฟกัส",
+  "whatsNewFocusTitle": "ซ่อนโลโก้ Kun และการ์ดบัญชี",
+  "whatsNewFocusBody": "เมื่อเปิด โลโก้ Kun ที่ว่ายระหว่างตอบ การ์ดบัญชีในแถบข้าง อวาตาร์ของบทสนทนา และแอนิเมชัน Kun จะถูกซ่อน เหลือเพียงบทสนทนา",
+  "whatsNewFocusTry": "ลองโหมดโฟกัส",
+  "whatsNewFocusOn": "เปิดโหมดโฟกัสแล้ว",
+  "whatsNewFocusWhere": "สลับได้ทุกเมื่อด้วยสวิตช์ \"โฟกัส\" ที่ด้านล่างของแถบข้าง",
+  "whatsNewFocusPreviewLogo": "โลโก้ Kun",
+  "whatsNewFocusPreviewAccount": "การ์ดบัญชี",
+  "whatsNewFocusPreviewCalm": "เฉพาะแชท"
 }

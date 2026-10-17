@@ -20,5 +20,14 @@
   "whatsNewHintReopen": "Show again",
   "whatsNewSettingTitle": "What's new in this version",
   "whatsNewSettingDesc": "Reopen the release summary shown the first time Kun starts after an update.",
-  "whatsNewSettingOpen": "View"
+  "whatsNewSettingOpen": "View",
+  "whatsNewFocusTag": "Focus mode",
+  "whatsNewFocusTitle": "Hide the Kun logo and account card",
+  "whatsNewFocusBody": "Turn it on and the swimming Kun logo, the sidebar account card, conversation avatars and Kun animations step aside, leaving just the conversation.",
+  "whatsNewFocusTry": "Try Focus mode now",
+  "whatsNewFocusOn": "Focus mode is on",
+  "whatsNewFocusWhere": "Switch it anytime with Focus at the bottom of the sidebar",
+  "whatsNewFocusPreviewLogo": "Kun logo",
+  "whatsNewFocusPreviewAccount": "Account",
+  "whatsNewFocusPreviewCalm": "Just the chat"
 }
