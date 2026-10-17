@@ -11,7 +11,7 @@ vi.mock('../../store/harness-store', () => ({ useHarnessStore: { getState: () =>
   rows: [{ definition: { id: 'droid', displayName: 'Factory Droid' } }]
 }) } }))
 
-import { agentSetupHelpPrompt, askKunAboutAgentSetup } from './agent-setup-help'
+import { agentSetupHelpPrompt, agentUpdateRequestPrompt, askKunAboutAgentSetup, askKunToUpdateAgent } from './agent-setup-help'
 
 beforeAll(async () => { await i18n.changeLanguage('en') })
 beforeEach(() => { vi.clearAllMocks() })
@@ -71,5 +71,50 @@ describe('askKunAboutAgentSetup', () => {
     await expect(askKunAboutAgentSetup({ harnessId: 'droid', operation: 'install' })).rejects.toThrow("Kun's private chat isn't available")
     expect(f.append).not.toHaveBeenCalled()
     expect(f.open).not.toHaveBeenCalled()
+  })
+})
+
+describe('agentUpdateRequestPrompt', () => {
+  it('asks for an update with how it was installed and the versions on offer', () => {
+    const prompt = agentUpdateRequestPrompt({
+      harnessId: 'dsh', currentVersion: '0.2.1-rc.1', currentPath: '/Users/me/.local/bin/dsh', source: 'npm',
+      latestVersion: '0.2.1-rc.2', installCommand: 'npm install -g @deepseek-ai/dsh', versionTooLow: true
+    }, 'DeepSeek Harness')
+    expect(prompt).toContain('Please update the third-party Agent "DeepSeek Harness" on this computer to its latest version.')
+    expect(prompt).toContain('- Agent: DeepSeek Harness (dsh)')
+    expect(prompt).toContain('- Currently using: 0.2.1-rc.1 · /Users/me/.local/bin/dsh')
+    expect(prompt).toContain('- Installed via: npm installation')
+    expect(prompt).toContain('- Latest version: 0.2.1-rc.2')
+    expect(prompt).toContain('- Kun reports this version is too low to connect.')
+    expect(prompt).toContain('- Reference install command: `npm install -g @deepseek-ai/dsh`')
+    expect(prompt).toContain('ask before deleting or overwriting files or using sudo.')
+    expect(prompt).not.toContain('failed')
+    expect(prompt).not.toContain('Newer copy')
+  })
+
+  it('names the owning app for a bundled Agent and omits facts it does not have', () => {
+    const prompt = agentUpdateRequestPrompt({ harnessId: 'cursor', source: 'application', owner: 'Cursor' }, 'Cursor')
+    expect(prompt).toContain('- Installed via: Bundled with another app (Cursor)')
+    expect(prompt).not.toContain('Latest version')
+    expect(prompt).not.toContain('Currently using')
+    expect(prompt).not.toContain('Reference install command')
+  })
+})
+
+describe('askKunToUpdateAgent', () => {
+  it('drafts the update request into the default 小 Kun chat and opens it without sending', async () => {
+    f.roomsRequest.mockResolvedValue({ roomId: 'room-kun' })
+    f.get.mockResolvedValue({ room: { id: 'room-kun' } })
+    await askKunToUpdateAgent({ harnessId: 'droid', latestVersion: '1.2.3' })
+    expect(f.append).toHaveBeenCalledWith('room-kun', { body: expect.stringContaining('Please update the third-party Agent "Factory Droid"') })
+    expect(f.open).toHaveBeenCalledWith('room-kun')
+  })
+
+  it('reports an unavailable chat instead of drafting anywhere', async () => {
+    f.roomsRequest.mockResolvedValue({ roomId: 'room-kun' })
+    f.get.mockRejectedValue(new Error('not found'))
+    f.resolveBot.mockResolvedValue('room-kun')
+    await expect(askKunToUpdateAgent({ harnessId: 'droid' })).rejects.toThrow("Kun's private chat isn't available")
+    expect(f.append).not.toHaveBeenCalled()
   })
 })

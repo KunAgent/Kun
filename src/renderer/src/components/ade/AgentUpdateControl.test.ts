@@ -10,6 +10,8 @@ vi.mock('../../store/harness-store', () => ({ loadHarnesses: vi.fn(), loadHarnes
   applyHarnessEnablementSettings: vi.fn(), harnessIdsWithChangedLaunchSettings: () => [], useHarnessStore: { getState: () => ({ rows: [] }) } }))
 vi.mock('./agent-enablement-settings', () => ({ waitForAgentSettings: vi.fn(async () => undefined) }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: { getState: () => ({ openSettings: vi.fn() }) } }))
+vi.mock('./AgentUpdateHelpButton', () => ({ AgentUpdateHelpButton: ({ request }: { request: unknown }) =>
+  createElement('div', { 'data-ask-kun-update': JSON.stringify(request) }) }))
 vi.mock('./AgentSetupHelpButton', () => ({ AgentSetupHelpButton: ({ issue }: { issue: unknown }) =>
   createElement('div', { 'data-ask-kun-issue': JSON.stringify(issue) }) }))
 import { AgentUpdateControl } from './AgentUpdateControl'
@@ -76,4 +78,25 @@ it('disables actions while a status check may replace the installation they were
   await act(async () => useHarnessUpdateStore.setState({ entries: { 'claude-code': { info: initial, loading: true } } }))
   expect(button('[data-agent-update-start]')?.disabled).toBe(true)
   expect(button('[data-agent-update-check]')?.getAttribute('aria-busy')).toBe('true')
+})
+
+it('offers 小 Kun on the current-version row with what the card knows, except while updating or failed', async () => {
+  receiveHarnessUpdate(initial)
+  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(initial) })
+  await render()
+  expect(JSON.parse(host.querySelector('[data-ask-kun-update]')!.getAttribute('data-ask-kun-update')!)).toEqual({
+    harnessId: 'claude-code', currentVersion: '2.1.220', currentPath: '/old', source: 'kun-bundled', latestVersion: '2.1.281'
+  })
+
+  await act(async () => useAgentUpdateRunner.setState({ items: { 'claude-code': { phase: 'failed', action: 'update', startedAt: 1, error: 'boom' } as never } }))
+  expect(host.querySelector('[data-ask-kun-update]')).toBeNull()
+  expect(host.querySelector('[data-ask-kun-issue]')).not.toBeNull()
+})
+
+it('has no 小 Kun update button when the Agent is already current', async () => {
+  const current: HarnessUpdateState = { ...initial, status: 'current', canUpdate: false }
+  receiveHarnessUpdate(current)
+  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(current) })
+  await render()
+  expect(host.querySelector('[data-ask-kun-update]')).toBeNull()
 })

@@ -5,6 +5,6 @@ import { AgentUpdateControl } from './AgentUpdateControl'
 type T = (key: string, options?: Record<string, unknown>) => string
 
 /** Tab 4: version, updates and rollback. The update itself runs in `harness-update-runner`. */
-export function AgentVersionTab({ row, t }: { row: AdeHarnessRow; t: T }): ReactElement {
-  return <AgentUpdateControl row={row} t={t} />
+export function AgentVersionTab({ row, t, platform }: { row: AdeHarnessRow; t: T; platform?: string }): ReactElement {
+  return <AgentUpdateControl row={row} t={t} platform={platform} />
 }
