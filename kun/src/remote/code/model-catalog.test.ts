@@ -15,7 +15,9 @@ const definition = (id: string, extra: Record<string, unknown> = {}) => ({
 })
 
 type Options = { ready?: Record<string, unknown[]>; disabled?: string[]; providers?: unknown[]
-  models?: Record<string, string[]>; info?: Record<string, unknown[]> }
+  models?: Record<string, string[]>; info?: Record<string, unknown[]>
+  /** Proofs a warm-up produces after `checks` polls; the Agent stays "checking" until then. */
+  warm?: Record<string, { checks: number; ready: unknown[] }>; warmed?: string[] }
 function runtime(options: Options = {}) {
   const list = [
     definition('kun', { credentialModes: ['provider'] }),
@@ -44,7 +46,16 @@ function runtime(options: Options = {}) {
         isDisabled: (id: string) => (options.disabled ?? []).includes(id)
       },
       readiness: {
-        readyProfiles: async (id: string) => options.ready?.[id] ?? []
+        readyProfiles: async (id: string) => options.ready?.[id] ?? [],
+        warmProfiles: (id: string) => { options.warmed?.push(id) },
+        checking: (id: string) => {
+          const warm = options.warm?.[id]
+          if (!warm) return false
+          if (--warm.checks > 0) return true
+          options.ready = { ...options.ready, [id]: warm.ready }
+          delete options.warm![id]
+          return false
+        }
       },
       probedModels: (entry: { id: string }) => options.models?.[entry.id] ??
         (entry.id === 'claude-code' ? ['claude-sonnet-4-5', 'claude-opus-4-1'] : undefined),
@@ -72,6 +83,19 @@ describe('mobile Code agent catalog', () => {
       name: 'Claude Code',
       routes: [{ credentialMode: 'native-login', label: 'Claude Code', models: ['claude-sonnet-4-5', 'claude-opus-4-1'] }]
     })
+  })
+
+  it('warms every listed Agent like the desktop Agent list, so an expired proof does not hide it', async () => {
+    const warmed: string[] = []
+    const agents = await codeAgents(runtime({
+      warmed,
+      warm: { codex: { checks: 3, ready: [{ harnessId: 'codex', credentialMode: 'native-login', expiresAt: later() }] } },
+      models: { codex: ['gpt-5'] },
+      disabled: ['claude-code']
+    }), ['deepseek-chat'])
+    expect(warmed).toEqual(['codex'])
+    expect(agents.map((agent) => agent.id)).toEqual(['kun', 'codex'])
+    expect(agents[1].routes).toMatchObject([{ credentialMode: 'native-login', models: ['gpt-5'] }])
   })
 
   it('keeps disabled Agents out and falls back to the legacy Kun route', async () => {

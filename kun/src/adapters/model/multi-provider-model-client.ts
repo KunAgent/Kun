@@ -134,11 +134,27 @@ export class MultiProviderModelClient implements ModelClient {
       assertCurrent()
       return accountModelRequest(request, (accounted) => this.streamAdmitted(client, { ...accounted, beforeProviderDispatch: async () => {
         assertCurrent(); if (this.dispatchAuthority) await this.dispatchAuthority(); await request.beforeProviderDispatch?.()
+        assertCurrent()
       } }, this.admission.get(sourceId)))
     } }
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const selected = this.selectRequest(request)
+    if (!this.dispatchAuthority) return this.streamSelected(request, selected)
+    return this.streamAfterConfiguration(request)
+  }
+
+  private async *streamAfterConfiguration(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.abortSignal.throwIfAborted()
+    // Applying an external registry revision can replace every client. Select
+    // and pin only after it finishes; this is still before any model request.
+    await this.dispatchAuthority?.()
+    request.abortSignal.throwIfAborted()
+    yield* this.streamSelected(request, this.selectRequest(request))
+  }
+
+  private selectRequest(request: ModelRequest) {
     if (request.googleWorkspaceData) {
       request.googleWorkspaceData.assertCurrent()
     }
@@ -174,6 +190,11 @@ export class MultiProviderModelClient implements ModelClient {
     if (!client || (request.gatewayRouting && (!request.gatewayRouting.assertCurrent || this.gatewayClients.get(providerId) !== client))) {
       throw new GatewayRouteChangedError()
     }
+    return { client, providerId, pinKey, label, selection, pinned }
+  }
+
+  private streamSelected(request: ModelRequest, selected: ReturnType<MultiProviderModelClient['selectRequest']>): AsyncIterable<ModelStreamChunk> {
+    const { client, providerId, pinKey, label, selection, pinned } = selected
     this.turnPins.set(request.turnId, {
       client,
       pinKey,
@@ -184,11 +205,15 @@ export class MultiProviderModelClient implements ModelClient {
     })
     const pin = this.turnPins.get(request.turnId)!
     this.pruneTurnPins()
-    const admitted = { ...request, beforeProviderDispatch: async () => {
+    const assertCurrent = () => {
       const current = providerId === 'default' && !request.gatewayRouting ? this.default_ : this.providers.get(providerId)
       if (!pin.admitted && current !== client) throw new GatewayRouteChangedError()
+    }
+    const admitted = { ...request, beforeProviderDispatch: async () => {
+      assertCurrent()
       if (this.dispatchAuthority) await this.dispatchAuthority()
       await request.beforeProviderDispatch?.()
+      assertCurrent()
       pin.admitted = true
     } }
     const admission = this.admission.get(providerId === 'default' ? this.defaultProviderId : providerId)

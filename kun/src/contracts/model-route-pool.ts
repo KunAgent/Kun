@@ -206,6 +206,8 @@ export type ModelFailureMetadata = {
   reason?: ModelFailureReason
   /** True only when the provider supplied an HTTP or protocol-level error response. */
   responseReceived?: boolean
+  /** False only when this failed attempt stopped before invoking the transport. */
+  requestSent?: boolean
   httpStatus?: number
   providerCode?: string
   retryAfterMs?: number

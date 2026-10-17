@@ -6,10 +6,13 @@ const Page = { cursor: z.string().max(2048).optional(), limit: z.number().int().
 const Thread = { threadId: Id }
 const Revision = z.string().regex(/^thread-v1:(0|[1-9][0-9]{0,15})$/)
 const Mutation = { ...Thread, expectedRevision: Revision }
+/** Echo of a catalog route's opaque `routeKey` (remote protocol 0.17); resolved server side. */
+const RouteKey = z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/)
 export const RouteSchema = z.object({
   model: z.string().min(1).max(512), harnessId: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
   providerId: z.string().min(1).max(128).optional(),
+  routeKey: RouteKey.optional(),
   // Checked against the chosen model's catalog profile server side.
   reasoningEffort: TurnReasoningEffortSchema.optional()
 }).strict()
@@ -41,6 +44,7 @@ export const CodeTaskParamSchemas = {
       harnessId: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/).optional(),
       credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
       providerId: z.string().min(1).max(128).optional(),
+      routeKey: RouteKey.optional(),
       reasoningEffort: TurnReasoningEffortSchema.optional()
     })
     .strict(),

@@ -87,9 +87,9 @@ case 'code.create': {
             .slice(0, 32)
         const old = await runtime.threadService.get(id)
         if (old) return { thread: old }
-        const { harnessId, credentialMode, providerId, model, reasoningEffort } =
+        const { harnessId, credentialMode, providerId, gatewayBinding, model, reasoningEffort } =
           await this.route(p)
-        const explicit = Boolean(p.harnessId || p.credentialMode || p.providerId)
+        const explicit = Boolean(p.harnessId || p.credentialMode || p.providerId || p.routeKey)
         const thread = await runtime.threadService.create(
           CreateThreadRequest.parse({
             title: p.title,
@@ -98,6 +98,8 @@ case 'code.create': {
             ...(explicit ? { harnessId } : {}),
             ...(credentialMode ? { credentialMode } : {}),
             ...(providerId ? { providerId } : {}),
+            // Stored on the task route, where each new turn's admission reads and freezes it.
+            ...(gatewayBinding ? { gatewayBinding } : {}),
             ...(reasoningEffort ? { reasoningEffort } : {}),
             agentSurface: 'code',
             workspaceMode: 'code'

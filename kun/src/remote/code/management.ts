@@ -6,7 +6,7 @@ import type { TurnReasoningEffort } from '../../contracts/turn-reasoning.js'
 import { ThreadRevisionConflict } from '../../domain/thread-revision-conflict.js'
 import { TaskExecutionConfigConflict } from '../../services/thread-service-execution-config.js'
 import { encodeThreadCursor } from '../../domain/thread-list-query.js'
-import { codeAgents, resolveCodeRoute, type CodeRouteChoice } from './model-catalog.js'
+import { codeAgents, gatewayRouteKey, resolveCodeRoute, type CodeRouteChoice, type CodeRoutePick } from './model-catalog.js'
 import { isRemoteCodeAllowed, requireCode } from './access.js'
 import { projects } from '../files/project-directory.js'
 import { cursorScope, readCursor, writeCursor } from '../cursor-codec.js'
@@ -152,8 +152,10 @@ export class RemoteCodeManagement {
     const value = await this.runtime.threadService.getExecutionConfig(id)
     if (!value) throw new Error('NOT_FOUND')
     const agents = await codeAgents(this.runtime, await this.legacyModels())
-    const route = (r: typeof value.current.route): CodeRouteChoice => ({ model: r.model, harnessId: r.harnessId ?? 'kun',
+    // The phone sees a gateway route only by the key its catalog lists, never the binding itself.
+    const route = (r: typeof value.current.route): Omit<CodeRouteChoice, 'gatewayBinding'> & { routeKey?: string } => ({ model: r.model, harnessId: r.harnessId ?? 'kun',
       ...(r.providerId ? { providerId: r.providerId } : {}), ...(r.credentialMode ? { credentialMode: r.credentialMode } : {}),
+      ...(r.gatewayBinding && r.credentialMode === 'kun-gateway' ? { routeKey: gatewayRouteKey({ harnessId: r.harnessId ?? 'kun', credentialMode: r.credentialMode, gatewayBinding: r.gatewayBinding }) } : {}),
       ...(r.reasoningEffort ? { reasoningEffort: r.reasoningEffort } : {}) })
     return { threadId: id, revision: value.revision, effective: route(value.current.route),
       next: route((value.pending ?? value.current).route), agents,
@@ -174,15 +176,16 @@ export class RemoteCodeManagement {
     }
     return this.settings(p.threadId)
   }
-  private async offeredRoute(pick: { model: string; harnessId?: string; credentialMode?: string; providerId?: string; reasoningEffort?: TurnReasoningEffort }) {
+  private async offeredRoute(pick: CodeRoutePick & { model: string; reasoningEffort?: TurnReasoningEffort }) {
     const models = await this.legacyModels(), agents = await codeAgents(this.runtime, models)
     const agent = agents.find((entry) => entry.id === (pick.harnessId ?? 'kun'))
     if (!agent) throw new RemoteNoEffect('AGENT_NOT_AVAILABLE')
-    const route = agent.routes.find((entry) => entry.models.includes(pick.model) &&
+    // A keyed (gateway) route is chosen only by its key; an unkeyed pick never lands on one.
+    const route = agent.routes.find((entry) => entry.models.includes(pick.model) && entry.routeKey === pick.routeKey &&
       (pick.providerId === undefined || entry.providerId === pick.providerId) &&
       (pick.credentialMode === undefined || entry.credentialMode === pick.credentialMode))
     if (!route) throw new RemoteNoEffect('MODEL_NOT_AVAILABLE')
-    return resolveCodeRoute(this.runtime, { model: pick.model, harnessId: agent.id,
-      credentialMode: route.credentialMode, providerId: route.providerId, reasoningEffort: pick.reasoningEffort }, models)
+    return resolveCodeRoute(this.runtime, { model: pick.model, harnessId: agent.id, credentialMode: route.credentialMode,
+      providerId: route.providerId, routeKey: route.routeKey, reasoningEffort: pick.reasoningEffort }, models)
   }
 }

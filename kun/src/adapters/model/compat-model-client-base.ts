@@ -184,7 +184,8 @@ export class CompatModelClientBase {
     }
     try { if (trace.beforeProviderDispatch) await trace.beforeProviderDispatch() } catch {
       return { kind: 'error', code: 'provider_configuration_changed', message: 'Provider configuration changed before dispatch; retry with the current configuration.',
-        failure: { category: 'request', reason: 'request', httpStatus: 503, failoverAllowed: false } }
+        failure: { category: 'request', reason: 'request', requestSent: false,
+          responseReceived: false, failoverAllowed: false } }
     }
     if (trace.gatewayRouting) {
       try {
