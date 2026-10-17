@@ -45,6 +45,7 @@ import { AcpDraftEmitter } from './acp-turn-emitter.js'
 import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
 import { acpSubagentSource } from './acp-subagent-source.js'
 import { openCodeDatabasePath, startOpenCodeChildSessions } from './opencode-child-sessions.js'
+import { devinSessionDatabasePath } from './devin-session-usage.js'
 import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
@@ -235,6 +236,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     const conn = lease.connection
     const subagentSource = acpSubagentSource(definition.id)
     const childSessionDb = openCodeDatabasePath(definition.id, { ...process.env, ...definition.launch?.env })
+    const devinSessionDb = devinSessionDatabasePath(definition.id, { ...process.env, ...definition.launch?.env })
     const mapper = new AcpEventMapper({
       ...(subagentSource ? { subagents: { source: subagentSource, mirrorSteps: Boolean(childSessionDb) } } : {}),
       threadId,
@@ -512,6 +514,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       companions = startAcpTurnCompanions({
         harnessId: definition.id, threadId, turnId, model: model ?? 'default', acpSessionId: session.sessionId,
         ...(childSessionDb ? { sessionDbPath: childSessionDb } : {}),
+        ...(devinSessionDb ? { devinSessionDbPath: devinSessionDb } : {}),
         gatewayMetered: credentialMode === 'kun-gateway', ...(guidance ? { guidance } : {}),
         emitLive: (drafts) => {
           mapper.observedFacts.sawUsageTokens = true

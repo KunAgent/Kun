@@ -1,6 +1,6 @@
 import { EngagementSync } from '../engagement/service'
 import { guestStorage } from '../engagement/guest-storage'
-import type { ArtAccountAccess } from '../art-assets/account-access'
+import type { AccountSessionEnding, ArtAccountAccess } from '../art-assets/account-access'
 import type { KunAccountState } from '../../shared/kun-account'
 import { writeFile } from 'node:fs/promises'
 import { validateSharePosterSave } from '../kun-account/share-poster-save'
@@ -35,6 +35,7 @@ const object = <T>(value: unknown): T => {
 
 export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null, runtimeRequest: RuntimeCall): ArtAccountAccess {
   const listeners = new Set<(state: KunAccountState) => void>()
+  const endingListeners = new Set<(session: AccountSessionEnding) => Promise<void>>()
   // Created lazily: startup never prompts for the OS credential store.
   let service: KunAccountService | undefined
   let wardrobe: AccountWardrobeSync | undefined
@@ -56,6 +57,7 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
       storage: createAccountStorage(join(app.getPath('userData'), 'kun-account', KUN_ACCOUNT_CLIENT_ID, 'session.v1.json'), safeStorage),
       listen: listenForAccountCode,
       openBrowser: (url) => shell.openExternal(url),
+      sessionEnding: async (session) => { await Promise.allSettled([...endingListeners].map(listener => listener(session))) },
       changed: (state) => {
         for (const listener of listeners) listener(state)
         wardrobe?.accountChanged(state)
@@ -131,7 +133,8 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
   })
   return {
     getState: () => account().getState(), accessToken: force => account().accessToken(force), expire: () => account().expire(),
-    onState: listener => { listeners.add(listener); return () => { listeners.delete(listener) } }
+    onState: listener => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    onSessionEnding: listener => { endingListeners.add(listener); return () => { endingListeners.delete(listener) } }
   }
 
 }

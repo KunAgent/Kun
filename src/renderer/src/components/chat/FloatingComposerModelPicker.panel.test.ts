@@ -91,8 +91,31 @@ describe('composer model and reasoning control', () => {
     await act(async () => trigger.click())
     const sections = [...document.querySelectorAll('[data-model-provider-section]')].map((node) => node.getAttribute('aria-label'))
     expect(sections).toEqual(['OpenAI', 'OpenCode Zen'])
+    // Control for the group test below: provider sections do carry a brand mark.
+    expect(document.querySelectorAll('[data-model-provider-section] [data-provider-icon]').length).toBeGreaterThan(0)
     expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent)).toEqual(['GPT-6-LUNA', 'GPT-6-SOL', 'big-pickle', 'exo-free'])
     expect(document.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('title')).toBe('OpenCode Zen/big-pickle (opencode/big-pickle)')
+  })
+
+  it('groups an Agent catalog by its own option groups so same-named models stay distinguishable', async () => {
+    const route = (name: string, model: string) => `["${name}","${model}"]`
+    const rows = [
+      [route('deepseek-official', 'deepseek-v4-flash'), 'deepseek-v4-flash', 'DeepSeek'],
+      [route('deepseek-official', 'deepseek-flash'), 'DeepSeek-V4.1-Flash', 'DeepSeek'],
+      [route('deepseek-account', 'deepseek-flash'), 'DeepSeek-V4.1-Flash', 'DeepSeek Account'],
+      [route('deepseek-account', 'deepseek-v4-pro'), 'DeepSeek-V4-Pro', 'DeepSeek Account']
+    ] as const
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'DeepSeek Harness account', nativeHarnessId: 'deepseek-harness',
+      modelIds: rows.map(([id]) => id), modelInfo: Object.fromEntries(rows.map(([id, displayName, section]) => [id, { id, displayName, group: section }])) }
+    const trigger = await renderPicker({ composerModel: rows[2][0], composerProviderId: group.providerId, composerModelGroups: [group] })
+    await act(async () => trigger.click())
+    expect([...document.querySelectorAll('[data-model-provider-section]')].map((node) => node.getAttribute('aria-label'))).toEqual(['DeepSeek', 'DeepSeek Account'])
+    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent)).toEqual(rows.map(([, name]) => name))
+    // Group headings carry no provider brand mark: they are routes, not providers.
+    expect(document.querySelectorAll('[data-model-provider-section] [data-provider-icon]')).toHaveLength(0)
+    const selected = document.querySelectorAll('[role="menuitemradio"][aria-checked="true"]')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]!.closest('[data-model-provider-section]')?.getAttribute('aria-label')).toBe('DeepSeek Account')
   })
 
   it('opens one panel with reasoning segments above the model list', async () => {

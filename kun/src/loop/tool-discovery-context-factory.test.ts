@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
+import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
 import { createApprovalRequest } from '../domain/approval.js'
 import type { ToolTurnContextInput } from './turn-execution-types.js'
 import {
@@ -36,6 +37,23 @@ function turnContextInput(signal: AbortSignal): ToolTurnContextInput {
 }
 
 describe('createToolDiscoveryContext', () => {
+  it('fences the host-reserved Gmail model before its first request without guessing other providers', async () => {
+    const signal = new AbortController().signal
+    const input = { ...turnContextInput(signal), modelProviderId: 'kun-gmail-local', threadMode: 'agent' as const,
+      activePlanContext: undefined, allowedToolNames: undefined }
+    const context = createToolDiscoveryContext(input, {
+      memoryEnabled: false, interactiveToolBridge: { awaitUserInput: vi.fn() }
+    })
+    const make = (name: string) => LocalToolHost.defineTool({ name, description: name, inputSchema: {}, policy: 'auto',
+      execute: async () => ({ output: 'not executed' }) })
+    const native = ['gmail_connect', 'gmail_search', 'gmail_read', 'gmail_send']
+    const host = new LocalToolHost({ registry: new CapabilityRegistry([
+      { id: 'gmail', kind: 'built-in', enabled: true, available: true, tools: native.map(make) },
+      { id: 'builtin', kind: 'built-in', enabled: true, available: true, tools: [make('bash'), make('web_search')] }
+    ]) })
+    expect(context.modelProviderId).toBe('kun-gmail-local')
+    expect((await host.listTools(context)).map((spec) => spec.name)).toEqual(native)
+  })
   it('keeps approval inert while retaining schema visibility inputs', async () => {
     const signal = new AbortController().signal
     const awaitUserInput = vi.fn(async () => ({ status: 'submitted' as const, answers: [] }))

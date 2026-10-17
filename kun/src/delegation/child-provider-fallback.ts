@@ -41,6 +41,7 @@ export type ChildExecutionArgs = {
   returnFormat: ChildReturnFormat
   fastContext: boolean
   fastContextTasks: readonly import('./fast-context-evidence.js').FastContextTask[] | undefined
+  fastContextHintPaths?: readonly string[] | undefined
   queueTimeoutMs: number | undefined
   workspace: string | undefined
   security: ChildSecuritySnapshot | undefined

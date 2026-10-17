@@ -149,6 +149,10 @@ export class ManagerWorkerDispatch {
         ...(intent.target?.workerIds?.[0] ? { workerId: intent.target.workerIds[0] } : {}),
         ...(intent.target?.dispatchIds?.[0] ? { dispatchId: intent.target.dispatchIds[0] } : {}),
         route: first.input.agent,
+        ...(['failed', 'cancelled', 'running'].includes(intent.state) ? {} : {
+          followUp: `No worker exists yet. Check dispatch_intent_status with intentId=${intent.intentId} before ` +
+            'telling the user it is running; a refusal or failed start also arrives as a worker notice.'
+        }),
         userReport: intent.state === 'cancelled' ? 'Dispatch cancelled. No new work will start.'
           : intent.state === 'failed' ? intent.error ?? 'Automatic dispatch review failed.'
           : intent.state === 'pending_confirmation' ? 'Dispatch saved. Waiting for your confirmation.'

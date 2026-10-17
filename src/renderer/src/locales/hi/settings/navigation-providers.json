@@ -310,6 +310,8 @@
   "cursorSpotlightColorReset": "डिफ़ॉल्ट",
   "cursorSpotlightColorShade": "Interaction effect shade {{index}}",
   "cursorSpotlightColorTone": "इंटरेक्शन प्रभाव टोन बार",
+  "homeGlyphRipple": "होम क्लिक लहरें",
+  "homeGlyphRippleDesc": "Code के नए कार्य होम के पीछे हल्का अक्षर-पटल दिखाएँ; खाली जगह पर क्लिक करने से लहर फैलती है।",
   "darkUiColorsTitle": "डार्क इंटरफ़ेस रंग",
   "darkUiColorsBackground": "पृष्ठभूमि",
   "darkUiColorsBackgroundDesc": "ऐप, साइडबार, कैनवास और घोस्ट सतहों का मूल रंग।",

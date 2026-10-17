@@ -16,7 +16,9 @@ import { useTimelineScroll } from './use-timeline-scroll'
 import { useTimelineTurnTargetBlocks } from './thread-turn-target'
 import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
 import { useTimelineFindJump } from './use-timeline-find-jump'
-import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
+import {
+  MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint, shouldShowTimelineEmptyHero
+} from './message-timeline-empty'
 import { WorkerControlBanner } from '../workers/WorkerControlBanner'
 import {
   activeTimelineTurnIndex,
@@ -395,7 +397,12 @@ export function MessageTimeline({
         timelineBottomPaddingClass()
       }`}>
         {activeThread?.historyRefId ? <SourceHistoryCard referenceId={activeThread.historyRefId} /> : null}
-        {(!hasContent && !activeThread?.historyRefId) || !activeThreadId ? (
+        {shouldShowTimelineEmptyHero({
+          hasContent: Boolean(hasContent),
+          hasHistoryReference: Boolean(activeThread?.historyRefId),
+          activeThreadId,
+          route: heroRoute
+        }) ? (
           <MessageTimelineEmptyHero
             route={heroRoute}
             ready={runtimeConnection === 'ready'}

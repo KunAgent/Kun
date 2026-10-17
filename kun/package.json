@@ -1,6 +1,6 @@
 {
   "name": "kun",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Kun local HTTP/SSE agent runtime",
   "engines": {
     "node": ">=22.19.0"
@@ -68,6 +68,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test ./scripts/runtime-build-manifest.test.mjs && node ./scripts/run-tests.mjs",
     "test:memory-growth": "node ./scripts/run-memory-growth-regression.mjs",
+    "bench:fast-context": "node ./scripts/fast-context-benchmark.mjs",
     "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts src/memory/semantic-memory-evaluation-dataset.test.ts src/memory/semantic-memory-evaluation-v2-dataset.test.ts src/memory/semantic-memory-evaluation.test.ts src/memory/semantic-memory-evaluation-comparison.test.ts src/memory/semantic-memory-terminology-candidate.test.ts src/memory/semantic-memory-evaluation-v2-workflow.test.ts src/memory/semantic-memory-evaluation-v2-evidence.test.ts src/memory/semantic-memory-vector-candidate.test.ts src/memory/semantic-memory-candidate-fallback.test.ts src/memory/semantic-memory-evaluation-decision.test.ts src/memory/semantic-memory-evaluation-evidence.test.ts --reporter=verbose",
     "test:watch": "vitest",
     "transcript:diff": "node ./scripts/transcript-diff.mjs",
@@ -89,6 +90,7 @@
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
+    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.18.0.tgz",
     "@modelcontextprotocol/client": "^2.2.0",
     "@xmldom/xmldom": "^0.9.12",
     "ajv": "^8.20.0",

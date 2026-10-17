@@ -15,10 +15,12 @@ export type ToolDetailsContentProps = {
   presentation: ToolPresentation
   workspaceRoot?: string
   expanded?: boolean
+  /** Approval previews: the tool has not run, so skip identity/cwd/"waiting" chrome the card already states. */
+  approval?: boolean
 }
 
 /** Shared by tool rows and approvals. Evidence never executes HTML or fetches remote media. */
-export function ToolDetailsContent({ presentation: p, workspaceRoot = '', expanded = false }: ToolDetailsContentProps): ReactElement {
+export function ToolDetailsContent({ presentation: p, workspaceRoot = '', expanded = false, approval = false }: ToolDetailsContentProps): ReactElement {
   const { t } = useTranslation('common')
   const [showAllResults, setShowAllResults] = useState(false)
   const [showAllContent, setShowAllContent] = useState(false)
@@ -53,7 +55,7 @@ export function ToolDetailsContent({ presentation: p, workspaceRoot = '', expand
   const shownContent = showAllContent ? content : content.slice(0, expanded ? 40 : 10)
   return (
     <div className="flex min-w-0 flex-col gap-3 text-[12px] text-ds-ink" data-tool-details-content data-tool-kind={p.kind}>
-      {p.server || (['unknown', 'mcp'].includes(p.kind) && p.name) ? <div className="break-all font-mono text-ds-muted" data-tool-identity>{[p.server, p.name].filter(Boolean).join(' / ')}</div> : null}
+      {!approval && (p.server || (['unknown', 'mcp'].includes(p.kind) && p.name)) ? <div className="break-all font-mono text-ds-muted" data-tool-identity>{[p.server, p.name].filter(Boolean).join(' / ')}</div> : null}
       {fileLocations.length ? <div className="flex flex-wrap gap-2">{fileLocations.map((location, index) => (
         <ToolFileLink key={`${location.path}:${index}`} path={location.path} line={location.line} workspaceRoot={workspaceRoot} />
       ))}</div> : null}
@@ -61,7 +63,7 @@ export function ToolDetailsContent({ presentation: p, workspaceRoot = '', expand
         {p.offset !== undefined ? `${t('toolDetails.offset')}: ${p.offset}` : ''}
         {p.limit !== undefined ? ` ${t('toolDetails.limit')}: ${p.limit}` : ''}
       </div> : null}
-      {p.cwd ? <div className="break-all text-ds-muted">{t('toolDetails.cwd')}: <span className="font-mono">{p.cwd}</span></div> : null}
+      {p.cwd && (!approval || p.command) ? <div className="break-all text-ds-muted">{t('toolDetails.cwd')}: <span className="font-mono">{p.cwd}</span></div> : null}
       {p.query ? <div className="whitespace-pre-wrap break-words"><span className="text-ds-muted">{t('toolDetails.query')}: </span>{p.query}</div> : null}
       {p.url ? <ToolExternalLink url={p.url}>{p.url}</ToolExternalLink> : null}
       {p.statusCode !== undefined ? <div className={p.statusCode >= 400 ? 'text-orange-700 dark:text-orange-300' : 'text-ds-muted'}>{t('toolDetails.status', { code: p.statusCode })}</div> : null}
@@ -95,7 +97,7 @@ export function ToolDetailsContent({ presentation: p, workspaceRoot = '', expand
       {shownContent.map((item, index) => <ToolRichEvidence key={index} item={item} expanded={expanded} truncated={p.truncated} workspaceRoot={workspaceRoot} />)}
       {shownContent.length < content.length ? <ShowMore onClick={() => setShowAllContent(true)} /> : null}
       {p.error ? <ToolPayloadSection title={t(p.state === 'canceled' ? 'toolStateCanceled' : 'toolDetails.error')} value={p.error} expanded={expanded} defaultOpen tone={p.state === 'failed' ? 'error' : undefined} /> : null}
-      {!hasSemanticBody && p.output === undefined && !p.error ? <p className="text-ds-muted">{t(p.state === 'running' || p.state === 'pending' ? 'toolDetails.waiting' : 'toolDetails.empty')}</p> : null}
+      {!approval && !hasSemanticBody && p.output === undefined && !p.error ? <p className="text-ds-muted">{t(p.state === 'running' || p.state === 'pending' ? 'toolDetails.waiting' : 'toolDetails.empty')}</p> : null}
       {p.truncated ? <p className="text-ds-muted">{t('toolDetails.truncated')}</p> : null}
       {p.input !== undefined ? <ToolPayloadSection title={t('toolDetails.input')} value={p.input} expanded={expanded} /> : null}
       {p.output !== undefined ? <ToolPayloadSection title={t('toolDetails.output')} value={p.output} expanded={expanded} defaultOpen={!hasSemanticBody && !p.error} /> : null}

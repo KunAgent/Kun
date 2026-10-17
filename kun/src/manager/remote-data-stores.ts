@@ -1,3 +1,4 @@
+import { referenceUnchangedItems } from './session-history-rewrite.js'
 import { MemoryErasureIncompleteError } from '../memory/memory-erasure-error.js'
 import { MemoryLifecycleResult, MemoryHistoryResult, type MemoryLifecycleRequest } from '../contracts/memory-lifecycle.js'
 import { MemoryRevisionConflictError } from '../memory/memory-revisions.js'
@@ -198,6 +199,9 @@ export function createManagerRemoteStores(manager: ServiceManagerConnection): {
 }
 
 export class ManagerRemoteSessionStore implements SessionStore {
+  async itemHistoryVersion(threadId: string): Promise<string> {
+    return z.string().parse(await this.call('itemHistoryVersion', { threadId }))
+  }
   /** Used by the HTTP SSE route to bridge events emitted by the other flavor. */
   readonly isManagerBacked = true
 
@@ -240,10 +244,12 @@ export class ManagerRemoteSessionStore implements SessionStore {
     expectedRevision: number,
     items: TurnItemValue[]
   ): Promise<ItemHistoryCommit> {
+    const snapshot = await this.loadItemSnapshot(threadId)
+    if (snapshot.revision !== expectedRevision) {
+      return { applied: false, reason: 'conflict', revision: snapshot.revision }
+    }
     return ItemCommitSchema.parse(await this.call('rewriteItemsIfRevision', {
-      threadId,
-      expectedRevision,
-      items
+      threadId, expectedRevision, itemReferences: referenceUnchangedItems(snapshot, items)
     }))
   }
 

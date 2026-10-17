@@ -146,4 +146,39 @@ describe('Kun account desktop service', () => {
     expect(await f.service.accessToken()).toBeNull()
   })
 
+  it('provides the ending identity before deleting credentials and fences token access during logout', async () => {
+    const f = fixture(tokens)
+    await f.service.getState()
+    let release!: () => void
+    f.deps.sessionEnding = vi.fn(() => new Promise<void>((done) => { release = done }))
+    const logout = f.service.logout()
+    await tick()
+    expect(f.deps.sessionEnding).toHaveBeenCalledWith({ userId: user.id, accessToken: 'secret-access' })
+    expect(f.stored()).toEqual(tokens)
+    expect(await f.service.accessToken()).toBeNull()
+    release()
+    await logout
+    expect(f.stored()).toBeNull()
+    expect(f.deps.transport.logout).toHaveBeenCalledWith('secret-access')
+  })
+
+  it('ends remote authorization before switching the account through another login', async () => {
+    const f = fixture(tokens)
+    await f.service.getState()
+    f.deps.sessionEnding = vi.fn(async () => {})
+    await f.service.login()
+    expect(f.deps.sessionEnding).toHaveBeenCalledWith({ userId: user.id, accessToken: 'secret-access' })
+    expect(await f.service.accessToken()).toBeNull()
+    expect(f.service.snapshot().status).toBe('authorizing')
+  })
+
+  it('continues local logout if a cleanup listener rejects', async () => {
+    const f = fixture(tokens)
+    await f.service.getState()
+    f.deps.sessionEnding = vi.fn(async () => { throw new Error('offline') })
+    await f.service.logout()
+    expect(f.stored()).toBeNull()
+    expect(f.service.snapshot().status).toBe('anonymous')
+  })
+
 })

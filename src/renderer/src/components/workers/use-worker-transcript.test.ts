@@ -67,6 +67,21 @@ describe('visible worker transcript subscription', () => {
     expect(current.detail?.hasMoreHistory).toBe(false)
   })
 
+  it('keeps the transcript visible while a metadata or compaction reset refetches', async () => {
+    provider.getThreadDetail.mockResolvedValueOnce({
+      blocks: [{ id: 'recent', kind: 'user', text: 'recent' }], latestSeq: 7,
+      historyCursor: 'older-page', hasMoreHistory: true
+    })
+    await mount()
+    provider.getThreadDetail.mockResolvedValue({ blocks: [{ id: 'fresh', kind: 'user', text: 'fresh' }], latestSeq: 8 })
+    await act(async () => { sink.onThreadUpdated?.({ threadId: 'worker', title: 'Renamed' }) })
+    expect(current.detail?.blocks.map((block) => block.id)).toEqual(['recent'])
+    expect(current.detail?.hasMoreHistory).toBe(false)
+    expect(current.detail?.historyCursor).toBeUndefined()
+    await act(async () => { await vi.advanceTimersByTimeAsync(600) })
+    expect(current.detail?.blocks.map((block) => block.id)).toEqual(['fresh'])
+  })
+
   it('discards a late response after the preview changes thread', async () => {
     let finish!: (value: unknown) => void
     provider.getThreadDetail.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))

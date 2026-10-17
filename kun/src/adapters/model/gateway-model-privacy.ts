@@ -8,6 +8,8 @@ const GATEWAY_DIAGNOSTICS: Record<string, string> = {
   model_context_limit_exceeded: 'Estimated request input leaves no output room in the selected model context. Shorten the request.',
   paper_request_budget_exhausted: 'Paper reading permits one upstream request; explicitly submit again to retry.',
   provider_configuration_changed: 'Provider configuration is not active. Retry after settings finish applying.' ,
+  google_data_provider_not_approved: 'Gmail requires current sharing permission for this private conversation.',
+  gmail_conversation_permission_changed: 'Gmail sharing changed before this model request. Enable it for this private conversation to continue.',
   token_budget_exceeded: 'Gateway client token budget exhausted.',
   cost_limit_exceeded: 'Gateway client estimated cost limit reached for this period.',
   token_budget_unbounded: 'This request has no declared conservative token bound. Check the account input ceiling and maximum output.',

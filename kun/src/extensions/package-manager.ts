@@ -1,3 +1,5 @@
+import * as enablement from './package-manager-enablement.js'
+import type { EnablementControl } from './enablement-control.js'
 import { randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, readdir, rename, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -285,27 +287,18 @@ export class ExtensionPackageManager {
     })
   }
 
-  async setGlobalEnabled(extensionId: string, enabled: boolean): Promise<void> {
-    await this.recover(extensionId)
-    await this.serializeExtension(extensionId, async () => {
-      if (!enabled) await this.lifecycle.beforeDisable?.(extensionId)
-      await this.registry.setGlobalEnabled(extensionId, enabled)
-    })
+  async setGlobalEnabled(extensionId: string, enabled: boolean, control?: EnablementControl): Promise<void> {
+    return enablement.setGlobalEnabled(this.enablementDependencies(), extensionId, enabled, control)
   }
 
-  async setWorkspaceEnabled(
-    extensionId: string,
-    workspaceKey: string,
-    enabled: boolean | undefined,
-    workspaceRoot?: string
-  ): Promise<void> {
-    await this.recover(extensionId)
-    await this.serializeExtension(extensionId, async () => {
-      if (enabled === false) {
-        await this.lifecycle.beforeDisable?.(extensionId, workspaceKey, workspaceRoot)
-      }
-      await this.registry.setWorkspaceEnabled(extensionId, workspaceKey, enabled)
-    })
+  async setWorkspaceEnabled(extensionId: string, workspaceKey: string, enabled: boolean | undefined, workspaceRoot?: string): Promise<void> {
+    return enablement.setWorkspaceEnabled(this.enablementDependencies(), extensionId, workspaceKey, enabled, workspaceRoot)
+  }
+
+  private enablementDependencies() {
+    return { registry: this.registry, recover: (id: string) => this.recover(id),
+      serialize: <T>(id: string, work: () => Promise<T>) => this.serializeExtension(id, work),
+      beforeDisable: this.lifecycle.beforeDisable?.bind(this.lifecycle) }
   }
 
   async setWorkspacePermissionGrant(

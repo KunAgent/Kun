@@ -65,7 +65,8 @@ export type ManagerRuntimeDeps = {
   notices: WorkerNoticeSink
   threads: ThreadStore
   turns: Pick<TurnService, 'getTurn'>
-  sessionStore: Pick<SessionStore, 'loadItems'>
+  sessionStore: Pick<SessionStore, 'loadItems'> &
+    Partial<Pick<SessionStore, 'loadEventsSince' | 'iterateEventsSince'>>
   taskWorkspaces?: TaskWorkspaceService
   activity?: ActivityStore
   /** Absent when subagents are disabled; worker creation then refuses. */

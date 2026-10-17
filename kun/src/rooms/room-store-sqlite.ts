@@ -72,6 +72,7 @@ export class SqliteRoomStore implements RoomStore {
     if (parsed.activityOnly && kind !== 'task' && kind !== 'integration' && kind !== 'request') {
       throw new z.ZodError([{ code: 'custom', path: ['activityOnly'], message: 'activity projection requires a task or integration' }])
     }
+    if (parsed.privateGeneration !== undefined && kind !== 'request') throw new Error('private generation requires requests')
     const db = await this.database()
     const clauses = ['kind = ?']
     const args: (string | number)[] = [kind]
@@ -149,8 +150,18 @@ export class SqliteRoomStore implements RoomStore {
       clauses.push(`status IN (${statuses.map(() => '?').join(',')})`)
       args.push(...statuses)
     }
+    if (parsed.privateGeneration !== undefined) {
+      clauses.push("COALESCE(json_extract(document,'$.roomSnapshot.privateContextGeneration'),0)=?")
+      args.push(parsed.privateGeneration)
+    }
     args.push(parsed.limit)
-    const columns = parsed.activityOnly ? `seq,kind,id,room_id,task_id,revision,
+    if (parsed.lifecycleOnly && kind !== 'request') throw new Error('lifecycle projection requires requests')
+    const columns = parsed.lifecycleOnly ? `seq,kind,id,room_id,task_id,revision,
+      json_object('privateProtocol',json_extract(document,'$.privateProtocol'),'threadId',json_extract(document,'$.threadId'),
+        'turnId',json_extract(document,'$.turnId'),'admissionAttempted',json_extract(document,'$.admissionAttempted'),
+        'privateContinuation',json_extract(document,'$.privateContinuation.kind'),'status',status,
+        'contextGeneration',COALESCE(json_extract(document,'$.roomSnapshot.privateContextGeneration'),0),
+        'transcriptEpoch',COALESCE(json_extract(document,'$.roomSnapshot.privateEpoch'),0)) AS document` : parsed.activityOnly ? `seq,kind,id,room_id,task_id,revision,
       CASE kind WHEN 'task' THEN json_object('task',json_object('status',status,'requestId',json_extract(document,'$.task.requestId')))
       WHEN 'request' THEN json_object('status',status,'currentAttentionRequest',
         CASE WHEN ${roomCurrentAttentionRequestSql('room_documents')} THEN 1 ELSE 0 END)

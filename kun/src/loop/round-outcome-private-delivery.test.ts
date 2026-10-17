@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ToolHostContext } from '../ports/tool-host.js'
-import { completed, harness, input, prepared } from '../../tests/loop-cases/round-outcome-support.cases.js'
+import { completed, harness, input, prepared, turnId } from '../../tests/loop-cases/round-outcome-support.cases.js'
 
 const roomContext = { roomStepKind: 'conversation', roomAgent: true } as ToolHostContext
 const delivery = (phase: 'start' | 'progress' | 'none', overrides: Record<string, unknown> = {}) => prepared({
@@ -67,6 +67,19 @@ describe('private Room public response boundary', () => {
       prepared: delivery('none', { published: true, lastPhase: 'final', finalCurrent: true }),
       toolKinds: new Map([['send_im_message', 'tool_call']])
     }))).toBe('stop')
+  })
+
+  it('runs checks after a final answer and then ends without republishing or failing', async () => {
+    const h = harness({ ordinaryResults: [{ output: { stdout: '51G available' }, isError: false }] })
+    const afterFinal = delivery('none', { published: true, lastPhase: 'final', finalCurrent: true, workSinceVisible: 7 })
+    const tools = new Map([['send_im_message', 'tool_call' as const]])
+    expect(await h.coordinator.resolve(input(completed({ toolCalls: [{ callId: 'check', toolName: 'bash',
+      arguments: { command: 'df -h' } }] }), { prepared: afterFinal, toolKinds: tools }))).toBe('continue')
+    expect(h.suppressToolCalls).not.toHaveBeenCalled()
+    expect(await h.coordinator.resolve(input(completed({ text: 'Verified.' }), { prepared: afterFinal, toolKinds: tools })))
+      .toBe('stop')
+    expect(h.coordinator.imPublicationRecoverySteps(turnId)).toBe(0)
+    expect(h.failures).toEqual([])
   })
 
   it('requires a final result after an app-connection continuation without requiring a new start', async () => {

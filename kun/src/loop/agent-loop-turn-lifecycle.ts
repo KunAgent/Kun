@@ -248,6 +248,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       return finalStatus
     }
     try {
+      if (delegatedSdkRuntime) await this.opts.model.assertGoogleWorkspaceDelegatedHistory?.(
+        threadId, owningThread?.turns.flatMap((turn) => turn.items))
       goalTimer = turnRecord?.paperContext ? null : await this.goalTurns.begin(threadId)
       // Conversation members retain their engine-native gate; constrained Code
       // handoffs still require the host to enforce their inherited ceiling.

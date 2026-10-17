@@ -5,6 +5,7 @@ import type { ToolOperationJournal } from '../../reliability/operation-journal.j
 import type { CapabilityRegistry } from './capability-registry.js'
 import type { ReadTrackerOptions } from './read-tracker.js'
 import type { ToolDispatchLeaseAuthority } from './lease-grace-gate.js'
+import type { ThreadStore } from '../../ports/thread-store.js'
 
 export type ToolSideEffect = 'read-only' | 'unknown'
 
@@ -70,6 +71,8 @@ export type LocalTool = {
 }
 
 export type LocalToolHostOptions = {
+  /** Canonical host storage used to restrict conversations containing Google mail. */
+  threadStore?: ThreadStore
   tools?: LocalTool[]
   registry?: CapabilityRegistry
   /** Allow-list for `untrusted` policy. Tools outside the list always prompt. */

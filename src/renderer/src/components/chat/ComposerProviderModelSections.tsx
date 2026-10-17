@@ -4,7 +4,7 @@ import { ProviderIcon } from '../provider-icon'
 import { initialOpenProviderSections, providerSectionIconPreset, type ProviderModelSection } from './composer-provider-model-sections'
 
 /**
- * One collapsible section per model provider inside an Agent's catalog.
+ * One collapsible section per model provider (or Agent option group) inside an Agent's catalog.
  * Long catalogs open only the section holding the current model; a filter
  * query shows every matching section open.
  */
@@ -20,7 +20,8 @@ export function ComposerProviderModelSections({ sections, currentModel, filterin
     <>
       {sections.map((section) => {
         const expanded = filtering || open.has(section.key)
-        const preset = providerSectionIconPreset(section.key)
+        // An Agent's own group is a route, not a provider: keep its rows aligned without a brand mark.
+        const preset = section.kind === 'group' ? undefined : providerSectionIconPreset(section.key)
         return (
           <div key={section.key} role="group" aria-label={section.label} data-model-provider-section={section.key}>
             <button

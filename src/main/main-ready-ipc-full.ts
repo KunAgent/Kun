@@ -361,6 +361,7 @@ export function registerMainIpc(services: MainServices): void {
         const settings = await mainState.store.load()
         const lease = await acquireKunRuntimeRequestLease(settings, ensureRuntime)
         return Object.freeze({
+          baseUrl: lease.baseUrl,
           runtimeToken: lease.runtimeToken,
           request: (path: string, method?: string, body?: string, headers?: Record<string, string>) =>
             runtimeRequestOnLease(lease, path, { method, body, headers })

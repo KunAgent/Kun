@@ -1,3 +1,4 @@
+import { RemoteForkSchema, RemoteRewindSchema } from './remote-history.js'
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { ContextSnapshotEvent } from './context-snapshot.js'
@@ -31,6 +32,7 @@ import {
   ThreadCollaborationRequestSchema
 } from './thread-workbench.js'
 import { ThreadExecutionConfigSchema } from './thread-execution-config.js'
+import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 export * from './thread-timeline.js'
 export * from './thread-knowledge.js'
 export * from './thread-workbench.js'
@@ -330,6 +332,8 @@ export const ThreadSchemaBase = z.object({
   costBudgetWarningSent: z.boolean().optional(),
   relation: ThreadRelation.default('primary'),
   parentThreadId: z.string().optional(),
+  remoteFork: RemoteForkSchema.optional(),
+  remoteRewind: RemoteRewindSchema.optional(),
   /**
    * ADE execution-unit identity. Host-written only: worker threads
    * carry their team/manager binding here so stores, tools, and completion
@@ -351,6 +355,8 @@ export const ThreadSchemaBase = z.object({
   forkedFromTurnCount: z.number().int().nonnegative().optional(),
   forkedFromTurnId: z.string().min(1).optional(),
   goal: ThreadGoalSchema.optional(),
+  /** Monotonic manual goal policy generation; survives clear/recreate to prevent stale ABA writes. */
+  goalPolicyRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   todos: ThreadTodoListSchema.optional(),
   executionTasks: ExecutionTaskStateSchema.optional(),
   retentionPolicy: ThreadRetentionPolicySchema.optional(),
@@ -482,6 +488,8 @@ export const CreateThreadRequest = z.object({
   harnessId: HarnessIdSchema.optional(),
   credentialMode: HarnessCredentialModeSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
+  /** Task reasoning depth stored on an explicit route; new turns inherit it. */
+  reasoningEffort: TurnReasoningEffortSchema.optional(),
   /**
    * Owning workspace mode ('code' | 'ade'). Written by the creating client;
    * absent and legacy threads count as 'code'.

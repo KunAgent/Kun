@@ -50,7 +50,8 @@ export async function composeForwardedModelRequest(input: {
     items: forwardHistory,
     threadId: input.threadId,
     workspace: input.thread.workspace,
-    modelCapabilities: input.modelCapabilities
+    modelCapabilities: input.modelCapabilities,
+    restrictMetadata: input.thread.turns.find((turn) => turn.id === input.turnId)?.attachmentAliases !== undefined
   })
   const hasCurrentAttachmentOwner = forwardHistory.some(
     (item) => item.kind === 'user_message' && item.turnId === input.turnId &&

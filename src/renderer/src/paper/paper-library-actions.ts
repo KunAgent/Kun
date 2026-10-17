@@ -2,7 +2,6 @@ import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
 import type { PaperTranslate } from '../write/paper/paper-actions'
 import { usePaperStore } from '../write/paper/paper-store'
 import { newPaperRequestId } from '../write/paper/paper-store'
-import { openPaperUnit } from '../write/paper/paper-open-layout'
 import { PAPER_NOTES_FILE_NAME } from '@shared/paper/paper-types'
 import {
   useWriteWorkspaceStore,
@@ -101,13 +100,13 @@ export async function openLibraryEntry(
   if (!root) return
   usePaperModeStore.getState().setInfoUnitDir(entry.unitDir)
   if (entry.hasPdf && entry.meta.pdfFile) {
-    // openPaperUnit only reads `pdfFile`; pass it explicitly so the v2 meta's
-    // optional field narrows to a present value.
-    await openPaperUnit({
-      workspaceRoot: root,
-      unitDir: entry.unitDir,
-      meta: { pdfFile: entry.meta.pdfFile }
-    })
+    // Open the PDF alone; the reader layout preset below adds the NOTES split
+    // only for the notes layout, so reading mode never flashes a second group.
+    await store.openFile(
+      root,
+      writeJoinPath(writeJoinPath(root, entry.unitDir), entry.meta.pdfFile),
+      { groupId: 'primary' }
+    )
   } else {
     await store.openFile(
       root,

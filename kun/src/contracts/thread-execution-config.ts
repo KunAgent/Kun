@@ -1,13 +1,16 @@
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
+import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 
 export const ThreadExecutionRouteSchema = z.object({
   model: z.string().min(1).max(512),
   providerId: z.string().min(1).max(128).optional(),
   harnessId: HarnessIdSchema.optional(),
   credentialMode: HarnessCredentialModeSchema.optional(),
-  gatewayBinding: HarnessGatewayBindingSchema.optional()
+  gatewayBinding: HarnessGatewayBindingSchema.optional(),
+  /** Task reasoning depth for new turns; absent keeps the model default. */
+  reasoningEffort: TurnReasoningEffortSchema.optional()
 }).strict()
 export type ThreadExecutionRoute = z.infer<typeof ThreadExecutionRouteSchema>
 

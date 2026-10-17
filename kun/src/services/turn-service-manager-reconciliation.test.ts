@@ -128,6 +128,25 @@ describe('managed Runtime restart reconciliation', () => {
       })
   })
 
+  it('reports a failed orphan settlement and can retry after persistence recovers', async () => {
+    const test = await fixture(async () => null)
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.spyOn(test.threadStore, 'upsert').mockRejectedValueOnce(new Error('persistence unavailable'))
+    try {
+      expect(await test.recovered.reconcileOrphanedTurns()).toEqual([])
+      expect(warning).toHaveBeenCalledWith('[kun] orphaned turn reconciliation failed', {
+        threadId: test.started.threadId,
+        turnId: test.started.turnId,
+        error: 'persistence unavailable'
+      })
+      expect(await test.recovered.reconcileOrphanedTurns()).toEqual([{
+        threadId: test.started.threadId, turnId: test.started.turnId
+      }])
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
   it('persists a terminal code and checkpoints a Manager-settled turn without duplication', async () => {
     const test = await fixture(async () => null)
     await persistManagerSettlement(test)

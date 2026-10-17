@@ -310,6 +310,8 @@
   "cursorSpotlightColorReset": "Default",
   "cursorSpotlightColorShade": "Interaction effect shade {{index}}",
   "cursorSpotlightColorTone": "Interaction effect tone bar",
+  "homeGlyphRipple": "Home click ripples",
+  "homeGlyphRippleDesc": "Lay a faint field of characters behind the Code new-task home; clicking empty space sends a ripple through it.",
   "darkUiColorsTitle": "Dark interface colors",
   "darkUiColorsBackground": "Background",
   "darkUiColorsBackgroundDesc": "Base color for the app, sidebar, canvas, and ghost surfaces.",

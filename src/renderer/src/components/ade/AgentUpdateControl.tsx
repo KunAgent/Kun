@@ -6,6 +6,8 @@ import { AGENT_UPDATE_RUNNING, rollbackAgentUpdate, startAgentUpdate, useAgentUp
 import { invalidateHarnessModels, loadHarnessModels } from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
 import { AgentSetupHelpButton } from './AgentSetupHelpButton'
+import { AgentUpdateHelpButton } from './AgentUpdateHelpButton'
+import { agentUpdateHelpRequest } from './agent-update-help-request'
 import { AgentUpdateProgress, formatAgentUpdateElapsed } from './AgentUpdateProgress'
 import { AgentSection } from './AgentCenterParts'
 import { settingsButtonClass } from '../settings-button'
@@ -18,7 +20,7 @@ const rowClass = 'flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px
  * flight. The work itself belongs to the background runner, so this view can
  * unmount at any step; it only starts, cancels and reads.
  */
-export function AgentUpdateControl({ row, t }: { row: AdeHarnessRow; t: T }): ReactElement {
+export function AgentUpdateControl({ row, t, platform = 'darwin' }: { row: AdeHarnessRow; t: T; platform?: string }): ReactElement {
   const id = row.definition.id
   const entry = useHarnessUpdateStore((state) => state.entries[id])
   const item = useAgentUpdateRunner((state) => state.items[id])
@@ -38,6 +40,8 @@ export function AgentUpdateControl({ row, t }: { row: AdeHarnessRow; t: T }): Re
   const status = running ? t('agentUpdate.running') : checking ? t('agentUpdate.checking')
     : state?.status === 'current' ? t('agentUpdate.upToDate') : t(`agentUpdate.${state?.status ?? 'unchecked'}`)
   const checkedAt = state?.checkedAt ? t('agentUpdate.checkedAt', { time: new Date(state.checkedAt).toLocaleString() }) : ''
+  // A failed update has its own 小 Kun button, which carries the error and log.
+  const askKunUpdate = running || failed ? null : agentUpdateHelpRequest(row, state, platform)
   const rollbackJob = job?.status === 'completed' && job.previousPath && job.previousPath !== job.activationPath ? job : undefined
   const refreshModels = async (): Promise<void> => {
     setRefreshing(true)
@@ -51,12 +55,13 @@ export function AgentUpdateControl({ row, t }: { row: AdeHarnessRow; t: T }): Re
         onClick={() => void checkHarnessUpdate(id, true)} data-agent-update-check>
         <RefreshCw aria-hidden className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} strokeWidth={2} />{t('agentUpdate.check')}
       </button>}>
-      <div className="flex min-w-0 items-center gap-4 px-3 py-3.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3 px-3 py-3.5">
         <span className="shrink-0 font-mono text-[22px] font-semibold leading-7 text-ds-ink" data-agent-version>{state?.current.version ?? row.status.version ?? '—'}</span>
-        <div className="min-w-0 text-[12px] text-ds-muted">
+        <div className="min-w-0 flex-1 basis-48 text-[12px] text-ds-muted">
           <p>{state ? t(`agentUpdate.source.${state.current.source}`) : ''}{state?.current.source === 'application' && state.current.owner ? ` · ${state.current.owner}` : ''}</p>
           {state?.current.path ? <p className="mt-0.5 truncate font-mono text-[11px] text-ds-faint" title={state.current.path}>{state.current.path}</p> : null}
         </div>
+        {askKunUpdate ? <AgentUpdateHelpButton request={askKunUpdate} t={t} /> : null}
       </div>
 
       {running || failed ? <div className="space-y-3 px-3 py-3.5" data-agent-update-run={item.phase}>

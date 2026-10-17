@@ -1,3 +1,4 @@
+import { PolicyMutationRejected } from '../domain/remote-policy-revision.js'
 import { createHash } from 'node:crypto'
 import type { TurnService } from './turn-service-core.js'
 import { TurnConflictError } from './turn-service-core.js'
@@ -7,6 +8,7 @@ import { finishTurn } from '../domain/turn.js'
 import { validateAndBindImageSteeringAttachments } from '../loop/turn-steering-attachments.js'
 
 export type DurableSteerInput = {
+  requiredClientSurface?: 'api'
   threadId: string; turnId: string; operationId: string; sourceTurnId?: string
   text: string; displayText?: string; attachmentIds?: string[]
 }
@@ -35,6 +37,8 @@ export async function admitDurableSteering(service: TurnService, input: DurableS
         const thread = await service['deps'].threadStore.get(input.threadId)
         const target = thread?.turns.find((turn) => turn.id === input.turnId)
         if (!thread || !target) throw new TurnConflictError('steering_target_missing')
+        if (input.requiredClientSurface && target.clientSurface !== input.requiredClientSurface)
+          throw new PolicyMutationRejected('INVALID_REQUEST')
         const existing = target.steeringDeliveries?.find((entry) => entry.operationId === input.operationId)
         if (existing) {
           if (existing.fingerprint !== fingerprint) throw new TurnConflictError('steering_operation_conflict')

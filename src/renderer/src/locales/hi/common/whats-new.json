@@ -20,5 +20,14 @@
   "whatsNewHintReopen": "फिर दिखाएँ",
   "whatsNewSettingTitle": "इस संस्करण में नया क्या है",
   "whatsNewSettingDesc": "अपडेट के बाद पहली बार Kun खोलने पर दिखा सारांश फिर से खोलें।",
-  "whatsNewSettingOpen": "देखें"
+  "whatsNewSettingOpen": "देखें",
+  "whatsNewFocusTag": "फोकस मोड",
+  "whatsNewFocusTitle": "Kun लोगो और खाता कार्ड छिपाएँ",
+  "whatsNewFocusBody": "इसे चालू करने पर जवाब के दौरान तैरता Kun लोगो, साइडबार का खाता कार्ड, बातचीत के अवतार और Kun एनिमेशन हट जाते हैं, और केवल बातचीत रहती है।",
+  "whatsNewFocusTry": "फोकस मोड आज़माएँ",
+  "whatsNewFocusOn": "फोकस मोड चालू है",
+  "whatsNewFocusWhere": "साइडबार के नीचे \"फोकस\" स्विच से कभी भी बदलें",
+  "whatsNewFocusPreviewLogo": "Kun लोगो",
+  "whatsNewFocusPreviewAccount": "खाता कार्ड",
+  "whatsNewFocusPreviewCalm": "सिर्फ़ बातचीत"
 }

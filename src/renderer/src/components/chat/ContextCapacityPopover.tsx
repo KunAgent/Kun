@@ -32,6 +32,8 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
   const agent = agentName?.trim() || t('contextCapacityAgentFallback')
   const occupancyUnknown = capacity.nativeHistoryUnknown || capacity.windowUnknown
   const thresholdRatio = capacity.alertRatio
+  // An Agent's bare total is one figure; only its own split earns category rows.
+  const agentTotalOnly = capacity.agentReported && !capacity.agentBreakdown
   const accent = occupancyUnknown
     ? 'var(--ds-muted)'
     : stateColor(capacity.usedRatio, thresholdRatio)
@@ -98,7 +100,7 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
           role="img"
           aria-label={t('contextCapacityBarAria', { percent: formatPercent(capacity.usedRatio) })}
         >
-          {capacity.agentReported
+          {agentTotalOnly
             ? <span style={{ width: `${capacity.usedRatio * 100}%`, background: accent }} data-context-agent-segment />
             : visibleSegments.map((segment) => (
               <span
@@ -127,7 +129,7 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
       </div>
 
       <div className="flex flex-col">
-        {capacity.agentReported ? (
+        {agentTotalOnly ? (
           <div className="grid grid-cols-[13px_1fr_auto_46px] items-center gap-x-2 py-[3px]" data-context-agent-row>
             <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: accent }} />
             <span className="truncate text-[12.5px] text-ds-muted">{t('contextCapacityAgentUsed', { agent })}</span>
@@ -171,6 +173,8 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
           ? `${capacity.agentReported ? '' : t('contextCapacityEstimatedBreakdown') + ' '}${t('contextCapacityWindowPendingNote')}`
           : occupancyUnknown
           ? t('contextCapacitySdkManagedEstimate')
+          : capacity.agentBreakdown
+            ? t('contextCapacityAgentBreakdownNote', { agent })
           : capacity.agentReported
             ? t('contextCapacityAgentReportedNote', { agent })
             : t('contextCapacityEstimatedBreakdown')}

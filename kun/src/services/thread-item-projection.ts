@@ -58,13 +58,16 @@ export class ThreadItemProjectionService {
   constructor(private readonly deps: ThreadItemProjectionServiceDeps) {}
 
   async syncFromSession(threadId: string): Promise<void> {
-    await withThreadStoreMutation(this.deps.threadStore, threadId, async () => {
-      const current = await this.deps.threadStore.get(threadId)
-      if (!current) return
-      const items = await this.deps.sessionStore.loadItems(threadId)
-      const projected = projectSessionItemsOntoExistingTurns(current, items)
-      if (!projected) return
-      await this.deps.threadStore.upsert(touchThread(projected, this.deps.nowIso()))
-    })
+    await withThreadStoreMutation(this.deps.threadStore, threadId, () => this.syncWithinMutation(threadId))
+  }
+
+  /** Caller must already hold the shared thread mutation lock (for example archive compaction). */
+  async syncWithinMutation(threadId: string): Promise<void> {
+    const current = await this.deps.threadStore.get(threadId)
+    if (!current) return
+    const items = await this.deps.sessionStore.loadItems(threadId)
+    const projected = projectSessionItemsOntoExistingTurns(current, items)
+    if (!projected) return
+    await this.deps.threadStore.upsert(touchThread(projected, this.deps.nowIso()))
   }
 }

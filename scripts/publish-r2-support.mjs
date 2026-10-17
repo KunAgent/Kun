@@ -33,10 +33,14 @@ export function usage() {
   console.log(`Usage:
   node scripts/publish-r2.mjs upload --platform mac|win|linux --tag vX.Y.Z [--channel frontier|stable] [--dry-run]
   node scripts/publish-r2.mjs promote --tag vX.Y.Z [--channel frontier|stable] [--platforms mac,win,linux] [--require-all-platforms] [--dry-run]
+  node scripts/publish-r2.mjs prune [--tag vX.Y.Z] [--channel frontier|stable] [--keep N] [--keep-blockmaps N] [--dry-run]
 
 If --platforms is omitted, promote uses the platform manifests already uploaded for that tag.
 If --channel is omitted, the default channel is frontier.
 Stable and Daily CI require all three GUI platform manifests before latest promotion.
+prune deletes archived releases beyond the newest --keep uploads (stable 3, frontier 2) and
+older-version installers in latest/, keeping blockmaps for the newest --keep-blockmaps (10)
+versions. The tag published in latest.json is never deleted; --tag aborts if latest moved.
 
 Environment:
   KUN_RELEASE_ENV=scripts/release.local.env (legacy DEEPSEEK_GUI_RELEASE_ENV is also accepted)

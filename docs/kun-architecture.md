@@ -337,6 +337,19 @@ body），也可按精确 ID 显式选择，并出现在设置页与工作台右
 全局并发位，同时仍受独立 Fast Context lane 串行约束。provider-native runtime 若声明
 `kunTools: false`（当前 Antigravity CLI）则整个回合都没有 Kun 独占工具，不会静默换模型。
 
+Fast Context 检索按大仓库成本设计。父侧启动 child 前校验 `hintPaths`（父代理已知相关的
+文件或目录），并从缓存的工作区文件索引（打包 rg `--files`；无 rg 时用 `git ls-files`，再退到
+有界遍历；家目录和文件系统根不建索引）生成约 2 KB 的目录概览写入 child prompt。grep 先用
+`rg --count` 找候选文件，按路径词、任务词、定义位置和 hint 打分，只对前 12 个文件取匹配行；
+省略 path 时依次限定在 hint 路径和定义该标识符的包目录，显式 `path: "."` 才搜全仓。所有
+rg/git 进程低优先级运行，受每线程 4 路和全进程 4 路（`KUN_FAST_CONTEXT_PROCESS_SLOTS`）
+并发上限约束；递归遍历剪枝依赖、构建、缓存目录，跳过二进制和 1 MB 以上文件，并读取工作区
+`.kunignore`。工作区超过 50,000 个文件，或同一次检索已超时两次时，无 path/glob 的根目录
+grep 以 `fast_context_scope_required` 拒绝。定义索引由一次低优先级 rg 提取，持久化在 runtime
+data 目录并按 git diff 增量刷新，只用于排序和限定范围，结果总由实际搜索复核。同一次检索中
+相同的 grep/glob/read 调用复用首次结果。`npm --prefix kun run bench:fast-context` 对比旧的
+单遍 grep 与当前排序检索的命中位置和 CPU。
+
 Subagent 目录按产品 surface 分层。`shared` 是 Code、Work、Design 强制继承的
 基础池，其余 profile 可以属于一个或多个 `code` / `write` / `design` surface；
 空 surface 列表表示不参与派发。Renderer 在每个 turn 持久化 `agentSurface`，旧 turn

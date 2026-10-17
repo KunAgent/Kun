@@ -11,7 +11,7 @@ import { kunToolPermissionModeSettings, type KunToolPermissionMode } from '../co
 import { currentTurnMutationFence, runWithTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { FileAgentDispatchIntentStore } from './agent-dispatch-intent-store.js'
 import {
-  AgentDispatchConflictError, AgentDispatchService,
+  AGENT_DISPATCH_MAX_START_ATTEMPTS, AgentDispatchConflictError, AgentDispatchService,
   type AgentDispatchHandler, type AgentDispatchProposal
 } from './agent-dispatch-service.js'
 
@@ -368,6 +368,20 @@ describe('scheduler reconciliation and cancellation', () => {
     await fixture.service.reconcile(); await fixture.service.reconcile()
     expect(await fixture.service.get(intent.intentId)).toMatchObject({ state: 'uncertain' }); expect(start).toHaveBeenCalledTimes(1)
     existing = 'absent'; await fixture.service.reconcile(); expect(start).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails the card visibly once proven-absent starts keep failing', async () => {
+    const start = vi.fn(async () => { throw new Error('worktree add failed') })
+    const fixture = await setup({ start, reconcile: async () => ({ state: 'absent' }) })
+    const intent = await fixture.service.propose(proposal('ask-for-approval'))
+    await fixture.service.act(intent.intentId, { action: 'start_now', requestId: 'start', expectedRevision: intent.revision })
+    for (let round = 0; round < 6; round += 1) await fixture.service.reconcile()
+    expect(start).toHaveBeenCalledTimes(AGENT_DISPATCH_MAX_START_ATTEMPTS)
+    expect(await fixture.service.get(intent.intentId)).toMatchObject({
+      state: 'failed',
+      error: expect.stringContaining('could not start after 3 attempts and nothing was admitted. Last error: worktree add failed')
+    })
+    expect(fixture.updates.at(-1)?.state).toBe('failed')
   })
 
   it('resumes a verified partial admission using the same stable scheduler identity', async () => {

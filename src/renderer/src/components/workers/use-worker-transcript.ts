@@ -71,11 +71,16 @@ export function useWorkerTranscript(workerId: string, activityStamp: string | un
       if (!alive() || refreshTimer) return
       refreshTimer = setTimeout(() => { refreshTimer = undefined; void read() }, 600)
     }
+    // Keep the current transcript on screen until the refetch replaces it;
+    // only its stale paging cursor is dropped so "load earlier" cannot mix
+    // pre-reset history into the new snapshot.
     const resetHistory = (): void => {
       if (!alive()) return
       history.current = []
       historyPage.current = null
-      setSnapshot(null)
+      setSnapshot((previous) => previous?.workerId === workerId ? { workerId, detail: {
+        ...previous.detail, hasMoreHistory: false, historyCursor: undefined
+      } } : previous)
       schedule()
     }
     const sink: ThreadEventSink = {

@@ -1,6 +1,7 @@
 import type { PptWorkflowScope, ToolHostContext } from '../ports/tool-host.js'
 import type { ToolTurnContextInput } from './turn-execution-types.js'
 import type { InteractiveToolBridge } from './interactive-tool-bridge.js'
+import { KUN_GMAIL_LOCAL_PROVIDER_ID } from '../gmail/tool-policy.js'
 
 export type ToolDiscoveryContextFactoryDeps = {
   memoryEnabled: boolean
@@ -37,6 +38,7 @@ export function createToolDiscoveryContext(
     threadId: input.threadId,
     turnId: input.turnId,
     workspace: input.workspace,
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: input.attachmentAliases } : {}),
     ...(input.orchestration ? { orchestration: input.orchestration } : {}),
     ...(input.messageSource && input.messageSource !== 'design_continuation'
       ? { messageSource: input.messageSource }
@@ -54,6 +56,8 @@ export function createToolDiscoveryContext(
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
     ...(input.imContext ? { imContext: true } : {}),
     model: input.modelCapabilities,
+    // This host-reserved route has no routing/failover, so its discovery fence is already exact.
+    ...(input.modelProviderId === KUN_GMAIL_LOCAL_PROVIDER_ID ? { modelProviderId: KUN_GMAIL_LOCAL_PROVIDER_ID } : {}),
     ...(input.harnessId ? { harnessId: input.harnessId } : {}),
     ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
     ...(input.collaborationEnabled !== undefined

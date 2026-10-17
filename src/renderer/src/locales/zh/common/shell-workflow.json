@@ -619,7 +619,7 @@
   "ikunMode": "iKun",
   "focusMode": "专注",
   "focusModeToggleLabel": "切换专注模式",
-  "focusModeToggleTitle": "专注模式：关闭 Kun 动画",
+  "focusModeToggleTitle": "专注模式：隐藏账号卡片、对话头像和 Kun 动画",
   "switchOn": "开",
   "switchOff": "关",
   "newChat": "新建会话",

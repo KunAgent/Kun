@@ -236,6 +236,28 @@ describe('RoomDirectProgress dismissible notices', () => {
       { clientRequestId: expect.any(String) })
   })
 
+  it('keeps a failure seen during this visit but does not raise it again on a later visit', async () => {
+    const failedBox = () => renderer.root.findAllByProps({ className: 'direct-failed' })
+    const activity = (request: object) => directState({
+      data: { requests: [request], pendingCount: 0, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+    })
+    const fresh = { id: 'req-1', revision: 3, status: 'failed', error: 'Error: boom' }
+    const acknowledged = { ...fresh, revision: 4, failureAcknowledged: true }
+    await act(async () => { renderer = create(createElement(RoomDirectProgress, progressProps(activity(fresh)))) })
+    expect(failedBox()).toHaveLength(1)
+    await act(async () => { renderer.update(createElement(RoomDirectProgress, progressProps(activity(acknowledged)))) })
+    expect(failedBox()).toHaveLength(1)
+    const other = { ...room, id: 'room-2' } as Room
+    await act(async () => { renderer.update(createElement(RoomDirectProgress, { ...progressProps(directState()), room: other })) })
+    await act(async () => { renderer.update(createElement(RoomDirectProgress, progressProps(activity(acknowledged)))) })
+    expect(failedBox()).toHaveLength(0)
+    act(() => renderer.unmount())
+    await act(async () => { renderer = create(createElement(RoomDirectProgress, progressProps(activity(acknowledged)))) })
+    expect(failedBox()).toHaveLength(0)
+    await act(async () => { renderer.update(createElement(RoomDirectProgress, progressProps(activity({ ...fresh, id: 'req-2' })))) })
+    expect(failedBox()).toHaveLength(1)
+  })
+
   it('leaves an already acknowledged or unseen failure alone', async () => {
     const seen = { id: 'req-1', revision: 4, status: 'failed', error: 'Error: boom', failureAcknowledged: true }
     await act(async () => {

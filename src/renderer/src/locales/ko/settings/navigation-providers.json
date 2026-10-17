@@ -310,6 +310,8 @@
   "cursorSpotlightColorReset": "기본값",
   "cursorSpotlightColorShade": "상호작용 효과 음영 {{index}}",
   "cursorSpotlightColorTone": "상호작용 효과 톤바",
+  "homeGlyphRipple": "홈 클릭 물결",
+  "homeGlyphRippleDesc": "Code 새 작업 홈에 은은한 문자 배경을 깔고, 빈 곳을 클릭하면 물결이 퍼집니다.",
   "darkUiColorsTitle": "다크 인터페이스 색상",
   "darkUiColorsBackground": "배경",
   "darkUiColorsBackgroundDesc": "앱, 사이드바, 캔버스 및 고스트 표면의 기본 색상입니다.",

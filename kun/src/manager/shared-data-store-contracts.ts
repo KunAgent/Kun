@@ -149,6 +149,7 @@ export const MANAGER_THREAD_STORE_OPERATIONS = [
 export type ManagerThreadStoreOperation = (typeof MANAGER_THREAD_STORE_OPERATIONS)[number]
 
 export type ManagerSessionStoreOperation =
+  | 'itemHistoryVersion'
   | 'appendEvent'
   | 'appendItem'
   | 'checkpointLiveItem'

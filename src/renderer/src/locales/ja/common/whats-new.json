@@ -20,5 +20,14 @@
   "whatsNewHintReopen": "もう一度見る",
   "whatsNewSettingTitle": "このバージョンの新機能",
   "whatsNewSettingDesc": "アップデート後の初回起動時に表示された概要をもう一度開きます。",
-  "whatsNewSettingOpen": "表示"
+  "whatsNewSettingOpen": "表示",
+  "whatsNewFocusTag": "フォーカスモード",
+  "whatsNewFocusTitle": "Kun のロゴとアカウントカードを非表示に",
+  "whatsNewFocusBody": "オンにすると、返信中に泳ぐ Kun のロゴ、サイドバーのアカウントカード、会話のアバター、Kun のアニメーションがしまわれ、会話だけが残ります。",
+  "whatsNewFocusTry": "フォーカスモードを試す",
+  "whatsNewFocusOn": "フォーカスモードはオンです",
+  "whatsNewFocusWhere": "サイドバー下部の「フォーカス」スイッチでいつでも切り替えられます",
+  "whatsNewFocusPreviewLogo": "Kun ロゴ",
+  "whatsNewFocusPreviewAccount": "アカウント",
+  "whatsNewFocusPreviewCalm": "会話だけ"
 }

@@ -218,7 +218,7 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, re
           onSetBinaryPath={onSetBinaryPath} onSetLaunchPatch={onSetLaunchPatch} t={t} tSettings={tSettings} /> : null}
       </SettingsTabPanel>
       <SettingsTabPanel baseId={`agent-${id}`} tabId="version" active={tab === 'version'}>
-        {tab === 'version' ? <AgentVersionTab row={row} t={t} /> : null}
+        {tab === 'version' ? <AgentVersionTab row={row} t={t} platform={platform} /> : null}
       </SettingsTabPanel>
     </>}
     {confirmDelete && onRemoveUser ? <AgentDeleteConfirm name={definition.displayName} t={t}

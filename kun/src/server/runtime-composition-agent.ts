@@ -96,6 +96,7 @@ export async function createRuntimeAgentComposition(
   const { delegationRuntime } = registryComposition
   let prepareExtensionContributions: ((context?: ToolHostContext) => Promise<void>) | undefined
   const toolHost = new LocalToolHost({
+    threadStore,
     registry: registryComposition.registry,
     readTracker: true,
     prepare: (context) => prepareExtensionContributions?.(context),
@@ -222,7 +223,8 @@ export async function createRuntimeAgentComposition(
   const adeManagerContext = createAdeManagerContext({
     ...services.adeStores,
     harnessSummary: graphHarnessSummary,
-    canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false
+    canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false,
+    dispatchIntents: services.agentDispatchService
   })
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(

@@ -18,6 +18,18 @@ export function isNativeNetworkOnlyApply(request: RuntimeConfigApplyRequest): bo
   return present.length === 1 && present[0]![0] === 'nativeAgentNetwork'
 }
 
+/**
+ * The refresh usually carries the policy already in effect. Publishing it would
+ * still bump the options revision that fences Agent readiness proofs, so a turn
+ * admitted meanwhile failed with "Configuration or credentials changed".
+ */
+export function isUnchangedNativeNetworkApply(
+  request: RuntimeConfigApplyRequest,
+  current: Pick<KunServeRuntimeOptions, 'nativeAgentNetwork'>
+): boolean {
+  return isNativeNetworkOnlyApply(request) && isDeepStrictEqual(request.nativeAgentNetwork, current.nativeAgentNetwork)
+}
+
 type ReusableMcpProviders = {
   readonly diagnostics: ReadonlyArray<{ readonly status: string }>
 }

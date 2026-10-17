@@ -307,6 +307,15 @@ export class LegacyProviderCredentialMigrationService {
     let document = await this.markers.read(emptyDocument)
     let marker = document.entries[source.sourceId]
 
+    // A stable source id (the runtime override) follows the active provider.
+    // Its old account belongs to the previous provider and cannot be bound to
+    // the new one, so drop that marker and migrate under the new provider.
+    if (marker && marker.providerId !== source.providerId) {
+      await this.forgetOne(source.sourceId)
+      document = await this.markers.read(emptyDocument)
+      marker = document.entries[source.sourceId]
+    }
+
     if (marker?.phase === 'secure-committed' &&
       marker.secretDigest !== digestSecret(apiKey, marker.salt)) {
       await this.rollbackOne(source.sourceId)

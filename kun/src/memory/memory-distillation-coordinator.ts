@@ -1,5 +1,6 @@
 import { memoryComparisonFitsBudget } from './memory-consolidation.js'
 import { canonicalMemoryHash } from './memory-record-normalizer.js'
+import { isBoundGmailSensitiveHistory } from '../gmail/thread-data-state.js'
 import { buildTurnMemoryEvidence } from './memory-distillation-evidence.js'
 import type { TurnItem } from '../contracts/items.js'
 import {
@@ -95,6 +96,7 @@ export class MemoryDistillationCoordinator {
     const thread = await this.options.threads.get(threadId)
     const turn = thread?.turns.find((entry) => entry.id === turnId)
     if (!thread?.workspace || !turn || turn.status !== 'completed' || turn.messageSource) return []
+    if (await isBoundGmailSensitiveHistory(this.options.threads, threadId, turn.items)) return []
     const userText = turn.prompt.trim()
     const assistantText = turn.items
       .flatMap((item) => item.kind === 'assistant_text' && item.status === 'completed' ? [item.text] : [])

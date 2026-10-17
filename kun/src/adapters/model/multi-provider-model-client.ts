@@ -1,8 +1,9 @@
 import { accountModelRequest } from './request-attempt-accounting.js'
-import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import type { GoogleWorkspaceModelFence, ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 import { ProviderRequestScheduler, ProviderAdmissionError } from '../../services/provider-request-scheduler.js'
 import type { ProviderAdmission } from '../../contracts/provider-configuration.js'
+import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
 
 export type ModelClientRouterInput = {
   default: ModelClient
@@ -120,6 +121,10 @@ export class MultiProviderModelClient implements ModelClient {
     }
   }
 
+  googleWorkspaceDispatchGuard(_request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    return Object.assign(() => undefined, { mode: 'configured-models' as const, recipient: GMAIL_CONVERSATION_RECIPIENT })
+  }
+
   /** Exact review clients retain account scheduling and cannot silently adopt a replacement credential client. */
   capture(providerId?: string): ModelClient {
     const client = this.resolve(providerId)
@@ -129,11 +134,30 @@ export class MultiProviderModelClient implements ModelClient {
       assertCurrent()
       return accountModelRequest(request, (accounted) => this.streamAdmitted(client, { ...accounted, beforeProviderDispatch: async () => {
         assertCurrent(); if (this.dispatchAuthority) await this.dispatchAuthority(); await request.beforeProviderDispatch?.()
+        assertCurrent()
       } }, this.admission.get(sourceId)))
     } }
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const selected = this.selectRequest(request)
+    if (!this.dispatchAuthority) return this.streamSelected(request, selected)
+    return this.streamAfterConfiguration(request)
+  }
+
+  private async *streamAfterConfiguration(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.abortSignal.throwIfAborted()
+    // Applying an external registry revision can replace every client. Select
+    // and pin only after it finishes; this is still before any model request.
+    await this.dispatchAuthority?.()
+    request.abortSignal.throwIfAborted()
+    yield* this.streamSelected(request, this.selectRequest(request))
+  }
+
+  private selectRequest(request: ModelRequest) {
+    if (request.googleWorkspaceData) {
+      request.googleWorkspaceData.assertCurrent()
+    }
     request.paperReadOnly?.assertCurrent()
     request.gatewayRouting?.assertCurrent?.()
     const providerId = request.providerId?.trim().toLowerCase() || 'default'
@@ -166,6 +190,11 @@ export class MultiProviderModelClient implements ModelClient {
     if (!client || (request.gatewayRouting && (!request.gatewayRouting.assertCurrent || this.gatewayClients.get(providerId) !== client))) {
       throw new GatewayRouteChangedError()
     }
+    return { client, providerId, pinKey, label, selection, pinned }
+  }
+
+  private streamSelected(request: ModelRequest, selected: ReturnType<MultiProviderModelClient['selectRequest']>): AsyncIterable<ModelStreamChunk> {
+    const { client, providerId, pinKey, label, selection, pinned } = selected
     this.turnPins.set(request.turnId, {
       client,
       pinKey,
@@ -176,11 +205,15 @@ export class MultiProviderModelClient implements ModelClient {
     })
     const pin = this.turnPins.get(request.turnId)!
     this.pruneTurnPins()
-    const admitted = { ...request, beforeProviderDispatch: async () => {
+    const assertCurrent = () => {
       const current = providerId === 'default' && !request.gatewayRouting ? this.default_ : this.providers.get(providerId)
       if (!pin.admitted && current !== client) throw new GatewayRouteChangedError()
+    }
+    const admitted = { ...request, beforeProviderDispatch: async () => {
+      assertCurrent()
       if (this.dispatchAuthority) await this.dispatchAuthority()
       await request.beforeProviderDispatch?.()
+      assertCurrent()
       pin.admitted = true
     } }
     const admission = this.admission.get(providerId === 'default' ? this.defaultProviderId : providerId)

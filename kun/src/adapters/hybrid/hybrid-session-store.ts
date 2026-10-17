@@ -28,6 +28,9 @@ import type { HybridThreadStore } from './hybrid-thread-store.js'
  * the append/rewrite has succeeded.
  */
 export class HybridSessionStore implements SessionStore {
+  itemHistoryVersion(threadId: string): Promise<string> {
+    return this.delegate.itemHistoryVersion(threadId)
+  }
   private readonly delegate: FileSessionStore
   private readonly index: HybridThreadStore
 

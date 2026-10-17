@@ -82,6 +82,7 @@ import {
 import { FileTeamStore } from '../ade/team-store.js'
 import { FileDispatchStore } from '../ade/dispatch-store.js'
 import { reconcileWorkerReviewActivity } from '../ade/worker-review-activity.js'
+import { restoreWorkerActivityRows } from '../ade/worker-activity-restore.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 import { FileQuestionStore } from '../ade/question-store.js'
 import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
@@ -101,12 +102,14 @@ import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
   const agentDispatchService = createRuntimeAgentDispatch(model)
   const { core } = model
+  const gmail = model.gmail
   const { options } = core
   const {
     stores,
@@ -502,6 +505,8 @@ export async function createRuntimeServices(
     }, artifactStore),
     races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
   }
+  await restoreWorkerActivityRows({ teams: adeStores.teams, dispatches: adeStores.dispatches,
+    threads: threadStore, activity: core.activityStore, taskWorkspaces: core.taskWorkspaces })
   await reconcileWorkerReviewActivity(
     adeStores.dispatches, core.activityStore, adeStores.teams, core.taskWorkspaces
   )
@@ -529,6 +534,7 @@ export async function createRuntimeServices(
   const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
     writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
+    buildGmailToolProvider(gmail, core.threadStore, model.gmailDataPolicy),
     { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
       tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {
@@ -597,6 +603,7 @@ export async function createRuntimeServices(
 	  ]
 	  let childRegistry = new CapabilityRegistry(baseToolProviders)
   const childToolHost = new LocalToolHost({
+    threadStore,
     registry: childRegistry,
     readTracker: true,
     ...(executionLeases ? { leaseAuthority: executionLeases } : {}),
@@ -607,6 +614,7 @@ export async function createRuntimeServices(
   const defaultIsCursorSdk = process.env.KUN_RUNTIME_PROVIDER_KIND === 'cursor-sdk'
   return {
     model,
+    gmail,
     agentDispatchService,
     migrationMaintenance,
     executionLeases,

@@ -81,6 +81,8 @@ export const RoomSchema = z.object({
   privateReasoningEffort: TurnReasoningEffortSchema.optional(),
   privateWorkspace: z.string().max(4096).optional(),
   privateEpoch: z.number().int().nonnegative().optional(),
+  /** Host-owned runtime rebuild generation; unlike privateEpoch, it retains transcript continuity. */
+  privateContextGeneration: z.number().int().nonnegative().optional(),
   schemaVersion: z.literal(1),
   id: RoomIdSchema,
   name: z.string().trim().min(1).max(120),

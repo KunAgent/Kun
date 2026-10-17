@@ -11,6 +11,8 @@
     "terminalModelManaged": "Select the native model in the CLI itself. Kun does not advertise a native model catalog for this terminal integration.",
     "askKun": "Ask Kun to fix this",
     "askKunHint": "Opens a chat with Kun, prefilled with the error and log. Review it, then send.",
+    "askKunUpdate": "Ask Kun to update it",
+    "askKunUpdateHint": "Drafted in Kun's input. Press Enter to run.",
     "askKunFailed": "Couldn't open the chat with Kun: {{error}}",
     "askKunUnavailable": "Kun's private chat isn't available. Restore or start it from Conversations first.",
     "askKunOperation": {
@@ -26,6 +28,14 @@
       "current": "Currently using: {{current}}",
       "target": "Target version: {{version}}",
       "error": "Error: {{error}}",
+      "updateIntro": "Please update the third-party Agent \"{{agent}}\" on this computer to its latest version.",
+      "source": "Installed via: {{source}}",
+      "latest": "Latest version: {{version}}",
+      "localNewer": "A newer copy is already on this computer: {{version}}",
+      "versionTooLow": "Kun reports this version is too low to connect.",
+      "installCommand": "Reference install command: `{{command}}`",
+      "docs": "Docs: {{url}}",
+      "updateInstructions": "Work out how it was installed from the path and installation source, then update it the same way (for example npm install -g, brew upgrade or the Agent's own update command). Tell me which commands you plan to run before running them, and ask before deleting or overwriting files or using sudo. If it is bundled with another app, tell me how to update that app instead. Afterwards run its version command to confirm, and remind me to go back to Settings → AI assistant → Agent connections → Version and click Check for updates.",
       "log": "End of the log:",
       "instructions": "Work out the cause from the log first and tell me which commands you plan to run. Ask before deleting or overwriting files or using sudo. After the fix, verify the command runs, and remind me to go back to Settings → AI assistant → Agent connections and click Retry detection."
     }

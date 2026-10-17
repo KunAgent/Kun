@@ -1,5 +1,4 @@
 import {
-  app,
   ipcMain,
   shell
 } from 'electron'
@@ -130,6 +129,7 @@ import {
   exportMemoryMarkdown
 } from '../services/memory-export-service'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
+import { applyAppBadge, registerUserAttentionIpc } from '../user-attention'
 import {
   assertTrustedWorkbenchSender,
   parseIpcPayload,
@@ -414,15 +414,9 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   ipcMain.handle('app:badge-count', async (event, count: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     const badgeCount = parseIpcPayload('app:badge-count', appBadgeCountSchema, count)
-    if (process.platform !== 'darwin' && process.platform !== 'linux') {
-      return { applied: false }
-    }
-    try {
-      return { applied: app.setBadgeCount(badgeCount) }
-    } catch {
-      return { applied: false }
-    }
+    return { applied: applyAppBadge(badgeCount) }
   })
+  registerUserAttentionIpc(getMainWindow)
   ipcMain.handle('notification:turn-complete', async (_, payload: unknown) =>
     showTurnCompleteNotification(
       parseIpcPayload('notification:turn-complete', notificationPayloadSchema, payload)

@@ -224,6 +224,7 @@ export class LifecycleFencedThreadStore implements ThreadStore {
 
 /** Session writes use the same lifecycle lease as metadata writes. */
 export class LifecycleFencedSessionStore implements SessionStore {
+  readonly itemHistoryVersion?: SessionStore['itemHistoryVersion']
   readonly allocateEventSeq?: (threadId: string) => Promise<number>
   readonly iterateEventsSince?: (
     threadId: string,
@@ -267,6 +268,7 @@ export class LifecycleFencedSessionStore implements SessionStore {
     if (raw.allocateEventSeq) {
       this.allocateEventSeq = (threadId) => raw.allocateEventSeq!(threadId)
     }
+    if (raw.itemHistoryVersion) this.itemHistoryVersion = (id) => raw.itemHistoryVersion!(id)
     if (raw.watchEventsSince) {
       this.watchEventsSince = (threadId, sinceSeq, signal) =>
         raw.watchEventsSince!(threadId, sinceSeq, signal)

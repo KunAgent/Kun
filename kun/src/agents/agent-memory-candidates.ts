@@ -56,7 +56,8 @@ export async function decideAgentMemoryCandidate(service: AgentMemoryService, ag
       if (!service.store().createWithId) throw new Error('idempotent memory storage unavailable')
       await service.store().createWithId!(memoryId, {
         ...row.value.candidate, scope: target.scope, workspace: target.workspace, project: target.project,
-        supersedes: target.id, provenance: { kind: 'user', origin: 'agent-memory-candidate:' + candidateId },
+        supersedes: target.id, supersedesExpectedRevision: target.revision,
+        provenance: { kind: 'user', origin: 'agent-memory-candidate:' + candidateId },
         agentContext: { ...target.agentContext!, locked: true, lastOperationId: key,
           originFingerprint: createHash('sha256').update(candidateId).digest('hex') }
       })

@@ -1,3 +1,4 @@
+import { privateRequestCanRun, contextGeneration } from './agent-lifecycle-state.js'
 import { directCancellationTarget } from './agent-direct-cancellation.js'
 import { resumeStalledPrivateQueue } from './agent-direct-queue.js'
 import { freezeConversationBridge, acknowledgeConversationBridge } from './agent-conversation-history.js'
@@ -43,6 +44,7 @@ export class AgentDirectRunner {
     let request = structuredClone(row.value)
     const member = request.roomSnapshot.members.find((item) => item.id === request.roomSnapshot.defaultMemberId)!
     if (!member.participantAgentId) throw new Error('Agent identity unavailable')
+    if (!request.cancellationRequested && !await privateRequestCanRun(this.deps.store, request)) return
     if (request.privateContinuation && !request.turnId && !request.admissionAttempted &&
       !await roomContinuationIsCurrent(this.deps, request)) {
       await this.save(row, { ...request, status: 'cancelled', cancellationRequested: true,
@@ -94,6 +96,7 @@ export class AgentDirectRunner {
       const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
       const fingerprint = JSON.stringify([request.roomId, request.roomSnapshot.privateEpoch ?? 0, canonical,
+        ...(contextGeneration(request.roomSnapshot) ? ['context-generation', contextGeneration(request.roomSnapshot)] : []),
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
         profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench),
         ...(external ? [agentExecutorRouteKey(external), 'private-code-dispatch-v1'] : [])])

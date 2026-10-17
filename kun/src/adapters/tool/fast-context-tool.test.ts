@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -160,6 +160,34 @@ describe('fast_context Fast Context provider', () => {
     expect(received?.prompt).toContain('task_indexes array')
     expect(received?.systemPrompt).toContain('only use grep, glob, and read')
     expect(received?.systemPrompt).not.toContain('列目录')
+  })
+
+  it('passes validated hint paths and a workspace overview to the retrieval child', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'fast-context-hints-'))
+    const workspace = await mkdtemp(join(tmpdir(), 'fast-context-hints-ws-'))
+    try {
+      await mkdir(join(workspace, 'src', 'shared'), { recursive: true })
+      await writeFile(join(workspace, 'src', 'shared', 'url.ts'), 'export const url = 1\n')
+      await writeFile(join(workspace, 'package.json'), '{}')
+      let received: Record<string, unknown> | undefined
+      const runtime = makeRuntime(dir, async (input) => {
+        received = { ...input, signal: undefined }
+        return { summary: 'Task 1: ok', evidencePack: evidencePack(input.fastContextTasks ?? []) }
+      })
+      const tool = buildFastContextToolProvider(runtime, () => ({ enabled: true }))[0]!.tools[0]!
+      expect(tool.inputSchema).toMatchObject({ properties: { hintPaths: { type: 'array', maxItems: 16 } } })
+      await tool.execute(
+        { tasks: tasks(1), hintPaths: ['src/shared', './src/shared/', '../outside', 'missing/dir', 'node_modules', 42] },
+        { ...baseContext, workspace }
+      )
+      expect(received?.fastContextHintPaths).toEqual(['src/shared'])
+      expect(received?.prompt).toContain('Priority scope')
+      expect(received?.prompt).toContain('- src/shared')
+      expect(received?.prompt).toContain('Workspace overview (2 searchable files')
+      expect(received?.prompt).toContain('- src/ 1: shared/ 1')
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
   })
 
   it('inherits host-wide reads instead of clamping Fast Context to the workspace', async () => {

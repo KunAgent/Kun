@@ -197,16 +197,16 @@ describe('sidebar Kun account card', () => {
     expect(panel()?.dataset.view).toBe('guest')
   })
 
-  it('keeps the full card in the sidebar footer whether Focus mode is on or off', async () => {
+  it('hides the account card in Focus mode and restores it when leaving', async () => {
     const footer = (focusModeEnabled: boolean) => createElement(SidebarStandardFooter, {
       focusModeEnabled, connectPhoneSidebarOpen: false, onFocusModeChange: vi.fn(), onOpenSettings: vi.fn(), onToggleConnectPhone: vi.fn()
     })
     await act(async () => root.render(footer(false)))
-    const before = card()
-    expect(before.dataset.variant).toBe('card')
+    expect(card().dataset.variant).toBe('card')
     await act(async () => root.render(footer(true)))
-    expect(container.querySelectorAll('[data-kun-account-card]')).toHaveLength(1)
-    expect(card()).toBe(before)
+    expect(card()).toBeNull()
+    expect(container.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => root.render(footer(false)))
     expect(card().dataset.variant).toBe('card')
     expect(container.querySelector('.kun-account-card-login')).not.toBeNull()
   })

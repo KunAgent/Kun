@@ -244,6 +244,27 @@ describe('kun tools MCP route', () => {
     expect(body.result.tools.map((tool: { name: string }) => tool.name)).not.toContain('read')
   })
 
+  it('strips top-level oneOf/anyOf/allOf from listed input schemas', async () => {
+    const { runtime, token } = makeFixture({
+      catalog: [
+        {
+          name: 'browser_use',
+          description: 'Browser',
+          inputSchema: {
+            type: 'object',
+            properties: { action: { type: 'string' } },
+            oneOf: [{ properties: { action: { const: 'open' } } }]
+          }
+        }
+      ] as unknown as CapabilityToolSpec[]
+    })
+    const listed = await post(runtime, rpc('tools/list', undefined, 'l2'), token)
+    const [tool] = (await listed.json()).result.tools
+    expect(tool.inputSchema).not.toHaveProperty('oneOf')
+    expect(tool.inputSchema.type).toBe('object')
+    expect(tool.inputSchema.required).toEqual(['action'])
+  })
+
   it('returns a tool error when no turn is running', async () => {
     const { runtime, token } = makeFixture({ runningTurn: false })
     const called = await post(

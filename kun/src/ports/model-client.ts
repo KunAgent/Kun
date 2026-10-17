@@ -82,6 +82,8 @@ export type ModelStreamChunk = (
  * conversation history, and any tools that are currently advertised.
  */
 export type ModelRequest = {
+  /** Host-owned Google data fence; never accepted from public request JSON. */
+  googleWorkspaceData?: { assertCurrent: () => void; assertEndpoint?: (url: string, protocol: string) => void; assertCredentials?: (apiKey: string, headers: Record<string, string>) => void }
   /** Host-only paper transport fence: single physical attempt and exact provider generation. */
   paperReadOnly?: { assertCurrent: () => void; takeAttempt: () => boolean }
   requestId?: string
@@ -300,11 +302,25 @@ export type ModelToolSpec = {
  * a DeepSeek-compatible HTTP client, with `pi-ai`, or with a test
  * double. The loop never depends on a concrete implementation.
  */
+export type GoogleWorkspaceModelFence = (() => void) & {
+  mode?: 'verified-local' | 'reviewed-cloud' | 'configured-models'
+  providerName?: string
+  recipient?: { id: string; accountBinding?: string }
+  consentId?: string
+  endpoint?: string
+  assertCredentials?: (apiKey: string, headers: Record<string, string>) => void
+  assertEndpoint?: (url: string, protocol: string) => void
+}
+
 export interface ModelClient {
   readonly provider: string
   readonly model: string
   /** Returns a trusted exact-route fence, or throws before any paper text is transmitted. */
   paperReadOnlyDispatchGuard?(request: Pick<ModelRequest, 'model' | 'providerId'>): () => void
+  /** Legacy compatibility metadata; active Gmail dispatch uses conversation permission only. */
+  googleWorkspaceDispatchGuard?(request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence
+  /** Host-only pre-export check for SDK/CLI handoffs that bypass ModelClient.stream. */
+  assertGoogleWorkspaceDelegatedHistory?(threadId: string, history?: readonly TurnItem[]): Promise<void>
   /** Captures a fail-closed generation proof for model gateway admission. */
   gatewayDispatchGuard?(): () => void
   /**

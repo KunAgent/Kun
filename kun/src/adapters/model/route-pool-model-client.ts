@@ -1,4 +1,5 @@
 import { accountModelRequest } from './request-attempt-accounting.js'
+import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type {
   ModelFailoverGroup,
@@ -11,6 +12,7 @@ import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-poo
 import type { ProviderQuotaEntry } from '../../contracts/provider-quota.js'
 import type {
   ModelClient,
+  GoogleWorkspaceModelFence,
   ModelRequest,
   ModelRouteTargetMetadata,
   ModelStreamChunk
@@ -50,6 +52,7 @@ export class RoutePoolModelClient implements ModelClient {
   private readonly roundRobin = new Map<string, number>()
   private readonly requestCounts = new Map<string, number>()
   private failoverByProvider = new Map<string, ModelFailoverGroup>()
+  private routingGeneration = {}
   private readonly groupState: FailoverGroupRouteState = createFailoverGroupRouteState()
   private quotaLookup?: (providerId: string) => ProviderQuotaEntry | undefined
   private readonly affinity: RouteAffinity
@@ -68,6 +71,7 @@ export class RoutePoolModelClient implements ModelClient {
   }
 
   replacePools(pools: readonly ModelRoutePoolConfig[]): void {
+    this.routingGeneration = {}
     // Affinity entries are revalidated against the current targets on use, so a
     // configuration change does not need to forget which account holds a cache.
     this.rules.clear()
@@ -87,6 +91,7 @@ export class RoutePoolModelClient implements ModelClient {
    * explicit model route pools.
    */
   replaceFailoverGroups(groups: readonly ModelFailoverGroup[]): void {
+    this.routingGeneration = {}
     this.failoverByProvider = new Map()
     for (const group of groups) {
       for (const member of group.members) {
@@ -140,7 +145,14 @@ export class RoutePoolModelClient implements ModelClient {
     }
   }
 
+  googleWorkspaceDispatchGuard(_request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    return Object.assign(() => undefined, { mode: 'configured-models' as const, recipient: GMAIL_CONVERSATION_RECIPIENT })
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    if (request.googleWorkspaceData) {
+      request.googleWorkspaceData.assertCurrent()
+    }
     request.paperReadOnly?.assertCurrent()
     return accountModelRequest(request, (accounted) => this.streamWithBudget(accounted))
   }
@@ -156,7 +168,21 @@ export class RoutePoolModelClient implements ModelClient {
     if (!routed && request.gatewayRouting && !gatewayAllowsTarget(request, {
       providerId: request.providerId ?? '', modelId: request.model
     })) return rejectedGatewayTarget()
-    return routed ? this.streamPool(routed.pool, request, routed.group) : this.direct.stream(request)
+    if (!routed) return this.direct.stream(request)
+    // Registry catch-up in the direct router must not revive a target selected
+    // from pools or account groups that were replaced before dispatch.
+    const generation = this.routingGeneration
+    const assertRouteCurrent = () => {
+      if (generation !== this.routingGeneration) throw new GatewayRouteChangedError()
+    }
+    return this.streamPool(routed.pool, {
+      ...request,
+      beforeProviderDispatch: async () => {
+        assertRouteCurrent()
+        await request.beforeProviderDispatch?.()
+        assertRouteCurrent()
+      }
+    }, routed.group)
   }
 
   private poolForRequest(

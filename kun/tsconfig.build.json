@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
+    "noEmitOnError": true,
     "outDir": "./dist",
     "rootDir": "./src"
   },
@@ -13,6 +14,7 @@
     "node_modules",
     "tests",
     "**/*.test.ts",
+    "**/*.test-support.ts",
     "**/*.bench.ts",
     "vitest.config.ts",
     "src/test-support/**"

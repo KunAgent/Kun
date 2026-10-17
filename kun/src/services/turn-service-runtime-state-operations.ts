@@ -272,8 +272,11 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
           if (checkpointed) {
             reconciledSources.set(thread.id, { threadId: thread.id, turnId: turn.id })
           }
-        } catch {
-          // Best-effort sweep; one unreadable thread must not stop the rest.
+        } catch (error) {
+          console.warn('[kun] orphaned turn reconciliation failed', {
+            threadId: thread.id, turnId: turn.id,
+            error: error instanceof Error ? error.message : String(error)
+          })
         }
       }
     }

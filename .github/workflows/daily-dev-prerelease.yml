@@ -483,3 +483,38 @@ jobs:
 
       - name: Publish GitHub prerelease
         run: gh release edit "${TAG_NAME}" --draft=false --prerelease --latest=false
+
+  prune-r2:
+    name: Prune superseded R2 prereleases
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+      TAG_NAME: ${{ needs.prepare.outputs.tag }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+      R2_RELEASE_PREFIX: ${{ secrets.R2_RELEASE_PREFIX }}
+    steps:
+      - name: Check out develop commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Delete superseded R2 prerelease archives and installers
+        run: node ./scripts/publish-r2.mjs prune --tag "${TAG_NAME}" --channel frontier

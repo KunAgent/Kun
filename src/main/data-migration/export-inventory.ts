@@ -223,6 +223,7 @@ export function portableSettingsForMigration(settings: AppSettingsV1): Record<st
     composerSendKey: settings.composerSendKey,
     cursorSpotlight: settings.cursorSpotlight,
     cursorSpotlightColor: settings.cursorSpotlightColor,
+    homeGlyphRipple: settings.homeGlyphRipple,
     darkUiColors: normalizeDarkUiColors(settings.darkUiColors),
     colorPalette: settings.colorPalette,
     notifications: settings.notifications,

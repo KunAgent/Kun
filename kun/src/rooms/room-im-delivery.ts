@@ -57,12 +57,15 @@ export function privateDeliveryState(items: readonly TurnItem[], turnId: string,
   }
   const elapsedMs = lastVisibleAt ? nowMs - Date.parse(lastVisibleAt) : 0
   const newerUserMessage = published && newestUserAt > (lastVisibleAt ? Date.parse(lastVisibleAt) : 0)
-  const progressDue = published && !waitingOnUser && workSinceVisible > 0 &&
+  // A final answer stays current until a newer user message or a newer start
+  // or progress bubble. Re-checks the model runs after it do not make it stale:
+  // demanding another bubble for them only republishes the same answer.
+  const finalCurrent = lastPhase === 'final' && !newerUserMessage
+  const progressDue = published && !waitingOnUser && !finalCurrent && workSinceVisible > 0 &&
     elapsedMs >= 10_000 && (elapsedMs >= 30_000 || workSinceVisible >= 6)
   return {
     gate: !communicationRequired || waitingOnUser ? 'none' : !published || newerUserMessage ? 'start' : progressDue ? 'progress' : 'none',
-    published, waitingOnUser, finalCurrent: lastPhase === 'final' && workSinceVisible === 0 && !newerUserMessage,
-    lastPhase, lastVisibleAt, workSinceVisible
+    published, waitingOnUser, finalCurrent, lastPhase, lastVisibleAt, workSinceVisible
   }
 }
 

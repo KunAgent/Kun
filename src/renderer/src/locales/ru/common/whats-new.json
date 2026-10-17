@@ -20,5 +20,14 @@
   "whatsNewHintReopen": "Показать снова",
   "whatsNewSettingTitle": "Что нового в этой версии",
   "whatsNewSettingDesc": "Снова открыть сводку, которая показывается при первом запуске после обновления.",
-  "whatsNewSettingOpen": "Открыть"
+  "whatsNewSettingOpen": "Открыть",
+  "whatsNewFocusTag": "Режим фокуса",
+  "whatsNewFocusTitle": "Скрыть логотип Kun и карточку аккаунта",
+  "whatsNewFocusBody": "Когда режим включён, плавающий логотип Kun, карточка аккаунта в боковой панели, аватары бесед и анимации Kun убираются, и остаётся только разговор.",
+  "whatsNewFocusTry": "Попробовать режим фокуса",
+  "whatsNewFocusOn": "Режим фокуса включён",
+  "whatsNewFocusWhere": "Переключайте его в любой момент кнопкой «Фокус» внизу боковой панели",
+  "whatsNewFocusPreviewLogo": "Логотип Kun",
+  "whatsNewFocusPreviewAccount": "Аккаунт",
+  "whatsNewFocusPreviewCalm": "Только чат"
 }

@@ -18,6 +18,13 @@ describe('durable context snapshot mapping', () => {
     expect((await getKunThreadDetail('thread')).contextSnapshot).toMatchObject({ threadId: 'thread',
       estimatedInputTokens: 19_000, contextWindowTokens: 100_000, occupancySource: 'agent' })
   })
+  it('keeps an Agent\'s own category split distinguishable from Kun\'s estimate', async () => {
+    stub({ ...snapshot, breakdown: { tools: 4_000, system: 2_000, skills: 0, messages: 13_000, other: 0 }, breakdownSource: 'agent' })
+    expect((await getKunThreadDetail('thread')).contextSnapshot).toMatchObject({ breakdownSource: 'agent',
+      breakdown: { tools: 4_000, system: 2_000, messages: 13_000 } })
+    stub({ ...snapshot, breakdownSource: 'tokenizer' })
+    expect((await getKunThreadDetail('thread')).contextSnapshot).not.toHaveProperty('breakdownSource')
+  })
   it.each([null, { ...snapshot, threadId: 'other' }, { ...snapshot, child: {} }, { ...snapshot, estimatedInputTokens: 12 }])(
     'does not invent or borrow telemetry for an invalid response', async value => {
       stub(value)

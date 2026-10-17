@@ -153,6 +153,8 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     fastContext?: boolean
     /** Original task grouping retained in the child record and evidence pack. */
     fastContextTasks?: readonly import('./fast-context-evidence.js').FastContextTask[]
+    /** Validated workspace-relative paths the parent marked as likely relevant. */
+    fastContextHintPaths?: readonly string[]
     /** Optional maximum time to wait for an execution slot before failing this child. */
     queueTimeoutMs?: number
     /**
@@ -360,6 +362,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       returnFormat,
       ...(input.fastContext === true ? { fastContext: true } : {}),
       ...(input.fastContextTasks?.length ? { fastContextTasks: [...input.fastContextTasks] } : {}),
+      ...(input.fastContextHintPaths?.length ? { fastContextHintPaths: [...input.fastContextHintPaths] } : {}),
       ...(input.detach ? { detached: true } : {}),
       ...(input.launcher ? { launcher: input.launcher } : {}),
       ...(input.pptWorkflowScope
@@ -371,6 +374,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       createdAt: queuedAt,
       updatedAt: queuedAt
     })
+    this.ownedChildIds.add(record.id)
     await this.options.store.upsert(record)
     await this.recordChildEvent(record)
     // Surface allocation as queued. Running is emitted only after a scheduler
@@ -439,6 +443,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         returnFormat,
         fastContext: input.fastContext === true,
         fastContextTasks: input.fastContextTasks,
+        fastContextHintPaths: input.fastContextHintPaths,
         queueTimeoutMs: input.queueTimeoutMs,
         workspace,
         security,
@@ -517,6 +522,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       returnFormat,
       fastContext: input.fastContext === true,
       fastContextTasks: input.fastContextTasks,
+      fastContextHintPaths: input.fastContextHintPaths,
       queueTimeoutMs: input.queueTimeoutMs,
       workspace,
       security,

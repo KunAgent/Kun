@@ -161,12 +161,21 @@ export class CompatModelClientBase {
       apiKey: string
       gatewayRouting?: ModelRequest['gatewayRouting']
       paperReadOnly?: ModelRequest['paperReadOnly']
+      googleWorkspaceData?: ModelRequest['googleWorkspaceData']
       routingBudget?: ModelRequest['routingBudget']
       beforeProviderDispatch?: ModelRequest['beforeProviderDispatch']
       beforeWireDispatch?: ModelRequest['beforeWireDispatch']
       onWireDispatch?: ModelRequest['onWireDispatch']
     }
   ): Promise<CompatPostResult> {
+    if (trace.googleWorkspaceData) {
+      try {
+        trace.googleWorkspaceData.assertCurrent()
+      } catch {
+        return { kind: 'error', code: 'gmail_conversation_permission_changed', message: 'Gmail permission changed before model dispatch. Enable sharing for this private conversation to continue.',
+          failure: { category: 'request', reason: 'request', failoverAllowed: false } }
+      }
+    }
     if (trace.paperReadOnly) {
       trace.paperReadOnly.assertCurrent()
       if (!trace.paperReadOnly.takeAttempt()) return { kind: 'error', code: 'paper_request_budget_exhausted',
@@ -175,7 +184,8 @@ export class CompatModelClientBase {
     }
     try { if (trace.beforeProviderDispatch) await trace.beforeProviderDispatch() } catch {
       return { kind: 'error', code: 'provider_configuration_changed', message: 'Provider configuration changed before dispatch; retry with the current configuration.',
-        failure: { category: 'request', reason: 'request', httpStatus: 503, failoverAllowed: false } }
+        failure: { category: 'request', reason: 'request', requestSent: false,
+          responseReceived: false, failoverAllowed: false } }
     }
     if (trace.gatewayRouting) {
       try {
@@ -214,6 +224,7 @@ export class CompatModelClientBase {
       : undefined
     try {
       trace.paperReadOnly?.assertCurrent()
+      trace.googleWorkspaceData?.assertCurrent()
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       if (trace.beforeWireDispatch) {
@@ -229,9 +240,12 @@ export class CompatModelClientBase {
       }
       if (trace.gatewayRouting?.beforeDispatch) await trace.gatewayRouting.beforeDispatch()
       trace.paperReadOnly?.assertCurrent()
+      trace.googleWorkspaceData?.assertCurrent()
       trace.gatewayRouting?.assertCurrent?.()
       signal.throwIfAborted()
       trace.onWireDispatch?.()
+      // The observer is synchronous but can revoke consent or replace credentials itself.
+      trace.googleWorkspaceData?.assertCurrent()
       const response = await this.fetchImpl(url, {
         method: 'POST',
         redirect: 'error',

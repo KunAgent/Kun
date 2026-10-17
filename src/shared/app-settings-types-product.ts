@@ -589,6 +589,8 @@ export type AppSettingsV1 = {
   composerSendKey: ComposerSendKey
   cursorSpotlight?: boolean
   cursorSpotlightColor?: string
+  /** Glyph field with click ripples behind the Code home; on unless explicitly false. */
+  homeGlyphRipple?: boolean
   /** Legacy snapshots omit this field; normalized settings always populate it. */
   darkUiColors?: DarkUiColorsV1
   /** Legacy snapshots omit this field; normalized settings always populate it. */

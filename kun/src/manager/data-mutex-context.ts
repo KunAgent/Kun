@@ -22,6 +22,11 @@ export function currentManagerDataCommitId(): string | undefined {
   return commitStorage.getStore()
 }
 
+/** A scheduler wake must not inherit the emitting mutation's already released lease or commit reservation. */
+export function runWithoutManagerDataMutexContext<T>(operation: () => T): T {
+  return storage.exit(() => commitStorage.exit(operation))
+}
+
 export function runWithManagerDataCommitId<T>(
   commitId: string,
   operation: () => Promise<T>

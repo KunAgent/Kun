@@ -646,8 +646,10 @@ function routingToolOutput(routing: ChildRoutingMetadata): Record<string, unknow
 
 function buildDelegateTaskDescription(runtime: DelegationRuntime): string {
   const modeDescription = runtime.useExistingAgents !== false
-    ? 'Select an exact reusable profile id from list_subagent_profiles, or omit profile so Kun can route over the effective catalog.'
-    : 'Define the best one-run role for this task in custom_agent. Do not select or recall an existing profile in this mode.'
+    ? 'Select an exact reusable profile id from list_subagent_profiles, or omit profile so Kun can route over the effective catalog. ' +
+      'Routed roles can differ per task in tool access (read-only roles cannot edit, and review/investigate-only wording is read-only); ' +
+      'pass the same explicit profile to keep tool access identical across a batch. The result reports the applied toolPolicy.'
+    : 'Define the best one-run role for this task in custom_agent, including its tool_policy. Do not select or recall an existing profile in this mode.'
   return [
     'Run a standalone child agent and return its result.',
     modeDescription,

@@ -19,13 +19,15 @@ export type GuestWardrobeHint = { id: string; createdAt: string; roomId?: string
 export type WardrobeSnapshot = {
   guestHints?: GuestWardrobeHint[];
   wardrobe: KunWardrobe | null; revision: number | null; unlockAll: boolean; mode: WardrobeMode; error: string; loaded: boolean
+  /** False until the runtime or the account said who owns the wardrobe; `mode` is only a placeholder before that. */
+  modeKnown: boolean
 }
 type Detail = KunWardrobeDetail & { guestHints?: GuestWardrobeHint[]; unlockAll?: boolean; mode?: WardrobeMode }
 export type WardrobeOpenResult = Detail & {
   drops: KunWardrobeDrop[]; drop: KunWardrobeDrop; granted: KunWardrobeItemKey[]; feathers: number; guaranteed: boolean
 }
 
-let snapshot: WardrobeSnapshot = { wardrobe: null, revision: null, unlockAll: false, mode: 'guest', error: '', loaded: false }
+let snapshot: WardrobeSnapshot = { wardrobe: null, revision: null, unlockAll: false, mode: 'guest', error: '', loaded: false, modeKnown: false }
 const listeners = new Set<() => void>()
 let inflight: Promise<void> | null = null
 let accountKnownAnonymous: boolean | undefined
@@ -37,7 +39,7 @@ export function acceptWardrobe(detail: Detail) {
   const mode = detail.mode === 'local' ? 'local' : accountKnownAnonymous ? 'guest' : detail.mode ?? snapshot.mode
   const wardrobe = mode === 'guest' ? { ...detail.wardrobe, items: {}, pending: [], roles: [], feathers: 0, history: [] } : detail.wardrobe
   publish({ wardrobe, revision: detail.revision, unlockAll: mode === 'guest' ? false : Boolean(detail.unlockAll ?? snapshot.unlockAll),
-    guestHints: mode === 'guest' ? detail.guestHints ?? [] : [], mode, error: '', loaded: true })
+    guestHints: mode === 'guest' ? detail.guestHints ?? [] : [], mode, error: '', loaded: true, modeKnown: true })
 }
 
 /** A refusal from the Kun account; `code` is a Kunserve rule code such as `not_enough_feathers`. */
@@ -82,7 +84,7 @@ export function useWardrobe(active = true): WardrobeSnapshot {
     let timer: ReturnType<typeof setTimeout> | undefined
     const accountChanged = (account: import('@shared/kun-account').KunAccountState) => {
       accountKnownAnonymous = !hasKunAccountSession(account)
-      if (accountKnownAnonymous && snapshot.mode !== 'local') publish({ mode: 'guest', unlockAll: false, guestHints: [], wardrobe: snapshot.wardrobe ? { ...snapshot.wardrobe, items: {}, pending: [], roles: [], feathers: 0, history: [] } : null })
+      if (accountKnownAnonymous && snapshot.mode !== 'local') publish({ mode: 'guest', modeKnown: true, unlockAll: false, guestHints: [], wardrobe: snapshot.wardrobe ? { ...snapshot.wardrobe, items: {}, pending: [], roles: [], feathers: 0, history: [] } : null })
       if (account.status === 'authenticated') void refreshWardrobe()
     }
     const offAccount = window.kunGui?.kunAccount?.onState?.(accountChanged)

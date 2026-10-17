@@ -276,6 +276,22 @@ function AdeSessionHero({
   )
 }
 
+/**
+ * Whether the timeline leads with its empty hero. A first Code send shows its
+ * bubble before the new thread id lands; the hero leaves with the home layout
+ * then, not a create-thread round trip later. Connect phone keeps its hero
+ * above local turns until it has a thread.
+ */
+export function shouldShowTimelineEmptyHero(state: {
+  hasContent: boolean
+  hasHistoryReference: boolean
+  activeThreadId: string | null
+  route: 'chat' | 'claw'
+}): boolean {
+  if (!state.hasContent && !state.hasHistoryReference) return true
+  return !state.activeThreadId && (!state.hasContent || state.route === 'claw')
+}
+
 export function MessageTimelineEmptyHero({
   route,
   ready,

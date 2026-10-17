@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "name": "fast-context-retrieval",
+  "description": "Fast Context grep relevance and cost on the DeepSeek-GUI repository. Each case is one grep the retrieval child typically issues first; expect is the file a reviewer would want cited.",
+  "cases": [
+    {
+      "id": "ripgrep-resolver",
+      "pattern": "resolveCursorSdkRipgrep",
+      "task": "Where is the packaged ripgrep binary resolved for Fast Context searches?",
+      "expect": "kun/src/adapters/tool/builtin-shell-utils.ts"
+    },
+    {
+      "id": "source-semaphore",
+      "pattern": "FastContextSourceSemaphore",
+      "task": "Where is the per-thread Fast Context source tool budget enforced?",
+      "expect": "kun/src/loop/fast-context-source-semaphore.ts"
+    },
+    {
+      "id": "evidence-pack",
+      "pattern": "buildFastContextEvidencePack",
+      "task": "How is the Fast Context evidence pack built from source tool results?",
+      "expect": "kun/src/delegation/fast-context-evidence.ts"
+    },
+    {
+      "id": "event-recorder",
+      "pattern": "RuntimeEventRecorder",
+      "task": "How are runtime events persisted before they are published over SSE?",
+      "expect": "kun/src/services/runtime-event-recorder.ts"
+    },
+    {
+      "id": "default-base-url",
+      "pattern": "DEFAULT_DEEPSEEK_BASE_URL",
+      "task": "Where does a blank provider base URL fall back to the DeepSeek default?",
+      "expect": "src/shared/app-settings-types-provider.ts"
+    },
+    {
+      "id": "market-catalogs",
+      "pattern": "useMarketCatalogs",
+      "task": "How does the renderer load the skill and MCP market catalogs?",
+      "expect": "src/renderer/src/components/use-market-catalogs.ts"
+    },
+    {
+      "id": "preload-bridge",
+      "pattern": "exposeInMainWorld",
+      "task": "Where is the kunGui preload bridge exposed to the renderer?",
+      "expect": "src/preload/index.ts"
+    },
+    {
+      "id": "episode-limits",
+      "pattern": "resolveChildEpisodeLimits",
+      "task": "Which step and wall-time limits apply to a Fast Context child episode?",
+      "expect": "kun/src/delegation/child-episode-limits.ts"
+    },
+    {
+      "id": "fast-context-provider",
+      "pattern": "fastContext",
+      "task": "How does the fast_context tool provider launch its retrieval child?",
+      "expect": "kun/src/adapters/tool/fast-context-tool-provider.ts"
+    },
+    {
+      "id": "hinted-endpoint-url",
+      "pattern": "EndpointUrl",
+      "task": "How is a custom full endpoint URL built from the provider base URL?",
+      "hintPaths": [
+        "src/shared",
+        "src/main"
+      ],
+      "expect": "src/shared/openai-compat-url.ts"
+    }
+  ]
+}

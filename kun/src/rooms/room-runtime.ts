@@ -1,3 +1,7 @@
+import { bindPrivateTurnLifecycle } from './private-turn-lifecycle.js'
+import { privateRequestCanRun } from '../agents/agent-lifecycle-state.js'
+import { AgentProfileImportService } from '../agents/agent-profile-import.js'
+import { AgentLifecycleService } from '../agents/agent-lifecycle-service.js'
 import { reconcileRoomNotificationGates } from './room-notification-observer.js'
 import { AgentCommitmentService } from '../agents/agent-commitment-service.js'
 import { AgentArtifactLibrary, bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
@@ -52,6 +56,8 @@ export class RoomRuntime {
   readonly agentMemory: AgentMemoryService
   readonly handoffs: AgentHandoffService
   private readonly handoffRunner: AgentHandoffRunner
+  readonly profileImport: AgentProfileImportService
+  readonly lifecycle: AgentLifecycleService
   readonly agents: AgentIdentityService
   readonly commitments: AgentCommitmentService
   readonly artifactLibrary: AgentArtifactLibrary
@@ -75,6 +81,7 @@ export class RoomRuntime {
   private actionQueue: Promise<unknown> = Promise.resolve()
   private requestCursor?: number
   private readonly executionService: RoomService
+  private readonly unbindPrivateLifecycle: () => void
   private readonly unbindContinuations: () => void
 
   constructor(readonly deps: RoomRuntimeDeps, private readonly held: () => boolean = () => true,
@@ -104,6 +111,9 @@ export class RoomRuntime {
     bindAgentSetupDirectory(deps.threadStore, this.agents)
     this.product = new RoomProductService(deps, this.service)
     this.integrations = new RoomIntegrationService(deps)
+    this.unbindPrivateLifecycle = bindPrivateTurnLifecycle(deps.threadStore, { store: deps.store, exclusive: operation => this.exclusive(operation) })
+    this.lifecycle = new AgentLifecycleService(this)
+    this.profileImport = new AgentProfileImportService(this)
     this.direct = new AgentDirectRunner(deps, this.executionService)
     this.requests = new RoomRequestRunner(deps, this.executionService)
     this.tasks = new RoomTaskRunner(deps, this.executionService)
@@ -122,7 +132,7 @@ export class RoomRuntime {
         return result
       }))
   }
-  start() { this.stopped = false; this.wake() }
+  start() { this.stopped = false; this.lifecycle.start(); this.wake() }
   /**
    * Immediate wake: a pending idle timer is cancelled so new room work never
    * waits out the backoff window. A wake arriving mid-tick is queued and
@@ -164,6 +174,8 @@ export class RoomRuntime {
   }
   async close() {
     this.stopped = true
+    this.lifecycle.close()
+    this.unbindPrivateLifecycle()
     this.unbindContinuations()
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
@@ -241,6 +253,7 @@ export class RoomRuntime {
   private async tickRequest(row: import('./room-store.js').RoomStoredDocument<RoomRequestState>, discussionBusy: Set<string>) {
     const current = await this.deps.store.get<RoomRequestState>('request', row.id)
     if (!current || current.revision !== row.revision) return
+    if (row.value.privateProtocol && !row.value.cancellationRequested && !await privateRequestCanRun(this.deps.store, row.value)) return
       try {
         if (row.value.handoffReturnId && !await this.handoffs.current(row.value.handoffReturnId)) {
           await cancelSupersededRoomRequest(this.deps, row.id); return
@@ -336,6 +349,7 @@ export class RoomRuntime {
     await this.handoffRunner.registerWaiting()
     await this.peers.registerWaiting()
     for (const row of requests) {
+      if (row.value.privateProtocol && !await privateRequestCanRun(this.deps.store, row.value)) continue
       if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) continue
       const target = roomRequestDiscussionTarget(row.value)
       const actor = row.value.roomSnapshot.members.find((member) => member.id === target?.memberId)

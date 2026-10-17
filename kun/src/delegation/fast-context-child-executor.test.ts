@@ -62,7 +62,8 @@ class ReadForeverModel implements ModelClient {
 
   async *stream(): AsyncIterable<ModelStreamChunk> {
     this.requests += 1
-    yield { kind: 'tool_call_complete', callId: `read_${this.requests}`, toolName: 'read', arguments: { path: 'src/target.ts', task_indexes: [1] } }
+    // Distinct ranges: identical calls in one run are served from the memo.
+    yield { kind: 'tool_call_complete', callId: `read_${this.requests}`, toolName: 'read', arguments: { path: 'src/target.ts', offset: this.requests, task_indexes: [1] } }
     yield { kind: 'completed', stopReason: 'tool_calls' }
   }
 }
@@ -76,7 +77,7 @@ class OverflowThenConcludeModel implements ModelClient {
     this.requests += 1
     if (this.requests === 1) {
       for (let index = 0; index < 9; index += 1) {
-        yield { kind: 'tool_call_complete', callId: `read_${index}`, toolName: 'read', arguments: { path: 'src/target.ts', task_indexes: [1] } }
+        yield { kind: 'tool_call_complete', callId: `read_${index}`, toolName: 'read', arguments: { path: 'src/target.ts', offset: index + 1, task_indexes: [1] } }
       }
       yield { kind: 'completed', stopReason: 'tool_calls' }
       return

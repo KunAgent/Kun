@@ -136,6 +136,7 @@
 }
 .sidebar-agent-chat-row:disabled { cursor: not-allowed; opacity: 0.6; }
 .sidebar-agent-chat-avatar { position: relative; display: flex; flex: 0 0 auto; }
+[data-focus-mode='on'] .sidebar-agent-chat-avatar { display: none; }
 .sidebar-agent-chat-avatar > i {
   position: absolute;
   right: -3px;

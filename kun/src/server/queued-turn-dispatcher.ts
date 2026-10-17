@@ -2,6 +2,7 @@ import { isQueueExecutionBlocked } from '../domain/queue-execution-state.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
+import { runWithoutManagerDataMutexContext } from '../manager/data-mutex-context.js'
 
 /**
  * Runtime-level fair scheduler for durable queued turns.
@@ -102,7 +103,7 @@ export class QueuedTurnDispatcher {
   private ensurePass(): void {
     if (this.disposed || this.passInFlight || this.readyIds.length === 0) return
     this.passInFlight = true
-    this.passPromise = runWithoutTurnMutationFence(() => this.runPass())
+    this.passPromise = runWithoutManagerDataMutexContext(() => runWithoutTurnMutationFence(() => this.runPass()))
       .catch((error) => {
         console.warn(
           '[kun] queued-turn dispatcher pass failed: ' +

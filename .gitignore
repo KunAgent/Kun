@@ -79,3 +79,6 @@ docs/R2_RELEASE.md
 
 # Generated signed art releases (private key is stored outside this repository)
 .art-release/
+
+### Promo video project (local render workspace, not published)
+promo/

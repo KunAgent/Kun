@@ -126,6 +126,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     composerSendKey: normalizeComposerSendKey(maybeSettings.composerSendKey),
     cursorSpotlight: maybeSettings.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(maybeSettings.cursorSpotlightColor),
+    homeGlyphRipple: maybeSettings.homeGlyphRipple !== false,
     darkUiColors: normalizeDarkUiColors(maybeSettings.darkUiColors),
     colorPalette: normalizeColorPaletteSettings(maybeSettings.colorPalette, maybeSettings.darkUiColors),
     provider: providerSettings,

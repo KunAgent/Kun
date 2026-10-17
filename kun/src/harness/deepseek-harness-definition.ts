@@ -1,8 +1,8 @@
 import type { HarnessDefinition } from '../contracts/harness.js'
 import { allUnsupportedStatuses, type HarnessCapabilities } from '../contracts/harness-capabilities.js'
 
-/** Reviewed upstream release: deepseek-ai/deepseek-harness tag dsh-v0.2.0-rc.2. */
-export const DEEPSEEK_HARNESS_VERSION = '0.2.0-rc.2'
+/** Oldest supported upstream release: deepseek-ai/deepseek-harness tag dsh-v0.2.0-rc.2. Newer releases are accepted. */
+export const DEEPSEEK_HARNESS_MIN_VERSION = '0.2.0-rc.2'
 export const DEEPSEEK_HARNESS_ID = 'deepseek-harness'
 
 /** Only capabilities supported by both the pinned server and Kun's ACP adapter. */
@@ -33,7 +33,7 @@ export const DEEPSEEK_HARNESS_DEFINITION: HarnessDefinition = {
   detect: {
     command: 'dsh', aliases: [], versionArgs: ['--version'],
     versionPattern: '\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?',
-    exactVersion: DEEPSEEK_HARNESS_VERSION
+    minVersion: DEEPSEEK_HARNESS_MIN_VERSION
   },
   launch: {
     command: 'dsh', args: ['--profile', 'acp'],
@@ -49,8 +49,9 @@ export const DEEPSEEK_HARNESS_DEFINITION: HarnessDefinition = {
   staticModels: [],
   capabilities: DEEPSEEK_HARNESS_CAPABILITIES,
   setup: {
-    install: [{ platform: 'any', command: `npm install -g @deepseek-ai/dsh@${DEEPSEEK_HARNESS_VERSION}`,
-      note: 'Preview: only this reviewed version and the stock ACP plugin composition are supported' }],
+    // `next` is the channel the update recipe follows (providers/deepseek-harness.ts).
+    install: [{ platform: 'any', command: 'npm install -g @deepseek-ai/dsh@next',
+      note: `Preview: requires dsh ${DEEPSEEK_HARNESS_MIN_VERSION} or newer with the stock ACP plugin composition` }],
     // No login command: ACP authenticate is a no-op. Users configure native
     // credentials through upstream's documented setup; a handshake is not auth.
     docsUrl: 'https://github.com/deepseek-ai/deepseek-harness'

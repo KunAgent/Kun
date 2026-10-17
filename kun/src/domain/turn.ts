@@ -1,3 +1,4 @@
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { createHash } from 'node:crypto'
 import { PaperTurnContextSchema, type PaperTurnContext } from '../contracts/paper-turn-context.js'
 import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
@@ -57,6 +58,7 @@ export function createTurnRecord(input: {
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer
   attachmentIds?: string[]
+  attachmentAliases?: AttachmentAliases
   composerContexts?: ComposerContextAttachmentJson[]
   guiPlan?: GuiPlanContextJson
   guiDesignCanvas?: boolean
@@ -108,6 +110,7 @@ export function createTurnRecord(input: {
     steering: [],
     items: [],
     attachmentIds: [...(input.attachmentIds ?? [])],
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: structuredClone(input.attachmentAliases) } : {}),
     composerContexts: [...(input.composerContexts ?? [])],
     activeSkillIds: [],
     injectedMemoryIds: [],

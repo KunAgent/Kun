@@ -1,3 +1,5 @@
+import { makeAssistantTextItem, makeUserItem } from '../domain/item.js'
+import { createTurnRecord } from '../domain/turn.js'
 import { describe, expect, it } from 'vitest'
 import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
 import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
@@ -31,6 +33,31 @@ function service(threadStore: InMemoryThreadStore, sessionStore = new InMemorySe
 }
 
 describe('prune without snapshots configured', () => {
+  it('prunes completed history without reacquiring its own thread mutation lock', async () => {
+    const threadStore = new InMemoryThreadStore()
+    const sessionStore = new InMemorySessionStore()
+    const turns = service(threadStore, sessionStore)
+    const threadId = 'thr_completed_prune'
+    const first = createTurnRecord({ id: 'old', threadId, prompt: 'older request', status: 'completed' })
+    const second = createTurnRecord({ id: 'recent', threadId, prompt: 'retain this request', status: 'completed' })
+    const items = [
+      makeUserItem({ id: 'old-user', threadId, turnId: first.id, text: first.prompt }),
+      makeAssistantTextItem({ id: 'old-answer', threadId, turnId: first.id, text: 'completed answer' }),
+      makeUserItem({ id: 'recent-user', threadId, turnId: second.id, text: second.prompt })
+    ]
+    await sessionStore.rewriteItems(threadId, items)
+    await threadStore.upsert({
+      ...createThreadRecord({ id: threadId, title: 'Prune', workspace: '/tmp', model: 'test' }),
+      turns: [first, second].map((turn) => ({ ...turn, items: items.filter((item) => item.turnId === turn.id) }))
+    })
+    const result = await turns.pruneThread({
+      threadId, request: { throughTurnId: first.id, archiveBeforePrune: false }
+    })
+    expect(result).toMatchObject({ pruned: true, removedTurns: 1 })
+    expect((await sessionStore.loadItems(threadId)).filter((item) => item.kind === 'user_message'))
+      .toEqual([expect.objectContaining({ turnId: second.id, text: 'retain this request' })])
+  })
+
   it('prunes nothing on a fresh thread but still records the policy', async () => {
     const threadStore = new InMemoryThreadStore()
     const turns = service(threadStore)

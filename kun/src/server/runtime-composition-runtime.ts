@@ -44,6 +44,7 @@ export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
   config: ReturnType<typeof createRuntimeConfigController>
 ): ServerRuntime {
+  const remoteCleanups = new Set<() => Promise<void>>()
   const { agent } = extensions
   const { registryComposition } = agent
   const { services } = registryComposition
@@ -174,6 +175,8 @@ export function createServerRuntimeComposition(
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
+      activeBackgroundTurns: () => backgroundShellRuntime.listSessions().filter(item => item.status === 'running')
+        .map(item => ({ threadId: item.threadId, turnId: item.turnId })),
       backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
       ...workbenchExecutionControl({ turns: turnService, threads: threadService, sessions: sessionStore,
         backgroundShells: backgroundShellRuntime, executionLeases }) }
@@ -188,9 +191,10 @@ export function createServerRuntimeComposition(
   // retains the backing store. Bind both identities to the same room scope.
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
   bindImMessageService(core.threadStore, roomComposition.rooms.service)
-  bindRoomAppAccess(core.threadStore, () => ({
+  bindRoomAppAccess(core.threadStore, async (scopeId) => ({
     servers: (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp.servers,
-    statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status]))
+    statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status])),
+    gmail: await services.gmail.status(scopeId)
   }))
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
@@ -211,6 +215,9 @@ export function createServerRuntimeComposition(
       snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
     threadService,
+    gmail: services.gmail,
+    gmailDataPolicy: model.gmailDataPolicy,
+    gmailLocalModel: model.gmailLocalModel,
     agentDispatchService: services.agentDispatchService,
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
@@ -338,7 +345,7 @@ export function createServerRuntimeComposition(
 	    },
 	    harnesses: services.harnesses,
 	    providerConfigs: () => config.activeOptions.providers ?? {},
-	    modelClient,
+	    modelClient: model.gmailDataPolicy,
 	    directModelClient,
 	    modelGateway: {
 	      requiresAdminToken: () => config.activeOptions.localModelGateway?.enabled === true ||
@@ -386,6 +393,9 @@ export function createServerRuntimeComposition(
       return runReview(input)
 	    },
 	    runtimeToken: config.activeOptions.runtimeToken,
+        remoteProtectedPaths: [config.activeOptions.dataDir,
+          ...(config.activeOptions.configPath ? [config.activeOptions.configPath] : []),
+          ...(core.options.serviceManager ? [core.options.serviceManager.discovery.settingsPath] : [])],
 	    insecure: config.activeOptions.insecure,
 	    ...(core.options.serviceManager
 	      ? { managerProtocolVersion: KUN_MANAGER_PROTOCOL_VERSION }
@@ -536,6 +546,7 @@ export function createServerRuntimeComposition(
       }
       return result
     },
+    registerRemoteCleanup(cleanup) { remoteCleanups.add(cleanup) },
     shutdown: async () => {
       beginOwnedProcessShutdown()
       await settleCleanupSteps([
@@ -543,6 +554,8 @@ export function createServerRuntimeComposition(
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
               eventStreamRegistry.closeAll()
+              await Promise.allSettled([...remoteCleanups].map((cleanup) => cleanup()))
+              remoteCleanups.clear()
               await services.agentDispatchService.stop()
               await roomComposition.close()
               agent.shuttingDown = true
@@ -579,6 +592,8 @@ export function createServerRuntimeComposition(
         () => extensionModelProviders.disposeAll(),
         () => shutdownAllLspSessions(),
         () => services.mcpProviders.close(),
+        () => services.gmail.dispose(),
+        () => model.gmailLocalModel?.dispose(),
         () => migrationService.shutdown(),
         () => migrationImportService.shutdown(),
         () => routeHealth.flush(),

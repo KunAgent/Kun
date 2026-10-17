@@ -29,7 +29,10 @@ can remain silent when there is no user-facing change.
 
 The next model step requests a progress message after 30 seconds or six
 completed work tools since the last visible message, with a ten-second minimum
-gap. One long-running tool does not start a parallel model call; the activity
+gap. A final answer stays current until a newer user message or a newer start
+or progress bubble: checks the model runs after it neither trigger a progress
+request nor require another final, so the turn can end without duplicate
+answers. One long-running tool does not start a parallel model call; the activity
 row shows its safe category and locally computed elapsed time. The run records
 first response latency, and the selected renderer keeps a bounded in-memory
 commit-to-render sample for validation. Raw arguments, output and internal

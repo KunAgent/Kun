@@ -1,56 +1,8 @@
-import { readFile, realpath, writeFile } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
-import type { ThreadStore, ThreadStoreListOptions } from '../ports/thread-store.js'
-import type { SessionStore } from '../ports/session-store.js'
-import type { IdGenerator } from '../ports/id-generator.js'
-import type {
-  CreateThreadRequest,
-  SetThreadGoalRequest,
-  SetThreadTodosRequest,
-  ThreadGoal,
-  ThreadMode,
-  ThreadRecord,
-  ThreadRelation,
-  ThreadStatus,
-  ThreadUpdateStatus,
-  ThreadTodoItem,
-  ThreadTodoList,
-  ThreadTodoSource,
-  ThreadTodoStatus,
-  ThreadSummary
-} from '../contracts/threads.js'
-import type { ExtensionThreadMetadata } from '../contracts/threads.js'
-import type {
-  ApprovalPolicy,
-  ApprovalReviewer,
-  SandboxMode
-} from '../contracts/policy.js'
-import type { Turn } from '../contracts/turns.js'
-import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
-import {
-  createThreadRecord,
-  resolveThreadAgentSurface,
-  toThreadSummary,
-  touchThread
-} from '../domain/thread.js'
-import type { AgentSession } from '../domain/session.js'
-import { repairModelHistoryItems } from '../domain/model-history-repair.js'
-import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
-import type { ThreadLifecycleFence } from './thread-lifecycle-fence.js'
-import { withFileMutationQueue } from '../adapters/tool/file-mutation-queue.js'
-import { withThreadStoreMutation } from './thread-mutation-coordinator.js'
+import type { ThreadGoal, SetThreadGoalRequest } from '../contracts/threads.js'
+import { touchThread } from '../domain/thread.js'
+import { goalRevision, requirePolicyRevision, PolicyMutationRejected } from '../domain/remote-policy-revision.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
-import { DEFAULT_KUN_MODEL } from '../config/kun-config.js'
-import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
-import {
-  extractPlanTodos,
-  mergePlanTodos,
-  normalizePlanRelativePath,
-  normalizeTodoContent,
-  patchPlanTodoStatus,
-  todoContentHash
-} from '../shared/todos.js'
-import { type ThreadService, type ThreadServiceOptions, type ListThreadsOptions, type ForkThreadOptions, type ResumeSessionOptions, type ResumeSessionResult, type SyncPlanTodosOptions, cloneTurnForThread, normalizeTodoItems, preserveToolTodoSources, normalizeTodoStatus, normalizeTodoSource, findExistingTodoForRaw, sameTodoSource, uniqueTodoId, cloneTodoListForThread, resolveWorkspaceRelativePath, cloneTurnForFork, cloneItemForThread, cloneSessionItemsForThread, matchesThreadSearch, threadStatusFromTurns, rebuildTurnsFromItems, attachmentIdsFromItems, toSessionSnapshot } from './thread-service-core.js'
+import type { ThreadService } from './thread-service-core.js'
 
 export const threadServiceGoalsOperations = {
 async getGoal(this: ThreadService, threadId: string): Promise<ThreadGoal | null> {
@@ -59,11 +11,13 @@ async getGoal(this: ThreadService, threadId: string): Promise<ThreadGoal | null>
     return current.goal ?? null
   },
 
-async setGoal(this: ThreadService, threadId: string, request: SetThreadGoalRequest): Promise<ThreadGoal> {
+async setGoal(this: ThreadService, threadId: string, request: SetThreadGoalRequest, options?: { expectedRevision: string }): Promise<ThreadGoal> {
     const goal = await withManagerDataMutex(`thread:${threadId}`, () =>
       this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
+      requirePolicyRevision(goalRevision(current.goal, current.goalPolicyRevision), options?.expectedRevision)
+      if (options && !current.goal && !request.objective) throw new PolicyMutationRejected('INVALID_REQUEST')
       if (!current.goal && !request.objective) {
         throw new Error(`cannot update goal for thread ${threadId}: no goal exists`)
       }
@@ -88,7 +42,11 @@ async setGoal(this: ThreadService, threadId: string, request: SetThreadGoalReque
         updatedAt: now
       }
 
-      await this['threadStore'].upsert(touchThread({ ...current, goal: next }, now))
+      const updated = touchThread({ ...current, goal: next, goalPolicyRevision: (current.goalPolicyRevision ?? 0) + 1 }, now)
+      if (options && this['threadStore'].upsertIfRevision) {
+        const result = await this['threadStore'].upsertIfRevision(updated, current.revision ?? 0)
+        if (!result.applied) throw new PolicyMutationRejected('REVISION_CONFLICT')
+      } else await this['threadStore'].upsert(updated)
       return next
     })
     )
@@ -104,7 +62,7 @@ async setGoal(this: ThreadService, threadId: string, request: SetThreadGoalReque
 async recordGoalUsage(this: ThreadService, threadId: string, tokenDelta: number): Promise<ThreadGoal | null> {
     const delta = Math.max(0, Math.floor(tokenDelta))
     if (delta === 0) return this.getGoal(threadId)
-    const goal = await this['withThreadMutation'](threadId, async () => {
+    const goal = await withManagerDataMutex(`thread:${threadId}`, () => this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
       if (!current?.goal || current.goal.status !== 'active') return current?.goal ?? null
       const nextTokens = current.goal.tokensUsed + delta
@@ -118,22 +76,26 @@ async recordGoalUsage(this: ThreadService, threadId: string, tokenDelta: number)
       }
       await this['threadStore'].upsert(touchThread({ ...current, goal: next }, next.updatedAt))
       return next
-    })
+    }))
     if (!goal) return null
     await this['events'].record({ kind: 'goal_updated', threadId, goal })
     return goal
   },
 
-async clearGoal(this: ThreadService, threadId: string): Promise<boolean> {
-    const cleared = await this['withThreadMutation'](threadId, async () => {
+async clearGoal(this: ThreadService, threadId: string, options?: { expectedRevision: string }): Promise<boolean> {
+    const cleared = await withManagerDataMutex(`thread:${threadId}`, () => this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
+      requirePolicyRevision(goalRevision(current.goal, current.goalPolicyRevision), options?.expectedRevision)
       if (!current.goal) return false
-      const updated = touchThread({ ...current }, this['nowIso']())
+      const updated = touchThread({ ...current, goalPolicyRevision: (current.goalPolicyRevision ?? 0) + 1 }, this['nowIso']())
       delete (updated as { goal?: ThreadGoal }).goal
-      await this['threadStore'].upsert(updated)
+      if (options && this['threadStore'].upsertIfRevision) {
+        const result = await this['threadStore'].upsertIfRevision(updated, current.revision ?? 0)
+        if (!result.applied) throw new PolicyMutationRejected('REVISION_CONFLICT')
+      } else await this['threadStore'].upsert(updated)
       return true
-    })
+    }))
     if (!cleared) return false
     await this['events'].record({
       kind: 'goal_cleared',

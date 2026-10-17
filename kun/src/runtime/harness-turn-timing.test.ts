@@ -53,6 +53,19 @@ describe('HarnessTurnTiming', () => {
     expect(stamped(draft).requestTtftMs).toBe(1_500)
   })
 
+  it('keeps the timing an engine measured itself and still resets the window', () => {
+    const { timing, at } = harness()
+    at(0); timing.requestStarted()
+    at(1_000); timing.observe([delta(TEN_TOKENS)])
+    const timed: UsageDraft = { ...usage(5), usage: { ...usage(5).usage, requestTtftMs: 2_388, requestGenerationMs: 605 } }
+    at(1_100); timing.observe([timed])
+    expect(stamped(timed)).toMatchObject({ requestTtftMs: 2_388, requestGenerationMs: 605 })
+    expect(stamped(timed)).not.toHaveProperty('requestGenerationTokens')
+    const next = usage(5)
+    timing.observe([next])
+    expect(stamped(next)).not.toHaveProperty('requestTtftMs')
+  })
+
   it('counts a reasoning delta as the first token too', () => {
     const { timing, at } = harness()
     at(0); timing.requestStarted()

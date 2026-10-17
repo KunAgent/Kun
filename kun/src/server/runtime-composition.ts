@@ -23,9 +23,12 @@ export async function createKunServeRuntime(
   const dataDirLease = options.serviceManager
     ? undefined
     : await acquireRuntimeDataDirLease(options.dataDir)
+  const startupCleanups: Array<() => Promise<unknown>> = []
   try {
     const core = await createRuntimeCore(options, dataDirLease)
-    const model = await createRuntimeModelComposition(core)
+    const model = await createRuntimeModelComposition(core, {
+      registerCleanup: (cleanup) => { startupCleanups.push(cleanup) }
+    })
     const services = await createRuntimeServices(model)
     const registry = createRuntimeRegistry(services)
     const agent = await createRuntimeAgentComposition(registry)
@@ -35,6 +38,7 @@ export async function createKunServeRuntime(
     runtime = createServerRuntimeComposition(extensions, config)
     return runtime
   } catch (error) {
+    await Promise.allSettled(startupCleanups.reverse().map(async (cleanup) => cleanup()))
     await dataDirLease?.release().catch(() => undefined)
     throw error
   }

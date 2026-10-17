@@ -1,5 +1,4 @@
-import { ApprovalDetails } from './ApprovalDetails'
-import { ApprovalActions } from './ApprovalActions'
+import { TimelineApprovalCard } from './TimelineApprovalCard'
 import { memo, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench } from 'lucide-react'
@@ -10,6 +9,7 @@ import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock, isWorker
 import { isAssignmentBlock } from '@shared/assignment-card'
 import { AssignmentCard } from '../workers/AssignmentCard'
 import { ToolBlockDetails } from './ToolBlockDetails'
+import { GmailToolCard, gmailToolThread } from './gmail-tool-card'
 import { ToolStateMeta } from './ToolStateMeta'
 import { readToolPresentation } from '../../agent/tool-presentation'
 import { AssistantMarkdown } from './AssistantMarkdown'
@@ -36,7 +36,6 @@ import { ToolAttachmentPreviews } from './message-timeline-media-views'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
 import { HandoffEntry } from './message-timeline-handoff-entry'
-import { MemoryApprovalHint } from './memory-approval-hint'
 import { useTimelineSurface } from './timeline-surface'
 import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
 
@@ -114,7 +113,6 @@ function MessageBubbleImpl({
   allowThreadActions?: boolean
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
-  const resolveApproval = useChatStore((s) => s.resolveApproval)
   const turnTimingMetrics = useChatStore((s) => s.turnTimingMetrics)
   const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
   const catchingUpThread = useChatStore((s) =>
@@ -315,55 +313,7 @@ function MessageBubbleImpl({
     )
   }
   if (block.kind === 'approval') {
-    const submitting = block.status === 'submitting'
-    const done = !allowThreadActions || (block.status !== 'pending' && !submitting)
-    const statusLabel =
-      block.status === 'allowed'
-        ? t('approvalAllowed')
-        : block.status === 'denied'
-          ? t('approvalDenied')
-          : block.status === 'expired'
-            ? t('approvalExpired')
-          : block.status === 'error'
-            ? t('approvalFailed')
-            : submitting
-              ? t('approvalSubmitting')
-              : t('approvalPending')
-    return (
-      <div
-        className={`rounded-[22px] border px-4 py-4 text-[13px] leading-6 shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${
-          block.status === 'error'
-            ? 'border-red-300/80 bg-red-500/10 dark:border-red-800/60 dark:bg-red-950/35'
-            : block.status === 'expired'
-              ? 'border-amber-300/80 bg-amber-500/10 dark:border-amber-800/60 dark:bg-amber-950/30'
-            : 'border-accent/35 bg-[linear-gradient(180deg,rgba(79,124,255,0.08),rgba(79,124,255,0.12))] text-ds-ink'
-        }`}
-      >
-        <div className="font-semibold text-accent">{t('approvalTitle')}</div>
-        {block.toolName ? (
-          <div className="mt-1 text-[12px] text-ds-muted">
-            {t('approvalTool', { name: block.toolName })}
-          </div>
-        ) : null}
-        <p className="mt-2 whitespace-pre-wrap text-[14px] text-ds-ink">{block.summary}</p>
-        <ApprovalDetails action={block.action} />
-        <MemoryApprovalHint toolName={block.toolName} action={block.action} t={t} />
-        {block.errorMessage ? (
-          <p className="mt-2 text-[12px] text-red-700 dark:text-red-300">{block.errorMessage}</p>
-        ) : null}
-        {/* Mobile owns pending approvals through the composer-adjacent
-            MobilePendingActions card — rendering Allow/Deny here too would
-            duplicate the same approval with the opposite button order. */}
-        {!done && surface !== 'mobile' ? (
-          <div className="mt-3">
-            <ApprovalActions options={block.action?.permissionOptions} submitting={submitting} t={t}
-              onDecide={(decision, choice) => void resolveApproval(block.id, decision, choice)} />
-          </div>
-        ) : (
-          <p className="mt-2 text-[12px] font-medium text-ds-muted">{statusLabel}</p>
-        )}
-      </div>
-    )
+    return <TimelineApprovalCard block={block} allowThreadActions={allowThreadActions} />
   }
   if (block.kind === 'compaction') {
     return (
@@ -451,6 +401,8 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
 
   const hasDetail = Boolean(block.meta?.toolPresentation || block.meta?.acpKind || block.detail?.trim())
   const canExpand = hasDetail || running
+  const gmailThread = gmailToolThread(presentation)
+  if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
 
   return (
     <div className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>

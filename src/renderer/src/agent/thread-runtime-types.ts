@@ -59,8 +59,10 @@ export type RequestContextSnapshot = {
   activeSkillIds: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
-  /** `agent`: the Agent measured its own request; no category breakdown exists. */
+  /** `agent`: the Agent measured its own request; no category breakdown exists unless `breakdownSource` is `agent`. */
   occupancySource?: 'estimate' | 'agent'
+  /** `agent`: the Agent split its own count into `breakdown`'s categories; otherwise they are Kun's estimate. */
+  breakdownSource?: 'estimate' | 'agent'
 }
 
 export type DelegatedRuntimeState = {

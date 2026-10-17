@@ -34,6 +34,29 @@ describe('model request failure context', () => {
     })
   })
 
+  it('uses explicit unsent evidence instead of a synthetic HTTP status', () => {
+    expect(modelRequestFailureContext({
+      request, code: 'provider_configuration_changed',
+      failure: {
+        category: 'request', reason: 'request', requestSent: false,
+        responseReceived: false, httpStatus: 503,
+        providerCode: 'provider_configuration_changed', failoverAllowed: false
+      }
+    })).toEqual({
+      requestState: 'not_sent', providerId: 'codex', model: 'gpt-5.6-sol',
+      category: 'request', reason: 'request'
+    })
+  })
+
+  it('retains legacy real HTTP status classification when no unsent proof exists', () => {
+    expect(modelRequestFailureContext({
+      request, code: 'http_503',
+      failure: { category: 'unavailable', httpStatus: 503, failoverAllowed: true }
+    })).toMatchObject({
+      requestState: 'provider_responded', httpStatus: 503, providerCode: 'http_503'
+    })
+  })
+
   it('recognizes known local preflight failures', () => {
     expect(modelPreflightFailureContext(new Error('unknown model provider: codex'), request))
       .toMatchObject({

@@ -310,6 +310,8 @@
   "cursorSpotlightColorReset": "默认",
   "cursorSpotlightColorShade": "交互特效色阶 {{index}}",
   "cursorSpotlightColorTone": "交互特效深浅调色条",
+  "homeGlyphRipple": "主页点击涟漪",
+  "homeGlyphRippleDesc": "在 Code 新任务主页铺一层淡淡的字符背景，点击空白处会荡开涟漪。",
   "darkUiColorsTitle": "暗色界面颜色",
   "darkUiColorsBackground": "背景",
   "darkUiColorsBackgroundDesc": "应用、侧边栏、画布和透明卡片使用的基础颜色。",

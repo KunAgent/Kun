@@ -166,6 +166,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     composerSendKey: normalizeComposerSendKey(raw.composerSendKey),
     cursorSpotlight: raw.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(raw.cursorSpotlightColor),
+    homeGlyphRipple: raw.homeGlyphRipple !== false,
     darkUiColors: normalizeDarkUiColors(raw.darkUiColors),
     colorPalette: normalizeColorPaletteSettings(raw.colorPalette, raw.darkUiColors),
     provider: normalizeModelProviderSettings(raw.provider),

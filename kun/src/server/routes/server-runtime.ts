@@ -183,6 +183,10 @@ export type ExtensionPlatformRuntime = {
  * file-backed adapters without leaking concrete types into routes.
  */
 export type ServerRuntime = {
+  /** Native installed-app Gmail connection; credentials remain in the local encrypted store. */
+  gmail?: import('../../gmail/ports.js').GmailServicePort
+  gmailDataPolicy?: import('../../gmail/model-data-policy.js').GmailModelDataPolicyPort
+  gmailLocalModel?: Pick<import('../../gmail/local-ollama-service.js').ManagedLocalGmailOllama, 'status' | 'prepare'>
   agentDispatchService?: AgentDispatchService
   historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
@@ -447,6 +451,8 @@ export type ServerRuntime = {
     accountId?: string
     reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
   }): Promise<'completed' | 'failed' | 'aborted'> | void
+  /** Canonical private runtime/config authorities excluded from remote project browsing. */
+  remoteProtectedPaths?: string[]
   runtimeToken: string
   insecure: boolean
   allocateSeq: (threadId: string) => number | Promise<number>
@@ -487,5 +493,6 @@ export type ServerRuntime = {
     id: 'attachments' | 'memory',
     enabled: boolean
   ): Promise<RuntimeConfigApplyResponse>
+  registerRemoteCleanup?(cleanup: () => Promise<void>): void
   shutdown?(): Promise<void>
 }

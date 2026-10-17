@@ -8,9 +8,11 @@
  *   pending map so a late response is dropped with a debug note.
  * - Writes are serialized through a queue that honors `write()` backpressure
  *   via the `drain` event.
- * - A line longer than the 8 MiB cap, a non-JSON line, or an unclassifiable
- *   frame closes the connection with `harness_protocol_error` — a peer that
- *   corrupts the stream can no longer be trusted.
+ * - A line longer than the 8 MiB cap, a malformed `{...` frame, or an
+ *   unclassifiable frame closes the connection with `harness_protocol_error` —
+ *   a peer that corrupts the stream can no longer be trusted. A line that
+ *   does not parse and does not start with `{` is stdout diagnostic noise and
+ *   is skipped with a debug note.
  * - `exitPromise` (the process exit) rejects every pending request with
  *   `harness_crashed` plus a sanitized stderr tail.
  *
@@ -260,6 +262,14 @@ export class AcpJsonRpc {
     try {
       value = JSON.parse(line)
     } catch {
+      // Some agents print diagnostics (e.g. `[llm-account] model listing ...`)
+      // on stdout. A line that cannot be a JSON object frame is noise, not a
+      // corrupt frame: note it and keep going. A broken `{...` line is still
+      // a stream we can no longer trust.
+      if (!line.trimStart().startsWith('{')) {
+        this.io.debug?.({ direction: 'note', summary: `ignored non-JSON stdout line: ${previewText(line)}` })
+        return
+      }
       this.failProtocol('ACP frame is not valid JSON')
       return
     }
@@ -434,7 +444,11 @@ function previewFrame(frame: Record<string, unknown>): string {
   } catch {
     return '[unserializable frame]'
   }
-  const sanitized = redactApprovalSensitiveText(serialized)
+  return previewText(serialized)
+}
+
+function previewText(text: string): string {
+  const sanitized = redactApprovalSensitiveText(text)
   return sanitized.length > DEBUG_FRAME_PREVIEW_CHARS
     ? `${sanitized.slice(0, DEBUG_FRAME_PREVIEW_CHARS)}…[truncated]`
     : sanitized

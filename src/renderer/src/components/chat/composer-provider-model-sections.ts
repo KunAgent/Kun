@@ -8,7 +8,11 @@ import type { ComposerModelMenuGroup } from './floating-composer-model-picker-lo
  * Pickle`). The picker shows one section per provider and the model's own
  * name inside it instead of repeating the provider on every row.
  */
-export type ProviderModelSection = { key: string; label: string; modelIds: string[] }
+export type ProviderModelSection = {
+  key: string; label: string; modelIds: string[]
+  /** Set for sections built from the Agent's own option groups rather than provider-qualified ids. */
+  kind?: 'group'
+}
 
 /** Provider and short model name of a provider-qualified model, if it is one. */
 export function providerQualifiedModel(id: string, displayName?: string): { key: string; provider: string; model: string } | undefined {
@@ -23,9 +27,30 @@ export function providerQualifiedModel(id: string, displayName?: string): { key:
 }
 
 /**
- * Sections for a native catalog whose every model is provider-qualified and
- * that spans at least two providers; undefined keeps the flat list. Order
- * follows the Agent's own list.
+ * Sections for an Agent's own option groups (ACP select groups such as
+ * DeepSeek Harness's API-key and account routes), which can list the same
+ * model name once per group. Needs every model to carry a group and at
+ * least two groups; undefined keeps the flat list. Order follows the Agent.
+ */
+export function agentModelGroupSections(
+  modelIds: readonly string[],
+  modelInfo: Pick<ComposerModelMenuGroup, 'modelInfo'>['modelInfo']
+): ProviderModelSection[] | undefined {
+  const sections = new Map<string, ProviderModelSection>()
+  for (const id of modelIds) {
+    const label = modelInfo?.[id]?.group?.trim()
+    if (!label) return undefined
+    const section = sections.get(label) ?? { key: label, label, modelIds: [], kind: 'group' }
+    section.modelIds.push(id)
+    sections.set(label, section)
+  }
+  return sections.size >= 2 ? [...sections.values()] : undefined
+}
+
+/**
+ * Sections for a native catalog that spans at least two providers (every
+ * model provider-qualified) or at least two of the Agent's own groups;
+ * undefined keeps the flat list. Order follows the Agent's own list.
  */
 export function providerModelSections(
   group: Pick<ComposerModelMenuGroup, 'nativeHarnessId' | 'modelInfo'>,
@@ -35,7 +60,7 @@ export function providerModelSections(
   const sections = new Map<string, ProviderModelSection>()
   for (const id of modelIds) {
     const parts = providerQualifiedModel(id, group.modelInfo?.[id]?.displayName)
-    if (!parts) return undefined
+    if (!parts) return agentModelGroupSections(modelIds, group.modelInfo)
     const section = sections.get(parts.key) ?? { key: parts.key, label: parts.provider, modelIds: [] }
     section.modelIds.push(id)
     sections.set(parts.key, section)

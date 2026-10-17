@@ -34,6 +34,7 @@ import { TurnUsageRow } from './TurnUsageRow'
 import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
 import { useTimelineSurface } from './timeline-surface'
 import { LiveTurnProgressRow } from './message-timeline-live-progress'
+import { GmailRequestedCards } from './gmail-tool-card'
 import {
   parseDelegateDetail,
   readChildMeta,
@@ -394,6 +395,10 @@ export function ConversationTurn({
             />
           ) : null}
         </div>
+      ) : null}
+
+      {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
+        <GmailRequestedCards blocks={workProcessBlocks} />
       ) : null}
 
       {!hasOrderedTimeline

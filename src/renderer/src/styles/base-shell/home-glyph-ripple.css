@@ -1,0 +1,32 @@
+/* Code home glyph field (HomeGlyphRipple). The canvas reads its theme colours
+   from its own computed style: ink = color, accent = caret-color, background
+   luminance = text-decoration-color. */
+.ds-home-glyph-ripple {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  color: var(--ds-text);
+  caret-color: var(--ds-accent);
+  text-decoration-color: var(--ds-bg-main);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.ds-home-glyph-ripple[data-visible='true'] {
+  opacity: 1;
+  transition-duration: 420ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-home-glyph-ripple {
+    transition: none;
+  }
+}
+
+/* The chat stage is a window-drag region; its blank home space must take
+   presses so they can ripple. The top bar stays draggable. */
+.ds-chat-main-stack:has(> .ds-home-glyph-ripple) {
+  -webkit-app-region: no-drag;
+}

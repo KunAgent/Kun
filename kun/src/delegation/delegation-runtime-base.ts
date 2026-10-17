@@ -117,6 +117,8 @@ export abstract class DelegationRuntimeBase {
   protected readonly detachedParentThreads = new Map<string, string>()
   /** Completion of each detached execution, including persistence and parent notification. */
   protected readonly detachedSettlements = new Map<string, Promise<void>>()
+  /** Children this process queued; the restart sweep must never fail them. */
+  protected readonly ownedChildIds = new Set<string>()
   /**
    * Foreground children are executed through an independently-owned signal
    * that is linked to the parent until the user presses Ctrl+B. Keeping this
@@ -524,6 +526,7 @@ export abstract class DelegationRuntimeBase {
           returnFormat: args.returnFormat,
           ...(args.fastContext ? { fastContext: true } : {}),
           ...(args.fastContextTasks?.length ? { fastContextTasks: args.fastContextTasks } : {}),
+          ...(args.fastContextHintPaths?.length ? { fastContextHintPaths: args.fastContextHintPaths } : {}),
           signal
       }, record, async (failure, route) => {
         // Settle the original provider before switching attribution. Executor

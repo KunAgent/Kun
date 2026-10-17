@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { applyTheme } from '../../lib/apply-theme'
-import { readFocusModePreference, writeFocusModePreference } from '../../lib/focus-mode'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import { useUiModeCameosEnabled, useUiPluginStore } from '../../store/ui-plugin-store'
 
 export function useWorkbenchUiRuntime() {
   const initUiPlugins = useUiPluginStore((s) => s.initUiPlugins)
   const uiModeCameosEnabled = useUiModeCameosEnabled()
-  const [focusModeEnabled, setFocusModeEnabled] = useState(readFocusModePreference)
+  const focusModeEnabled = useFocusModeStore((state) => state.enabled)
+  const updateFocusMode = useFocusModeStore((state) => state.setEnabled)
   const [runtimeLogPath, setRuntimeLogPath] = useState('')
 
   useEffect(() => {
@@ -33,11 +34,6 @@ export function useWorkbenchUiRuntime() {
     if (typeof document === 'undefined') return
     document.documentElement.setAttribute('data-focus-mode', focusModeEnabled ? 'on' : 'off')
   }, [focusModeEnabled])
-
-  const updateFocusMode = useCallback((enabled: boolean): void => {
-    writeFocusModePreference(enabled)
-    setFocusModeEnabled(enabled)
-  }, [])
 
   const toggleTheme = useCallback((): void => {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark'

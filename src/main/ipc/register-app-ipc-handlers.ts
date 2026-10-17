@@ -1,3 +1,4 @@
+import { registerMobileLink } from '../mobile-link/register'
 import { registerKunArtIpc } from './register-kun-art-ipc'
 import { ipcMain } from 'electron'
 import { homedir } from 'node:os'
@@ -26,6 +27,7 @@ import { registerKunAccountIpc } from './register-kun-account-ipc'
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const accountAccess = registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
+  registerMobileLink(options, accountAccess)
   registerKunArtIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }), accountAccess)
   configureRuntimeModelExecutor(async (input) => {

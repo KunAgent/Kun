@@ -34,6 +34,11 @@ export class AntigravityModelProbe {
     return cached && cached.expires > this.now() && cached.catalog.models.length ? cached.catalog.models : undefined
   }
 
+  /** Spawn-free cached model facts, under the same freshness rule as `peek`. */
+  peekInfo(definition: HarnessDefinition): HarnessModelCatalog['modelInfo'] | undefined {
+    return this.peek(definition) ? this.cache.get(this.key(definition))?.catalog.modelInfo : undefined
+  }
+
   /** Check & enable already ran `agy models`; reuse it instead of a second run. */
   seed(definition: HarnessDefinition, catalog: HarnessModelCatalog): void {
     if (catalog.models.length) this.cache.set(this.key(definition), { catalog, expires: this.now() + CACHE_MS })

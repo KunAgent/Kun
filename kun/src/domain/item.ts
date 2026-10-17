@@ -1,3 +1,4 @@
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import type {
   ToolCallProviderMetadata,
   ModelContextBlockState,
@@ -25,6 +26,7 @@ export function makeUserItem(input: {
   displayText?: string
   messageSource?: UserMessageSource
   attachmentIds?: string[]
+  attachmentAliases?: AttachmentAliases
   composerContexts?: ComposerContextAttachmentJson[]
   reviewRequests?: UserTurnItem['reviewRequests']
   fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
@@ -60,6 +62,7 @@ export function makeUserItem(input: {
     ...(displayText && displayText !== input.text ? { displayText } : {}),
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(attachmentIds?.length ? { attachmentIds } : {}),
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: structuredClone(input.attachmentAliases) } : {}),
     ...(input.composerContexts?.length ? { composerContexts: input.composerContexts } : {}),
     ...(input.reviewRequests?.length ? { reviewRequests: input.reviewRequests } : {}),
     ...(fileReferences?.length ? { fileReferences } : {}),

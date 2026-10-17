@@ -7,6 +7,7 @@ import { RoomStoreConflictError, type RoomStore, type RoomStoredDocument } from 
 import { interactionFingerprint, interactionId, interactionReplay, interactionRoom, retryRoomInteraction } from './room-interaction-store.js'
 import { assertReminderCapacity, reminderBudget, reminderRows } from './room-reminder-budget.js'
 import { reminderFireAt, validateReminderOptions, nextReminderOccurrence } from './room-reminder-schedule.js'
+import { remoteReminderDevice, reminderUpdateFingerprint, type RemoteReminderResume } from './room-reminder-remote-control.js'
 export { reminderFireAt } from './room-reminder-schedule.js'
 export { fireDueRoomReminders } from './room-reminder-execution.js'
 
@@ -56,7 +57,7 @@ export async function createRoomReminder(store: RoomStore, input: RoomReminderOp
   anchorMessageId?: string
   chainDepth: number
   createdByRunId: string
-  clientSurface?: 'gui' | 'im'
+  clientSurface?: 'gui' | 'im' | 'api'
   imConnectionId?: string
 }): Promise<RoomReminderEntry> {
   const receipt = interactionId('reminder-create', input.roomId, input.clientRequestId)
@@ -111,9 +112,10 @@ export async function updateRoomReminder(store: RoomStore, roomId: string, remin
   note?: string
   delaySeconds?: number
   fireAt?: string
-}): Promise<RoomReminderEntry> {
+} & RemoteReminderResume): Promise<RoomReminderEntry> {
   const receipt = interactionId('reminder-update', roomId, reminderId, input.clientRequestId)
-  const fingerprint = interactionFingerprint({ roomId, reminderId, ...input })
+  const remoteDeviceId = remoteReminderDevice(input)
+  const fingerprint = reminderUpdateFingerprint(roomId, reminderId, input)
   return retryRoomInteraction(async () => {
     const replay = await interactionReplay<RoomReminderEntry>(store, receipt, fingerprint)
     if (replay) return replay
@@ -132,6 +134,11 @@ export async function updateRoomReminder(store: RoomStore, roomId: string, remin
       patch.triggerCursor = (await store.list('message', { roomId, limit: 1 }))[0]?.seq ?? 0
     }
     if (input.paused !== undefined) patch.status = input.paused ? 'paused' : 'scheduled'
+    if (remoteDeviceId) {
+      patch.clientSurface = 'api'
+      patch.remoteDeviceId = remoteDeviceId
+      patch.imConnectionId = undefined
+    }
     if (input.paused === false && Date.parse(row.value.fireAt) <= Date.now()) {
       patch.fireAt = nextReminderOccurrence({ ...row.value, ...patch }, new Date().toISOString())
         ?? new Date(Date.now() + ROOM_REMINDER_LIMITS.minDelaySec * 1000).toISOString()
@@ -182,7 +189,15 @@ export async function cancelRoomReminder(store: RoomStore, roomId: string, remin
     if (input.expectedRevision !== undefined && row.revision !== input.expectedRevision) {
       throw new RoomStoreConflictError('reminder changed since it was read', row.revision)
     }
-    if (row.value.status === 'cancelled') return { ...row.value, revision: row.revision }
+    if (row.value.status === 'cancelled') {
+      const result: RoomReminderEntry = { ...row.value, revision: row.revision }
+      // A no-op still needs an exact native proof: acknowledgement loss must
+      // never require a second cancel or infer success from current state.
+      await store.commit({ requestId: receipt, fingerprint,
+        checks: [{ kind: 'room', id: roomId, expectedRevision: room.revision },
+          { kind: 'room_reminder', id: reminderId, expectedRevision: row.revision }], result })
+      return result
+    }
     if (!['scheduled', 'paused'].includes(row.value.status)) {
       throw new RoomStoreConflictError('reminder already ended', row.revision)
     }
