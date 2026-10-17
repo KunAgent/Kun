@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { HarnessDetector } from './harness-detector.js'
 import { ACP_DEFAULT_CAPABILITIES } from './builtin-harnesses.js'
+import { DEEPSEEK_HARNESS_DEFINITION } from './deepseek-harness-definition.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
 import type { HarnessLoginState } from './harness-login-probes.js'
 
@@ -380,6 +381,17 @@ describe('safe current detection evidence', () => {
       command: 'fixture', aliases: [], versionArgs: ['--version'], exactVersion: '0.2.0-rc.2'
     } })], probeReady,
     spawnCaptured: async () => ({ stdout: `fixture ${version}`, stderr: '', timedOut: false, exitCode: 0 }) })
+    expect(await detector.status('opencode')).toMatchObject({ version, versionSupported: supported })
+    expect(probeReady).toHaveBeenCalledTimes(supported ? 1 : 0)
+  })
+
+  it.each([
+    ['0.1.9', false], ['0.2.0-rc.1', false], ['0.2.0-rc.2', true], ['0.2.0-rc.3', true],
+    ['0.2.0', true], ['0.2.1-rc.2', true], ['0.3.0', true]
+  ])('accepts DeepSeek Harness %s only at or above its minimum version', async (version, supported) => {
+    const probeReady = vi.fn(async () => ({ ready: 'yes' as const }))
+    const detector = makeDetector({ defs: [acpDef({ detect: { ...DEEPSEEK_HARNESS_DEFINITION.detect!, command: 'fixture' } })], probeReady,
+      spawnCaptured: async () => ({ stdout: `dsh ${version}`, stderr: '', timedOut: false, exitCode: 0 }) })
     expect(await detector.status('opencode')).toMatchObject({ version, versionSupported: supported })
     expect(probeReady).toHaveBeenCalledTimes(supported ? 1 : 0)
   })
