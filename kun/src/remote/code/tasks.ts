@@ -11,6 +11,7 @@ import { RemoteCodeManagement, metadataRevision } from './management.js'
 import { RemoteCodeHistory } from './history/service.js'
 import type { RemoteArtifacts } from '../files/artifacts.js'
 import { versionedHistory } from '../messages/history-version.js'
+import { continuationRoute, movedTurn } from './session-route.js'
 
 /**
  * The task depth a new turn inherits. A fresh admission promotes pending settings first, so they win; the
@@ -109,12 +110,18 @@ case 'code.create': {
         return { thread }
       }
 case 'code.turn.start': {
-        const reasoningEffort = storedEffort(await requireCode(runtime, p.threadId))
+        const thread = await requireCode(runtime, p.threadId), clientRequestId = receiptKey(envelope, requestId)
+        // Pending settings are promoted by the admission itself; otherwise follow a desktop per-turn pick. A retry
+        // ignores the turn it already admitted, so it sends the same request again.
+        const moved = thread.pendingExecutionConfig ? undefined
+          : movedTurn({ ...thread, turns: thread.turns.filter((turn) => turn.clientRequestId !== clientRequestId) })
+        const reasoningEffort = moved ? undefined : storedEffort(thread)
         return this.call('/v1/threads/' + p.threadId + '/turns', 'POST', {
           prompt: p.text,
           attachmentIds: p.attachmentIds,
-          clientRequestId: receiptKey(envelope, requestId),
+          clientRequestId,
           clientSurface: 'api',
+          ...(moved ? continuationRoute(moved) : {}),
           ...(reasoningEffort ? { reasoningEffort } : {})
         })
       }

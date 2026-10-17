@@ -13,6 +13,7 @@ import { cursorScope, readCursor, writeCursor } from '../cursor-codec.js'
 import { RemoteNoEffect } from '../requests/rejections.js'
 import { RemoteMessages } from '../messages/service.js'
 import { matchesUpdatedRange, type UpdatedRange } from './search-filters.js'
+import { movedTurn, sessionRoute, turnRoute } from './session-route.js'
 export const metadataRevision = (thread: Pick<ThreadRecord, 'revision'>) => `thread-v1:${thread.revision ?? 0}`
 export class RemoteCodeManagement {
   constructor(private runtime: ServerRuntime, private legacyModels: () => Promise<string[]>) {}
@@ -21,7 +22,7 @@ export class RemoteCodeManagement {
     try { projectId = createHash('sha256').update(await realpath(thread.workspace)).digest('hex') } catch {}
     return { id: thread.id, title: thread.title, status: thread.status,
       pinned: thread.pinned === true, archived: thread.status === 'archived', revision: metadataRevision(thread),
-      model: thread.model, harnessId: thread.harnessId, providerId: thread.providerId,
+      ...sessionRoute(thread),
       createdAt: thread.createdAt, updatedAt: thread.updatedAt, ...(projectId ? { projectId } : {}) }
   }
   async search(p: { query?: string; status?: string; harnessId?: string; projectId?: string; cursor?: string; limit?: number } & UpdatedRange) {
@@ -50,7 +51,7 @@ export class RemoteCodeManagement {
     const eligible = async (thread: ThreadRecord) => await isRemoteCodeAllowed(this.runtime, thread) && thread.status !== 'deleted' &&
       (p.status === 'archived' ? thread.status === 'archived' : thread.status !== 'archived') &&
       (!p.status || p.status === 'all' || p.status === 'archived' || thread.status === p.status) &&
-      (!p.harnessId || (thread.harnessId ?? 'kun') === p.harnessId) && matchesUpdatedRange(thread, p) && await projectMatch(thread.workspace)
+      (!p.harnessId || (sessionRoute(thread).harnessId ?? 'kun') === p.harnessId) && matchesUpdatedRange(thread, p) && await projectMatch(thread.workspace)
     const inspect = async (thread: ThreadRecord, next: string, contentCursor?: string) => {
       if (!await eligible(thread)) return true
       const text = [thread.title, thread.summary ?? ''].join('\n').toLowerCase()
@@ -148,17 +149,19 @@ export class RemoteCodeManagement {
     }
   }
   async settings(id: string) {
-    await requireCode(this.runtime, id)
+    const thread = await requireCode(this.runtime, id)
     const value = await this.runtime.threadService.getExecutionConfig(id)
     if (!value) throw new Error('NOT_FOUND')
+    // A desktop per-turn pick moves the task without changing its stored route; a settings change after it wins.
+    const moved = movedTurn(thread), current = moved ? turnRoute(moved) : value.current.route
     const agents = await codeAgents(this.runtime, await this.legacyModels())
     // The phone sees a gateway route only by the key its catalog lists, never the binding itself.
     const route = (r: typeof value.current.route): Omit<CodeRouteChoice, 'gatewayBinding'> & { routeKey?: string } => ({ model: r.model, harnessId: r.harnessId ?? 'kun',
       ...(r.providerId ? { providerId: r.providerId } : {}), ...(r.credentialMode ? { credentialMode: r.credentialMode } : {}),
       ...(r.gatewayBinding && r.credentialMode === 'kun-gateway' ? { routeKey: gatewayRouteKey({ harnessId: r.harnessId ?? 'kun', credentialMode: r.credentialMode, gatewayBinding: r.gatewayBinding }) } : {}),
       ...(r.reasoningEffort ? { reasoningEffort: r.reasoningEffort } : {}) })
-    return { threadId: id, revision: value.revision, effective: route(value.current.route),
-      next: route((value.pending ?? value.current).route), agents,
+    return { threadId: id, revision: value.revision, effective: route(current),
+      next: route(value.pending?.route ?? current), agents,
       models: [...new Set(agents.flatMap((a) => a.routes.flatMap((r) => r.models)))],
       editable: value.editable.route.allowed, reason: value.editable.route.reason }
   }
