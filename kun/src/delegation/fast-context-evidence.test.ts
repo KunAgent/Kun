@@ -39,6 +39,17 @@ describe('buildFastContextEvidencePack', () => {
     expect(pack.tasks[1]?.uncertainties).toContain('Read result was truncated; more source data may be available.')
   })
 
+  it('tells the parent when a search was narrowed to the defining package or hit the candidate limit', () => {
+    const items = sourceItems().slice(0, 2).map((item) => item.kind === 'tool_result'
+      ? { ...item, output: { matches: [{ relative_path: 'src/auth/session.ts', line: 42, text: 'createSession' }], scope: 'definition_scope', scope_hint: { searched: 'src/auth' }, candidate_files_truncated: true } }
+      : item) as TurnItem[]
+    const pack = buildFastContextEvidencePack({ tasks: tasks.slice(0, 1), items, turnId: 'turn' })
+    expect(pack.tasks[0]?.uncertainties).toEqual(expect.arrayContaining([
+      'Search covered only src/auth, where the identifier is defined; references elsewhere were not searched.',
+      'Search stopped at its candidate-file limit; ranking may have missed files.'
+    ]))
+  })
+
   it('does not assign unrelated evidence when no task term matches', () => {
     const pack = buildFastContextEvidencePack({
       tasks: [

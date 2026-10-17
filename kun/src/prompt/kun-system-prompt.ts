@@ -210,6 +210,9 @@ export function buildToolPreferenceInstruction(
     bullets.push(
       'For a complex investigation, make one `fast_context` call with 2-4 non-overlapping tasks. They share one bounded retrieval child and compact evidence pack; put any investigation that depends on this evidence in a later batch.'
     )
+    bullets.push(
+      'Pass `hintPaths` to `fast_context` when you already know relevant files or directories (user-mentioned or selected files, files you just edited, paths cited by an earlier evidence pack). The child searches them first instead of scanning the whole workspace.'
+    )
     if (names.has('delegate_task')) {
       bullets.push(
         'Reserve `delegate_task` for broader child work that needs full tool access; use `fast_context` for repository investigation.'

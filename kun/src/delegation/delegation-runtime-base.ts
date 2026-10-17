@@ -526,6 +526,7 @@ export abstract class DelegationRuntimeBase {
           returnFormat: args.returnFormat,
           ...(args.fastContext ? { fastContext: true } : {}),
           ...(args.fastContextTasks?.length ? { fastContextTasks: args.fastContextTasks } : {}),
+          ...(args.fastContextHintPaths?.length ? { fastContextHintPaths: args.fastContextHintPaths } : {}),
           signal
       }, record, async (failure, route) => {
         // Settle the original provider before switching attribution. Executor

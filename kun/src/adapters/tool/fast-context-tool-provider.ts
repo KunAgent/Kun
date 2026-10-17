@@ -11,6 +11,12 @@ import {
 import type { ToolExecutionUpdate, ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
+import {
+  FAST_CONTEXT_MAX_HINT_PATHS,
+  parseFastContextHintPaths,
+  prepareFastContextRun,
+  type FastContextRunPreparation
+} from './fast-context-run-preparation.js'
 import { elapsedMs } from '../../delegation/delegation-runtime-support.js'
 
 export const FAST_CONTEXT_TOOL_NAME = 'fast_context' as const
@@ -47,7 +53,8 @@ const FAST_CONTEXT_PROMPT_PREAMBLE = [
 const FAST_CONTEXT_DESCRIPTION = [
   'Run a Fast Context repository retrieval before broad code exploration. Submit 1-4 scoped tasks together; one budgeted child investigates them as a single retrieval run.',
   'The child can only use grep, glob, and read, has at most four model steps, executes at most four source calls concurrently, and returns compact file-and-line evidence instead of raw search output.',
-  'Use a later fast_context call for questions that depend on this evidence. 即使后续需要修改文件，也必须先调用 fast_context；复杂问题请在一个批次中提交 2-4 个互不重叠的任务。'
+  'Use a later fast_context call for questions that depend on this evidence. 即使后续需要修改文件，也必须先调用 fast_context；复杂问题请在一个批次中提交 2-4 个互不重叠的任务。',
+  'Pass hintPaths with files or directories you already know are relevant (mentioned by the user, open or selected, recently edited, or cited by earlier evidence); the child searches them first instead of the whole workspace.'
 ].join(' ')
 
 /**
@@ -88,6 +95,11 @@ export function buildFastContextToolProvider(
               },
               required: ['title', 'query'], additionalProperties: false
             }
+          },
+          hintPaths: {
+            type: 'array', maxItems: FAST_CONTEXT_MAX_HINT_PATHS,
+            items: { type: 'string', minLength: 1 },
+            description: 'Optional workspace-relative files or directories already known to be relevant; searched first.'
           }
         },
         required: ['tasks'], additionalProperties: false
@@ -104,13 +116,17 @@ export function buildFastContextToolProvider(
         // the immutable workspace captured by the parent tool context.
         const workspace = context.workspace
         const state = new FastContextRunState(parsed.tasks, onUpdate)
+        const preparation: FastContextRunPreparation = await prepareFastContextRun({
+          context,
+          hintPaths: parseFastContextHintPaths(args.hintPaths)
+        }).catch(() => ({ hintPaths: [] }))
         try {
           const record = await runtime.runChild({
             parentThreadId: context.threadId,
             parentTurnId: context.turnId,
             launcher: 'fast_context',
             label: FAST_CONTEXT_LABEL,
-            prompt: fastContextPrompt(parsed.tasks),
+            prompt: fastContextPrompt(parsed.tasks, preparation),
             workspace,
             inlineProfile: buildFastContextInlineProfile(cfg ?? {}),
             agentSurface: context.agentSurface ?? 'code',
@@ -127,6 +143,7 @@ export function buildFastContextToolProvider(
             returnFormat: 'summary',
             fastContext: true,
             fastContextTasks: parsed.tasks,
+            ...(preparation.hintPaths.length ? { fastContextHintPaths: preparation.hintPaths } : {}),
             queueTimeoutMs: FAST_CONTEXT_QUEUE_TIMEOUT_MS,
             onQueued: async (childId, _profile, metadata) => state.update({
               childId, status: 'queued', model: resolveExploreModel(metadata?.model, context),
@@ -308,7 +325,7 @@ function buildFastContextInlineProfile(cfg: FastContextToolConfig): { id: string
   }
 }
 
-function fastContextPrompt(tasks: readonly FastContextTask[]): string {
+function fastContextPrompt(tasks: readonly FastContextTask[], preparation: FastContextRunPreparation): string {
   return [
     'Investigate this batch as one Fast Context retrieval run.',
     'Use rounds 1-3 only for retrieval: locate candidate files, grep only candidate paths, then read necessary local ranges.',
@@ -316,7 +333,12 @@ function fastContextPrompt(tasks: readonly FastContextTask[]): string {
     'Round 4 is final synthesis only. Do not call a tool in round 4; write the task conclusions instead.',
     `Every grep, glob, and read call must include a non-empty task_indexes array of 1-based task numbers (1-${tasks.length}); include every task supported by shared evidence.`,
     'Use the minimum source calls needed. Do not request broad recursive scans after candidates are known.',
+    'Give grep a path or a glob whenever the overview, the priority scope, or an earlier result suggests one. Results are ranked by relevance, so the first matches are the most likely files.',
     'Your final response must contain one concise `Task N:` conclusion for every task, with uncertainty where evidence is missing.',
+    ...(preparation.hintPaths.length
+      ? [`Priority scope (paths the parent marked as relevant; grep without a path searches these first):\n${preparation.hintPaths.map((path) => `- ${path}`).join('\n')}`]
+      : []),
+    ...(preparation.skeleton ? [preparation.skeleton] : []),
     ...tasks.map((task, index) => `Task ${index + 1}: ${task.title}\n${task.query}`)
   ].join('\n\n')
 }

@@ -347,6 +347,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       returnFormat: record.returnFormat,
       fastContext: record.fastContext === true,
       fastContextTasks: record.fastContextTasks,
+      fastContextHintPaths: record.fastContextHintPaths,
       queueTimeoutMs: undefined,
       workspace,
       security,

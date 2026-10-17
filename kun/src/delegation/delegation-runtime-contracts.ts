@@ -284,6 +284,8 @@ export const ChildRunRecord = z.object({
   fastContext: z.literal(true).optional(),
   /** Original grouped retrieval requests, retained for evidence and resume projection. */
   fastContextTasks: z.array(FastContextTaskSchema).min(1).max(4).optional(),
+  /** Workspace-relative paths the parent marked as likely relevant. */
+  fastContextHintPaths: z.array(z.string().min(1).max(1_024)).max(16).optional(),
   /** Durable host-owned PPT phase identity, including attempts that fail before producing a bundle. */
   pptWorkflow: ChildPptWorkflow.optional(),
   status: z.enum(['queued', 'running', 'completed', 'failed', 'aborted']),
@@ -429,6 +431,8 @@ export type ChildRunExecutor = (input: {
   fastContext?: boolean
   /** Original task grouping used to build the structured evidence pack. */
   fastContextTasks?: readonly FastContextTask[]
+  /** Workspace-relative paths searched first by Fast Context grep. */
+  fastContextHintPaths?: readonly string[]
   signal: AbortSignal
 }) => Promise<{
   summary: string

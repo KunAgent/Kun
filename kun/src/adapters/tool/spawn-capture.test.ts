@@ -22,4 +22,27 @@ describe('spawnCapture output bounds', () => {
 
     expect(result.timedOut).toBe(true)
   })
+
+  it('stops the producer once it has emitted the requested number of rows', async () => {
+    const started = Date.now()
+    const result = await spawnCapture(
+      process.execPath,
+      ['-e', "let i = 0; const t = setInterval(() => { process.stdout.write(`row ${i++}\\n`) }, 5); setTimeout(() => { clearInterval(t) }, 5_000)"],
+      { cwd: process.cwd(), maxLines: 3, timeoutMs: 4_000, lowPriority: true }
+    )
+
+    expect(result.lineLimitReached).toBe(true)
+    expect(result.timedOut).toBe(false)
+    expect(result.stdout.split('\n').filter(Boolean)).toEqual(['row 0', 'row 1', 'row 2'])
+    expect(Date.now() - started).toBeLessThan(3_000)
+  })
+
+  it('reports no line limit when the producer finishes first', async () => {
+    const result = await spawnCapture(
+      process.execPath,
+      ['-e', "process.stdout.write('a\\nb\\n')"],
+      { cwd: process.cwd(), maxLines: 10 }
+    )
+    expect(result).toMatchObject({ lineLimitReached: false, exitCode: 0, stdout: 'a\nb\n' })
+  })
 })

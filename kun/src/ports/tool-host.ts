@@ -217,6 +217,11 @@ export type ToolHostContext = {
   fastContextScopeId?: string
   /** Number of grouped Fast Context tasks; source calls carry task_indexes for durable attribution. */
   fastContextTaskCount?: number
+  /**
+   * Host-owned state for one Fast Context retrieval run. Only the Fast Context
+   * tool-host wrapper attaches it; it is never derived from model arguments.
+   */
+  fastContextRun?: FastContextRunScope
   /** Active model provider id selected for this turn. Child agents inherit this routing unless a profile overrides it. */
   modelProviderId?: string
   /** Frozen harness identity for this turn; tool providers use it for harness-aware behavior. */
@@ -314,6 +319,16 @@ export type ToolHostContext = {
   awaitUserInput?: (
     input: Omit<UserInputRequest, 'threadId' | 'turnId'>
   ) => Promise<UserInputResolution>
+}
+
+/** Per-run Fast Context retrieval state shared by grep, glob, and read. */
+export interface FastContextRunScope {
+  /** Workspace-relative files or directories the parent marked as likely relevant. */
+  readonly hintPaths: readonly string[]
+  /** Lowercased identifier-like terms from the grouped task titles and queries. */
+  readonly queryTerms: readonly string[]
+  /** Source commands in this run that hit their time limit. */
+  timedOutCommands: number
 }
 
 export type ToolCallLike = {

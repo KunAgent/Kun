@@ -23,6 +23,7 @@ import {
 } from './workspace-path.js'
 export { workspaceRoot } from './workspace-path.js'
 export * from './builtin-shell-utils.js'
+export * from './spawn-capture.js'
 
 
 export async function withToolBoundary(
