@@ -15,6 +15,7 @@ import { delegatedCapabilityFingerprint, delegatedCredentialIdentity, delegatedR
 import { recordHandoffInjected, resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
 import { delegatedGraphCompletionCheck, delegatedGraphRecoveryInstruction, parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 import { CursorSdkEventMapper } from './cursor-sdk-event-mapper.js'
+import { cursorContextSnapshot, observeCursorCheckpointContext } from './cursor-checkpoint-context.js'
 import {
   CURSOR_AUTH_RECOVERY_PROMPT,
   CursorTurnInterruptedError,
@@ -366,17 +367,13 @@ export async function runCursorSdkTurnOwned(
           ])
       const attachIsolatedStore = (): void => {
         if (!deps.sessionCoordinator || !sdk.JsonlLocalAgentStore || !preparation) return
-        const store = new sdk.JsonlLocalAgentStore(
-          deps.sessionCoordinator.store.providerStateDir(
-            'cursor-sdk',
-            threadId,
-            delegatedRouteKey(preparation.route)
-          )
-        )
-        options = {
-          ...options,
-          local: { ...options.local, store }
-        }
+        const dir = deps.sessionCoordinator.store.providerStateDir('cursor-sdk', threadId, delegatedRouteKey(preparation.route))
+        // Each step's checkpoint carries Cursor's own context count: the live gauge.
+        const store = observeCursorCheckpointContext(new sdk.JsonlLocalAgentStore(dir), (details) => {
+          void Promise.resolve(deps.events.record(cursorContextSnapshot({ threadId, turnId, model, providerId: resolvedProviderId,
+            toolCount: kunContext.tools.length, activeSkillIds: kunContext.activeSkillIds }, details))).catch(() => undefined)
+        })
+        options = { ...options, local: { ...options.local, store } }
       }
       if (deps.sessionCoordinator && !sdk.JsonlLocalAgentStore) {
         if (resumeNativeSession && preparation?.resumed) {

@@ -135,7 +135,9 @@ export class HarnessTurnTiming {
     // from the completion (ACP `thoughtTokens`), so the ceiling is both.
     const reported = draft.usage.completionTokens + (draft.usage.reasoningTokens ?? 0)
     const sample = this.drain(reported)
-    if (sample) draft.usage = { ...draft.usage, ...sample }
+    // A call the engine timed itself (Devin's session store) keeps its own
+    // numbers; the arrival window is still reset.
+    if (sample && draft.usage.requestTtftMs === undefined) draft.usage = { ...draft.usage, ...sample }
   }
 
   private drain(reportedTokens: number): HarnessTimingSample | undefined {

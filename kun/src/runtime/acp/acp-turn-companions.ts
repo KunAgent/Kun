@@ -1,9 +1,9 @@
 /**
  * Per-turn companions of an ACP prompt:
  * - composer guidance, live or deferred — see acp-live-steering.ts;
- * - per-call usage from an OpenCode-family session store — see
- *   opencode-session-usage.ts. When it booked calls, the prompt results'
- *   usage (last call only, input without cache reads) is not booked again.
+ * - per-call usage from the Agent's own session store — OpenCode family
+ *   (opencode-session-usage.ts) or Devin (devin-session-usage.ts). When it
+ *   booked calls, the prompt results' usage (last call only) is not booked again.
  */
 import type { SteeringEntry } from '../../contracts/turns.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
@@ -14,6 +14,7 @@ import { AcpPromptResultSchema } from './acp-schema.js'
 import { acpPromptResultUsage } from './acp-session-usage.js'
 import type { AcpUsage } from './acp-usage-types.js'
 import { startOpenCodeSessionUsage, type OpenCodeCallUsage } from './opencode-session-usage.js'
+import { startDevinSessionUsage } from './devin-session-usage.js'
 
 export type AcpTurnCompanionsInput = {
   harnessId: string
@@ -23,6 +24,8 @@ export type AcpTurnCompanionsInput = {
   acpSessionId: string
   /** OpenCode-family session store; absent for other engines. */
   sessionDbPath?: string
+  /** Devin's session store; absent for other engines. */
+  devinSessionDbPath?: string
   /** A kun-gateway route is metered by the gateway; the Agent's own usage is dropped. */
   gatewayMetered: boolean
   /** Guidance opened when the turn was handed over (openAcpGuidance). */
@@ -78,13 +81,14 @@ export function startAcpTurnCompanions(input: AcpTurnCompanionsInput): AcpTurnCo
     kind: 'usage', threadId: input.threadId, turnId: input.turnId, model: input.model,
     source: 'harness-reported', harnessId: input.harnessId, usage: call.usage
   })
-  const calls = input.sessionDbPath && !input.gatewayMetered
-    ? startOpenCodeSessionUsage({
-        dbPath: input.sessionDbPath,
-        acpSessionId: input.acpSessionId,
-        onCalls: (booked) => input.emitLive(booked.map(usageDraft)),
-        ...(input.debug ? { debug: input.debug } : {})
-      })
+  const reader = {
+    acpSessionId: input.acpSessionId,
+    onCalls: (booked: OpenCodeCallUsage[]) => input.emitLive(booked.map(usageDraft)),
+    ...(input.debug ? { debug: input.debug } : {})
+  }
+  const calls = input.gatewayMetered ? undefined
+    : input.sessionDbPath ? startOpenCodeSessionUsage({ dbPath: input.sessionDbPath, ...reader })
+    : input.devinSessionDbPath ? startDevinSessionUsage({ dbPath: input.devinSessionDbPath, ...reader })
     : undefined
   const guidanceUsage: AcpUsage[] = []
   const live = input.guidance
