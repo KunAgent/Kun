@@ -6,6 +6,7 @@ import { kunWardrobeRules, kunWardrobeItems } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import { RoomAvatar } from '../rooms/RoomAvatar'
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
+import { useRoomUserProfileSync } from '../rooms/room-user-profile'
 import { useWardrobe, wardrobeShelf } from '../rooms/room-wardrobe'
 import { kunAccountBadge, kunAccountCardCopy } from './kun-account-view'
 import '../rooms/room-wardrobe.css'
@@ -66,6 +67,9 @@ export function SidebarAccountCard({ variant, state, open, panelId, cardRef, tri
   const { t } = useTranslation('common')
   const runtime = useKunRuntimeStatus()
   const summary = useAccountWardrobeSummary()
+  // The face is the user's own look; the card is on screen from launch, so it keeps that look fresh
+  // instead of waiting for the Agent chat or the wardrobe to be opened.
+  useRoomUserProfileSync()
   const onWardrobe = useChatStore((value) => value.route === 'wardrobe')
   const compact = variant === 'compact'
   const loading = state.status === 'loading'

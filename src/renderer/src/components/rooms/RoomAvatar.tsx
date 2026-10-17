@@ -1,5 +1,5 @@
 import { useWardrobe } from './room-wardrobe'
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import kunGreet from '../../../../asset/img/kun_greet.png'
 import { useRoomUserProfile } from './room-user-profile'
 import { kunAvatarFraming, type KunAvatarFraming, type RoomMember, type RoomAvatarReference } from '@shared/rooms-api'
@@ -8,6 +8,7 @@ import { avatarForIdentity, ROOM_AVATARS, ROOM_AVATAR_BACKGROUND_SIZE } from './
 import './rooms-avatars.css'
 import { useRoomUploadedAvatar } from './room-uploaded-avatar'
 import { useRoomComposedAvatar } from './room-avatar-composed'
+import { rememberedFace, rememberFace } from './room-user-avatar-cache'
 import { AgentIcon } from '../agent-icon'
 
 const tones = [
@@ -66,10 +67,19 @@ export function RoomAvatar({
   const profileAvatar = useRoomUserProfile((state) => state.profile.avatar)
   const isUser = user || identity === 'user'
   const wardrobeAccess = useWardrobe(false)
-  const reference = isUser && wardrobeAccess.mode === 'guest' ? null : avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
-  const uploaded = useRoomUploadedAvatar(reference?.kind === 'uploaded' ? reference.attachmentId : undefined)
+  // Until the wardrobe says who owns it, `guest` is only a placeholder: the remembered look stands in.
+  const guest = isUser && wardrobeAccess.mode === 'guest' && wardrobeAccess.modeKnown !== false
+  const reference = guest ? null : avatar !== undefined ? avatar : isUser ? profileAvatar : member?.avatar
+  // The user's own look is remembered on this machine so the next launch paints it at once.
+  const mine = isUser && !guest && avatar === undefined
+  const uploadedReference = reference?.kind === 'uploaded' ? reference : undefined
+  const uploadedLive = useRoomUploadedAvatar(uploadedReference?.attachmentId)
+  const uploaded = uploadedLive ?? (mine && uploadedReference ? rememberedFace(uploadedReference, 'uploaded') : undefined)
+  useEffect(() => {
+    if (mine && uploadedReference && uploadedLive) rememberFace(uploadedReference, 'uploaded', uploadedLive)
+  }, [mine, uploadedReference, uploadedLive])
   const view = framing ?? kunAvatarFraming(size)
-  const composed = useRoomComposedAvatar(reference?.kind === 'composed' ? reference : undefined, size, false, view)
+  const composed = useRoomComposedAvatar(reference?.kind === 'composed' ? reference : undefined, size, false, view, mine)
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(() => new Set())
   const builtinId = reference?.kind === 'builtin' ? reference.id : undefined
   // Coding Agents show their engine mark in a rounded square, never a portrait.
