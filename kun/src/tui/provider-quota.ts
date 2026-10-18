@@ -1,11 +1,5 @@
-import {
-  matchesKey,
-  truncateToWidth,
-  visibleWidth,
-  type Component,
-  type Focusable,
-  type TUI
-} from '@earendil-works/pi-tui'
+import { truncateToWidth, visibleWidth } from './ansi-text.js'
+import { ReportPage } from './pages/report-page.js'
 import type {
   ProviderQuotaEntry,
   ProviderQuotaListResponse,
@@ -15,7 +9,6 @@ import { redactSecretText } from '../config/secret-redaction.js'
 import { sanitizeTerminalText, wrapText } from './layout.js'
 import {
   joinVisualSides,
-  pageFrame,
   sectionLabel,
   statusGlyph,
   visual,
@@ -30,97 +23,24 @@ const green = visual.success
 const yellow = visual.warning
 const red = visual.danger
 
-export class ProviderQuotaDialog implements Component, Focusable {
-  private snapshot?: ProviderQuotaListResponse
-  private loading = false
-  private error = ''
-  private offset = 0
-  private maxOffset = 0
-  private pageSize = 1
-  private _focused = true
-
+export class ProviderQuotaPage extends ReportPage<ProviderQuotaListResponse> {
   constructor(
-    private readonly tui: TUI,
-    private readonly load: () => Promise<ProviderQuotaListResponse>,
-    private readonly close: () => void,
-    private readonly terminalRows: () => number,
-    private readonly nowMs: () => number = Date.now
-  ) {}
-
-  get focused(): boolean { return this._focused }
-  set focused(value: boolean) { this._focused = value }
-
-  async refresh(): Promise<void> {
-    if (this.loading) return
-    this.loading = true
-    this.error = ''
-    this.tui.requestRender()
-    try {
-      this.snapshot = await this.load()
-      this.offset = 0
-    } catch (error) {
-      this.error = safe(error instanceof Error ? error.message : 'Provider quota refresh failed.')
-    } finally {
-      this.loading = false
-      this.tui.requestRender()
-    }
-  }
-
-  render(width: number): string[] {
-    const contentWidth = Math.max(12, width - 2)
-    const body = providerQuotaBody(
-      this.snapshot,
-      contentWidth,
-      this.nowMs(),
-      this.loading,
-      this.error
-    )
-    this.pageSize = Math.max(1, this.terminalRows() - 7)
-    this.maxOffset = Math.max(0, body.length - this.pageSize)
-    this.offset = Math.max(0, Math.min(this.offset, this.maxOffset))
-    const visible = body.slice(this.offset, this.offset + this.pageSize)
-    const range = this.maxOffset > 0
-      ? `${this.offset + 1}-${Math.min(body.length, this.offset + this.pageSize)}/${body.length}`
-      : ''
-    const refreshed = this.snapshot
-      ? `refreshed ${formatClock(this.snapshot.refreshedAt)}`
-      : this.loading
-        ? 'loading'
-        : ''
-    return pageFrame({
+    load: () => Promise<ProviderQuotaListResponse>,
+    close: () => void,
+    invalidate: () => void,
+    nowMs: () => number = Date.now
+  ) {
+    super({
+      kind: 'provider-quota',
       path: ['KUN', 'Provider quota'],
-      right: [this.loading && this.snapshot ? 'refreshing' : refreshed, range].filter(Boolean).join(' · '),
       description: 'Account balances and rate limits from configured providers.',
-      body: visible,
-      footer: [
-        ...(this.maxOffset > 0 ? [{ key: '↑/↓ PgUp/PgDn', label: 'navigate' }] : []),
-        { key: 'r', label: this.loading ? 'refreshing…' : 'refresh' },
-        { key: 'Esc', label: 'back' }
-      ],
-      width
-    })
+      load,
+      body: (snapshot, width, loading, error) => providerQuotaBody(snapshot, width, nowMs(), loading, error),
+      refreshedLabel: (snapshot) => snapshot ? `refreshed ${formatClock(snapshot.refreshedAt)}` : '',
+      errorMessage: (error) => safe(error instanceof Error ? error.message : 'Provider quota refresh failed.'),
+      nowMs
+    }, close, invalidate)
   }
-
-  handleInput(data: string): void {
-    if (matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) {
-      this.close()
-      return
-    }
-    const key = data.toLowerCase()
-    if (key === 'r' || matchesKey(data, 'ctrl+r')) {
-      void this.refresh()
-      return
-    }
-    if (matchesKey(data, 'up') || key === 'k') this.offset = Math.max(0, this.offset - 1)
-    else if (matchesKey(data, 'down') || key === 'j') this.offset = Math.min(this.maxOffset, this.offset + 1)
-    else if (matchesKey(data, 'pageUp')) this.offset = Math.max(0, this.offset - this.pageSize)
-    else if (matchesKey(data, 'pageDown')) this.offset = Math.min(this.maxOffset, this.offset + this.pageSize)
-    else if (matchesKey(data, 'home')) this.offset = 0
-    else if (matchesKey(data, 'end')) this.offset = this.maxOffset
-    this.tui.requestRender()
-  }
-
-  invalidate(): void {}
 }
 
 export function providerQuotaBody(

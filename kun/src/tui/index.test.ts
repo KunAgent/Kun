@@ -12,6 +12,11 @@ import {
 import type { TuiConnection } from './client.js'
 import type { TuiOptions } from './options.js'
 
+/** These tests run the in-process path; the opentui renderer itself is never mounted. */
+function inProcessRenderer(): NonNullable<Parameters<typeof runTuiCommand>[1]['renderer']> {
+  return { availableInProcess: async () => true, handoff: vi.fn(async () => 0) }
+}
+
 function runtimeInfo(dataDir: string): RuntimeInfoResponse {
   return RuntimeInfoResponse.parse({
     host: '127.0.0.1',
@@ -103,6 +108,27 @@ describe('runTuiCommand', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
+  it('hands off to a renderer-capable Node before starting or discovering a Runtime', async () => {
+    const fetch = vi.fn()
+    const resolveConnection = vi.fn()
+    const handoff = vi.fn(async () => 7)
+    const env = { KUN_GUI_SETTINGS_PATH: '/nonexistent/kun-settings.json' }
+    const code = await runTuiCommand(['--continue'], {
+      stdin: { isTTY: true } as unknown as NodeJS.ReadableStream,
+      stdout: { isTTY: true, write: () => undefined },
+      stderr: { write: vi.fn() },
+      env,
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      nodeVersion: '22.19.0',
+      resolveConnection: resolveConnection as never,
+      renderer: { availableInProcess: async () => false, handoff }
+    })
+    expect(code).toBe(7)
+    expect(handoff).toHaveBeenCalledWith(['--continue'], env, expect.anything())
+    expect(fetch).not.toHaveBeenCalled()
+    expect(resolveConnection).not.toHaveBeenCalled()
+  })
+
   it('refuses an unpublished GUI-private writer instead of attaching to it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-private-gui-'))
     const dataDir = join(root, 'data')
@@ -129,7 +155,8 @@ describe('runTuiCommand', () => {
         stderr: { write: (chunk) => { stderr += chunk } },
         env: { KUN_GUI_SETTINGS_PATH: settingsPath },
         fetch: fetch as unknown as typeof globalThis.fetch,
-        nodeVersion: '22.19.0'
+        nodeVersion: '22.19.0',
+        renderer: inProcessRenderer()
       })
 
       expect(code).toBe(70)
@@ -184,7 +211,8 @@ describe('runTuiCommand', () => {
         env: { KUN_GUI_SETTINGS_PATH: join(root, 'missing-settings.json') },
         fetch: vi.fn(async () => new Response('unavailable', { status: 503 })) as unknown as typeof fetch,
         nodeVersion: '22.19.0',
-        resolveConnection
+        resolveConnection,
+        renderer: inProcessRenderer()
       })
 
       expect(code).toBe(70)

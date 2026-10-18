@@ -16,11 +16,56 @@ import {
 } from '../graph/graph-test-fixtures.test-support.js'
 import { KunTuiClient } from './client.js'
 import { sanitizeTerminalText } from './layout.js'
+import { PtyScreen, ptyTuiNode } from './pty-screen.test-support.js'
 
 const worktreeRoot = resolve(import.meta.dirname, '../../..')
 const cliEntry = join(worktreeRoot, 'kun/dist/cli/serve-entry.js')
 const roots: string[] = []
 const servers: KunServeHandle[] = []
+// The renderer needs Node >= 26.4; the CLI under test runs on the test
+// interpreter and hands off to this one, exactly as an installed `kun` does.
+const tuiNode = ptyTuiNode()
+
+type PtyExit = { exitCode: number; signal?: number }
+
+/** Spawn `kun` in a PTY whose output feeds an emulated terminal screen. */
+function spawnKun(args: string[], options: { cols: number; rows: number; env?: NodeJS.ProcessEnv }) {
+  const screen = new PtyScreen(options.cols, options.rows)
+  const terminal = pty.spawn(process.execPath, [cliEntry, ...args], {
+    name: 'xterm-256color',
+    cols: options.cols,
+    rows: options.rows,
+    cwd: worktreeRoot,
+    env: stringEnvironment({ ...(options.env ?? process.env), KUN_TUI_NODE: tuiNode?.path, KUN_TUI_NODE_DOWNLOAD: '0' })
+  })
+  let exitState: PtyExit | undefined
+  const data = terminal.onData((chunk) => screen.write(chunk))
+  screen.onReply((reply) => { if (!exitState) terminal.write(reply) })
+  const exited = new Promise<PtyExit>((accept) => {
+    terminal.onExit((state) => {
+      exitState = state
+      accept(state)
+    })
+  })
+  return {
+    terminal,
+    screen,
+    exited,
+    getExit: () => exitState,
+    /** Raw output stream, for escape-sequence assertions. */
+    output: () => screen.raw,
+    /** Text on the emulated screen and its scrollback. */
+    visible: () => sanitizeTerminalText(screen.text()),
+    resize(cols: number, rows: number) {
+      terminal.resize(cols, rows)
+      screen.resize(cols, rows)
+    },
+    dispose() {
+      data.dispose()
+      try { terminal.kill() } catch { /* already exited */ }
+    }
+  }
+}
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close().catch(() => undefined)))
@@ -29,7 +74,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui PTY smoke', () => {
+describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNode)('kun tui PTY smoke', () => {
   it('starts, creates and opens a thread, accepts input and resize, interrupts, and restores the terminal on exit', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-pty-'))
     roots.push(root)
@@ -63,81 +108,61 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       runtimeToken
     })
 
-    const terminal = pty.spawn(process.execPath, [
-      cliEntry,
-      'tui',
-      '--no-start',
-      '--data-dir', root,
-      '--workspace', root
-    ], {
-      name: 'xterm-256color',
+    const tui = spawnKun(['tui', '--no-start', '--data-dir', root, '--workspace', root], {
       cols: 88,
       rows: 26,
-      cwd: worktreeRoot,
-      env: stringEnvironment({
+      env: {
         ...process.env,
         KUN_MANAGER_CONTROL_DIR: join(root, 'control'),
         KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json')
-      })
+      }
     })
-    let output = ''
-    const dataSubscription = terminal.onData((data) => { output += data })
-    const exited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
-      terminal.onExit(accept)
-    })
+    const { terminal } = tui
+    const visible = tui.visible
+    const output = tui.output
 
     try {
-      await waitFor(() =>
-        output.includes('Welcome to Kun') &&
-        output.includes('/connect') &&
-        output.includes('/sessions') &&
-        output.includes('┌') &&
-        output.includes('Ctrl+P')
-      )
-      expect(output).not.toContain('\x1b[?1049h')
-      expect(output).toContain('/connect')
-      expect(output).toContain('/sessions')
-      expect(output).toContain('Workspace')
-      expect(output).toContain('┌')
-      expect(output).toContain('Ctrl+P')
-      expect(output).not.toContain('/model')
-      expect(output).not.toContain('runtime ready')
-      expect(output).not.toContain('MCP ')
-      expect(output).not.toContain('No threads found')
+      await waitFor(() => {
+        const text = visible()
+        return text.includes('Welcome to Kun') && text.includes('/connect') &&
+          text.includes('/sessions') && text.includes('┌') && text.includes('Ctrl+P')
+      }, 20_000).catch((error) => { throw new Error(`${String(error)}\nPTY screen:\n${visible()}`) })
+      expect(output()).not.toContain('\x1b[?1049h')
+      expect(visible()).toContain('Workspace')
+      expect(visible()).not.toContain('/model')
+      expect(visible()).not.toContain('runtime ready')
+      expect(visible()).not.toContain('MCP ')
+      expect(visible()).not.toContain('No threads found')
 
-      await waitFor(() => sanitizeTerminalText(output).includes('gpt-5.6-luna · high'))
+      await waitFor(() => visible().includes('gpt-5.6-luna · high'))
       terminal.write('\x14') // Ctrl+T cycles high -> max.
-      await waitFor(() => output.includes('Reasoning effort: max'))
-      await waitFor(() => sanitizeTerminalText(output).includes('gpt-5.6-luna · max'))
+      await waitFor(() => visible().includes('Reasoning effort: max'))
+      await waitFor(() => visible().includes('gpt-5.6-luna · max'))
 
       terminal.write('\x18n') // Ctrl+X N
       const thread = await waitForValue(async () =>
         (await client.listThreads()).find((item) => item.title === 'Terminal chat')
       ).catch((error) => {
-        const visibleTail = sanitizeTerminalText(output).slice(-2_000)
-        throw new Error(`${error instanceof Error ? error.message : String(error)}\nPTY output tail:\n${visibleTail}`)
+        throw new Error(`${error instanceof Error ? error.message : String(error)}\nPTY screen:\n${visible().slice(-2_000)}`)
       })
-      await waitFor(() => output.includes('Terminal chat'))
+      await waitFor(() => visible().includes('Terminal chat'))
 
       terminal.write('/rename PTY smoke\r')
       await waitFor(async () => (await client.getThread(thread.id)).title === 'PTY smoke')
 
-      const beforeResize = output.length
-      terminal.resize(52, 14)
-      await waitFor(() => output.length > beforeResize)
-      const beforeWideResize = output.length
-      terminal.resize(112, 26)
-      await waitFor(() => output.length > beforeWideResize)
+      const beforeResize = output().length
+      tui.resize(52, 14)
+      await waitFor(() => output().length > beforeResize)
+      const beforeWideResize = output().length
+      tui.resize(112, 26)
+      await waitFor(() => output().length > beforeWideResize)
 
       const turn = await server.runtime.turnService.startTurn({
         threadId: thread.id,
         request: { prompt: 'hold for interrupt', model: 'gpt-5.6-luna', mode: 'agent' }
       })
-      await waitFor(() => {
-        const visible = sanitizeTerminalText(output)
-        return visible.includes('Esc stop') && visible.includes('Waiting')
-      })
-      expect(sanitizeTerminalText(output)).not.toContain('Tip:')
+      await waitFor(() => visible().includes('Esc stop') && visible().includes('Waiting'))
+      expect(visible()).not.toContain('Tip:')
       const itemBase = {
         id: 'item_pty_stream', threadId: thread.id, turnId: turn.turnId, role: 'assistant' as const,
         status: 'running' as const, createdAt: new Date().toISOString(), kind: 'assistant_text' as const
@@ -151,55 +176,48 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         kind: 'assistant_reasoning_delta', threadId: thread.id, turnId: turn.turnId,
         itemId: reasoningBase.id, item: { ...reasoningBase, text: 'Inspect the active model capability.' }
       })
-      await waitFor(() => output.includes('/thinking expand'))
-      expect(output).not.toContain('Inspect the active model capability.')
-      expect(output).not.toContain('\x1b[?1000h\x1b[?1006h')
-      expect(sanitizeTerminalText(output)).toContain('History')
+      await waitFor(() => visible().includes('/thinking expand'))
+      expect(visible()).not.toContain('Inspect the active model capability.')
+      // Native scrolling and selection stay with the terminal until opted out.
+      expect(output()).not.toContain('\x1b[?1000h')
+      expect(visible()).toContain('History')
 
       terminal.write('\x18p') // Ctrl+X P opts into direct transcript clicks.
-      await waitFor(() =>
-        output.includes('Mouse clicks enabled') &&
-        output.includes('\x1b[?1000h\x1b[?1006h')
-      )
+      await waitFor(() => visible().includes('Mouse clicks enabled') && output().includes('\x1b[?1000h'))
       terminal.write('\x18p') // The same binding restores native scroll and selection.
       await waitFor(() =>
-        output.includes('Text selection mode') &&
-        output.lastIndexOf('\x1b[?1000l\x1b[?1006l') >
-          output.lastIndexOf('\x1b[?1000h\x1b[?1006h')
+        visible().includes('Text selection mode') &&
+        output().lastIndexOf('\x1b[?1000l') > output().lastIndexOf('\x1b[?1000h')
       )
       expect((await client.getThread(thread.id)).turns.find((candidate) => candidate.id === turn.turnId)?.status).toBe('running')
 
       terminal.write('/thinking\r')
-      await waitFor(() => output.includes('Thinking is expanded'))
-      await waitFor(() => output.includes('Inspect the active model capability.'))
+      await waitFor(() => visible().includes('Thinking expanded for new output'))
+      await waitFor(() => visible().includes('Inspect the active model capability.'))
       terminal.write('/thinking\r')
-      await waitFor(() => output.includes('Thinking is collapsed'))
-      const beforeHiddenReasoning = output.length
+      await waitFor(() => visible().includes('Thinking collapsed for new output'))
+      await waitFor(() => !tui.screen.view().join('\n').includes('Inspect the active model capability.'))
       await server.runtime.events.record({
         kind: 'assistant_reasoning_delta', threadId: thread.id, turnId: turn.turnId,
         itemId: reasoningBase.id, item: { ...reasoningBase, text: ' This fragment stays hidden.' }
       })
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      expect(output.slice(beforeHiddenReasoning)).not.toContain('This fragment stays hidden.')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      await tui.screen.settled()
+      expect(visible()).not.toContain('This fragment stays hidden.')
       terminal.write('/thinking\r')
-      await waitFor(() => output.slice(beforeHiddenReasoning).includes('Thinking is expanded'))
+      await waitFor(() => visible().includes('Thinking expanded for new output'))
 
-      const beforeAssistantDelta = output.length
       await server.runtime.events.record({
         kind: 'assistant_text_delta', threadId: thread.id, turnId: turn.turnId,
         itemId: itemBase.id, item: { ...itemBase, text: 'Hel' }
       })
-      await waitFor(() =>
-        output.slice(beforeAssistantDelta).includes('Hel') &&
-        output.slice(beforeAssistantDelta).includes('Responding')
-      )
-      expect(output).toContain('▍')
+      await waitFor(() => visible().includes('Hel ▍') && visible().includes('Responding'))
       expect((await client.getThread(thread.id)).turns.find((candidate) => candidate.id === turn.turnId)?.status).toBe('running')
       await server.runtime.events.record({
         kind: 'assistant_text_delta', threadId: thread.id, turnId: turn.turnId,
         itemId: itemBase.id, item: { ...itemBase, text: 'lo' }
       })
-      await waitFor(() => output.includes('Hello'))
+      await waitFor(() => visible().includes('Hello'))
 
       terminal.write('\x1b') // Escape interrupts the active turn
       await waitFor(async () => {
@@ -208,48 +226,35 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       })
 
       terminal.write('/quit\r')
-      const exit = await withTimeout(exited, 5_000, 'PTY process did not exit')
+      const exit = await withTimeout(tui.exited, 10_000, 'PTY process did not exit')
       expect(exit.exitCode).toBe(0)
-      expect(output).toContain('\x1b[?2004l')
-      expect(output).not.toContain('\x1b[?1049l')
-      expect(output).not.toContain('\x1b[3J')
+      expect(output()).toContain('\x1b[?2004l')
+      // The conversation stays inline: no alternate screen was used.
+      expect(output()).not.toContain('\x1b[?1049h')
+      await tui.screen.settled()
+      expect(visible()).toContain('Hello')
       await expect(client.runtimeInfo()).resolves.toMatchObject({
         instanceId: server.instanceId
       })
     } finally {
-      dataSubscription.dispose()
-      try { terminal.kill() } catch { /* already exited */ }
+      tui.dispose()
     }
-  }, 30_000)
+  }, 60_000)
 
   it('stops its owned Runtime and Manager after Ctrl+C and reopens persisted history', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-standalone-'))
     roots.push(root)
     const controlDir = join(root, 'control')
-    const terminal = pty.spawn(process.execPath, [
-      cliEntry,
-      '--data-dir', root,
-      '--workspace', root
-    ], {
-      name: 'xterm-256color',
+    const tui = spawnKun(['--data-dir', root, '--workspace', root], {
       cols: 88,
       rows: 26,
-      cwd: worktreeRoot,
-      env: stringEnvironment({
+      env: {
         ...process.env,
         KUN_MANAGER_CONTROL_DIR: controlDir,
         KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json')
-      })
+      }
     })
-    let output = ''
-    let exitState: { exitCode: number; signal?: number } | undefined
-    const dataSubscription = terminal.onData((data) => { output += data })
-    const exited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
-      terminal.onExit((state) => {
-        exitState = state
-        accept(state)
-      })
-    })
+    const { terminal, exited } = tui
 
     try {
       const manager = await waitForPtyValue(
@@ -257,8 +262,8 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         {
           stage: 'Service Manager readiness',
           timeoutMs: 35_000,
-          getExit: () => exitState,
-          getOutput: () => output
+          getExit: tui.getExit,
+          getOutput: tui.visible
         }
       )
       const connection = await waitForPtyValue(
@@ -266,8 +271,8 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         {
           stage: 'shared Runtime readiness',
           timeoutMs: 35_000,
-          getExit: () => exitState,
-          getOutput: () => output
+          getExit: tui.getExit,
+          getOutput: tui.visible
         }
       )
       expect(connection.discovery.launchMode).toBe('shared')
@@ -286,16 +291,16 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         mode: 'agent'
       })
       await waitForPtyValue(
-        () => output.includes('Welcome to Kun') &&
-          output.includes('/connect') &&
-          output.includes('/sessions')
+        () => tui.visible().includes('Welcome to Kun') &&
+          tui.visible().includes('/connect') &&
+          tui.visible().includes('/sessions')
           ? true
           : undefined,
         {
           stage: 'TUI first render',
           timeoutMs: 30_000,
-          getExit: () => exitState,
-          getOutput: () => output
+          getExit: tui.getExit,
+          getOutput: tui.visible
         }
       )
 
@@ -304,38 +309,22 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       terminal.write('\x03')
       const exit = await withTimeout(exited, 15_000, 'standalone TUI process did not exit')
       expect(exit.exitCode).toBe(0)
-      expect(output).not.toContain('\x1b[?1049h')
-      expect(output).not.toContain('\x1b[?1049l')
+      expect(tui.output()).not.toContain('\x1b[?1049h')
       await waitFor(() => !processIsAlive(ownedPid), 10_000)
       await waitFor(() => !processIsAlive(manager.discovery.pid), 10_000)
       expect(await readManagerDiscovery(controlDir)).toBeNull()
       await expect(fetch(`${manager.discovery.baseUrl}/health`)).rejects.toThrow()
 
-      const secondTerminal = pty.spawn(process.execPath, [
-        cliEntry,
-        '--data-dir', root,
-        '--workspace', root,
-        '--continue'
-      ], {
-        name: 'xterm-256color',
+      const second = spawnKun(['--data-dir', root, '--workspace', root, '--continue'], {
         cols: 88,
         rows: 26,
-        cwd: worktreeRoot,
-        env: stringEnvironment({
+        env: {
           ...process.env,
           KUN_MANAGER_CONTROL_DIR: controlDir,
           KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json')
-        })
+        }
       })
-      let secondOutput = ''
-      let secondExitState: { exitCode: number; signal?: number } | undefined
-      const secondData = secondTerminal.onData((data) => { secondOutput += data })
-      const secondExited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
-        secondTerminal.onExit((state) => {
-          secondExitState = state
-          accept(state)
-        })
-      })
+      const { terminal: secondTerminal, exited: secondExited } = second
       try {
         let secondManagerPid: number | undefined
         const secondConnection = await waitForPtyValue(
@@ -352,8 +341,8 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
           {
             stage: 'sequential Runtime readiness',
             timeoutMs: 35_000,
-            getExit: () => secondExitState,
-            getOutput: () => secondOutput
+            getExit: second.getExit,
+            getOutput: second.visible
           }
         )
         expect(secondConnection.discovery.clientOwnerKind).toBe('tui')
@@ -366,12 +355,12 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
           title: 'Sequential TUI state'
         })
         await waitForPtyValue(
-          () => secondOutput.includes('Welcome to Kun') ? true : undefined,
+          () => second.visible().includes('Welcome to Kun') ? true : undefined,
           {
             stage: 'sequential TUI first render',
             timeoutMs: 30_000,
-            getExit: () => secondExitState,
-            getOutput: () => secondOutput
+            getExit: second.getExit,
+            getOutput: second.visible
           }
         )
 
@@ -382,12 +371,10 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         await waitFor(() => secondManagerPid !== undefined && !processIsAlive(secondManagerPid), 10_000)
         expect(await readManagerDiscovery(controlDir)).toBeNull()
       } finally {
-        secondData.dispose()
-        try { secondTerminal.kill() } catch { /* already exited */ }
+        second.dispose()
       }
     } finally {
-      dataSubscription.dispose()
-      try { terminal.kill() } catch { /* already exited */ }
+      tui.dispose()
     }
   }, 90_000)
 
@@ -395,30 +382,16 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-signal-exit-'))
     roots.push(root)
     const controlDir = join(root, 'control')
-    const terminal = pty.spawn(process.execPath, [
-      cliEntry,
-      '--data-dir', root,
-      '--workspace', root
-    ], {
-      name: 'xterm-256color',
+    const tui = spawnKun(['--data-dir', root, '--workspace', root], {
       cols: 88,
       rows: 26,
-      cwd: worktreeRoot,
-      env: stringEnvironment({
+      env: {
         ...process.env,
         KUN_MANAGER_CONTROL_DIR: controlDir,
         KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json')
-      })
+      }
     })
-    let output = ''
-    let exitState: { exitCode: number; signal?: number } | undefined
-    const dataSubscription = terminal.onData((data) => { output += data })
-    const exited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
-      terminal.onExit((state) => {
-        exitState = state
-        accept(state)
-      })
-    })
+    const { terminal, exited } = tui
 
     try {
       const manager = await waitForPtyValue(
@@ -426,8 +399,8 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         {
           stage: 'signal test Manager readiness',
           timeoutMs: 35_000,
-          getExit: () => exitState,
-          getOutput: () => output
+          getExit: tui.getExit,
+          getOutput: tui.visible
         }
       )
       const connection = await waitForPtyValue(
@@ -435,18 +408,18 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         {
           stage: 'signal test Runtime readiness',
           timeoutMs: 35_000,
-          getExit: () => exitState,
-          getOutput: () => output
+          getExit: tui.getExit,
+          getOutput: tui.visible
         }
       )
       expect(connection.discovery.clientOwnerKind).toBe('tui')
       await waitForPtyValue(
-        () => output.includes('Welcome to Kun') ? true : undefined,
+        () => tui.visible().includes('Welcome to Kun') ? true : undefined,
         {
           stage: 'signal test first render',
           timeoutMs: 30_000,
-          getExit: () => exitState,
-          getOutput: () => output
+          getExit: tui.getExit,
+          getOutput: tui.visible
         }
       )
 
@@ -457,8 +430,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       expect(await readManagerDiscovery(controlDir)).toBeNull()
       await expect(fetch(`${manager.discovery.baseUrl}/health`)).rejects.toThrow()
     } finally {
-      dataSubscription.dispose()
-      try { terminal.kill() } catch { /* already exited */ }
+      tui.dispose()
     }
   }, 90_000)
 
@@ -488,28 +460,11 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       runtimeToken
     })
     const requirement = 'Build the PTY Graph board'
-    const terminal = pty.spawn(process.execPath, [
-      cliEntry,
-      '--no-start',
-      '--data-dir', root,
-      '--workspace', root,
-      '--graph', requirement
-    ], {
-      name: 'xterm-256color',
+    const tui = spawnKun(['--no-start', '--data-dir', root, '--workspace', root, '--graph', requirement], {
       cols: 88,
-      rows: 26,
-      cwd: worktreeRoot,
-      env: stringEnvironment(process.env)
+      rows: 26
     })
-    let output = ''
-    let exitState: { exitCode: number; signal?: number } | undefined
-    const dataSubscription = terminal.onData((data) => { output += data })
-    const exited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
-      terminal.onExit((exit) => {
-        exitState = exit
-        accept(exit)
-      })
-    })
+    const { terminal, exited } = tui
 
     try {
       const source = await waitForPtyValue(async () => {
@@ -524,8 +479,8 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       }, {
         stage: 'startup Graph turn',
         timeoutMs: 35_000,
-        getExit: () => exitState,
-        getOutput: () => output
+        getExit: tui.getExit,
+        getOutput: tui.visible
       })
       expect(source.turn.orchestration).toBe('graph')
       expect(source.turn.items).toContainEqual(expect.objectContaining({
@@ -545,33 +500,30 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
         commandId: 'command_pty_graph',
         idempotencyKey: 'create_pty_graph'
       })
-      await waitFor(() => sanitizeTerminalText(output).includes('/graph status'), 10_000)
-      terminal.resize(52, 16)
-      const beforePointer = output.length
+      await waitFor(() => tui.visible().includes('/graph status'), 10_000)
+      tui.resize(52, 16)
       terminal.write('/mouse on\r')
-      await waitFor(() => output.slice(beforePointer).includes('Mouse clicks enabled'))
+      await waitFor(() => tui.visible().includes('Mouse clicks enabled'))
 
-      const beforeBoard = output.length
       for (let row = 1; row <= 16; row += 1) {
         terminal.write(`\x1b[<0;4;${row}M`)
       }
+      // The board opens as a page on the alternate screen.
       await waitFor(() => {
-        const visible = sanitizeTerminalText(output.slice(beforeBoard))
-        return visible.includes('GRAPH ·') && visible.includes('Phase 1 · Implementation')
+        const view = sanitizeTerminalText(tui.screen.view().join('\n'))
+        return view.includes('GRAPH ·') && view.includes('Phase 1 · Implementation')
       })
-      expect(sanitizeTerminalText(output.slice(beforeBoard))).toContain('Node')
+      expect(sanitizeTerminalText(tui.screen.view().join('\n'))).toContain('Node')
+      expect(tui.output()).toContain('\x1b[?1049h')
 
-      const beforeClose = output.length
       terminal.write('\x1b')
-      await waitFor(() => output.length > beforeClose)
+      await waitFor(() => tui.output().lastIndexOf('\x1b[?1049l') > tui.output().lastIndexOf('\x1b[?1049h'))
       await new Promise((resolve) => setTimeout(resolve, 100))
       terminal.write('/quit\r')
-      const exit = await withTimeout(exited, 5_000, 'Graph PTY process did not exit')
+      const exit = await withTimeout(exited, 10_000, 'Graph PTY process did not exit')
       expect(exit.exitCode).toBe(0)
-      expect(output).not.toContain('\x1b[?1049h')
     } finally {
-      dataSubscription.dispose()
-      try { terminal.kill() } catch { /* already exited */ }
+      tui.dispose()
     }
   }, 60_000)
 })

@@ -1,14 +1,29 @@
 # Kun Terminal UI (TUI)
 
 After installing the Kun desktop app, run `kun` in a new terminal to enter the
-TUI. `kun tui` is an exact alias. The interface uses
-`@earendil-works/pi-tui` in inline mode and never switches to the terminal's
-alternate screen, so the transcript remains in native scrollback after exit.
+TUI. `kun tui` is an exact alias. The interface is built on opentui and runs
+inline: the composer and the in-progress reply occupy a fixed region at the
+bottom of the terminal, and every finished message, tool row, and Markdown
+block is printed above it into the terminal's native scrollback, where it stays
+after exit. Full-screen pages (commands, sessions, models, the full transcript,
+approvals) open on the alternate screen and return to the inline conversation
+when closed.
 
 ## Installation and release forms
 
 Kun desktop packages include the complete TUI and runtime. Install the desktop
-app to use `kun` / `kun tui`; no separate Node.js or TUI download is needed.
+app to use `kun` / `kun tui`.
+
+The terminal renderer drives a native library through Node.js FFI, which needs
+Node.js 26.4 or later. The Runtime keeps using the interpreter Kun ships with;
+only the TUI process moves to Node.js 26. Kun looks for it in this order:
+`KUN_TUI_NODE`, a copy next to the app (`<resources>/tui-node`) or in the
+repository's `.cache/tui-node`, the per-user cache `~/.kun/runtime/tui-node`,
+and finally `node` on `PATH`. When none qualifies, the first launch downloads
+the official Node.js 26.12.0 build into the per-user cache and verifies it
+against the release `SHASUMS256.txt` before running it. Set
+`KUN_TUI_NODE_DOWNLOAD=0` to disable the download and report the requirement
+instead.
 Starting with 0.3.8, Stable and Daily no longer build or publish standalone TUI
 archives or advance the standalone update manifest. The bundled TUI updates
 with the desktop app.
@@ -150,8 +165,9 @@ when idle. When runtime context and usage are known, the right edge shows
 `used / capacity · percent` as context occupancy, not generation progress.
 
 Tool calls default to a single action/object/duration row whose completed
-result terminates with `└`. `Ctrl+O` expands it into a `├ input` / `└ output`
-tree. Running, completed, and failed tools use motion, a solid dot, and an
+result terminates with `└`. `/details` expands new tool rows into a
+`├ input` / `└ output` tree, and the transcript page (`Ctrl+O`, then `D`)
+shows that view for the whole conversation. Running, completed, and failed tools use motion, a solid dot, and an
 error mark respectively, with color reserved for status meaning. These
 presentational changes retain inline mode and native terminal scrollback.
 
@@ -160,7 +176,7 @@ Consecutive read-only discovery calls in one phase are grouped into an
 and Web Search may stay in one group across collapsed Thinking rows; an
 answer, command, edit, delegation, approval, or structured input ends the
 group. The compact view shows the first 12 actions and the remaining count.
-`Ctrl+O` expands every action and its input/output. Failed actions remain in
+`/details` and the transcript page expand every action and its input/output. Failed actions remain in
 the group and contribute to its title. Grouping changes only the TUI
 presentation, not execution order, event history, or exports.
 
@@ -209,7 +225,13 @@ provider and account.
 
 Sessions, Commands, Reasoning, Mode, Connect, Subagents, Timeline, Skills,
 Help, Status, Context, Queue, MCP, Permissions, Approval, and structured input
-follow the same exclusive-route rule. Selectors use a breadcrumb, optional
+follow the same exclusive-route rule. Pages use the terminal's alternate
+screen, so the scrollback above the conversation is untouched while a page is
+open; closing it restores the conversation, composer draft, and focus. The
+Approval page highlights `Allow once`; `←`/`→` or Tab switches the choice,
+Enter confirms it (an Enter typed in the first moment after the page opens is
+ignored so a keystroke meant for the composer cannot approve), `y` allows,
+and `n`, Esc, or Ctrl+C deny. Selectors use a breadcrumb, optional
 search, flat groups, a cyan selection rail, and one contextual footer.
 Connection pages show one current step, while read-only inspection pages group
 fields and statuses instead of reusing a heavy generic modal.
@@ -243,12 +265,19 @@ directory, writes only a secret-free GUI compatibility projection, and
 | `Ctrl+D` | Forward-delete when non-empty; press twice to exit while idle and empty; request confirmation in Sessions |
 | `Backspace` / `Delete` | Remove the most recently queued attachment when composer text is empty; retain normal text editing while text is present |
 | `Esc` | Close autocomplete/the current page or interrupt the active turn; press twice while idle to safely undo the previous turn |
-| `Ctrl+O` | Expand or collapse tool-call details in the transcript |
+| `Ctrl+O` | Open the full transcript page: scroll the whole conversation, `T` expands Thinking, `D` toggles tool details |
 | `Ctrl+G` | Edit the current composer draft with `$VISUAL`/`$EDITOR` |
 | `Ctrl+S` | Immediately steer a non-empty draft into the running turn |
 | macOS `Cmd+V` / `Ctrl+X V`; Windows/Linux `Ctrl+V` | Read a screenshot from the system clipboard and queue it; `Alt+V` and forwarded `Ctrl+Shift+V` / `Super+V` are also accepted |
 | `Ctrl+L` | Redraw |
 | `Shift+PgUp/PgDn` | Native terminal scrollback; not captured by Kun |
+
+Text already printed to the scrollback is never rewritten, so display toggles
+such as `/thinking` and `/details` apply to new output; the transcript page
+shows the whole conversation with the current settings. After the terminal
+width changes, Kun clears the screen and the terminal's saved lines and prints
+the conversation again at the new width, so wrapped tables and code blocks
+stay intact.
 
 Kun leaves terminal mouse reporting disabled by default. Drag to select any
 transcript text, then use the terminal's own copy shortcut.
@@ -325,12 +354,16 @@ GUI Code projects attach extra folders to the primary project (sidebar **Add fol
 Compatibility aliases: `/threads`, `/resume`, and `/continue` → `/sessions`, `/clear` →
 `/new`, `/title` → `/rename`, `/models` → `/model`, `/provider` → `/connect`,
 `/summarize` → `/compact`, and `/q` → `/quit`. The aliases are also present in
-pi-tui autocomplete.
+composer autocomplete.
 
-Assistant text uses pi-tui Markdown. Tool calls and results are compact by
+Assistant text is rendered as Markdown with highlighted code blocks and tables.
+While a reply streams, each paragraph, list, table, or code block is printed to
+the scrollback as soon as it is complete; only the growing tail stays in the
+live region. Tool calls and results are compact by
 default. Thinking starts as a one-line collapsed duration summary without its
-reasoning body. `/thinking` expands every body as muted italic text and toggles
-back to collapsed. In Pointer mode, primary-click one Thinking title to toggle
+reasoning body. `/thinking` expands Thinking bodies in new output as muted
+italic text and toggles back to collapsed; `Ctrl+O` shows them for earlier
+turns. In Pointer mode, primary-click one Thinking title to toggle
 only that segment; its body and neighboring messages are not click targets.
 Streaming fragments continue to accumulate while
 collapsed, so expanding restores the complete text. `Ctrl+T` prefers complete GUI/registry

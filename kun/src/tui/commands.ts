@@ -1,4 +1,4 @@
-import type { SlashCommand } from '@earendil-works/pi-tui'
+import type { SlashCommand } from './autocomplete.js'
 import type { TuiKeyAction } from './keymap.js'
 
 export type TuiCommandDefinition = {
@@ -34,6 +34,7 @@ export type TuiCommand =
   | { kind: 'copy' }
   | { kind: 'export'; path?: string }
   | { kind: 'details' }
+  | { kind: 'transcript' }
   | { kind: 'permission' }
   | { kind: 'undo' }
   | { kind: 'redo' }
@@ -100,7 +101,8 @@ export const TUI_SLASH_COMMANDS: SlashCommand[] = [
   { name: 'status', description: 'Show session, model, workspace, permissions, and connection' },
   { name: 'copy', description: 'Copy the last Kun response' },
   { name: 'export', description: 'Export the active session as Markdown', argumentHint: '[path]' },
-  { name: 'details', description: 'Expand or collapse tool details' },
+  { name: 'details', description: 'Expand or collapse tool details for new output' },
+  { name: 'transcript', description: 'Open the full transcript with tool details and Thinking' },
   { name: 'permission', description: 'Choose approval and sandbox policies' },
   { name: 'undo', description: 'Undo the last user turn in a preserved branch' },
   { name: 'redo', description: 'Move to the next preserved branch when available' },
@@ -169,7 +171,8 @@ export const TUI_COMMAND_DEFINITIONS: readonly TuiCommandDefinition[] = [
   { id: 'variants', title: 'Select reasoning effort', category: 'Model', slash: 'variants', keyAction: 'variant_cycle', available: true },
   { id: 'thinking', title: 'Expand or collapse Thinking', category: 'Display', slash: 'thinking', keyAction: 'thinking_toggle', available: true },
   { id: 'mouse', title: 'Toggle mouse clicks / text selection', category: 'Display', slash: 'mouse', keyAction: 'pointer_mode_toggle', available: true },
-  { id: 'details', title: 'Toggle tool details', category: 'Display', slash: 'details', keyAction: 'tool_details_toggle', available: true },
+  { id: 'transcript', title: 'Open full transcript', category: 'Display', slash: 'transcript', keyAction: 'tool_details_toggle', available: true },
+  { id: 'details', title: 'Toggle tool details for new output', category: 'Display', slash: 'details', available: true },
   { id: 'subagent-background', title: 'Move active subagent to background', category: 'Session', keyAction: 'subagent_detach', available: true },
   { id: 'permission', title: 'Change permissions', category: 'Session', slash: 'permission', available: true },
   { id: 'mode', title: 'Choose Agent, Plan, or Goal mode', category: 'Session', keyAction: 'agent_list', available: true },
@@ -246,6 +249,7 @@ export function parseTuiCommand(text: string): TuiCommand | null {
     case 'copy': return { kind: 'copy' }
     case 'export': return { kind: 'export', ...(rest ? { path: rest } : {}) }
     case 'details': return { kind: 'details' }
+    case 'transcript': return { kind: 'transcript' }
     case 'permission':
     case 'permissions': return { kind: 'permission' }
     case 'undo': return { kind: 'undo' }

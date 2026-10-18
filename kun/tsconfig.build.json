@@ -17,6 +17,7 @@
     "**/*.test-support.ts",
     "**/*.bench.ts",
     "vitest.config.ts",
-    "src/test-support/**"
+    "src/test-support/**",
+    "src/tui/app/**"
   ]
 }

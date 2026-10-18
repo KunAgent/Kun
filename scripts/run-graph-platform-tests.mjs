@@ -30,7 +30,7 @@ const kunTests = [
   'src/tui/client.test.ts',
   'src/tui/controller.test.ts',
   'src/tui/state.test.ts',
-  'src/tui/pi-app.test.ts'
+  'src/tui/pages/graph-page.test.ts'
 ]
 
 const rendererTests = [

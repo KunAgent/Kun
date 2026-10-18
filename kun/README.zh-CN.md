@@ -87,7 +87,7 @@ kun exec --data-dir ~/.kun/data --workspace "$PWD" read --args '{"path":"README.
 
 - `kun run` 会创建一个线程，执行一个回合并流式输出助手文本后退出。
 - `kun chat` 启动行式 REPL。使用 `/exit`、`/quit` 或空行退出。
-- 裸 `kun`（或别名 `kun tui`）在槽位空闲时启动由该 TUI 会话持有的 Runtime；要与 GUI 已持有的 Runtime 共用实时 HTTP/SSE 状态，请运行 `kun tui --no-start`。pi-tui 内联界面会保留终端 scrollback。参见 [TUI 指南](../docs/kun-tui.md)。
+- 裸 `kun`（或别名 `kun tui`）在槽位空闲时启动由该 TUI 会话持有的 Runtime；要与 GUI 已持有的 Runtime 共用实时 HTTP/SSE 状态，请运行 `kun tui --no-start`。基于 opentui 的内联界面会把对话保留在终端 scrollback 中。参见 [TUI 指南](../docs/kun-tui.md)。
 - `kun exec --list-tools` 打印当前配置 / 工作区下生效的动态工具列表。
 - `kun exec <tool> --args <json>` 直接调用单个工具。`run` 或 `exec` 上可配合 `--json` 获取机器可读输出。
 

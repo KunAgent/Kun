@@ -53,9 +53,10 @@ const KUN_RUNTIME_REQUIRED_PATHS = [
   'kun/node_modules/@cursor/sdk/package.json',
   'kun/node_modules/@anthropic-ai/claude-agent-sdk/package.json',
   'kun/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs',
-  'kun/node_modules/@earendil-works/pi-tui/package.json',
-  'kun/node_modules/marked/package.json',
-  'kun/node_modules/get-east-asian-width/package.json',
+  'kun/dist/tui/app/main.js',
+  'kun/node_modules/@opentui/core/package.json',
+  'kun/node_modules/@opentui/solid/package.json',
+  'kun/node_modules/solid-js/dist/solid.js',
   'kun/node_modules/@modelcontextprotocol/sdk/package.json',
   'kun/node_modules/@kun/extension-api/package.json',
   'kun/node_modules/@kun/extension-api/dist/index.js',
@@ -384,6 +385,14 @@ function validateBundledKunRuntime(context) {
   assertExists(
     join(root, cursorPlatformPackage, 'package.json'),
     `${cursorPlatformPackage}/package.json`
+  )
+  // The terminal UI renders through opentui's native library, shipped as a
+  // per-platform optional dependency of @opentui/core.
+  const opentuiPlatformPackage =
+    `kun/node_modules/@opentui/core-${normalizePlatform(context.electronPlatformName)}-${normalizeArch(context.arch)}`
+  assertExists(
+    join(root, opentuiPlatformPackage, 'package.json'),
+    `${opentuiPlatformPackage}/package.json`
   )
   assertExists(
     join(root, 'node_modules', 'better-sqlite3', 'package.json'),

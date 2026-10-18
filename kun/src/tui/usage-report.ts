@@ -1,11 +1,5 @@
-import {
-  matchesKey,
-  truncateToWidth,
-  visibleWidth,
-  type Component,
-  type Focusable,
-  type TUI
-} from '@earendil-works/pi-tui'
+import { truncateToWidth, visibleWidth } from './ansi-text.js'
+import { ReportPage } from './pages/report-page.js'
 import type {
   ThreadUsageBucket,
   ThreadUsageResponse,
@@ -15,7 +9,6 @@ import { redactSecretText } from '../config/secret-redaction.js'
 import { sanitizeTerminalText } from './layout.js'
 import {
   joinVisualSides,
-  pageFrame,
   sectionLabel,
   statusGlyph,
   visual,
@@ -35,102 +28,25 @@ export type UsageReportData = {
   threadTitles?: Readonly<Record<string, string>>
 }
 
-export class UsageDialog implements Component, Focusable {
-  private snapshot?: UsageReportData
-  private loading = false
-  private error = ''
-  private refreshedAt?: number
-  private offset = 0
-  private maxOffset = 0
-  private pageSize = 1
-  private _focused = true
-
+export class UsagePage extends ReportPage<UsageReportData> {
   constructor(
-    private readonly tui: TUI,
-    private readonly load: () => Promise<UsageReportData>,
-    private readonly close: () => void,
-    private readonly terminalRows: () => number,
-    private readonly nowMs: () => number = Date.now
-  ) {}
-
-  get focused(): boolean { return this._focused }
-  set focused(value: boolean) { this._focused = value }
-
-  async refresh(): Promise<void> {
-    if (this.loading) return
-    this.loading = true
-    this.error = ''
-    this.tui.requestRender()
-    try {
-      this.snapshot = await this.load()
-      this.refreshedAt = this.nowMs()
-      this.offset = 0
-    } catch (error) {
-      this.error = safe(error instanceof Error ? error.message : 'Usage refresh failed.')
-      this.offset = 0
-    } finally {
-      this.loading = false
-      this.tui.requestRender()
-    }
-  }
-
-  render(width: number): string[] {
-    const contentWidth = Math.max(12, width - 2)
-    const body = usageReportBody(
-      this.snapshot,
-      contentWidth,
-      this.loading,
-      this.error,
-      this.nowMs()
-    )
-    this.pageSize = Math.max(1, this.terminalRows() - 7)
-    this.maxOffset = Math.max(0, body.length - this.pageSize)
-    this.offset = Math.max(0, Math.min(this.offset, this.maxOffset))
-    const visible = body.slice(this.offset, this.offset + this.pageSize)
-    const range = this.maxOffset > 0
-      ? `${this.offset + 1}-${Math.min(body.length, this.offset + this.pageSize)}/${body.length}`
-      : ''
-    const refreshed = this.refreshedAt
-      ? `updated ${formatClock(this.refreshedAt)}`
-      : this.loading
-        ? 'loading'
-        : ''
-    return pageFrame({
+    load: () => Promise<UsageReportData>,
+    close: () => void,
+    invalidate: () => void,
+    nowMs: () => number = Date.now
+  ) {
+    super({
+      kind: 'usage',
       path: ['KUN', 'Usage'],
-      right: [this.loading && this.snapshot ? 'refreshing' : refreshed, range].filter(Boolean).join(' · '),
       description: 'Local accumulated model usage. Provider allowance is shown in /quota.',
-      body: visible,
-      footer: [
-        ...(this.maxOffset > 0 ? [{ key: '↑/↓ PgUp/PgDn', label: 'navigate' }] : []),
-        { key: 'r', label: this.loading ? 'refreshing…' : 'refresh' },
-        { key: '/quota', label: 'provider allowance' },
-        { key: '/context', label: 'request context' },
-        { key: 'Esc', label: 'back' }
-      ],
-      width
-    })
+      load,
+      body: (snapshot, width, loading, error) => usageReportBody(snapshot, width, loading, error, nowMs()),
+      refreshedLabel: (_snapshot, refreshedAt) => refreshedAt ? `updated ${formatClock(refreshedAt)}` : '',
+      errorMessage: (error) => safe(error instanceof Error ? error.message : 'Usage refresh failed.'),
+    extraFooter: [{ key: '/quota', label: 'provider allowance' }, { key: '/context', label: 'request context' }],
+      nowMs
+    }, close, invalidate)
   }
-
-  handleInput(data: string): void {
-    if (matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) {
-      this.close()
-      return
-    }
-    const key = data.toLowerCase()
-    if (key === 'r' || matchesKey(data, 'ctrl+r')) {
-      void this.refresh()
-      return
-    }
-    if (matchesKey(data, 'up') || key === 'k') this.offset = Math.max(0, this.offset - 1)
-    else if (matchesKey(data, 'down') || key === 'j') this.offset = Math.min(this.maxOffset, this.offset + 1)
-    else if (matchesKey(data, 'pageUp')) this.offset = Math.max(0, this.offset - this.pageSize)
-    else if (matchesKey(data, 'pageDown')) this.offset = Math.min(this.maxOffset, this.offset + this.pageSize)
-    else if (matchesKey(data, 'home')) this.offset = 0
-    else if (matchesKey(data, 'end')) this.offset = this.maxOffset
-    this.tui.requestRender()
-  }
-
-  invalidate(): void {}
 }
 
 export function usageReportBody(

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { pageText } from './page-model.js'
+import { key } from './keys.test-support.js'
 import type { ThreadUsageResponse } from '../contracts/usage.js'
 import { stripAnsi } from './layout.js'
 import {
-  UsageDialog,
+  UsagePage,
   usageReportBody,
   usageReportVisibleWidth,
   type UsageReportData
@@ -123,31 +125,30 @@ describe('TUI usage report', () => {
       if (reject) throw new Error('refresh failed with token=super-secret-value')
       return snapshot
     })
-    const dialog = new UsageDialog(
-      { requestRender } as never,
+    const dialog = new UsagePage(
       load,
       close,
-      () => 10,
+      requestRender,
       () => Date.parse('2026-07-29T08:00:00.000Z')
     )
 
     const pending = dialog.refresh()
-    expect(dialog.render(70).map(stripAnsi).join('\n')).toContain('Loading Kun usage')
+    expect(pageText(dialog.view({ width: 70, height: 10 }))).toContain('Loading Kun usage')
     await pending
-    const first = dialog.render(70).map(stripAnsi).join('\n')
+    const first = pageText(dialog.view({ width: 70, height: 10 }))
     expect(first).toContain('126,482')
 
-    dialog.handleInput('\x1b[6~')
-    const second = dialog.render(70).map(stripAnsi).join('\n')
+    dialog.handleKey(key('\x1b[6~'))
+    const second = pageText(dialog.view({ width: 70, height: 10 }))
     expect(second).not.toBe(first)
 
     reject = true
     await dialog.refresh()
-    const failed = dialog.render(70).map(stripAnsi).join('\n')
+    const failed = pageText(dialog.view({ width: 70, height: 10 }))
     expect(failed).toContain('Refresh failed')
     expect(failed).not.toContain('super-secret-value')
 
-    dialog.handleInput('\x1b')
+    dialog.handleKey(key('\x1b'))
     expect(close).toHaveBeenCalledTimes(1)
   })
 })

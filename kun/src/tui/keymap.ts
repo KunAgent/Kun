@@ -1,10 +1,4 @@
-import {
-  isKeyRelease,
-  isKeyRepeat,
-  matchesKey,
-  type KeyEventType,
-  type KeyId
-} from '@earendil-works/pi-tui'
+import { keyEventType, matchesKey, type TuiKeyEvent, type TuiKeyEventType } from './keys.js'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -67,6 +61,9 @@ export type TuiKeyAction =
   | 'session_quick_7'
   | 'session_quick_8'
   | 'session_quick_9'
+
+type KeyId = string
+type KeyEventType = TuiKeyEventType
 
 export type TuiKeyBinding = {
   keys: readonly KeyId[]
@@ -183,25 +180,25 @@ export class TuiKeymap {
     this.leaderTimeoutMs = leaderTimeoutMs
   }
 
-  matches(action: TuiKeyAction, data: string): boolean {
+  matches(action: TuiKeyAction, data: TuiKeyEvent): boolean {
     return Boolean(this.match(action, data))
   }
 
-  match(action: TuiKeyAction, data: string): TuiKeyBinding | undefined {
+  match(action: TuiKeyAction, data: TuiKeyEvent): TuiKeyBinding | undefined {
     return (this.bindings.get(action) ?? []).find((binding) =>
       binding.keys.length === 1 && eventMatches(binding.event, data) && matchesKey(data, binding.keys[0]!)
     )
   }
 
-  matchesLeader(data: string): boolean {
+  matchesLeader(data: TuiKeyEvent): boolean {
     return this.matches('leader', data)
   }
 
-  leaderAction(data: string): TuiKeyAction | undefined {
+  leaderAction(data: TuiKeyEvent): TuiKeyAction | undefined {
     return this.leaderMatch(data)?.action
   }
 
-  leaderMatch(data: string): { action: TuiKeyAction; binding: TuiKeyBinding } | undefined {
+  leaderMatch(data: TuiKeyEvent): { action: TuiKeyAction; binding: TuiKeyBinding } | undefined {
     for (const [action, bindings] of this.bindings) {
       if (action === 'leader') continue
       const binding = bindings.find((binding) =>
@@ -342,10 +339,8 @@ function normalizeEvent(value: unknown, action: string, warnings: string[]): Key
   return 'press'
 }
 
-function eventMatches(event: KeyEventType, data: string): boolean {
-  if (event === 'release') return isKeyRelease(data)
-  if (event === 'repeat') return isKeyRepeat(data)
-  return !isKeyRelease(data) && !isKeyRepeat(data)
+function eventMatches(event: KeyEventType, data: TuiKeyEvent): boolean {
+  return keyEventType(data) === event
 }
 
 function firstEnabledKey(value: unknown): string | undefined {
@@ -367,7 +362,7 @@ function normalizeKey(input: string): KeyId | undefined {
   const modifiers = parts.slice(0, -1)
   if (new Set(modifiers).size !== modifiers.length || modifiers.some((part) => !['ctrl', 'shift', 'alt', 'super'].includes(part))) return undefined
   const canonicalKey = key.toLowerCase() === 'pageup' ? 'pageUp' : key.toLowerCase() === 'pagedown' ? 'pageDown' : key.toLowerCase()
-  return [...modifiers, canonicalKey].join('+') as KeyId
+  return [...modifiers, canonicalKey].join('+')
 }
 
 function formatKey(key: KeyId): string {

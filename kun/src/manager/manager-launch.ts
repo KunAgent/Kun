@@ -7,6 +7,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { KUN_APP_SESSION_OWNER_ENV, KUN_APP_SESSION_RESERVATION_ENV, type AppSessionOwner } from '../contracts/app-session-owner.js'
 import { spawnOwnedProcess } from '../process/owned-process.js'
 import { KUN_NODE_CHILD_V8_FLAGS } from '../process/node-child-v8-flags.js'
+import { hostNodeLaunch } from '../process/host-node.js'
 
 export type ManagerLaunchOverride = {
   command: string
@@ -30,9 +31,10 @@ export async function launchServiceManagerProcess(input: {
   const managerToken = randomBytes(32).toString('base64url')
   const instanceId = randomUUID()
   const entry = fileURLToPath(new URL('./manager-entry.js', import.meta.url))
-  const command = input.launch?.command ?? process.execPath
+  const host = hostNodeLaunch()
+  const command = input.launch?.command ?? host.command
   const args = input.launch?.args ?? [...KUN_NODE_CHILD_V8_FLAGS, entry]
-  const runAsNode = input.launch?.runAsNode ?? Boolean(process.versions.electron)
+  const runAsNode = input.launch?.runAsNode ?? host.runAsNode
   let child: ChildProcess
   try {
     const options = {
