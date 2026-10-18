@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import type { AppSettingsV1 } from '@shared/app-settings'
 import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
@@ -26,6 +26,7 @@ let rerender: (() => void) | undefined
 let opened = true
 let epoch = 0
 let navigationBusy = false
+let root: Root | undefined
 const navigationWaiters = new Set<() => void>()
 const runtime = host.harnessRuntime
 const requestedPlatform = new URLSearchParams(location.search).get('platform')
@@ -68,6 +69,12 @@ Object.assign(window, { agentEnablementFixture: {
     if (!busy) { for (const resolve of navigationWaiters) resolve(); navigationWaiters.clear() }
   },
   reopen(): void { opened = true; useHarnessStore.setState({ settingsHarnessId: 'pi' }); refresh() },
+  // Unmounts the fixture so no React work is scheduled once the page or test environment goes away.
+  dispose(): void {
+    rerender = undefined
+    root?.unmount()
+    root = undefined
+  },
   language: (language: string) => i18n.changeLanguage(language),
   theme(theme: 'light' | 'dark'): void {
     // Use the saved host state and its renderer settings event. SettingsView
@@ -89,4 +96,5 @@ function Fixture() {
   </main>
 }
 useHarnessStore.setState({ rows: runtime.rows(), rowsLoadedAt: Date.now(), settingsHarnessId: 'pi' })
-createRoot(document.getElementById('root')!).render(<Fixture />)
+root = createRoot(document.getElementById('root')!)
+root.render(<Fixture />)
