@@ -41,7 +41,7 @@
 .kun-mobile-agents-feed {
   margin: 0 var(--kun-mobile-gutter, 16px) 8px;
   font-size: 13px;
-  color: var(--ds-text-tertiary);
+  color: var(--ds-text-faint);
 }
 .kun-mobile-agents-error {
   margin: 0 var(--kun-mobile-gutter, 16px) 8px;
@@ -58,7 +58,7 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--ds-text-tertiary);
+  color: var(--ds-text-faint);
 }
 .kun-mobile-agents-card {
   margin: 8px var(--kun-mobile-gutter, 16px);
@@ -93,7 +93,7 @@
 .kun-mobile-agents-card-detail {
   margin: 8px 0 0;
   font-size: 13px;
-  color: var(--ds-text-secondary);
+  color: var(--ds-text-muted);
   overflow-wrap: anywhere;
 }
 .kun-mobile-agents-card-actions {
@@ -148,12 +148,12 @@
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: var(--ds-text-tertiary);
+  background: var(--ds-text-faint);
 }
 .kun-mobile-agents-dot-needs-you { background: var(--ds-warning); }
 .kun-mobile-agents-dot-working { background: var(--ds-accent); }
 .kun-mobile-agents-dot-review { background: var(--ds-warning); }
-.kun-mobile-agents-dot-done { background: var(--ds-text-tertiary); }
+.kun-mobile-agents-dot-done { background: var(--ds-text-faint); }
 .kun-mobile-agents-row-body {
   flex: 1;
   min-width: 0;
@@ -168,7 +168,7 @@
 }
 .kun-mobile-agents-row-meta {
   font-size: 12px;
-  color: var(--ds-text-tertiary);
+  color: var(--ds-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -176,10 +176,10 @@
 .kun-mobile-agents-row-time {
   flex-shrink: 0;
   font-size: 12px;
-  color: var(--ds-text-tertiary);
+  color: var(--ds-text-faint);
 }
 .kun-mobile-agents-empty {
   margin: 24px var(--kun-mobile-gutter, 16px);
   font-size: 14px;
-  color: var(--ds-text-tertiary);
+  color: var(--ds-text-faint);
 }

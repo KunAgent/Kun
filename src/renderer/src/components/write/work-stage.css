@@ -112,7 +112,7 @@
   gap: 3px;
   border: 1px solid var(--ds-border);
   border-radius: 14px;
-  background: var(--ds-card);
+  background: var(--ds-surface-card);
   padding: 11px 14px;
   text-align: left;
   transition: border-color 120ms, box-shadow 120ms;
@@ -142,7 +142,7 @@
   gap: 6px;
   border: 1px solid var(--ds-sidebar-row-ring);
   border-radius: 8px;
-  background: var(--ds-card);
+  background: var(--ds-surface-card);
   padding: 0 8px;
   color: var(--ds-text);
   font-size: 12.5px;
