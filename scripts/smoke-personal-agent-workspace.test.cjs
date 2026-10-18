@@ -387,6 +387,20 @@ test('native smoke measures stopped and restart recovery controls wide and narro
   assert.doesNotMatch(recovery, /\.click\(|dispatchEvent\(|force:/)
 })
 
+test('restart recovery geometry precedes reload suppression of the acknowledged failure', () => {
+  const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
+  const acknowledged = smoke.indexOf('renderer acknowledged the interrupted request before recovery geometry')
+  const wide = smoke.indexOf("await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay'")
+  const narrow = smoke.indexOf("await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow'")
+  const reload = smoke.indexOf("await page.reload({ waitUntil: 'domcontentloaded' })")
+  const hidden = smoke.indexOf('Reload must not raise an already acknowledged failure again')
+  assert(acknowledged >= 0 && acknowledged < wide && wide < narrow && narrow < reload && reload < hidden)
+  assert.match(smoke.slice(smoke.lastIndexOf("if (recovered.status === 'failed')", acknowledged), wide),
+    /item.id === restarting.requestId\)\?\.failureAcknowledged === true/)
+  assert.match(smoke.slice(reload, hidden), /Runtime restart and renderer reload must not replay an interrupted request/)
+  assert.match(smoke.slice(reload, hidden), /Runtime restart destroys transient browser authority/)
+})
+
 test('recovery action row wins span flex specificity and wraps labels within its container', () => {
   const css = readFileSync(join(__dirname, '../src/renderer/src/components/rooms/rooms-direct.css'), 'utf8')
   const row = css.match(/\.direct-failed\s*>\s*\.direct-failed-actions\s*\{([^}]+)\}/)?.[1]
