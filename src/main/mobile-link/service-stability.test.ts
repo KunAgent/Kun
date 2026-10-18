@@ -49,6 +49,30 @@ async function cleanup(f: ReturnType<typeof fixture>) {
 }
 
 describe('desktop mobile link under network disruption', () => {
+  it('stops on a missing account token and recovers after explicit authorization repair', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    let authorized = true
+    f.deps.account.accessToken = async () => authorized ? 'token' : null
+    try {
+      await f.service.enable(true); await settle()
+      authorized = false
+      await vi.advanceTimersByTimeAsync(20000)
+      expect(f.sockets[0].close).toHaveBeenCalledOnce()
+      expect(f.deps.diagnostic).toHaveBeenCalledWith('AUTHORIZATION_REJECTED', undefined)
+      f.service.reconnect('NETWORK_ONLINE')
+      await vi.advanceTimersByTimeAsync(120000)
+      expect(f.sockets).toHaveLength(1)
+      authorized = true
+      await f.service.enable(false)
+      await f.service.enable(true); await settle()
+      expect(f.sockets).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(11000)
+      expect((f.service as any).online).toBe(true)
+      expect(vi.mocked(f.sockets[1].send).mock.calls.some(([raw]) => JSON.parse(raw).kind === 'ping')).toBe(true)
+    } finally { await cleanup(f) }
+  })
+
   it('keeps healthy WSS through sustained interface churn and recovers a genuinely dead route', async () => {
     vi.useFakeTimers()
     const f = fixture()

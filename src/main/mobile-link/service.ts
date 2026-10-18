@@ -313,7 +313,8 @@ export class MobileLinkService {
       token: async () => {
         const token = await sessionOperation(() => this.deps.account.accessToken(), signal)
         if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
-        if (!token) throw new Error('LOGIN_REQUIRED')
+        // RemoteApi maps a missing token to typed LOGIN_REQUIRED so the transport stops retrying.
+        if (!token) return null
         this.lastToken = token
         return token
       },
