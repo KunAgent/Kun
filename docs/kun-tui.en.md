@@ -64,8 +64,15 @@ Default TUI startup elects under the data-directory/flavor lock and Manager
 fence, creates the token, chooses the port, and starts a Runtime owned by that
 TUI session. Discovery records its instance ID, PID, owner, version, start time,
 loopback URL, and log path. If the same slot already has a live or starting GUI,
-another TUI, or a foreground `kun serve` owner, startup reports an actionable
-conflict; it does not attach to, replace, or stop that owner. The default
+another TUI, or a foreground `kun serve` owner, the TUI does not replace or stop
+that owner. Instead it attaches to the owner's Runtime when that Runtime answers
+and is the same application build, and says so in the status row ("Attached to
+the running GUI Runtime"). An attached TUI never owns the Runtime: it ends when
+the owner exits, the TUI then reports the lost connection, and it never starts a
+Runtime of its own on reconnect. When the owner's Runtime is a different build
+(for example an older installed app next to a development build) or does not
+answer, startup reports the actionable ownership conflict instead. `--no-start`
+still forces this attach-only behavior. The default
 Manager profile binds one canonical data directory, while production and
 development flavors retain independent slots.
 

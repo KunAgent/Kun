@@ -157,8 +157,8 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
     let guiConfigSync: GuiConfigSyncResult | null = null
     let guiConfigWarning = ''
     if (guiSettings && !parsed.options.url) {
-      // Registry remains the catalog authority when explicit attach mode sees
-      // a live Runtime; default owned startup will reject that foreign owner.
+      // Registry remains the catalog authority when the TUI attaches to a live
+      // Runtime, whether through --no-start or because another client owns it.
       const imported = await importGuiProviderCatalogForTui({
         dataDir: parsed.options.dataDir,
         settings: guiSettings,
@@ -226,6 +226,10 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
       controller.notify(keymapConfig.warnings.join(' '), 'error')
     }
     if (guiConfigWarning) controller.notify(guiConfigWarning, 'error')
+    if (connection.attached) {
+      const owner = connection.attached.ownerKind ? `${connection.attached.ownerKind.toUpperCase()} ` : ''
+      controller.notify(`Attached to the running ${owner}Runtime (pid ${connection.attached.pid}); it stops when that client exits.`)
+    }
     const session = new ChatSession(controller, keymapConfig.keymap)
     suppressFfiExperimentalWarning()
     const { startOpenTuiApplication } = await import('./app/main.js')
@@ -308,8 +312,11 @@ export function createTuiReconnectResolver(
   resolveConnection: typeof resolveTuiConnection = resolveTuiConnection
 ): (() => Promise<{ baseUrl: string; runtimeToken: string }>) | undefined {
   if (!connection.discovered || connection.ownedRuntime) return undefined
+  // An attached connection belongs to another client. Reconnecting must never
+  // start a Runtime of its own when that client exits: nothing would stop it.
+  const reconnectOptions = connection.attached ? { ...options, noStart: true } : options
   return async () => {
-    const refreshed = await resolveConnection(options, fetchImpl)
+    const refreshed = await resolveConnection(reconnectOptions, fetchImpl)
     return {
       baseUrl: refreshed.baseUrl,
       runtimeToken: refreshed.runtimeToken

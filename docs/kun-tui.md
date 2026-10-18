@@ -52,8 +52,12 @@ kun tui
 默认 TUI 会在 data-dir/flavor 启动锁与 Manager fence 下选主，生成运行时 token、
 选择端口并拉起该 TUI 会话持有的 Runtime。发现文件记录实例 ID、PID、owner、版本、
 启动时间、loopback URL 和日志路径。若同一 Manager profile/flavor 槽位已有
-live/starting GUI、另一 TUI 或前台 `kun serve` owner，默认启动会明确报冲突并
-提示关闭 owner；它不会附加、替换或停止外部 owner。默认 Manager profile 只绑定
+live/starting GUI、另一 TUI 或前台 `kun serve` owner，TUI 不会替换或停止该 owner，
+而是在对方 Runtime 能正常应答且属于同一应用 build 时附着到它，并在状态行提示
+"Attached to the running GUI Runtime"。附着的 TUI 不持有该 Runtime：owner 退出后
+Runtime 随之结束，TUI 报告连接丢失，重连时也绝不会自行拉起 Runtime。若对方 Runtime
+是不同 build（例如旧版已安装应用与开发构建并存）或没有应答，则仍然报可操作的
+ownership 冲突。`--no-start` 仍强制只附着。默认 Manager profile 只绑定
 一个 canonical data-dir，production 与 development flavor 仍是独立槽位。
 
 TUI 在 `/quit`、终端/信号退出、初始化失败或其他命令退出路径中，只关闭并等待自己

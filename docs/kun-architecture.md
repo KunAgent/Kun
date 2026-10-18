@@ -141,7 +141,10 @@ inflight cleanup、steering queue、context compaction、usage/cache telemetry�
   初始化失败的 finally 中按先 Runtime 后 Manager 的顺序清理。`--url` 和
   `--no-start` 仅连接外部服务，不能停止或延长目标 owner 的生命周期。
 - 同一 canonical `dataDir`、settingsPath 已有 live/starting 应用 session 时，
-  第二个正常 GUI/TUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  第二个正常 GUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  第二个 TUI 同样不能 steal 或 kill，但在 owner 的 Runtime 经 discovery 验证存活
+  且 build 一致时附着到它（`attached`，不持有生命周期，重连强制 `noStart`）；
+  验证失败则保持原 ownership conflict。
   production/development 不能共享同一数据 owner；并行实例必须显式隔离
   dataDir、Manager controlDir 和 settingsPath，不能自动换历史目录。
 - GUI Runtime 重启只替换本次 Runtime，Manager 保持本次 session。Manager

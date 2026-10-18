@@ -150,27 +150,43 @@ export async function resolveTuiConnection(
     }
   }
   const discoveryDir = runtimeDiscoveryDirectory(options.dataDir, runtimeFlavor, controlDir)
+  /** Attach to the Runtime named by discovery, requiring the same application build. */
+  const attachToDiscovered = async (discovery: RuntimeDiscoveryRecord): Promise<TuiConnection> => {
+    const connection = await validateConnection({
+      baseUrl: discovery.baseUrl.replace(/\/$/, ''),
+      runtimeToken: options.runtimeToken || discovery.runtimeToken,
+      discovered: true,
+      discovery
+    }, fetchImpl)
+    const buildMatches = !expectedBuildId || (
+      discovery.buildId === expectedBuildId &&
+      connection.runtimeInfo.buildId === expectedBuildId
+    )
+    if (buildMatches) return connection
+    throw new TuiClientError(
+      'Kun runtime discovery belongs to a different application build; restart the owning client.',
+      undefined,
+      'runtime_build_mismatch'
+    )
+  }
   const discovery = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
   if (discovery) {
     assertSafeDiscovery(discovery)
-    if (!options.noStart) return startExpectedRuntime()
+    if (!options.noStart) return startOrAttachToOwner(startExpectedRuntime, async () => {
+      const current = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
+      if (!current) return undefined
+      assertSafeDiscovery(current)
+      return {
+        ownerKind: current.clientOwnerKind,
+        pid: current.pid,
+        connect: async () => ({
+          ...(await attachToDiscovered(current)),
+          attached: { ...(current.clientOwnerKind ? { ownerKind: current.clientOwnerKind } : {}), pid: current.pid }
+        })
+      }
+    })
     try {
-      const connection = await validateConnection({
-        baseUrl: discovery.baseUrl.replace(/\/$/, ''),
-        runtimeToken: options.runtimeToken || discovery.runtimeToken,
-        discovered: true,
-        discovery
-      }, fetchImpl)
-      const buildMatches = !expectedBuildId || (
-        discovery.buildId === expectedBuildId &&
-        connection.runtimeInfo.buildId === expectedBuildId
-      )
-      if (buildMatches) return connection
-      throw new TuiClientError(
-        'Kun runtime discovery belongs to a different application build; restart the owning client.',
-        undefined,
-        'runtime_build_mismatch'
-      )
+      return await attachToDiscovered(discovery)
     } catch (error) {
       if (error instanceof TuiClientError && error.code === 'runtime_build_mismatch') {
         throw error
@@ -184,12 +200,50 @@ export async function resolveTuiConnection(
   }
   if (options.noStart) {
     throw new TuiClientError(
-      `No reachable Kun runtime was found in ${options.dataDir}; remove --no-start or run kun serve.`,
+      `No reachable Kun runtime was found in ${options.dataDir}; the client that owned it may have exited. Restart kun without --no-start, or run kun serve.`,
       undefined,
       'runtime_unavailable'
     )
   }
-  return startExpectedRuntime()
+  return startOrAttachToOwner(startExpectedRuntime, async () => undefined)
+}
+
+const OWNER_BUSY_CODES = new Set(['app_session_owner_busy', 'client_runtime_owner_busy'])
+
+/**
+ * Start a TUI-owned Runtime; when another live client already owns the
+ * profile, use that client's Runtime instead of failing. Only an ownership
+ * refusal triggers the fallback, and only a verified live Runtime of the same
+ * build qualifies, so every other failure keeps its original error. The
+ * attached Runtime stays owned by its client: the TUI neither stops nor
+ * replaces it.
+ */
+async function startOrAttachToOwner(
+  start: () => Promise<TuiConnection>,
+  findOwner: () => Promise<{ ownerKind?: string; pid: number; connect(): Promise<TuiConnection> } | undefined>
+): Promise<TuiConnection> {
+  try {
+    return await start()
+  } catch (error) {
+    const code = (error as { code?: unknown } | null)?.code
+    if (typeof code !== 'string' || !OWNER_BUSY_CODES.has(code)) throw error
+    const owner = await findOwner().catch(() => undefined)
+    if (!owner) throw error
+    try {
+      return await owner.connect()
+    } catch (attachError) {
+      const reason = attachError instanceof TuiClientError && attachError.code === 'runtime_build_mismatch'
+        ? ' Its Runtime is a different application build, so the TUI cannot attach to it.'
+        : ' Its Runtime did not answer, so the TUI cannot attach to it.'
+      throw new TuiClientError(
+        `${error instanceof Error ? error.message : String(error)}${reason}`,
+        undefined,
+        attachError instanceof TuiClientError && attachError.code === 'runtime_build_mismatch'
+          ? 'runtime_build_mismatch'
+          : 'runtime_owner_unreachable'
+      )
+    }
+  }
 }
 
 async function validateConnection(

@@ -280,4 +280,32 @@ describe('createTuiReconnectResolver', () => {
     })
     expect(resolveConnection).toHaveBeenCalledOnce()
   })
+
+  it('never lets an attached connection start a Runtime of its own when it reconnects', async () => {
+    const dataDir = '/tmp/kun-attached-reconnect'
+    const info = runtimeInfo(dataDir)
+    const attached: TuiConnection = {
+      baseUrl: 'http://127.0.0.1:18899',
+      runtimeToken: 'gui-secret',
+      runtimeInfo: info,
+      discovered: true,
+      attached: { ownerKind: 'gui', pid: 4242 }
+    }
+    const resolveConnection = vi.fn(async () => attached)
+    // The caller's options default to starting a Runtime; the attached
+    // connection must override that, or a vanished owner would leave a
+    // Runtime that nothing is responsible for stopping.
+    const reconnect = createTuiReconnectResolver(
+      attached,
+      tuiOptions(dataDir),
+      vi.fn() as unknown as typeof fetch,
+      resolveConnection
+    )
+
+    await reconnect?.()
+    expect(resolveConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ dataDir, noStart: true }),
+      expect.anything()
+    )
+  })
 })
