@@ -13,7 +13,7 @@ describe('reconcileRuntimeAfterRestart', () => {
         reconcileOrphanedTurns: async () => ['private', 'goal', 'child', 'task'].map((threadId) => ({ threadId, turnId: threadId })),
         reconcileManagerSettledInterruptions: async () => []
       },
-      threadStore: { get: async (id: string) => ({ id, relation: 'side',
+      threadStore: { list: async () => [], get: async (id: string) => ({ id, relation: 'side',
         turns: [{ id, status: 'failed' }],
         ...(id === 'private' || id === 'goal' ? { roomContext: { kind: 'conversation' } } : {}),
         ...(id === 'task' ? { roomContext: { kind: 'task' } } : {}),
@@ -63,6 +63,7 @@ describe('reconcileRuntimeAfterRestart', () => {
         })
       },
       threadStore: {
+        list: async () => [],
         get: vi.fn(async (threadId: string) => ({
           id: threadId,
           relation: threadId === 'child_side' ? 'side' : 'primary',
@@ -87,8 +88,11 @@ describe('reconcileRuntimeAfterRestart', () => {
       'owner_expired',
       'detached_parent'
     ])
+    // Both sweeps share one metadata scan instead of each listing every thread.
+    const scan = vi.mocked(runtime.turnService.reconcileOrphanedTurns).mock.calls[0]?.[0]?.scan
+    expect(scan?.summaries).toEqual([])
     expect(runtime.turnService.reconcileManagerSettledInterruptions)
-      .toHaveBeenCalledWith({ settledAfter: undefined })
+      .toHaveBeenCalledWith({ settledAfter: undefined, scan })
     expect(resumeInterruptedGoals).toHaveBeenCalledWith([
       { threadId: 'owner_expired', turnId: 'turn_owner_expired' }
     ])
@@ -118,6 +122,7 @@ describe('reconcileRuntimeAfterRestart', () => {
         ])
       },
       threadStore: {
+        list: async () => [],
         get: vi.fn(async (threadId: string) => ({
           relation: 'primary',
           turns: [{ id: `turn_${threadId}`, status: 'failed' as const }]
@@ -154,6 +159,7 @@ describe('reconcileRuntimeAfterRestart', () => {
         reconcileManagerSettledInterruptions: vi.fn(async () => [])
       },
       threadStore: {
+        list: async () => [],
         get: vi.fn(async () => ({
           id: 'goal_parent',
           relation: 'primary',
@@ -188,6 +194,7 @@ describe('reconcileRuntimeAfterRestart', () => {
         reconcileManagerSettledInterruptions: vi.fn(async () => [])
       },
       threadStore: {
+        list: async () => [],
         get: vi.fn(async () => ({
           id: source.threadId,
           relation: 'primary',
@@ -218,7 +225,7 @@ describe('restart execution source behind queued inputs', () => {
     } as unknown as ThreadRecord
     const get = async () => thread
     const control = {
-      deps: { threadStore: { get }, nowIso: () => '2026-10-05T00:01:00.000Z' },
+      deps: { threadStore: { list: async () => [], get }, nowIso: () => '2026-10-05T00:01:00.000Z' },
       withQueueDataMutation: async (_threadId: string, operation: () => Promise<unknown>) => operation(),
       commitThreadRecordCAS: async (next: ThreadRecord, revision: number) => {
         if (revision !== thread.revision) return { applied: false }
@@ -243,7 +250,7 @@ describe('restart execution source behind queued inputs', () => {
         },
         pauseQueuedTurns: pause
       },
-      threadStore: { get },
+      threadStore: { list: async () => [], get },
       resumeInterruptedTurns: resume,
       queuedTurnDispatcher: { drainAllQueued: vi.fn(async () => 1) }
     } as unknown as ServerRuntime
@@ -265,7 +272,7 @@ describe('restart execution source behind queued inputs', () => {
         reconcileManagerSettledInterruptions: async () => [],
         pauseQueuedTurns: vi.fn(async () => {})
       },
-      threadStore: { get: async () => ({ id: 'thread', relation: 'primary',
+      threadStore: { list: async () => [], get: async () => ({ id: 'thread', relation: 'primary',
         turns: [{ id: 'A', status: 'failed' }, { id: 'B', status: 'queued' }, { id: 'C', status: 'queued' }] }) },
       resumeInterruptedTurns: resume,
       queuedTurnDispatcher: { drainAllQueued: drain }
