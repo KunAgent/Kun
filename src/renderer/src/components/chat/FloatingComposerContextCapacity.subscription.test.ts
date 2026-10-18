@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,6 +16,7 @@ const state = vi.hoisted(() => ({
 vi.mock('../../store/chat-store', () => ({ useChatStore: (selector: (value: typeof state.chat) => unknown) => selector(state.chat) }))
 vi.mock('../../store/harness-store', () => ({ useHarnessStore: (selector: (value: unknown) => unknown) => selector({ rows: [{ definition: { id: 'codex', displayName: 'Codex' } }] }) }))
 vi.mock('../../hooks/use-composer-subscription-quota', () => ({ useComposerSubscriptionQuota: () => state.quota }))
+const tokensCss = readFileSync(resolve('src/renderer/src/styles/base-shell/tokens-window-workspace.css'), 'utf8')
 
 const snapshot: RequestContextSnapshot = {
   threadId: 'thread', model: 'gpt', providerId: 'default', stepIndex: 0, contextWindowTokens: 100_000,
@@ -65,6 +68,20 @@ describe('composer context and subscription popup', () => {
     expect(popup.querySelector('[data-composer-subscription-quota]')).not.toBeNull()
     expect(popup.querySelector('[data-context-threshold-label]')).toBeNull()
     expect(popup.querySelector('.ds-context-capacity')!.textContent).not.toContain('100%')
+  })
+
+  it('draws the pending ring and its popover accent with defined theme tokens and evenly spaced dashes', async () => {
+    state.chat.lastContextSnapshot = { ...snapshot, contextWindowTokens: 32_000, contextWindowKnown: false,
+      nativeHistory: 'none', occupancySource: 'estimate' }
+    await render(); await open()
+    const ring = host.querySelector('[data-context-ring-pending]')!
+    const [dash, gap] = ring.getAttribute('stroke-dasharray')!.split(' ').map(Number)
+    expect(gap).toBeGreaterThan(dash)
+    expect(Math.round(2 * Math.PI * Number(ring.getAttribute('r')) / (dash + gap) * 1000) % 1000).toBe(0)
+    const markup = host.innerHTML + document.querySelector('[data-context-capacity-popover]')!.innerHTML
+    const used = new Set([...markup.matchAll(/var\((--ds-[a-z-]+)\)/g)].map((match) => match[1]))
+    expect(used).toContain('--ds-text-muted')
+    for (const token of used) expect(tokensCss).toMatch(new RegExp(`${token}\\s*:`))
   })
 
   it('combines restored native context without a provider id with the explicit default selection and quota', async () => {

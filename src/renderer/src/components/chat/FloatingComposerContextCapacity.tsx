@@ -27,6 +27,9 @@ const RING_SIZE = 24
 const RING_STROKE = 2.5
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
+// A 2:3 dash rhythm that divides the ring evenly, so no long seam dash forms.
+const RING_PENDING_PERIOD = RING_CIRCUMFERENCE / 14
+const RING_PENDING_DASHES = `${RING_PENDING_PERIOD * 0.4} ${RING_PENDING_PERIOD * 0.6}`
 const POPOVER_WIDTH = 300
 const POPOVER_MIN_HEIGHT = 72
 const POPOVER_MAX_HEIGHT = 520
@@ -335,10 +338,11 @@ export function FloatingComposerContextCapacity({
                 cy={RING_SIZE / 2}
                 r={RING_RADIUS}
                 fill="none"
-                stroke="var(--ds-muted)"
+                stroke="var(--ds-text-muted)"
                 strokeWidth={RING_STROKE}
                 strokeLinecap="round"
-                strokeDasharray="2 3"
+                strokeDasharray={RING_PENDING_DASHES}
+                data-context-ring-pending
               />
             ) : (
               <>
