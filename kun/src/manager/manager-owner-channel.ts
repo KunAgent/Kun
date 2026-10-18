@@ -78,6 +78,28 @@ export async function drainManagerAfterOwnerLoss(
   }
 }
 
+/** Drain (22s) plus close; past this the orphaned Manager exits regardless. */
+export const OWNER_LOSS_EXIT_DEADLINE_MS = 45_000
+
+/**
+ * Once the owner is gone, nothing else will stop this Manager, and while it
+ * lives its reservation participant blocks every later client of the profile.
+ * Bound the whole owner-loss cleanup, including close(), by a hard exit.
+ */
+export function armOwnerLossExitDeadline(
+  exit: (code: number) => void,
+  options: { deadlineMs?: number; log?: (line: string) => void } = {}
+): () => void {
+  const deadlineMs = options.deadlineMs ?? OWNER_LOSS_EXIT_DEADLINE_MS
+  const timer = setTimeout(() => {
+    const log = options.log ?? ((line: string) => { process.stderr.write(line) })
+    log(`kun Manager owner-loss cleanup did not finish within ${deadlineMs}ms; exiting\n`)
+    exit(75)
+  }, deadlineMs)
+  timer.unref?.()
+  return () => clearTimeout(timer)
+}
+
 /** Owner-loss must unpublish even when drain times out, so the next desktop is not blocked. */
 export async function stopManagerAfterOwnerLoss(
   handle: ManagerOwnerLossHandle,
