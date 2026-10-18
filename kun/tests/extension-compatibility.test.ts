@@ -17,6 +17,7 @@ import {
   parseExtensionManifest,
   type ExtensionCompatibility
 } from '../src/extensions/index.js'
+import { kunEngineVersion } from '../src/version.js'
 
 const cleanupRoots: string[] = []
 
@@ -60,6 +61,32 @@ describe('extension runtime compatibility admission', () => {
       manifestFor({ apiVersion: '1.2.0', enginesKun: '>=0.2.0' }),
       minorPolicy
     )).toThrow(expect.objectContaining({ code: 'EXTENSION_ENGINE_INCOMPATIBLE' }))
+  })
+
+  it('checks a daily dev build against engines.kun as the develop release line', () => {
+    const daily = policy({ apiVersion: '1.2.0', kunVersion: '0.0.0-dev-20261017-1607' })
+    const report = assertManifestCompatible(
+      manifestFor({ apiVersion: '1.2.0', enginesKun: '>=0.1.0' }),
+      daily
+    )
+    expect(report.kunEngine).toEqual({
+      declared: '>=0.1.0',
+      running: '0.0.0-dev-20261017-1607',
+      compatible: true
+    })
+    expect(() => assertManifestCompatible(
+      manifestFor({ apiVersion: '1.2.0', enginesKun: '<0.1.0' }),
+      daily
+    )).toThrow(expect.objectContaining({ code: 'EXTENSION_ENGINE_INCOMPATIBLE' }))
+    expect(() => assertManifestCompatible(
+      manifestFor({ apiVersion: '1.2.0', enginesKun: '>=0.1.0' }),
+      policy({ apiVersion: '1.2.0', kunVersion: '0.0.9' })
+    )).toThrow(expect.objectContaining({ code: 'EXTENSION_ENGINE_INCOMPATIBLE' }))
+
+    expect(kunEngineVersion('0.0.0-dev-20261017-1607', '0.4.1')).toBe('0.4.1')
+    expect(kunEngineVersion('0.4.1', '0.9.0')).toBe('0.4.1')
+    expect(kunEngineVersion('0.5.0-beta.1', '0.4.1')).toBe('0.5.0-beta.1')
+    expect(kunEngineVersion('0.0.0-dev', '0.4.1')).toBe('0.0.0-dev')
   })
 
   it('re-admits installed versions before activation, selection, and rollback', async () => {
