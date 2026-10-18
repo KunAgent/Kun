@@ -1,4 +1,3 @@
-import { lookup as dnsLookup } from 'node:dns/promises'
 import {
   createServer,
   request as httpRequest,
@@ -7,25 +6,34 @@ import {
   type Server as HttpServer,
   type ServerResponse
 } from 'node:http'
-import {
-  connect as netConnect,
-  isIP,
-  type Socket
-} from 'node:net'
+import { connect as netConnect, type Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
-import ipaddr from 'ipaddr.js'
-import type { BrowserUseMode } from '../../shared/browser-use'
+import {
+  BrowserUseNetworkPolicyError,
+  resolveBrowserUseNetworkTarget,
+  sanitizeBrowserUseUrl,
+  type BrowserUseNetworkPolicyOptions,
+  type BrowserUseNetworkTarget
+} from './network-policy-destination'
+import {
+  connectThroughUpstreamProxy,
+  parseBrowserUseUpstreamProxy,
+  type BrowserUseUpstreamProxy
+} from './network-policy-upstream'
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
-const BLOCKED_HOSTNAMES = new Set([
-  'metadata.google.internal',
-  'metadata.goog',
-  'metadata.azure.internal'
-])
-const BLOCKED_PUBLIC_METADATA_IPS = new Set([
-  '168.63.129.16',
-  '169.254.169.254'
-])
+export {
+  BROWSER_USE_DNS_TIMEOUT_MS,
+  BrowserUseNetworkPolicyError,
+  classifyBrowserUseAddress,
+  normalizeBrowserUseOrigin,
+  resolveBrowserUseNetworkTarget,
+  sanitizeBrowserUseUrl,
+  type BrowserUseDnsResolver,
+  type BrowserUseNetworkPolicyOptions,
+  type BrowserUseNetworkTarget,
+  type BrowserUseResolvedAddress
+} from './network-policy-destination'
+
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
   'keep-alive',
@@ -37,253 +45,27 @@ const HOP_BY_HOP_HEADERS = new Set([
   'upgrade'
 ])
 
-export type BrowserUseResolvedAddress = {
-  address: string
-  family: 4 | 6
-}
-
-export type BrowserUseDnsResolver = (
-  hostname: string
-) => Promise<readonly BrowserUseResolvedAddress[]>
-
-export type BrowserUseNetworkTarget = {
-  url: URL
-  hostname: string
-  port: number
-  addresses: readonly BrowserUseResolvedAddress[]
-}
-
-export type BrowserUseNetworkPolicyOptions = {
-  mode: BrowserUseMode
-  exactLocalOrigin?: string
-  resolve?: BrowserUseDnsResolver
-  dnsTimeoutMs?: number
+/** Outcome of one vetted connection attempt, as surfaced to the audit log and the session. */
+export type BrowserUsePolicyEvent = {
+  outcome: 'allowed' | 'blocked' | 'failed'
+  sanitizedUrl: string
+  code?: string
+  message?: string
 }
 
 export type BrowserUsePolicyProxyOptions = BrowserUseNetworkPolicyOptions & {
   maxConcurrentConnections?: number
   connectTimeoutMs?: number
   startTimeoutMs?: number
-  onPolicyEvent?: (event: {
-    outcome: 'allowed' | 'blocked'
-    sanitizedUrl: string
-    code?: string
-  }) => void
+  /**
+   * Returns the proxy URL the desktop would use for `url` (`''` for DIRECT).
+   * Public-mode traffic then rides that proxy by hostname after the usual
+   * destination vetting, so a system proxy configured on the host is honoured.
+   */
+  resolveUpstreamProxy?: (url: string) => Promise<string>
+  onPolicyEvent?: (event: BrowserUsePolicyEvent) => void
 }
 
-export class BrowserUseNetworkPolicyError extends Error {
-  constructor(
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'BrowserUseNetworkPolicyError'
-  }
-}
-
-export function sanitizeBrowserUseUrl(rawUrl: string): string {
-  try {
-    const url = new URL(rawUrl)
-    return `${url.origin}${url.pathname.slice(0, 1024)}`
-  } catch {
-    return '<invalid-url>'
-  }
-}
-
-export function normalizeBrowserUseOrigin(rawUrl: string, mode: BrowserUseMode): string {
-  let url: URL
-  try {
-    url = new URL(rawUrl)
-  } catch {
-    throw new BrowserUseNetworkPolicyError('invalid_url', 'Browser Use requires a valid absolute URL.')
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new BrowserUseNetworkPolicyError(
-      'unsupported_scheme',
-      'Browser Use permits only HTTP and HTTPS top-level origins.'
-    )
-  }
-  if (url.username || url.password) {
-    throw new BrowserUseNetworkPolicyError(
-      'embedded_credentials',
-      'Browser Use URLs cannot contain credentials.'
-    )
-  }
-  const hostname = normalizedHostname(url.hostname)
-  if (isBlockedMetadataHostname(hostname)) {
-    throw new BrowserUseNetworkPolicyError('metadata_blocked', 'Cloud metadata destinations are blocked.')
-  }
-  if (mode === 'local-development') {
-    if (!LOOPBACK_HOSTS.has(hostname)) {
-      throw new BrowserUseNetworkPolicyError(
-        'local_origin_required',
-        'Local-development Browser Use requires localhost, 127.0.0.1, or ::1.'
-      )
-    }
-  } else if (LOOPBACK_HOSTS.has(hostname) || hostname.endsWith('.local')) {
-    throw new BrowserUseNetworkPolicyError(
-      'non_public_destination',
-      'Public Browser Use cannot access loopback or local-network names.'
-    )
-  }
-  return url.origin
-}
-
-export const BROWSER_USE_DNS_TIMEOUT_MS = 10_000
-
-async function resolveBrowserUseAddressWithDeadline(
-  hostname: string,
-  options: BrowserUseNetworkPolicyOptions
-): Promise<readonly BrowserUseResolvedAddress[]> {
-  let timer: NodeJS.Timeout | undefined
-  const lookup = Promise.resolve()
-    .then(() => (options.resolve ?? systemBrowserUseDnsResolver)(hostname))
-  // A stalled getaddrinfo (for example behind an unresponsive VPN DNS) must
-  // never hold the policy proxy's CONNECT decision open forever.
-  lookup.catch(() => undefined)
-  try {
-    return await Promise.race([
-      lookup,
-      new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new BrowserUseNetworkPolicyError(
-          'dns_timeout',
-          'Browser Use destination DNS resolution timed out.'
-        )), options.dnsTimeoutMs ?? BROWSER_USE_DNS_TIMEOUT_MS)
-      })
-    ])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
-}
-
-export async function resolveBrowserUseNetworkTarget(
-  rawUrl: string | URL,
-  options: BrowserUseNetworkPolicyOptions
-): Promise<BrowserUseNetworkTarget> {
-  const url = rawUrl instanceof URL ? new URL(rawUrl.href) : new URL(rawUrl)
-  if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
-    throw new BrowserUseNetworkPolicyError(
-      'unsupported_scheme',
-      'Browser Use network policy permits only HTTP, HTTPS, WS, and WSS.'
-    )
-  }
-  if (url.username || url.password) {
-    throw new BrowserUseNetworkPolicyError(
-      'embedded_credentials',
-      'Browser Use network destinations cannot contain credentials.'
-    )
-  }
-  const hostname = normalizedHostname(url.hostname)
-  if (isBlockedMetadataHostname(hostname)) {
-    throw new BrowserUseNetworkPolicyError('metadata_blocked', 'Cloud metadata destinations are blocked.')
-  }
-
-  if (options.mode === 'local-development') {
-    const exactLocalOrigin = options.exactLocalOrigin
-    if (!exactLocalOrigin) {
-      throw new BrowserUseNetworkPolicyError(
-        'local_origin_unset',
-        'Local-development Browser Use has no exact granted origin.'
-      )
-    }
-    const comparableProtocol = url.protocol === 'ws:'
-      ? 'http:'
-      : url.protocol === 'wss:'
-        ? 'https:'
-        : url.protocol
-    const comparable = new URL(url.href)
-    comparable.protocol = comparableProtocol
-    if (comparable.origin !== exactLocalOrigin) {
-      throw new BrowserUseNetworkPolicyError(
-        'local_origin_mismatch',
-        'Local-development Browser Use cannot leave its exact granted origin.'
-      )
-    }
-  } else if (LOOPBACK_HOSTS.has(hostname) || hostname.endsWith('.local')) {
-    throw new BrowserUseNetworkPolicyError(
-      'non_public_destination',
-      'Public Browser Use cannot access loopback or local-network names.'
-    )
-  }
-
-  const literalFamily = isIP(hostname)
-  const rawAddresses = literalFamily === 0
-    ? await resolveBrowserUseAddressWithDeadline(hostname, options)
-    : [{ address: hostname, family: literalFamily as 4 | 6 }]
-  if (rawAddresses.length === 0) {
-    throw new BrowserUseNetworkPolicyError('dns_empty', 'Destination DNS returned no addresses.')
-  }
-
-  const addresses: BrowserUseResolvedAddress[] = []
-  const seen = new Set<string>()
-  for (const entry of rawAddresses) {
-    const classified = classifyBrowserUseAddress(entry.address)
-    if (entry.family !== classified.family) {
-      throw new BrowserUseNetworkPolicyError(
-        'dns_family_mismatch',
-        'Destination DNS returned an address with a mismatched family.'
-      )
-    }
-    const allowed = options.mode === 'local-development'
-      ? classified.loopback
-      : classified.publicUnicast
-    if (!allowed) {
-      throw new BrowserUseNetworkPolicyError(
-        'non_public_destination',
-        `Destination resolved to a blocked ${classified.range} address.`
-      )
-    }
-    const key = `${classified.family}:${classified.normalized}`
-    if (!seen.has(key)) {
-      seen.add(key)
-      addresses.push({
-        address: classified.normalized,
-        family: classified.family
-      })
-    }
-  }
-
-  return {
-    url,
-    hostname,
-    port: url.port
-      ? Number(url.port)
-      : url.protocol === 'https:' || url.protocol === 'wss:'
-        ? 443
-        : 80,
-    addresses
-  }
-}
-
-export function classifyBrowserUseAddress(address: string): {
-  family: 4 | 6
-  range: string
-  loopback: boolean
-  publicUnicast: boolean
-  normalized: string
-} {
-  if (!ipaddr.isValid(address)) {
-    throw new BrowserUseNetworkPolicyError('invalid_ip', 'Destination DNS returned an invalid IP address.')
-  }
-  const parsed = ipaddr.parse(address)
-  if ('zoneId' in parsed && parsed.zoneId) {
-    throw new BrowserUseNetworkPolicyError('scoped_ipv6', 'Scoped IPv6 destinations are blocked.')
-  }
-  const effective = 'isIPv4MappedAddress' in parsed && parsed.isIPv4MappedAddress()
-    ? parsed.toIPv4Address()
-    : parsed
-  const family = effective.kind() === 'ipv4' ? 4 : 6
-  const range = effective.range()
-  const normalized = effective.toNormalizedString()
-  const metadataBlocked = BLOCKED_PUBLIC_METADATA_IPS.has(normalized)
-  return {
-    family,
-    range,
-    loopback: range === 'loopback',
-    publicUnicast: range === 'unicast' && !metadataBlocked,
-    normalized
-  }
-}
 const PROXY_START_TIMEOUT_MS = 10_000
 
 export class BrowserUsePolicyProxy {
@@ -399,14 +181,29 @@ export class BrowserUsePolicyProxy {
           'Encrypted destinations must use CONNECT.'
         )
       }
+      const upstreamProxy = await this.upstreamProxyFor(target)
+      if (request.destroyed || response.destroyed) {
+        release()
+        return
+      }
       this.policyEvent('allowed', target.url.href)
       let receivedUpstreamResponse = false
       const upstreamRequest = httpRequest({
-        host: target.addresses[0]!.address,
-        family: target.addresses[0]!.family,
-        port: target.port,
+        ...(upstreamProxy
+          // A forward proxy takes the absolute URL and resolves the vetted
+          // hostname itself; no connection is pinned to our DNS answer.
+          ? {
+              host: upstreamProxy.hostname,
+              port: upstreamProxy.port,
+              path: target.url.href
+            }
+          : {
+              host: target.addresses[0]!.address,
+              family: target.addresses[0]!.family,
+              port: target.port,
+              path: `${target.url.pathname}${target.url.search}`
+            }),
         method: request.method,
-        path: `${target.url.pathname}${target.url.search}`,
         headers: outboundHeaders(request.headers, target.url.host),
         timeout: this.options.connectTimeoutMs ?? 10_000
       }, (upstreamResponse) => {
@@ -426,7 +223,11 @@ export class BrowserUsePolicyProxy {
       upstreamRequest.once('timeout', () => {
         upstreamRequest.destroy(new Error('upstream timeout'))
       })
-      upstreamRequest.once('error', () => {
+      upstreamRequest.once('error', (error: NodeJS.ErrnoException) => {
+        this.policyEvent('failed', target.url.href, 'proxy_upstream_failed', describeConnectFailure(
+          error,
+          upstreamProxy ? `System proxy ${upstreamProxy.label}` : 'The destination'
+        ))
         if (!response.headersSent) this.rejectResponse(response, 502, 'proxy_upstream_failed')
         else response.destroy()
         release()
@@ -468,13 +269,14 @@ export class BrowserUsePolicyProxy {
     client.once('close', closeUpstream)
     client.once('error', closeUpstream)
     const authority = request.url ?? ''
+    let target: BrowserUseNetworkTarget | undefined
     try {
-      const target = await resolveBrowserUseNetworkTarget(`https://${authority}`, this.options)
+      target = await resolveBrowserUseNetworkTarget(`https://${authority}`, this.options)
       if (client.destroyed) {
         release()
         return
       }
-      upstream = await this.connectPinned(target)
+      upstream = await this.connectVetted(target)
       if (client.destroyed) {
         closeUpstream()
         return
@@ -487,8 +289,15 @@ export class BrowserUsePolicyProxy {
       upstream.pipe(client)
       client.pipe(upstream)
     } catch (error) {
-      this.policyEvent('blocked', `https://${authority}`, policyErrorCode(error))
-      client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+      // Vetting failures are policy blocks (403); a vetted destination that
+      // could not be reached is a gateway failure (502) and says why.
+      if (target) {
+        this.policyEvent('failed', target.url.href, policyErrorCode(error), errorMessage(error))
+        client.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n')
+      } else {
+        this.policyEvent('blocked', `https://${authority}`, policyErrorCode(error), errorMessage(error))
+        client.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+      }
       release()
     }
   }
@@ -515,6 +324,7 @@ export class BrowserUsePolicyProxy {
     client.once('close', closeUpstream)
     client.once('error', closeUpstream)
     const rawUrl = request.url ?? ''
+    let vetted: BrowserUseNetworkTarget | undefined
     try {
       const target = await resolveBrowserUseNetworkTarget(rawUrl, this.options)
       if (client.destroyed) {
@@ -527,7 +337,8 @@ export class BrowserUsePolicyProxy {
           'Encrypted WebSockets must use CONNECT.'
         )
       }
-      upstream = await this.connectPinned(target)
+      vetted = target
+      upstream = await this.connectVetted(target)
       if (client.destroyed) {
         closeUpstream()
         return
@@ -555,13 +366,39 @@ export class BrowserUsePolicyProxy {
       upstream.pipe(client)
       client.pipe(upstream)
     } catch (error) {
-      this.policyEvent('blocked', rawUrl, policyErrorCode(error))
+      this.policyEvent(
+        vetted ? 'failed' : 'blocked',
+        rawUrl,
+        policyErrorCode(error),
+        errorMessage(error)
+      )
       client.destroy()
       release()
     }
   }
 
-  private async connectPinned(target: BrowserUseNetworkTarget): Promise<Socket> {
+  /** Looks up the desktop proxy for a vetted public destination; local mode and lookup failures stay direct. */
+  private async upstreamProxyFor(
+    target: BrowserUseNetworkTarget
+  ): Promise<BrowserUseUpstreamProxy | undefined> {
+    if (this.options.mode === 'local-development' || !this.options.resolveUpstreamProxy) return undefined
+    try {
+      return parseBrowserUseUpstreamProxy(await this.options.resolveUpstreamProxy(target.url.href))
+    } catch {
+      return undefined
+    }
+  }
+
+  private async connectVetted(target: BrowserUseNetworkTarget): Promise<Socket> {
+    const upstreamProxy = await this.upstreamProxyFor(target)
+    const timeoutMs = this.options.connectTimeoutMs ?? 10_000
+    if (upstreamProxy) {
+      return connectThroughUpstreamProxy(upstreamProxy, target.hostname, target.port, timeoutMs)
+    }
+    return this.connectPinned(target, timeoutMs)
+  }
+
+  private async connectPinned(target: BrowserUseNetworkTarget, timeoutMs: number): Promise<Socket> {
     let lastError: unknown
     for (const address of target.addresses) {
       try {
@@ -573,22 +410,31 @@ export class BrowserUsePolicyProxy {
           })
           const timer = setTimeout(() => {
             socket.destroy()
-            reject(new Error('Browser Use proxy connection timed out.'))
-          }, this.options.connectTimeoutMs ?? 10_000)
+            reject(new BrowserUseNetworkPolicyError(
+              'upstream_connect_timeout',
+              'The destination did not accept a connection in time.'
+            ))
+          }, timeoutMs)
           socket.once('connect', () => {
             clearTimeout(timer)
             resolve(socket)
           })
-          socket.once('error', (error) => {
+          socket.once('error', (error: NodeJS.ErrnoException) => {
             clearTimeout(timer)
-            reject(error)
+            reject(new BrowserUseNetworkPolicyError(
+              'upstream_connect_failed',
+              describeConnectFailure(error, 'The destination')
+            ))
           })
         })
       } catch (error) {
         lastError = error
       }
     }
-    throw lastError ?? new Error('Browser Use proxy has no vetted destination address.')
+    throw lastError ?? new BrowserUseNetworkPolicyError(
+      'upstream_connect_failed',
+      'Browser Use proxy has no vetted destination address.'
+    )
   }
 
   private enter(): boolean {
@@ -616,14 +462,16 @@ export class BrowserUsePolicyProxy {
   }
 
   private policyEvent(
-    outcome: 'allowed' | 'blocked',
+    outcome: BrowserUsePolicyEvent['outcome'],
     rawUrl: string,
-    code?: string
+    code?: string,
+    message?: string
   ): void {
     this.options.onPolicyEvent?.({
       outcome,
       sanitizedUrl: sanitizeBrowserUseUrl(rawUrl),
-      ...(code ? { code } : {})
+      ...(code ? { code } : {}),
+      ...(message ? { message: message.slice(0, 512) } : {})
     })
   }
 }
@@ -646,32 +494,6 @@ export function browserUseProxyConfiguration(proxyUrl: string): {
   }
 }
 
-async function systemBrowserUseDnsResolver(
-  hostname: string
-): Promise<readonly BrowserUseResolvedAddress[]> {
-  const results = await dnsLookup(hostname, { all: true, verbatim: true })
-  return results.map((entry) => {
-    if (entry.family !== 4 && entry.family !== 6) {
-      throw new BrowserUseNetworkPolicyError(
-        'dns_family_unsupported',
-        'Destination DNS returned an unsupported address family.'
-      )
-    }
-    return { address: entry.address, family: entry.family }
-  })
-}
-
-function normalizedHostname(hostname: string): string {
-  const normalized = hostname.toLowerCase().replace(/\.$/, '')
-  return normalized.startsWith('[') && normalized.endsWith(']')
-    ? normalized.slice(1, -1)
-    : normalized
-}
-
-function isBlockedMetadataHostname(hostname: string): boolean {
-  return BLOCKED_HOSTNAMES.has(hostname) || hostname.startsWith('metadata.')
-}
-
 function outboundHeaders(
   headers: IncomingHttpHeaders,
   host?: string
@@ -688,6 +510,19 @@ function policyErrorCode(error: unknown): string {
   return error instanceof BrowserUseNetworkPolicyError
     ? error.code
     : 'proxy_failed_closed'
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** Names the failing hop and the socket error code without echoing addresses. */
+function describeConnectFailure(error: NodeJS.ErrnoException, subject: string): string {
+  const code = typeof error.code === 'string' ? error.code : ''
+  if (code === 'ETIMEDOUT' || error.message === 'upstream timeout') {
+    return `${subject} did not answer in time.`
+  }
+  return `${subject} refused or dropped the connection${code ? ` (${code})` : ''}.`
 }
 
 function once(callback: () => void): () => void {
