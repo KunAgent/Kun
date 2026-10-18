@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { accountModelRequest } from './request-attempt-accounting.js'
 import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
@@ -52,6 +53,7 @@ export class RoutePoolModelClient implements ModelClient {
   private readonly roundRobin = new Map<string, number>()
   private readonly requestCounts = new Map<string, number>()
   private failoverByProvider = new Map<string, ModelFailoverGroup>()
+  private failoverGroups: ModelFailoverGroup[] = []
   private routingGeneration = {}
   private readonly groupState: FailoverGroupRouteState = createFailoverGroupRouteState()
   private quotaLookup?: (providerId: string) => ProviderQuotaEntry | undefined
@@ -71,7 +73,8 @@ export class RoutePoolModelClient implements ModelClient {
   }
 
   replacePools(pools: readonly ModelRoutePoolConfig[]): void {
-    this.routingGeneration = {}
+    // Settings apply re-sends unchanged pools; only a real change fences selected targets.
+    if (!isDeepStrictEqual(pools, this.configured)) this.routingGeneration = {}
     // Affinity entries are revalidated against the current targets on use, so a
     // configuration change does not need to forget which account holds a cache.
     this.rules.clear()
@@ -91,7 +94,8 @@ export class RoutePoolModelClient implements ModelClient {
    * explicit model route pools.
    */
   replaceFailoverGroups(groups: readonly ModelFailoverGroup[]): void {
-    this.routingGeneration = {}
+    if (!isDeepStrictEqual(groups, this.failoverGroups)) this.routingGeneration = {}
+    this.failoverGroups = groups.map((group) => structuredClone(group))
     this.failoverByProvider = new Map()
     for (const group of groups) {
       for (const member of group.members) {

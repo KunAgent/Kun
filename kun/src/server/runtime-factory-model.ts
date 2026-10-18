@@ -28,6 +28,7 @@ import { subscriptionBillingKind } from '../shared/subscription-billing.js'
 import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
 import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 import { providerCredentialLease } from '../adapters/model/provider-credential-lease.js'
+import { withDispatchIdentity } from '../adapters/model/model-dispatch-identity.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -243,9 +244,13 @@ export function buildModelClientRouterInput(
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           ...streamIdleOverride
         })
-    const observedClient = withModelVerification(client, trimmedId, getRegistry, (model) => kind !== 'http' ? kind :
+    const observedClient = withDispatchIdentity(withModelVerification(client, trimmedId, getRegistry, (model) => kind !== 'http' ? kind :
       verificationProtocol(scopedModelCapabilities(model).endpointFormat ?? provider.endpointFormat ?? options.endpointFormat, provider.customEndpointProtocol),
-      (model) => verificationScopes(provider.modelCapabilities, model))
+      (model) => verificationScopes(provider.modelCapabilities, model)), {
+      slot: 'provider', providerId: trimmedId, provider: providerDispatchFields(provider), model: options.model,
+      baseUrl: provider.baseUrl ?? options.baseUrl, endpointFormat: provider.endpointFormat ?? options.endpointFormat,
+      modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl') ? provider.modelProxyUrl : options.modelProxyUrl
+    })
     providerClients.set(trimmedId, observedClient)
     if (provider.admission) admission.set(trimmedId.toLowerCase(), {
       accountId: provider.accountId ?? trimmedId, limits: provider.admission
@@ -254,9 +259,28 @@ export function buildModelClientRouterInput(
       configured: provider.authType === 'none' || Boolean(provider.apiKey.trim() || provider.credentialSourceId),
       credentialStatus: provider.authType === 'none' ? 'not-required' : 'ready' })) gatewayClients.set(trimmedId, observedClient)
   }
-  return { default: withModelVerification(defaultClient, activeProviderId, getRegistry, (model) =>
+  const defaultIdentity = {
+    slot: 'default', providerId: activeProviderId, provider: providerDispatchFields(activeProvider), model: options.model,
+    kind: options.modelConnectionSelectionRequired && !options.activeProviderId ? 'unavailable'
+      : process.env.KUN_RUNTIME_PROVIDER_KIND ?? 'http',
+    baseUrl: options.baseUrl, endpointFormat: options.endpointFormat, modelProxyUrl: defaultModelProxyUrl,
+    apiKey: options.apiKey, headers: options.headers, credentialSourceId: options.credentialSourceId, geminiAuth: options.geminiAuth
+  }
+  return { default: withDispatchIdentity(withModelVerification(defaultClient, activeProviderId, getRegistry, (model) =>
     verificationProtocol(defaultModelCapabilities(model).endpointFormat ?? options.endpointFormat, activeProvider?.customEndpointProtocol),
-    (model) => verificationScopes(activeProvider?.modelCapabilities, model)), providers: providerClients, gatewayClients, admission, defaultProviderId: activeProviderId.toLowerCase() }
+    (model) => verificationScopes(activeProvider?.modelCapabilities, model)), defaultIdentity),
+  providers: providerClients, gatewayClients, admission, defaultProviderId: activeProviderId.toLowerCase() }
+}
+
+/**
+ * Catalog metadata, retry tuning and admission limits shape or schedule a
+ * request; every other provider field decides where it goes and with which
+ * credential, so an unknown future field conservatively counts as a change.
+ */
+const NON_DISPATCH_PROVIDER_FIELDS = new Set(['modelCapabilities', 'modelProfiles', 'models', 'selectedModel', 'retry', 'admission'])
+
+function providerDispatchFields(provider: ServeProviderConfig | undefined): Record<string, unknown> | undefined {
+  return provider && Object.fromEntries(Object.entries(provider).filter(([key]) => !NON_DISPATCH_PROVIDER_FIELDS.has(key)))
 }
 
 export function modelContextProfilesByProvider(
