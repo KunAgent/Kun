@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { realpath, stat } from 'node:fs/promises'
-import { basename, extname, isAbsolute, relative, resolve } from 'node:path'
+import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ServerRuntime } from '../../server/routes/server-runtime.js'
 import { readRoomRepositoryFile } from '../../rooms/room-file-content.js'
 import { requireCode } from '../code/access.js'
@@ -63,7 +63,7 @@ export class RemoteArtifacts {
             try {
               const absolute = await realpath(resolve(root, candidate)),
                 path = relative(root, absolute)
-              if (isAbsolute(path) || path === '..' || path.startsWith('../'))
+              if (isAbsolute(path) || path === '..' || path.startsWith('..' + sep))
                 continue
               const info = await stat(absolute)
               if (!info.isFile()) continue
