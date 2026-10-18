@@ -128,6 +128,47 @@ export class SdkAssistantDeltaEventCoalescer {
   }
 }
 
+/**
+ * Item-relative delta bookkeeping. The mapper opens a fresh text/reasoning item
+ * for each SDK assistant message, so offsets and the cumulative running text
+ * restart at zero whenever the item id changes.
+ */
+export class SdkItemDeltaLane {
+  private queuedItemId: string | undefined
+  private queuedChars = 0
+  private emittedItemId: string | undefined
+  private emittedText = ''
+
+  constructor(private readonly label: 'text' | 'reasoning') {}
+
+  /** Offset for the next fragment queued into the coalescer. */
+  nextOffset(itemId: string, chars: number): number {
+    if (itemId !== this.queuedItemId) {
+      this.queuedItemId = itemId
+      this.queuedChars = 0
+    }
+    const offset = this.queuedChars
+    this.queuedChars += chars
+    return offset
+  }
+
+  /** Append one coalesced event and return the item's cumulative running text. */
+  emit(event: SdkAssistantDeltaEvent): string {
+    if (event.itemId !== this.emittedItemId) {
+      this.emittedItemId = event.itemId
+      this.emittedText = ''
+    }
+    if (event.textOffset !== this.emittedText.length) {
+      throw new Error(
+        `Agent SDK assistant ${this.label} delta offset mismatch: expected ${this.emittedText.length}, ` +
+        `got ${event.textOffset}`
+      )
+    }
+    this.emittedText += event.text
+    return this.emittedText
+  }
+}
+
 export function sdkResultTurnCount(message: SdkMessage): number {
   if (message.type !== 'result') return 0
   const raw = Number((message as { num_turns?: unknown }).num_turns ?? 1)

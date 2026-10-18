@@ -83,6 +83,49 @@ describe('SdkEventMapper', () => {
     })
   })
 
+  test('opens a new text and reasoning item for each SDK assistant message', () => {
+    const m = makeMapper()
+    const delta = (type: 'text_delta' | 'thinking_delta', value: string): SdkMessage => ({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: type === 'text_delta' ? { type, text: value } : { type, thinking: value } }
+    }) as SdkMessage
+    const assistant = (content: unknown[]): SdkMessage =>
+      ({ type: 'assistant', parent_tool_use_id: null, message: { role: 'assistant', content } }) as SdkMessage
+    const out = [
+      ...m.map(delta('thinking_delta', 'plan')),
+      ...m.map(assistant([{ type: 'thinking', thinking: 'plan' }])),
+      ...m.map(delta('text_delta', 'Step A')),
+      ...m.map(assistant([{ type: 'text', text: 'Step A' }])),
+      ...m.map(assistant([{ type: 'tool_use', id: 'tu_1', name: 'Read', input: {} }])),
+      ...m.map({ type: 'user', parent_tool_use_id: null,
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: 'ok' }] } } as SdkMessage),
+      ...m.map(delta('thinking_delta', 'again')),
+      ...m.map(assistant([{ type: 'thinking', thinking: 'again' }])),
+      ...m.map(delta('text_delta', 'Step B')),
+      ...m.map(assistant([{ type: 'text', text: 'Step B' }])),
+      // Streamed text whose authoritative message carries no text block still finalizes.
+      ...m.map(delta('text_delta', 'Step C')),
+      ...m.map(assistant([{ type: 'tool_use', id: 'tu_2', name: 'Read', input: {} }]))
+    ]
+    const finals = out.flatMap((event) => event.kind === 'item_created' && 'item' in event &&
+      (event.item.kind === 'assistant_text' || event.item.kind === 'assistant_reasoning')
+      ? [{ id: event.itemId, kind: event.item.kind, text: event.item.text }] : [])
+    expect(finals.map(({ kind, text }) => [kind, text])).toEqual([
+      ['assistant_reasoning', 'plan'], ['assistant_text', 'Step A'],
+      ['assistant_reasoning', 'again'], ['assistant_text', 'Step B'], ['assistant_text', 'Step C']
+    ])
+    expect(new Set(finals.map((entry) => entry.id)).size).toBe(5)
+    // Deltas share their own message's id, never an earlier message's.
+    for (const event of out) {
+      const item = event.kind === 'assistant_text_delta' && 'item' in event ? event.item : undefined
+      if (item?.kind !== 'assistant_text') continue
+      const streamed = item.text
+      expect(finals.find((entry) => entry.text === streamed)?.id).toBe(event.itemId)
+    }
+    m.map({ type: 'result', subtype: 'success', num_turns: 2 } as SdkMessage)
+    expect(m.getFinal()).toMatchObject({ status: 'completed', text: 'Step C' })
+  })
+
   test('maps a tool_use block to item_created + tool_call_ready', () => {
     const m = makeMapper()
     const events = m.map({

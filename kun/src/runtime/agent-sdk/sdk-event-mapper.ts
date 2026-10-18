@@ -15,7 +15,8 @@
  * Streaming model (mirrors kun's native loop exactly, or the GUI double-renders):
  * a kun `assistant_text_delta` event carries an INCREMENTAL CHUNK (the GUI
  * APPENDS each delta's `item.text`), and the authoritative full text is emitted
- * ONCE at the end as an `item_created` event (the GUI replaces/finalizes by id).
+ * once per SDK assistant message as an `item_created` event (the GUI
+ * replaces/finalizes by id). The next message then opens a new item id.
  * So: `stream_event` deltas → chunk `*_delta` events; the complete `assistant`
  * message → a single `item_created` with the full text. On the no-partials path
  * (deltas absent) the `item_created` alone carries the whole message.
@@ -35,6 +36,7 @@ import {
 } from '../../domain/item.js'
 import { takeSdkToolResultMeta } from './sdk-tool-result-meta.js'
 import { SdkSubagentRouter } from './sdk-subagent-router.js'
+import { StreamTextAccumulator } from './sdk-stream-text-accumulator.js'
 import type {
   SdkApiMessage,
   SdkContentBlock,
@@ -168,6 +170,8 @@ export class SdkEventMapper {
   private textItemId?: string
   private reasoningItemId?: string
   private readonly textAccum = new StreamTextAccumulator()
+  /** Text of the most recently finalized assistant item, for the turn's final text. */
+  private lastText = ''
   private readonly reasoningAccum = new StreamTextAccumulator()
   /** Text emitted in only the current SDK query, used to dedupe its result copy. */
   private readonly queryTextAccum = new StreamTextAccumulator()
@@ -209,7 +213,7 @@ export class SdkEventMapper {
     return this.toolNames.size
   }
 
-  /** Reset query-local result/delta state while retaining turn-wide output budgets and item ids. */
+  /** Reset query-local result/delta state while retaining turn-wide output budgets. */
   beginQuery(): void {
     this.queryTextAccum.clear()
     this.currentAssistantTextAccum.clear()
@@ -294,20 +298,32 @@ export class SdkEventMapper {
     // Finalize text/thinking as item_created with the authoritative full payload.
     // (Native finalizes via applyItem -> item_created, a replace — NOT a delta —
     // so the streamed chunks above are not re-appended.)
-    if (thinking) {
-      this.reasoningAccum.replace(thinking)
-      events.unshift(this.reasoningItemCreated())
-    }
+    const finalized: RuntimeEventDraft[] = []
+    if (thinking) this.reasoningAccum.replace(thinking)
+    if (thinking || (this.reasoningItemId && streamedThinking)) finalized.push(this.reasoningItemCreated())
     if (text) {
       this.textAccum.replace(text)
       this.queryTextAccum.replace(text)
-      events.unshift(this.textItemCreated())
-    } else if (this.textItemId && streamedText) {
-      events.unshift(this.textItemCreated())
     }
+    if (text || (this.textItemId && streamedText)) finalized.push(this.textItemCreated())
+    events.unshift(...finalized)
+    this.closeAssistantItems()
+    return events
+  }
+
+  /**
+   * Claude Code emits one SDK assistant message per content block. Each is its
+   * own timeline item, like a native model round: close the current text and
+   * reasoning items so later steps open new ones instead of overwriting them.
+   */
+  private closeAssistantItems(): void {
+    if (this.textItemId) this.lastText = this.textAccum.value
+    this.textItemId = undefined
+    this.reasoningItemId = undefined
+    this.textAccum.clear()
+    this.reasoningAccum.clear()
     this.currentAssistantTextAccum.clear()
     this.currentAssistantReasoningAccum.clear()
-    return events
   }
 
   private mapUser(message: SdkApiMessage): RuntimeEventDraft[] {
@@ -329,7 +345,9 @@ export class SdkEventMapper {
     }
     this.final = {
       status: isError ? 'failed' : 'completed',
-      ...(resultText ? { text: resultText } : this.textAccum.value ? { text: this.textAccum.value } : {}),
+      ...(resultText
+        ? { text: resultText }
+        : (this.textAccum.value || this.lastText) ? { text: this.textAccum.value || this.lastText } : {}),
       ...(isError ? { message: resultText ?? subtype } : {}),
       ...(subtype === 'error_max_turns' ? { code: 'turn_step_limit' as const } : {})
     }
@@ -504,36 +522,6 @@ export class SdkEventMapper {
 
 function isSdkBrowserUseTool(name: string): boolean {
   return name === 'browser_use' || name === 'mcp__kun__browser_use'
-}
-
-/** O(1)-append, lazily joined accumulator bounded by the enclosing byte/event budget. */
-class StreamTextAccumulator {
-  private parts: string[] = []
-  private joined: string | undefined
-
-  append(text: string): void {
-    if (!text) return
-    this.parts.push(text)
-    this.joined = undefined
-  }
-
-  replace(text: string): void {
-    this.parts = text ? [text] : []
-    this.joined = text
-  }
-
-  clear(): void {
-    this.parts = []
-    this.joined = ''
-  }
-
-  get value(): string {
-    if (this.joined === undefined) {
-      this.joined = this.parts.join('')
-      this.parts = this.joined ? [this.joined] : []
-    }
-    return this.joined
-  }
 }
 
 function normalizeSdkStreamLimits(
