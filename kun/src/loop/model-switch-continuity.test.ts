@@ -4,6 +4,7 @@ import { makeHarness } from '../../tests/loop-test-harness.js'
 import { ContextCompactor } from './context-compactor.js'
 import { modelContextProfilesFromConfig, modelCapabilitiesForModel } from './model-context-profile.js'
 import { estimateModelRequestInputTokens } from './model-request-estimator.js'
+import { DEFAULT_EFFECTIVE_OUTPUT_BUDGET_TOKENS } from './model-request-composer.js'
 import type { ModelClient, ModelRequest } from '../ports/model-client.js'
 
 it('keeps one canonical history through repeated large-small-large window changes', async () => {
@@ -42,14 +43,16 @@ it('keeps one canonical history through repeated large-small-large window change
 }, 30_000)
 
 
-it('still enforces the unknown-model cap when legacy compactor thresholds are much larger', async () => {
+// A small assumed window (it used to be 32k) sat below Kun's own prompt and
+// tool overhead, so every step of an unknown model's turn compacted away.
+it('assumes a 1M window for an unknown-capacity model instead of compacting a modest history', async () => {
   const seen: ModelRequest[] = []
   const model: ModelClient = { provider: 'test', model: 'custom-unknown-capacity', async *stream(request) {
     seen.push(request)
     yield { kind: 'assistant_text_delta', text: 'Completed normally' }
     yield { kind: 'completed', stopReason: 'stop' }
   } }
-  const h = makeHarness(model, { tools: [], compactor: new ContextCompactor({ softThreshold: 750_000, hardThreshold: 850_000 }),
+  const h = makeHarness(model, { tools: [], compactor: new ContextCompactor(),
     contextCompaction: { summaryMode: 'heuristic' } })
   const thread = await h.threads.create({ title: 'Unknown capacity', workspace: '/tmp', model: model.model, mode: 'agent' })
   for (let n = 0; n < 12; n++) await h.sessionStore.appendItem(thread.id, makeUserItem({ id: 'seed-' + n,
@@ -57,7 +60,9 @@ it('still enforces the unknown-model cap when legacy compactor thresholds are mu
   const admitted = await h.turns.startTurn({ threadId: thread.id, request: { prompt: 'Continue safely' } })
   expect(await h.loop.runTurn(thread.id, admitted.turnId)).toBe('completed')
   expect(seen).toHaveLength(1)
-  expect(estimateModelRequestInputTokens(seen[0]) + seen[0].maxTokens!).toBeLessThanOrEqual(27_200)
-  expect(h.bus.snapshotSince(thread.id, 0).some((event) => event.kind === 'compaction_completed')).toBe(true)
+  expect(estimateModelRequestInputTokens(seen[0])).toBeGreaterThan(27_200)
+  expect(estimateModelRequestInputTokens(seen[0]) + seen[0].maxTokens!).toBeLessThanOrEqual(850_000)
+  expect(seen[0].maxTokens).toBe(DEFAULT_EFFECTIVE_OUTPUT_BUDGET_TOKENS)
+  expect(h.bus.snapshotSince(thread.id, 0).some((event) => event.kind === 'compaction_completed')).toBe(false)
   expect((await h.sessionStore.loadItems(thread.id)).filter((item) => item.kind === 'user_message')).toHaveLength(13)
 })

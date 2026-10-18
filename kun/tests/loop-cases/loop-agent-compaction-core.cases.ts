@@ -280,9 +280,8 @@ describe('AgentLoop', () => {
         id: 'long_history',
         turnId: 'turn_1',
         threadId: 'thr_1',
-        // ~200k estimated tokens: above the 256k fallback profile's 192k soft
-        // threshold, but below the DeepSeek v4 soft threshold
-        // (750k = 0.75 * 1M) so the v4 profiles do not.
+        // ~200k estimated tokens: below the 750k soft threshold (0.75 * 1M)
+        // that the DeepSeek v4 profiles and unknown models now share.
         text: 'x'.repeat(800_000)
       })
     ]
@@ -291,7 +290,7 @@ describe('AgentLoop', () => {
     expect(resolveModelContextProfile('provider/deepseek-v4-flash')?.contextWindowTokens).toBe(1_000_000)
     expect(resolveModelContextProfile('deepseek-chat')?.canonicalModel).toBe('deepseek-v4-flash')
     expect(resolveModelContextProfile('deepseek-reasoner')?.canonicalModel).toBe('deepseek-v4-flash')
-    expect(compactor.shouldCompact(items)).toBe(true)
+    expect(compactor.shouldCompact(items)).toBe(false)
     expect(compactor.shouldCompact(items, { model: 'deepseek-v4-pro' })).toBe(false)
     expect(compactor.shouldCompact(items, { model: 'deepseek-v4-flash' })).toBe(false)
     expect(compactor.hardCap('deepseek-v4-flash')).toBe(850_000)
