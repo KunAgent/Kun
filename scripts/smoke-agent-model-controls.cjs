@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { setupCancellationSettled, prepareModelSelection } = require('./smoke-agent-model-readiness.cjs')
 const { roomWorkbenchSnapshot, waitCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 
 /** Real Electron controls and runtime, using the existing isolated offline model fixture. */
@@ -57,7 +58,15 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   assert.deepEqual(created.modelRef, JSON.parse(JSON.stringify({ providerId: selected.providerId, accountId: selected.accountId, model: selected.model })))
   await request(page, '/v1/agents/' + created.id + '/setup', 'POST', { clientRequestId: 'model-smoke-skip', action: 'skip' })
   const current = (await request(page, '/v1/agents/' + created.id + '/conversation', 'POST', {})).room
+  const activityPath = '/v1/rooms/' + current.id + '/direct'
+  const setupActivity = await request(page, activityPath)
+  assert.equal(setupActivity.requests.length, 1, 'New Agent has exactly one setup request')
+  const setupRequestId = setupActivity.requests[0].id
+  await poll(async () => setupCancellationSettled(await request(page, activityPath), setupRequestId),
+    15000, 'exact setup request durably cancelled')
   await waitCodeConversation(page, poll, current.id, created.name)
+  await conversation.locator('.direct-failed').getByText('Response stopped', { exact: true }).waitFor()
+
   // The private composer shares Code's "model · effort" pill; the note lives in its panel, not under it.
   const picker = conversation.locator('[data-room-model-picker] [data-composer-model-trigger]')
   await picker.waitFor()
@@ -72,15 +81,18 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   const binding = { providerId: alternative.providerId, accountId: alternative.accountId, model: alternative.model }
   const sharedProvider = new Set(eligible.filter((item) => item.providerId === binding.providerId).map((item) => item.accountId ?? '')).size > 1
   const groupKey = sharedProvider ? binding.providerId + '::' + (binding.accountId ?? '') : binding.providerId
-  await picker.click()
   const panel = page.locator('[data-composer-model-panel]')
-  await panel.waitFor()
-  await capture('agent-models-composer-panel')
   const group = panel.locator('[data-model-provider="' + groupKey + '"]')
   const header = group.locator('button[aria-expanded="false"]')
-  if (await header.count()) await header.click()
+  const target = group.locator('[role="menuitemradio"][title="' + binding.model + '"]')
+  const selectionTimeout = await prepareModelSelection({ poll,
+    ready: async () => await conversation.locator('[data-room-model-picker]').getAttribute('aria-busy') === 'false' &&
+      await picker.isEnabled() && (await picker.getAttribute('aria-label'))?.includes(selected.model),
+    panelVisible: () => panel.isVisible(), open: (timeout) => picker.click({ timeout }),
+    expand: async (timeout) => { if (await header.count()) await header.click({ timeout }) },
+    targetVisible: () => target.isVisible(), capture: () => capture('agent-models-composer-panel') })
   // Capability badges are part of each item's accessible name; the title is the exact model id.
-  await group.locator('[role="menuitemradio"][title="' + binding.model + '"]').click()
+  await target.click({ timeout: selectionTimeout })
   await panel.waitFor({ state: 'hidden' })
   await poll(async () => {
     const saved = (await request(page, '/v1/rooms/' + current.id)).room.privateModelRef
