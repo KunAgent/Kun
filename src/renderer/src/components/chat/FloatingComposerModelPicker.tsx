@@ -74,6 +74,8 @@ type Props = {
   onConfigureProviders?: () => void
   /** Extra panel footer for Kun routes; external Agents show their catalog footer instead. */
   renderFooter?: (close: () => void) => ReactNode
+  /** Panel notice under the model list, kept alongside the footer. */
+  renderNotice?: (close: () => void) => ReactNode
 }
 
 /**
@@ -101,7 +103,8 @@ export function FloatingComposerModelPicker({
   onComposerReasoningEffortChange,
   onComposerFastModeChange,
   onConfigureProviders,
-  renderFooter
+  renderFooter,
+  renderNotice
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const pickerRef = useRef<HTMLDivElement | null>(null)
@@ -277,6 +280,7 @@ export function FloatingComposerModelPicker({
           setOpen(false)
         }}
         onClose={() => setOpen(false)}
+        notice={renderNotice?.(() => setOpen(false))}
         footer={agentHarnessId && agentHarnessId !== 'kun'
           ? <AgentModelCatalogFooter harnessId={agentHarnessId} selectedModel={composerModel} />
           : renderFooter?.(() => { triggerRef.current?.focus(); setOpen(false) })}

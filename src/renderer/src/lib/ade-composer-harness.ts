@@ -10,6 +10,7 @@ import { harnessProfileReady, readyHarnessProfiles } from '@shared/harness-enabl
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { MODEL_REASONING_EFFORTS, type ModelReasoningEffort, type ModelProviderModelProfileV1 } from '@shared/app-settings'
 import type { HarnessModelInfo } from '../../../../kun/src/contracts/harness-models'
+import { agentHarnessIdForProviderKind } from './kun-model-provider-groups'
 
 export function harnessModelProfiles(models: readonly HarnessModelInfo[] = [], nativeReasoning = false): Record<string, ModelProviderModelProfileV1> {
   return Object.fromEntries(models.flatMap((model) => {
@@ -68,10 +69,7 @@ export function effectiveHarnessId(
   threadHarnessId: string | undefined,
   providerKind?: ModelProviderModelGroup['kind']
 ): string {
-  const legacy = providerKind === 'agent-sdk' ? 'claude-code'
-    : providerKind === 'cursor-sdk' ? 'cursor'
-      : providerKind === 'antigravity-cli' ? 'antigravity' : 'kun'
-  return composerHarnessId.trim() || threadHarnessId?.trim() || legacy
+  return composerHarnessId.trim() || threadHarnessId?.trim() || agentHarnessIdForProviderKind(providerKind) || 'kun'
 }
 
 /** The native Kun loop keeps the provider-registry model groups untouched. */

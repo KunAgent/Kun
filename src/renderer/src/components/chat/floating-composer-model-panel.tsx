@@ -59,11 +59,13 @@ type ComposerModelPanelProps = {
   onConfigureProviders?: () => void
   onPickModel: (modelId: string, providerId?: string) => void
   onClose: () => void
+  /** Shown under the model list without replacing the footer. */
+  notice?: ReactNode
   footer?: ReactNode
 }
 
 export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement {
-  const { t, panelRef, style, reasoningEnabled, fastModeState, footer, needsProviderSetup, onConfigureProviders, onClose } = props
+  const { t, panelRef, style, reasoningEnabled, fastModeState, notice, footer, needsProviderSetup, onConfigureProviders, onClose } = props
   const showReasoning = reasoningEnabled || fastModeState !== 'hidden'
   return (
     <div
@@ -76,6 +78,7 @@ export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement
     >
       {showReasoning ? <ComposerReasoningSection {...props} /> : null}
       <ComposerModelList {...props} />
+      {notice ? <div className="shrink-0 border-t border-ds-border-muted">{notice}</div> : null}
       {footer ? <div className="shrink-0 border-t border-ds-border-muted">{footer}</div>
         : onConfigureProviders && !needsProviderSetup && !props.emptyModelMessage ? (
           <button

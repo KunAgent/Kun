@@ -16,7 +16,8 @@ import { KnowledgeBasePicker } from './KnowledgeBasePicker'
 import { composerAgentPickerSurface } from '../../lib/subagent-profile-surface'
 import { AdeWorkspaceProjectPicker } from './AdeWorkspaceProjectPicker'
 import { AdeWorktreeStartPicker } from './AdeWorktreeStartPicker'
-import { FloatingComposerAgentModePicker } from './FloatingComposerAgentModePicker'
+import { FloatingComposerAgentModePicker, type AgentModeSurface } from './FloatingComposerAgentModePicker'
+import { ComposerAgentOnlyProviders } from './ComposerAgentOnlyProviders'
 import { FloatingComposerNativeAgentPicker } from './FloatingComposerNativeAgentPicker'
 import { FloatingComposerAgentSettings } from './FloatingComposerAgentSettings'
 import { composerToolbarFitRef } from './composer-toolbar-fit'
@@ -74,6 +75,18 @@ export function FloatingComposerSurfaceView({
   useHarnessNativeAgentStore((state) => state.selected)
   const kunComposer = adeComposerEnabled && !side && adeComposer?.harnessId === 'kun'
   const modelGroups: ModelProviderModelGroup[] = kunComposer ? composerModelGroups.filter(isKunModelProviderGroup) : composerModelGroups
+  const agentOnlyGroups = kunComposer ? composerModelGroups.filter((group: ModelProviderModelGroup) => !isKunModelProviderGroup(group)) : []
+  const selectAgent = (harnessId: string, surface: AgentModeSurface): void => {
+    if (!adeComposer) return
+    if (harnessId !== adeComposer.harnessId) adeComposer.selectHarness(harnessId)
+    else if (harnessId === 'kun' && !composerHarnessId) useChatStore.getState().setComposerHarness('kun', '')
+    if (surface !== 'write' && (harnessId !== adeComposer.harnessId || surface !== taskSurface)) onTaskSurfaceChange?.(surface)
+  }
+  const manageAgent = (harnessId?: string, configureProvider?: boolean): void => {
+    if (configureProvider) return openSettings('providers')
+    useHarnessStore.setState({ settingsHarnessId: harnessId ?? adeComposer?.harnessId })
+    openSettings('agentsHarnesses')
+  }
   const modelPickList = kunComposer && (composerModelGroups.length || modelCatalogStatus !== 'ready')
     ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
   const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
@@ -330,19 +343,9 @@ export function FloatingComposerSurfaceView({
                             rows: adeComposer.rows,
                             loading: adeComposer.rowsLoading,
                             needsConfirm: adeComposer.needsSwitchConfirm,
-                            onSelect: (harnessId, surface) => {
-                              if (harnessId !== adeComposer.harnessId) adeComposer.selectHarness(harnessId)
-                              else if (harnessId === 'kun' && !composerHarnessId) useChatStore.getState().setComposerHarness('kun', '')
-                              if (surface !== 'write' && (harnessId !== adeComposer.harnessId || surface !== taskSurface)) onTaskSurfaceChange?.(surface)
-                            },
+                            onSelect: selectAgent,
                             onOpen: adeComposer.refreshRows,
-                            onManage: (harnessId, configureProvider) => {
-                              if (configureProvider) openSettings('providers')
-                              else {
-                                useHarnessStore.setState({ settingsHarnessId: harnessId ?? adeComposer.harnessId })
-                                openSettings('agentsHarnesses')
-                              }
-                            },
+                            onManage: manageAgent,
                             onContinueLocalSession: openContinueLocalSession
                           }}
                         />
@@ -548,6 +551,10 @@ export function FloatingComposerSurfaceView({
                       onComposerReasoningEffortChange={onComposerReasoningEffortChange}
                       onComposerFastModeChange={onComposerFastModeChange}
                       onConfigureProviders={onConfigureProviders}
+                      renderNotice={agentOnlyGroups.length && adeComposer ? (close: () => void) => (
+                        <ComposerAgentOnlyProviders groups={agentOnlyGroups} needsConfirm={adeComposer.needsSwitchConfirm} close={close}
+                          onSwitch={(harnessId) => selectAgent(harnessId, agentSwitcher ? 'write' : 'code')} onManage={manageAgent} />
+                      ) : undefined}
                     />
                   )}
                   {hideModelPicker || side || externalAgent ? null : (

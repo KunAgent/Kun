@@ -20,6 +20,14 @@
     "externalAgents": "其他 Agent",
     "configureAgent": "配置 {{name}}"
   },
+  "composerAgentOnlyProviders": {
+    "title": "需通过 Agent 使用",
+    "hint": "这些订阅由对应的 Agent 执行整轮对话，因此不会作为 Kun 模型出现在上方列表中。",
+    "runsIn": "由 {{agent}} Agent 运行",
+    "notEnabled": "{{agent}} Agent 尚未启用",
+    "switch": "切换到 {{agent}}",
+    "enable": "启用 {{agent}}"
+  },
   "adeAgentNetwork": {
     "title": "原生登录的网络连接",
     "environment": "启动环境配置",

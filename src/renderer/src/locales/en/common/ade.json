@@ -20,6 +20,14 @@
     "externalAgents": "Other Agents",
     "configureAgent": "Configure {{name}}"
   },
+  "composerAgentOnlyProviders": {
+    "title": "Used through an Agent",
+    "hint": "These subscriptions run whole turns in their own Agent, so they are not listed as Kun models.",
+    "runsIn": "Runs in the {{agent}} Agent",
+    "notEnabled": "{{agent}} Agent is not enabled yet",
+    "switch": "Switch to {{agent}}",
+    "enable": "Enable {{agent}}"
+  },
   "adeAgentNetwork": {
     "title": "Network for native sign-in",
     "environment": "Launch environment",
