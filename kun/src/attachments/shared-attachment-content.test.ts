@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -31,9 +31,14 @@ describe('shared-only attachment metadata and private copies', () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-shared-alias-policy-')), thread = 'policy-' + Date.now()
     const otherThread = thread + '-other'
     try {
+      const ordinaryFile = join(workspace, 'ordinary.txt')
+      await writeFile(ordinaryFile, 'workspace bytes')
       const own = await projectSharedAttachment(content(), thread, []), foreign = await projectSharedAttachment(content(), otherThread, [])
       const context: ToolHostContext = { threadId: thread, turnId: 'turn', workspace, attachmentAliases: [], clientSurface: 'api',
         sandboxMode: 'workspace-write', approvalPolicy: 'auto', abortSignal: new AbortController().signal, awaitApproval: async () => 'deny' }
+      expect((await resolveWorkspacePath(ordinaryFile, context)).absolutePath).toBe(await realpath(ordinaryFile))
+      expect((await resolveWorkspacePath(ordinaryFile, { ...context, attachmentAliases: undefined })).absolutePath).toBe(await realpath(ordinaryFile))
+      expect(canWritePath(ordinaryFile, context).ok).toBe(true)
       expect((await resolveWorkspacePath(own.localFilePath!, context)).absolutePath).toBe(await sharedAttachmentReadPath(own.localFilePath!, context))
       expect((await resolveWorkspacePath(dirname(own.localFilePath!), context)).absolutePath).toBeTruthy()
       expect(canWritePath(own.localFilePath!, { ...context, sandboxMode: 'danger-full-access' }).ok).toBe(false)
