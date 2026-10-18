@@ -348,6 +348,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/rooms/{roomId}/runs', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs/{runId}', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs/{runId}/items', ['GET']),
+  compileEndpoint('/v1/rooms/{roomId}/runs/{runId}/steps', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs/{runId}/events', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/read', ['GET', 'POST']),
   compileEndpoint('/v1/rooms/{roomId}/search', ['GET']),
