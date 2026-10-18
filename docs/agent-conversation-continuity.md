@@ -77,18 +77,23 @@ Retrieved text is reference data and grants no execution authority.
 
 ## Model capacity and recovery
 
-Unregistered model capacity now defaults to a conservative 32,000-token
-estimate, with a bounded one-time diagnostic per model name. Sparse profiles
-receive the same fallback, including desktop settings projection. Previously
-saved explicit capacities are preserved and should be verified for custom
-endpoints. Set the actual `contextWindowTokens` in the model's
-provider capabilities or `models.profiles` configuration, especially for
-models below 32k. Known and explicit profiles retain their capacities.
+Unregistered model capacity defaults to an assumed 1,000,000-token window,
+with a bounded one-time diagnostic per model name. Sparse profiles and models
+on an unproven relay receive the same fallback, including desktop settings
+projection. The earlier 32,000-token guess sat below Kun's own system prompt
+and tool schemas (about 22k tokens), so every step of an unknown model's turn
+force-compacted its history. The assumed window stays marked unknown: the
+pre-send guard is advisory, and a provider's context-overflow error drives
+compaction recovery. Previously saved explicit capacities are preserved. Set
+the actual `contextWindowTokens` in the model's provider capabilities or
+`models.profiles` configuration for smaller or local models, especially servers
+that truncate silently instead of rejecting an oversized request. Known and
+explicit profiles retain their capacities.
 
 Ordinary compaction output reservation is capped by one quarter of the safe
-request cap. This prevents the previous small-window behavior where the 32k
-output default consumed the whole input/output budget and forced compaction on
-every turn. The actual forwarded output limit still honors the configured
+request cap. This prevents the small-window behavior where the 32k output
+default consumed the whole input/output budget and forced compaction on every
+turn. The actual forwarded output limit still honors the configured
 capability, clamped to remaining request capacity.
 
 Large -> small -> large switches reuse native compaction and re-evaluate the

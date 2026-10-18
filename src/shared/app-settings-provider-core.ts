@@ -108,8 +108,9 @@ import {
 
 export const DEFAULT_MODEL_PROVIDER_NAME = 'DeepSeek'
 
-// Keep unknown desktop models aligned with the runtime's conservative fallback.
-export const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 32_000
+// Keep unknown desktop models aligned with the runtime's assumed window
+// (kun DEFAULT_CONTEXT_WINDOW_TOKENS).
+export const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 1_000_000
 
 export const DEFAULT_TEXT_MODEL_PROFILE: ModelProviderModelProfileV1 = {
   inputModalities: ['text'],

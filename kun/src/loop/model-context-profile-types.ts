@@ -2,6 +2,15 @@ import type { ModelMetadataEvidence } from '../contracts/model-metadata-evidence
 import type { ModelCatalogPricing, ModelInputModality, ModelMessagePartSupport, ModelReasoningCapabilityMetadata } from '../contracts/capabilities.js'
 import type { ModelEndpointFormat } from '../contracts/model-endpoint-format.js'
 
+/**
+ * Window assumed for a model with no declared capacity. Kun's own system
+ * prompt and tool schemas take ~22k tokens, so a small guess forced
+ * compaction on every step. A model whose real window is smaller is caught by
+ * the provider's overflow error, which drives compaction recovery; set
+ * models.profiles.<id>.contextWindowTokens for small or local models.
+ */
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 1_000_000
+
 export type ModelContextThresholds = {
   softThreshold: number
   hardThreshold: number

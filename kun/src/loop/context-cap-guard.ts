@@ -26,9 +26,9 @@ type CapBudget = {
 }
 
 /**
- * An unregistered model's 32k window is a guess. Failing every request
- * against a guess bricks the conversation for models whose real window is
- * larger (the tool catalog alone can take 22k tokens), so the pre-send guard
+ * An unregistered model's window is a guess. Failing every request against
+ * a guess bricks the conversation when the real window differs (the tool
+ * catalog alone can take 22k tokens), so the pre-send guard
  * turns advisory there: keep the bounded output reservation and let the
  * provider's own overflow error drive compaction recovery. Returns the output
  * budget to forward, or `undefined` when the strict guard applies.
