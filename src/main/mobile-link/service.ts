@@ -183,8 +183,10 @@ export class MobileLinkService {
     this.error = undefined
     this.authorizationExpiresAt = 0
   }
-  dispose() {
-    void this.endSession({ userId: this.owner ?? null, accessToken: this.lastToken ?? null })
+  /** App quit. Keeping access only closes the relay, so a remembered start can resume with its grants. */
+  dispose(keepAccess = false) {
+    if (keepAccess) this.stop()
+    else void this.endSession({ userId: this.owner ?? null, accessToken: this.lastToken ?? null })
     this.unsubscribe()
     this.unsubscribeEnding()
   }
@@ -312,7 +314,7 @@ export class MobileLinkService {
       grants: grants.map((grant) => ({ ...grant, scopes: this.authorities.scopes(grant.controllerId, grant.id) }))
     }
   }
-  async enable(value: boolean) {
+  async enable(value: boolean, keepGrants = false) {
     if (!value) {
       ++this.enableOperation
       this.enabling = false
@@ -322,7 +324,7 @@ export class MobileLinkService {
     this.enabling = true
     const operation = ++this.enableOperation
     try {
-      return await this.setEnabled(value)
+      return await this.setEnabled(value, keepGrants)
     } catch (error) {
       if (operation === this.enableOperation && !this.enabled) this.stop()
       throw error
@@ -372,7 +374,7 @@ export class MobileLinkService {
     if (api && eligible()) this.notifications.start(api, eligible)
     else this.notifications.stop()
   }
-  private async setEnabled(value: boolean) {
+  private async setEnabled(value: boolean, keepGrants = false) {
     if (!value) {
       const identity = this.identity
       const token = this.lastToken
@@ -406,9 +408,9 @@ export class MobileLinkService {
       platform: this.deps.platform,
       role: 'host'
     })
-    // Offline logout or a crashed app may not have completed cloud cleanup.
-    // Revoke previous grants before this session can obtain a relay ticket.
-    await api.request('/devices/enabled', 'PUT', { enabled: false })
+    // Offline logout or a crashed app may not have completed cloud cleanup, so a fresh start revokes
+    // previous grants before it can obtain a relay ticket. Resuming a start the user left on keeps them.
+    if (!keepGrants) await api.request('/devices/enabled', 'PUT', { enabled: false })
     const token = this.lastToken
     try {
       await api.request('/devices/enabled', 'PUT', { enabled: true })
