@@ -14,6 +14,7 @@ import {
   type ReactElement
 } from 'react'
 import type { DesignComposerContext } from '../../design/design-composer-context'
+import { ComposerMessageQuoteChip } from './MessageQuoteViews'
 
 type Translate = (key: string, values?: unknown) => string
 
@@ -28,9 +29,11 @@ export function FloatingComposerContextChips({
 }): ReactElement {
   return (
     <div className="flex flex-wrap items-center gap-2 px-1">
-      {chips.map((chip) => chip.kind === 'document-quote' && chip.quote
-        ? <DocumentQuoteChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />
-        : <DefaultContextChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />)}
+      {chips.map((chip) => chip.kind === 'message-quote' && chip.messageQuote
+        ? <ComposerMessageQuoteChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />
+        : chip.kind === 'document-quote' && chip.quote
+          ? <DocumentQuoteChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />
+          : <DefaultContextChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />)}
     </div>
   )
 }

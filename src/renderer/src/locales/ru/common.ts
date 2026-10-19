@@ -33,6 +33,7 @@ import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
 import wardrobeInvite from './common/wardrobe-invite.json'
 import codeTour from './common/code-tour.json'
+import messageQuote from './common/message-quote.json'
 
 const common = {
   ...agentUpdates,
@@ -69,6 +70,7 @@ const common = {
   ...whatsNew,
   ...wardrobeInvite,
   ...codeTour,
+  ...messageQuote,
 }
 
 export default common

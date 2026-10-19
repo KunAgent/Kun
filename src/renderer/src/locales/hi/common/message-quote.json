@@ -1,0 +1,19 @@
+{
+  "messageQuoteToolbarLabel": "चयनित टेक्स्ट क्रियाएँ",
+  "messageQuoteStartSide": "शाखा वार्तालाप शुरू करें",
+  "messageQuoteStartSideTitle": "इस अंश के बारे में ऐसी शाखा वार्तालाप में पूछें जो पूरा संदर्भ बनाए रखती है",
+  "messageQuoteSideNeedsRuntime": "रनटाइम से कनेक्ट होने पर उपलब्ध",
+  "messageQuoteSideNeedsThread": "पहले एक वार्तालाप शुरू करें",
+  "messageQuoteReply": "जवाब दें",
+  "messageQuoteReplyTitle": "अगले संदेश में इस अंश को उद्धृत करें",
+  "messageQuoteReplyingToAssistant": "Kun को जवाब",
+  "messageQuoteReplyingToUser": "आपके संदेश का जवाब",
+  "messageQuoteTruncated": "पहले 2,000 वर्ण",
+  "messageQuoteExpand": "पूरा उद्धरण दिखाएँ",
+  "messageQuoteCollapse": "उद्धरण समेटें",
+  "messageQuoteRemove": "उद्धरण हटाएँ",
+  "messageQuoteComposerPlaceholder": "इस अंश का जवाब दें…",
+  "messageQuoteSidePlaceholder": "इस अंश के बारे में पूछें…",
+  "messageQuoteJumpToSource": "मूल पर जाएँ",
+  "messageQuoteJumpToSourceLabel": "उद्धृत मूल पाठ पर जाएँ: {{text}}"
+}

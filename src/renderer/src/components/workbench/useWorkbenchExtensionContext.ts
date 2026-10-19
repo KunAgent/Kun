@@ -7,6 +7,7 @@ import {
 import type { ExtensionContributionLoadContext } from '../../extensions/contribution-load-coordinator'
 import type { useWorkbenchChatStoreState } from './useWorkbenchChatStoreState'
 import type { DesignComposerContext } from '../../design/design-composer-context'
+import { messageQuoteFromComposerContext } from '../../lib/message-quote'
 
 type WorkbenchState = ReturnType<typeof useWorkbenchChatStoreState>
 
@@ -80,6 +81,23 @@ export function composerContextChip(
   event: WorkbenchState['extensionComposerContexts'][number]
 ): DesignComposerContext {
   const { attachment } = event
+  const messageQuote = 'source' in attachment.provenance &&
+    attachment.provenance.source === 'workspace-selection'
+    ? messageQuoteFromComposerContext(attachment)
+    : null
+  if (messageQuote) {
+    return {
+      id: attachment.attachmentId,
+      kind: 'message-quote',
+      label: attachment.title,
+      removable: true,
+      messageQuote: {
+        text: messageQuote.text,
+        role: messageQuote.role,
+        truncated: messageQuote.truncated
+      }
+    }
+  }
   if (
     'source' in attachment.provenance &&
     attachment.provenance.source === 'workspace-selection' &&
