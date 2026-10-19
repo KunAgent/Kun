@@ -373,6 +373,7 @@ export function WorkbenchChatStage({
               onOpenSettings={onOpenSettings}
               onSelectSuggestion={onSelectSuggestion}
               focusModeEnabled={focusModeEnabled}
+              messageSelectionToolbar
               planActionsBusy={planActionsBusy}
               graphEnabled={graphEnabled}
               onBuildPlan={onBuildPlan}

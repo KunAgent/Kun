@@ -91,6 +91,7 @@ export function FloatingComposerSurfaceView({
     ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
   const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
+  const messageQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'message-quote')
   // "continue local session" is offered only on a fresh thread when
   // the picked harness exposes a matching historySource + lab flag.
   const [continueDialogOpen, setContinueDialogOpen] = useState(false)
@@ -220,7 +221,9 @@ export function FloatingComposerSurfaceView({
             className={`ds-composer-textarea ds-no-drag block w-full min-w-0 resize-none break-words bg-transparent px-1 py-2.5 text-[15px] leading-[1.45] text-ds-ink placeholder:text-ds-faint focus:outline-none [overflow-wrap:anywhere] ${
               canEditComposer ? '' : 'opacity-80'
             } ${compact ? 'text-[14px] py-2' : emptyTaskLayout ? 'min-h-[64px]' : 'min-h-[40px]'}`}
-            placeholder={documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : placeholder}
+            placeholder={messageQuoteAttached
+              ? t(side ? 'messageQuoteSidePlaceholder' : 'messageQuoteComposerPlaceholder')
+              : documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : placeholder}
             value={input}
             disabled={!canEditComposer}
             onChange={(e) => {

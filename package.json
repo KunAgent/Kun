@@ -60,6 +60,7 @@
     "smoke:development-graph-workbench": "node ./scripts/smoke-development-graph-workbench.cjs",
     "smoke:development-session-summary": "node ./scripts/smoke-development-session-summary.cjs",
     "smoke:chat-rendering": "node ./scripts/smoke-chat-rendering.mjs",
+    "smoke:message-quote": "node ./scripts/smoke-message-quote.mjs",
     "smoke:tool-presentation": "node ./scripts/smoke-tool-presentation.mjs",
     "smoke:development-trajectory-layout": "node ./scripts/smoke-development-trajectory-layout.cjs",
     "smoke:development-composer-queue": "node ./scripts/smoke-development-composer-queue.cjs",

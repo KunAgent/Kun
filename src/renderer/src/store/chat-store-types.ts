@@ -37,6 +37,7 @@ import type {
   ExtensionComposerContextEvent,
   PendingComposerContextEvent
 } from '@shared/extension-ipc'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { DesignTaskProfile } from '../agent/design-task-profile'
 import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
 import type { CodeWorkspaceFolderSetsRegistry } from '../lib/code-workspace-folder-sets'
@@ -151,6 +152,12 @@ export type SideConversationDraftOptions = {
   reasoningEffort?: string
   fastMode?: boolean
   attachments?: AttachmentReference[]
+  /** Context for the seed turn only, e.g. the passage the side chat quotes. */
+  composerContexts?: ComposerContextAttachment[]
+}
+
+export type SideMessageSendOptions = {
+  composerContexts?: ComposerContextAttachment[]
 }
 
 export type ChatState = {
@@ -616,7 +623,7 @@ export type ChatState = {
    * thread. The first draft send will create the side thread.
    */
   openSideConversationDraft: () => void
-  sendSideMessage: (sideId: string, text: string) => Promise<boolean>
+  sendSideMessage: (sideId: string, text: string, options?: SideMessageSendOptions) => Promise<boolean>
   interruptSide: (sideId: string) => Promise<void>
   resolveSideUserInput: (
     sideId: string,

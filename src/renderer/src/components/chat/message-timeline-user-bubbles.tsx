@@ -5,6 +5,8 @@ import type { ChatBlock, RuntimeDisclosureMetadata } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
 import { writePromptQuotesFromComposerContexts } from '../../write/write-composer-context-quotes'
+import { messageQuotesFromComposerContexts } from '../../lib/message-quote'
+import { SentMessageQuotes } from './MessageQuoteViews'
 import { parseClawUserPromptForDisplay, type ClawUserPromptDisplay } from '@shared/app-settings'
 import { parseBackgroundShellCompletionNotice } from '@shared/background-shell-notice'
 import { parseBackgroundSubagentCompletionNotice } from '@shared/background-subagent-notice'
@@ -348,6 +350,10 @@ export function UserMessageBubble({
     () => writePromptQuotesFromComposerContexts(block.meta?.composerContexts),
     [block.meta?.composerContexts]
   )
+  const messageQuotes = useMemo(
+    () => messageQuotesFromComposerContexts(block.meta?.composerContexts),
+    [block.meta?.composerContexts]
+  )
   const parsedClawPrompt = useMemo(() => {
     const parsed = parseClawUserPromptForDisplay(block.text)
     if (!parsed.managed && !parsed.inbound && block.managedBy !== 'claw' && route !== 'claw') return null
@@ -467,6 +473,7 @@ export function UserMessageBubble({
           <ClawInboundMessageCard display={parsedClawPrompt} text={displayText} />
         ) : (
           <>
+          <SentMessageQuotes quotes={messageQuotes} />
           <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-left">
             {displayText}
           </div>
