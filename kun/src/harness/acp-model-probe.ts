@@ -54,6 +54,16 @@ export type AcpModelProbeDeps = {
   log?: (line: string) => void
   /** Idle lifetime of the reused probe process; tests pass small values. */
   idleMs?: number
+  /** Receives each successful base catalog (no `selectedModel`), e.g. to keep it across restarts. */
+  onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
+}
+
+export type AcpModelProbeOptions = {
+  /**
+   * Keep the probe process for follow-up detail lookups (default). Background
+   * discovery passes false so it never holds one Agent while starting the next.
+   */
+  keepWarm?: boolean
 }
 
 type PooledProbe = { conn: AcpConnection; users: number; timer?: ReturnType<typeof setTimeout> }
@@ -160,25 +170,27 @@ export class AcpModelProbe {
   }
 
   /** Best-effort probe; never throws — failures return `[]`. */
-  async probe(definition: HarnessDefinition): Promise<string[]> {
-    return (await this.probeCatalog(definition)).models
+  async probe(definition: HarnessDefinition, options: AcpModelProbeOptions = {}): Promise<string[]> {
+    return (await this.probeCatalog(definition, undefined, options)).models
   }
 
   /** Never throws; a failure returns no models plus its categorical `error`. */
-  async probeCatalog(definition: HarnessDefinition, selectedModel?: string): Promise<HarnessModelCatalog> {
+  async probeCatalog(definition: HarnessDefinition, selectedModel?: string,
+    options: AcpModelProbeOptions = {}): Promise<HarnessModelCatalog> {
     const key = this.cacheKey(definition, selectedModel)
     const cached = this.cache.get(key)
     if (cached && cached.expiresAt > this.nowMs()) return cached.catalog
     const inFlight = this.pending.get(key)
     if (inFlight) return inFlight
     const started = this.nowMs()
-    const task = this.probeWithRetry(definition, selectedModel)
+    const task = this.probeWithRetry(definition, selectedModel, options.keepWarm !== false)
       .then((catalog) => {
         this.store(key, catalog, this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS)
         this.failures.delete(key)
         if (catalog.models.length > 0) {
           if (this.lastGood.size >= 32) this.lastGood.delete(this.lastGood.keys().next().value!)
           this.lastGood.set(this.identityKey(definition, selectedModel), catalog)
+          if (!selectedModel) this.deps.onCatalog?.(definition, catalog)
         }
         return catalog
       })
@@ -202,19 +214,21 @@ export class AcpModelProbe {
     return task
   }
 
-  private async probeWithRetry(definition: HarnessDefinition, selectedModel?: string): Promise<HarnessModelCatalog> {
+  private async probeWithRetry(definition: HarnessDefinition, selectedModel: string | undefined,
+    keepWarm: boolean): Promise<HarnessModelCatalog> {
     try {
-      return await this.probeUncached(definition, selectedModel)
+      return await this.probeUncached(definition, selectedModel, keepWarm)
     } catch (error) {
       const reason = acpModelProbeError(error)
       if (!retryable(reason)) throw error
       const delay = this.deps.retryDelayMs ?? ACP_PROBE_RETRY_DELAY_MS
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
-      return this.probeUncached(definition, selectedModel)
+      return this.probeUncached(definition, selectedModel, keepWarm)
     }
   }
 
-  private async probeUncached(definition: HarnessDefinition, selectedModel?: string): Promise<HarnessModelCatalog> {
+  private async probeUncached(definition: HarnessDefinition, selectedModel: string | undefined,
+    keepWarm: boolean): Promise<HarnessModelCatalog> {
     const lease = await this.acquire(definition)
     const conn = lease.conn
     try {
@@ -241,17 +255,20 @@ export class AcpModelProbe {
           defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
         attachNativeAgents(definition, catalog, parsed.data)
         const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
-        lease.release(true)
+        // A background lookup returns only once its process is gone, so the
+        // next Agent in its queue never overlaps this one.
+        await lease.release(true, keepWarm)
         return settings.length ? { ...catalog, settings } : catalog
       } finally { off() }
     } catch (error) {
       // A failed lookup never leaves a possibly wedged process in the pool.
-      lease.release(false)
+      const closing = lease.release(false)
+      if (!keepWarm) await closing
       throw error
     }
   }
 
-  private async acquire(definition: HarnessDefinition): Promise<{ conn: AcpConnection; release(healthy: boolean): void }> {
+  private async acquire(definition: HarnessDefinition): Promise<{ conn: AcpConnection; release(healthy: boolean, keepWarm?: boolean): Promise<void> }> {
     const key = this.identityKey(definition)
     let entry = this.connections.get(key)
     if (entry?.conn.closed) { this.drop(key, entry); entry = undefined }
@@ -272,11 +289,12 @@ export class AcpModelProbe {
     leased.users += 1
     if (leased.timer) { clearTimeout(leased.timer); leased.timer = undefined }
     let released = false
-    return { conn: leased.conn, release: (healthy) => {
+    return { conn: leased.conn, release: async (healthy, keepWarm = true) => {
       if (released) return
       released = true
       leased.users -= 1
-      if (!healthy) { this.drop(key, leased); return }
+      // Another lookup still using the process keeps it; the last one decides.
+      if (!healthy || (!keepWarm && leased.users === 0)) return this.drop(key, leased)
       if (leased.users === 0 && this.connections.get(key) === leased) {
         leased.timer = setTimeout(() => this.drop(key, leased), this.deps.idleMs ?? ACP_PROBE_IDLE_MS)
         leased.timer.unref?.()
@@ -318,10 +336,10 @@ export class AcpModelProbe {
     }
   }
 
-  private drop(key: string, entry: PooledProbe): void {
+  private drop(key: string, entry: PooledProbe): Promise<void> {
     if (this.connections.get(key) === entry) this.connections.delete(key)
     if (entry.timer) clearTimeout(entry.timer)
-    void entry.conn.close().catch(() => undefined)
+    return entry.conn.close().catch(() => undefined)
   }
 
   private store(key: string, catalog: HarnessModelCatalog, ttlMs: number): void {

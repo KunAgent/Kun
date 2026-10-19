@@ -180,6 +180,7 @@ export async function createRuntimeServices(
     // store at spawn/probe time; values never reach config or logs.
     revision: () => core.optionsRevision,
     readinessProofStorePath: join(core.activeOptions.dataDir, 'harness-readiness.json'),
+    modelCatalogStorePath: join(core.activeOptions.dataDir, 'harness-model-catalogs.json'),
     resolveProviderCredential: model.resolveLegacyRequestCredentials,
     resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding),
     resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)

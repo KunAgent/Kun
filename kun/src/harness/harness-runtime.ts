@@ -7,6 +7,7 @@ import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
 import { harnessCommandOverride, harnessProviderOverrides } from '../config/kun-config-harness-providers.js'
 import { HarnessReadinessService } from './harness-readiness.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
+import type { HarnessModelCatalog } from '../contracts/harness-models.js'
 import { PROVIDER_MODULES, providerModule } from './providers/registry.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
 import type { KunServeRuntimeOptions } from '../server/runtime-factory-types.js'
@@ -21,6 +22,7 @@ import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 import type { HarnessSecretRefResolver } from './harness-secret-env.js'
 import { ExtensionAgentProviderSource } from './extension-agent-providers.js'
+import { HarnessModelCatalogStore, harnessModelCatalogIdentity } from './harness-model-catalog-store.js'
 
 /** Executable override from the engine's environment variable (e.g. a dev build). */
 function binaryEnvOverride(id: string): string | undefined {
@@ -47,10 +49,20 @@ export type HarnessRuntimeComposition = {
   invalidateModels(id: string): void
   installNetwork?: () => import('../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
   /**
-   * Spawn-free read of the freshest probed model list, dispatched by
-   * transport; `undefined` means no fresh successful probe is cached.
+   * Spawn-free model list: this process's fresh probe, else the catalog the
+   * Agent listed before a restart while its identity is unchanged;
+   * `undefined` means neither is known.
    */
   probedModels: (definition: HarnessDefinition) => string[] | undefined
+  /** Spawn-free read of this process's fresh probe only, dispatched by transport. */
+  liveProbedModels: (definition: HarnessDefinition) => string[] | undefined
+  /** Catalogs kept across restarts (display-only, identity-checked); `flush` at shutdown. */
+  modelCatalogs: Pick<HarnessModelCatalogStore, 'get' | 'flush'>
+  /**
+   * Discovery's model listing: a known catalog is served as is; otherwise the
+   * Agent is probed in a queue that starts one CLI at a time.
+   */
+  probeModelsInBackground: (definition: HarnessDefinition) => Promise<string[]>
   /** Process-local scoped bearer tokens for spawned harnesses. */
   tokens: HarnessTokenService
   /** Agents declared by enabled extensions; the runtime sets the loader. */
@@ -78,7 +90,9 @@ export function createHarnessComposition(
     Partial<Pick<KunServeRuntimeOptions, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'routePools'>>,
   deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null>
     /** Persist display readiness proofs here (the live Runtime only, never a probe composition). */
-    readinessProofStorePath?: string } = {}
+    readinessProofStorePath?: string
+    /** Persist Agent model catalogs here (the live Runtime only, never a probe composition). */
+    modelCatalogStorePath?: string } = {}
 ): HarnessRuntimeComposition {
   const extensionAgents = new ExtensionAgentProviderSource()
   const catalog = new HarnessCatalog({
@@ -117,11 +131,25 @@ export function createHarnessComposition(
     nowMs: () => Date.now(),
     nowIso: () => new Date().toISOString()
   })
+  // Every executable a model probe may start for this Agent, for the persisted catalog identity.
+  const catalogExecutables = (definition: HarnessDefinition): Array<string | undefined> => {
+    const override = harnessCommandOverride(options().harnesses, definition.id)
+    const engine = providerModule(definition.id)
+    return [override, engine?.sdkExecutable?.(override), engine?.bundled?.()?.command, binaryEnvOverride(definition.id),
+      definition.launch?.command, definition.detect?.command]
+  }
+  const modelCatalogs = new HarnessModelCatalogStore({
+    ...(deps.modelCatalogStorePath ? { path: deps.modelCatalogStorePath } : {}),
+    identity: (definition) => harnessModelCatalogIdentity(definition, catalogExecutables(definition))
+  })
+  const onCatalog = (definition: HarnessDefinition, catalog: HarnessModelCatalog): void =>
+    modelCatalogs.record(definition, catalog)
   const acpModels = new AcpModelProbe({
     binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
-    resolveSecretEnv: deps.resolveSecretEnv
+    resolveSecretEnv: deps.resolveSecretEnv, onCatalog
   })
   const agentSdkModels = new AgentSdkModelProbe({
+    onCatalog,
     // An engine with its own SDK executable choice (Claude Code falls back to
     // the user's installation) starts what the detector reported.
     binaryPath: (id) => {
@@ -132,11 +160,11 @@ export function createHarnessComposition(
   })
   const codexModels = new CodexModelProbe({
     binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
-    resolveSecretEnv: deps.resolveSecretEnv
+    resolveSecretEnv: deps.resolveSecretEnv, onCatalog
   })
-  const piModels = new PiModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id), resolveSecretEnv: deps.resolveSecretEnv })
-  const antigravityModels = new AntigravityModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id) ?? binaryEnvOverride(id) })
-  const probedModels = (definition: HarnessDefinition): string[] | undefined =>
+  const piModels = new PiModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id), resolveSecretEnv: deps.resolveSecretEnv, onCatalog })
+  const antigravityModels = new AntigravityModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id) ?? binaryEnvOverride(id), onCatalog })
+  const liveProbedModels = (definition: HarnessDefinition): string[] | undefined =>
     definition.transport === 'acp'
       ? acpModels.peek(definition)
       : definition.transport === 'agent-sdk'
@@ -146,6 +174,30 @@ export function createHarnessComposition(
         : definition.transport === 'codex-app-server'
           ? codexModels.peek(definition)
           : undefined
+  const probedModels = (definition: HarnessDefinition): string[] | undefined =>
+    liveProbedModels(definition) ?? modelCatalogs.get(definition)?.catalog.models
+  // Discovery never holds one Agent's probe process while starting the next.
+  const probeLive = (definition: HarnessDefinition): Promise<string[]> =>
+    definition.transport === 'acp' ? acpModels.probe(definition, { keepWarm: false })
+      : definition.transport === 'agent-sdk' ? agentSdkModels.probe(definition)
+        : definition.transport === 'codex-app-server' ? codexModels.probe(definition)
+          : definition.transport === 'pi-rpc' ? piModels.probe(definition)
+            : definition.transport === 'antigravity-cli' ? antigravityModels.probe(definition) : Promise.resolve([])
+  let backgroundTail: Promise<unknown> = Promise.resolve()
+  const backgroundProbes = new Map<string, Promise<string[]>>()
+  const probeModelsInBackground = (definition: HarnessDefinition): Promise<string[]> => {
+    const known = probedModels(definition)
+    if (known?.length) return Promise.resolve(known)
+    const queued = backgroundProbes.get(definition.id)
+    if (queued) return queued
+    // An earlier queued probe (or a picker) may have listed this Agent meanwhile.
+    const run = backgroundTail.then(() => probedModels(definition) ?? probeLive(definition))
+      .catch(() => [] as string[])
+      .finally(() => { if (backgroundProbes.get(definition.id) === run) backgroundProbes.delete(definition.id) })
+    backgroundTail = run
+    backgroundProbes.set(definition.id, run)
+    return run
+  }
   const readiness = new HarnessReadinessService({ options, catalog, detector, revision: deps.revision,
     resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
     resolveGatewayAliases: deps.resolveGatewayAliases,
@@ -154,6 +206,8 @@ export function createHarnessComposition(
     onCatalog: (definition, catalog) => {
       if (definition.transport === 'acp') acpModels.seed(definition, catalog)
       else if (definition.transport === 'antigravity-cli') antigravityModels.seed(definition, catalog)
+      else return
+      modelCatalogs.record(definition, catalog)
     } })
   // Refreshing one Agent must not discard another Agent's catalog.
   const invalidateModels = (id: string): void => {
@@ -186,7 +240,7 @@ export function createHarnessComposition(
       const override = { ...original, harnesses: HarnessesConfigSchema.parse({
         ...original.harnesses, providers: { ...original.harnesses?.providers, [id]: { ...original.harnesses?.providers?.[id], command: path } }
       }) }
-      const probe = createHarnessComposition(() => override, { ...deps, readinessProofStorePath: undefined })
+      const probe = createHarnessComposition(() => override, { ...deps, readinessProofStorePath: undefined, modelCatalogStorePath: undefined })
       const definition = probe.catalog.get(id)
       if (!definition) throw new Error('Agent definition is unavailable')
       const status = await probe.detector.status(id, { force: true, signal })
@@ -218,6 +272,9 @@ export function createHarnessComposition(
     antigravityModels,
     installNetwork: () => options().nativeAgentNetwork?.installer,
     probedModels,
+    liveProbedModels,
+    modelCatalogs,
+    probeModelsInBackground,
     tokens: new HarnessTokenService(),
     extensionAgents,
     gatewayEndpoint: {},
