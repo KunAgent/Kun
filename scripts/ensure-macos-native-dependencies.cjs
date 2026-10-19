@@ -50,6 +50,7 @@ function nativeInstallArguments(arch, versions) {
     `--cpu=${arch}`,
     `sharp@${versions.sharp}`,
     `@napi-rs/canvas@${versions.canvas}`,
+    `@trycua/cua-driver-darwin-${arch}@${versions.cuaDriver}`,
     `@cursor/sdk-darwin-${arch}@${versions.cursorSdk}`,
     `@opentui/core-darwin-${arch}@${versions.opentuiCore}`
   ]
@@ -74,7 +75,8 @@ function targetPackages(arch) {
   return [
     ['@img', `sharp-darwin-${arch}`],
     ['@img', `sharp-libvips-darwin-${arch}`],
-    ['@napi-rs', `canvas-darwin-${arch}`]
+    ['@napi-rs', `canvas-darwin-${arch}`],
+    ['@trycua', `cua-driver-darwin-${arch}`]
   ]
 }
 
@@ -133,6 +135,7 @@ function ensureMacosNativeDependencies({
   const versions = {
     sharp: installedPackageVersion(root, 'sharp'),
     canvas: installedPackageVersion(root, '@napi-rs/canvas'),
+    cuaDriver: installedPackageVersion(root, '@trycua/cua-driver'),
     cursorSdk: installedPackageVersion(join(root, 'kun'), '@cursor/sdk'),
     opentuiCore: installedPackageVersion(join(root, 'kun'), '@opentui/core')
   }
@@ -155,6 +158,7 @@ function ensureMacosNativeDependencies({
   assertTargetPackage(root, '@img', `sharp-darwin-${arch}`, arch)
   assertTargetPackage(root, '@img', `sharp-libvips-darwin-${arch}`, arch)
   assertTargetPackage(root, '@napi-rs', `canvas-darwin-${arch}`, arch)
+  assertTargetPackage(root, '@trycua', `cua-driver-darwin-${arch}`, arch, versions.cuaDriver)
   assertTargetPackage(join(root, 'kun'), '@cursor', `sdk-darwin-${arch}`, arch)
   assertTargetPackage(join(root, 'kun'), '@opentui', `core-darwin-${arch}`, arch, versions.opentuiCore)
   return { arch, versions }
@@ -164,6 +168,7 @@ function main() {
   const result = ensureMacosNativeDependencies({ arch: argumentValue('--arch') })
   process.stdout.write(
     `Prepared Sharp ${result.versions.sharp}, Canvas ${result.versions.canvas}, ` +
+    `CUA Driver ${result.versions.cuaDriver}, ` +
     `Cursor SDK ${result.versions.cursorSdk}, and OpenTUI ${result.versions.opentuiCore} ` +
     `for darwin/${result.arch}\n`
   )

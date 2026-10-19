@@ -13,15 +13,17 @@ const {
 const VERSIONS = {
   sharp: '0.34.5',
   canvas: '0.1.100',
+  cuaDriver: '0.22.2',
   cursorSdk: '1.0.24',
   opentuiCore: '0.6.6'
 }
 
-async function fixture(opentuiVersion = VERSIONS.opentuiCore) {
+async function fixture(opentuiVersion = VERSIONS.opentuiCore, cuaVersion = VERSIONS.cuaDriver) {
   const root = join(tmpdir(), `kun-native-architecture-${process.pid}-${Date.now()}-${Math.random()}`)
   for (const [name, version] of [
     ['node_modules/sharp', VERSIONS.sharp],
     ['node_modules/@napi-rs/canvas', VERSIONS.canvas],
+    ['node_modules/@trycua/cua-driver', cuaVersion],
     ['kun/node_modules/@cursor/sdk', VERSIONS.cursorSdk],
     ['kun/node_modules/@opentui/core', opentuiVersion]
   ]) {
@@ -31,11 +33,12 @@ async function fixture(opentuiVersion = VERSIONS.opentuiCore) {
   return root
 }
 
-function stagePackages(root, arch, { omit, opentuiManifest = {} } = {}) {
+function stagePackages(root, arch, { omit, opentuiManifest = {}, cuaManifest = {} } = {}) {
   for (const name of [
     `@img/sharp-darwin-${arch}`,
     `@img/sharp-libvips-darwin-${arch}`,
     `@napi-rs/canvas-darwin-${arch}`,
+    `@trycua/cua-driver-darwin-${arch}`,
     `@cursor/sdk-darwin-${arch}`,
     `@opentui/core-darwin-${arch}`
   ]) {
@@ -46,10 +49,16 @@ function stagePackages(root, arch, { omit, opentuiManifest = {} } = {}) {
       name,
       os: ['darwin'],
       cpu: [arch],
+      ...(name.startsWith('@trycua/') ? { version: VERSIONS.cuaDriver, ...cuaManifest } : {}),
       ...(name.startsWith('@opentui/') ? { version: VERSIONS.opentuiCore, ...opentuiManifest } : {})
     }))
     if (name.startsWith('@opentui/')) {
       writeFileSync(join(directory, 'libopentui.dylib'), `OpenTUI ${arch} binary fixture`)
+    }
+    if (name.startsWith('@trycua/')) {
+      for (const file of ['libcua_driver_sdk.dylib', 'cua_driver_node_runtime.node']) {
+        writeFileSync(join(directory, file), `CUA Driver ${arch} ${file} fixture`)
+      }
     }
   }
 }
@@ -66,13 +75,14 @@ test('uses npm cross-platform flags without changing package metadata', () => {
     '--cpu=x64',
     'sharp@0.34.5',
     '@napi-rs/canvas@0.1.100',
+    '@trycua/cua-driver-darwin-x64@0.22.2',
     '@cursor/sdk-darwin-x64@1.0.24',
     '@opentui/core-darwin-x64@0.6.6'
   ])
   assert.throws(() => nativeInstallArguments('ia32', VERSIONS), /Unsupported/)
 })
 
-test('stages target packages and switches Kun native payloads between macOS builds', async (t) => {
+test('stages target packages and switches root and Kun native payloads between macOS builds', async (t) => {
   const root = await fixture()
   t.after(() => rm(root, { recursive: true, force: true }))
   const coreManifest = join(root, 'kun/node_modules/@opentui/core/package.json')
@@ -91,6 +101,7 @@ test('stages target packages and switches Kun native payloads between macOS buil
     assert.equal(calls.length, 1)
     assert.ok(calls[0].args.includes(`--cpu=${arch}`))
     assert.ok(calls[0].args.includes(`@opentui/core-darwin-${arch}@0.6.6`))
+    assert.ok(calls[0].args.includes(`@trycua/cua-driver-darwin-${arch}@0.22.2`))
     assert.match(calls[0].options.cwd, new RegExp(`kun-macos-native-${arch}-`))
     assert.equal(existsSync(calls[0].options.cwd), false, 'staging directory is removed')
     const otherArch = arch === 'x64' ? 'arm64' : 'x64'
@@ -102,6 +113,13 @@ test('stages target packages and switches Kun native payloads between macOS buil
       root, 'kun/node_modules/@opentui', `core-darwin-${arch}`, 'libopentui.dylib'
     ), 'utf8'), `OpenTUI ${arch} binary fixture`)
     assert.equal(existsSync(join(root, 'node_modules/@opentui')), false, 'OpenTUI belongs in Kun')
+    for (const file of ['libcua_driver_sdk.dylib', 'cua_driver_node_runtime.node']) {
+      assert.equal(readFileSync(join(
+        root, 'node_modules/@trycua', `cua-driver-darwin-${arch}`, file
+      ), 'utf8'), `CUA Driver ${arch} ${file} fixture`)
+    }
+    assert.equal(existsSync(join(root, 'node_modules/@trycua', `cua-driver-darwin-${otherArch}`)), false)
+    assert.equal(existsSync(join(root, 'kun/node_modules/@trycua')), false, 'CUA Driver belongs at root')
     assert.equal(readFileSync(coreManifest, 'utf8'), originalManifest)
   }
 })
@@ -129,8 +147,23 @@ test('fails closed when npm does not install the target architecture', async (t)
   )
 })
 
+test('uses the installed CUA Driver version instead of a hardcoded or latest version', async (t) => {
+  const root = await fixture(undefined, '0.22.3')
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const result = ensureMacosNativeDependencies({
+    root,
+    arch: 'arm64',
+    execute: (_command, args, options) => {
+      assert.ok(args.includes('@trycua/cua-driver-darwin-arm64@0.22.3'))
+      stagePackages(options.cwd, 'arm64', { cuaManifest: { version: '0.22.3' } })
+    }
+  })
+  assert.equal(result.versions.cuaDriver, '0.22.3')
+})
+
 for (const [name, pattern] of [
   ['@napi-rs/canvas-darwin-x64', /missing.*canvas-darwin-x64/i],
+  ['@trycua/cua-driver-darwin-x64', /missing.*cua-driver-darwin-x64/i],
   ['@cursor/sdk-darwin-x64', /missing.*sdk-darwin-x64/i],
   ['@opentui/core-darwin-x64', /missing.*core-darwin-x64/i]
 ]) {
@@ -141,6 +174,24 @@ for (const [name, pattern] of [
       root,
       arch: 'x64',
       execute: (_command, _args, options) => stagePackages(options.cwd, 'x64', { omit: name })
+    }), pattern)
+  })
+}
+
+for (const [manifest, pattern] of [
+  [{ os: ['linux'] }, /cua-driver-darwin-x64.*expected darwin\/x64/],
+  [{ cpu: ['arm64'] }, /cua-driver-darwin-x64.*expected darwin\/x64/],
+  [{ version: '0.22.1' }, /cua-driver-darwin-x64.*installed runtime version 0\.22\.2/]
+]) {
+  test(`rejects mismatched CUA Driver metadata ${JSON.stringify(manifest)}`, async (t) => {
+    const root = await fixture()
+    t.after(() => rm(root, { recursive: true, force: true }))
+    assert.throws(() => ensureMacosNativeDependencies({
+      root,
+      arch: 'x64',
+      execute: (_command, _args, options) => stagePackages(options.cwd, 'x64', {
+        cuaManifest: manifest
+      })
     }), pattern)
   })
 }
