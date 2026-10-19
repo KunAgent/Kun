@@ -13,6 +13,7 @@ import {
   type ToolResultItem
 } from './transcript-exploration.js'
 import { splitStableMarkdown } from './markdown-blocks.js'
+import type { TurnOutcome, WorkTrailSummary } from './transcript-trail.js'
 
 type VisibleItem = Exclude<TurnItem, { kind: 'goal_context' | 'model_context' | 'runtime_context_source' | 'interruption_note' }>
 
@@ -37,6 +38,8 @@ export type TranscriptEntry = (
   | { kind: 'child'; key: string; child: ProjectedChildRun }
   | { kind: 'child-group'; key: string; turnId: string; children: ProjectedChildRun[] }
   | { kind: 'approval-review'; key: string; review: ProjectedApprovalReview }
+  | { kind: 'work'; key: string; turnId: string; trail: WorkTrailSummary; expanded: boolean }
+  | { kind: 'turn-footer'; key: string; turnId: string; model?: string; durationMs?: number; outcome: TurnOutcome }
 ) & {
   /** Final: the entry will not change (in-progress entries show live hints). */
   settled: boolean

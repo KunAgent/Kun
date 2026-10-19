@@ -108,6 +108,7 @@ export class ChatSession extends ChatSessionInput {
 
   toggleToolDetails(): void {
     this.showToolDetailsValue = !this.showToolDetailsValue
+    this.refreshEntries()
     this.controller.notify(this.showToolDetailsValue
       ? `Tool details expanded · ${this.keymap.display('tool_details_toggle')} collapses them.`
       : 'Tool details collapsed.')
@@ -157,7 +158,12 @@ export class ChatSession extends ChatSessionInput {
 
   protected override executeKeyAction(action: TuiKeyAction): void {
     if (action.startsWith('session_quick_')) {
-      void this.controller.openQuickSession(Number(action.slice('session_quick_'.length)))
+      // Ctrl+X 1-9 switch between the open session tabs; without a tab in
+      // that slot it falls back to the thread list's quick slots.
+      const slot = Number(action.slice('session_quick_'.length))
+      const tab = this.navigation.tabAt(slot)
+      if (tab) void this.controller.openThread(tab)
+      else void this.controller.openQuickSession(slot)
       return
     }
     switch (action) {

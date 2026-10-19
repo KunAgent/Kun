@@ -1,5 +1,6 @@
-import { CliRenderEvents, RGBA, type MouseEvent, type ScrollBoxRenderable } from '@opentui/core'
+import { CliRenderEvents, type MouseEvent, type ScrollBoxRenderable } from '@opentui/core'
 import { createEffect, createMemo, createSignal, on, onCleanup, Show, type JSX } from 'solid-js'
+import { currentMode } from '../../chat-format.js'
 import type { ViewportScroll } from '../../session/session-types.js'
 import { firstMountedEntry, MOUNT_BUDGET, MOUNT_STEP, trimmedMountStart } from '../../session-view-model.js'
 import { useApp } from '../context.js'
@@ -38,6 +39,7 @@ export function Conversation(): JSX.Element {
   const reasoningExpanded = (itemId: string, fallback: boolean): boolean => session.reasoningExpanded(itemId) ?? fallback
   const onToggleReasoning = (itemId: string): void => session.handleLiveClick({ kind: 'thinking', itemId })
   const onOpenChild = (childId: string): void => session.handleLiveClick({ kind: 'child', childId })
+  const onToggleWork = (key: string): void => session.handleLiveClick({ kind: 'work', key })
   const renderOptions = (frame: number): EntryRenderOptions => ({
     details: session.showToolDetails,
     showReasoning: session.showReasoning,
@@ -45,9 +47,12 @@ export function Conversation(): JSX.Element {
     legacyGui: app.controller.runtime.legacyGui === true,
     attachments: session.state.attachmentMetadata,
     clickable: session.pointerMode,
+    mode: currentMode(session.state),
+    ...(session.state.projection?.pendingApproval?.itemId ? { awaitingItemId: session.state.projection.pendingApproval.itemId } : {}),
     reasoningExpanded,
     onToggleReasoning,
-    onOpenChild
+    onOpenChild,
+    onToggleWork
   })
   const options = createMemo(() => {
     app.tick()
@@ -119,8 +124,8 @@ export function Conversation(): JSX.Element {
   }
   session.attachViewport({ scroll: scrollTo })
 
-  const scrollbarColor = (): RGBA => app.theme().focus ?? RGBA.defaultForeground()
   return (
+    <box flexGrow={1} minHeight={0} flexDirection="column">
     <box flexGrow={1} minHeight={0} position="relative">
       <scrollbox
         ref={(element: ScrollBoxRenderable) => { scroll = element }}
@@ -140,7 +145,7 @@ export function Conversation(): JSX.Element {
           top: 0,
           width: 1,
           height: '100%',
-          trackOptions: { foregroundColor: scrollbarColor(), backgroundColor: RGBA.defaultBackground() }
+          trackOptions: { foregroundColor: app.theme().faint, backgroundColor: app.theme().raised }
         }}
         onMouseScroll={(event: MouseEvent) => {
           if (event.scroll?.direction === 'up' && scroll && scroll.scrollTop <= 0) revealOlder()
@@ -148,21 +153,25 @@ export function Conversation(): JSX.Element {
       >
         <Show when={hidden() > 0}>
           <Line
-            segments={[seg.muted(` … ${hidden()} earlier entr${hidden() === 1 ? 'y' : 'ies'} · scroll up or click to load more`)]}
+            segments={[seg.faint(`   … ${hidden()} earlier entr${hidden() === 1 ? 'y' : 'ies'} · scroll up or click to load more`)]}
             onMouseDown={revealOlder}
           />
         </Show>
         <Show when={emptySession()}>
-          <Line segments={[' ', seg.brand('New session', { bold: true }), seg.muted(' · type a task and press Enter · /sessions to resume earlier work')]} />
+          <Line segments={['   ', seg.brand('◆ ', { bold: true }), seg.bold('New session'), seg.muted(' · type a task and press enter · ctrl+x l resumes earlier work')]} />
         </Show>
         <TranscriptList entries={visible} options={options} settledOptions={settledOptions} />
         <box height={1} flexShrink={0} />
       </scrollbox>
-      <Show when={away()}>
-        <box position="absolute" right={2} bottom={0} zIndex={10} backgroundColor={RGBA.defaultBackground()} onMouseDown={toBottom}>
-          <Line segments={[' ', seg.focus('Jump to latest ↓', { bold: true }), ' ', seg.muted(app.session.keymap.display('messages_last')), ' ']} />
-        </box>
-      </Show>
+    </box>
+      <box height={1} flexShrink={0} flexDirection="row">
+        <box flexGrow={1} />
+        <Show when={away()}>
+          <box flexShrink={0} onMouseDown={toBottom}>
+            <Line segments={[seg.brand('↓ new output'), seg.faint(` · ${app.session.keymap.display('messages_last').toLowerCase()} `)]} />
+          </box>
+        </Show>
+      </box>
     </box>
   )
 }

@@ -3,8 +3,11 @@ import type { TuiController, TuiControllerState } from '../controller.js'
 import { parseTuiKeymapConfig, type TuiKeymap } from '../keymap.js'
 import { editTextInExternalEditor } from '../operations.js'
 import type { TuiPage } from '../page-model.js'
+import { GitStatusWatcher, type GitSnapshot } from '../git-status.js'
 import { isActiveChildRun } from '../subagent-format.js'
 import { buildTranscriptEntries, type TranscriptEntry } from '../transcript-model.js'
+import { foldWorkTrails, withPartSpacing, withTurnFooters } from '../transcript-trail.js'
+import { SessionNavigation } from './session-navigation.js'
 import type { OfficialProviderCliId } from '../../services/official-provider-cli.js'
 import type {
   AutocompleteView,
@@ -38,6 +41,16 @@ export abstract class ChatSessionBase {
   protected readonly pages: PageEntry[] = []
   protected readonly listeners = new Set<() => void>()
   protected entriesValue: TranscriptEntry[] = []
+  /** Open session tabs and when each was last seen. */
+  readonly navigation = new SessionNavigation()
+  protected gitValue?: GitSnapshot
+  protected readonly gitWatcher = new GitStatusWatcher((snapshot) => {
+    this.gitValue = snapshot
+    this.changed()
+  })
+  /** Work trails the reader opened one by one. */
+  protected readonly expandedTrails = new Set<string>()
+  protected navigationTimer?: ReturnType<typeof setInterval>
   protected showReasoningValue = false
   protected readonly liveReasoningOverrides = new Map<string, boolean>()
   protected showToolDetailsValue = false
@@ -91,6 +104,8 @@ export abstract class ChatSessionBase {
   get pointerMode(): boolean { return this.pointerModeValue }
   get sidebarVisible(): boolean { return this.sidebarVisibleValue }
   get sidebarOverlay(): boolean { return this.sidebarOverlayValue }
+  /** Branch and uncommitted changes of the session's workspace, when it is a repository. */
+  get git(): GitSnapshot | undefined { return this.gitValue }
   get transientHint(): string | undefined { return this.transientHintValue }
   get leaderHint(): LeaderHint | undefined { return this.leaderHintValue }
   get autocomplete(): AutocompleteView | undefined { return this.autocompleteValue }
@@ -125,11 +140,16 @@ export abstract class ChatSessionBase {
 
   /** Rebuild the transcript entries from the current projection. */
   protected refreshEntries(): void {
-    this.entriesValue = buildTranscriptEntries(this.controller.state.projection, {
+    const projection = this.controller.state.projection
+    const entries = buildTranscriptEntries(projection, {
       showReasoning: this.showReasoningValue,
       reasoningOverrides: this.liveReasoningOverrides,
       splitAssistantText: true
     })
+    this.entriesValue = withPartSpacing(foldWorkTrails(withTurnFooters(entries, projection), projection, {
+      expandAll: this.showToolDetailsValue,
+      expanded: this.expandedTrails
+    }))
   }
 
   run(): Promise<void> {
@@ -140,6 +160,12 @@ export abstract class ChatSessionBase {
     process.on('SIGTERM', this.signalHandler)
     process.on('SIGHUP', this.signalHandler)
     this.terminal?.setTitle('Kun')
+    // Tab and rail status for sessions other than the open one comes from
+    // the thread list; the Sessions page refreshes it on its own.
+    this.navigationTimer = setInterval(() => {
+      if (this.page?.kind !== 'sessions') void this.controller.refreshThreads(this.controller.state.threadSearch)
+    }, 5_000)
+    this.navigationTimer.unref?.()
     this.onControllerState(this.controller.state)
     return this.runPromise
   }
@@ -163,6 +189,9 @@ export abstract class ChatSessionBase {
     }
     this.syncPages(state)
     this.syncAnimation(state)
+    const thread = state.projection?.thread
+    this.navigation.observe(thread ? { id: thread.id, title: thread.title, workspace: thread.workspace } : undefined)
+    this.gitWatcher.watch(thread?.workspace ?? this.controller.options.workspace)
     this.refreshEntries()
     void this.refreshSkillAutocomplete(state.projection?.thread.workspace ?? this.controller.options.workspace)
     if (state.quitRequested) this.resolveRun?.()
@@ -210,6 +239,9 @@ export abstract class ChatSessionBase {
     this.threadRefreshTimer = undefined
     if (this.animationTimer) clearInterval(this.animationTimer)
     this.animationTimer = undefined
+    if (this.navigationTimer) clearInterval(this.navigationTimer)
+    this.navigationTimer = undefined
+    this.gitWatcher.stop()
     this.resolveRun?.()
     this.resolveRun = undefined
   }

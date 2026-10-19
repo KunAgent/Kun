@@ -45,30 +45,30 @@ export function ChildRunView(props: {
     <box flexDirection="column" flexShrink={0} {...(props.onOpen ? { onMouseDown: props.onOpen } : {})}>
       <Line segments={[
         '   ',
-        active() ? seg.focus(activityFrame('subagent', props.frame)) : failed() ? seg.danger('✗') : seg.success('●'),
-        ' ', seg.bold('Subagent'), ` · ${label()}`, seg.muted(role()),
+        active() ? seg.brand(activityFrame('subagent', props.frame)) : failed() ? seg.danger('✗') : seg.success('✓'),
+        ' ', { text: label(), tone: failed() ? 'danger' : 'muted' }, seg.faint(role()),
         metrics() ? seg.muted(` · ${metrics()}`) : undefined,
-        ' ', statusSeg(child())
+        seg.muted(' · '), statusSeg(child())
       ]} />
       <Show when={active() && child().activity}>
         <Line segments={[
           '     ',
-          seg.focus(activityFrame(childActivityVisualKind(child()), props.frame)),
-          ` ${sanitizeTerminalText(child().activity!.label)}`,
-          seg.muted(` · ${elapsedDuration(child().activity!.startedAt, undefined, true)}`)
+          seg.brand(activityFrame(childActivityVisualKind(child()), props.frame)),
+          seg.muted(` ${sanitizeTerminalText(child().activity!.label)}`),
+          seg.faint(` · ${elapsedDuration(child().activity!.startedAt, undefined, true)}`)
         ]} />
       </Show>
       <Show when={active() && !child().activity && !child().text}>
-        <Line segments={[seg.muted(`     ${child().status === 'queued' ? 'Waiting for an execution slot…' : 'Working independently…'}`)]} />
+        <Line segments={[seg.faint(`     ${child().status === 'queued' ? 'Waiting for an execution slot…' : 'Working independently…'}`)]} />
       </Show>
       <Index each={preview()}>
-        {(line) => <Line segments={[{ text: `     ${line()}`, tone: failed() ? 'danger' : 'muted' }]} />}
+        {(line) => <Line segments={[{ text: `     ${line()}`, tone: failed() ? 'danger' : 'faint' }]} />}
       </Index>
       <Show when={props.expanded && child().prompt}>
-        <Line segments={[seg.muted(`     Task: ${sanitizeTerminalText(child().prompt!)}`)]} />
+        <Line segments={[seg.faint(`     Task: ${sanitizeTerminalText(child().prompt!)}`)]} />
       </Show>
       <Show when={props.hint}>
-        <Line segments={[seg.muted(`     click to open · keyboard: /subagents${isForegroundChildRun(child()) ? ' · Ctrl+B background' : ''}`)]} />
+        <Line segments={[seg.faint(`     click to open · /subagents${isForegroundChildRun(child()) ? ' · ctrl+b background' : ''}`)]} />
       </Show>
     </box>
   )
@@ -87,15 +87,13 @@ export function ChildRunGroupView(props: {
     <box flexDirection="column" flexShrink={0}>
       <Line segments={[
         '   ',
-        summary().active ? seg.focus(activityFrame('subagent', props.frame)) : summary().failed ? seg.danger('✗') : seg.success('●'),
-        ' ', seg.bold(summary().title),
-        summary().breakdown ? seg.muted(` (${summary().breakdown})`) : undefined,
-        summary().metrics ? seg.muted(` · ${summary().metrics}`) : undefined
+        summary().active ? seg.brand(activityFrame('subagent', props.frame)) : summary().failed ? seg.danger('✗') : seg.success('✓'),
+        ' ', seg.muted(summary().title),
+        summary().breakdown ? seg.faint(` (${summary().breakdown})`) : undefined,
+        summary().metrics ? seg.faint(` · ${summary().metrics}`) : undefined
       ]} />
       <For each={props.children}>
-        {(child, index) => {
-          const last = () => index() === props.children.length - 1
-          const continuation = () => (last() ? '  ' : '│ ')
+        {(child) => {
           const description = () => sanitizeTerminalText(child.label || child.prompt || child.childId)
           const preview = () => child.text || (isActiveChildRun(child)
             ? child.status === 'queued' ? 'Waiting to start…' : 'Working independently…'
@@ -103,25 +101,26 @@ export function ChildRunGroupView(props: {
           return (
             <box flexDirection="column" flexShrink={0} {...(props.onOpen ? { onMouseDown: () => props.onOpen!(child.childId) } : {})}>
               <Line segments={[
-                '   ', seg.muted(last() ? '└─' : '├─'), ' ',
-                seg.focus(sanitizeTerminalText(child.profileName || child.profile || 'agent')),
+                '     ',
+                isActiveChildRun(child) ? seg.brand(activityFrame('subagent', props.frame)) : child.status === 'failed' ? seg.danger('✗') : seg.success('✓'),
+                ' ', sanitizeTerminalText(child.profileName || child.profile || 'agent'),
                 seg.muted(` · ${description()}`),
-                childMetrics(child) ? seg.muted(` · ${childMetrics(child)}`) : undefined,
-                ' ', statusSeg(child)
+                childMetrics(child) ? seg.faint(` · ${childMetrics(child)}`) : undefined,
+                seg.muted(' · '), statusSeg(child)
               ]} />
               <Show
                 when={isActiveChildRun(child) && child.activity}
                 fallback={
                   <Index each={preview() ? previewLines(preview()!, props.expanded ? 6 : isActiveChildRun(child) ? 1 : 0) : []}>
-                    {(line) => <Line segments={[seg.muted(`   ${continuation()}   ${line()}`)]} />}
+                    {(line) => <Line segments={[seg.faint(`       ${line()}`)]} />}
                   </Index>
                 }
               >
                 <Line segments={[
-                  `   ${continuation()}   `,
-                  seg.focus(activityFrame(childActivityVisualKind(child), props.frame)),
-                  ` ${sanitizeTerminalText(child.activity!.label)}`,
-                  seg.muted(` · ${elapsedDuration(child.activity!.startedAt, undefined, true)}`)
+                  '       ',
+                  seg.brand(activityFrame(childActivityVisualKind(child), props.frame)),
+                  seg.muted(` ${sanitizeTerminalText(child.activity!.label)}`),
+                  seg.faint(` · ${elapsedDuration(child.activity!.startedAt, undefined, true)}`)
                 ]} />
               </Show>
             </box>
@@ -129,7 +128,7 @@ export function ChildRunGroupView(props: {
         }}
       </For>
       <Show when={props.hint}>
-        <Line segments={[seg.muted('     click an agent to open its live session · /subagents · Ctrl+B background')]} />
+        <Line segments={[seg.faint('     click an agent to open it · /subagents · ctrl+b background')]} />
       </Show>
     </box>
   )

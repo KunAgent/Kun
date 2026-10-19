@@ -1,42 +1,72 @@
-import { RGBA } from '@opentui/core'
 import { createMemo, For, Show, type JSX } from 'solid-js'
-import { activityFrame, formatContextGauge, formatTokenCount } from '../../activity.js'
-import { activityLabel, currentModel, currentWorkspace, describeGraphProgress, displayWorkspace } from '../../chat-format.js'
+import { activityFrame, formatTokenCount } from '../../activity.js'
+import { currentModel, currentWorkspace, describeActivity, displayWorkspace } from '../../chat-format.js'
+import { formatGoalDuration } from '../../render-utils.js'
 import { sanitizeTerminalText } from '../../safe-text.js'
+import { contextRing, formatSessionCost, SIDEBAR_WIDTH, sidebarTodos, type SidebarTodo } from '../../session-view-model.js'
 import { matchingRequestContextSnapshot } from '../../state.js'
-import { formatSessionCost, SIDEBAR_WIDTH, sidebarTodos, type SidebarTodo } from '../../session-view-model.js'
-import { isActiveChildRun } from '../../subagent-format.js'
+import { childMetrics, isActiveChildRun } from '../../subagent-format.js'
 import { AppContext, useApp, type AppContextValue } from '../context.js'
-import { Line, seg, styled, type SegInput } from '../ui.js'
+import { ringColor, type KunTheme } from '../theme.js'
+import { Line, seg, SplitRow, styled, type SegInput } from '../ui.js'
 import { Txt } from '../txt.js'
+import { activityColor } from '../chat/status-rows.js'
 
-const MAX_AGENTS = 8
-const RULE_COLOR = RGBA.fromIndex(8)
+const MAX_AGENTS = 6
+const MAX_CHANGES = 4
 
-/** "used / window · percent" for the current request's model, if known. */
-export function sessionContextGauge(app: Pick<AppContextValue, 'session' | 'controller'>): string | undefined {
+export type ContextUsage = { used: number; window: number; percent: number }
+
+/** Tokens in the latest request against the selected model's window. */
+export function sessionContextUsage(app: Pick<AppContextValue, 'session' | 'controller'>): ContextUsage | undefined {
   const projection = app.session.state.projection
   const snapshot = matchingRequestContextSnapshot(projection, {
     model: app.controller.options.model ?? projection?.thread.model,
     providerId: app.controller.options.providerId ?? projection?.thread.providerId
   })
-  return snapshot ? formatContextGauge(snapshot.estimatedInputTokens, snapshot.contextWindowTokens) : undefined
+  if (!snapshot || snapshot.contextWindowTokens <= 0) return undefined
+  const used = Math.max(0, snapshot.estimatedInputTokens)
+  return { used, window: snapshot.contextWindowTokens, percent: Math.round((used / snapshot.contextWindowTokens) * 100) }
 }
 
-function Heading(props: { text: string; right?: string }): JSX.Element {
+/** "◔ 13%" in the ring's level color. */
+export function ringSegments(theme: KunTheme, usage: ContextUsage): SegInput[] {
+  const ring = contextRing(usage.percent)
+  return [seg.color(ring.glyph, ringColor(theme, ring.level)), seg.muted(` ${usage.percent}%`)]
+}
+
+/** Workspace with the branch appended: "~/ds_project/DeepSeek-GUI:develop". */
+export function workspaceLabel(app: AppContextValue): SegInput[] {
+  const workspace = displayWorkspace(currentWorkspace(app.session.state, app.controller))
+  const branch = app.session.git?.branch
+  return [seg.muted(workspace), ...(branch ? [seg.faint(`:${sanitizeTerminalText(branch)}`)] : [])]
+}
+
+export function sharedWithGui(app: AppContextValue): boolean {
+  return app.controller.runtime.attached?.ownerKind === 'gui'
+}
+
+function Heading(props: { text: string; right?: SegInput[] }): JSX.Element {
   return (
     <box flexDirection="column" flexShrink={0}>
       <box height={1} flexShrink={0} />
-      <Line segments={[seg.bold(props.text), ...(props.right ? [seg.muted(`  ${props.right}`)] : [])]} />
+      <SplitRow left={[seg.bold(props.text)]} right={props.right ?? []} />
     </box>
   )
 }
 
+function ProgressBar(props: { done: number; total: number; tone: 'brand' | 'success' }): JSX.Element {
+  const app = useApp()
+  const width = () => app.width()
+  const filled = () => (props.total > 0 ? Math.round((props.done / props.total) * width()) : 0)
+  return <Line segments={[{ text: '▰'.repeat(filled()), tone: props.tone }, seg.faint('▱'.repeat(Math.max(0, width() - filled())))]} />
+}
+
 /**
- * Session overview beside the conversation: title, context and usage, the
- * task list, subagents and anything waiting on the user.
+ * Session overview beside the conversation: what Kun is doing, context and
+ * spend, the goal and plan, subagents and uncommitted changes.
  */
-export function Sidebar(props: { overlay?: boolean }): JSX.Element {
+export function Sidebar(): JSX.Element {
   const app = useApp()
   const inner = SIDEBAR_WIDTH - 4
   const view = createMemo(() => {
@@ -45,110 +75,106 @@ export function Sidebar(props: { overlay?: boolean }): JSX.Element {
     const projection = state.projection
     const thread = projection?.thread
     const usage = projection?.usage
+    const items = thread?.todos?.items ?? []
+    const changes = app.session.git?.changes ?? []
     return {
       title: sanitizeTerminalText(thread?.title || 'Untitled'),
-      running: Boolean(projection?.runningTurnId),
-      status: projection?.runningTurnId ? activityLabel(projection.activity) : thread?.status ?? 'idle',
+      activity: describeActivity(state, app.controller, inner),
+      context: sessionContextUsage(app),
       model: currentModel(state, app.controller),
-      context: sessionContextGauge(app),
-      usage: usage
-        ? [
-            `${formatTokenCount(usage.totalTokens)} tokens`,
-            ...(usage.cacheHitRate !== null && usage.cacheHitRate !== undefined ? [`cache ${Math.round(usage.cacheHitRate * 100)}%`] : [])
-          ].join(' · ')
-        : undefined,
-      cost: usage ? formatSessionCost(usage.costUsd, usage.costCny) : undefined,
-      todos: sidebarTodos(thread?.todos?.items ?? []),
-      todoDone: (thread?.todos?.items ?? []).filter((item) => item.status === 'completed').length,
-      todoTotal: thread?.todos?.items.length ?? 0,
+      spend: [
+        ...(usage ? [formatSessionCost(usage.costUsd, usage.costCny)].filter(Boolean).map((cost) => `${cost} spent`) : []),
+        ...(usage?.cacheHitRate !== null && usage?.cacheHitRate !== undefined ? [`cache ${Math.round(usage.cacheHitRate * 100)}%`] : [])
+      ].join(' · '),
+      goal: thread?.goal,
+      todos: sidebarTodos(items),
+      todoDone: items.filter((item) => item.status === 'completed').length,
+      todoTotal: items.length,
       agents: [...(projection?.childRuns ?? [])].reverse().slice(0, MAX_AGENTS),
-      approval: projection?.pendingApproval?.toolName,
-      input: Boolean(projection?.pendingUserInput),
-      graph: describeGraphProgress(state),
-      workspace: displayWorkspace(currentWorkspace(state, app.controller)),
-      version: sanitizeTerminalText(app.controller.runtime.runtimeInfo.serviceVersion),
-      connection: state.connection
+      agentsRunning: (projection?.childRuns ?? []).filter(isActiveChildRun).length,
+      changes: changes.slice(0, MAX_CHANGES),
+      moreChanges: Math.max(0, changes.length - MAX_CHANGES),
+      added: changes.reduce((sum, change) => sum + change.added, 0),
+      deleted: changes.reduce((sum, change) => sum + change.deleted, 0),
+      version: sanitizeTerminalText(app.controller.runtime.runtimeInfo.serviceVersion)
     }
   })
-  const todoMark = (status: SidebarTodo['status']): SegInput =>
-    status === 'completed' ? seg.success('✓') : status === 'in_progress' ? seg.focus('•') : seg.muted('○')
+  const todoRow = (todo: SidebarTodo): SegInput[] => {
+    const text = sanitizeTerminalText(todo.content)
+    if (todo.status === 'completed') return [seg.muted(`[✓] ${text}`)]
+    if (todo.status === 'in_progress') return [seg.warning(`[•] ${text}`)]
+    return [`[ ] ${text}`]
+  }
+  const status = (): SegInput[] => {
+    const activity = view().activity
+    if (activity?.active) {
+      return [seg.color(activityFrame(activity.visualKind, app.session.animationFrame), activityColor(app.theme(), activity.visualKind)), seg.muted(` ${activity.text.toLowerCase()} ${activity.elapsed}`)]
+    }
+    return [seg.faint('● idle')]
+  }
   return (
-    <box
-      width={SIDEBAR_WIDTH}
-      height="100%"
-      flexShrink={0}
-      flexDirection="column"
-      border={['left']}
-      borderColor={RULE_COLOR}
-      paddingLeft={2}
-      paddingRight={1}
-      {...(props.overlay ? { backgroundColor: RGBA.defaultBackground() } : {})}
-    >
+    <box width={SIDEBAR_WIDTH} height="100%" flexShrink={0} flexDirection="column" backgroundColor={app.theme().raised} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
       <AppContext.Provider value={{ ...app, width: () => inner }}>
         <Txt content={styled(app.theme(), [seg.bold(view().title)])} wrapMode="word" flexShrink={0} />
-        <Line segments={[
-          view().running ? seg.focus(activityFrame('responding', app.session.animationFrame)) : seg.muted('●'),
-          ' ',
-          seg.muted(sanitizeTerminalText(view().status))
-        ]} maxWidth={inner} />
+        <Line segments={status()} maxWidth={inner} />
         <scrollbox flexGrow={1} minHeight={0} scrollY verticalScrollbarOptions={{ visible: false }} horizontalScrollbarOptions={{ visible: false }}>
-          <Heading text="Context" />
-          <Line segments={[seg.muted(view().model)]} maxWidth={inner} />
-          <Show when={view().context}><Line segments={[view().context!]} maxWidth={inner} /></Show>
-          <Show when={view().usage}><Line segments={[seg.muted(view().usage!)]} maxWidth={inner} /></Show>
-          <Show when={view().cost}><Line segments={[seg.muted(`${view().cost} spent`)]} maxWidth={inner} /></Show>
-          <Show when={view().approval || view().input}>
-            <Heading text="Waiting on you" />
-            <Show when={view().approval}><Line segments={[seg.warning('! '), `Approval · ${sanitizeTerminalText(view().approval!)}`]} maxWidth={inner} /></Show>
-            <Show when={view().input}><Line segments={[seg.accent('? '), 'A question needs your answer']} maxWidth={inner} /></Show>
+          <Heading text="Context" right={view().context ? ringSegments(app.theme(), view().context!) : []} />
+          <Show when={view().context} fallback={<Line segments={[seg.muted(view().model)]} maxWidth={inner} />}>
+            <Line segments={[seg.muted(`${view().context!.used.toLocaleString()} / ${formatTokenCount(view().context!.window)} tokens`)]} maxWidth={inner} />
           </Show>
-          <Show when={view().graph}>
-            <Heading text="Graph" right={view().graph!.status} />
-            <Line segments={[seg.muted(`${view().graph!.accepted}/${view().graph!.total} accepted · ${view().graph!.activeAgents} agents`)]} maxWidth={inner} />
+          <Show when={view().spend}><Line segments={[seg.muted(view().spend)]} maxWidth={inner} /></Show>
+          <Show when={view().goal}>
+            <Heading text="Goal" right={[seg.success(sanitizeTerminalText(view().goal!.status))]} />
+            <Txt content={styled(app.theme(), [seg.muted(sanitizeTerminalText(view().goal!.objective))])} wrapMode="word" flexShrink={0} />
+            <Line segments={[seg.faint(`${formatTokenCount(view().goal!.tokensUsed)} tokens · ${formatGoalDuration(view().goal!.timeUsedSeconds)}`)]} maxWidth={inner} />
           </Show>
           <Show when={view().todoTotal > 0}>
-            <Heading text="Todo" right={`${view().todoDone}/${view().todoTotal}`} />
-            <For each={view().todos.rows}>
-              {(todo) => (
-                <box flexDirection="row" flexShrink={0}>
-                  <box width={2} flexShrink={0}><Line segments={[todoMark(todo.status)]} /></box>
-                  <Txt
-                    content={styled(app.theme(), [todo.status === 'completed' ? seg.muted(sanitizeTerminalText(todo.content)) : sanitizeTerminalText(todo.content)])}
-                    wrapMode="word"
-                    flexGrow={1}
-                    flexShrink={1}
+            <Heading text="Plan" right={[seg.faint(`${view().todoDone}/${view().todoTotal}`)]} />
+            <ProgressBar done={view().todoDone} total={view().todoTotal} tone="brand" />
+            <For each={view().todos.rows}>{(todo) => <Line segments={todoRow(todo)} maxWidth={inner} />}</For>
+            <Show when={view().todos.more > 0}><Line segments={[seg.faint(`+${view().todos.more} more · /tasks`)]} /></Show>
+          </Show>
+          <Show when={view().agents.length > 0}>
+            <Heading text="Agents" right={view().agentsRunning ? [seg.muted(`${view().agentsRunning} running`)] : []} />
+            <For each={view().agents}>
+              {(child) => (
+                <box flexShrink={0} onMouseDown={() => app.session.handleLiveClick({ kind: 'child', childId: child.childId })}>
+                  <SplitRow
+                    left={[
+                      isActiveChildRun(child)
+                        ? seg.brand(activityFrame('subagent', app.session.animationFrame))
+                        : child.status === 'failed' ? seg.danger('✗') : child.status === 'aborted' ? seg.warning('■') : seg.success('✓'),
+                      ' ',
+                      isActiveChildRun(child) ? sanitizeTerminalText(child.label || child.profileName || child.profile || child.childId) : seg.muted(sanitizeTerminalText(child.label || child.profileName || child.profile || child.childId))
+                    ]}
+                    right={[seg.muted(isActiveChildRun(child) ? childMetrics(child) || child.status : child.status === 'completed' ? 'done' : child.status)]}
                   />
                 </box>
               )}
             </For>
-            <Show when={view().todos.more > 0}><Line segments={[seg.muted(`  +${view().todos.more} more · /tasks`)]} /></Show>
           </Show>
-          <Show when={view().agents.length > 0}>
-            <Heading text="Subagents" right={String(app.session.state.projection?.childRuns.length ?? 0)} />
-            <For each={view().agents}>
-              {(child) => (
-                <Line
-                  segments={[
-                    isActiveChildRun(child)
-                      ? seg.focus(activityFrame('subagent', app.session.animationFrame))
-                      : child.status === 'failed' ? seg.danger('✗') : child.status === 'aborted' ? seg.warning('■') : seg.success('✓'),
-                    ' ',
-                    sanitizeTerminalText(child.label || child.profileName || child.profile || child.childId),
-                    seg.muted(`  ${child.status}`)
+          <Show when={view().changes.length > 0}>
+            <Heading text="Changes" right={[seg.success(`+${view().added}`), seg.danger(` −${view().deleted}`)]} />
+            <For each={view().changes}>
+              {(change) => (
+                <SplitRow
+                  left={[seg.muted(sanitizeTerminalText(change.path))]}
+                  right={change.binary ? [seg.faint('bin')] : [
+                    ...(change.added ? [seg.success(`+${change.added}`)] : []),
+                    ...(change.deleted ? [seg.danger(` −${change.deleted}`)] : [])
                   ]}
-                  maxWidth={inner}
-                  onMouseDown={() => app.session.handleLiveClick({ kind: 'child', childId: child.childId })}
                 />
               )}
             </For>
+            <Show when={view().moreChanges > 0}><Line segments={[seg.faint(`+${view().moreChanges} more · /diff`)]} /></Show>
           </Show>
         </scrollbox>
         <box height={1} flexShrink={0} />
-        <Line segments={[seg.muted(view().workspace)]} maxWidth={inner} />
-        <Line segments={[
-          seg.muted(`Kun ${view().version} · `),
-          view().connection === 'connected' ? seg.success('connected') : seg.warning(view().connection)
-        ]} maxWidth={inner} />
+        <Line segments={workspaceLabel(app)} maxWidth={inner} />
+        <SplitRow
+          left={sharedWithGui(app) ? [seg.brand('⧉'), seg.muted(' shared with GUI')] : []}
+          right={[seg.brand('◆'), seg.bold(' Kun'), seg.muted(` ${view().version}`)]}
+        />
       </AppContext.Provider>
     </box>
   )
