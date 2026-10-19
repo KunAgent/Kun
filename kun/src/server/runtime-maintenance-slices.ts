@@ -16,7 +16,13 @@ import {
 } from './runtime-maintenance-reference-store.js'
 
 export const MAINTENANCE_SLICE_MAX_THREADS = 8
+/** Guardian checks are local stats, so one listed page serves many slices. */
+export const MAINTENANCE_GUARDIAN_PAGE_THREADS = 64
 export const MAINTENANCE_SLICE_MAX_MS = 50
+/** A listed page is reused by the next slices of the same task for this long. */
+const MAINTENANCE_PAGE_REUSE_MS = 60_000
+/** Leases younger than this keep an unreferenced attachment. */
+const ATTACHMENT_LEASE_GRACE_MS = 24 * 60 * 60 * 1_000
 
 const ScanStateSchema = z.object({
   version: z.literal(3),
@@ -150,6 +156,38 @@ export function createRuntimeMaintenanceSlices(input: {
     if (entry?.promise === promise) flights.delete(key)
   }
 
+  // A slice handles only what fits in MAINTENANCE_SLICE_MAX_MS, so the next
+  // slices resume inside the page they already listed instead of asking the
+  // Manager to list (and re-verify) the same threads again.
+  type ListedPage = Awaited<ReturnType<ThreadService['listPage']>>
+  const listedPages = new Map<'attachments' | 'guardian', { key: string; at: number; page: ListedPage }>()
+  const listMaintenancePage = async (
+    task: 'attachments' | 'guardian',
+    cursor: string | undefined,
+    limit: number
+  ): Promise<ListedPage> => {
+    const key = `${cursor ?? ''}\0${limit}`
+    const listed = listedPages.get(task)
+    if (listed?.key === key && Date.now() - listed.at < MAINTENANCE_PAGE_REUSE_MS) return listed.page
+    const page = await input.threads.listPage({ limit, includeArchived: true, includeSide: true, cursor })
+    listedPages.set(task, { key, at: Date.now(), page })
+    return page
+  }
+
+  // Only lease-managed attachments whose leases all expired can be pruned, and
+  // most profiles have none. Without a candidate no pass needs to hydrate every
+  // thread to collect references; with candidates the full two-generation pass
+  // below runs unchanged. A Manager that predates the query keeps that pass.
+  const withoutPruneCandidates = async (store: AttachmentStore): Promise<boolean> => {
+    const now = Date.parse(input.nowIso())
+    if (!store.expiredLeaseCandidates || !Number.isFinite(now)) return false
+    try {
+      return (await store.expiredLeaseCandidates(new Date(now - ATTACHMENT_LEASE_GRACE_MS).toISOString())).length === 0
+    } catch {
+      return false
+    }
+  }
+
   const freshState = (): ScanState => ({
     version: 3,
     attachments: { generation: 0 },
@@ -234,12 +272,12 @@ export function createRuntimeMaintenanceSlices(input: {
     const startedAt = Date.now()
     const state = await readState()
     const generation = state.attachments.generation
-    const page = await input.threads.listPage({
-      limit: MAINTENANCE_SLICE_MAX_THREADS,
-      includeArchived: true,
-      includeSide: true,
-      cursor: state.attachments.cursor
-    })
+    const passStart = !state.attachments.cursor && !state.attachments.pageOffset && !state.attachments.partialThread
+    if (passStart && await withoutPruneCandidates(attachmentStore)) {
+      recordSlice(startedAt, 0)
+      return true
+    }
+    const page = await listMaintenancePage('attachments', state.attachments.cursor, MAINTENANCE_SLICE_MAX_THREADS)
     // The soft deadline only budgets the per-thread work; state load and page
     // listing are bounded setup costs that must not starve the first thread.
     const loopStartedAt = Date.now()
@@ -332,7 +370,7 @@ export function createRuntimeMaintenanceSlices(input: {
       if (Number.isFinite(now)) {
         await attachmentStore.pruneExpiredLeases(
           safeReferences,
-          new Date(now - 24 * 60 * 60 * 1_000).toISOString()
+          new Date(now - ATTACHMENT_LEASE_GRACE_MS).toISOString()
         )
       }
     }
@@ -352,12 +390,7 @@ export function createRuntimeMaintenanceSlices(input: {
     }
     const startedAt = Date.now()
     const state = await readState()
-    const page = await input.threads.listPage({
-      limit: MAINTENANCE_SLICE_MAX_THREADS,
-      includeArchived: true,
-      includeSide: true,
-      cursor: state.guardian.cursor
-    })
+    const page = await listMaintenancePage('guardian', state.guardian.cursor, MAINTENANCE_GUARDIAN_PAGE_THREADS)
     const loopStartedAt = Date.now()
     const warnings: string[] = []
     let processed = 0

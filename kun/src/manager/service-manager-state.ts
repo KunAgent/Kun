@@ -113,7 +113,7 @@ export const GraphStoreOperationSchema = z.enum([
 ])
 export const AttachmentStoreOperationSchema = z.enum([
   'create', 'get', 'bindScope', 'bindScopes', 'delete', 'releaseLease',
-  'pruneExpiredLeases', 'replaceMetadata', 'resolveContent', 'diagnostics'
+  'pruneExpiredLeases', 'expiredLeaseCandidates', 'replaceMetadata', 'resolveContent', 'diagnostics'
 ])
 export const MAX_MANAGER_DATA_BODY_BYTES = 64 * 1024 * 1024
 
