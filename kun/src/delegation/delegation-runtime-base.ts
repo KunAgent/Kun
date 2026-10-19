@@ -410,6 +410,9 @@ export abstract class DelegationRuntimeBase {
   }
 
   protected async notifyDetachedChild(record: ChildRunRecord): Promise<void> {
+    // Execution is settled; notification I/O must not keep the child cancellable.
+    // Keep parent/settlement tracking until delivery finishes for thread deletion.
+    this.detachedAborts.delete(record.id)
     await runWithoutTurnMutationFence(() => this.detachedHandoffs.deliverRecord(record))
   }
 
