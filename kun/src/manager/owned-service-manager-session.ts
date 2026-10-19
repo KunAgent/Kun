@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ChildProcess } from 'node:child_process'
 import { AppSessionOwnerSchema, sameAppSessionOwner, type AppSessionOwner, type AppSessionOwnerKind } from '../contracts/app-session-owner.js'
-import { runtimeProcessIdentity } from '../server/runtime-process-identity.js'
+import { requireRuntimeProcessIdentity } from '../server/runtime-process-identity.js'
 import { stopOwnedProcess } from '../process/owned-process.js'
 import { acquireAppSessionReservation, AppSessionConflictError, canonicalSessionPath, type AppSessionReservation } from './app-session-reservation.js'
 import { defaultKunControlDir, defaultProductionSettingsPath, removeManagerDiscovery, withManagerStartLock } from './manager-discovery.js'
@@ -31,8 +31,7 @@ export function createOwnedServiceManagerSession(input: {
   ownerSessionId?: string
 }): OwnedServiceManagerSession {
   const ownerSessionId = input.ownerSessionId ?? randomUUID()
-  const identity = runtimeProcessIdentity()
-  if (!identity) throw new Error('Cannot establish application process identity')
+  const identity = requireRuntimeProcessIdentity()
   const ownerBase = {
     ownerSessionId, ownerKind: input.ownerKind, ownerPid: process.pid,
     ownerStartedAt: new Date().toISOString(), ownerProcessIdentity: identity
@@ -185,7 +184,10 @@ export function createOwnedServiceManagerSession(input: {
           await stopOwnedProcess(child, { graceMs: 0, timeoutMs: 2_000 })
           managerChildren.delete(child)
           candidate = undefined
-          throw error
+          const failure = error instanceof Error ? error : new Error(String(error))
+          const logHint = `; inspect ${launched.logPath}`
+          if (!failure.message.endsWith(logHint)) failure.message += logHint
+          throw failure
         }
       }, signal)
     })().finally(() => { startup = undefined })
