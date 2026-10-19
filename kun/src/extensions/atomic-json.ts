@@ -17,17 +17,30 @@ export type AtomicJsonMutationOptions = {
 
 export type JsonValidator<T> = (value: unknown) => T
 
+export type AtomicJsonFileOptions = {
+  /**
+   * Keep the last validated Manager document and revalidate it with the
+   * Manager etag. An unchanged document costs one small request and a clone
+   * instead of the full transfer, parse and validation. Only for long-lived
+   * instances whose validator returns plain JSON data.
+   */
+  cacheManagerReads?: boolean
+}
+
 export class AtomicJsonFile<T> {
   private operation: Promise<unknown> = Promise.resolve()
+  private cached: { etag: string; value: T | null } | undefined
 
   constructor(
     readonly path: string,
     private readonly validate: JsonValidator<T>,
-    private readonly allowDirectWriteFallback = true
+    private readonly allowDirectWriteFallback = true,
+    private readonly options: AtomicJsonFileOptions = {}
   ) {}
 
   async read(fallback: () => T): Promise<T> {
     const manager = managerAtomicJsonConfig(this.path)
+    if (manager && this.options.cacheManagerReads) return this.readCached(manager, fallback)
     if (manager) {
       const snapshot = await readManagerSnapshot(manager, this.path)
       return snapshot.value === null ? fallback() : this.validate(snapshot.value)
@@ -119,11 +132,30 @@ export class AtomicJsonFile<T> {
     await rm(this.path, { force: true })
   }
 
+  private async readCached(manager: ManagerAtomicJsonConfig, fallback: () => T): Promise<T> {
+    const cached = this.cached
+    let snapshot = await readManagerSnapshot(manager, this.path, cached?.etag)
+    if ('unchanged' in snapshot) {
+      if (cached && cached.etag === snapshot.etag) {
+        return cached.value === null ? fallback() : structuredClone(cached.value)
+      }
+      snapshot = await readManagerSnapshot(manager, this.path)
+      if ('unchanged' in snapshot) throw managerConflictError(this.path)
+    }
+    const value = snapshot.value === null ? null : this.validate(snapshot.value)
+    // A write from this instance may have landed while the read was in flight.
+    if (this.cached === cached) {
+      this.cached = snapshot.etag ? { etag: snapshot.etag, value: value === null ? null : structuredClone(value) } : undefined
+    }
+    return value === null ? fallback() : value
+  }
+
   private serialize<R>(operation: () => Promise<R>): Promise<R> {
+    this.cached = undefined
     const result = this.operation.then(operation, operation)
     this.operation = result.then(
-      () => undefined,
-      () => undefined
+      () => { this.cached = undefined },
+      () => { this.cached = undefined }
     )
     return result
   }
@@ -158,6 +190,7 @@ export function configureManagerAtomicJsonClient(
 
 type ManagerAtomicJsonSnapshot = {
   revision: number
+  etag?: string
   value: unknown | null
 }
 
@@ -166,6 +199,21 @@ const ManagerAtomicJsonSnapshotSchema = z.object({
     revision: z.number().int().nonnegative(),
     value: z.unknown().nullable()
   })
+})
+
+const ManagerAtomicJsonReadSchema = z.object({
+  snapshot: z.union([
+    z.object({
+      revision: z.number().int().nonnegative(),
+      etag: z.string().min(1).max(128),
+      unchanged: z.literal(true)
+    }),
+    z.object({
+      revision: z.number().int().nonnegative(),
+      etag: z.string().min(1).max(128).optional(),
+      value: z.unknown().nullable()
+    })
+  ])
 })
 
 export function managerAtomicJsonConfig(path: string): ManagerAtomicJsonConfig | null {
@@ -213,16 +261,32 @@ export function assertManagerAtomicJsonPath(path: string): void {
 async function readManagerSnapshot(
   manager: ManagerAtomicJsonConfig,
   path: string
-): Promise<ManagerAtomicJsonSnapshot> {
+): Promise<ManagerAtomicJsonSnapshot>
+async function readManagerSnapshot(
+  manager: ManagerAtomicJsonConfig,
+  path: string,
+  ifNoneMatch: string | undefined
+): Promise<ManagerAtomicJsonSnapshot | { revision: number; etag: string; unchanged: true }>
+async function readManagerSnapshot(
+  manager: ManagerAtomicJsonConfig,
+  path: string,
+  ifNoneMatch?: string
+): Promise<ManagerAtomicJsonSnapshot | { revision: number; etag: string; unchanged: true }> {
   return withManagerRequestSignal(undefined, async (signal) => {
-    const response = await fetch(`${manager.baseUrl}/v1/data/atomic-json/read`, {
+    const request = (conditional: boolean) => fetch(`${manager.baseUrl}/v1/data/atomic-json/read`, {
       method: 'POST',
       headers: managerHeaders(manager.token),
-      body: JSON.stringify({ path }),
+      body: JSON.stringify(conditional && ifNoneMatch ? { path, ifNoneMatch } : { path }),
       signal
     })
+    // Etags come only from Managers that answer conditional reads; one that
+    // rejects the field (a replaced older Manager) gets a plain read instead.
+    let response = await request(true)
+    if (ifNoneMatch && response.status === 400) response = await request(false)
     if (!response.ok) throw await managerRequestError(response, path)
-    return ManagerAtomicJsonSnapshotSchema.parse(await response.json()).snapshot
+    const snapshot = ManagerAtomicJsonReadSchema.parse(await response.json()).snapshot
+    if ('unchanged' in snapshot) return snapshot
+    return { revision: snapshot.revision, value: snapshot.value ?? null, ...(snapshot.etag ? { etag: snapshot.etag } : {}) }
   })
 }
 

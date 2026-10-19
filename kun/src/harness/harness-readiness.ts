@@ -42,6 +42,13 @@ export const PROOF_DISPLAY_TTL_MS = 12 * 60 * 60_000
 /** Turn admission reuses a proof only when it still has this much life left. */
 const PROOF_REUSE_MIN_REMAINING_MS = 15_000
 const WARM_RETRY_BASE_MS = 15_000
+/**
+ * Background warm-ups (an Agent list fetched after proofs aged out, typically
+ * the first launch of the day) start each Agent CLI for a handshake. Several
+ * CLIs booting at once cost hundreds of MB each; bounding them keeps that peak
+ * to the largest two. Warm-ups the user asked for skip the queue.
+ */
+const BACKGROUND_WARM_CONCURRENCY = 2
 const WARM_RETRY_MAX_MS = 5 * 60_000
 // Matches the ACP cold-start budget so a first-run bootstrap is not misread as unready.
 const DEFAULT_TIMEOUT_MS = 60_000
@@ -84,6 +91,8 @@ export type WarmProfilesOptions = {
 export class HarnessReadinessService {
   private readonly proofs = new Map<string, Proof>()
   private readonly warming = new Map<string, Promise<unknown>>()
+  private backgroundWarmsRunning = 0
+  private readonly backgroundWarmQueue: Array<() => void> = []
   /** Warm-ups that re-validate a still-valid proof ahead of its expiry. */
   private readonly refreshingKeys = new Set<string>()
   private readonly warmed = new Map<string, string>()
@@ -307,7 +316,8 @@ export class HarnessReadinessService {
         if (failure.retryAt > now) continue
       }
       this.warmed.set(key, signature)
-      const pending = this.check(definition, route, { level: 'handshake', ...route }, undefined, { keepProofOnFailure: refreshing })
+      const check = () => this.check(definition, route, { level: 'handshake', ...route }, undefined, { keepProofOnFailure: refreshing })
+      const pending = (options.refreshStale ? check() : this.backgroundWarm(check))
         .then((result) => {
           if (result.ok) this.warmFailures.delete(key)
           else this.recordWarmFailure(key, (this.warmFailures.get(key)?.attempts ?? 0) + 1)
@@ -315,6 +325,21 @@ export class HarnessReadinessService {
         .finally(() => { this.warming.delete(key); this.refreshingKeys.delete(key) })
       this.warming.set(key, pending)
       if (refreshing) this.refreshingKeys.add(key)
+    }
+  }
+  private async backgroundWarm<T>(run: () => Promise<T>): Promise<T> {
+    if (this.backgroundWarmsRunning >= BACKGROUND_WARM_CONCURRENCY) {
+      await new Promise<void>((resolve) => { this.backgroundWarmQueue.push(resolve) })
+    } else {
+      this.backgroundWarmsRunning += 1
+    }
+    try {
+      return await run()
+    } finally {
+      // Hand the slot straight to the next waiter so a new caller cannot overtake it.
+      const next = this.backgroundWarmQueue.shift()
+      if (next) next()
+      else this.backgroundWarmsRunning -= 1
     }
   }
   private recordWarmFailure(key: string, attempts: number): { attempts: number; retryAt: number } {

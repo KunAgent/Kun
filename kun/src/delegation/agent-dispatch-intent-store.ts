@@ -21,7 +21,8 @@ export class FileAgentDispatchIntentStore implements AgentDispatchIntentStore {
   constructor(dataDir: string) {
     this.path = resolve(dataDir, 'agent-dispatch', 'intents.json')
     assertManagerAtomicJsonPath(this.path)
-    this.file = new AtomicJsonFile(this.path, (value) => AgentDispatchIntentFileSchema.parse(value), false)
+    this.file = new AtomicJsonFile(this.path, (value) => AgentDispatchIntentFileSchema.parse(value), false,
+      { cacheManagerReads: true })
   }
 
   async list(threadId?: string): Promise<AgentDispatchIntent[]> {

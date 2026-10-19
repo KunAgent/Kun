@@ -10,6 +10,8 @@
 //   node scripts/smoke-idle-memory.cjs [--idle-seconds 90] [--max-footprint-mb 1400]
 //     [--evidence <dir>] [--timeout-ms 180000] [--repository <checkout>] [--report-only]
 //     [--stack <request substring>]   (records Main call stacks for matching requests)
+//     [--profile-seed <dir>]          (copied into the disposable ~/.kun/data first, e.g.
+//                                      a Registry, model catalogs and rooms from a large profile)
 //
 // The app starts twice on the same disposable profile: the first start seeds
 // the caches a real profile already has (MCP catalogs, readiness proofs), the
@@ -20,7 +22,7 @@
 const assert = require('node:assert/strict')
 const { execFileSync } = require('node:child_process')
 const { existsSync } = require('node:fs')
-const { mkdir, mkdtemp, readFile, realpath, rm, writeFile } = require('node:fs/promises')
+const { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
 const { _electron } = require('playwright-core')
@@ -215,6 +217,8 @@ async function main() {
   try {
     await Promise.all([home, profile, userData, appData, localAppData, temporaryDirectory, evidenceRoot]
       .map((directory) => mkdir(directory, { recursive: true })))
+    const profileSeed = argumentValue('--profile-seed')
+    if (profileSeed) await cp(resolve(profileSeed), profile, { recursive: true })
     const environment = createIsolatedEnvironment(process.env, { home, appData, localAppData, temporaryDirectory })
     modelFixture = await startDirectModel({ real: false })
     const settings = { ...desktopSmokeSettings(await availablePort(), workspaceRoot, profile), initialSetupCompleted: true }

@@ -533,6 +533,7 @@ export function createRuntimeConfigController(
 	    tokenEconomy = nextTokenEconomy
     core.modelProfiles = modelProfiles
     core.providerModelProfiles = providerModelProfiles
+    modelConnections.invalidateSnapshotCache?.() // Registry projections derive capabilities from these profiles.
     core.tokenEconomy = tokenEconomy
 	    refreshDelegatedProviderIds()
 	    directModelClient.replace(nextModelClients)

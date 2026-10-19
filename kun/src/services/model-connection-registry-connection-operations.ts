@@ -242,9 +242,13 @@ async waitForRevision(this: ModelConnectionRegistry,
     timeoutMs: number,
     sinceMetadataRevision?: number
   ): Promise<ModelConnectionSnapshot> {
-    const initial = await this.snapshot()
-    if (initial.revision > sinceRevision || (sinceMetadataRevision !== undefined && (initial.metadataRevision ?? 0) > sinceMetadataRevision) || signal.aborted || timeoutMs <= 0) return initial
-    return new Promise((resolve) => {
+    const changedSince = (revision: number, metadataRevision: number | undefined): boolean =>
+      revision > sinceRevision || (sinceMetadataRevision !== undefined && (metadataRevision ?? 0) > sinceMetadataRevision)
+    // Long-poll watchers reconnect every few seconds. Compare revisions first
+    // and project only when the caller is behind or the wait ends.
+    const head = await this.revisionHead()
+    if (changedSince(head.revision, head.metadataRevision) || signal.aborted || timeoutMs <= 0) return this.snapshot()
+    return new Promise((resolve, reject) => {
       let settled = false
       let unsubscribe: (() => void) | undefined
       const finish = (snapshot: ModelConnectionSnapshot): void => {
@@ -255,12 +259,23 @@ async waitForRevision(this: ModelConnectionRegistry,
         unsubscribe?.()
         resolve(snapshot)
       }
-      const readLatest = (): void => { void this.snapshot().then(finish, () => finish(initial)) }
+      const readLatest = (): void => {
+        void this.snapshot().then(finish, (error: unknown) => {
+          const lastKnown = this['snapshotCache'].lastKnown()
+          if (lastKnown) { finish(lastKnown); return }
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          signal.removeEventListener('abort', aborted)
+          unsubscribe?.()
+          reject(error)
+        })
+      }
       const aborted = (): void => readLatest()
       const timer = setTimeout(readLatest, timeoutMs)
       timer.unref?.()
       unsubscribe = this.subscribe((snapshot) => {
-        if (snapshot.revision > sinceRevision || (sinceMetadataRevision !== undefined && (snapshot.metadataRevision ?? 0) > sinceMetadataRevision)) finish(snapshot)
+        if (changedSince(snapshot.revision, snapshot.metadataRevision)) finish(snapshot)
       })
       signal.addEventListener('abort', aborted, { once: true })
       // Close the read/subscribe race if a writer committed between them.

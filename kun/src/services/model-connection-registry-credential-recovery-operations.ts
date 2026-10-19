@@ -101,8 +101,20 @@ scheduleCredentialRecovery(this: ModelConnectionRegistry,
 async readDocumentForCredentialConsumer(this: ModelConnectionRegistry, providerId: string): Promise<RegistryDocument> {
     // Main can request credentials before Runtime initialize(). Recovery must
     // not publish an empty v2 document and hide the v1 credentials/selection.
-    await this['migrateLegacyRegistry']()
+    // Once the canonical document exists the migration is a no-op, so it runs
+    // again only after the document disappears instead of locking the shared
+    // data mutex on every credential read.
+    if (!this['legacyRegistryMigrated']) {
+      await this['migrateLegacyRegistry']()
+      this['legacyRegistryMigrated'] = true
+    }
     await this['recoverExpiredCredentialTransaction'](providerId).catch(() => undefined)
+    let missing = false
+    const document = await this['file'].read(() => { missing = true; return emptyDocument() })
+    if (!missing) return document
+    this['legacyRegistryMigrated'] = false
+    await this['migrateLegacyRegistry']()
+    this['legacyRegistryMigrated'] = true
     return this['file'].read(emptyDocument)
   },
 
@@ -442,6 +454,8 @@ project(this: ModelConnectionRegistry, document: RegistryDocument): ModelConnect
 async projectWithCredentialHealth(this: ModelConnectionRegistry,
     document: RegistryDocument
   ): Promise<ModelConnectionSnapshot> {
+    // Credential health stays fresh on every projection; only the catalog
+    // enrichment behind it is memoized.
     const health = await this['inspectCredentialHealth'](document)
     if (document.revision >= this['credentialHealthRevision']) {
       this['credentialHealthRevision'] = document.revision
@@ -450,8 +464,11 @@ async projectWithCredentialHealth(this: ModelConnectionRegistry,
     // Capture the cursor before reading facts: a concurrent refresh must not
     // label an older materialization with a newer cursor and hide the update.
     const { revision: metadataRevision } = await this['metadataRevisionFile'].read(() => ({ revision: 0 }))
-    const enriched = await resolveRegistryDocumentMetadata(this, document)
-    return { ...project(enriched, this['options'].modelCapabilities, health), metadataRevision }
+    const cache = this['snapshotCache']
+    return cache.project(cache.key(document, metadataRevision, health), async () => {
+      const enriched = await resolveRegistryDocumentMetadata(this, document)
+      return { ...project(enriched, this['options'].modelCapabilities, health), metadataRevision }
+    })
   },
 
 async inspectCredentialHealth(this: ModelConnectionRegistry,
