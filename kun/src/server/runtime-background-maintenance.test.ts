@@ -101,4 +101,48 @@ describe('Runtime background maintenance', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(rebuildEventIndex).toHaveBeenCalledTimes(2)
   })
+  it('resumes the attachment schedule across restarts and records each completed pass', async () => {
+    vi.useFakeTimers({ now: Date.parse('2026-10-19T08:00:00.000Z') })
+    const recorded: Array<[string, number]> = []
+    const completions = {
+      read: vi.fn(async () => ({ 'attachment pruning': Date.now() - 1_000 })),
+      record: vi.fn(async (task: string, at: number) => { recorded.push([task, at]) })
+    }
+    const pruneAttachments = vi.fn(async () => true)
+    const maintenance = createRuntimeBackgroundMaintenance({
+      pruneAttachments,
+      inspectThreads: vi.fn(async () => undefined),
+      onError: vi.fn(),
+      attachmentDelayMs: 100,
+      attachmentIntervalMs: 10_000,
+      guardianDelayMs: 50_000,
+      completions
+    })
+
+    maintenance.start()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(pruneAttachments).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(4_100)
+    expect(pruneAttachments).toHaveBeenCalledOnce()
+    expect(recorded).toEqual([['attachment pruning', expect.any(Number)]])
+    expect(recorded[0]![1]).toBeGreaterThanOrEqual(Date.parse('2026-10-19T08:00:09.000Z'))
+    maintenance.stop()
+  })
+
+  it('starts the first attachment pass after the launch delay without a completion record', async () => {
+    vi.useFakeTimers()
+    const pruneAttachments = vi.fn(async () => true)
+    const maintenance = createRuntimeBackgroundMaintenance({
+      pruneAttachments,
+      inspectThreads: vi.fn(async () => undefined),
+      onError: vi.fn(),
+      attachmentDelayMs: 100,
+      guardianDelayMs: 50_000,
+      completions: { read: vi.fn(async () => ({})), record: vi.fn(async () => undefined) }
+    })
+    maintenance.start()
+    await vi.advanceTimersByTimeAsync(100)
+    expect(pruneAttachments).toHaveBeenCalledOnce()
+    maintenance.stop()
+  })
 })
