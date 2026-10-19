@@ -38,7 +38,7 @@ export type TranscriptEntry = (
   | { kind: 'child-group'; key: string; turnId: string; children: ProjectedChildRun[] }
   | { kind: 'approval-review'; key: string; review: ProjectedApprovalReview }
 ) & {
-  /** Final: the entry will not change and may be written to scrollback. */
+  /** Final: the entry will not change (in-progress entries show live hints). */
   settled: boolean
   /** Starts a new visual group, rendered with one blank line above it. */
   separated: boolean
@@ -56,8 +56,8 @@ const HIDDEN_KINDS = new Set(['goal_context', 'model_context', 'runtime_context_
 /**
  * Ordered, renderer-neutral view of a thread: Kun reply headers, items,
  * exploration groups, subagents and approval reviews, each with a stable key
- * and a `settled` flag. The terminal app writes the settled prefix into the
- * native scrollback and keeps only the unsettled tail live.
+ * and a `settled` flag. The terminal app renders them in one scrollable
+ * conversation; only unsettled entries keep changing.
  */
 export function buildTranscriptEntries(
   projection: ThreadProjection | undefined,
@@ -285,8 +285,8 @@ function itemEntries(
     return blocks.map((text, index) => ({
       ...base,
       key: `${item.id}#${index}`,
-      // Only the still-growing tail shows the stream cursor; a block that is
-      // already final may be printed to scrollback at any moment.
+      // Only the still-growing tail shows the stream cursor; finished blocks
+      // keep their renderables while the answer streams.
       markdown: { text, index, last: index === blocks.length - 1, streaming: index >= stable },
       settled: index < stable
     }))
@@ -337,4 +337,33 @@ function openExplorationTail(items: readonly VisibleItem[], runningTurnId: strin
     break
   }
   return open
+}
+
+function sameShallow(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false
+  if (Array.isArray(left) !== Array.isArray(right)) return false
+  const a = left as Record<string, unknown>
+  const b = right as Record<string, unknown>
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key])
+}
+
+/**
+ * Two builds of one entry that render identically. Entries are rebuilt on
+ * every projection change while unchanged items keep their identity, so the
+ * view compares field by field and leaves untouched entries mounted as is.
+ */
+export function sameTranscriptEntry(left: TranscriptEntry, right: TranscriptEntry): boolean {
+  if (left === right) return true
+  const a = left as unknown as Record<string, unknown>
+  const b = right as unknown as Record<string, unknown>
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) return false
+  // A Markdown block renders only its own text; the item it was cut from
+  // keeps growing while the answer streams.
+  const block = Boolean(a.markdown && b.markdown)
+  return keys.every((key) => a[key] === b[key] ||
+    ((key === 'markdown' || key === 'userAttachmentIds') && sameShallow(a[key], b[key])) ||
+    (key === 'item' && block && (a.item as { id: string }).id === (b.item as { id: string }).id))
 }

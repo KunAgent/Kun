@@ -22,7 +22,10 @@ export const DIRECT_SEMANTIC_ACTIONS: readonly TuiKeyAction[] = [
   'input_paste', 'sidebar_toggle', 'theme_list', 'session_share', 'session_unshare', 'share',
   'plugin_list', 'console_toggle', 'diff_toggle', 'terminal_toggle',
   'session_quick_1', 'session_quick_2', 'session_quick_3', 'session_quick_4', 'session_quick_5',
-  'session_quick_6', 'session_quick_7', 'session_quick_8', 'session_quick_9'
+  'session_quick_6', 'session_quick_7', 'session_quick_8', 'session_quick_9',
+  'messages_page_up', 'messages_page_down', 'messages_line_up', 'messages_line_down',
+  'messages_half_page_up', 'messages_half_page_down',
+  'messages_first', 'messages_last'
 ]
 
 const SLASH_CONTEXT = /^\/[^\s]*$/u
@@ -57,6 +60,11 @@ export abstract class ChatSessionInput extends ChatSessionPages {
       return true
     }
     this.cancelPendingGesturesForDifferentInput(key)
+    if (this.sidebarOverlayValue && isCancelKey(key)) {
+      this.sidebarOverlayValue = false
+      this.changed()
+      return true
+    }
     if (this.leaderPending) {
       this.cancelLeader()
       this.changed()
@@ -173,6 +181,14 @@ export abstract class ChatSessionInput extends ChatSessionPages {
     if (isKey(key, 'up') && this.browseHistory(1)) return true
     if (isKey(key, 'down') && this.browseHistory(-1)) return true
     return false
+  }
+
+  /** A click outside a dialog closes it the way Esc does. */
+  dismissPage(): void {
+    const page = this.page
+    if (!page || this.stopped || this.suspended) return
+    page.handleKey({ name: 'escape', ctrl: false, meta: false, shift: false, sequence: '\x1b' })
+    this.changed()
   }
 
   protected consumes(action: TuiKeyAction, key: TuiKeyEvent): boolean {
@@ -469,7 +485,7 @@ export abstract class ChatSessionInput extends ChatSessionPages {
     }
   }
 
-  /** Clicks on live-window rows (Pointer mode). */
+  /** Clicks on transcript rows: Thinking toggles, subagents, the Graph row. */
   handleLiveClick(target: LiveClickTarget): void {
     if (target.kind === 'graph') {
       void this.controller.showGraphStatus()
@@ -485,7 +501,7 @@ export abstract class ChatSessionInput extends ChatSessionPages {
 
   protected toggleLiveReasoning(itemId: string): void {
     this.liveReasoningOverrides.set(itemId, !(this.liveReasoningOverrides.get(itemId) ?? this.showReasoningValue))
-    this.planScrollback()
+    this.refreshEntries()
     this.changed()
   }
 

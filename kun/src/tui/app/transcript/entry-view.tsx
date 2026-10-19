@@ -1,6 +1,6 @@
 import { createMemo, For, Match, Switch, type Accessor, type JSX } from 'solid-js'
 import type { AttachmentMetadata } from '../../../contracts/attachments.js'
-import type { TranscriptEntry, TranscriptItemEntry } from '../../transcript-model.js'
+import { sameTranscriptEntry, type TranscriptEntry, type TranscriptItemEntry } from '../../transcript-model.js'
 import { AssistantText, MarkdownBlockView } from './assistant-text.js'
 import { ApprovalReviewView, CompactItemView, ErrorView, ThinkingView, UserMessageView } from './items.js'
 import { ChildRunGroupView, ChildRunView } from './subagents.js'
@@ -13,9 +13,7 @@ export type EntryRenderOptions = {
   frame: number
   legacyGui: boolean
   attachments: Readonly<Record<string, AttachmentMetadata>>
-  /** Rendering in the bounded live window (compact groups, click hints). */
-  live: boolean
-  /** Pointer interactions are available (live window in Pointer mode, pages). */
+  /** Pointer interactions are available (mouse on, or inside a page). */
   clickable: boolean
   reasoningExpanded: (itemId: string, fallback: boolean) => boolean
   onToggleReasoning?: (itemId: string) => void
@@ -39,7 +37,6 @@ export function TranscriptEntryView(props: { entry: TranscriptEntry; options: En
             details={props.options.details}
             showReasoning={props.options.showReasoning}
             frame={props.options.frame}
-            live={props.options.live}
           />
         </Match>
         <Match when={entry().kind === 'child'}>
@@ -50,7 +47,7 @@ export function TranscriptEntryView(props: { entry: TranscriptEntry; options: En
                 child={child()}
                 expanded={props.options.details}
                 frame={props.options.frame}
-                live={props.options.live && props.options.clickable}
+                hint={props.options.clickable && !entry().settled}
                 {...(props.options.clickable && props.options.onOpenChild ? { onOpen: () => props.options.onOpenChild!(child().childId) } : {})}
               />
             )
@@ -61,7 +58,7 @@ export function TranscriptEntryView(props: { entry: TranscriptEntry; options: En
             children={(entry() as Extract<TranscriptEntry, { kind: 'child-group' }>).children}
             expanded={props.options.details}
             frame={props.options.frame}
-            live={props.options.live && props.options.clickable}
+            hint={props.options.clickable && !entry().settled}
             {...(props.options.clickable && props.options.onOpenChild ? { onOpen: props.options.onOpenChild } : {})}
           />
         </Match>
@@ -131,12 +128,26 @@ function ItemEntryView(props: { entry: TranscriptItemEntry; options: EntryRender
   )
 }
 
+/** Render options are equal when every field is (callbacks compare by identity). */
+export function sameRenderOptions(left: EntryRenderOptions, right: EntryRenderOptions): boolean {
+  const a = left as unknown as Record<string, unknown>
+  const b = right as unknown as Record<string, unknown>
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key])
+}
+
 /**
- * Keyed list of entries. Rows are keyed by their stable entry key so a
- * streaming update re-renders the changed row in place instead of
- * recreating every Markdown renderable on each frame.
+ * Keyed list of entries. Rows are keyed by their stable entry key and keep
+ * their renderables while their content is unchanged, so a streaming update
+ * re-renders only the rows it touched. Finished entries may take
+ * `settledOptions`, which do not carry the animation frame, so spinner ticks
+ * leave them alone.
  */
-export function TranscriptList(props: { entries: Accessor<readonly TranscriptEntry[]>; options: Accessor<EntryRenderOptions> }): JSX.Element {
+export function TranscriptList(props: {
+  entries: Accessor<readonly TranscriptEntry[]>
+  options: Accessor<EntryRenderOptions>
+  settledOptions?: Accessor<EntryRenderOptions>
+}): JSX.Element {
   const byKey = createMemo(() => new Map(props.entries().map((entry, index) => [entry.key, { entry, index }] as const)))
   const keys = createMemo(() => props.entries().map((entry) => entry.key), undefined, {
     equals: (left, right) => left.length === right.length && left.every((key, index) => key === right[index])
@@ -144,10 +155,13 @@ export function TranscriptList(props: { entries: Accessor<readonly TranscriptEnt
   return (
     <For each={keys()}>
       {(key) => {
-        const value = createMemo(() => byKey().get(key))
+        const value = createMemo(() => byKey().get(key), undefined, {
+          equals: (left, right) => Boolean(left && right && left.index === right.index && sameTranscriptEntry(left.entry, right.entry))
+        })
+        const options = () => (value()?.entry.settled && props.settledOptions ? props.settledOptions() : props.options())
         return (
           <>
-            {value() ? <TranscriptEntryView entry={value()!.entry} options={props.options()} first={value()!.index === 0} /> : null}
+            {value() ? <TranscriptEntryView entry={value()!.entry} options={options()} first={value()!.index === 0} /> : null}
           </>
         )
       }}

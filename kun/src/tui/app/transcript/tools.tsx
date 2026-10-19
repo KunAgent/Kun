@@ -121,8 +121,6 @@ export function ExplorationView(props: {
   details: boolean
   showReasoning: boolean
   frame: number
-  /** Live rendering shows only the latest actions to fit the live window. */
-  live?: boolean
 }): JSX.Element {
   const visible = createMemo(() => {
     const timeline: ExplorationTimelineEntry[] = []
@@ -137,7 +135,8 @@ export function ExplorationView(props: {
     }
     const rendered = Math.min(actions, EXPLORE_GROUP_COMPACT_LIMIT)
     const omitted = props.details ? 0 : props.stage.entries.length - rendered
-    if (props.live && timeline.length > 4) {
+    // A running stage shows its newest actions; finished stages show the start.
+    if (!props.details && props.stage.active && timeline.length > 4) {
       const tail = timeline.slice(-4)
       return { timeline: tail, omitted: omitted + (timeline.length - tail.length), leading: true }
     }

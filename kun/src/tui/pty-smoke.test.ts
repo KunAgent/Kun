@@ -124,11 +124,13 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
     try {
       await waitFor(() => {
         const text = visible()
-        return text.includes('Welcome to Kun') && text.includes('/connect') &&
+        return text.includes('A focused terminal agent') && text.includes('/connect') &&
           text.includes('/sessions') && text.includes('┌') && text.includes('Ctrl+P')
       }, 20_000).catch((error) => { throw new Error(`${String(error)}\nPTY screen:\n${visible()}`) })
-      expect(output()).not.toContain('\x1b[?1049h')
-      expect(visible()).toContain('Workspace')
+      // Kun runs full screen on the alternate screen with the mouse captured.
+      expect(output()).toContain('\x1b[?1049h')
+      expect(output()).toContain('\x1b[?1000h')
+      expect(visible()).toContain('/graph <requirement>')
       expect(visible()).not.toContain('/model')
       expect(visible()).not.toContain('runtime ready')
       expect(visible()).not.toContain('MCP ')
@@ -178,24 +180,36 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       })
       await waitFor(() => visible().includes('/thinking expand'))
       expect(visible()).not.toContain('Inspect the active model capability.')
-      // Native scrolling and selection stay with the terminal until opted out.
-      expect(output()).not.toContain('\x1b[?1000h')
-      expect(visible()).toContain('History')
+      expect(visible()).toContain('Ctrl+O details')
 
-      terminal.write('\x18p') // Ctrl+X P opts into direct transcript clicks.
-      await waitFor(() => visible().includes('Mouse clicks enabled') && output().includes('\x1b[?1000h'))
-      terminal.write('\x18p') // The same binding restores native scroll and selection.
+      terminal.write('\x18p') // Ctrl+X P hands selection back to the terminal.
       await waitFor(() =>
-        visible().includes('Text selection mode') &&
+        visible().includes('Mouse off') &&
         output().lastIndexOf('\x1b[?1000l') > output().lastIndexOf('\x1b[?1000h')
       )
+      terminal.write('\x18p') // The same binding captures the mouse again.
+      await waitFor(() =>
+        visible().includes('Mouse on') &&
+        output().lastIndexOf('\x1b[?1000h') > output().lastIndexOf('\x1b[?1000l')
+      )
+      // Clicking the collapsed Thinking row expands it in place, and again collapses it.
+      const thinkingRow = () => tui.screen.view().findIndex((line) => line.includes('Thinking') && line.includes('click'))
+      const clickThinking = () => {
+        const row = thinkingRow() + 1
+        terminal.write(`\x1b[<0;8;${row}M\x1b[<0;8;${row}m`)
+      }
+      expect(thinkingRow()).toBeGreaterThanOrEqual(0)
+      clickThinking()
+      await waitFor(() => visible().includes('Inspect the active model capability.') && visible().includes('click to collapse'))
+      clickThinking()
+      await waitFor(() => !visible().includes('Inspect the active model capability.'))
       expect((await client.getThread(thread.id)).turns.find((candidate) => candidate.id === turn.turnId)?.status).toBe('running')
 
       terminal.write('/thinking\r')
-      await waitFor(() => visible().includes('Thinking expanded for new output'))
+      await waitFor(() => visible().includes('Thinking expanded.'))
       await waitFor(() => visible().includes('Inspect the active model capability.'))
       terminal.write('/thinking\r')
-      await waitFor(() => visible().includes('Thinking collapsed for new output'))
+      await waitFor(() => visible().includes('Thinking collapsed.'))
       await waitFor(() => !tui.screen.view().join('\n').includes('Inspect the active model capability.'))
       await server.runtime.events.record({
         kind: 'assistant_reasoning_delta', threadId: thread.id, turnId: turn.turnId,
@@ -205,7 +219,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       await tui.screen.settled()
       expect(visible()).not.toContain('This fragment stays hidden.')
       terminal.write('/thinking\r')
-      await waitFor(() => visible().includes('Thinking expanded for new output'))
+      await waitFor(() => visible().includes('Thinking expanded.'))
 
       await server.runtime.events.record({
         kind: 'assistant_text_delta', threadId: thread.id, turnId: turn.turnId,
@@ -229,10 +243,10 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       const exit = await withTimeout(tui.exited, 10_000, 'PTY process did not exit')
       expect(exit.exitCode).toBe(0)
       expect(output()).toContain('\x1b[?2004l')
-      // The conversation stays inline: no alternate screen was used.
-      expect(output()).not.toContain('\x1b[?1049h')
+      expect(output()).toContain('\x1b[?1049l')
+      // The restored main screen tells the user how to reopen the session.
       await tui.screen.settled()
-      expect(visible()).toContain('Hello')
+      await waitFor(() => visible().includes(`kun tui --thread ${thread.id}`))
       await expect(client.runtimeInfo()).resolves.toMatchObject({
         instanceId: server.instanceId
       })
@@ -291,7 +305,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
         mode: 'agent'
       })
       await waitForPtyValue(
-        () => tui.visible().includes('Welcome to Kun') &&
+        () => tui.visible().includes('A focused terminal agent') &&
           tui.visible().includes('/connect') &&
           tui.visible().includes('/sessions')
           ? true
@@ -309,7 +323,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       terminal.write('\x03')
       const exit = await withTimeout(exited, 15_000, 'standalone TUI process did not exit')
       expect(exit.exitCode).toBe(0)
-      expect(tui.output()).not.toContain('\x1b[?1049h')
+      expect(tui.output().lastIndexOf('\x1b[?1049l')).toBeGreaterThan(tui.output().lastIndexOf('\x1b[?1049h'))
       await waitFor(() => !processIsAlive(ownedPid), 10_000)
       await waitFor(() => !processIsAlive(manager.discovery.pid), 10_000)
       expect(await readManagerDiscovery(controlDir)).toBeNull()
@@ -355,7 +369,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
           title: 'Sequential TUI state'
         })
         await waitForPtyValue(
-          () => second.visible().includes('Welcome to Kun') ? true : undefined,
+          () => second.visible().includes('A focused terminal agent') ? true : undefined,
           {
             stage: 'sequential TUI first render',
             timeoutMs: 30_000,
@@ -414,7 +428,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       )
       expect(connection.discovery.clientOwnerKind).toBe('tui')
       await waitForPtyValue(
-        () => tui.visible().includes('Welcome to Kun') ? true : undefined,
+        () => tui.visible().includes('A focused terminal agent') ? true : undefined,
         {
           stage: 'signal test first render',
           timeoutMs: 30_000,
@@ -434,7 +448,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
     }
   }, 90_000)
 
-  it('submits --graph after startup and opens a narrow Graph board through opt-in mouse input', async () => {
+  it('submits --graph after startup and opens a narrow Graph board with a mouse click', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-graph-pty-'))
     roots.push(root)
     const runtimeToken = 'pty-graph-runtime-token'
@@ -502,22 +516,21 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       })
       await waitFor(() => tui.visible().includes('/graph status'), 10_000)
       tui.resize(52, 16)
-      terminal.write('/mouse on\r')
-      await waitFor(() => tui.visible().includes('Mouse clicks enabled'))
-
-      for (let row = 1; row <= 16; row += 1) {
-        terminal.write(`\x1b[<0;4;${row}M`)
-      }
-      // The board opens as a page on the alternate screen.
+      const graphRow = () => tui.screen.view().findIndex((line) => line.trimStart().startsWith('GRAPH'))
+      await waitFor(() => graphRow() >= 0)
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      const row = graphRow() + 1
+      terminal.write(`\x1b[<0;4;${row}M\x1b[<0;4;${row}m`)
+      // The board opens as a dialog over the session.
       await waitFor(() => {
         const view = sanitizeTerminalText(tui.screen.view().join('\n'))
-        return view.includes('GRAPH ·') && view.includes('Phase 1 · Implementation')
-      })
+        // Formatted for the dialog's inner width, so long labels are elided.
+        return view.includes('GRAPH ·') && view.includes('Phase 1 · Implemen')
+      }).catch((error) => { throw new Error(`${String(error)}\nPTY screen:\n${tui.screen.view().join('\n')}`) })
       expect(sanitizeTerminalText(tui.screen.view().join('\n'))).toContain('Node')
-      expect(tui.output()).toContain('\x1b[?1049h')
 
       terminal.write('\x1b')
-      await waitFor(() => tui.output().lastIndexOf('\x1b[?1049l') > tui.output().lastIndexOf('\x1b[?1049h'))
+      await waitFor(() => !sanitizeTerminalText(tui.screen.view().join('\n')).includes('GRAPH ·'))
       await new Promise((resolve) => setTimeout(resolve, 100))
       terminal.write('/quit\r')
       const exit = await withTimeout(exited, 10_000, 'Graph PTY process did not exit')
