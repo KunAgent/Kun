@@ -17,6 +17,7 @@ const {
 const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
 const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
+const { deduplicatePackedJimpZod } = require('./after-pack-jimp.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
   assertElfExecutable,
@@ -307,6 +308,7 @@ function prunePackedApplicationPayload(context) {
   checkPackedSanottsRuntime(context, { unpackedAppRoot })
   trimPackedNodePtyPayload(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
   prunePackedHoistedKunDependencies(context)
+  deduplicatePackedJimpZod(context, { unpackedAppRoot })
 }
 
 function assertMissing(path, label) {
