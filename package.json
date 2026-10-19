@@ -122,7 +122,7 @@
     "@google/design.md": "0.3.0",
     "@kun/extension-api": "1.5.0",
     "@kun/provider-catalog": "0.1.0",
-    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.18.2.tgz",
+    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.19.0.tgz",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@napi-rs/canvas": "^0.1.100",

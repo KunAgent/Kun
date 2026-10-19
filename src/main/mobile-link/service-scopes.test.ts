@@ -66,7 +66,8 @@ describe('trusted desktop permission dispatch', () => {
       f.invoke('catalog.get', {}, 'catalog'); await tick()
       expect(f.calls.at(-1).scopes).toEqual(['personal'])
       expect(f.calls.at(-1).authorizationId).not.toBe(priorAuthority)
-      expect(f.frames.some((frame) => frame.kind === 'resync_required' && frame.payload.reason === 'permissions_changed')).toBe(true)
+      // Control frames are paced 5 ms apart, so the notice may follow a batched acknowledgement.
+      await vi.waitFor(() => expect(f.frames.some((frame) => frame.kind === 'resync_required' && frame.payload.reason === 'permissions_changed')).toBe(true))
       await f.service.setScopes(grant, ['groups.read'])
       f.grants([{ id: '55555555-5555-4555-8555-555555555555', controllerId: phone }])
       expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])

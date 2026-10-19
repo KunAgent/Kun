@@ -5,6 +5,7 @@ import { desktopScheduleDescriptors } from './desktop-schedules'
 import { MobileNotifications } from './notifications'
 import { MobileLinkAuthorities } from './authorities'
 import { mobileLinkScopes } from '../../shared/mobile-link-scopes'
+import { conditionalCall, conditionalResult } from './read-version'
 import { randomUUID } from 'node:crypto'
 import {
   RemoteApi,
@@ -13,6 +14,9 @@ import {
   validateCall,
   hasRemoteOperationScope,
   READ_METHODS,
+  HISTORY_LIVE_CAPABILITY,
+  READ_CONDITIONAL_CAPABILITY,
+  type RelayNotice,
   type DeviceIdentity,
   type Frame,
   type Socket
@@ -21,7 +25,7 @@ import type { AccountSessionEnding, ArtAccountAccess } from '../art-assets/accou
 import { hasKunAccountSession } from '../../shared/kun-account'
 import type { MobileLinkStatus } from '../../shared/mobile-link'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
-import { MobileSubscriptions } from './subscriptions'
+import { MobileSubscriptions, type SubscriptionAuthority } from './subscriptions'
 import { disableHost, sessionOperation } from './lifecycle'
 // Kun refuses these before any receipt or mutation, so the phone may treat them as not applied.
 const CERTAIN_REJECTIONS = new Set([
@@ -111,7 +115,8 @@ export class MobileLinkService {
     this.subscriptions = new MobileSubscriptions({
       lease: deps.lease,
       fetch: deps.fetch,
-      send: (f) => this.client?.send(f)
+      send: (f) => this.client?.send(f),
+      read: (device, authority, method, params) => this.runtimeRead(device, authority, method, params)
     })
     this.unsubscribe = deps.account.onState((state) => {
       const next = hasKunAccountSession(state) ? state.user!.id : null
@@ -233,6 +238,24 @@ export class MobileLinkService {
       if (this.authorizationExpiresAt === expiresAt) this.reconnect('LOCAL_LEASE_EXPIRED')
     }, Math.max(1, expiresAt - Date.now()))
   }
+  /** A read for one phone under its subscription's authority, as the runtime would answer its invoke. */
+  private async runtimeRead(device: string, authority: SubscriptionAuthority, method: string, params: Record<string, unknown>) {
+    const lease = await this.deps.lease()
+    const response = await lease.request('/v1/remote/invoke', 'POST', JSON.stringify({ accountId: authority.accountId,
+      deviceId: device, authorizationId: authority.authorizationId, scopes: authority.scopes,
+      call: { method, params, requestId: randomUUID(), expiresAt: Date.now() + 60000 } }))
+    const value = JSON.parse(response.body)
+    if (!response.ok) throw new Error(typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED')
+    return value as unknown
+  }
+  /** Relay notices: a phone that went away no longer needs its streams; changed grants are re-read now. */
+  private relayNotice(notice: RelayNotice, refresh: () => Promise<void>) {
+    if (notice.relay === 'presence') {
+      for (const peer of notice.peers) if (!peer.online) this.subscriptions.clear(peer.deviceId)
+    } else if (notice.relay === 'authorization') {
+      void refresh().catch(() => this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED'))
+    }
+  }
   private notifyReconnected() {
     // The phone may miss a sub-second host presence gap while its own WSS
     // remains open. Rebuild lost subscriptions; never replay business calls.
@@ -338,7 +361,9 @@ export class MobileLinkService {
   private updateGrants(grants: { id: string; controllerId: string }[]) {
     for (const grant of grants)
       if (this.deniedGrants.has(grant.id)) this.deniedGrants.set(grant.id, grant.controllerId)
+    const previous = this.peers
     this.peers = new Set(grants.filter((grant) => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id)).map((grant) => grant.controllerId))
+    for (const peer of previous) if (!this.peers.has(peer)) this.subscriptions.clear(peer)
     this.grantPeers = new Map(grants.map((grant) => [grant.id, grant.controllerId]))
     for (const peer of this.authorities.sync(grants)) this.permissionsChanged(peer)
     const api = this.api, generation = this.generation
@@ -423,7 +448,7 @@ export class MobileLinkService {
         // Lease renewal must never wait behind noncritical grants/UI metadata.
         const result = await api.request('/relay-lease', 'POST', undefined, false, signal)
         this.transportCurrent(generation, epoch, signal)
-        this.authorizeUntil(started + 60000)
+        // The transport reports the renewed expiry (up to five minutes) through leaseChanged.
         if (Date.now() - peersListedAt < PEER_LIST_INTERVAL_MS) return result
         peersListedAt = Date.now()
         void refreshPeers(epoch, signal).catch(() => {
@@ -434,6 +459,12 @@ export class MobileLinkService {
       },
       socket: this.deps.socket,
       budget: this.requestBudget,
+      leaseChanged: (expiresAt: number) => {
+        if (generation === this.generation && this.online) this.authorizeUntil(expiresAt)
+      },
+      relay: (notice: RelayNotice) => {
+        if (generation === this.generation) this.relayNotice(notice, () => refreshPeers(this.transportEpoch))
+      },
       state: (online: boolean) => {
         if (generation === this.generation) {
           this.online = online
@@ -542,7 +573,8 @@ export class MobileLinkService {
       authority.id === this.peerAuthority(src).id &&
       this.peers.has(src)
     try {
-      const call = validateCall(frame.payload)
+      // An optional read version is answered here; the runtime envelope never sees it.
+      const { call, ifVersion } = conditionalCall(validateCall(frame.payload))
       if (call.requestId !== frame.id) throw new Error('INVALID_REQUEST')
       if (!hasRemoteOperationScope(call.method, authority.scopes)) throw new Error('REMOTE_SCOPE_REQUIRED')
       if (call.method.startsWith('attachment.')) {
@@ -606,6 +638,8 @@ export class MobileLinkService {
           )
         if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []),
           ...(this.deps.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...this.shared.descriptors(authority.scopes)]
+        if (call.method === 'catalog.get' && Array.isArray(value.capabilities))
+          value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY]
         result = call.method === 'catalog.get' ? appendHostMetadata(value, {
           deviceId: this.identity?.id, appVersion: this.deps.appVersion, platform: this.deps.platform }) : value
       }
@@ -614,7 +648,7 @@ export class MobileLinkService {
           kind: 'result',
           id: frame.id,
           dst: src,
-          payload: result
+          payload: conditionalResult(call.method, result, ifVersion)
         })
     } catch (error) {
       if (current()) {
