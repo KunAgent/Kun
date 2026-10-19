@@ -98,7 +98,7 @@ test('PR quality catches production advisories before the stable release merge',
   assert.equal(audit.run, 'npm run audit:production')
 })
 
-test('native Windows recovery and path boundaries run early and fail closed before packaging and PR acceptance', () => {
+test('native Windows recovery, speech and path boundaries run early and fail closed before packaging and PR acceptance', () => {
   const workflow = readWorkflow('pr-checks.yml')
   const recovery = workflow.jobs['windows-recovery']
   assert.equal(recovery['runs-on'], 'windows-latest')
@@ -132,6 +132,16 @@ test('native Windows recovery and path boundaries run early and fail closed befo
   assert.ok(install >= 0 && recovery.steps.indexOf(boundary) > install)
   assert.equal(Object.values(workflow.jobs).flatMap(job => job.steps ?? [])
     .filter(step => step.run === boundary.run).length, 1)
+  const speech = stepByName(recovery, 'Test local speech downloads and worker paths')
+  const speechCommand = 'npx vitest run src/main/services/local-sanotts src/shared/local-sanotts'
+  assert.equal(speech.run, `${speechCommand} --silent=false --reporter=verbose`)
+  assert.equal(speech.if, undefined)
+  assert.equal(speech['working-directory'], undefined)
+  assert.ok(recovery.steps.indexOf(speech) > install)
+  const windowsJobs = Object.values(workflow.jobs).filter(job => job['runs-on'] === 'windows-latest')
+  assert.equal(windowsJobs.flatMap(job => job.steps ?? []).filter(step => step.run?.startsWith(speechCommand)).length, 1)
+  assert.equal(stepByName(workflow.jobs['package-macos'],
+    'Test local speech downloads and worker paths').run, speechCommand)
   assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
     const job = workflow.jobs[name]
