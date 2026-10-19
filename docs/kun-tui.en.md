@@ -145,15 +145,26 @@ conversation, use `/connect` to configure a model, `Ctrl+X L` to browse
 sessions, and `Ctrl+P` to search every command. Exiting the TUI stops its exact
 Runtime but leaves Service Manager and all saved data intact.
 
-The welcome surface contains only the text identity `KUN`, one concise value
-statement, Workspace/Model/Mode/Version metadata, and three starts: type a task,
-`/connect`, or `/sessions`. It does not keep a large logo, runtime diagnostics,
-MCP counts, or a full shortcut menu on screen. In a session, every assistant
-turn is grouped under one `Kun` label, Thinking is collapsed by default, and
-tools and Subagents use compact status/object/duration rows. The composer has
-one input, provider/model · effort · mode metadata, and only actions valid in
-the current context. Narrow layouts preserve titles, selection, errors, and
-primary actions before secondary counts and descriptions.
+The welcome surface shows the pixel logo, the line the name comes from, the
+prompt panel, the three most recent sessions, and Workspace:branch plus the
+version at the foot. It does not keep runtime diagnostics, MCP counts, or a full
+shortcut menu on screen.
+
+The session view is full screen. Sessions opened in this TUI sit in a tab strip
+at the top (`Ctrl+X 1`-`9` switches; running, waiting and unread sessions carry
+a status glyph); at 180 columns or wider a session rail grouped by workspace
+replaces it. The right sidebar (docked at 120 columns or wider, otherwise an
+overlay toggled with `Ctrl+X B`) shows the context ring, Goal, Plan, Agents and
+`git diff` stats. The prompt panel's bar takes the mode's color
+(Agent/Plan/Graph/Goal), with mode, model, effort and context use beneath it.
+A finished turn folds its successful tool calls into one
+`▸ Worked 38s · read 4 · edit 2` line that expands on click, keeps failed steps
+visible, and ends with `◆ Kun · model · duration`. Thinking is a one-line
+summary (`Thinking:` / `Thought:`) that expands on click. Approvals and
+structured questions open where the prompt is; other pages are dialogs over the
+session. Colors follow the terminal's light or dark theme. Narrow layouts
+preserve titles, selection, errors, and primary actions before secondary counts
+and descriptions.
 
 Pressing Enter clears the composer immediately and shows an animated
 `Sending message` status before the runtime acknowledges the turn.
@@ -264,6 +275,8 @@ directory, writes only a secret-free GUI compatibility projection, and
 | `Ctrl+P` | Open the searchable command palette |
 | `Ctrl+X L` | Open the session search/switch page |
 | `Ctrl+X N` | Create and open a session |
+| `Ctrl+X 1`-`9` | Switch to the session tab with that number |
+| `Ctrl+X B` | Show or hide the session sidebar |
 | `Ctrl+X P` | Enter or leave Pointer mode; only this mode lets Kun capture mouse clicks |
 | `Ctrl+T` | Cycle the current model's supported reasoning efforts |
 | `F2` / `Shift+F2` | Cycle recent models forward/backward |
@@ -272,7 +285,7 @@ directory, writes only a secret-free GUI compatibility projection, and
 | `Ctrl+D` | Forward-delete when non-empty; press twice to exit while idle and empty; request confirmation in Sessions |
 | `Backspace` / `Delete` | Remove the most recently queued attachment when composer text is empty; retain normal text editing while text is present |
 | `Esc` | Close autocomplete/the current page or interrupt the active turn; press twice while idle to safely undo the previous turn |
-| `Ctrl+O` | Open the full transcript page: scroll the whole conversation, `T` expands Thinking, `D` toggles tool details |
+| `Ctrl+O` | Expand or collapse all tool details and folded `Worked` lines |
 | `Ctrl+G` | Edit the current composer draft with `$VISUAL`/`$EDITOR` |
 | `Ctrl+S` | Immediately steer a non-empty draft into the running turn |
 | macOS `Cmd+V` / `Ctrl+X V`; Windows/Linux `Ctrl+V` | Read a screenshot from the system clipboard and queue it; `Alt+V` and forwarded `Ctrl+Shift+V` / `Super+V` are also accepted |

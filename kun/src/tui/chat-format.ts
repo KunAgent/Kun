@@ -91,7 +91,7 @@ export type ActivityDescription = {
   text: string
   /** "· 3.2s" or "· 3.2s · total 41s". */
   elapsed: string
-  /** Shown instead of the phase when nothing is active. */
+  /** The latest notice: alone when nothing is active, beside the phase otherwise. */
   notice?: { kind: 'info' | 'error' | 'hint'; message: string }
   /** Right-aligned status, joined with " · ". */
   right: ActivitySegment[]
@@ -195,11 +195,9 @@ export function describeActivity(
     visualKind,
     text: sanitizeTerminalText(text),
     elapsed: active ? (showTotal ? `· ${phaseElapsed} · total ${turnElapsed}` : `· ${phaseElapsed}`) : '',
-    ...(!active
-      ? transientHint
-        ? { notice: { kind: 'hint' as const, message: sanitizeTerminalText(transientHint) } }
-        : notice ? { notice: { kind: notice.kind, message: noticeMessage } } : {}
-      : {}),
+    ...(transientHint
+      ? { notice: { kind: 'hint' as const, message: sanitizeTerminalText(transientHint) } }
+      : notice ? { notice: { kind: notice.kind, message: noticeMessage } } : {}),
     right
   }
 }

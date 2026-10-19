@@ -5,7 +5,8 @@ import { AssistantText, MarkdownBlockView } from './assistant-text.js'
 import { ApprovalReviewView, CompactItemView, ErrorView, ThinkingView, UserMessageView } from './items.js'
 import { ChildRunGroupView, ChildRunView } from './subagents.js'
 import { ExplorationView, ToolCallView, ToolResultView } from './tools.js'
-import { Line, seg } from '../ui.js'
+import type { ComposerMode } from '../../chat-format.js'
+import { TurnFooterView, WorkTrailView } from './trail.js'
 
 export type EntryRenderOptions = {
   details: boolean
@@ -15,9 +16,14 @@ export type EntryRenderOptions = {
   attachments: Readonly<Record<string, AttachmentMetadata>>
   /** Pointer interactions are available (mouse on, or inside a page). */
   clickable: boolean
+  /** Current composer mode; user messages carry its color. */
+  mode?: ComposerMode
+  /** Tool call waiting for the user's permission. */
+  awaitingItemId?: string
   reasoningExpanded: (itemId: string, fallback: boolean) => boolean
   onToggleReasoning?: (itemId: string) => void
   onOpenChild?: (childId: string) => void
+  onToggleWork?: (key: string) => void
 }
 
 export function TranscriptEntryView(props: { entry: TranscriptEntry; options: EntryRenderOptions; first: boolean }): JSX.Element {
@@ -26,7 +32,16 @@ export function TranscriptEntryView(props: { entry: TranscriptEntry; options: En
     <box flexDirection="column" flexShrink={0} marginTop={(entry().separated && !props.first) || isFollowingMarkdownBlock(entry()) ? 1 : 0}>
       <Switch>
         <Match when={entry().kind === 'reply-header'}>
-          <Line segments={[' ', seg.brand('Kun', { bold: true })]} />
+          <box height={0} />
+        </Match>
+        <Match when={entry().kind === 'work'}>
+          <WorkTrailView
+            entry={entry() as Extract<TranscriptEntry, { kind: 'work' }>}
+            {...(props.options.onToggleWork ? { onToggle: props.options.onToggleWork } : {})}
+          />
+        </Match>
+        <Match when={entry().kind === 'turn-footer'}>
+          <TurnFooterView entry={entry() as Extract<TranscriptEntry, { kind: 'turn-footer' }>} />
         </Match>
         <Match when={entry().kind === 'item'}>
           <ItemEntryView entry={entry() as TranscriptItemEntry} options={props.options} />
@@ -81,6 +96,7 @@ function ItemEntryView(props: { entry: TranscriptItemEntry; options: EntryRender
     <Switch fallback={<CompactItemView item={item()} />}>
       <Match when={item().kind === 'user_message'}>
         <UserMessageView
+          mode={props.options.mode ?? 'agent'}
           item={item() as Extract<TranscriptItemEntry['item'], { kind: 'user_message' }>}
           attachmentIds={props.entry.userAttachmentIds}
           attachments={props.options.attachments}
@@ -111,6 +127,7 @@ function ItemEntryView(props: { entry: TranscriptItemEntry; options: EntryRender
       </Match>
       <Match when={item().kind === 'tool_call'}>
         <ToolCallView
+          awaiting={props.options.awaitingItemId === item().id}
           item={item() as Extract<TranscriptItemEntry['item'], { kind: 'tool_call' }>}
           {...(props.entry.toolResult ? { result: props.entry.toolResult } : {})}
           turnRunning={props.entry.turnRunning}

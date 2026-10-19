@@ -124,22 +124,20 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
     try {
       await waitFor(() => {
         const text = visible()
-        return text.includes('A focused terminal agent') && text.includes('/connect') &&
-          text.includes('/sessions') && text.includes('┌') && text.includes('Ctrl+P')
+        return text.includes('北冥有鱼') && text.includes('Ask anything') && text.includes('ctrl+p commands')
       }, 20_000).catch((error) => { throw new Error(`${String(error)}\nPTY screen:\n${visible()}`) })
       // Kun runs full screen on the alternate screen with the mouse captured.
       expect(output()).toContain('\x1b[?1049h')
       expect(output()).toContain('\x1b[?1000h')
-      expect(visible()).toContain('/graph <requirement>')
       expect(visible()).not.toContain('/model')
       expect(visible()).not.toContain('runtime ready')
       expect(visible()).not.toContain('MCP ')
       expect(visible()).not.toContain('No threads found')
 
-      await waitFor(() => visible().includes('gpt-5.6-luna · high'))
+      await waitFor(() => /gpt-5\.6-luna.* · high/u.test(visible()))
       terminal.write('\x14') // Ctrl+T cycles high -> max.
       await waitFor(() => visible().includes('Reasoning effort: max'))
-      await waitFor(() => visible().includes('gpt-5.6-luna · max'))
+      await waitFor(() => /gpt-5\.6-luna.* · max/u.test(visible()))
 
       terminal.write('\x18n') // Ctrl+X N
       const thread = await waitForValue(async () =>
@@ -163,7 +161,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
         threadId: thread.id,
         request: { prompt: 'hold for interrupt', model: 'gpt-5.6-luna', mode: 'agent' }
       })
-      await waitFor(() => visible().includes('Esc stop') && visible().includes('Waiting'))
+      await waitFor(() => visible().includes('esc interrupt') && visible().includes('waiting'))
       expect(visible()).not.toContain('Tip:')
       const itemBase = {
         id: 'item_pty_stream', threadId: thread.id, turnId: turn.turnId, role: 'assistant' as const,
@@ -176,31 +174,31 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       }
       await server.runtime.events.record({
         kind: 'assistant_reasoning_delta', threadId: thread.id, turnId: turn.turnId,
-        itemId: reasoningBase.id, item: { ...reasoningBase, text: 'Inspect the active model capability.' }
+        itemId: reasoningBase.id, item: { ...reasoningBase, text: 'Checking the model.\nInspect the active model capability.' }
       })
-      await waitFor(() => visible().includes('/thinking expand'))
+      // Collapsed reasoning shows its first line only.
+      await waitFor(() => visible().includes('Thinking: Checking the model.'))
       expect(visible()).not.toContain('Inspect the active model capability.')
-      expect(visible()).toContain('Ctrl+O details')
 
       terminal.write('\x18p') // Ctrl+X P hands selection back to the terminal.
       await waitFor(() =>
         visible().includes('Mouse off') &&
         output().lastIndexOf('\x1b[?1000l') > output().lastIndexOf('\x1b[?1000h')
-      )
+      ).catch((error) => { throw new Error(`${String(error)}\nPTY screen:\n${tui.screen.view().join('\n')}`) })
       terminal.write('\x18p') // The same binding captures the mouse again.
       await waitFor(() =>
         visible().includes('Mouse on') &&
         output().lastIndexOf('\x1b[?1000h') > output().lastIndexOf('\x1b[?1000l')
       )
       // Clicking the collapsed Thinking row expands it in place, and again collapses it.
-      const thinkingRow = () => tui.screen.view().findIndex((line) => line.includes('Thinking') && line.includes('click'))
+      const thinkingRow = () => tui.screen.view().findIndex((line) => line.includes('Thinking: Checking the model.'))
       const clickThinking = () => {
         const row = thinkingRow() + 1
         terminal.write(`\x1b[<0;8;${row}M\x1b[<0;8;${row}m`)
       }
       expect(thinkingRow()).toBeGreaterThanOrEqual(0)
       clickThinking()
-      await waitFor(() => visible().includes('Inspect the active model capability.') && visible().includes('click to collapse'))
+      await waitFor(() => visible().includes('Inspect the active model capability.'))
       clickThinking()
       await waitFor(() => !visible().includes('Inspect the active model capability.'))
       expect((await client.getThread(thread.id)).turns.find((candidate) => candidate.id === turn.turnId)?.status).toBe('running')
@@ -225,7 +223,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
         kind: 'assistant_text_delta', threadId: thread.id, turnId: turn.turnId,
         itemId: itemBase.id, item: { ...itemBase, text: 'Hel' }
       })
-      await waitFor(() => visible().includes('Hel ▍') && visible().includes('Responding'))
+      await waitFor(() => visible().includes('Hel ▍') && visible().includes('responding'))
       expect((await client.getThread(thread.id)).turns.find((candidate) => candidate.id === turn.turnId)?.status).toBe('running')
       await server.runtime.events.record({
         kind: 'assistant_text_delta', threadId: thread.id, turnId: turn.turnId,
@@ -305,9 +303,9 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
         mode: 'agent'
       })
       await waitForPtyValue(
-        () => tui.visible().includes('A focused terminal agent') &&
+        () => tui.visible().includes('北冥有鱼') &&
           tui.visible().includes('/connect') &&
-          tui.visible().includes('/sessions')
+          tui.visible().includes('ctrl+p commands')
           ? true
           : undefined,
         {
@@ -369,7 +367,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
           title: 'Sequential TUI state'
         })
         await waitForPtyValue(
-          () => second.visible().includes('A focused terminal agent') ? true : undefined,
+          () => second.visible().includes('北冥有鱼') ? true : undefined,
           {
             stage: 'sequential TUI first render',
             timeoutMs: 30_000,
@@ -428,7 +426,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
       )
       expect(connection.discovery.clientOwnerKind).toBe('tui')
       await waitForPtyValue(
-        () => tui.visible().includes('A focused terminal agent') ? true : undefined,
+        () => tui.visible().includes('北冥有鱼') ? true : undefined,
         {
           stage: 'signal test first render',
           timeoutMs: 30_000,
@@ -514,9 +512,9 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry) || !tuiNod
         commandId: 'command_pty_graph',
         idempotencyKey: 'create_pty_graph'
       })
-      await waitFor(() => tui.visible().includes('/graph status'), 10_000)
+      await waitFor(() => tui.visible().includes('⬡ Graph'), 10_000)
       tui.resize(52, 16)
-      const graphRow = () => tui.screen.view().findIndex((line) => line.trimStart().startsWith('GRAPH'))
+      const graphRow = () => tui.screen.view().findIndex((line) => line.trimStart().startsWith('⬡ Graph'))
       await waitFor(() => graphRow() >= 0)
       await new Promise((resolve) => setTimeout(resolve, 150))
       const row = graphRow() + 1

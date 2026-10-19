@@ -2,7 +2,8 @@ import type { TextareaRenderable } from '@opentui/core'
 import { createMemo, For, Show, type JSX } from 'solid-js'
 import { currentMode, currentModel, formatBytes } from '../../chat-format.js'
 import { sanitizeTerminalText } from '../../safe-text.js'
-import { useApp } from '../context.js'
+import { AppContext, useApp } from '../context.js'
+import { ringSegments, sessionContextUsage } from '../session/sidebar.js'
 import { Line, seg, SplitRow, styled, type SegInput } from '../ui.js'
 import { Txt } from '../txt.js'
 
@@ -15,13 +16,22 @@ export const COMPOSER_KEY_BINDINGS = [
   { name: 'return', meta: true, action: 'newline' as const }
 ]
 
-function Divider(): JSX.Element {
+/** Left edge of a panel: a heavy bar in the mode or status color. */
+export const PANEL_BAR = {
+  topLeft: '', topRight: '', bottomLeft: '', bottomRight: '', horizontal: ' ', vertical: '┃',
+  topT: '', bottomT: '', leftT: '', rightT: '', cross: ''
+}
+
+export type ComposerHandlers = {
+  onTextarea: (textarea: TextareaRenderable) => void
+  onSubmit: () => void
+  onChange: () => void
+}
+
+/** Half-row bottom edge of a panel: the bar ends in ╹ and the fill in ▀. */
+export function PanelEdge(props: { bar: import('@opentui/core').RGBA; fill: import('@opentui/core').RGBA }): JSX.Element {
   const app = useApp()
-  return (
-    <box marginLeft={-1} marginRight={-1} flexShrink={0}>
-      <Txt content={styled(app.theme(), [seg.brand(`├${'─'.repeat(Math.max(0, app.width() - 2))}┤`)])} wrapMode="none" truncate />
-    </box>
-  )
+  return <Line segments={[seg.color('╹', props.bar), seg.color('▀'.repeat(Math.max(0, app.width() - 1)), props.fill)]} />
 }
 
 function AutocompleteList(): JSX.Element {
@@ -45,21 +55,20 @@ function AutocompleteList(): JSX.Element {
   })
   return (
     <Show when={view()}>
-      <Divider />
+      <box height={1} flexShrink={0} />
       <For each={view()!.rows}>
         {(row) => (
-          <SplitRow
-            onMouseDown={() => app.session.applyAutocomplete(row.index)}
-            left={[
-              row.selected ? seg.focus(' › ') : '   ',
-              { text: sanitizeTerminalText(row.item.label), bold: row.selected, tone: row.selected ? 'normal' : 'normal' }
-            ]}
-            right={row.item.description ? [seg.muted(sanitizeTerminalText(row.item.description))] : []}
-          />
+          <box flexShrink={0} {...(row.selected ? { backgroundColor: app.theme().sel } : {})}>
+            <SplitRow
+              onMouseDown={() => app.session.applyAutocomplete(row.index)}
+              left={[' ', { text: sanitizeTerminalText(row.item.label), bold: row.selected }]}
+              right={row.item.description ? [seg.muted(sanitizeTerminalText(row.item.description)), ' '] : []}
+            />
+          </box>
         )}
       </For>
       <Show when={view()!.more}>
-        <Line segments={[seg.muted(`   ${view()!.more} · ↑/↓ choose · Tab insert · Enter run`)]} />
+        <Line segments={[seg.faint(` ${view()!.more} · ↑↓ choose · tab insert · enter run`)]} />
       </Show>
     </Show>
   )
@@ -72,79 +81,92 @@ function AttachmentChips(): JSX.Element {
     return app.session.state.pendingAttachments
   })
   return (
-    <For each={attachments()}>
-      {(attachment, index) => (
-        <SplitRow
-          left={[
-            ' ',
-            seg.focus(`Attachment ${index() + 1}/${attachments().length}`), ' ',
-            seg.focus(`[${attachment.kind === 'image' ? 'Image' : 'File'}]`), ' ',
-            sanitizeTerminalText(attachment.name), ' ',
-            seg.muted(`· ${formatBytes(attachment.byteSize)}`)
-          ]}
-          right={index() === attachments().length - 1 ? [seg.muted(app.width() >= 72 ? 'Backspace/Del remove' : 'Del remove')] : []}
-        />
-      )}
-    </For>
+    <Show when={attachments().length > 0}>
+      <box flexDirection="row" flexWrap="wrap" columnGap={1} flexShrink={0} paddingBottom={1}>
+        <For each={attachments()}>
+          {(attachment) => (
+            <Txt content={styled(app.theme(), [
+              { text: attachment.kind === 'image' ? ' img ' : ' file ', color: app.theme().panel, bg: app.theme().brand, bold: true },
+              { text: ` ${sanitizeTerminalText(attachment.name)} · ${formatBytes(attachment.byteSize)} `, tone: 'muted', bg: app.theme().high }
+            ])} wrapMode="none" />
+          )}
+        </For>
+        <Txt content={styled(app.theme(), [seg.faint('del removes the last')])} wrapMode="none" />
+      </box>
+    </Show>
   )
 }
 
+/** Mode · model provider · effort on the left; the context ring on the right. */
 function Metadata(): JSX.Element {
   const app = useApp()
-  const segments = createMemo((): SegInput[] => {
+  const view = createMemo(() => {
     app.tick()
     const state = app.session.state
     const mode = currentMode(state)
-    return [
-      ' ',
-      seg.muted(currentModel(state, app.controller)),
-      seg.muted(' · '),
-      seg.focus(state.reasoningEffort ?? 'default'),
-      seg.muted(' · '),
-      mode === 'goal'
-        ? seg.success(mode, { bold: true })
-        : mode === 'plan' ? seg.warning(mode, { bold: true }) : mode === 'graph' ? seg.accent(mode, { bold: true }) : seg.muted(mode)
-    ]
+    const model = currentModel(state, app.controller)
+    const [provider, name] = model.includes(' / ') ? model.split(' / ', 2) as [string, string] : ['', model]
+    return {
+      mode,
+      // The implicit "default" provider and effort say nothing; leave them out.
+      provider: provider === 'default' ? '' : provider,
+      name,
+      effort: state.reasoningEffort,
+      usage: sessionContextUsage(app)
+    }
   })
-  return <Line segments={segments()} />
-}
-
-export type ComposerHandlers = {
-  onTextarea: (textarea: TextareaRenderable) => void
-  onSubmit: () => void
-  onChange: () => void
+  const left = (): SegInput[] => [
+    seg.color(view().mode.charAt(0).toUpperCase() + view().mode.slice(1), app.theme().modes[view().mode], { bold: true }),
+    '  ', view().name,
+    view().provider ? seg.muted(` ${view().provider}`) : undefined,
+    ...(view().effort ? [seg.muted(' · '), seg.warning(view().effort!)] : [])
+  ]
+  return <SplitRow left={left()} right={view().usage ? [...ringSegments(app.theme(), view().usage!)] : []} />
 }
 
 /**
- * Bordered composer: pending attachments, the prompt editor, the inline
- * autocomplete list and a single metadata row (model · effort · mode).
+ * The prompt: a filled panel with a bar in the current mode's color,
+ * pending attachments, the editor, inline completions and the metadata row,
+ * closed by a half-row edge.
  */
 export function Composer(props: ComposerHandlers): JSX.Element {
   const app = useApp()
+  const modeColor = createMemo(() => {
+    app.tick()
+    return app.theme().modes[currentMode(app.session.state)]
+  })
+  const inner = () => Math.max(10, app.width() - 5)
   return (
-    <box border borderStyle="single" borderColor={app.theme().brand ?? '#888888'} flexDirection="column" flexShrink={0}>
-      <AttachmentChips />
-      <box flexDirection="row" flexShrink={0}>
-        <box flexShrink={0} width={3}>
-          <Txt content={styled(app.theme(), [' ', seg.user('›'), ' '])} wrapMode="none" />
+    <box flexDirection="column" flexShrink={0}>
+      <box border={['left']} borderColor={modeColor()} customBorderChars={PANEL_BAR} flexShrink={0}>
+        <box flexDirection="column" flexGrow={1} backgroundColor={app.theme().panel} paddingLeft={2} paddingRight={2} paddingTop={1}>
+          <AppContext.Provider value={{ ...app, width: inner }}>
+          <AttachmentChips />
+          <textarea
+            ref={(element: TextareaRenderable) => props.onTextarea(element)}
+            flexGrow={1}
+            flexShrink={1}
+            minHeight={1}
+            maxHeight={8}
+            wrapMode="word"
+            placeholder="Ask anything…  / commands · @ files"
+            backgroundColor={app.theme().panel}
+            focusedBackgroundColor={app.theme().panel}
+            textColor={app.theme().text}
+            focusedTextColor={app.theme().text}
+            placeholderColor={app.theme().faint}
+            keyBindings={COMPOSER_KEY_BINDINGS}
+            onSubmit={() => props.onSubmit()}
+            onContentChange={() => props.onChange()}
+            onCursorChange={() => props.onChange()}
+          />
+          <AutocompleteList />
+          <box height={1} flexShrink={0} />
+          <Metadata />
+          </AppContext.Provider>
         </box>
-        <textarea
-          ref={(element: TextareaRenderable) => props.onTextarea(element)}
-          flexGrow={1}
-          flexShrink={1}
-          minHeight={1}
-          maxHeight={6}
-          wrapMode="word"
-          placeholder="Type a task · / commands · @ files"
-          keyBindings={COMPOSER_KEY_BINDINGS}
-          onSubmit={() => props.onSubmit()}
-          onContentChange={() => props.onChange()}
-          onCursorChange={() => props.onChange()}
-        />
       </box>
-      <AutocompleteList />
-      <Divider />
-      <Metadata />
+      <PanelEdge bar={modeColor()} fill={app.theme().panel} />
     </box>
   )
 }

@@ -81,7 +81,7 @@ describe('ChatSession', () => {
     ])
     const { session } = await harness({ thread })
     await waitFor(() => session.entries.length > 0)
-    expect(session.entries.map((entry) => entry.key)).toEqual(['u1', 'kun-reply:turn_1', 'a1#0', 'a1#1'])
+    expect(session.entries.map((entry) => entry.key)).toEqual(['u1', 'kun-reply:turn_1', 'a1#0', 'a1#1', 'turn-footer:turn_1'])
   })
 
   it('routes message paging keys to the conversation viewport', async () => {

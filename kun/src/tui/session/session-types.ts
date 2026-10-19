@@ -59,6 +59,8 @@ export type LiveClickTarget =
   | { kind: 'thinking'; itemId: string }
   | { kind: 'child'; childId: string }
   | { kind: 'graph' }
+  | { kind: 'work'; key: string }
+  | { kind: 'session'; threadId: string }
 
 export type ChatSessionDependencies = {
   clipboardImageReader?: () => Promise<ClipboardImage | null>

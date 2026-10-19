@@ -41,10 +41,9 @@ export function Rule(): JSX.Element {
 export function Footer(props: { actions: readonly PageAction[] }): JSX.Element {
   const app = useApp()
   const segments = (): SegInput[] => props.actions.flatMap((action, index) => [
-    index === 0 ? ' ' : seg.muted('  ·  '),
-    { text: action.key, bold: true, tone: action.tone === 'danger' ? 'danger' : action.tone === 'warning' ? 'warning' : 'focus' },
-    ' ',
-    seg.muted(sanitizeTerminalText(action.label))
+    index === 0 ? '' : '   ',
+    { text: action.key.toLowerCase(), tone: action.tone === 'danger' ? 'danger' : action.tone === 'warning' ? 'warning' : 'normal' },
+    seg.muted(` ${sanitizeTerminalText(action.label)}`)
   ])
   return <Line segments={segments()} maxWidth={app.width()} />
 }
@@ -55,10 +54,14 @@ function SelectionRow(props: { block: Extract<PageBlock, { kind: 'row' }>; page:
     if (props.block.index !== undefined) props.page.handleMouse?.({ type: 'row', index: props.block.index, activate: true })
   }
   return (
-    <box flexDirection="row" width="100%" flexShrink={0} onMouseDown={select}>
-      <box flexShrink={0} width={3}>
-        <Txt content={styled(app.theme(), [' ', props.block.selected ? seg.focus('│') : ' ', ' '])} wrapMode="none" />
-      </box>
+    <box
+      flexDirection="row"
+      width="100%"
+      flexShrink={0}
+      onMouseDown={select}
+      {...(props.block.selected ? { backgroundColor: app.theme().sel } : {})}
+    >
+      <box flexShrink={0} width={2} />
       <box flexGrow={1} flexShrink={1} minWidth={0}>
         <Txt
           content={ansiToStyled(props.block.left, { attributes: props.block.selected ? TextAttributes.BOLD : 0 })}
@@ -67,7 +70,7 @@ function SelectionRow(props: { block: Extract<PageBlock, { kind: 'row' }>; page:
         />
       </box>
       <Show when={props.block.right}>
-        <box flexShrink={1} marginLeft={2} maxWidth={Math.max(8, Math.floor(app.width() * 0.5))}>
+        <box flexShrink={1} marginLeft={2} marginRight={1} maxWidth={Math.max(8, Math.floor(app.width() * 0.5))}>
           <Txt content={ansiToStyled(props.block.right!, { attributes: TextAttributes.DIM })} wrapMode="none" truncate />
         </box>
       </Show>
@@ -81,15 +84,13 @@ function Section(props: { label: string; right?: string }): JSX.Element {
     <box flexDirection="row" width="100%" flexShrink={0}>
       <Show when={props.label}>
         <box flexShrink={0}>
-          <Txt content={styled(app.theme(), [seg.muted(` ${sanitizeTerminalText(props.label)} `)])} wrapMode="none" />
+          <Txt content={styled(app.theme(), [seg.faint(sanitizeTerminalText(props.label))])} wrapMode="none" />
         </box>
       </Show>
-      <box flexGrow={1} flexShrink={1} minWidth={0}>
-        <Txt content={styled(app.theme(), [seg.muted('─'.repeat(400))])} wrapMode="none" truncate={false} />
-      </box>
+      <box flexGrow={1} flexShrink={1} minWidth={0} />
       <Show when={props.right}>
         <box flexShrink={0}>
-          <Txt content={styled(app.theme(), [seg.muted(` ${sanitizeTerminalText(props.right!)}`)])} wrapMode="none" />
+          <Txt content={styled(app.theme(), [seg.faint(`${sanitizeTerminalText(props.right!)} `)])} wrapMode="none" />
         </box>
       </Show>
     </box>
@@ -106,22 +107,20 @@ function Field(props: { block: Extract<PageBlock, { kind: 'field' }> }): JSX.Ele
     if (!value) {
       return [
         ...label,
-        props.block.focused ? { text: ' ', tone: 'normal' as const, underline: true } : undefined,
-        seg.muted(props.block.placeholder ?? '', { italic: true })
+        props.block.focused ? { text: ' ', color: app.theme().bg, bg: app.theme().text } : undefined,
+        seg.faint(props.block.placeholder ?? '')
       ]
     }
     const mask = (text: string) => (props.block.masked ? '•'.repeat(Math.min(48, Array.from(text).length)) : text)
     const { before, after } = field.parts()
     const [cursorChar = ' ', ...rest] = Array.from(after)
     return props.block.focused
-      ? [...label, mask(before), { text: props.block.masked ? (after ? '•' : ' ') : cursorChar, underline: true, bold: true }, mask(rest.join(''))]
+      ? [...label, mask(before), { text: props.block.masked ? (after ? '•' : ' ') : cursorChar, color: app.theme().bg, bg: app.theme().text }, mask(rest.join(''))]
       : [...label, mask(value)]
   })
   return (
-    <box flexDirection="row" flexShrink={0} width="100%">
-      <box flexShrink={0} width={3}>
-        <Txt content={styled(app.theme(), [' ', props.block.focused ? seg.focus('│') : ' ', ' '])} wrapMode="none" />
-      </box>
+    <box flexDirection="row" flexShrink={0} width="100%" backgroundColor={props.block.focused ? app.theme().bg : app.theme().high}>
+      <box flexShrink={0} width={1} />
       <Txt content={styled(app.theme(), content())} wrapMode="none" truncate flexGrow={1} />
     </box>
   )

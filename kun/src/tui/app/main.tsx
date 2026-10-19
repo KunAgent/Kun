@@ -10,7 +10,8 @@ import { HomeView } from './home/home-view.js'
 import { isDockedPage, PageDialog } from './pages/page-view.js'
 import { createKunRenderer, createTerminalPort, type RendererStreams } from './runtime.js'
 import { SessionView } from './session/session-view.js'
-import { createTheme, markdownSyntaxStyle } from './theme.js'
+import { setAnsiTheme } from './ansi.js'
+import { createTheme, markdownSyntaxStyle, type ThemeMode } from './theme.js'
 
 /**
  * The composer textarea is remounted when the view changes (home, session,
@@ -82,6 +83,11 @@ function App(props: { app: AppContextValue; composer: ComposerBinding }): JSX.El
   const dock = () => (isDockedPage(page()) ? page() : undefined)
   // Keys go to the open page; the composer keeps its draft but not focus.
   createEffect(() => props.composer.setFocused(!page()))
+  // Page formatters and cleared cells follow the active theme.
+  createEffect(() => {
+    setAnsiTheme(app.theme())
+    app.renderer.setBackgroundColor(app.theme().bg)
+  })
   // Dragging over text selects it; releasing copies it, like OpenCode.
   const copySelection = (event: MouseEvent): void => {
     if (!event.isDragging) return
@@ -91,7 +97,7 @@ function App(props: { app: AppContextValue; composer: ComposerBinding }): JSX.El
   const handlers = props.composer.handlers
   return (
     <AppContext.Provider value={app}>
-      <box width="100%" height="100%" flexDirection="column" onMouseUp={copySelection}>
+      <box width="100%" height="100%" flexDirection="column" backgroundColor={app.theme().bg} onMouseUp={copySelection}>
         <Show
           when={home()}
           fallback={<SessionView onTextarea={handlers.onTextarea} onSubmit={handlers.onSubmit} onChange={handlers.onChange} dock={dock()} />}
@@ -124,7 +130,13 @@ export async function startOpenTuiApplication(
   const renderer: CliRenderer = await createKunRenderer(streams)
   const [tick, setTick] = createSignal(0)
   const [themeName, setThemeName] = createSignal(session.state.theme)
-  const theme = createMemo(() => createTheme(themeName()))
+  // Dark or light follows the terminal's background, also when it changes.
+  const [themeMode, setThemeMode] = createSignal<ThemeMode>(renderer.themeMode ?? 'dark')
+  const theme = createMemo(() => createTheme(themeName(), themeMode()))
+  setAnsiTheme(theme())
+  const onThemeMode = (mode: ThemeMode): void => { setThemeMode(mode) }
+  renderer.on(CliRenderEvents.THEME_MODE, onThemeMode)
+  void renderer.waitForThemeMode(300).then((mode) => { if (mode) setThemeMode(mode) }).catch(() => undefined)
   const syntax = createMemo(() => markdownSyntaxStyle(theme(), renderer))
   const [width, setWidth] = createSignal(renderer.terminalWidth)
   const composer = new ComposerBinding(session)
@@ -173,6 +185,7 @@ export async function startOpenTuiApplication(
       const thread = session.state.projection?.thread
       unsubscribe()
       renderer.off(CliRenderEvents.RESIZE, onResize)
+      renderer.off(CliRenderEvents.THEME_MODE, onThemeMode)
       renderer.keyInput.off('keypress', onKey)
       renderer.keyInput.off('paste', onPaste)
       await session.stop()

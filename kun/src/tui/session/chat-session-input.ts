@@ -491,6 +491,17 @@ export abstract class ChatSessionInput extends ChatSessionPages {
       void this.controller.showGraphStatus()
       return
     }
+    if (target.kind === 'work') {
+      if (this.expandedTrails.has(target.key)) this.expandedTrails.delete(target.key)
+      else this.expandedTrails.add(target.key)
+      this.refreshEntries()
+      this.changed()
+      return
+    }
+    if (target.kind === 'session') {
+      void this.controller.openThread(target.threadId)
+      return
+    }
     if (target.kind === 'thinking') {
       this.toggleLiveReasoning(target.itemId)
       return
