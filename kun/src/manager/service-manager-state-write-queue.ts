@@ -32,7 +32,12 @@ export type ManagerStateWriteQueueStats = {
   degraded: boolean
 }
 
-type PendingSnapshot = { snapshot: ServiceManagerStateSnapshot; seq: number }
+/** A snapshot, or a provider the drain calls once just before writing. */
+export type ManagerStateSnapshotSource =
+  | ServiceManagerStateSnapshot
+  | (() => ServiceManagerStateSnapshot)
+
+type PendingSnapshot = { snapshot: ManagerStateSnapshotSource; seq: number }
 
 function delay(ms: number): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -47,8 +52,9 @@ function delay(ms: number): Promise<void> {
  * A single drain worker consumes the latest pending snapshot. `enqueue()` only
  * overwrites that snapshot and starts the worker when it is not running, so a
  * burst of mutations collapses into at most two writes (the one already in
- * flight plus one trailing write). `flush()` waits until the snapshot enqueued
- * at call time has been durably persisted.
+ * flight plus one trailing write). A provider is resolved by the drain right
+ * before its write, so a burst also builds at most two snapshots. `flush()`
+ * waits until the snapshot enqueued at call time has been durably persisted.
  *
  * A failed write marks the queue `degraded` and retries a bounded number of
  * times. If retries are exhausted the queue enters a permanent failure state:
@@ -83,7 +89,7 @@ export class ManagerStateWriteQueue {
     this.onPermanentFailure = options.onPermanentFailure
   }
 
-  enqueue(snapshot: ServiceManagerStateSnapshot): void {
+  enqueue(snapshot: ManagerStateSnapshotSource): void {
     if (this.permanentFailure !== undefined) return
     this.lastEnqueuedSeq += 1
     this.pending = { snapshot, seq: this.lastEnqueuedSeq }
@@ -149,7 +155,10 @@ export class ManagerStateWriteQueue {
       this.pending = undefined
       const startedAt = performance.now()
       try {
-        await this.writer(this.path, item.snapshot)
+        // Resolved synchronously after taking the item, so the state it reads
+        // is at least as new as `item.seq`.
+        const snapshot = typeof item.snapshot === 'function' ? item.snapshot() : item.snapshot
+        await this.writer(this.path, snapshot)
         this.lastDurableSeq = item.seq
         this.durableFlushAt = Date.now()
         this.lastWriteMs = performance.now() - startedAt

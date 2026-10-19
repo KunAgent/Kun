@@ -86,7 +86,7 @@ export async function startServiceManager(input: {
     onPermanentFailure: () => deferShutdown()
   })
   state.onMutation(() => {
-    stateQueue.enqueue(state.durableSnapshot())
+    stateQueue.enqueue(() => state.durableSnapshot())
   })
   const flushState = async () => {
     await stateQueue.flush()

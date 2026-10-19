@@ -80,7 +80,9 @@ export class ExtensionCredentialStore {
     this.encryptedFile = new AtomicJsonFile(
       this.encryptedPath,
       (value) => validateEncryptedDocument(value, options.profileId),
-      false
+      false,
+      // Credential health is inspected for every Registry projection.
+      { cacheManagerReads: true }
     )
   }
 
