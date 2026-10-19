@@ -6,7 +6,7 @@ import type { ServeProviderConfig } from '../config/kun-config-application.js'
 import type { HarnessDefinition, HarnessRoute } from '../contracts/harness.js'
 import type { KunServeRuntimeOptions } from '../server/runtime-factory-types.js'
 import { nativeHarnessCredentialEnv } from './harness-secret-env.js'
-import { nativeAgentNetworkStatus } from './native-agent-network.js'
+import { nativeAgentNetworkIdentity } from './native-agent-network.js'
 import { nativeAgentCredentialFiles, nativeAgentCredentialsConfigured } from './native-agent-credentials.js'
 import { providerBinaryEnvKeys, providerModule } from './providers/registry.js'
 import { homeOf, readBoundedFile } from './providers/support.js'
@@ -78,7 +78,7 @@ export function readinessFingerprint(input: {
   try { const s = statSync(input.command || harnessCommandOverride(options.harnesses, definition.id) || definition.detect?.command || '');
     binary = [s.dev, s.ino, s.size, s.mtimeMs, s.ctimeMs] } catch { binary = null }
   return createHash('sha256').update(JSON.stringify({
-    definition, route, network: nativeAgentNetworkStatus(definition).networkFingerprint,
+    definition, route, network: nativeAgentNetworkIdentity(definition),
     binaryPath: harnessCommandOverride(options.harnesses, definition.id), binary,
     runtimeBinaryEnv: [...providerBinaryEnvKeys().map((key) => process.env[key]), process.env.KUN_RUNTIME_PROVIDER_KIND],
     defaults: options.harnesses?.defaults?.[definition.id],
