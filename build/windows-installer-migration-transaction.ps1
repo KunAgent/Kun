@@ -535,12 +535,8 @@ function Restore-TransactionPayloadBackup($Transaction) {
   $source = Normalize-FullPath ([string]$Transaction.Source)
   Assert-RecoveryPayload $backup
   Assert-SafeInstallRoot $source 'Automatic update recovery destination'
-  [IO.Directory]::CreateDirectory($source) | Out-Null
-  foreach ($entry in @(Get-ChildItem -LiteralPath $backup -Force)) {
-    if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Automatic update transaction backup' }
-    elseif (Test-ReparsePoint $entry.FullName) { throw "Automatic update transaction backup is a reparse point: $($entry.FullName)" }
-    Copy-Item -LiteralPath $entry.FullName -Destination $source -Recurse -Force
-  }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  Copy-RecoveryPayloadTree $backup $source
   Assert-RecoveryPayload $source
 }
 
@@ -690,7 +686,8 @@ function Finalize-TerminalUpdateTransaction {
     ([string]$transaction.HealthResult)
   )) {
     if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-      Remove-Item -LiteralPath $path -Recurse -Force
+      . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+      Remove-RecoveryPayloadTree $path
     }
   }
   Remove-Journal
