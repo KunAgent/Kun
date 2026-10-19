@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useAppSurfaceStore } from '../../app-surfaces/app-surface-store'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   type RightPanelContributionId,
@@ -106,6 +107,20 @@ export function useWorkbenchRightTools({
     openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
   }, [activeThreadId, openRightPanelTab, openSideConversationDraft, sideDraftRevealRequest])
 
+  // Interactive app pages (Gen UI expand, MCP App surfaces) open as the App tab.
+  const appPanelKey = useAppSurfaceStore((state) => state.panel?.key ?? null)
+  const previousAppPanelKey = useRef<string | null>(appPanelKey)
+  useEffect(() => {
+    const previous = previousAppPanelKey.current
+    previousAppPanelKey.current = appPanelKey
+    if (appPanelKey && appPanelKey !== previous) openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.appSurface)
+    if (!appPanelKey && previous) closeRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.appSurface)
+  }, [appPanelKey, closeRightPanelTab, openRightPanelTab])
+  useEffect(() => {
+    const panel = useAppSurfaceStore.getState().panel
+    if (panel && panel.threadId !== activeThreadId) useAppSurfaceStore.getState().closePanel()
+  }, [activeThreadId])
+
   const openSideChat = useCallback((): void => {
     const latestSide = currentSideConversations.at(-1)
     if (latestSide) selectSideConversation(latestSide.threadId)
@@ -159,6 +174,7 @@ export function useWorkbenchRightTools({
 
   const closeCodeRightTool = useCallback((id: RightPanelContributionId): void => {
     if (id === BUILTIN_RIGHT_PANEL_IDS.sideConversations) setSidePanelOpen(false)
+    if (id === BUILTIN_RIGHT_PANEL_IDS.appSurface) useAppSurfaceStore.getState().closePanel()
     closeRightPanelTab(id)
   }, [closeRightPanelTab, setSidePanelOpen])
 

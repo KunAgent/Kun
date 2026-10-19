@@ -6,6 +6,7 @@ import {
   extractUnifiedDiffText,
   formatFilePathForDisplay,
 } from '../../lib/diff-stats'
+import { isAppSurfaceBlock } from '../../app-surfaces/app-surface-tool-meta'
 import { isPendingRenderChartTool } from '../../agent/chart-spec-adapter'
 import { isPendingPaperReportTool } from '../../agent/paper-list-adapter'
 import {
@@ -59,6 +60,8 @@ export type TurnSections = {
   componentPrototypeBlocks: ToolBlock[]
   diagramPrototypeBlocks: ToolBlock[]
   conversationVisualizationBlocks: ToolBlock[]
+  /** Gen UI widgets and MCP App pages, rendered after the conclusion. */
+  appSurfaceBlocks: ToolBlock[]
   generatedFileBlocks: ToolBlock[]
   turnFileChanges: ToolBlock[]
   /** Guided inputs appended inside the turn, in timeline order. */
@@ -352,6 +355,10 @@ export function deriveTurnSections({
     Boolean(block.meta.conversationVisualization)
   ))
 
+  const appSurfaceBlocks: ToolBlock[] = turn.blocks.filter((block): block is ToolBlock => (
+    block.kind === 'tool' && isAppSurfaceBlock(block)
+  ))
+
   const chartBlocks = turn.blocks.filter((block): block is Extract<ChatBlock, { kind: 'chart' }> => block.kind === 'chart')
   const pendingChartBlocks = turn.blocks.filter((block): block is ToolBlock => isPendingRenderChartTool(block))
   const paperListBlocks = turn.blocks.filter((block): block is Extract<ChatBlock, { kind: 'paper-list' }> => block.kind === 'paper-list')
@@ -367,6 +374,7 @@ export function deriveTurnSections({
     componentPrototypeBlocks,
     diagramPrototypeBlocks,
     conversationVisualizationBlocks,
+    appSurfaceBlocks,
     generatedFileBlocks,
     turnFileChanges,
     chartBlocks,

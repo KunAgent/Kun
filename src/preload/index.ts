@@ -22,6 +22,7 @@ import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { marketApi } from './market-api'
 import { kunAccountApi } from './kun-account'
+import { appSandboxPreloadApi } from './app-sandbox-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -685,6 +686,7 @@ const api = {
     return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
   },
   ...paperApi,
-  ...marketApi
+  ...marketApi,
+  ...appSandboxPreloadApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

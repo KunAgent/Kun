@@ -1,4 +1,5 @@
 import type { McpCapabilityConfig, McpServerConfig } from '../../contracts/capabilities.js'
+import { mcpAppToolOutputMeta } from '../../contracts/mcp-apps.js'
 import { assertBuiltinGitHubMcpCallAllowed } from '../../contracts/builtin-mcp.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
@@ -136,12 +137,16 @@ export function createMcpLocalTool(
         state.server.timeoutMs,
         isMcpReplaySafe(descriptor.annotations)
       )
+      const mcpApp = mcpAppToolOutputMeta(state.serverId, descriptor)
       return {
         output: {
           serverId: state.serverId,
           toolName: descriptor.name,
           result
         },
+        // UI-only sideband: lets the desktop render the tool's MCP App page
+        // without adding anything to the model-facing output.
+        ...(mcpApp ? { meta: { mcpApp } } : {}),
         isError: typeof result === 'object' && result !== null && (result as { isError?: boolean }).isError === true
       }
     }
@@ -264,7 +269,7 @@ export async function connectAndLoadCatalog(
   }
 }
 
-async function callMcpToolWithReconnect(
+export async function callMcpToolWithReconnect(
   state: McpConnectionState,
   input: { name: string; arguments: Record<string, unknown> },
   context: ToolHostContext | undefined,
@@ -317,7 +322,7 @@ async function callMcpToolWithReconnect(
  * declaring itself read-only or idempotent. There is currently no local
  * replay allow-list, so mid-flight calls are always treated as unknown.
  */
-function isMcpReplaySafe(_annotations: McpToolDescriptor['annotations']): boolean {
+export function isMcpReplaySafe(_annotations: McpToolDescriptor['annotations']): boolean {
   return false
 }
 
@@ -493,7 +498,7 @@ export function shouldUseMcpSearch(config: NonNullable<McpCapabilityConfig['sear
   return toolCount >= config.autoThresholdToolCount
 }
 
-function policyFromAnnotations(annotation: McpToolDescriptor['annotations']): LocalTool['policy'] {
+export function policyFromAnnotations(annotation: McpToolDescriptor['annotations']): LocalTool['policy'] {
   // MCP annotations come from the remote server and are not an authorization
   // signal. Keep a uniform confirmation boundary regardless of what it says.
   void annotation

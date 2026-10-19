@@ -19,7 +19,8 @@ export const BUILTIN_RIGHT_PANEL_IDS = {
   review: 'builtin:right-panel-review',
   workers: 'builtin:right-panel-workers',
   conversationInfo: 'builtin:right-panel-conversation-info',
-  wardrobe: 'builtin:right-panel-wardrobe'
+  wardrobe: 'builtin:right-panel-wardrobe',
+  appSurface: 'builtin:right-panel-app-surface'
 } as const
 
 export type BuiltinRightPanelId = (typeof BUILTIN_RIGHT_PANEL_IDS)[keyof typeof BUILTIN_RIGHT_PANEL_IDS]

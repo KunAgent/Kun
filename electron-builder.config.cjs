@@ -288,6 +288,11 @@ module.exports = {
       to: 'bundled-skills',
       filter: ['**/*']
     },
+    // Offline copies of the libraries Gen UI widgets may reference by their
+    // pinned CDN URLs (see src/main/app-sandbox/app-sandbox-vendor.ts).
+    { from: 'node_modules/d3/dist/d3.min.js', to: 'gen-ui-vendor/d3.min.js' },
+    { from: 'node_modules/echarts/dist/echarts.min.js', to: 'gen-ui-vendor/echarts.min.js' },
+    { from: 'node_modules/lucide/dist/umd/lucide.min.js', to: 'gen-ui-vendor/lucide.min.js' },
     {
       from: 'resources/whisper',
       to: 'whisper',

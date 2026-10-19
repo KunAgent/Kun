@@ -241,6 +241,11 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  // Gen UI widget state and MCP Apps host requests made on behalf of sandbox pages.
+  compileEndpoint('/v1/threads/{threadId}/gen-ui/state', ['GET']),
+  compileEndpoint('/v1/threads/{threadId}/gen-ui/state/{widgetId}', ['PUT']),
+  compileEndpoint('/v1/mcp-apps/catalog', ['GET']),
+  ...['resource', 'resources', 'tool'].map((action) => compileEndpoint('/v1/mcp-apps/' + action, ['POST'])),
   compileEndpoint('/v1/gmail/status', ['GET']),
   compileEndpoint('/v1/gmail/local-model', ['GET', 'POST']),
   compileEndpoint('/v1/gmail/authorize', ['POST']),

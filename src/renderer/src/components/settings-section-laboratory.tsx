@@ -24,6 +24,7 @@ import {
 } from './settings-section-agent-panels'
 import { GraphModeSettingsPanel } from './settings-section-graph-panel'
 import { ConversationVisualizationSettingsPanel } from './settings-section-lab-conversation-visualization'
+import { AppSurfacesSettingsPanels } from './settings-section-lab-app-surfaces'
 import { ContextWindowSettingsPanel } from './settings-section-lab-context-window'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
@@ -76,6 +77,8 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
   const enabledCount = [
     contextCompaction.modelInitiatedCompactionEnabled === true,
     lab.conversationVisualization.enabled,
+    lab.genUi?.enabled === true,
+    lab.mcpApps?.enabled === true,
     lab.codexReferenceBranches?.enabled === true || lab.claudeCodeReferenceBranches?.enabled === true
       || lab.opencodeReferenceBranches?.enabled === true,
     lab.autoPlanBuild.enabled,
@@ -89,7 +92,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
   return (
     <>
       <p className="ds-settings-lab-summary" role="status">
-        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 9 })}
+        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 11 })}
       </p>
       <LabFeatureGroup label={t('settingsIaLabsGroupConversation')}>
         <ContextWindowSettingsPanel
@@ -117,6 +120,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           value={lab}
           onChange={(patch) => updateKun({ lab: patch })}
         />
+        <AppSurfacesSettingsPanels t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
         <CodexReferenceBranchesSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
       </LabFeatureGroup>
 
