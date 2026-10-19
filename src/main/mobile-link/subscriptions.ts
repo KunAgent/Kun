@@ -8,6 +8,8 @@ export type SubscriptionAuthority = { accountId: string; deviceId: string; autho
 const QUIET_EVENTS = new Set(['heartbeat', 'replay_synchronized'])
 export class MobileSubscriptions {
   private streams = new Map<string, AbortController>()
+  /** Live pages by `device:kind:id`, so a phone's own write can refresh the page it watches. */
+  private lives = new Map<string, LiveHistory>()
   constructor(
     private deps: {
       lease(): Promise<ProtectedRuntimeRequestLease>
@@ -21,6 +23,12 @@ export class MobileSubscriptions {
     for (const [key, control] of this.streams) if (!device || key.startsWith(device + ':')) {
       control.abort(); this.streams.delete(key)
     }
+  }
+  /** Re-reads a phone's live page soon, as if the runtime had reported a change. False when it watches no live page. */
+  touch(device: string, kind: LiveKind, id: string): boolean {
+    const live = this.lives.get(device + ':' + kind + ':' + id)
+    live?.changed()
+    return Boolean(live)
   }
   async subscribe(device: string, input: unknown, authority?: SubscriptionAuthority) {
     const p = input as {
@@ -65,6 +73,7 @@ export class MobileSubscriptions {
           failed: () => cancel()
         })
         control.signal.addEventListener('abort', () => history.stop(), { once: true })
+        this.lives.set(key, history)
         since = await history.start()
         if (control.signal.aborted) return
       }
@@ -154,6 +163,7 @@ export class MobileSubscriptions {
     } finally {
       relay?.stop()
       live?.stop()
+      if (live && this.lives.get(key) === live) this.lives.delete(key)
       if (this.streams.get(key) === control) this.streams.delete(key)
     }
   }

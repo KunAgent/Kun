@@ -26,6 +26,7 @@ import { hasKunAccountSession } from '../../shared/kun-account'
 import type { MobileLinkStatus } from '../../shared/mobile-link'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
 import { MobileSubscriptions, type SubscriptionAuthority } from './subscriptions'
+import { refreshAfterWrite } from './write-refresh'
 import { disableHost, sessionOperation } from './lifecycle'
 // Kun refuses these before any receipt or mutation, so the phone may treat them as not applied.
 const CERTAIN_REJECTIONS = new Set([
@@ -652,6 +653,8 @@ export class MobileLinkService {
           dst: src,
           payload: conditionalResult(call.method, result, ifVersion)
         })
+      // The phone's own message should reach its live page now, not after the runtime's next event.
+      if (current()) refreshAfterWrite(this.subscriptions, src, call.method, call.params, result)
     } catch (error) {
       if (current()) {
         try {
