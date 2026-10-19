@@ -17,6 +17,8 @@ const {
 const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
 const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
+const macho = require('./after-pack-thin-macho.cjs')
+const scopeDedupe = require('./after-pack-scope-dedupe.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
   assertElfExecutable,
@@ -307,6 +309,8 @@ function prunePackedApplicationPayload(context) {
   checkPackedSanottsRuntime(context, { unpackedAppRoot })
   trimPackedNodePtyPayload(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
   prunePackedHoistedKunDependencies(context)
+  scopeDedupe.sharePackedScopeNestedPackages(context, { unpackedAppRoot })
+  macho.thinPackedUniversalMachOFiles(context, { packedResourcesDir, normalizePlatform, normalizeArch })
 }
 
 function assertMissing(path, label) {
@@ -373,6 +377,8 @@ function validatePackedApplicationPayload(context) {
   }
   validatePackedKunBinLinks(kunModules)
   validateRootHoistedDependencyClosure(root)
+  scopeDedupe.validatePackedScopeNestedPackages(context, { unpackedAppRoot })
+  macho.validatePackedMachOArchitecture(context, { packedResourcesDir, normalizePlatform })
 }
 
 function validateBundledKunRuntime(context) {

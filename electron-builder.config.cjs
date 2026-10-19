@@ -216,6 +216,8 @@ module.exports = {
     '!kun/node_modules/@anthropic-ai/claude-agent-sdk-*/**',
     '!**/*.map',
     '!**/*.d.ts',
+    // ESM/CJS-specific declaration twins are compile-time only as well.
+    '!**/*.d.{mts,cts}',
     '!**/*.ts',
     '!**/tsconfig*.json',
     '!**/README*',
@@ -244,6 +246,14 @@ module.exports = {
     // DOCX export requires html-to-docx's Node entry. Its two browser bundles
     // duplicate the converter and are never loaded by the application.
     '!**/node_modules/html-to-docx/dist/html-to-docx.browser{,.esm}.js',
+    // The Kun TUI always runs on Node (see kun/src/tui/tui-node.ts), so
+    // opentui's Bun-only entry points never load. Node resolves the `node`
+    // export conditions, which import only the `chunk-node-*` files.
+    '!**/node_modules/@opentui/*/{index,testing,yoga}.bun.js',
+    '!**/node_modules/@opentui/core/chunk-bun-*.js',
+    // opentui loads web-tree-sitter's root `tree-sitter.js` + `.wasm`. The
+    // `./debug` build and the C sources under lib/ are never imported.
+    '!**/node_modules/web-tree-sitter/{debug,lib}{,/**/*}',
     'packages/create-kun-extension/templates/**/*',
     // @computer-use/libnut-linux currently publishes an x86-64 libnut.node
     // even though its npm metadata also declares arm64. Keep that incompatible
