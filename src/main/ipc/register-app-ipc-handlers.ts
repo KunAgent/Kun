@@ -23,6 +23,7 @@ import { registerAppWorkspaceIpcHandlers } from './register-app-workspace-ipc-ha
 import { configureRuntimeModelExecutor } from '../services/runtime-model-requests'
 import { registerAgentIntegrationIpcHandlers } from './register-agent-integration-ipc-handlers'
 import { registerKunAccountIpc } from './register-kun-account-ipc'
+import { registerAppSandboxIpcHandlers } from '../app-sandbox/app-sandbox-host'
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const accountAccess = registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
@@ -61,4 +62,8 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppPaperReaderIpcHandlers(options)
   registerAppPaperEvidenceIpcHandlers(options)
   registerAppContentIpcHandlers(options)
+  registerAppSandboxIpcHandlers({
+    getMainWindow: options.getMainWindow,
+    runtimeRequest: (path, method, body) => options.runtimeRequest(path, method, body)
+  })
 }

@@ -20,6 +20,7 @@ import {
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
+import { AppSurfaceBlocks } from '../../app-surfaces/AppSurfaceBlocks'
 import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
 import { PaperListCard, PaperListSkeleton } from './PaperListCard'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
@@ -144,6 +145,7 @@ export function ConversationTurn({
     componentPrototypeBlocks,
     diagramPrototypeBlocks,
     conversationVisualizationBlocks,
+    appSurfaceBlocks,
     generatedFileBlocks,
     turnFileChanges,
     chartBlocks,
@@ -288,6 +290,7 @@ export function ConversationTurn({
     componentPrototypeBlocks.length > 0 ||
     diagramPrototypeBlocks.length > 0 ||
     conversationVisualizationBlocks.length > 0 ||
+    appSurfaceBlocks.length > 0 ||
     pendingChartBlocks.length > 0 ||
     chartBlocks.length > 0 ||
     pendingPaperListBlocks.length > 0 ||
@@ -457,6 +460,8 @@ export function ConversationTurn({
       {conversationVisualizationBlocks.map((block) => (
         <ConversationVisualizationCard key={block.id} block={block} />
       ))}
+
+      <AppSurfaceBlocks threadId={threadId} blocks={appSurfaceBlocks} />
 
       {pendingChartBlocks.map((block) => (
         <ChartSkeleton key={block.id} title={block.summary} />

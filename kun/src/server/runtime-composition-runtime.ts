@@ -218,6 +218,8 @@ export function createServerRuntimeComposition(
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,
+    genUi: { store: core.genUiStore },
+    mcpApps: () => services.mcpProviders.apps,
     turnService,
     threadStore: stores.threadStore,
     toolCancellationService,

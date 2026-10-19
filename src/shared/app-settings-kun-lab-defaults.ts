@@ -29,6 +29,8 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
     codexReferenceBranches: { enabled: false },
     projectBoard: {
       enabled: false
-    }
+    },
+    genUi: { enabled: false },
+    mcpApps: { enabled: false }
   }
 }

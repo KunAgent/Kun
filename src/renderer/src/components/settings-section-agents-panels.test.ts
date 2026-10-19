@@ -147,6 +147,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(features.map((feature) => feature.props['aria-label'])).toEqual([
       'Context compression',
       'Session display optimization',
+      'labGenUiTitle',
+      'labMcpAppsTitle',
       'Codex history branches',
       'Automatic plan and build',
       'Graph mode',

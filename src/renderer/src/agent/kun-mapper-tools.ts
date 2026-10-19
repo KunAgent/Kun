@@ -40,6 +40,7 @@ import {
 import { dedupeTimelineTextBlocks } from './timeline-text-blocks'
 import { earliestSourceHistoryOrder, orderSourceHistoryBlocks } from './source-history-order'
 import { visualizationFromToolPayload } from './conversation-visualization'
+import { applyAppSurfaceToolMeta } from '../app-surfaces/app-surface-tool-meta'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
 import {
@@ -367,6 +368,7 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     )
     if (visualization) meta.conversationVisualization = visualization
   }
+  applyAppSurfaceToolMeta(meta, item)
   const presentationStudioToolId = presentationStudioWriteToolId(item)
   if (presentationStudioToolId) {
     meta.canonicalToolId = presentationStudioToolId

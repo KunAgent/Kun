@@ -1,0 +1,31 @@
+{
+  "id": "gen-ui",
+  "name": "Interactive Widgets",
+  "version": "1.0.0",
+  "description": "Build interactive HTML widgets (simulators, explorers, calculators, UI mockups) inline in desktop conversations with render_widget.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/gen-ui",
+      "/widget"
+    ],
+    "promptPatterns": [
+      "gen ui",
+      "interactive widget",
+      "interactive demo",
+      "simulation",
+      "simulator",
+      "slider",
+      "mockup",
+      "交互组件",
+      "交互演示",
+      "可交互",
+      "模拟器",
+      "滑块"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 0
+}

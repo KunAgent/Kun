@@ -37,6 +37,7 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           'claw-schedule-mcp-node-entry': resolve('src/main/claw-schedule-mcp-node-entry.ts'),
+          'canvas-mcp-node-entry': resolve('src/main/canvas-mcp/canvas-mcp-node-entry.ts'),
           // sanoTTS WASM inference blocks its JS thread, so it runs on a worker.
           'local-sanotts-worker-entry': resolve('src/main/services/local-sanotts-worker-entry.ts')
         }
@@ -53,6 +54,7 @@ export default defineConfig({
           index: resolve('src/preload/index.ts'),
           'protected-room-dialog': resolve('src/preload/protected-room-dialog.ts'),
           'extension-view': resolve('src/preload/extension-view.ts'),
+          'app-sandbox-shell': resolve('src/preload/app-sandbox-shell.ts'),
           'extension-protected-surface': resolve('src/preload/extension-protected-surface.ts'),
           'storage-relocation-recovery': resolve('src/preload/storage-relocation-recovery.ts'),
           'runtime-data-recovery': resolve('src/preload/runtime-data-recovery.ts'),

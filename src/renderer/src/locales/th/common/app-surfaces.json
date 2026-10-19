@@ -1,0 +1,21 @@
+{
+  "appSurfaceDesktopOnly": "หน้าแบบโต้ตอบใช้ได้ในแอปเดสก์ท็อป Kun",
+  "appSurfaceRetry": "ลองอีกครั้ง",
+  "appSurfacePageError": "หน้าเกิดข้อผิดพลาด: {{message}}",
+  "appSurfaceWidgetAria": "วิดเจ็ตแบบโต้ตอบ: {{title}}",
+  "appSurfaceCopyImage": "คัดลอกเป็นรูปภาพ",
+  "appSurfaceCopied": "คัดลอกแล้ว",
+  "appSurfaceExpand": "เปิดในแผงแอป",
+  "appSurfaceOpenInPanel": "แสดงในแผงแอปแล้ว คลิกเพื่อเปิดอีกครั้ง",
+  "appSurfaceFollowUpConfirm": "ส่งข้อความนี้จาก \"{{app}}\" หรือไม่",
+  "appSurfaceOpenLinkConfirm": "\"{{app}}\" ต้องการเปิดลิงก์นี้ในเบราว์เซอร์ของคุณ",
+  "appSurfaceToolConsent": "อนุญาตให้ \"{{app}}\" เรียกใช้เครื่องมือของตนในการสนทนานี้หรือไม่",
+  "appSurfaceToolConsentDetail": "หน้านี้เรียกใช้เครื่องมือของเซิร์ฟเวอร์ MCP ของตนเองได้ เช่น บันทึกหรือแก้ไขเอกสารของตน แต่เข้าถึงเซิร์ฟเวอร์อื่น ไฟล์ หรือประวัติการสนทนาไม่ได้",
+  "appSurfaceWidgetStateChip": "สถานะ {{title}}",
+  "appSurfaceWidgetStateSummary": "ตัวเลือกที่บันทึกในวิดเจ็ตแบบโต้ตอบ",
+  "appSurfaceAppContextChip": "บริบท {{title}}",
+  "appSurfaceAppContextSummary": "บริบทที่เลือกในแอป",
+  "appSurfaceDownloadConfirm": "\"{{app}}\" ต้องการบันทึกไฟล์ลงในคอมพิวเตอร์ของคุณ",
+  "appSurfacePanelTab": "แอป",
+  "appSurfacePanelEmpty": "ยังไม่มีแอปที่เปิดอยู่ เปิดการ์ดแบบโต้ตอบจากการสนทนา"
+}

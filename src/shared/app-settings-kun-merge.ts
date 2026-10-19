@@ -526,7 +526,9 @@ export function mergeKunLabSettings(
     codexReferenceBranches: { enabled: legacyCurrent?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: legacyCurrent?.projectBoard?.enabled ?? defaults.projectBoard.enabled
-    }
+    },
+    genUi: { enabled: legacyCurrent?.genUi?.enabled === true },
+    mcpApps: { enabled: legacyCurrent?.mcpApps?.enabled === true }
   }
   if (!patch) return base
   return {
@@ -581,7 +583,9 @@ export function mergeKunLabSettings(
     },
     projectBoard: {
       enabled: patch.projectBoard?.enabled ?? base.projectBoard.enabled
-    }
+    },
+    genUi: { enabled: patch.genUi?.enabled ?? base.genUi.enabled },
+    mcpApps: { enabled: patch.mcpApps?.enabled ?? base.mcpApps.enabled }
   }
 }
 

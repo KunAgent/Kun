@@ -1,0 +1,8 @@
+{
+  "labGenUiTitle": "인터랙티브 위젯(Gen UI)",
+  "labGenUiDescription": "데스크톱 에이전트가 대화 안에 작은 인터랙티브 페이지(시뮬레이터, 파라미터 탐색, 계산기, UI 목업)를 만들 수 있게 합니다. 페이지는 네트워크, 도구, 파일에 접근할 수 없는 격리된 샌드박스에서 실행됩니다.",
+  "labGenUiEnabled": "인터랙티브 위젯 사용",
+  "labMcpAppsTitle": "MCP Apps",
+  "labMcpAppsDescription": "인터랙티브 페이지를 제공하는 MCP 도구의 페이지를 대화 안이나 앱 패널에 표시하고, 내장 편집 가능 캔버스 앱을 추가합니다. 페이지는 자체 서버의 도구만 호출할 수 있습니다.",
+  "labMcpAppsEnabled": "MCP Apps 사용"
+}

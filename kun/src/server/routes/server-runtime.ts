@@ -192,6 +192,10 @@ export type ServerRuntime = {
   threadService: ThreadService
   rooms?: RoomRuntime
   projectBoardService?: ProjectBoardService
+  /** Generated conversation UI storage served to the desktop sandbox host. */
+  genUi?: { store: import('../../gen-ui/gen-ui-store.js').GenUiStore }
+  /** Live MCP Apps access; reads the current MCP provider build. */
+  mcpApps?: () => import('../../adapters/tool/mcp-apps-access.js').McpAppsAccess | undefined
   turnService: TurnService
   toolCancellationService?: ToolCancellationService
   usageService: UsageService

@@ -19,6 +19,7 @@ import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 import onboarding from './settings/onboarding.json'
+import appSurfaces from './settings/app-surfaces.json'
 
 const settings = {
   ...providerConfiguration,
@@ -42,7 +43,8 @@ const settings = {
   guiUpdateErrFeedUnavailable: '当前没有可连接的更新源，请稍后重试或前往下载页。',
   ...speak,
   ...ade,
-  ...onboarding
+  ...onboarding,
+  ...appSurfaces
 }
 
 export default settings
