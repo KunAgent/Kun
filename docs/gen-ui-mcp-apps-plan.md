@@ -415,7 +415,17 @@ P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页�
   目前总是走受保护确认。这是偏安全的降级,后续可在 shell preload 或 guest 层面补手势来源。
 - **第三方库**:D3、ECharts、Lucide 固定版本随包离线,固定 CDN URL 在 Gen UI 分区内映射到本地文件,缺失即失败。
 
-### 15.3 未做
+### 15.3 打包验证(2026-10-19,mac arm64)
+
+- `npm run dist:mac:arm64` 通过体积门禁:app 713.7 / 750 MiB,zip 285.5 / 295,dmg 268.4 / 280。本功能约占 9.5 MiB
+  未压缩(画布页面 7.8,Gen UI 离线库 1.7);`@modelcontextprotocol/{ext-apps,core,client}` 只被 Vite 打进 renderer
+  与画布页面,放在 devDependencies,不进 `app.asar`。
+- 解压后的 Kun.app 跑同一套冒烟:`node scripts/smoke-development-app-surfaces.cjs --app-executable
+  <Kun.app>/Contents/MacOS/Kun --evidence <dir>`(隔离 HOME/appData、空闲端口,不影响已安装的 Kun)。8 项全部通过,
+  包括从 `app.asar` 启动 `kun_canvas` server、从 `Resources/gen-ui-vendor` 离线加载固定 CDN 地址的 d3、画布字体
+  从 `out/renderer/excalidraw/fonts` 加载。
+
+### 15.4 未做
 
 P1.5(Tweak、导出、内置组件)、P4(sampling、页面工具代理、资源订阅、`downloadFile`、原生权限、扩展分发)、
 MCP 设置里的"清除 App 页面数据"、远程/移动端渲染。

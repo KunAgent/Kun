@@ -5,7 +5,9 @@
 // app sandbox webviews, the Kun runtime and the built-in canvas MCP server run
 // against an offline model fixture.
 //   npm run build && node scripts/smoke-development-app-surfaces.cjs [--keep-dirs]
-// Screenshots and report.json land under dist/app-surfaces-smoke.
+// Pass --app-executable <Kun.app/Contents/MacOS/Kun> to run the same flow
+// against a packaged build. Screenshots and report.json land under
+// dist/app-surfaces-smoke (or --evidence <dir>).
 
 const assert = require('node:assert/strict')
 const { existsSync } = require('node:fs')
@@ -133,6 +135,9 @@ async function runFlow({ application, page, capture, timeoutMs }) {
   assert.equal(guestInfo.hasWorkbenchBridge, false)
   assert.equal(guestInfo.paths, 1)
   assert.equal(fetchBlocked, true)
+  // A pinned CDN script resolves to the bundled offline copy, never the network.
+  await poll(async () => (await guestEvaluate(application, genUiInstance,
+    "document.getElementById('amp-explorer')?.dataset.d3")) === '7.9.0', timeoutMs, 'offline d3 loaded in the widget')
   await poll(async () => (await webview.evaluate((element) => element.getBoundingClientRect().height)) > 150,
     timeoutMs, 'widget reported its content height')
   await poll(async () => (await guestEvaluate(application, genUiInstance,
@@ -141,7 +146,7 @@ async function runFlow({ application, page, capture, timeoutMs }) {
   diagnostics.genUi = await layout(application, genUiInstance, webview, `({ innerWidth, innerHeight,
     body: Math.round(document.body.getBoundingClientRect().height), scrollHeight: document.documentElement.scrollHeight })`)
   await capture('gen-ui-1-widget')
-  checks.push('render_widget output renders in a kun-app:// sandbox page with the window.kun bridge and no network')
+  checks.push('render_widget output renders in a kun-app:// sandbox page with the window.kun bridge, no network and offline d3')
 
   // 2. Widget state persists through the runtime and becomes a composer context chip.
   await guestEvaluate(application, genUiInstance, `(() => {
@@ -225,6 +230,9 @@ async function runFlow({ application, page, capture, timeoutMs }) {
     return { innerWidth, innerHeight, stageHeight: stage && Math.round(stage.height),
       toolbar: Boolean(document.querySelector('.App-toolbar')) }
   })()`)
+  await poll(async () => (await guestEvaluate(application, canvasInstance,
+    "[...document.fonts].some((font) => font.status === 'loaded' && /excalifont|virgil/i.test(font.family))")) === true,
+  timeoutMs, 'Excalidraw hand-drawn font loaded from the bundled font directory')
   assert(diagnostics.canvas.guest.stageHeight > 400, 'canvas editor fills the App panel')
   assert.equal(diagnostics.canvas.guest.toolbar, true, 'Excalidraw toolbar rendered')
   await capture('canvas-1-panel')
@@ -233,7 +241,7 @@ async function runFlow({ application, page, capture, timeoutMs }) {
     return shell ? (await shell.capturePage()).toPNG().toString('base64') : null
   }, canvasInstance).catch(() => null)
   if (guestPng) await writeFile(join(process.cwd(), 'dist', 'app-surfaces-smoke', 'canvas-guest.png'), Buffer.from(guestPng, 'base64'))
-  checks.push('canvas_create opens the App panel; the sandboxed Excalidraw page converts skeletons and saves revision 2')
+  checks.push('canvas_create opens the App panel; the sandboxed Excalidraw page converts skeletons, saves revision 2 and uses the bundled fonts')
 
   // 5. The agent edits by element id; the open page reloads the new revision in place.
   await sendPrompt(page, `[canvas-edit-smoke-1] Make the cache two nodes on ${boardId}`)
@@ -265,11 +273,20 @@ async function main() {
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 90_000)
   const keepDirs = process.argv.includes('--keep-dirs')
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'app-surfaces-smoke'))
-  for (const entry of ['out/main/index.js', 'out/main/canvas-mcp-node-entry.js', 'out/renderer/index.html', 'out/canvas-app/index.html', 'kun/dist/cli/serve-entry.js']) {
-    assert(existsSync(join(repositoryRoot, entry)), `Missing ${entry}; run npm run build first`)
+  const appExecutable = argumentValue('--app-executable')
+  const packaged = Boolean(appExecutable)
+  let electronExecutable, unpackedRoot = repositoryRoot
+  if (packaged) {
+    electronExecutable = resolve(appExecutable)
+    assert(existsSync(electronExecutable), `Missing packaged executable ${electronExecutable}`)
+    unpackedRoot = resolve(electronExecutable, '..', '..', 'Resources', 'app.asar.unpacked')
+  } else {
+    for (const entry of ['out/main/index.js', 'out/main/canvas-mcp-node-entry.js', 'out/renderer/index.html', 'out/canvas-app/index.html', 'kun/dist/cli/serve-entry.js']) {
+      assert(existsSync(join(repositoryRoot, entry)), `Missing ${entry}; run npm run build first`)
+    }
+    const electronPackage = join(repositoryRoot, 'node_modules', 'electron')
+    electronExecutable = join(electronPackage, 'dist', (await readFile(join(electronPackage, 'path.txt'), 'utf8')).trim())
   }
-  const electronPackage = join(repositoryRoot, 'node_modules', 'electron')
-  const electronExecutable = join(electronPackage, 'dist', (await readFile(join(electronPackage, 'path.txt'), 'utf8')).trim())
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'kun-app-surfaces-smoke-'))
   const home = join(temporaryRoot, 'home')
   const profile = join(home, '.kun', 'data')
@@ -302,7 +319,7 @@ async function main() {
     const runtimePort = await availablePort()
     const environment = createIsolatedEnvironment(process.env, { home, appData, localAppData, temporaryDirectory })
     delete environment.ELECTRON_RENDERER_URL
-    environment.NODE_ENV = 'development'
+    if (!packaged) environment.NODE_ENV = 'development'
     fixture = await startAppSurfacesModelFixture(MODEL)
     const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, realProfile), locale: 'en', initialSetupCompleted: true }
     Object.assign(settings.agents.kun, {
@@ -319,8 +336,8 @@ async function main() {
     application = await _electron.launch({
       executablePath: electronExecutable,
       args: [`--user-data-dir=${userData}`, '--no-first-run', '--disable-background-networking',
-        '--disable-component-update', ...platformDesktopArguments(process.platform), repositoryRoot],
-      cwd: repositoryRoot, env: environment, chromiumSandbox: true, timeout: timeoutMs
+        '--disable-component-update', ...platformDesktopArguments(process.platform), ...(packaged ? [] : [repositoryRoot])],
+      cwd: packaged ? home : repositoryRoot, env: environment, chromiumSandbox: true, timeout: timeoutMs
     })
     electronProcess = application.process()
     for (const stream of [electronProcess.stdout, electronProcess.stderr]) {
@@ -336,7 +353,7 @@ async function main() {
     await page.locator('.ds-composer-textarea').waitFor({ timeout: timeoutMs })
     const assertions = await runFlow({ application, page, capture, timeoutMs })
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
-    result = { ok: true, status: 'passed', completedAt: new Date().toISOString(), screenshots, assertions, diagnostics,
+    result = { ok: true, status: 'passed', completedAt: new Date().toISOString(), packaged, screenshots, assertions, diagnostics,
       modelFixture: fixture.snapshot(), ...(keepDirs ? { temporaryRoot, workspaceRoot } : {}) }
   } catch (error) {
     if (page) {
@@ -349,7 +366,7 @@ async function main() {
     if (application) await withTimeout(application.close(), 3_000, 'closing Electron').catch(() => undefined)
     if (electronProcess) await terminateProcessTree(electronProcess, process.platform,
       { timeoutMs: 15_000, detached: process.platform !== 'win32' }).catch(() => undefined)
-    await withTimeout(stopIsolatedSharedRuntime(repositoryRoot, realProfile), 20_000, 'runtime').catch(() => undefined)
+    await withTimeout(stopIsolatedSharedRuntime(unpackedRoot, realProfile), 20_000, 'runtime').catch(() => undefined)
     await withTimeout(stopIsolatedServiceManager(home, realProfile), 20_000, 'manager').catch(() => undefined)
     releaseChildProcessHandles(electronProcess)
     if (fixture) await fixture.close()
