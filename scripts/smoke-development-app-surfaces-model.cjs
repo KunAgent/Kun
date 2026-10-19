@@ -12,6 +12,7 @@ const WIDGET_HTML = `<div id="amp-explorer" class="stack">
   </div>
   <p id="amp-status" class="text-muted text-small" role="status"></p>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script>
   const root = document.getElementById('amp-explorer')
   const input = document.getElementById('amp')
@@ -37,6 +38,7 @@ const WIDGET_HTML = `<div id="amp-explorer" class="stack">
       .catch(() => { document.getElementById('amp-status').textContent = 'not sent' })
   })
   draw()
+  root.dataset.d3 = window.d3 ? window.d3.version : 'missing'
   root.dataset.ready = 'true'
 </script>`
 
