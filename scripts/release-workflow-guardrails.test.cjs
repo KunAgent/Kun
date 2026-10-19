@@ -98,7 +98,7 @@ test('PR quality catches production advisories before the stable release merge',
   assert.equal(audit.run, 'npm run audit:production')
 })
 
-test('native Windows recovery runs early and fails closed before packaging and PR acceptance', () => {
+test('native Windows recovery and path boundaries run early and fail closed before packaging and PR acceptance', () => {
   const workflow = readWorkflow('pr-checks.yml')
   const recovery = workflow.jobs['windows-recovery']
   assert.equal(recovery['runs-on'], 'windows-latest')
@@ -117,6 +117,21 @@ test('native Windows recovery runs early and fails closed before packaging and P
     assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts`)
     assert.equal(step.if, undefined)
   }
+  const boundaryName = 'Test native Windows file path boundaries'
+  const boundary = stepByName(recovery, boundaryName)
+  assert.equal(boundary['working-directory'], 'kun')
+  assert.equal(boundary.if, undefined)
+  assert.equal(boundary.run, 'node node_modules/vitest/vitest.mjs run ' + [
+    'src/attachments/shared-attachment-paths.test.ts',
+    'src/attachments/shared-attachment-workspace-tools.test.ts',
+    'src/attachments/shared-attachment-content.test.ts',
+    'src/remote/files/path-containment.test.ts',
+    'src/agents/agent-direct-workspace-paths.test.ts'
+  ].join(' '))
+  const install = recovery.steps.findIndex(step => step.run === 'npm ci')
+  assert.ok(install >= 0 && recovery.steps.indexOf(boundary) > install)
+  assert.equal(Object.values(workflow.jobs).flatMap(job => job.steps ?? [])
+    .filter(step => step.run === boundary.run).length, 1)
   assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
     const job = workflow.jobs[name]

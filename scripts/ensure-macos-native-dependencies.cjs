@@ -50,11 +50,12 @@ function nativeInstallArguments(arch, versions) {
     `--cpu=${arch}`,
     `sharp@${versions.sharp}`,
     `@napi-rs/canvas@${versions.canvas}`,
-    `@cursor/sdk-darwin-${arch}@${versions.cursorSdk}`
+    `@cursor/sdk-darwin-${arch}@${versions.cursorSdk}`,
+    `@opentui/core-darwin-${arch}@${versions.opentuiCore}`
   ]
 }
 
-function assertTargetPackage(root, scope, name, arch) {
+function assertTargetPackage(root, scope, name, arch, expectedVersion) {
   const manifestPath = join(root, 'node_modules', scope, name, 'package.json')
   if (!existsSync(manifestPath)) {
     throw new Error(`macOS ${arch} native install is missing ${name}`)
@@ -64,6 +65,9 @@ function assertTargetPackage(root, scope, name, arch) {
       !Array.isArray(manifest.cpu) || !manifest.cpu.includes(arch)) {
     throw new Error(`${name} does not declare the expected darwin/${arch} target`)
   }
+  if (expectedVersion !== undefined && manifest.version !== expectedVersion) {
+    throw new Error(`${name} must match the installed runtime version ${expectedVersion}`)
+  }
 }
 
 function targetPackages(arch) {
@@ -71,6 +75,13 @@ function targetPackages(arch) {
     ['@img', `sharp-darwin-${arch}`],
     ['@img', `sharp-libvips-darwin-${arch}`],
     ['@napi-rs', `canvas-darwin-${arch}`]
+  ]
+}
+
+function kunTargetPackages(arch) {
+  return [
+    ['@cursor', `sdk-darwin-${arch}`],
+    ['@opentui', `core-darwin-${arch}`]
   ]
 }
 
@@ -92,21 +103,21 @@ function installStagedTargetPackages(stagingRoot, root, arch) {
     }
   }
 
-  const cursorPackage = `sdk-darwin-${arch}`
-  const cursorSource = join(stagingRoot, 'node_modules', '@cursor', cursorPackage)
-  if (!existsSync(join(cursorSource, 'package.json'))) {
-    throw new Error(`Staged macOS ${arch} native install is missing @cursor/${cursorPackage}`)
+  for (const [scope, name] of kunTargetPackages(arch)) {
+    const source = join(stagingRoot, 'node_modules', scope, name)
+    if (!existsSync(join(source, 'package.json'))) {
+      throw new Error(`Staged macOS ${arch} native install is missing ${scope}/${name}`)
+    }
+    const destination = join(root, 'kun', 'node_modules', scope, name)
+    rmSync(destination, { recursive: true, force: true })
+    mkdirSync(join(root, 'kun', 'node_modules', scope), { recursive: true })
+    cpSync(source, destination, { recursive: true, verbatimSymlinks: true })
   }
-  const cursorDestination = join(root, 'kun', 'node_modules', '@cursor', cursorPackage)
-  rmSync(cursorDestination, { recursive: true, force: true })
-  mkdirSync(join(root, 'kun', 'node_modules', '@cursor'), { recursive: true })
-  cpSync(cursorSource, cursorDestination, { recursive: true, verbatimSymlinks: true })
   for (const otherArch of SUPPORTED_ARCHITECTURES) {
     if (otherArch === arch) continue
-    rmSync(
-      join(root, 'kun', 'node_modules', '@cursor', `sdk-darwin-${otherArch}`),
-      { recursive: true, force: true }
-    )
+    for (const [scope, name] of kunTargetPackages(otherArch)) {
+      rmSync(join(root, 'kun', 'node_modules', scope, name), { recursive: true, force: true })
+    }
   }
 }
 
@@ -122,7 +133,8 @@ function ensureMacosNativeDependencies({
   const versions = {
     sharp: installedPackageVersion(root, 'sharp'),
     canvas: installedPackageVersion(root, '@napi-rs/canvas'),
-    cursorSdk: installedPackageVersion(join(root, 'kun'), '@cursor/sdk')
+    cursorSdk: installedPackageVersion(join(root, 'kun'), '@cursor/sdk'),
+    opentuiCore: installedPackageVersion(join(root, 'kun'), '@opentui/core')
   }
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
   const stagingRoot = mkdtempSync(join(tmpdir(), `kun-macos-native-${arch}-`))
@@ -144,14 +156,15 @@ function ensureMacosNativeDependencies({
   assertTargetPackage(root, '@img', `sharp-libvips-darwin-${arch}`, arch)
   assertTargetPackage(root, '@napi-rs', `canvas-darwin-${arch}`, arch)
   assertTargetPackage(join(root, 'kun'), '@cursor', `sdk-darwin-${arch}`, arch)
+  assertTargetPackage(join(root, 'kun'), '@opentui', `core-darwin-${arch}`, arch, versions.opentuiCore)
   return { arch, versions }
 }
 
 function main() {
   const result = ensureMacosNativeDependencies({ arch: argumentValue('--arch') })
   process.stdout.write(
-    `Prepared Sharp ${result.versions.sharp}, Canvas ${result.versions.canvas}, and ` +
-    `Cursor SDK ${result.versions.cursorSdk} ` +
+    `Prepared Sharp ${result.versions.sharp}, Canvas ${result.versions.canvas}, ` +
+    `Cursor SDK ${result.versions.cursorSdk}, and OpenTUI ${result.versions.opentuiCore} ` +
     `for darwin/${result.arch}\n`
   )
 }

@@ -240,6 +240,10 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Test native Windows file path boundaries
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/attachments/shared-attachment-paths.test.ts src/attachments/shared-attachment-workspace-tools.test.ts src/attachments/shared-attachment-content.test.ts src/remote/files/path-containment.test.ts src/agents/agent-direct-workspace-paths.test.ts
+
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
@@ -287,10 +291,6 @@ jobs:
 
       - name: Test local speech downloads and worker paths
         run: npx vitest run src/main/services/local-sanotts src/shared/local-sanotts
-
-      - name: Test native Windows file path boundaries
-        working-directory: kun
-        run: node node_modules/vitest/vitest.mjs run src/attachments/shared-attachment-paths.test.ts src/attachments/shared-attachment-workspace-tools.test.ts src/attachments/shared-attachment-content.test.ts src/remote/files/path-containment.test.ts src/agents/agent-direct-workspace-paths.test.ts
 
       - name: Smoke Windows mini window interaction and restoration
         timeout-minutes: 5
