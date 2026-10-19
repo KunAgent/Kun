@@ -281,10 +281,14 @@ export type ServerRuntime = {
     antigravityModels?: import('../../harness/antigravity-model-probe.js').AntigravityModelProbe
     installNetwork?: () => import('../../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
     /**
-     * Spawn-free read of the freshest probed model list, dispatched by
-     * transport; `undefined` means no fresh successful probe is cached.
+     * Spawn-free model list: this process's fresh probe, else the catalog the
+     * Agent listed before a restart; `undefined` means neither is known.
      */
     probedModels?: (definition: HarnessDefinition) => string[] | undefined
+    /** Spawn-free read of this process's fresh probe only. */
+    liveProbedModels?: (definition: HarnessDefinition) => string[] | undefined
+    /** Agent model catalogs kept across restarts (display-only, identity-checked). */
+    modelCatalogs?: import('../../harness/harness-runtime.js').HarnessRuntimeComposition['modelCatalogs']
     /**
      * Loopback `kun serve` endpoint shared with harness env injection; the
      * serve layer fills `baseUrl` once the listener binds.

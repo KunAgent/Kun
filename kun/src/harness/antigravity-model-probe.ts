@@ -25,6 +25,8 @@ export class AntigravityModelProbe {
     spawn?: SpawnCaptured
     resolve?: (command: string) => Promise<string | undefined>
     nowMs?: () => number
+    /** Receives each successful listing, e.g. to keep it across restarts. */
+    onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
   } = {}) {}
 
   invalidate(): void { this.revision++; this.cache.clear(); this.pending.clear() }
@@ -56,6 +58,7 @@ export class AntigravityModelProbe {
     const revision = this.revision
     const task = this.run(definition).then((catalog) => {
       if (revision === this.revision) this.cache.set(key, { catalog, expires: this.now() + (catalog.models.length ? CACHE_MS : FAILURE_CACHE_MS) })
+      if (catalog.models.length > 0) this.deps.onCatalog?.(definition, catalog)
       return catalog
     }).catch(() => EMPTY).finally(() => { if (this.pending.get(key) === task) this.pending.delete(key) })
     this.pending.set(key, task)

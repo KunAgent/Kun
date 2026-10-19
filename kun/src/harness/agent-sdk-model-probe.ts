@@ -49,6 +49,8 @@ export type AgentSdkModelProbeDeps = {
   nowMs?: () => number
   cacheMs?: number
   timeoutMs?: number
+  /** Receives each successful catalog, e.g. to keep it across restarts. */
+  onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
 }
 
 type ProbeModelRow = {
@@ -162,6 +164,7 @@ export class AgentSdkModelProbe {
           fetchedAt: this.nowMs(), expiresAt: this.nowMs() + (this.deps.cacheMs ?? AGENT_SDK_MODEL_PROBE_CACHE_MS),
           catalog
         })
+        if (catalog.models.length > 0) this.deps.onCatalog?.(definition, catalog)
         return catalog
       })
       .catch(() => {

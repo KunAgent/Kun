@@ -49,7 +49,7 @@ export function nativeCredentialFiles(definition: HarnessDefinition, overrideEnv
   const files = providerModule(definition.id)?.credentials?.files
   return files ? files(env, homeOf(env)) : nativeAgentCredentialFiles(definition.id, env)
 }
-function nativeProfileFiles(definition: HarnessDefinition, overrides: Record<string, string>): string[] {
+export function nativeProfileFiles(definition: HarnessDefinition, overrides: Record<string, string> = {}): string[] {
   const env = { ...process.env, ...definition.launch?.env, ...overrides }
   return [...nativeCredentialFiles(definition, overrides),
     ...providerModule(definition.id)?.credentials?.profileFiles?.(env, homeOf(env)) ?? []]
