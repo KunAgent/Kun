@@ -4,9 +4,8 @@ const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/u
 
 /**
  * Split assistant Markdown at blank lines outside fenced code. Every block
- * except a still-growing tail is final, so streaming answers can be written
- * to the terminal scrollback paragraph by paragraph without ever reflowing
- * text that was already printed.
+ * except a still-growing tail is final, so a streaming answer re-renders only
+ * its last paragraph instead of the whole Markdown document.
  */
 export function splitStableMarkdown(markdown: string, streaming: boolean): { blocks: string[]; stable: number } {
   const lines = normalizeTerminalCodeFences(markdown).replaceAll('\r\n', '\n').split('\n')

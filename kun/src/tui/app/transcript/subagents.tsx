@@ -26,7 +26,8 @@ export function ChildRunView(props: {
   child: ProjectedChildRun
   expanded: boolean
   frame: number
-  live: boolean
+  /** Show the click hint (in-progress entries with the mouse on). */
+  hint: boolean
   onOpen?: () => void
 }): JSX.Element {
   const child = () => props.child
@@ -66,7 +67,7 @@ export function ChildRunView(props: {
       <Show when={props.expanded && child().prompt}>
         <Line segments={[seg.muted(`     Task: ${sanitizeTerminalText(child().prompt!)}`)]} />
       </Show>
-      <Show when={props.live}>
+      <Show when={props.hint}>
         <Line segments={[seg.muted(`     click to open · keyboard: /subagents${isForegroundChildRun(child()) ? ' · Ctrl+B background' : ''}`)]} />
       </Show>
     </box>
@@ -77,7 +78,8 @@ export function ChildRunGroupView(props: {
   children: readonly ProjectedChildRun[]
   expanded: boolean
   frame: number
-  live: boolean
+  /** Show the click hint (in-progress entries with the mouse on). */
+  hint: boolean
   onOpen?: (childId: string) => void
 }): JSX.Element {
   const summary = createMemo(() => childGroupSummary(props.children))
@@ -126,7 +128,7 @@ export function ChildRunGroupView(props: {
           )
         }}
       </For>
-      <Show when={props.live}>
+      <Show when={props.hint}>
         <Line segments={[seg.muted('     click an agent to open its live session · /subagents · Ctrl+B background')]} />
       </Show>
     </box>

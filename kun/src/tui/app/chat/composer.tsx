@@ -109,15 +109,17 @@ function Metadata(): JSX.Element {
   return <Line segments={segments()} />
 }
 
+export type ComposerHandlers = {
+  onTextarea: (textarea: TextareaRenderable) => void
+  onSubmit: () => void
+  onChange: () => void
+}
+
 /**
  * Bordered composer: pending attachments, the prompt editor, the inline
  * autocomplete list and a single metadata row (model · effort · mode).
  */
-export function Composer(props: {
-  onTextarea: (textarea: TextareaRenderable) => void
-  onSubmit: () => void
-  onChange: () => void
-}): JSX.Element {
+export function Composer(props: ComposerHandlers): JSX.Element {
   const app = useApp()
   return (
     <box border borderStyle="single" borderColor={app.theme().brand ?? '#888888'} flexDirection="column" flexShrink={0}>

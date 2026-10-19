@@ -12,7 +12,7 @@ export type AppContextValue = {
   tick: Accessor<number>
   theme: Accessor<KunTheme>
   syntax: Accessor<SyntaxStyle>
-  /** Terminal width in columns (also valid inside scrollback snapshots). */
+  /** Width in columns of the region being rendered (column, dialog, sidebar). */
   width: Accessor<number>
 }
 

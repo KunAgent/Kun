@@ -3,7 +3,6 @@ import type { TuiController, TuiControllerState } from '../controller.js'
 import { parseTuiKeymapConfig, type TuiKeymap } from '../keymap.js'
 import { editTextInExternalEditor } from '../operations.js'
 import type { TuiPage } from '../page-model.js'
-import { ScrollbackPlanner } from '../scrollback-plan.js'
 import { isActiveChildRun } from '../subagent-format.js'
 import { buildTranscriptEntries, type TranscriptEntry } from '../transcript-model.js'
 import type { OfficialProviderCliId } from '../../services/official-provider-cli.js'
@@ -13,8 +12,8 @@ import type {
   ComposerPort,
   LeaderHint,
   PageEntry,
-  ScrollbackSink,
-  TerminalPort
+  TerminalPort,
+  ViewportPort
 } from './session-types.js'
 
 export const ANIMATION_INTERVAL_MS = 80
@@ -29,22 +28,25 @@ const NOOP_COMPOSER: ComposerPort = {
 
 /**
  * Renderer-neutral application state for the terminal UI: page stack,
- * gestures, scrollback planning and animation. The opentui app renders this
+ * gestures, transcript entries and animation. The opentui app renders this
  * state and forwards input; everything here is testable without a terminal.
  */
 export abstract class ChatSessionBase {
   protected composer: ComposerPort = NOOP_COMPOSER
   protected terminal?: TerminalPort
-  protected scrollbackSink?: ScrollbackSink
+  protected viewport?: ViewportPort
   protected readonly pages: PageEntry[] = []
   protected readonly listeners = new Set<() => void>()
-  protected readonly planner = new ScrollbackPlanner()
-  protected liveEntriesValue: TranscriptEntry[] = []
-  protected scrollbackReady = false
+  protected entriesValue: TranscriptEntry[] = []
   protected showReasoningValue = false
   protected readonly liveReasoningOverrides = new Map<string, boolean>()
   protected showToolDetailsValue = false
-  protected pointerModeValue = false
+  /** Mouse capture: wheel scrolling, clicks and in-app selection. */
+  protected pointerModeValue = true
+  /** Docked sidebar on wide terminals (shown unless hidden). */
+  protected sidebarVisibleValue = true
+  /** Sidebar overlay on narrow terminals (hidden unless opened). */
+  protected sidebarOverlayValue = false
   protected transientHintValue?: string
   protected leaderHintValue?: LeaderHint
   protected autocompleteValue?: AutocompleteView
@@ -82,10 +84,13 @@ export abstract class ChatSessionBase {
 
   get state(): TuiControllerState { return this.controller.state }
   get page(): TuiPage | undefined { return this.pages.at(-1)?.page }
-  get liveEntries(): readonly TranscriptEntry[] { return this.liveEntriesValue }
+  /** Every transcript entry of the open thread, in display order. */
+  get entries(): readonly TranscriptEntry[] { return this.entriesValue }
   get showReasoning(): boolean { return this.showReasoningValue }
   get showToolDetails(): boolean { return this.showToolDetailsValue }
   get pointerMode(): boolean { return this.pointerModeValue }
+  get sidebarVisible(): boolean { return this.sidebarVisibleValue }
+  get sidebarOverlay(): boolean { return this.sidebarOverlayValue }
   get transientHint(): string | undefined { return this.transientHintValue }
   get leaderHint(): LeaderHint | undefined { return this.leaderHintValue }
   get autocomplete(): AutocompleteView | undefined { return this.autocompleteValue }
@@ -99,9 +104,8 @@ export abstract class ChatSessionBase {
     this.terminal = terminal
   }
 
-  /** Receives transcript entries once they are final enough for scrollback. */
-  attachScrollback(sink: ScrollbackSink): void {
-    this.scrollbackSink = sink
+  attachViewport(viewport: ViewportPort): void {
+    this.viewport = viewport
   }
 
   subscribe(listener: () => void): () => void {
@@ -119,67 +123,13 @@ export abstract class ChatSessionBase {
     for (const listener of [...this.listeners]) listener()
   }
 
-  /**
-   * Scrollback can only be written while the inline chat surface is active.
-   * Pages run on the alternate screen and external programs own the
-   * terminal while suspended; commits are planned again once ready.
-   */
-  setScrollbackReady(ready: boolean): void {
-    this.scrollbackReady = ready
-    if (ready) this.planScrollback()
-  }
-
-  protected planScrollback(): void {
-    const projection = this.controller.state.projection
-    const entries = buildTranscriptEntries(projection, {
+  /** Rebuild the transcript entries from the current projection. */
+  protected refreshEntries(): void {
+    this.entriesValue = buildTranscriptEntries(this.controller.state.projection, {
       showReasoning: this.showReasoningValue,
       reasoningOverrides: this.liveReasoningOverrides,
       splitAssistantText: true
     })
-    if (!this.scrollbackReady || this.suspended || !this.scrollbackSink) {
-      // Without a writable scrollback everything unwritten is live; nothing
-      // is marked committed so it will be written once the surface returns.
-      return
-    }
-    const plan = this.planner.plan(projection?.thread.id, projection?.thread.title || 'Untitled', entries)
-    this.liveEntriesValue = plan.live
-    if (plan.commits.length) {
-      this.scrollbackSink(plan.commits, {
-        showReasoning: this.showReasoningValue,
-        showToolDetails: this.showToolDetailsValue,
-        legacyGui: this.controller.runtime.legacyGui === true
-      })
-    }
-  }
-
-  /**
-   * On exit, write whatever is still live so the terminal scrollback keeps
-   * the final state of the conversation after Kun's surface is gone.
-   */
-  finalizeScrollback(): void {
-    if (!this.scrollbackReady || !this.scrollbackSink) return
-    const projection = this.controller.state.projection
-    const entries = buildTranscriptEntries(projection, {
-      showReasoning: this.showReasoningValue,
-      reasoningOverrides: this.liveReasoningOverrides,
-      splitAssistantText: true
-    }).map((entry) => ({ ...entry, settled: true }))
-    const plan = this.planner.plan(projection?.thread.id, projection?.thread.title || 'Untitled', entries)
-    this.liveEntriesValue = []
-    if (plan.commits.length) {
-      this.scrollbackSink(plan.commits, {
-        showReasoning: this.showReasoningValue,
-        showToolDetails: this.showToolDetailsValue,
-        legacyGui: this.controller.runtime.legacyGui === true
-      })
-    }
-  }
-
-  /** Called by the app after it cleared the screen and wants a full replay. */
-  replayScrollback(): void {
-    this.planner.reset()
-    this.planScrollback()
-    this.changed()
   }
 
   run(): Promise<void> {
@@ -208,13 +158,12 @@ export abstract class ChatSessionBase {
         updateSnapshot?: (snapshot: NonNullable<TuiControllerState['modelConnections']>) => void
       }
       page.updateParentProjection?.(state.projection)
-      if (page.kind === 'transcript') page.update?.(state.projection)
-      else if (page.kind === 'sessions' || page.kind === 'goal' || page.kind === 'graph') page.update?.(state)
+      if (page.kind === 'sessions' || page.kind === 'goal' || page.kind === 'graph') page.update?.(state)
       if (state.modelConnections) page.updateSnapshot?.(state.modelConnections)
     }
     this.syncPages(state)
     this.syncAnimation(state)
-    this.planScrollback()
+    this.refreshEntries()
     void this.refreshSkillAutocomplete(state.projection?.thread.workspace ?? this.controller.options.workspace)
     if (state.quitRequested) this.resolveRun?.()
     this.changed()
