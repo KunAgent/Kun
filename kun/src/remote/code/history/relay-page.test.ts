@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TurnItem } from '../../../contracts/items.js'
 import { makeAssistantTextItem, makeToolResultItem, makeUserItem } from '../../../domain/item.js'
 import { remoteFixture } from '../../testing/runtime.test-support.js'
-import { RELAY_HISTORY_ITEM_BYTES, RELAY_HISTORY_PAGE_BYTES, relayHistoryPage } from './relay-page.js'
+import { RELAY_HISTORY_ITEM_BYTES, RELAY_HISTORY_PAGE_BYTES, RELAY_LATEST_PAGE_BYTES, relayHistoryPage } from './relay-page.js'
 
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value))
 const ids = (history: { turns?: { items?: TurnItem[] }[] }) => (history.turns ?? []).flatMap((turn) => (turn.items ?? []).map((item) => item.id))
@@ -26,7 +26,11 @@ describe('relay-sized code history pages', () => {
 
     const { relayed, retained } = relayHistoryPage(history)
     const kept = relayed.turns[0]!.items!
-    expect(bytes(relayed)).toBeLessThan(RELAY_HISTORY_PAGE_BYTES + 4096)
+    expect(bytes(relayed)).toBeLessThan(RELAY_LATEST_PAGE_BYTES + 4096)
+    // An older page, read with a cursor, keeps the larger budget.
+    const older = relayHistoryPage({ ...history, activeTurn: null, latestTurn: null }, 'turn_1_result_80').relayed
+    expect(bytes(older)).toBeGreaterThan(RELAY_LATEST_PAGE_BYTES)
+    expect(bytes(older)).toBeLessThan(RELAY_HISTORY_PAGE_BYTES + 4096)
     expect(kept[0]!.id).toBe('turn_1_ask')
     expect(kept.at(-1)!.id).toBe('turn_1_done')
     expect(relayed.timeline).toMatchObject({ hasMore: true, nextCursor: kept[1]!.id, itemCount: kept.length })

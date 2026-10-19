@@ -11,6 +11,11 @@ import { buildPublicItemHistoryPage, timelineSafeItem } from '../../../services/
  */
 export const RELAY_HISTORY_ITEM_BYTES = 16 * 1024
 export const RELAY_HISTORY_PAGE_BYTES = 512 * 1024
+/**
+ * The newest page opens a conversation, so it is what a phone waits for; older pages load on request.
+ * At about 100 KB/s through a proxy this arrives in about a second instead of five.
+ */
+export const RELAY_LATEST_PAGE_BYTES = 128 * 1024
 const SOURCE_CURSOR = 'history:'
 
 type HistoryTurn = { id: string; items?: TurnItem[] }
@@ -48,7 +53,7 @@ export function relayHistoryPage<T extends TimelineHistory>(history: T, cursor?:
   const page = source ? undefined : buildPublicItemHistoryPage(items, {
     ...(anchorTurnId ? { anchorTurnId } : {}),
     maxItems: Math.max(1, items.length),
-    maxBytes: RELAY_HISTORY_PAGE_BYTES
+    maxBytes: cursor ? RELAY_HISTORY_PAGE_BYTES : RELAY_LATEST_PAGE_BYTES
   })
   if (!page) return { relayed: { ...history, turns: withItems(history, items, true) }, retained: history }
   const kept = new Set(page.items.map((item) => item.id))
