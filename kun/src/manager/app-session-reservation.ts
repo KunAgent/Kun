@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 
 import { basename, dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { AppSessionOwnerSchema, type AppSessionOwner } from '../contracts/app-session-owner.js'
-import { runtimeProcessIdentity, runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
+import { requireRuntimeProcessIdentity, runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
 import { withManagerStartLock } from './manager-discovery.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 
@@ -109,8 +109,7 @@ export async function acquireAppSessionReservation(input: {
     path,
     profile,
     recordProcess: async (participant) => {
-      const processIdentity = runtimeProcessIdentity(participant.pid)
-      if (!processIdentity) throw new Error(`Unable to verify owned process ${participant.pid}`)
+      const processIdentity = requireRuntimeProcessIdentity(participant.pid)
       const value = ParticipantSchema.parse({ ...participant, processIdentity, startedAt: participant.startedAt ?? new Date().toISOString() })
       // All profile claims retain participants, including shared settings with a different dataDir.
       for (const directory of paths) {
@@ -228,8 +227,7 @@ export async function recordAppSessionParticipant(path: string, owner: AppSessio
   const record = ReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')))
   if (record.owner.ownerSessionId !== owner.ownerSessionId ||
     record.owner.ownerProcessIdentity !== owner.ownerProcessIdentity) throw new AppSessionConflictError(path)
-  const processIdentity = runtimeProcessIdentity(participant.pid)
-  if (!processIdentity) throw new Error(`Unable to verify owned Runtime process ${participant.pid}`)
+  const processIdentity = requireRuntimeProcessIdentity(participant.pid)
   const value = ParticipantSchema.parse({ ...participant, processIdentity })
   for (const directory of [...new Set([
     join(record.dataDir, '.app-session'), join(record.controlDir, '.app-session'),

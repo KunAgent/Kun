@@ -3,6 +3,7 @@ import { mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/pro
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createOwnedServiceManagerSession, type OwnedServiceManagerSession } from './owned-service-manager-session.js'
 import { managerDiscoveryPath, readManagerDiscovery } from './manager-discovery.js'
@@ -19,14 +20,18 @@ const sessions: OwnedServiceManagerSession[] = []
 let bundleRoot: string
 let managerEntry: string
 let sessionEntry: string
+let processEntry: string
 const parents: ChildProcess[] = []
 
 beforeAll(async () => {
   bundleRoot = await realpath(await mkdtemp(join(tmpdir(), 'kun-owned-manager-entry-')))
   managerEntry = join(bundleRoot, 'manager-entry.mjs')
   sessionEntry = join(bundleRoot, 'owned-session.mjs')
+  processEntry = join(bundleRoot, 'owned-process.mjs')
   await symlink(resolve(import.meta.dirname, '../../node_modules'), join(bundleRoot, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
   await build({ entryPoints: [resolve(import.meta.dirname, 'manager-entry.ts')], outfile: managerEntry,
+    bundle: true, packages: 'external', format: 'esm', platform: 'node', target: 'node22', logLevel: 'silent' })
+  await build({ entryPoints: [resolve(import.meta.dirname, '../process/owned-process.ts')], outfile: processEntry,
     bundle: true, packages: 'external', format: 'esm', platform: 'node', target: 'node22', logLevel: 'silent' })
   await build({ entryPoints: [resolve(import.meta.dirname, 'owned-service-manager-session.ts')], outfile: sessionEntry,
     bundle: true, packages: 'external', format: 'esm', platform: 'node', target: 'node22', logLevel: 'silent' })
@@ -34,7 +39,10 @@ beforeAll(async () => {
 
 afterEach(async (context) => {
   if (context.task.result?.state === 'fail') {
-    for (const root of roots) console.error(await readFile(join(root, 'control', 'manager.log'), 'utf8').catch(() => ''))
+    for (const root of roots) {
+      console.error(await readFile(join(root, 'control', 'manager.log'), 'utf8').catch(() => ''))
+      console.error(await readFile(join(root, 'runtime-fixture.log'), 'utf8').catch(() => ''))
+    }
   }
   for (const child of parents.splice(0)) {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
@@ -192,15 +200,20 @@ describe('owned Service Manager real process lifecycle', () => {
     const { session, input } = await fixture()
     const fixturePath = join(bundleRoot, 'owner-fixture.mjs')
     await writeFile(fixturePath, `
-import { spawn } from 'node:child_process';
-import { createOwnedServiceManagerSession } from ${JSON.stringify(sessionEntry)};
+import { spawnOwnedProcess } from ${JSON.stringify(pathToFileURL(processEntry).href)};
+import { openSync, closeSync } from 'node:fs';
+import { join } from 'node:path';
+import { createOwnedServiceManagerSession } from ${JSON.stringify(pathToFileURL(sessionEntry).href)};
 const input = JSON.parse(process.env.KUN_LIFECYCLE_TEST_INPUT);
 const session = createOwnedServiceManagerSession({ ownerKind: 'gui' });
 const manager = await session.ensure(input);
-const runtime = spawn(process.execPath, ['-e', ${JSON.stringify(`
+const runtimeLog = openSync(join(input.dataDir, '..', 'runtime-fixture.log'), 'a');
+const runtime = await spawnOwnedProcess(process.execPath, ['-e', ${JSON.stringify(`
 const http = require('node:http');
 const manager = JSON.parse(process.env.KUN_LIFECYCLE_TEST_MANAGER);
 let closing = false;
+console.error('Runtime fixture started', process.pid);
+process.on('exit', (code) => console.error('Runtime fixture exit', code));
 const server = http.createServer((request, response) => {
   response.end('{}');
   if (request.url !== '/v1/runtime/shutdown') return;
@@ -209,17 +222,21 @@ const server = http.createServer((request, response) => {
 function close() {
   if (closing) return;
   closing = true;
+  console.error('Runtime fixture closing');
   setTimeout(async () => {
     const result = await fetch(manager.baseUrl + '/v1/documents/settings', {
       method: 'PUT', headers: { authorization: 'Bearer ' + manager.managerToken, 'content-type': 'application/json' },
       body: JSON.stringify({ expectedRevision: 0, value: JSON.stringify({ preserved: 'last-runtime-write' }) })
     });
+    console.error('Runtime final write response', result.status, await result.text());
     server.close(() => process.exit(result.ok ? 0 : 71));
   }, 200);
 }
 process.on('disconnect', close);
+process.on('SIGTERM', close);
 server.listen(0, '127.0.0.1', () => process.send({ port: server.address().port }));
-`)}], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], env: { ...process.env, KUN_LIFECYCLE_TEST_MANAGER: JSON.stringify(manager.discovery) } });
+`)}], { ownerLossGraceMs: 5_000, stdio: ['ignore', runtimeLog, runtimeLog, 'ipc'], env: { ...process.env, KUN_LIFECYCLE_TEST_MANAGER: JSON.stringify(manager.discovery) } });
+closeSync(runtimeLog);
 const ready = await new Promise((resolve, reject) => { runtime.once('message', resolve); runtime.once('error', reject); });
 const registration = { flavor: 'production', instanceId: 'test-runtime', pid: runtime.pid,
   startedAt: new Date().toISOString(), host: '127.0.0.1', port: ready.port,
@@ -237,10 +254,29 @@ setInterval(() => {}, 1000);
     })
     parents.push(parent)
     const records = await new Promise<{ manager: { pid: number; startedAt: string; baseUrl: string }; runtime: { pid: number; startedAt: string } }>((accept, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Owner fixture readiness timed out')), 8_000)
-      parent.once('message', (value) => { clearTimeout(timeout); accept(value as never) })
-      parent.once('error', reject)
-      parent.stderr?.on('data', (data) => { if (String(data).includes('Error:')) reject(new Error(String(data))) })
+      let stderr = ''
+      const onData = (data: Buffer) => { stderr = (stderr + String(data)).slice(-8_192) }
+      const cleanup = () => {
+        clearTimeout(timeout)
+        parent.removeListener('message', onMessage)
+        parent.removeListener('error', onError)
+        parent.removeListener('close', onClose)
+        parent.stderr?.removeListener('data', onData)
+      }
+      const onMessage = (value: unknown) => { cleanup(); accept(value as never) }
+      const onError = (error: Error) => { cleanup(); reject(error) }
+      const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+        cleanup()
+        reject(new Error(`Owner fixture exited before readiness (code=${code}, signal=${signal}): ${stderr}`))
+      }
+      const timeout = setTimeout(() => {
+        cleanup()
+        reject(new Error(`Owner fixture readiness timed out: ${stderr}`))
+      }, 8_000)
+      parent.once('message', onMessage)
+      parent.once('error', onError)
+      parent.once('close', onClose)
+      parent.stderr?.on('data', onData)
     })
     parent.kill('SIGKILL')
     const deadline = Date.now() + 5_000
