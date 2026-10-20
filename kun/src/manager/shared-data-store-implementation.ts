@@ -1,4 +1,5 @@
 import { writeThreadMetadata } from './thread-metadata-write.js'
+import { MemoryRelationCommand } from '../contracts/memory-relations.js'
 import { rewriteSessionHistory } from './session-history-rewrite.js'
 import { executeMemoryLifecycleOperation } from './memory-lifecycle-owner.js'
 import { AgentMemoryAccessSchema } from '../memory/agent-memory-scope.js'
@@ -210,6 +211,9 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     const store = this.memoryStore(body.config)
     const run = this.memoryQueue.catch(() => undefined).then(async () => {
       switch (operation) {
+        case 'relations':
+          if (!store.relations) throw new Error('Memory relations are unavailable')
+          return store.relations(MemoryRelationCommand.parse(body.value))
         case 'erasureReceipt':
         case 'history':
         case 'isForgotten': return executeMemoryLifecycleOperation(store, operation, body.value)

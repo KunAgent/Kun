@@ -193,6 +193,7 @@ export type ManagerArtifactStoreOperation =
   | 'stat'
 
 export type ManagerMemoryStoreOperation =
+  | 'relations'
   | 'erasureReceipt'
   | 'isForgotten'
   | 'history'

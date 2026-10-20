@@ -1,4 +1,5 @@
 import { referenceUnchangedItems } from './session-history-rewrite.js'
+import { MemoryRelationResult, type MemoryRelationCommand } from '../contracts/memory-relations.js'
 import { MemoryErasureIncompleteError } from '../memory/memory-erasure-error.js'
 import { MemoryLifecycleResult, MemoryHistoryResult, type MemoryLifecycleRequest } from '../contracts/memory-lifecycle.js'
 import { MemoryRevisionConflictError } from '../memory/memory-revisions.js'
@@ -458,6 +459,10 @@ export class ManagerRemoteArtifactStore implements ArtifactStore {
 
 export class ManagerRemoteMemoryStore implements MemoryStore {
   private lastInjectedIds: string[] = []
+
+  async relations(command: MemoryRelationCommand): Promise<MemoryRelationResult> {
+    return MemoryRelationResult.parse(await this.call('relations', command))
+  }
 
   constructor(
     private readonly manager: ServiceManagerConnection,

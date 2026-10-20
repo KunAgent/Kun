@@ -9,6 +9,8 @@ import type { PendingMemoryCandidate } from '../contracts/memory-distillation-ru
 import { commitMemoryDistillationCandidate } from './memory-distillation-apply.js'
 import { withMemoryMutation } from './memory-mutation-queue.js'
 import { readFile } from 'node:fs/promises'
+import type { MemoryRelationCommand, MemoryRelationResult } from '../contracts/memory-relations.js'
+import { executeMemoryRelationCommand, removeMemoryRelations } from './memory-relation-store.js'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
   MEMORY_DIRECTIVE_MAX_CONTENT_CHARS,
@@ -51,6 +53,7 @@ import {
 } from './memory-retrieval.js'
 
 export interface MemoryStore {
+  relations?(command: MemoryRelationCommand): Promise<MemoryRelationResult>
   erasureReceipt?(operationId: string): Promise<string[]>
   isForgotten?(input: MemoryCreateRequest, id?: string): Promise<boolean>
   history?(id: string, access?: MemoryAccess): Promise<MemoryHistoryResult>
@@ -99,10 +102,13 @@ export class FileMemoryStore implements MemoryStore {
   ) {}
 
   async erasureReceipt(operationId: string): Promise<string[]> {
-    const ledger = await readMemoryForgetting(this.options.rootDir)
-    const ids = ledger.barriers.filter((entry) => entry.erased && entry.operationId === operationId).map((entry) => entry.memoryId)
-    for (const id of ids) await purgeCanonicalMemoryRecord(this.options.rootDir, id)
-    return ids
+    return withMemoryMutation(this.options.rootDir, async () => {
+      const ledger = await readMemoryForgetting(this.options.rootDir)
+      const ids = ledger.barriers.filter((entry) => entry.erased && entry.operationId === operationId).map((entry) => entry.memoryId)
+      await removeMemoryRelations(this.options.rootDir, ids)
+      for (const id of ids) await purgeCanonicalMemoryRecord(this.options.rootDir, id)
+      return ids
+    })
   }
 
   async isForgotten(input: MemoryCreateRequest, id?: string): Promise<boolean> {
@@ -110,6 +116,13 @@ export class FileMemoryStore implements MemoryStore {
   }
 
   async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> { return this.mustGet(id, access) }
+
+  async relations(command: MemoryRelationCommand): Promise<MemoryRelationResult> {
+    return withMemoryMutation(this.options.rootDir, () => executeMemoryRelationCommand({
+      rootDir: this.options.rootDir, command, now: this.now(),
+      get: (id) => this.get(id), authorize: (id, access) => this.mustGet(id, access)
+    }))
+  }
 
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {
     return withMemoryMutation(this.options.rootDir, () => this.createRecord(
@@ -275,6 +288,7 @@ export class FileMemoryStore implements MemoryStore {
     })
     const affected = memoryDescendants((await readCanonicalMemoryDirectory(this.options.rootDir)).records, id)
     await recordMemoryForgetting(this.options.rootDir, affected, false, now)
+    await removeMemoryRelations(this.options.rootDir, affected.map((record) => record.id))
     const revised = reviseMemory(current, next, 'forget')
     for (const record of affected) {
       await this.write(record.id === id ? revised : reviseMemory(record,
@@ -305,6 +319,7 @@ export class FileMemoryStore implements MemoryStore {
         const ledger = await readMemoryForgetting(this.options.rootDir)
         const approved = new Set(ledger.barriers.filter((entry) => entry.erased && entry.operationId === operationId).map((entry) => entry.memoryId))
         if (!approved.has(id) || receipt.affectedIds.some((affectedId) => !approved.has(affectedId))) throw error
+        await removeMemoryRelations(this.options.rootDir, receipt.affectedIds)
         for (const affectedId of receipt.affectedIds) await purgeCanonicalMemoryRecord(this.options.rootDir, affectedId)
         return { erased: true, affectedIds: receipt.affectedIds }
       }
@@ -333,6 +348,7 @@ export class FileMemoryStore implements MemoryStore {
       }
       await prepareMemoryErasureOperation(this.options.rootDir, operationId, current, affected.map((record) => record.id), this.now())
       await recordMemoryForgetting(this.options.rootDir, affected, true, this.now(), operationId)
+      await removeMemoryRelations(this.options.rootDir, affected.map((record) => record.id))
       for (const record of affected) await purgeCanonicalMemoryRecord(this.options.rootDir, record.id)
       this.setLastInjected([])
       this.lastRetrieval = undefined
@@ -345,6 +361,7 @@ export class FileMemoryStore implements MemoryStore {
     await withMemoryMutation(this.options.rootDir, async () => {
       const record = await this.get(id)
       if (record && !agentMemoryVisible(record, access ?? {})) throw new MemoryNotFoundError()
+      await removeMemoryRelations(this.options.rootDir, [id])
       await purgeCanonicalMemoryRecord(this.options.rootDir, id)
     })
   }

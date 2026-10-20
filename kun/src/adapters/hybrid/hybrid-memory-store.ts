@@ -1,4 +1,5 @@
 import { MemoryErasureIncompleteError } from '../../memory/memory-erasure-error.js'
+import type { MemoryRelationCommand } from '../../contracts/memory-relations.js'
 import type { MemoryLifecycleRequest, MemoryLifecycleResult, MemoryHistoryResult } from '../../contracts/memory-lifecycle.js'
 import { applyMemoryForgetting, readMemoryForgetting } from '../../memory/memory-forgetting.js'
 import { resolveMemoryProjectAccess } from '../../memory/memory-project-identity.js'
@@ -100,6 +101,9 @@ export class HybridMemoryStore implements MemoryStore {
   }
 
   async ready(): Promise<void> { await this.readyPromise }
+  async relations(command: MemoryRelationCommand) {
+    return this.enqueueMutation(() => this.canonical.relations(command))
+  }
   async waitForBackfill(): Promise<void> { await this.ready(); await this.backfill?.wait() }
 
   async shutdown(): Promise<void> {
