@@ -162,7 +162,7 @@ export function GitBranchPicker({
   const launchModeLabel = useWorktreePool
     ? t('composerLaunchIsolatedWorktreeShort')
     : t('composerLaunchCurrentDirectoryShort')
-  const triggerLabel = `${middleEllipsize(label, BRANCH_TRIGGER_LABEL_MAX_LENGTH)} · ${launchModeLabel}`
+  const triggerBranchLabel = middleEllipsize(label, BRANCH_TRIGGER_LABEL_MAX_LENGTH)
   const launchSummary = useWorktreePool
     ? t('composerLaunchSummaryWorktree', { branch: label })
     : t('composerLaunchSummaryCurrentDirectory', { branch: label })
@@ -385,7 +385,7 @@ export function GitBranchPicker({
   if (!root) return null
 
   return (
-    <div ref={wrapRef} className="ds-git-branch-picker ds-no-drag relative min-w-0">
+    <div ref={wrapRef} className="ds-git-branch-picker ds-no-drag relative flex min-w-0">
       <button
         type="button"
         data-composer-launch-settings-trigger
@@ -400,7 +400,11 @@ export function GitBranchPicker({
         aria-label={t('composerLaunchTriggerLabel', { branch: label, mode: launchModeLabel })}
       >
         <GitBranch className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-        <span className="min-w-0 truncate">{triggerLabel}</span>
+        {/* The branch name gives way first so the launch mode stays readable. */}
+        <span className="flex min-w-0">
+          <span className="min-w-0 truncate">{triggerBranchLabel}</span>
+          <span className="max-w-full shrink-0 truncate pl-1">· {launchModeLabel}</span>
+        </span>
         {loading ? (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ds-faint" strokeWidth={2} />
         ) : (

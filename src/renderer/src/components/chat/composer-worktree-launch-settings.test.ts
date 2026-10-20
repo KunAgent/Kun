@@ -131,11 +131,9 @@ describe('composer worktree launch settings', () => {
         'data-composer-launch-settings-trigger': true
       })
       expect(trigger.props['data-composer-launch-mode']).toBe('worktree')
-      expect(
-        trigger.findAllByType('span').some(
-          (span) => span.children.join('') === 'codemaker/production · Isolated worktree'
-        )
-      ).toBe(true)
+      const spanTexts = trigger.findAllByType('span').map((span) => span.children.join(''))
+      expect(spanTexts).toContain('codemaker/production')
+      expect(spanTexts).toContain('· Isolated worktree')
 
       await act(async () => {
         trigger.props.onClick()
