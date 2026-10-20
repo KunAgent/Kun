@@ -10,11 +10,12 @@ These are directed suggestions, not verified facts. Shared keywords alone do not
 establish a relation. Review both records and their highlighted, exact evidence
 before choosing **Accept relation** or **Reject relation**.
 
-Accepting a relation records a review decision only. It does not:
+Accepting a relation records your review decision. By default it remains available
+only for browsing and preview. Acceptance does not:
 
 - edit either record or promote its authority;
 - replace or automatically invalidate a fact;
-- affect retrieval order, prompt injection, or model answers;
+- change retrieval order or retrieve extra memories;
 - create an embedding index or a knowledge graph.
 
 Use the existing Memory correction/lifecycle controls when a fact needs changing.
@@ -59,6 +60,11 @@ Review is idempotent. A different decision cannot overwrite a decided pair/versi
 Re-analyzing the same directed pair/version cannot replace a prior rejection with
 a new model label. A new record version may generate a new suggestion.
 
+Filter the browser by pending, accepted, rejected, or stale. **Withdraw acceptance**
+explicitly rejects a previously accepted relation, including a stale one. This stops
+future use without changing either record. The same pair/version remains rejected
+on re-analysis; withdrawal does not rewrite past chat context.
+
 Forgetting or permanently erasing an endpoint scrubs associated relation references,
 including affected derivative records and erasure retries. The existing canonical
 forgetting barriers still prevent replay. Unreadable records or ledgers fail closed;
@@ -78,23 +84,69 @@ fall back to writing the ledger itself.
 
 ## API
 
-Both endpoints require the existing runtime authentication and accept POST only:
+All endpoints require the existing runtime authentication and accept POST only:
 
-- `/v1/memory/relations`: `list` or `review`, with a strict workspace/project access
+- `/v1/memory/relations`: `list`, `review`, or `withdraw`, with a strict workspace/project access
   object. No caller-authored proposal, `all`, or agent-management privilege is accepted.
 - `/v1/memory/relations/analyze`: Memory ID, expected revision, and access. The
   configured model generates suggestions; there is no caller-supplied model or prompt.
+- `/v1/memory/context/preview`: query and workspace path. The server selects records;
+  callers cannot supply selected IDs, authority, or agent-management privileges.
+  Responses are `no-store` and exclude directives.
 
 Conflicting/stale review or analysis returns 409. Unavailable storage/model operations
 return a generic error without echoing record content or provider error payloads.
 Refreshing is safe; analysis retry is another explicit provider request.
 
-## Validation and future use
+## Preview and controlled automatic context
+
+In **Settings > Memory > Context preview**, enter a workspace path and query.
+Preview uses the same relevance-gated reference selection and relation assembly
+as chat, but does not call a model, record retrieval feedback, change last-injected
+diagnostics, or include long-term rules. It is a snapshot, not a guarantee about a
+later turn. Editing the inputs, canceling, or changing settings clears the snapshot.
+
+**Include reviewed relations in chat** is off by default. The GUI persists
+`memoryRelationContextEnabled`; the runtime capability is
+`capabilities.memory.relationContextEnabled`. Both require master Memory to be on.
+Turning it off takes effect on subsequent context assembly; it cannot remove
+information already sent in an in-flight turn or retained in conversation history.
+
+When enabled, native Kun, Agent SDK and Cursor SDK attach the same bounded annotations:
+
+- Both endpoints must already be selected by ordinary retrieval. No additional
+  recall, graph traversal, re-ranking, or summaries are performed.
+- Both must remain authorized, active, same-ownership reference records with
+  matching revisions/fingerprints. Private and directive records are excluded.
+- The accepted evidence spans must remain present in the selected text, including
+  when retrieval truncated a record.
+- Annotations contain relation kind, endpoint IDs/revisions, relation ID and review
+  time. They do not duplicate content or promote it to user/system authority.
+- At most six annotations and 1,600 characters fit inside the remaining 6,000-character
+  reference budget. Existing reference records are never evicted for annotations.
+- Projection reads the bounded ledger once and checks only the relevant selected
+  endpoints. It does not scan all canonical memories or write derived context.
+- Unavailable/old Manager, invalid ledger or a one-second projection deadline drops
+  only optional annotations. Ordinary reference context remains available. Rooms
+  retain their existing Memory-free boundary.
+
+A contradiction remains unresolved: the annotation explicitly says not to choose
+a winner or merge conflicting facts. Annotations are untrusted, user-reviewed
+metadata, not verified truth. They can still influence model answers; opt-in and
+bounded size do not prove semantic correctness or eliminate model mistakes.
+
+The chat's used-memory details retain the IDs/revisions actually injected, distinct
+from preview and from current records. A later edit or withdrawal does not rewrite
+this historical provenance.
+
+## Validation and limits
 
 Backend tests cover schema rejection, scope/lifecycle fences, idempotence, stale
 versions, forgetting/erasure, corrupt state, model output rejection, deadlines, and
 the Manager HTTP round-trip. UI tests cover explicit-only analysis and stale/error
-states. All supported locale resources include the new controls.
+states, preview cancellation, withdrawal and malformed history metadata. All seven
+locale resources include the new controls; new context copy is localized in English
+and Chinese, with English fallback text in the other five resources.
 
 For a repeatable component integration smoke:
 
@@ -115,7 +167,8 @@ route and FileMemoryStore with isolated synthetic data and a deterministic mock
 provider. It does **not** validate real model quality or the full packaged Electron
 preload/Manager path. Manager ownership has separate integration coverage.
 
-Using reviewed relations in a Working Context is separate future functionality.
-It requires evidence about relation precision and target correctness, lifecycle
-revalidation, provenance and context budgets. An accepted suggestion alone does
-not authorize automatic context injection or ranking changes.
+These checks establish plumbing and safety invariants, not measured improvements in
+real model answers or relation precision. The default remains off pending voluntary
+use and review. Acceptance alone does not enable the switch or authorize ranking
+changes. Embedding ranking, feedback ranking, Crystal/community detection and graph
+expansion are outside this feature.
