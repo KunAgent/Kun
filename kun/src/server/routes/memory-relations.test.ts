@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { MemoryRecord } from '../../contracts/memory.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import { MemoryRelationConflictError } from '../../memory/memory-relations.js'
 import { Router } from '../router.js'
@@ -49,5 +50,23 @@ describe('Memory relation HTTP boundary', () => {
     const failure = await memoryRelations(runtime, request(value), false)
     expect(failure.status).toBe(503)
     expect(failure.body).not.toContain('private-content')
+  })
+
+  it('admits only one analysis per runtime and releases the slot after completion', async () => {
+    const record = MemoryRecord.parse({ id: 'mem_a', content: 'A recorded fact.', scope: 'user',
+      createdAt: '2026-10-20T00:00:00Z', updatedAt: '2026-10-20T00:00:00Z' })
+    let release!: (value: MemoryRecord) => void
+    const pending = new Promise<MemoryRecord>((resolve) => { release = resolve })
+    const getById = vi.fn().mockReturnValueOnce(pending).mockResolvedValue(record)
+    const runtime = { memoryStore: {
+      relations: vi.fn(), getById, list: vi.fn(async () => [])
+    }, defaultModel: 'fixture', modelClient: {} } as unknown as ServerRuntime
+    const value = { memoryId: record.id, expectedRevision: 1, access: {} }
+    const first = memoryRelations(runtime, request(value), true)
+    await vi.waitFor(() => expect(getById).toHaveBeenCalledOnce())
+    expect((await memoryRelations(runtime, request(value), true)).status).toBe(409)
+    release(record)
+    expect((await first).status).toBe(200)
+    expect((await memoryRelations(runtime, request(value), true)).status).toBe(200)
   })
 })
