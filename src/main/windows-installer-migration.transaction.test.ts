@@ -424,10 +424,14 @@ windowsOnly('Windows automatic update transaction', () => {
     assertSucceeded(run(input, 'Prepare'), 'Prepare long-path backup')
     expect(readFileSync(join(input.backup, relative))).toEqual(bytes)
     payload(input.stage, 'Kun.exe')
+    // The rejected candidate is parked under the longer .kun-failed root and must still be removable.
+    mkdirSync(dirname(join(input.stage, relative)), { recursive: true })
+    writeFileSync(join(input.stage, relative), 'candidate')
     assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
     // Remove the renamed original so success requires copying from BackupRoot.
     rmSync(join(`${input.source}.kun-old-${process.pid}`, relative))
     assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction long paths')
+    expect(existsSync(`${input.target}.kun-failed`)).toBe(false)
     expect(readFileSync(oldFile)).toEqual(bytes)
     expect(transaction(input.transaction)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
     assertSucceeded(run(input, 'FinalizeUpdateTransaction'), 'FinalizeUpdateTransaction long paths')

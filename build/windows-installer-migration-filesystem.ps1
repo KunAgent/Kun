@@ -493,6 +493,14 @@ function Restore-InPlacePayloadBackup {
   Set-InPlacePayloadBackupEnvironment $backup
 }
 
+# Stage, failed, old and backup trees hold a full payload under a longer root
+# than the install directory, beyond PowerShell 5.1 recursive removal limits.
+function Remove-PayloadTreeIfPresent([string]$PathValue) {
+  if ([string]::IsNullOrWhiteSpace($PathValue) -or -not (Test-Path -LiteralPath $PathValue)) { return }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  Remove-RecoveryPayloadTree $PathValue
+}
+
 function Resolve-RecoveryPayloadExecutable {
   $transactionPath = Get-EnvironmentValue 'KUN_INSTALLER_TRANSACTION'
   if (-not [string]::IsNullOrWhiteSpace($transactionPath) -and
