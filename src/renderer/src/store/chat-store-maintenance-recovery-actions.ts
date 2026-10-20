@@ -440,10 +440,14 @@ export function createMaintenanceRecoveryActions(
         attachment.id.trim().length > 0
       )
       const composerContexts = targetBlock.meta?.composerContexts ?? []
+      // The editor passes the file mentions still present in the edited text;
+      // without it the original message's references carry over unchanged.
+      const fileReferences = options?.fileReferences ?? targetBlock.meta?.fileReferences ?? []
       const attachmentOverrides = {
         ...(attachmentIds.length ? { attachmentIds } : {}),
         ...(attachments.length ? { attachments } : {}),
-        ...(composerContexts.length ? { composerContexts } : {})
+        ...(composerContexts.length ? { composerContexts } : {}),
+        ...(fileReferences.length ? { fileReferences } : {})
       }
 
       const droppedUserIds = state.blocks
@@ -499,7 +503,7 @@ export function createMaintenanceRecoveryActions(
           ...(canvasResend.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
           ...attachmentOverrides
         })
-      } else if (attachmentIds.length > 0 || composerContexts.length > 0) {
+      } else if (attachmentIds.length > 0 || composerContexts.length > 0 || fileReferences.length > 0) {
         await get().sendMessage(trimmed, undefined, attachmentOverrides)
       } else {
         await get().sendMessage(trimmed)

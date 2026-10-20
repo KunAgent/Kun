@@ -14,6 +14,7 @@ import type {
   ThreadUsageSnapshot,
   KnowledgeBaseIndexStatus,
   KnowledgeBaseMount,
+  UserFileReference,
   UserInputAnswer
 } from '../agent/types'
 import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
@@ -592,7 +593,11 @@ export type ChatState = {
    * changes of that turn and every later one when all of them are safe to
    * restore; otherwise only the conversation is reset.
    */
-  rewindAndResend: (userBlockId: string, newText: string, options?: { resetFiles?: boolean }) => Promise<void>
+  rewindAndResend: (
+    userBlockId: string,
+    newText: string,
+    options?: { resetFiles?: boolean; fileReferences?: UserFileReference[] }
+  ) => Promise<void>
   rollbackWorkspaceToCheckpoint: (checkpointId: string) => Promise<void>
   interrupt: (options?: { discard?: boolean }) => Promise<void>
   cancelToolCall: (threadId: string, turnId: string, callId: string) => Promise<boolean>

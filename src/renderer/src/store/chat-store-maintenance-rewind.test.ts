@@ -463,6 +463,35 @@ describe('chat-store-maintenance-actions rewind and resend', () => {
     })
   })
 
+  it('carries file mentions through an edited resend', async () => {
+    const prepareCodeCanvasResend = vi.fn(async () => null)
+    const original = { path: '/repo/src/a.ts', relativePath: 'src/a.ts', name: 'a.ts', kind: 'file' as const }
+    const added = { path: '/repo/docs', relativePath: 'docs', name: 'docs', kind: 'directory' as const }
+    const resend = async (options?: { fileReferences?: Array<typeof original | typeof added> }) => {
+      const { actions, sendMessage, state } = buildHarness({ maintenanceDependencies: { prepareCodeCanvasResend } })
+      Object.assign(state, {
+        route: 'chat',
+        busy: false,
+        blocks: [{ kind: 'user', id: 'user_1', text: 'Check @src/a.ts', meta: { turnId: 'turn_1', fileReferences: [original] } }],
+        queuedMessages: [],
+        turnStartedAtByUserId: {},
+        turnDurationByUserId: {},
+        turnReasoningFirstAtByUserId: {},
+        turnReasoningLastAtByUserId: {}
+      })
+      await actions.rewindAndResend('user_1', 'Check @src/a.ts and @docs/', options)
+      return sendMessage
+    }
+
+    expect(await resend()).toHaveBeenCalledWith('Check @src/a.ts and @docs/', undefined, {
+      fileReferences: [original]
+    })
+    expect(await resend({ fileReferences: [original, added] })).toHaveBeenCalledWith(
+      'Check @src/a.ts and @docs/', undefined, { fileReferences: [original, added] }
+    )
+    expect(await resend({ fileReferences: [] })).toHaveBeenCalledWith('Check @src/a.ts and @docs/')
+  })
+
   const AGENT_SHA = 'a'.repeat(64)
   const checkpointedBlocks = (): ChatBlock[] => [
     {

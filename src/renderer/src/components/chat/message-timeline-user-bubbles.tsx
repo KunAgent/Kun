@@ -18,6 +18,8 @@ import { CopyFeedbackButton, RuntimeMetaChips } from './message-timeline-bubble-
 import { metaUserFileReferences } from './message-timeline-bubble-meta'
 import { useTimelineSurface } from './timeline-surface'
 import { RewindFileResetChoice } from './rewind-file-reset-choice'
+import { editedFileReferences, userToComposerFileReferences, UserMessageEditField } from './UserMessageEditField'
+import type { ComposerFileReference } from '../../lib/composer-file-references'
 
 export function BackgroundShellNoticeBubble({
   block,
@@ -341,6 +343,7 @@ export function UserMessageBubble({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(block.text)
   const [resetFiles, setResetFiles] = useState(false)
+  const [editReferences, setEditReferences] = useState<ComposerFileReference[]>([])
   const [writeMetaOpen, setWriteMetaOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const parsedWritePrompt = useMemo(() => {
@@ -388,6 +391,7 @@ export function UserMessageBubble({
   const startEdit = (): void => {
     if (busy || !canEdit) return
     setDraft(displayText)
+    setEditReferences(userToComposerFileReferences(metaUserFileReferences(block.meta)))
     setEditing(true)
   }
 
@@ -400,7 +404,10 @@ export function UserMessageBubble({
     const trimmed = draft.trim()
     if (!trimmed || busy) return
     setEditing(false)
-    await rewindAndResend(block.id, trimmed, { resetFiles })
+    await rewindAndResend(block.id, trimmed, {
+      resetFiles,
+      fileReferences: editedFileReferences(trimmed, editReferences)
+    })
   }
 
   if (editing) {
@@ -408,26 +415,14 @@ export function UserMessageBubble({
       <div className="ds-user-message">
         <UserAttachmentPreviews meta={block.meta} />
         <div className="ds-user-message-bubble min-w-0 border border-accent/35 ring-1 ring-accent/15">
-          <textarea
-            ref={textareaRef}
+          <UserMessageEditField
             value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              const el = e.currentTarget
-              el.style.height = 'auto'
-              el.style.height = `${Math.min(el.scrollHeight, 360)}px`
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                cancelEdit()
-              } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault()
-                void submit()
-              }
-            }}
-            rows={2}
-            className="block w-full min-w-0 resize-none break-words bg-transparent text-[15px] font-medium leading-[1.58] text-ds-ink outline-none [overflow-wrap:anywhere]"
+            onChange={setDraft}
+            references={editReferences}
+            onReferencesChange={setEditReferences}
+            textareaRef={textareaRef}
+            onSubmit={() => void submit()}
+            onCancel={cancelEdit}
           />
           <div className="mt-2 flex items-center justify-between gap-3">
             <span className="text-[12px] text-ds-faint">{t('rewindHint')}</span>
