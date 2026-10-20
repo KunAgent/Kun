@@ -260,7 +260,8 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       .toBe('Avg 38.5 tok/s')
   })
 
-  it('renders the workspace rollback action with fork in completed assistant response actions', () => {
+  it('offers per-turn undo from the response actions when the turn has no file card', () => {
+    vi.stubGlobal('window', { kunGui: { preflightTurnUndo: vi.fn(), getTurnUndoStatus: vi.fn() } })
     const blocks: ChatBlock[] = [
       {
         kind: 'user',
@@ -277,26 +278,64 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       }
     ]
 
-    const html = renderToStaticMarkup(
-      createElement(MessageTimeline, {
-        blocks,
-        liveReasoning: '',
-        live: '',
-        activeThreadId: 'thr_1',
-        runtimeConnection: 'ready',
-        onRetryConnection: () => undefined,
-        onOpenSettings: () => undefined
-      })
-    )
+    try {
+      const html = renderToStaticMarkup(
+        createElement(MessageTimeline, {
+          blocks,
+          liveReasoning: '',
+          live: '',
+          activeThreadId: 'thr_1',
+          runtimeConnection: 'ready',
+          onRetryConnection: () => undefined,
+          onOpenSettings: () => undefined
+        })
+      )
 
-    expect(html).toMatch(/rollbackWorkspace|Rollback commit|回滚提交/)
-    expect(html).toMatch(/rollbackWorkspaceFromAssistantResponse|Rollback this response&#x27;s Git commit|只回滚这条回答对应的 Git 提交/)
-    const rollbackIndex = html.search(/rollbackWorkspaceFromAssistantResponse|Rollback this response&#x27;s Git commit|只回滚这条回答对应的 Git 提交/)
-    const forkIndex = html.slice(rollbackIndex).search(/forkFromAssistantResponse|Fork a new thread from this response|从这条回答分叉新会话/)
-    const copyIndex = html.slice(rollbackIndex + Math.max(forkIndex, 0)).search(/copyMessage|Copy message|复制消息/)
-    expect(rollbackIndex).toBeGreaterThanOrEqual(0)
-    expect(forkIndex).toBeGreaterThan(0)
-    expect(copyIndex).toBeGreaterThan(0)
+      expect(html).toMatch(/turnUndoMessageAction|Undo file changes|撤销文件改动/)
+      const rollbackIndex = html.search(/turnUndoMessageActionTitle|Undo this response&#x27;s file changes|撤销这条回答对文件的改动/)
+      const forkIndex = html.slice(rollbackIndex).search(/forkFromAssistantResponse|Fork a new thread from this response|从这条回答分叉新会话/)
+      const copyIndex = html.slice(rollbackIndex + Math.max(forkIndex, 0)).search(/copyMessage|Copy message|复制消息/)
+      expect(rollbackIndex).toBeGreaterThanOrEqual(0)
+      expect(forkIndex).toBeGreaterThan(0)
+      expect(copyIndex).toBeGreaterThan(0)
+      expect(html).not.toMatch(/Rollback commit|回滚提交/)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('moves per-turn undo onto the file card when the turn edited files', () => {
+    vi.stubGlobal('window', { kunGui: { preflightTurnUndo: vi.fn(), getTurnUndoStatus: vi.fn() } })
+    const blocks: ChatBlock[] = [
+      { kind: 'user', id: 'user_1', turnId: 'turn_1', text: 'change alpha', meta: { workspaceCheckpointId: 'gcp_1' } },
+      {
+        kind: 'tool',
+        id: 'tool_1',
+        summary: 'edit alpha',
+        status: 'success',
+        toolKind: 'file_change',
+        filePath: '/tmp/project/src/alpha.ts',
+        detail: ['--- a/src/alpha.ts', '+++ b/src/alpha.ts', '@@ -1 +1 @@', '-old', '+new'].join('\n')
+      },
+      { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'alpha done' }
+    ]
+    try {
+      const html = renderToStaticMarkup(
+        createElement(MessageTimeline, {
+          blocks,
+          liveReasoning: '',
+          live: '',
+          activeThreadId: 'thr_1',
+          runtimeConnection: 'ready',
+          onRetryConnection: () => undefined,
+          onOpenSettings: () => undefined
+        })
+      )
+      expect(html).toContain('data-turn-undo-action="undo"')
+      expect(html).not.toContain('data-assistant-action="rollback"')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('renders each file-change summary after the turn that produced it', () => {

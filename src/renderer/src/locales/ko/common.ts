@@ -39,6 +39,7 @@ import appSurfaces from './common/app-surfaces.json'
 import designAgent from './common/design-agent.json'
 import artifactsLibrary from './common/artifacts-library.json'
 import workspaceFiles from './common/workspace-files.json'
+import turnUndo from './common/turn-undo.json'
 
 const common = {
   ...agentUpdates,
@@ -81,6 +82,7 @@ const common = {
   ...designAgent,
   ...artifactsLibrary,
   ...workspaceFiles,
+  ...turnUndo,
 }
 
 export default common

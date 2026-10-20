@@ -356,6 +356,10 @@
     },
     createGitCheckpoint: invokePayload('git:checkpoint:create'),
     restoreGitCheckpoint: invokePayload('git:checkpoint:restore'),
+    preflightTurnUndo: invokePayload('git:turn-undo:preflight'),
+    undoTurnFiles: invokePayload('git:turn-undo:undo'),
+    reapplyTurnFiles: invokePayload('git:turn-undo:reapply'),
+    getTurnUndoStatus: invokePayload('git:turn-undo:status'),
     checkoutGitBranchWorktree: function (workspaceRoot, branch) {
       return invoke('git:checkout-branch-worktree', [{ workspaceRoot: workspaceRoot, branch: branch }])
     },
