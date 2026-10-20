@@ -27,7 +27,7 @@ it('round-trips relation review through the Manager owner and scrubs erased endp
     managerToken: 'test-token', serviceVersion: '0.4.1', dataDir, settingsPath: join(root, 'settings.json')
   } }
   try {
-    const config = MemoryCapabilityConfig.parse({ enabled: true })
+    const config = MemoryCapabilityConfig.parse({ enabled: true, relationContextEnabled: true })
     const first = new ManagerRemoteMemoryStore(connection, config)
     const second = new ManagerRemoteMemoryStore(connection, config)
     const source = await first.create({ content: 'Database version 17.', scope: 'user' })
@@ -39,9 +39,19 @@ it('round-trips relation review through the Manager owner and scrubs erased endp
     const id = proposed.relations[0].suggestion.id
     await second.relations({ action: 'review', id, decision: 'accepted', access: {} })
     expect((await first.relations({ action: 'list', memoryId: source.id, access: {} })).relations[0].suggestion.status).toBe('accepted')
+    const projection = {
+      selected: [source, target].map(({ id, revision, content }) => ({ id, revision, content })),
+      access: {}, remainingCharacters: 1600, purpose: 'injection' as const
+    }
+    expect((await second.relationContext(projection)).annotations).toHaveLength(1)
+    const disabled = new ManagerRemoteMemoryStore(connection, MemoryCapabilityConfig.parse({ enabled: true }))
+    expect((await disabled.relationContext(projection)).state).toBe('disabled')
+    expect((await disabled.relationContext({ ...projection, purpose: 'preview' })).automaticEnabled).toBe(false)
+    expect((await second.relationContext(projection)).automaticEnabled).toBe(true)
     await first.lifecycle(target.id, { action: 'erase', expectedRevision: target.revision,
       confirmation: { memoryId: target.id, irreversible: true } })
     expect((await second.relations({ action: 'list', memoryId: source.id, access: {} })).relations).toEqual([])
+    expect((await second.relationContext(projection)).annotations).toEqual([])
   } finally {
     await server.close()
     await owner.close()

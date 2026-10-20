@@ -53,6 +53,11 @@ export const MemoryRelationCommand = z.discriminatedUnion('action', [
     id: MemoryRelationSuggestion.shape.id,
     decision: z.enum(['accepted', 'rejected']),
     access: MemoryRelationAccess
+  }).strict(),
+  z.object({
+    action: z.literal('withdraw'),
+    id: MemoryRelationSuggestion.shape.id,
+    access: MemoryRelationAccess
   }).strict()
 ])
 export type MemoryRelationCommand = z.infer<typeof MemoryRelationCommand>

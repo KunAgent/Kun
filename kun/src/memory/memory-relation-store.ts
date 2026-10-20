@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { MEMORY_RELATION_MAX_RECORD_CHARS, MemoryRelationCommand, MemoryRelationSuggestion, type MemoryRelationResult } from '../contracts/memory-relations.js'
 import type { MemoryRecord } from '../contracts/memory.js'
+import { MemoryRelationContextRequest, emptyMemoryRelationContext, type MemoryRelationAnnotation } from '../contracts/memory-working-context.js'
+import { assembleMemoryRelationContext } from './memory-working-context.js'
 import type { MemoryAccess } from './memory-store.js'
 import { memoryRecordPath } from './memory-canonical-files.js'
 import { normalizeMemoryRecord } from './memory-record-normalizer.js'
@@ -78,6 +80,17 @@ export async function executeMemoryRelationCommand(options: {
     }
     return { relations }
   }
+  if (command.action === 'withdraw') {
+    const entry = ledger.suggestions.find((item) => item.id === command.id)
+    if (!entry || entry.status === 'pending') throw new MemoryRelationConflictError()
+    const result = await view(entry)
+    if (entry.status === 'accepted') {
+      entry.status = 'rejected'
+      entry.decidedAt = now
+      await writeLedger(rootDir, ledger)
+    }
+    return { relations: [result] }
+  }
   if (command.action === 'review') {
     const entry = ledger.suggestions.find((item) => item.id === command.id)
     if (!entry) throw new MemoryRelationConflictError()
@@ -111,6 +124,51 @@ export async function executeMemoryRelationCommand(options: {
   if (ledger.suggestions.length > MAX_RELATIONS) throw new Error('Memory relation storage is full')
   if (command.proposals.length) await writeLedger(rootDir, ledger)
   return { relations }
+}
+
+/** Read once, authorize selected endpoints only; no cleanup or content persistence. */
+export async function projectMemoryRelations(options: {
+  rootDir: string
+  request: MemoryRelationContextRequest
+  authorize: (id: string, access: MemoryAccess) => Promise<MemoryRecord>
+  now: string
+  enabled: boolean
+  memoryEnabled: boolean
+}) {
+  const request = MemoryRelationContextRequest.parse(options.request)
+  const automaticEnabled = options.memoryEnabled && options.enabled
+  if (!options.memoryEnabled || (request.purpose === 'injection' && !automaticEnabled)) {
+    return emptyMemoryRelationContext('disabled', automaticEnabled)
+  }
+  const selected = new Map(request.selected.map((record) => [record.id, record]))
+  if (selected.size < 2) return emptyMemoryRelationContext('ready', automaticEnabled)
+  const ledger = await readLedger(options.rootDir)
+  const eligible = ledger.suggestions.filter((entry) => entry.status === 'accepted' &&
+    selected.has(entry.proposal.source.id) && selected.has(entry.proposal.target.id))
+  const current = new Map<string, MemoryRecord>()
+  for (const id of new Set(eligible.flatMap((entry) => [entry.proposal.source.id, entry.proposal.target.id]))) {
+    try {
+      const record = await options.authorize(id, request.access)
+      const snapshot = selected.get(id)!
+      if (relationRecordEligible(record, Date.parse(options.now)) &&
+          record.revision === snapshot.revision && record.content.startsWith(snapshot.content)) current.set(id, record)
+    } catch { /* Missing, unreadable or hidden canonical records never become evidence. */ }
+  }
+  const annotations: MemoryRelationAnnotation[] = []
+  for (const entry of eligible) {
+    const { source: from, target: to, sourceEvidence, targetEvidence, kind } = entry.proposal
+    const source = current.get(from.id)
+    const target = current.get(to.id)
+    if (!source || !target || !entry.decidedAt || !sameRelationScope(source, target) ||
+        !relationBindingMatches(source, from) || !relationBindingMatches(target, to) ||
+        !relationEvidenceValid(selected.get(from.id)!, sourceEvidence) ||
+        !relationEvidenceValid(selected.get(to.id)!, targetEvidence)) continue
+    annotations.push({
+      id: entry.id, kind, source: { id: from.id, revision: from.revision },
+      target: { id: to.id, revision: to.revision }, reviewedAt: entry.decidedAt
+    })
+  }
+  return assembleMemoryRelationContext(annotations, request.remainingCharacters, automaticEnabled)
 }
 
 function endpoint(record: MemoryRecord, stale: boolean) {

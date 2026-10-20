@@ -1,5 +1,6 @@
 import { MemoryErasureIncompleteError } from '../../memory/memory-erasure-error.js'
 import type { MemoryRelationCommand } from '../../contracts/memory-relations.js'
+import type { MemoryRelationContextRequest } from '../../contracts/memory-working-context.js'
 import type { MemoryLifecycleRequest, MemoryLifecycleResult, MemoryHistoryResult } from '../../contracts/memory-lifecycle.js'
 import { applyMemoryForgetting, readMemoryForgetting } from '../../memory/memory-forgetting.js'
 import { resolveMemoryProjectAccess } from '../../memory/memory-project-identity.js'
@@ -103,6 +104,9 @@ export class HybridMemoryStore implements MemoryStore {
   async ready(): Promise<void> { await this.readyPromise }
   async relations(command: MemoryRelationCommand) {
     return this.enqueueMutation(() => this.canonical.relations(command))
+  }
+  async relationContext(request: MemoryRelationContextRequest, policy = this.config()) {
+    return this.enqueueMutation(() => this.canonical.relationContext(request, policy))
   }
   async waitForBackfill(): Promise<void> { await this.ready(); await this.backfill?.wait() }
 
@@ -328,7 +332,7 @@ export class HybridMemoryStore implements MemoryStore {
           channels: candidates.channels,
           preFiltered: candidates.filtered
         })
-        if (request.purpose !== 'tool') {
+        if (!request.purpose || request.purpose === 'injection') {
           this.lastRetrieval = result.trace
           this.lastInjectedIds = [...result.trace.selectedIds]
         }
@@ -339,9 +343,11 @@ export class HybridMemoryStore implements MemoryStore {
       }
     }
     const records = await this.canonical.retrieve({ ...request, policy })
-    const diagnostics = await this.canonical.diagnostics(policy)
-    this.lastRetrieval = diagnostics.lastRetrieval
-    this.lastInjectedIds = [...(diagnostics.lastInjectedIds ?? [])]
+    if (!request.purpose || request.purpose === 'injection') {
+      const diagnostics = await this.canonical.diagnostics(policy)
+      this.lastRetrieval = diagnostics.lastRetrieval
+      this.lastInjectedIds = [...(diagnostics.lastInjectedIds ?? [])]
+    }
     this.reconcileStaleIndex()
     return records
   }

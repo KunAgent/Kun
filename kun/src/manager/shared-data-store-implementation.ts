@@ -1,5 +1,6 @@
 import { writeThreadMetadata } from './thread-metadata-write.js'
 import { MemoryRelationCommand } from '../contracts/memory-relations.js'
+import { MemoryRelationContextRequest } from '../contracts/memory-working-context.js'
 import { rewriteSessionHistory } from './session-history-rewrite.js'
 import { executeMemoryLifecycleOperation } from './memory-lifecycle-owner.js'
 import { AgentMemoryAccessSchema } from '../memory/agent-memory-scope.js'
@@ -211,6 +212,9 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     const store = this.memoryStore(body.config)
     const run = this.memoryQueue.catch(() => undefined).then(async () => {
       switch (operation) {
+        case 'relationContext':
+          if (!store.relationContext) throw new Error('Memory relation context is unavailable')
+          return store.relationContext(MemoryRelationContextRequest.parse(body.value), body.config)
         case 'relations':
           if (!store.relations) throw new Error('Memory relations are unavailable')
           return store.relations(MemoryRelationCommand.parse(body.value))
@@ -295,7 +299,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             project: z.string().optional(), projectIdentity: z.string().optional(),
             limit: z.number().int().positive(),
             promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional(),
-            purpose: z.enum(['injection', 'tool']).optional(),
+            purpose: z.enum(['injection', 'tool', 'preview']).optional(),
             filter: z.object({
               scope: MemoryScope.optional(),
               type: MemoryType.optional(),

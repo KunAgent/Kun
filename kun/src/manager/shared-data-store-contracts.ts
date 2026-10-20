@@ -208,6 +208,7 @@ export type ManagerMemoryStoreOperation =
   | 'purge'
   | 'list'
   | 'listDirectives'
+  | 'relationContext'
   | 'retrieve'
   | 'diagnostics'
   | 'feedbackReady'

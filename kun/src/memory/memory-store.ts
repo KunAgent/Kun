@@ -10,7 +10,8 @@ import { commitMemoryDistillationCandidate } from './memory-distillation-apply.j
 import { withMemoryMutation } from './memory-mutation-queue.js'
 import { readFile } from 'node:fs/promises'
 import type { MemoryRelationCommand, MemoryRelationResult } from '../contracts/memory-relations.js'
-import { executeMemoryRelationCommand, removeMemoryRelations } from './memory-relation-store.js'
+import { executeMemoryRelationCommand, projectMemoryRelations, removeMemoryRelations } from './memory-relation-store.js'
+import type { MemoryRelationContextRequest, MemoryRelationContextResult } from '../contracts/memory-working-context.js'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
   MEMORY_DIRECTIVE_MAX_CONTENT_CHARS,
@@ -53,6 +54,7 @@ import {
 } from './memory-retrieval.js'
 
 export interface MemoryStore {
+  relationContext?(request: MemoryRelationContextRequest, policy?: MemoryCapabilityConfig): Promise<MemoryRelationContextResult>
   relations?(command: MemoryRelationCommand): Promise<MemoryRelationResult>
   erasureReceipt?(operationId: string): Promise<string[]>
   isForgotten?(input: MemoryCreateRequest, id?: string): Promise<boolean>
@@ -120,6 +122,14 @@ export class FileMemoryStore implements MemoryStore {
   async relations(command: MemoryRelationCommand): Promise<MemoryRelationResult> {
     return withMemoryMutation(this.options.rootDir, () => executeMemoryRelationCommand({
       rootDir: this.options.rootDir, command, now: this.now(),
+      authorize: (id, access) => this.mustGet(id, access)
+    }))
+  }
+
+  async relationContext(request: MemoryRelationContextRequest, policy = this.config()): Promise<MemoryRelationContextResult> {
+    return withMemoryMutation(this.options.rootDir, () => projectMemoryRelations({
+      rootDir: this.options.rootDir, request, now: this.now(),
+      enabled: policy.relationContextEnabled === true, memoryEnabled: policy.enabled,
       authorize: (id, access) => this.mustGet(id, access)
     }))
   }
@@ -421,7 +431,7 @@ export class FileMemoryStore implements MemoryStore {
       nowIso: this.now(),
       minConfidence: this.options.minConfidence
     })
-    if (input.purpose !== 'tool') {
+    if (!input.purpose || input.purpose === 'injection') {
       this.lastRetrieval = result.trace
       this.lastInjectedIds = [...result.trace.selectedIds]
     }
