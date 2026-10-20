@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { MemoryRecord } from '../contracts/memory.js'
-import type { MemoryRelationBinding, MemoryRelationProposal } from '../contracts/memory-relations.js'
+import { MEMORY_RELATION_MAX_RECORD_CHARS, type MemoryRelationBinding, type MemoryRelationProposal } from '../contracts/memory-relations.js'
 import { canonicalMemoryHash } from './memory-record-normalizer.js'
 import { memoryLifecycleState, normalizeMemoryScopePath } from './memory-ranking.js'
 import { MemoryRevisionConflictError } from './memory-revisions.js'
@@ -20,6 +20,7 @@ export function relationBindingMatches(record: MemoryRecord, binding: MemoryRela
 
 export function relationRecordEligible(record: MemoryRecord, nowMs: number): boolean {
   return !record.agentContext && record.authority === 'reference' &&
+    record.content.length <= MEMORY_RELATION_MAX_RECORD_CHARS &&
     memoryLifecycleState(record, nowMs) === 'active'
 }
 
@@ -45,6 +46,6 @@ export function relationId(proposal: MemoryRelationProposal): string {
   ])).digest('hex')
 }
 
-export function relationEvidenceValid(record: MemoryRecord, span: { start: number; end: number }): boolean {
+export function relationEvidenceValid(record: Pick<MemoryRecord, 'content'>, span: { start: number; end: number }): boolean {
   return span.end <= record.content.length && record.content.slice(span.start, span.end).trim().length > 0
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { MemoryRecord } from './memory.js'
+import { MemoryConsolidation, MemoryRevisionSnapshot, MemoryScope } from './memory.js'
 
+export const MEMORY_RELATION_MAX_RECORD_CHARS = 2000
 const MemoryId = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,127}$/u)
 export const MemoryRelationKind = z.enum(['confirms', 'contradicts', 'extends'])
 export const MemoryRelationBinding = z.object({
@@ -56,11 +57,16 @@ export const MemoryRelationCommand = z.discriminatedUnion('action', [
 ])
 export type MemoryRelationCommand = z.infer<typeof MemoryRelationCommand>
 
+const MemoryRelationEndpoint = z.object({
+  id: MemoryId, revision: z.number().int().positive(), scope: MemoryScope,
+  content: z.string().max(MEMORY_RELATION_MAX_RECORD_CHARS),
+  sources: MemoryRevisionSnapshot.shape.sources, consolidation: MemoryConsolidation.optional()
+}).strict()
 export const MemoryRelationView = z.object({
   suggestion: MemoryRelationSuggestion,
   stale: z.boolean(),
-  source: MemoryRecord,
-  target: MemoryRecord
+  source: MemoryRelationEndpoint,
+  target: MemoryRelationEndpoint
 }).strict()
 export const MemoryRelationResult = z.object({ relations: z.array(MemoryRelationView).max(200) }).strict()
 export type MemoryRelationResult = z.infer<typeof MemoryRelationResult>

@@ -51,6 +51,7 @@ const doctorFiles = [
   'src/memory/memory-lexical-abstention-hybrid.test.ts',
   'src/memory/memory-project-identity.test.ts',
   'src/manager/agent-memory-roundtrip.test.ts',
+  'src/manager/memory-relations-manager.test.ts',
   'src/server/memory-managed-runtime.integration.test.ts'
 ]
 

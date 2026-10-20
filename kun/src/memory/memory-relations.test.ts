@@ -127,4 +127,14 @@ describe('Memory relation storage', () => {
     await expect(f.propose()).rejects.toThrow('Memory relation storage is unavailable')
     expect(await readFile(path, 'utf8')).toBe('{invalid-private-payload')
   })
+
+  it('preserves decisions if an endpoint cannot be parsed instead of treating it as deleted', async () => {
+    const f = await fixture()
+    await f.propose()
+    const path = join(f.rootDir, 'relations/suggestions.json')
+    const before = await readFile(path, 'utf8')
+    await writeFile(join(f.rootDir, f.target.id + '.json'), '{invalid-endpoint')
+    await expect(f.store.relations({ action: 'list', memoryId: f.source.id, access: {} })).rejects.toThrow(/endpoint is unavailable/)
+    expect(await readFile(path, 'utf8')).toBe(before)
+  })
 })

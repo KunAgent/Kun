@@ -120,7 +120,7 @@ export class FileMemoryStore implements MemoryStore {
   async relations(command: MemoryRelationCommand): Promise<MemoryRelationResult> {
     return withMemoryMutation(this.options.rootDir, () => executeMemoryRelationCommand({
       rootDir: this.options.rootDir, command, now: this.now(),
-      get: (id) => this.get(id), authorize: (id, access) => this.mustGet(id, access)
+      authorize: (id, access) => this.mustGet(id, access)
     }))
   }
 

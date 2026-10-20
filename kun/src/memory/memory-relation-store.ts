@@ -2,9 +2,12 @@ import { mkdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
-import { MemoryRelationCommand, MemoryRelationSuggestion, type MemoryRelationResult } from '../contracts/memory-relations.js'
+import { MEMORY_RELATION_MAX_RECORD_CHARS, MemoryRelationCommand, MemoryRelationSuggestion, type MemoryRelationResult } from '../contracts/memory-relations.js'
 import type { MemoryRecord } from '../contracts/memory.js'
 import type { MemoryAccess } from './memory-store.js'
+import { memoryRecordPath } from './memory-canonical-files.js'
+import { normalizeMemoryRecord } from './memory-record-normalizer.js'
+import { applyMemoryForgetting, readMemoryForgetting } from './memory-forgetting.js'
 import {
   MemoryRelationConflictError, relationBindingMatches, relationEvidenceValid,
   relationId, relationRecordEligible, sameRelationScope
@@ -20,18 +23,30 @@ type Ledger = z.infer<typeof Ledger>
 export async function executeMemoryRelationCommand(options: {
   rootDir: string
   command: MemoryRelationCommand
-  get: (id: string) => Promise<MemoryRecord | undefined>
   authorize: (id: string, access: MemoryAccess) => Promise<MemoryRecord>
   now: string
 }): Promise<MemoryRelationResult> {
-  const { rootDir, get, authorize, now } = options
+  const { rootDir, authorize, now } = options
   const command = MemoryRelationCommand.parse(options.command)
   const ledger = await readLedger(rootDir)
   const originalCount = ledger.suggestions.length
+  const forgetting = await readMemoryForgetting(rootDir)
   const cache = new Map<string, MemoryRecord | undefined>()
   for (const entry of ledger.suggestions) {
     for (const binding of [entry.proposal.source, entry.proposal.target]) {
-      if (!cache.has(binding.id)) cache.set(binding.id, await get(binding.id))
+      if (cache.has(binding.id)) continue
+      try {
+        const raw = JSON.parse(await readFile(memoryRecordPath(rootDir, binding.id), 'utf8'))
+        const parsed = normalizeMemoryRecord(raw, binding.id)
+        if (!parsed.ok) throw new Error('Invalid relation endpoint')
+        cache.set(binding.id, applyMemoryForgetting(forgetting, parsed.record))
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          // IO/parse failures are not deletion evidence. Preserve the ledger.
+          throw new Error('Memory relation endpoint is unavailable', { cause: error })
+        }
+        cache.set(binding.id, undefined)
+      }
     }
   }
   ledger.suggestions = ledger.suggestions.filter((entry) =>
@@ -51,7 +66,7 @@ export async function executeMemoryRelationCommand(options: {
       !relationRecordEligible(target, Date.parse(now)) ||
       !relationBindingMatches(source, entry.proposal.source) ||
       !relationBindingMatches(target, entry.proposal.target)
-    return { suggestion: entry, stale, source, target }
+    return { suggestion: entry, stale, source: endpoint(source, stale), target: endpoint(target, stale) }
   }
   if (command.action === 'list') {
     await authorize(command.memoryId, command.access)
@@ -96,6 +111,15 @@ export async function executeMemoryRelationCommand(options: {
   if (ledger.suggestions.length > MAX_RELATIONS) throw new Error('Memory relation storage is full')
   if (command.proposals.length) await writeLedger(rootDir, ledger)
   return { relations }
+}
+
+function endpoint(record: MemoryRecord, stale: boolean) {
+  return {
+    id: record.id, revision: record.revision, scope: record.scope,
+    content: stale ? '' : record.content.slice(0, MEMORY_RELATION_MAX_RECORD_CHARS),
+    sources: stale ? [] : record.sources,
+    ...(!stale && record.consolidation ? { consolidation: record.consolidation } : {})
+  }
 }
 
 export async function removeMemoryRelations(rootDir: string, ids: readonly string[]): Promise<void> {
