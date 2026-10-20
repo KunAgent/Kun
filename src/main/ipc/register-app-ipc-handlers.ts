@@ -31,9 +31,11 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerMobileLink(options, accountAccess)
   registerKunArtIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }), accountAccess)
-  configureRuntimeModelExecutor(async (input) => {
+  configureRuntimeModelExecutor(async (input, request) => {
+    // Closing the HTTP request aborts the Runtime's provider stream, so a caller's cancel reaches the provider.
+    const timeout = AbortSignal.timeout((input.timeoutMs ?? 30_000) + 5_000)
     const response = await options.runtimeRequest('/v1/model-requests', 'POST', JSON.stringify(input), undefined,
-      { signal: AbortSignal.timeout((input.timeoutMs ?? 30_000) + 5_000), priority: 'background' })
+      { signal: request?.signal ? AbortSignal.any([request.signal, timeout]) : timeout, priority: 'background' })
     if (!response.ok) return { ok: false, message: `Model runtime request failed (HTTP ${response.status}). Check provider configuration.` }
     const value = JSON.parse(response.body) as { ok?: unknown; text?: unknown; message?: unknown }
     return value.ok === true && typeof value.text === 'string' ? { ok: true, text: value.text }

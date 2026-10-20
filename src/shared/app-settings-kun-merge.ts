@@ -102,6 +102,7 @@ import {
   normalizeKunComputerUseSettings,
   normalizeKunImageGenerationSettings,
   normalizeKunMusicGenerationSettings,
+  migrateKunPromptOptimizationDefaults,
   normalizeKunPromptOptimizationSettings,
   normalizeKunSpeakSettings,
   normalizeKunSpeechToTextSettings,
@@ -218,7 +219,7 @@ export function mergeKunRuntimeSettings(
   const currentPromptOptimization = normalizeKunPromptOptimizationSettings(current.promptOptimization)
   const nextPromptOptimization = normalizeKunPromptOptimizationSettings({
     ...currentPromptOptimization,
-    ...(patch?.promptOptimization ?? {})
+    ...migrateKunPromptOptimizationDefaults(patch?.promptOptimization)
   })
   const currentMusicGeneration = normalizeKunMusicGenerationSettings(current.musicGeneration)
   const nextMusicGeneration = normalizeKunMusicGenerationSettings({

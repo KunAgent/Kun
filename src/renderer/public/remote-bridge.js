@@ -172,6 +172,7 @@
     listProviderQuotas: invokeRaw('provider:quota:list'),
     fetchModelsDevCatalog: invokePayload('provider:models-dev-catalog'),
     optimizePrompt: invokePayload('prompt:optimize'),
+    cancelPromptOptimization: invokePayload('prompt:optimize-cancel'),
     uploadRuntimeImageAttachment: invokePayload('runtime:attachment:upload-image'),
     uploadRuntimeDocumentAttachment: invokePayload('runtime:attachment:upload-document'),
     gatewayCredential: function (action) { return invoke('gateway:credential', [action]) },

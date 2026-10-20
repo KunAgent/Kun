@@ -34,6 +34,7 @@ import {
   clawTaskFromTextPayloadSchema,
   modelsDevCatalogPayloadSchema,
   providerProbePayloadSchema,
+  promptOptimizationCancelPayloadSchema,
   promptOptimizationPayloadSchema,
   scheduleTaskCreatePayloadSchema,
   scheduleTaskUpdatePayloadSchema,
@@ -86,6 +87,7 @@ import {
   checkWorkflowCode
 } from '../workflow-runtime'
 import {
+  cancelPromptOptimization,
   optimizePrompt
 } from '../services/prompt-optimization-service'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
@@ -291,7 +293,17 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
 
   ipcMain.handle('prompt:optimize', async (_, payload: unknown) => {
     const request = parseIpcPayload('prompt:optimize', promptOptimizationPayloadSchema, payload)
-    return optimizePrompt(await withRegistryCredentials(await store.load()), request.text)
+    return optimizePrompt(await withRegistryCredentials(await store.load()), request.text, {
+      requestId: request.requestId,
+      // No provider id means the composer runs Kun on its default model.
+      selection: request.providerId ? { providerId: request.providerId, model: request.model ?? '' } : undefined,
+      log: { info: options.logInfo, error: options.logError }
+    })
+  })
+
+  ipcMain.handle('prompt:optimize-cancel', (_, payload: unknown) => {
+    const request = parseIpcPayload('prompt:optimize-cancel', promptOptimizationCancelPayloadSchema, payload)
+    cancelPromptOptimization(request.requestId)
   })
 
   ipcMain.handle('claw:status', async (): Promise<ClawRuntimeStatus> =>

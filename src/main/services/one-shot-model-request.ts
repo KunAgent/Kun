@@ -38,6 +38,8 @@ export type OneShotModelRequestInput = {
   providerId?: string
   presetSource?: string
   maxOutputTokens?: number
+  /** Caller cancellation; the timeout above still applies. */
+  signal?: AbortSignal
 }
 
 export type OneShotModelRequestPayload = {
@@ -279,7 +281,8 @@ export async function oneShotModelRequest(
     if (!input.providerId) return { ok: false, message: 'Select a provider connection for this request.' }
     return requestRuntimeModelText({ purpose: input.purpose ?? 'paper-translation', providerId: input.providerId,
       model: input.model, messages: [{ role: 'system', content: input.systemPrompt }, { role: 'user', content: input.userText }],
-      maxOutputTokens: input.maxOutputTokens ?? DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS, timeoutMs: input.timeoutMs })
+      maxOutputTokens: input.maxOutputTokens ?? DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS, timeoutMs: input.timeoutMs },
+    input.signal ? { signal: input.signal } : undefined)
   }
   const request = buildOneShotModelRequest({
     baseUrl: input.baseUrl,
@@ -302,7 +305,9 @@ export async function oneShotModelRequest(
       method: 'POST',
       headers: request.headers,
       body: JSON.stringify(request.body),
-      signal: AbortSignal.timeout(Math.max(1_000, input.timeoutMs))
+      signal: input.signal
+        ? AbortSignal.any([input.signal, AbortSignal.timeout(Math.max(1_000, input.timeoutMs))])
+        : AbortSignal.timeout(Math.max(1_000, input.timeoutMs))
     }, input.proxyUrl ?? '')
     bodyText = await response.text()
   } catch (error) {
