@@ -61,7 +61,11 @@ export function execGitBuffer(
       }
       resolve(stdout)
     })
-    child.stdin?.end(input ?? '')
+    // Most git commands exit without reading stdin, so a pending write can hit
+    // a closed pipe (EPIPE). The exit status above is the source of truth;
+    // an unhandled stream error would instead crash the main process.
+    child.stdin?.on('error', () => undefined)
+    child.stdin?.end(input)
   })
 }
 
