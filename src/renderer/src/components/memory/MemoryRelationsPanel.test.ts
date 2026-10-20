@@ -75,6 +75,20 @@ describe('Memory relation review UI', () => {
     expect(JSON.stringify(renderer!.toJSON())).toContain('memoryRelationsStaleHint')
   })
 
+  it('filters reviewed relations and explicitly withdraws an accepted decision', async () => {
+    vi.mocked(requestMemoryRelations).mockResolvedValue({ relations: [
+      { ...entry, suggestion: { ...entry.suggestion, status: 'accepted', decidedAt: source.createdAt } }
+    ] })
+    await render(); await click('memoryRelationsTitle')
+    await act(async () => renderer!.root.findByType('select').props.onChange({ target: { value: 'pending' } }))
+    expect(renderer!.root.findAllByType('mark')).toHaveLength(0)
+    await act(async () => renderer!.root.findByType('select').props.onChange({ target: { value: 'accepted' } }))
+    await click('memoryRelationsWithdraw')
+    expect(requestMemoryRelations).toHaveBeenCalledWith({
+      action: 'withdraw', id: entry.suggestion.id, access: { workspace: undefined, project: undefined }
+    }, expect.any(AbortSignal))
+  })
+
   it('hides cached evidence after failure and supports a fresh read', async () => {
     vi.mocked(requestMemoryRelations).mockResolvedValueOnce({ relations: [entry] })
       .mockRejectedValueOnce(new Error('secret text')).mockResolvedValue({ relations: [] })

@@ -16,6 +16,7 @@ export function MemoryRelationsPanel({ memory, t }: {
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
+  const [filter, setFilter] = useState('all')
   const controller = useRef<AbortController | null>(null)
   const access = { workspace: memory.workspace, project: memory.project }
   const expired = [memory.expiresAt, memory.validTo].some((value) => value && Date.parse(value) <= Date.now())
@@ -24,9 +25,14 @@ export function MemoryRelationsPanel({ memory, t }: {
     !memory.deletedAt && !memory.supersededAt && !expired &&
     !(memory.validFrom && Date.parse(memory.validFrom) > Date.now()) && memory.content.length <= MEMORY_RELATION_MAX_RECORD_CHARS
 
-  useEffect(() => () => controller.current?.abort(), [])
+  useEffect(() => {
+    controller.current?.abort()
+    controller.current = null
+    setOpened(false); setRelations([]); setLoaded(false); setBusy(false); setError(false); setFilter('all')
+    return () => controller.current?.abort()
+  }, [memory.id, memory.revision, memory.updatedAt])
 
-  const run = async (operation: 'list' | 'analyze' | 'accepted' | 'rejected', relation?: Relation) => {
+  const run = async (operation: 'list' | 'analyze' | 'accepted' | 'rejected' | 'withdraw', relation?: Relation) => {
     if (controller.current) return
     const pending = new AbortController()
     controller.current = pending
@@ -35,6 +41,8 @@ export function MemoryRelationsPanel({ memory, t }: {
     try {
       if (operation === 'analyze') {
         await analyzeRuntimeMemoryRelations({ memoryId: memory.id, expectedRevision: memory.revision ?? 1, access }, pending.signal)
+      } else if (operation === 'withdraw' && relation) {
+        await requestMemoryRelations({ action: 'withdraw', id: relation.suggestion.id, access }, pending.signal)
       } else if (relation) {
         await requestMemoryRelations({ action: 'review', id: relation.suggestion.id, decision: operation as 'accepted' | 'rejected', access }, pending.signal)
       }
@@ -77,12 +85,23 @@ export function MemoryRelationsPanel({ memory, t }: {
       {error ? <p role="alert" className="text-[12px] text-ds-danger">{t('memoryRelationsError')}</p> : null}
       {!busy && loaded && !error && relations.length === 0
         ? <p role="status" className="text-[12px] text-ds-muted">{t('memoryRelationsEmpty')}</p> : null}
+      {relations.length ? <label className="flex flex-wrap items-center gap-2 text-[12px] text-ds-muted">
+        {t('memoryRelationsFilter')}
+        <select aria-label={t('memoryRelationsFilter')} value={filter} onChange={(event) => setFilter(event.target.value)}
+          className="rounded border border-ds-border bg-ds-elevated p-1.5 text-ds-ink">
+          {['all', 'pending', 'accepted', 'rejected', 'stale'].map((value) =>
+            <option key={value} value={value}>{t(value === 'all' ? 'memoryAuthority_all' : `memoryRelations_${value}`)}</option>)}
+        </select>
+      </label> : null}
       <ul className="divide-y divide-ds-border-muted">
-        {relations.map((relation) => <li key={relation.suggestion.id} className="space-y-3 py-4">
+        {relations.filter((relation) => filter === 'all' ||
+          (relation.stale ? filter === 'stale' : filter === relation.suggestion.status))
+          .map((relation) => <li key={relation.suggestion.id} className="space-y-3 py-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h4 className="text-[14px] font-semibold text-ds-ink">{t(`memoryRelations_${relation.suggestion.proposal.kind}`)}</h4>
             <span className="text-[12px] text-ds-muted">{t(`memoryRelations_${relation.stale ? 'stale' : relation.suggestion.status}`)}</span>
           </div>
+          <p className="break-all text-[11px] text-ds-muted">{relation.source.id} → {relation.target.id}</p>
           {relation.stale ? <p className="text-[12px] text-ds-muted">{t('memoryRelationsStaleHint')}</p> : (
             <div className="grid gap-4 sm:grid-cols-2">
               <RelationEndpoint record={relation.source} label={t('memoryRelationsSource')}
@@ -98,6 +117,11 @@ export function MemoryRelationsPanel({ memory, t }: {
               onClick={() => void run('accepted', relation)}>{t('memoryRelationsAccept')}</button>
             <button type="button" disabled={busy} className={settingsButtonClass()}
               onClick={() => void run('rejected', relation)}>{t('memoryRelationsReject')}</button>
+          </div> : null}
+          {relation.suggestion.status === 'accepted' ? <div className="space-y-2">
+            <p className="text-[12px] text-ds-muted">{t('memoryRelationsWithdrawHint')}</p>
+            <button type="button" disabled={busy} className={settingsButtonClass()}
+              onClick={() => void run('withdraw', relation)}>{t('memoryRelationsWithdraw')}</button>
           </div> : null}
         </li>)}
       </ul>

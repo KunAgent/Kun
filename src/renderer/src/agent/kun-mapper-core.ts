@@ -1,3 +1,4 @@
+import { parseMemoryRelationMetadata } from './memory-relation-metadata'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -512,6 +513,7 @@ export function applyRuntimeDisclosureMeta(
   if (activeSkillIds) meta.activeSkillIds = activeSkillIds
   if (injectedMemoryIds) meta.injectedMemoryIds = injectedMemoryIds
   if (injectedMemorySummaries) meta.injectedMemorySummaries = injectedMemorySummaries
+  if (item.injectedMemoryRelations) meta.injectedMemoryRelations = parseMemoryRelationMetadata(item.injectedMemoryRelations)
   if (injectedDirectiveIds) meta.injectedDirectiveIds = injectedDirectiveIds
   if (injectedDirectiveSummaries) meta.injectedDirectiveSummaries = injectedDirectiveSummaries
   if (injectedInstructionSources) meta.injectedInstructionSources = injectedInstructionSources
