@@ -5,6 +5,7 @@ import {
   Clock3,
   Columns3,
   LayoutGrid,
+  Layers,
   Puzzle,
   Workflow,
   Zap
@@ -32,6 +33,7 @@ import { useProjectBoardEnabled } from '../../project-board/use-project-board-en
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import { SidebarFrame } from '../sidebar/SidebarPrimitives'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
+import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 
 type Props = {
   threads: NormalizedThread[]
@@ -112,6 +114,7 @@ export function Sidebar({
   useEffect(() => registerSidebarDragAutoScroll(document), [])
 
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
+  const artifactsActive = useChatStore((s) => s.route === 'artifacts')
   const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const codeWorkspaceRoots = useChatStore((s) => s.codeWorkspaceRoots)
   const threadListStatus = useChatStore((s) => s.threadListStatus)
@@ -218,6 +221,12 @@ export function Sidebar({
               { id: 'plugins', label: t('plugins'), icon: <LayoutGrid {...iconProps} />, active: pluginsActive, onSelect: onOpenPlugins },
               { id: 'extensions', label: i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions', icon: <Puzzle {...iconProps} />, active: extensionsActive, onSelect: onOpenExtensions }
             ]}
+          />
+          <SidebarNavRow
+            icon={<Layers {...iconProps} />}
+            label={t('artifactsNav')}
+            onClick={openArtifactsPage}
+            active={artifactsActive}
           />
           {projectBoardEnabled ? (
             <SidebarNavRow

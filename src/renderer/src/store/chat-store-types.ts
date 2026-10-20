@@ -81,7 +81,7 @@ export type {
   SendMessageOverrides,
   WriteAssistantMessageContext
 }
-export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe'
+export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe' | 'artifacts'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
