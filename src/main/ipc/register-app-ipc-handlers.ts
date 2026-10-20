@@ -9,6 +9,7 @@ import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { registerAppContentIpcHandlers } from './register-app-content-ipc-handlers'
 import { registerAppFileIpcHandlers } from './register-app-file-ipc-handlers'
 import { registerAppGitIpcHandlers } from './register-app-git-ipc-handlers'
+import { registerAppGitCommitIpcHandlers } from './register-app-git-commit-ipc-handlers'
 import { registerAppGitTurnUndoIpcHandlers } from './register-app-git-turn-undo-ipc-handlers'
 import { registerAppKunConfigIpcHandlers } from './register-app-kun-config-ipc-handlers'
 import { registerAppMarketIpcHandlers } from './register-app-market-ipc-handlers'
@@ -58,6 +59,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppUiPluginIpcHandlers(options)
   registerAppKunConfigIpcHandlers(options)
   registerAppGitIpcHandlers(options)
+  registerAppGitCommitIpcHandlers(options)
   registerAppGitTurnUndoIpcHandlers(options)
   registerAppFileIpcHandlers(options)
   registerAppPaperIpcHandlers(options)

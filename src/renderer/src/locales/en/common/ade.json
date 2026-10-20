@@ -373,8 +373,6 @@
   "codeCollaborationDisable": "Stop new assignments",
   "codeCollaborationRequiresKun": "Select Kun in the model menu before enabling collaboration.",
   "codeCollaborationUnavailable": "This runtime cannot update collaboration settings.",
-  "codeChangesTarget": "View changes in",
-  "codeChangesConversation": "Current conversation",
   "codeChangesUnavailable": "This workspace is unavailable. Select another changes target.",
   "workerInput.placeholder": "Message {{name}}…",
   "workerInput.send": "Send",

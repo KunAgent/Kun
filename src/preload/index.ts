@@ -22,6 +22,7 @@ import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { marketApi } from './market-api'
+import { gitCommitApi } from './git-commit-api'
 import { kunAccountApi } from './kun-account'
 import { appSandboxPreloadApi } from './app-sandbox-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
@@ -692,6 +693,7 @@ const api = {
   },
   ...paperApi,
   ...marketApi,
+  ...gitCommitApi,
   ...appSandboxPreloadApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)
