@@ -43,6 +43,7 @@ import { modelConnectionRegistryCredentialRecoveryOperations } from './model-con
 import { upgradeRegistryProxyRouting } from './model-connection-registry-proxy.js'
 import { reconciledSeedIdentity } from './model-connection-registry-seed-support.js'
 import type { ModelConnectionRegistryOperations } from './model-connection-registry-operations-contract.js'
+import { RegistrySnapshotCache } from './model-connection-registry-snapshot-cache.js'
 import {
   isAnonymousHttpProfile,
   isProfileUsable,
@@ -190,6 +191,20 @@ export type MaterializedModelConnections = {
 }
 
 export class ModelConnectionRegistry {
+  /** Drops the memoized snapshot after an input outside the Registry changed (model profiles). */
+  invalidateSnapshotCache(): void {
+    this.snapshotCache.invalidate()
+  }
+
+  /** Revisions a watcher compares, without projecting the snapshot. */
+  async revisionHead(): Promise<{ revision: number; metadataRevision: number }> {
+    const [document, metadata] = await Promise.all([
+      this.file.read(emptyDocument),
+      this.metadataRevisionFile.read(() => ({ revision: 0 }))
+    ])
+    return { revision: document.revision, metadataRevision: metadata.revision }
+  }
+
   async assertActiveConfiguration(revision?: number): Promise<void> {
     let document = await this.file.read(emptyDocument)
     if (this.lastAppliedRevision < document.revision) {
@@ -246,6 +261,9 @@ export class ModelConnectionRegistry {
   private preparedCredentialSecretTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private credentialRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private readonly registryInstanceId = randomUUID()
+  private readonly snapshotCache = new RegistrySnapshotCache()
+  /** Set once the canonical v2 document is known to exist; see readDocumentForCredentialConsumer. */
+  private legacyRegistryMigrated = false
 
   constructor(private readonly options: {
     dataDir: string
@@ -281,7 +299,9 @@ export class ModelConnectionRegistry {
         assertProviderConfigurationUrls(upgraded)
         return RegistryDocumentSchema.parse(upgraded)
       },
-      false
+      false,
+      // Every credential read, apply, and snapshot starts from this document.
+      { cacheManagerReads: true }
     )
   }
 }
@@ -321,9 +341,12 @@ export function readLatestIfChanged(
   finish: (snapshot: ModelConnectionSnapshot) => void,
   sinceMetadataRevision?: number
 ): void {
-  void registry.snapshot().then((snapshot) => {
-    if (snapshot.revision > sinceRevision || (sinceMetadataRevision !== undefined && (snapshot.metadataRevision ?? 0) > sinceMetadataRevision)) finish(snapshot)
-  })
+  // Compare revisions first; only a real change pays for a projection.
+  void registry.revisionHead().then((head) => {
+    if (head.revision <= sinceRevision &&
+      (sinceMetadataRevision === undefined || head.metadataRevision <= sinceMetadataRevision)) return
+    return registry.snapshot().then(finish)
+  }).catch(() => undefined)
 }
 
 export function parseCredentialOperationToken(operationToken: string): {

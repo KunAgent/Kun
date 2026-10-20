@@ -66,6 +66,7 @@ import {
   goalContextInstruction,
   goalContextKey
 } from '../loop/continuation-instructions.js'
+import type { ThreadMetadataScan } from './thread-metadata-scan.js'
 import type { TurnServiceDeps, TurnConflictError, TurnCapacityError, TerminalTurnStatus, TurnSettlement, GraphLeadSuspensionResult, GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
 export interface TurnServiceOperations {
@@ -146,6 +147,7 @@ export interface TurnServiceOperations {
   suspendActiveTurnsForShutdown(): Promise<number>;
   reconcileManagerSettledInterruptions(input?: {
     settledAfter?: string
+    scan?: ThreadMetadataScan
   }): Promise<RestartRecoverySource[]>;
   suspendTurnForHostShutdown(input: {
     threadId: string
@@ -223,7 +225,7 @@ export interface TurnServiceOperations {
   getAbortController(turnId: string): AbortSignal | undefined;
   abortTurnExecution(turnId: string, reason?: unknown): boolean;
   abortThreadExecution(threadId: string): number;
-  reconcileOrphanedTurns(): Promise<RestartRecoverySource[]>;
+  reconcileOrphanedTurns(input?: { scan?: ThreadMetadataScan }): Promise<RestartRecoverySource[]>;
   getTurn(threadId: string, turnId: string): Promise<Turn | null>;
   ensureGoalContext(threadId: string, turnId: string, signal?: AbortSignal): Promise<void>;
   updateTurnMetadata(

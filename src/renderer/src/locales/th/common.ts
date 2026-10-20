@@ -5,6 +5,7 @@ import phoneComposer from './common/phone-composer.json'
 import pluginMarket from './common/plugin-market.json'
 import pluginsPage from './common/plugins-page.json'
 import composerFastMode from './common/composer-fast-mode.json'
+import composerPromptEnhance from './common/composer-prompt-enhance.json'
 import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
 import sddFrameworks from './common/sdd-frameworks.json'
@@ -33,6 +34,13 @@ import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
 import wardrobeInvite from './common/wardrobe-invite.json'
 import codeTour from './common/code-tour.json'
+import messageQuote from './common/message-quote.json'
+import appSurfaces from './common/app-surfaces.json'
+import designAgent from './common/design-agent.json'
+import artifactsLibrary from './common/artifacts-library.json'
+import workspaceFiles from './common/workspace-files.json'
+import changesCommit from './common/changes-commit.json'
+import turnUndo from './common/turn-undo.json'
 
 const common = {
   ...agentUpdates,
@@ -42,6 +50,7 @@ const common = {
   ...pluginMarket,
   ...pluginsPage,
   ...composerFastMode,
+  ...composerPromptEnhance,
   ...commandsSdd,
   ...providerErrors,
   ...sddFrameworks,
@@ -69,6 +78,13 @@ const common = {
   ...whatsNew,
   ...wardrobeInvite,
   ...codeTour,
+  ...messageQuote,
+  ...appSurfaces,
+  ...designAgent,
+  ...artifactsLibrary,
+  ...workspaceFiles,
+  ...changesCommit,
+  ...turnUndo,
 }
 
 export default common

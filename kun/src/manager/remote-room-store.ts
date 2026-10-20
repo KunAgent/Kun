@@ -26,6 +26,8 @@ import type { RoomRequestOutcome } from '../contracts/rooms-product.js'
 import { RoomLatestMessageSchema } from '../contracts/room-list.js'
 import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replies.js'
 import type { RoomSearchQuery, RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
+import { invalidateTickReads, tickCachedRead } from '../rooms/room-tick-reads.js'
+import { notifyRoomStoreCommit } from '../rooms/room-commit-signal.js'
 
 /** Runtime proxy. Canonical room data never opens a local file in this process. */
 export class RemoteRoomStore implements RoomStore {
@@ -38,17 +40,26 @@ export class RemoteRoomStore implements RoomStore {
   ) {}
 
   async get<T = unknown>(kind: RoomDocumentKind, id: string): Promise<RoomStoredDocument<T> | null> {
-    return RoomStoredDocumentSchema.nullable().parse(await this.call('get', { kind, id })) as RoomStoredDocument<T> | null
+    return tickCachedRead(`get\0${kind}\0${id}`, async () =>
+      RoomStoredDocumentSchema.nullable().parse(await this.call('get', { kind, id })) as RoomStoredDocument<T> | null)
   }
 
   async list<T = unknown>(kind: RoomDocumentKind, options: RoomStoreListOptions = {}): Promise<RoomStoredDocument<T>[]> {
-    return z.array(RoomStoredDocumentSchema).parse(await this.call('list', { kind, options })) as RoomStoredDocument<T>[]
+    return tickCachedRead(`list\0${kind}\0${JSON.stringify(options)}`, async () =>
+      z.array(RoomStoredDocumentSchema).parse(await this.call('list', { kind, options })) as RoomStoredDocument<T>[])
   }
 
   async commit(input: RoomStoreCommit): Promise<RoomStoreCommitResult> {
-    await this.options.ready?.()
-    const fence = this.fence()
-    return RoomStoreCommitResultSchema.parse(await this.call('commit', { input, ...(fence ? { fence } : {}) }))
+    invalidateTickReads()
+    try {
+      await this.options.ready?.()
+      const fence = this.fence()
+      const result = RoomStoreCommitResultSchema.parse(await this.call('commit', { input, ...(fence ? { fence } : {}) }))
+      notifyRoomStoreCommit()
+      return result
+    } finally {
+      invalidateTickReads()
+    }
   }
 
   async listRooms(options: RoomListOptions = {}): Promise<RoomListPage> {
@@ -65,7 +76,8 @@ export class RemoteRoomStore implements RoomStore {
   async runSummary(input: RoomRunSummaryQuery): Promise<RoomRunSummary> { return await this.call('runSummary', input) as RoomRunSummary }
 
   async getRequest(requestId: string): Promise<RoomStoreRequest | null> {
-    return RoomStoreRequestSchema.nullable().parse(await this.call('getRequest', { requestId }))
+    return tickCachedRead(`request\0${requestId}`, async () =>
+      RoomStoreRequestSchema.nullable().parse(await this.call('getRequest', { requestId })))
   }
 
   async events(roomId: string, sinceSeq = 0, limit = 200): Promise<RoomStoreEvent[]> {
@@ -87,10 +99,15 @@ export class RemoteRoomStore implements RoomStore {
   }
 
   async scrubMemoryData(input: RoomMemoryErasure): Promise<{ scrubbed: number }> {
-    await this.options.ready?.()
-    const fence = this.fence()
-    if (!fence) throw new RoomStoreConflictError('room coordinator ownership is required')
-    return z.object({ scrubbed: z.number().int().nonnegative() }).parse(await this.call('scrubMemoryData', { input, fence }))
+    invalidateTickReads()
+    try {
+      await this.options.ready?.()
+      const fence = this.fence()
+      if (!fence) throw new RoomStoreConflictError('room coordinator ownership is required')
+      return z.object({ scrubbed: z.number().int().nonnegative() }).parse(await this.call('scrubMemoryData', { input, fence }))
+    } finally {
+      invalidateTickReads()
+    }
   }
 
   async close(): Promise<void> {}

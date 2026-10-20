@@ -12,11 +12,9 @@ import { redactSecretText } from '../config/secret-redaction.js'
 
 export type * from './model-context-profile-types.js'
 import type { ContextCompactionConfig, ModelConfig, ModelContextThresholds, ModelContextProfile, ModelContextProfileConfig, ModelProfileConfigSource, ProviderModelCapabilityInput } from './model-context-profile-types.js'
+import { DEFAULT_CONTEXT_WINDOW_TOKENS } from './model-context-profile-types.js'
 
-// Unknown capacity is not evidence of a large context window. Custom models
-// can override this conservative estimate with models.profiles.<id>.contextWindowTokens.
-// Models smaller than 32k still need an explicit profile; this is not a hard-fit guarantee.
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 32_000
+export { DEFAULT_CONTEXT_WINDOW_TOKENS } from './model-context-profile-types.js'
 
 export const DEFAULT_CONTEXT_THRESHOLDS: ModelContextThresholds = {
   softThreshold: Math.floor(DEFAULT_CONTEXT_WINDOW_TOKENS * 0.75),
@@ -96,7 +94,7 @@ export function contextThresholdsForModel(
   const profile = resolveModelContextProfile(model, profiles)
   // Explicit compactor thresholds can be paired with a separately supplied
   // model-capability resolver. The per-request hard cap still enforces the
-  // actual window; do not replace that declared policy with a 32k assumption.
+  // actual window; do not replace that declared policy with the assumed default window.
   if (!profile) return fallback
   // Safety cap: never let thresholds exceed 75%/85% of the context
   // window, even if a config-provided model profile sets them higher
@@ -124,8 +122,8 @@ export function modelCapabilitiesForModel(
   if (!profile && model && !warnedUnknownWindows.has(model)) {
     if (warnedUnknownWindows.size >= 128) warnedUnknownWindows.delete(warnedUnknownWindows.values().next().value!)
     warnedUnknownWindows.add(model)
-    console.warn(`[kun] No context capacity registered for "${redactSecretText(model)}"; using a conservative ` +
-      `${DEFAULT_CONTEXT_WINDOW_TOKENS}-token estimate. Configure contextWindowTokens for the actual model, especially smaller windows.`)
+    console.warn(`[kun] No context capacity registered for "${redactSecretText(model)}"; assuming a ` +
+      `${DEFAULT_CONTEXT_WINDOW_TOKENS}-token window. Configure contextWindowTokens for the actual model, especially smaller windows.`)
   }
   return {
     id: model?.trim() || profile?.canonicalModel || 'auto',

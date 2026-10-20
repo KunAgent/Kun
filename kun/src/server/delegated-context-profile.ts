@@ -18,7 +18,7 @@ export type DelegatedContextProfile = {
  * (Claude Code, Cursor, Antigravity). The window is declared on the provider
  * (`modelCapabilities` / `modelProfiles`), exactly as the Kun-managed request
  * path reads it, so the provider id must travel with the model: resolving by
- * model id alone falls back to the conservative 32k estimate.
+ * model id alone falls back to the assumed default window, not the declared one.
  */
 export function delegatedContextProfile(input: {
   model: string

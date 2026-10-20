@@ -20,6 +20,7 @@ import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 import onboarding from './settings/onboarding.json'
+import appSurfaces from './settings/app-surfaces.json'
 
 const settings = {
   ...providerConfiguration,
@@ -43,7 +44,8 @@ const settings = {
   guiUpdateErrFeedUnavailable: '현재 사용할 수 있는 업데이트 소스가 없습니다. 나중에 다시 시도하거나 다운로드 페이지를 이용하세요.',
   ...speak,
   ...ade,
-  ...onboarding
+  ...onboarding,
+  ...appSurfaces
 }
 
 export default settings

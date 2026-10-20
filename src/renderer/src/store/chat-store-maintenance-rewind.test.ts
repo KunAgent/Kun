@@ -463,153 +463,142 @@ describe('chat-store-maintenance-actions rewind and resend', () => {
     })
   })
 
-  it('restores checkpoints against the thread workspace when resending under another global picker root', async () => {
-    const previousWindow = globalThis.window
-    const restoreGitCheckpoint = vi.fn(async () => ({
-      ok: true,
-      checkpointId: 'gcp_1',
-      repositoryRoot: '/workspace/deepseek-gui',
-      head: 'abc123',
-      currentBranch: 'develop',
-      rescueCheckpointId: null
-    }))
-    ;(globalThis as { window?: unknown }).window = {
-      kunGui: {
-        restoreGitCheckpoint
-      }
-    }
-    try {
-      const prepareCodeCanvasResend = vi.fn(async () => null)
-      const { actions, provider, sendMessage, state } = buildHarness({
-        maintenanceDependencies: {
-          prepareCodeCanvasResend
-        }
-      })
-      Object.assign(state, {
-        route: 'chat',
-        busy: false,
-        workspaceRoot: '/workspace/kun-ui-extend',
-        blocks: [
-          {
-            kind: 'user',
-            id: 'user_1',
-            text: 'old prompt',
-            meta: { turnId: 'turn_1', workspaceCheckpointId: 'gcp_1' }
-          },
-          { kind: 'assistant', id: 'assistant_1', text: 'old answer' }
-        ],
-        queuedMessages: [],
-        turnStartedAtByUserId: {},
-        turnDurationByUserId: {},
-        turnReasoningFirstAtByUserId: {},
-        turnReasoningLastAtByUserId: {}
-      })
+  const AGENT_SHA = 'a'.repeat(64)
+  const checkpointedBlocks = (): ChatBlock[] => [
+    {
+      kind: 'user',
+      id: 'user_1',
+      text: 'old prompt',
+      meta: { turnId: 'turn_1', workspaceCheckpointId: 'gcp_1' }
+    },
+    {
+      kind: 'tool',
+      id: 'tool_1',
+      turnId: 'turn_1',
+      summary: 'edit',
+      status: 'success',
+      toolKind: 'file_change',
+      filePath: 'src/app.ts',
+      meta: { fileState: { path: '/workspace/deepseek-gui/src/app.ts', afterSha256: AGENT_SHA } }
+    },
+    { kind: 'assistant', id: 'assistant_1', text: 'old answer' }
+  ]
+  const resendState = (blocks: ChatBlock[]): Partial<ChatState> => ({
+    route: 'chat',
+    busy: false,
+    blocks,
+    queuedMessages: [],
+    turnStartedAtByUserId: {},
+    turnDurationByUserId: {},
+    turnReasoningFirstAtByUserId: {},
+    turnReasoningLastAtByUserId: {}
+  } as Partial<ChatState>)
+  const undone = { ok: true, undoId: 'tu_1', restored: ['src/app.ts'], deleted: [], preflight: {} }
 
-      await actions.rewindAndResend('user_1', '  Retry release review  ')
-
-      expect(restoreGitCheckpoint).toHaveBeenCalledWith({
-        checkpointId: 'gcp_1',
-        expectedThreadId: 'thr_existing',
-        expectedWorkspaceRoot: '/workspace/deepseek-gui'
-      })
-      expect(provider.rewindThread).toHaveBeenCalledWith('thr_existing', 'turn_1')
-      expect(sendMessage).toHaveBeenCalledWith('Retry release review')
-      expect(state.error).toBeNull()
-    } finally {
-      ;(globalThis as { window?: unknown }).window = previousWindow
-    }
-  })
-
-  it('coalesces repeated activation before checkpoint restore completes', async () => {
-    const previousWindow = globalThis.window
-    const restore = deferred<{
-      ok: true
-      checkpointId: string
-      repositoryRoot: string
-      head: string
-      currentBranch: string
-      rescueCheckpointId: null
-    }>()
-    const restoreGitCheckpoint = vi.fn(() => restore.promise)
-    ;(globalThis as { window?: unknown }).window = {
-      kunGui: { restoreGitCheckpoint }
-    }
-    try {
-      const prepareCodeCanvasResend = vi.fn(async () => null)
-      const { actions, provider, sendMessage, state } = buildHarness({
-        maintenanceDependencies: { prepareCodeCanvasResend }
-      })
-      Object.assign(state, {
-        route: 'chat',
-        busy: false,
-        blocks: [{
-          kind: 'user', id: 'user_1', text: 'old prompt',
-          meta: { turnId: 'turn_1', workspaceCheckpointId: 'gcp_1' }
-        }],
-        queuedMessages: [],
-        turnStartedAtByUserId: {},
-        turnDurationByUserId: {},
-        turnReasoningFirstAtByUserId: {},
-        turnReasoningLastAtByUserId: {}
-      })
-
-      const first = actions.rewindAndResend('user_1', 'Edited once')
-      const duplicate = actions.rewindAndResend('user_1', 'Edited twice')
-
-      expect(restoreGitCheckpoint).toHaveBeenCalledOnce()
-      restore.resolve({
-        ok: true,
-        checkpointId: 'gcp_1',
-        repositoryRoot: '/workspace/deepseek-gui',
-        head: 'abc123',
-        currentBranch: 'develop',
-        rescueCheckpointId: null
-      })
-      await Promise.all([first, duplicate])
-
-      expect(prepareCodeCanvasResend).toHaveBeenCalledOnce()
-      expect(provider.rewindThread).toHaveBeenCalledOnce()
-      expect(provider.rewindThread).toHaveBeenCalledWith('thr_existing', 'turn_1')
-      expect(sendMessage).toHaveBeenCalledOnce()
-      expect(sendMessage).toHaveBeenCalledWith('Edited once')
-    } finally {
-      ;(globalThis as { window?: unknown }).window = previousWindow
-    }
-  })
-
-  it('releases the resend guard when checkpoint restoration returns early', async () => {
-    const previousWindow = globalThis.window
+  it('resets only the turn files against the thread workspace when asked to', async () => {
     const restoreGitCheckpoint = vi.fn()
-      .mockResolvedValueOnce({ ok: false, reason: 'error', message: 'restore failed' })
-      .mockResolvedValueOnce({
-        ok: true, checkpointId: 'gcp_1', repositoryRoot: '/workspace/deepseek-gui',
-        head: 'abc123', currentBranch: 'develop', rescueCheckpointId: null
-      })
-    ;(globalThis as { window?: unknown }).window = { kunGui: { restoreGitCheckpoint } }
-    try {
-      const { actions, provider, sendMessage, state } = buildHarness({
-        maintenanceDependencies: { prepareCodeCanvasResend: vi.fn(async () => null) }
-      })
-      Object.assign(state, {
-        route: 'chat', busy: false,
-        blocks: [{ kind: 'user', id: 'user_1', text: 'old prompt', meta: {
-          turnId: 'turn_1', workspaceCheckpointId: 'gcp_1'
-        } }],
-        queuedMessages: [], turnStartedAtByUserId: {}, turnDurationByUserId: {},
-        turnReasoningFirstAtByUserId: {}, turnReasoningLastAtByUserId: {}
-      })
+    const undoTurnFiles = vi.fn(async () => undone)
+    vi.stubGlobal('window', { kunGui: { restoreGitCheckpoint, undoTurnFiles } })
+    const { actions, provider, sendMessage, state } = buildHarness({
+      maintenanceDependencies: { prepareCodeCanvasResend: vi.fn(async () => null) }
+    })
+    Object.assign(state, resendState(checkpointedBlocks()), { workspaceRoot: '/workspace/kun-ui-extend' })
 
-      await actions.rewindAndResend('user_1', 'Edited prompt')
-      expect(provider.rewindThread).not.toHaveBeenCalled()
-      expect(state.error).toBe('restore failed')
+    await actions.rewindAndResend('user_1', '  Retry release review  ', { resetFiles: true })
 
-      await actions.rewindAndResend('user_1', 'Edited prompt')
-      expect(restoreGitCheckpoint).toHaveBeenCalledTimes(2)
-      expect(provider.rewindThread).toHaveBeenCalledOnce()
-      expect(sendMessage).toHaveBeenCalledWith('Edited prompt')
-    } finally {
-      ;(globalThis as { window?: unknown }).window = previousWindow
-    }
+    expect(undoTurnFiles).toHaveBeenCalledWith({
+      checkpointId: 'gcp_1',
+      expectedThreadId: 'thr_existing',
+      expectedWorkspaceRoot: '/workspace/deepseek-gui',
+      files: [{ path: '/workspace/deepseek-gui/src/app.ts', afterSha256: AGENT_SHA }],
+      shellCommandsRan: false,
+      scope: 'rewind'
+    })
+    expect(restoreGitCheckpoint).not.toHaveBeenCalled()
+    expect(provider.rewindThread).toHaveBeenCalledWith('thr_existing', 'turn_1')
+    expect(sendMessage).toHaveBeenCalledWith('Retry release review')
+    expect(state.error).toBeNull()
+  })
+
+  it('leaves files alone when only the conversation is reset', async () => {
+    const restoreGitCheckpoint = vi.fn()
+    const undoTurnFiles = vi.fn(async () => undone)
+    vi.stubGlobal('window', { kunGui: { restoreGitCheckpoint, undoTurnFiles } })
+    const { actions, provider, sendMessage, state } = buildHarness({
+      maintenanceDependencies: { prepareCodeCanvasResend: vi.fn(async () => null) }
+    })
+    Object.assign(state, resendState(checkpointedBlocks()))
+
+    await actions.rewindAndResend('user_1', 'Conversation only')
+
+    expect(undoTurnFiles).not.toHaveBeenCalled()
+    expect(restoreGitCheckpoint).not.toHaveBeenCalled()
+    expect(provider.rewindThread).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledWith('Conversation only')
+  })
+
+  it('falls back to resetting the conversation when a file is unsafe', async () => {
+    const undoTurnFiles = vi.fn(async () => ({
+      ok: false,
+      reason: 'unsafe',
+      message: '1 file(s) cannot be restored safely; nothing was changed.',
+      preflight: {}
+    }))
+    vi.stubGlobal('window', { kunGui: { undoTurnFiles } })
+    const { actions, provider, sendMessage, state } = buildHarness({
+      maintenanceDependencies: { prepareCodeCanvasResend: vi.fn(async () => null) }
+    })
+    Object.assign(state, resendState(checkpointedBlocks()))
+
+    await actions.rewindAndResend('user_1', 'Edited prompt', { resetFiles: true })
+
+    expect(provider.rewindThread).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledWith('Edited prompt')
+    expect(state.error).toBeTruthy()
+  })
+
+  it('coalesces repeated activation before the file reset completes', async () => {
+    const reset = deferred<typeof undone>()
+    const undoTurnFiles = vi.fn(() => reset.promise)
+    vi.stubGlobal('window', { kunGui: { undoTurnFiles } })
+    const prepareCodeCanvasResend = vi.fn(async () => null)
+    const { actions, provider, sendMessage, state } = buildHarness({
+      maintenanceDependencies: { prepareCodeCanvasResend }
+    })
+    Object.assign(state, resendState(checkpointedBlocks()))
+
+    const first = actions.rewindAndResend('user_1', 'Edited once', { resetFiles: true })
+    const duplicate = actions.rewindAndResend('user_1', 'Edited twice', { resetFiles: true })
+
+    expect(undoTurnFiles).toHaveBeenCalledOnce()
+    reset.resolve(undone)
+    await Promise.all([first, duplicate])
+
+    expect(prepareCodeCanvasResend).toHaveBeenCalledOnce()
+    expect(provider.rewindThread).toHaveBeenCalledOnce()
+    expect(provider.rewindThread).toHaveBeenCalledWith('thr_existing', 'turn_1')
+    expect(sendMessage).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledWith('Edited once')
+  })
+
+  it('releases the resend guard when the file reset fails', async () => {
+    const undoTurnFiles = vi.fn()
+      .mockResolvedValueOnce({ ok: false, reason: 'error', message: 'reset failed' })
+      .mockResolvedValueOnce(undone)
+    vi.stubGlobal('window', { kunGui: { undoTurnFiles } })
+    const { actions, provider, sendMessage, state } = buildHarness({
+      maintenanceDependencies: { prepareCodeCanvasResend: vi.fn(async () => null) }
+    })
+    Object.assign(state, resendState(checkpointedBlocks()))
+
+    await actions.rewindAndResend('user_1', 'Edited prompt', { resetFiles: true })
+    expect(provider.rewindThread).not.toHaveBeenCalled()
+    expect(state.error).toBe('reset failed')
+
+    await actions.rewindAndResend('user_1', 'Edited prompt', { resetFiles: true })
+    expect(undoTurnFiles).toHaveBeenCalledTimes(2)
+    expect(provider.rewindThread).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledWith('Edited prompt')
   })
 
   it('recovers canonical turn state and releases the guard after rewind fails', async () => {

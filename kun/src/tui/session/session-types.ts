@@ -2,7 +2,6 @@ import type { AutocompleteItem } from '../autocomplete.js'
 import type { ClipboardImage } from '../clipboard-image.js'
 import type { TuiKeyAction } from '../keymap.js'
 import type { TuiPage } from '../page-model.js'
-import type { ScrollbackCommit } from '../scrollback-plan.js'
 import type { OfficialProviderCliId } from '../../services/official-provider-cli.js'
 
 /** The multi-line prompt editor owned by the terminal app (an opentui textarea). */
@@ -27,22 +26,20 @@ export interface TerminalPort {
    * and restore the renderer afterwards, even when `work` throws.
    */
   suspend<T>(work: () => Promise<T>): Promise<T>
-  /** Erase the visible screen while keeping the terminal scrollback. */
-  clearScreen(): void
-  /** Repaint everything the renderer owns (Ctrl+L). */
+  /** Repaint everything the renderer owns (Ctrl+L, /clear). */
   repaint(): void
   size(): { width: number; height: number }
   /** Send SIGTSTP to the process group after restoring the terminal. */
   suspendProcess(): void
 }
 
-export type ScrollbackRenderOptions = {
-  showReasoning: boolean
-  showToolDetails: boolean
-  legacyGui: boolean
-}
+export type ViewportScroll =
+  | 'page-up' | 'page-down' | 'line-up' | 'line-down' | 'half-page-up' | 'half-page-down' | 'first' | 'last'
 
-export type ScrollbackSink = (commits: ScrollbackCommit[], options: ScrollbackRenderOptions) => void
+/** The scrollable conversation the app renders; scroll position lives there. */
+export interface ViewportPort {
+  scroll(target: ViewportScroll): void
+}
 
 export type AutocompleteView = {
   items: readonly AutocompleteItem[]
@@ -62,6 +59,8 @@ export type LiveClickTarget =
   | { kind: 'thinking'; itemId: string }
   | { kind: 'child'; childId: string }
   | { kind: 'graph' }
+  | { kind: 'work'; key: string }
+  | { kind: 'session'; threadId: string }
 
 export type ChatSessionDependencies = {
   clipboardImageReader?: () => Promise<ClipboardImage | null>

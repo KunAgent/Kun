@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { SidebarCommandRow, SidebarIconButton } from './SidebarPrimitives'
 import { SidebarFocusModeControl } from './SidebarFocusModeControl'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
+import { SidebarGuiUpdate } from './SidebarGuiUpdate'
 import { KunAccountControl, kunAccountAvailable } from '../account/KunAccountControl'
 
 function useDocumentDarkMode(): boolean {
@@ -22,7 +23,8 @@ function useDocumentDarkMode(): boolean {
 
 /**
  * Footer shared by the Code and Work sidebars: the Kun account card (its menu
- * holds the wardrobe), then Settings beside the focus, phone and theme switches.
+ * holds the wardrobe), then Settings (with the GUI update chip while an update
+ * is pending) beside the focus, phone and theme switches.
  * Focus mode hides the card. Theme packs with their own sidebar scene use
  * the one-line card; the remote browser client, which has no account, keeps Kun's status card.
  */
@@ -57,15 +59,17 @@ export function SidebarStandardFooter({
           {account ? <KunAccountControl /> : <SidebarKunStatus />}
         </div>
       ) : null}
-      <div className="ds-sidebar-footer-bar flex items-center gap-1">
-        <div className="min-w-0 flex-1">
+      <div className="ds-sidebar-footer-bar relative flex items-center gap-1">
+        <div className="min-w-0 flex-1" data-footer-settings-slot>
           <SidebarCommandRow
             icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}
             label={t('settings')}
             onClick={onOpenSettings}
             variant="footer"
+            collapseLabel
           />
         </div>
+        <SidebarGuiUpdate />
         {!sceneFooter ? <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} /> : null}
         <SidebarIconButton title={t('claw')} ariaLabel={t('claw')} onClick={onToggleConnectPhone} active={connectPhoneSidebarOpen}>
           <Smartphone className="h-4 w-4" strokeWidth={1.75} />

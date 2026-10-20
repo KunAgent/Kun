@@ -27,6 +27,7 @@ import type {
   WorkspaceEntryRenameResult,
   WorkspaceFileCreatePayload,
   WorkspaceFileCreateResult,
+  WorkspaceFileReadPayload,
   WorkspaceFileReadResult,
   WorkspaceFileResolveResult,
   WorkspaceFileTarget,
@@ -39,6 +40,16 @@ import type {
   WorkspaceImageReadResult,
   WorkspacePdfReadResult
 } from '../../shared/workspace-file'
+import {
+  WORKSPACE_TEXT_PREVIEW_HEAD_BYTES,
+  WORKSPACE_TEXT_PREVIEW_MAX_BYTES
+} from '../../shared/workspace-file'
+import {
+  CONVERTED_IMAGE_EXTENSIONS,
+  MAX_CONVERTED_IMAGE_SOURCE_BYTES,
+  convertImageToPng
+} from './workspace-image-conversion'
+import { decodeWorkspaceText } from './workspace-text-decoding'
 import {
   canonicalPath,
   compareWorkspaceEntries,
@@ -53,9 +64,11 @@ import {
   validateEntryName
 } from './workspace-paths'
 
-export const MAX_FILE_PREVIEW_BYTES = 1_500_000
+export const MAX_FILE_PREVIEW_BYTES = WORKSPACE_TEXT_PREVIEW_HEAD_BYTES
 
-export const MAX_IMAGE_PREVIEW_BYTES = 12 * 1024 * 1024
+const BINARY_HEAD_BYTES = 4096
+
+export const MAX_IMAGE_PREVIEW_BYTES = 40 * 1024 * 1024
 
 export const MAX_PDF_PREVIEW_BYTES = 64 * 1024 * 1024
 
@@ -76,26 +89,12 @@ export const WORKSPACE_IMAGE_MIME_BY_EXT = new Map([
 ])
 
 export function decodeWorkspaceTextPreview(bytes: Buffer): string | null {
-  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
-    return bytes.subarray(3).toString('utf8')
-  }
+  return decodeWorkspaceText(bytes)?.text ?? null
+}
 
-  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
-    const body = bytes.subarray(2, bytes.length - ((bytes.length - 2) % 2))
-    return body.toString('utf16le')
-  }
-
-  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
-    const body = Buffer.from(bytes.subarray(2, bytes.length - ((bytes.length - 2) % 2)))
-    for (let index = 0; index + 1 < body.length; index += 2) {
-      const first = body[index]
-      body[index] = body[index + 1]
-      body[index + 1] = first
-    }
-    return body.toString('utf16le')
-  }
-
-  return bytes.includes(0) ? null : bytes.toString('utf8')
+function readFailureCode(error: unknown): 'not_found' | undefined {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR' ? 'not_found' : undefined
 }
 
 export async function listWorkspaceDirectory(
@@ -129,32 +128,47 @@ export async function listWorkspaceDirectory(
   }
 }
 
-export async function readWorkspaceFile(payload: WorkspaceFileTarget): Promise<WorkspaceFileReadResult> {
+export async function readWorkspaceFile(payload: WorkspaceFileReadPayload): Promise<WorkspaceFileReadResult> {
   try {
     const targetPath = await resolveOpenTargetPath(payload.path, payload.workspaceRoot)
     const fileInfo = await stat(targetPath)
     if (fileInfo.isDirectory()) {
-      return { ok: false, message: 'Cannot preview a directory.' }
+      return { ok: false, code: 'directory', message: 'Cannot preview a directory.', path: targetPath }
     }
 
-    const maxBytes = Math.min(fileInfo.size, MAX_FILE_PREVIEW_BYTES)
+    const limit = Math.min(
+      Math.max(1, Math.trunc(payload.maxBytes ?? MAX_FILE_PREVIEW_BYTES)),
+      WORKSPACE_TEXT_PREVIEW_MAX_BYTES
+    )
+    const maxBytes = Math.min(fileInfo.size, limit)
     const handle = await openFile(targetPath, 'r')
     try {
       const buffer = Buffer.alloc(maxBytes)
       const { bytesRead } = await handle.read(buffer, 0, maxBytes, 0)
       const bytes = buffer.subarray(0, bytesRead)
-      const content = decodeWorkspaceTextPreview(bytes)
-      if (content === null) {
-        return { ok: false, message: 'This file appears to be binary and cannot be previewed.' }
+      const truncated = fileInfo.size > bytesRead
+      const decoded = decodeWorkspaceText(bytes, { forced: payload.encoding, truncated })
+      if (!decoded) {
+        return {
+          ok: false,
+          code: 'binary',
+          message: 'This file appears to be binary and cannot be previewed.',
+          path: targetPath,
+          size: fileInfo.size,
+          mtimeMs: fileInfo.mtimeMs,
+          headBase64: bytes.subarray(0, BINARY_HEAD_BYTES).toString('base64')
+        }
       }
 
       return {
         ok: true,
         path: targetPath,
-        content,
+        content: decoded.text,
         size: fileInfo.size,
         mtimeMs: fileInfo.mtimeMs,
-        truncated: fileInfo.size > MAX_FILE_PREVIEW_BYTES,
+        truncated,
+        encoding: decoded.encoding,
+        bytesRead,
         ...(payload.line ? { line: payload.line } : {}),
         ...(payload.column ? { column: payload.column } : {})
       }
@@ -162,8 +176,10 @@ export async function readWorkspaceFile(payload: WorkspaceFileTarget): Promise<W
       await handle.close()
     }
   } catch (error) {
+    const code = readFailureCode(error)
     return {
       ok: false,
+      ...(code ? { code } : {}),
       message: error instanceof Error ? error.message : String(error)
     }
   }
@@ -178,14 +194,31 @@ export async function readWorkspaceImage(
     if (fileInfo.isDirectory()) {
       return { ok: false, message: 'Cannot preview a directory.' }
     }
-    if (fileInfo.size > MAX_IMAGE_PREVIEW_BYTES) {
-      return { ok: false, message: 'This image is too large to preview.' }
-    }
 
     const ext = extensionFromName(targetPath).toLowerCase()
+    if (CONVERTED_IMAGE_EXTENSIONS.has(ext)) {
+      if (fileInfo.size > MAX_CONVERTED_IMAGE_SOURCE_BYTES) {
+        return { ok: false, code: 'too_large', message: 'This image is too large to preview.' }
+      }
+      const png = await convertImageToPng(targetPath)
+      if (!png) {
+        return { ok: false, code: 'unsupported', message: 'This image format cannot be previewed on this system.' }
+      }
+      return {
+        ok: true,
+        path: targetPath,
+        dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+        mimeType: 'image/png',
+        size: fileInfo.size,
+        convertedFrom: ext.slice(1).toUpperCase()
+      }
+    }
+    if (fileInfo.size > MAX_IMAGE_PREVIEW_BYTES) {
+      return { ok: false, code: 'too_large', message: 'This image is too large to preview.' }
+    }
     const mimeType = WORKSPACE_IMAGE_MIME_BY_EXT.get(ext)
     if (!mimeType) {
-      return { ok: false, message: 'This image type is not supported in Work.' }
+      return { ok: false, code: 'unsupported', message: 'This image type is not supported in Work.' }
     }
 
     const bytes = await readFile(targetPath)
@@ -197,8 +230,10 @@ export async function readWorkspaceImage(
       size: fileInfo.size
     }
   } catch (error) {
+    const code = readFailureCode(error)
     return {
       ok: false,
+      ...(code ? { code } : {}),
       message: error instanceof Error ? error.message : String(error)
     }
   }

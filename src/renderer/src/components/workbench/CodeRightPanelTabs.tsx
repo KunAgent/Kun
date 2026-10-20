@@ -27,7 +27,8 @@ import {
   Shirt,
   Users,
   X,
-  type LucideIcon
+  type LucideIcon,
+  AppWindow
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -153,6 +154,9 @@ export function CodeRightPanelTabs({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return { label: dynamicTitle || t('rightPanelNewBrowserTab'), icon: Globe2 }
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.appSurface) {
+      return { label: dynamicTitle || t('appSurfacePanelTab'), icon: AppWindow }
     }
     const builtin = builtinById.get(id)
     if (builtin) return { label: dynamicTitle || builtin.label, icon: builtin.icon }

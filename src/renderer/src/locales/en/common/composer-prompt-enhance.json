@@ -1,0 +1,20 @@
+{
+  "composerPromptEnhance": "Enhance prompt",
+  "composerPromptEnhanceHint": "Enhance prompt · rewrites the draft with {{model}}",
+  "composerPromptEnhanceHintDefault": "Enhance prompt · rewrites the draft with Kun's default model",
+  "composerPromptEnhanceCancel": "Cancel enhancement",
+  "composerPromptEnhanceCancelHint": "Cancel enhancement (Esc)",
+  "composerPromptEnhanceRunning": "Enhancing with {{model}}… The draft is read-only; click the button again or press Esc to cancel.",
+  "composerPromptEnhanceRunningDefault": "Enhancing… The draft is read-only; click the button again or press Esc to cancel.",
+  "composerPromptEnhanceDone": "Enhanced with {{model}}; the draft was replaced",
+  "composerPromptEnhanceUndo": "Undo",
+  "composerPromptEnhanceUndoHint": "Restore the draft from before the enhancement",
+  "composerPromptEnhanceDismiss": "Dismiss",
+  "composerPromptEnhanceEmpty": "Enter a prompt to enhance first",
+  "composerPromptEnhanceUnsupportedAgent": "The current model signs in through {{agent}}, so Kun can't call it to enhance prompts. Switch to a Kun provider model, or pin an enhancement model in Settings.",
+  "composerPromptEnhanceUnsupported": "The current model can't be used to enhance prompts. Switch to a Kun provider model, or pin an enhancement model in Settings.",
+  "composerPromptEnhanceOpenSettings": "Open settings",
+  "composerPromptEnhanceFailed": "Enhancement failed: {{message}} The draft was not changed.",
+  "composerPromptEnhanceTimeout": "Enhancement timed out. The draft was not changed; try again or raise the timeout in Settings.",
+  "composerPromptEnhanceDisabled": "Prompt enhancement is turned off in Settings."
+}

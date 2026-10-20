@@ -7,7 +7,6 @@ import type {
 import {
   chatFileTreeEntryMatchesQuery,
   compareChatFileTreeEntriesByModified,
-  formatChatFileTreeUnsupportedMessage,
   isChatFileTreeIgnoredDirectory,
   isChatFileTreePreviewableEntry,
   scanChatFileTreeRecentFiles,
@@ -40,11 +39,11 @@ describe('ChatFileTreePanel helpers', () => {
     expect(isChatFileTreeIgnoredDirectory('src')).toBe(false)
   })
 
-  it('marks all supported preview families as previewable', () => {
+  it('treats every file as previewable, including names without a known extension', () => {
     expect(isChatFileTreePreviewableEntry(entry({ name: 'main.ts', type: 'file' }))).toBe(true)
-    expect(isChatFileTreePreviewableEntry(entry({ name: 'logo.png', type: 'file' }))).toBe(true)
-    expect(isChatFileTreePreviewableEntry(entry({ name: 'report.pdf', type: 'file' }))).toBe(true)
-    expect(isChatFileTreePreviewableEntry(entry({ name: 'archive.zip', type: 'file' }))).toBe(false)
+    expect(isChatFileTreePreviewableEntry(entry({ name: 'LICENSE', type: 'file' }))).toBe(true)
+    expect(isChatFileTreePreviewableEntry(entry({ name: '.env.local', type: 'file' }))).toBe(true)
+    expect(isChatFileTreePreviewableEntry(entry({ name: 'archive.zip', type: 'file' }))).toBe(true)
     expect(isChatFileTreePreviewableEntry(entry({ name: 'src', type: 'directory' }))).toBe(false)
   })
 
@@ -57,10 +56,6 @@ describe('ChatFileTreePanel helpers', () => {
     expect(chatFileTreeEntryMatchesQuery(candidate, '/tmp/project', 'app')).toBe(true)
     expect(chatFileTreeEntryMatchesQuery(candidate, '/tmp/project', 'components/app')).toBe(true)
     expect(chatFileTreeEntryMatchesQuery(candidate, '/tmp/project', 'server')).toBe(false)
-  })
-
-  it('formats unsupported preview titles without leaking UI state', () => {
-    expect(formatChatFileTreeUnsupportedMessage('logo.png')).toContain('logo.png')
   })
 
   it('sorts files by newest mtime before falling back to name', () => {

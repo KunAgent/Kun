@@ -3,9 +3,11 @@ import type { TuiController, TuiControllerState } from '../controller.js'
 import { parseTuiKeymapConfig, type TuiKeymap } from '../keymap.js'
 import { editTextInExternalEditor } from '../operations.js'
 import type { TuiPage } from '../page-model.js'
-import { ScrollbackPlanner } from '../scrollback-plan.js'
+import { GitStatusWatcher, type GitSnapshot } from '../git-status.js'
 import { isActiveChildRun } from '../subagent-format.js'
 import { buildTranscriptEntries, type TranscriptEntry } from '../transcript-model.js'
+import { foldWorkTrails, withPartSpacing, withTurnFooters } from '../transcript-trail.js'
+import { SessionNavigation } from './session-navigation.js'
 import type { OfficialProviderCliId } from '../../services/official-provider-cli.js'
 import type {
   AutocompleteView,
@@ -13,8 +15,8 @@ import type {
   ComposerPort,
   LeaderHint,
   PageEntry,
-  ScrollbackSink,
-  TerminalPort
+  TerminalPort,
+  ViewportPort
 } from './session-types.js'
 
 export const ANIMATION_INTERVAL_MS = 80
@@ -29,22 +31,35 @@ const NOOP_COMPOSER: ComposerPort = {
 
 /**
  * Renderer-neutral application state for the terminal UI: page stack,
- * gestures, scrollback planning and animation. The opentui app renders this
+ * gestures, transcript entries and animation. The opentui app renders this
  * state and forwards input; everything here is testable without a terminal.
  */
 export abstract class ChatSessionBase {
   protected composer: ComposerPort = NOOP_COMPOSER
   protected terminal?: TerminalPort
-  protected scrollbackSink?: ScrollbackSink
+  protected viewport?: ViewportPort
   protected readonly pages: PageEntry[] = []
   protected readonly listeners = new Set<() => void>()
-  protected readonly planner = new ScrollbackPlanner()
-  protected liveEntriesValue: TranscriptEntry[] = []
-  protected scrollbackReady = false
+  protected entriesValue: TranscriptEntry[] = []
+  /** Open session tabs and when each was last seen. */
+  readonly navigation = new SessionNavigation()
+  protected gitValue?: GitSnapshot
+  protected readonly gitWatcher = new GitStatusWatcher((snapshot) => {
+    this.gitValue = snapshot
+    this.changed()
+  })
+  /** Work trails the reader opened one by one. */
+  protected readonly expandedTrails = new Set<string>()
+  protected navigationTimer?: ReturnType<typeof setInterval>
   protected showReasoningValue = false
   protected readonly liveReasoningOverrides = new Map<string, boolean>()
   protected showToolDetailsValue = false
-  protected pointerModeValue = false
+  /** Mouse capture: wheel scrolling, clicks and in-app selection. */
+  protected pointerModeValue = true
+  /** Docked sidebar on wide terminals (shown unless hidden). */
+  protected sidebarVisibleValue = true
+  /** Sidebar overlay on narrow terminals (hidden unless opened). */
+  protected sidebarOverlayValue = false
   protected transientHintValue?: string
   protected leaderHintValue?: LeaderHint
   protected autocompleteValue?: AutocompleteView
@@ -82,10 +97,15 @@ export abstract class ChatSessionBase {
 
   get state(): TuiControllerState { return this.controller.state }
   get page(): TuiPage | undefined { return this.pages.at(-1)?.page }
-  get liveEntries(): readonly TranscriptEntry[] { return this.liveEntriesValue }
+  /** Every transcript entry of the open thread, in display order. */
+  get entries(): readonly TranscriptEntry[] { return this.entriesValue }
   get showReasoning(): boolean { return this.showReasoningValue }
   get showToolDetails(): boolean { return this.showToolDetailsValue }
   get pointerMode(): boolean { return this.pointerModeValue }
+  get sidebarVisible(): boolean { return this.sidebarVisibleValue }
+  get sidebarOverlay(): boolean { return this.sidebarOverlayValue }
+  /** Branch and uncommitted changes of the session's workspace, when it is a repository. */
+  get git(): GitSnapshot | undefined { return this.gitValue }
   get transientHint(): string | undefined { return this.transientHintValue }
   get leaderHint(): LeaderHint | undefined { return this.leaderHintValue }
   get autocomplete(): AutocompleteView | undefined { return this.autocompleteValue }
@@ -99,9 +119,8 @@ export abstract class ChatSessionBase {
     this.terminal = terminal
   }
 
-  /** Receives transcript entries once they are final enough for scrollback. */
-  attachScrollback(sink: ScrollbackSink): void {
-    this.scrollbackSink = sink
+  attachViewport(viewport: ViewportPort): void {
+    this.viewport = viewport
   }
 
   subscribe(listener: () => void): () => void {
@@ -119,67 +138,18 @@ export abstract class ChatSessionBase {
     for (const listener of [...this.listeners]) listener()
   }
 
-  /**
-   * Scrollback can only be written while the inline chat surface is active.
-   * Pages run on the alternate screen and external programs own the
-   * terminal while suspended; commits are planned again once ready.
-   */
-  setScrollbackReady(ready: boolean): void {
-    this.scrollbackReady = ready
-    if (ready) this.planScrollback()
-  }
-
-  protected planScrollback(): void {
+  /** Rebuild the transcript entries from the current projection. */
+  protected refreshEntries(): void {
     const projection = this.controller.state.projection
     const entries = buildTranscriptEntries(projection, {
       showReasoning: this.showReasoningValue,
       reasoningOverrides: this.liveReasoningOverrides,
       splitAssistantText: true
     })
-    if (!this.scrollbackReady || this.suspended || !this.scrollbackSink) {
-      // Without a writable scrollback everything unwritten is live; nothing
-      // is marked committed so it will be written once the surface returns.
-      return
-    }
-    const plan = this.planner.plan(projection?.thread.id, projection?.thread.title || 'Untitled', entries)
-    this.liveEntriesValue = plan.live
-    if (plan.commits.length) {
-      this.scrollbackSink(plan.commits, {
-        showReasoning: this.showReasoningValue,
-        showToolDetails: this.showToolDetailsValue,
-        legacyGui: this.controller.runtime.legacyGui === true
-      })
-    }
-  }
-
-  /**
-   * On exit, write whatever is still live so the terminal scrollback keeps
-   * the final state of the conversation after Kun's surface is gone.
-   */
-  finalizeScrollback(): void {
-    if (!this.scrollbackReady || !this.scrollbackSink) return
-    const projection = this.controller.state.projection
-    const entries = buildTranscriptEntries(projection, {
-      showReasoning: this.showReasoningValue,
-      reasoningOverrides: this.liveReasoningOverrides,
-      splitAssistantText: true
-    }).map((entry) => ({ ...entry, settled: true }))
-    const plan = this.planner.plan(projection?.thread.id, projection?.thread.title || 'Untitled', entries)
-    this.liveEntriesValue = []
-    if (plan.commits.length) {
-      this.scrollbackSink(plan.commits, {
-        showReasoning: this.showReasoningValue,
-        showToolDetails: this.showToolDetailsValue,
-        legacyGui: this.controller.runtime.legacyGui === true
-      })
-    }
-  }
-
-  /** Called by the app after it cleared the screen and wants a full replay. */
-  replayScrollback(): void {
-    this.planner.reset()
-    this.planScrollback()
-    this.changed()
+    this.entriesValue = withPartSpacing(foldWorkTrails(withTurnFooters(entries, projection), projection, {
+      expandAll: this.showToolDetailsValue,
+      expanded: this.expandedTrails
+    }))
   }
 
   run(): Promise<void> {
@@ -190,6 +160,12 @@ export abstract class ChatSessionBase {
     process.on('SIGTERM', this.signalHandler)
     process.on('SIGHUP', this.signalHandler)
     this.terminal?.setTitle('Kun')
+    // Tab and rail status for sessions other than the open one comes from
+    // the thread list; the Sessions page refreshes it on its own.
+    this.navigationTimer = setInterval(() => {
+      if (this.page?.kind !== 'sessions') void this.controller.refreshThreads(this.controller.state.threadSearch)
+    }, 5_000)
+    this.navigationTimer.unref?.()
     this.onControllerState(this.controller.state)
     return this.runPromise
   }
@@ -208,13 +184,15 @@ export abstract class ChatSessionBase {
         updateSnapshot?: (snapshot: NonNullable<TuiControllerState['modelConnections']>) => void
       }
       page.updateParentProjection?.(state.projection)
-      if (page.kind === 'transcript') page.update?.(state.projection)
-      else if (page.kind === 'sessions' || page.kind === 'goal' || page.kind === 'graph') page.update?.(state)
+      if (page.kind === 'sessions' || page.kind === 'goal' || page.kind === 'graph') page.update?.(state)
       if (state.modelConnections) page.updateSnapshot?.(state.modelConnections)
     }
     this.syncPages(state)
     this.syncAnimation(state)
-    this.planScrollback()
+    const thread = state.projection?.thread
+    this.navigation.observe(thread ? { id: thread.id, title: thread.title, workspace: thread.workspace } : undefined)
+    this.gitWatcher.watch(thread?.workspace ?? this.controller.options.workspace)
+    this.refreshEntries()
     void this.refreshSkillAutocomplete(state.projection?.thread.workspace ?? this.controller.options.workspace)
     if (state.quitRequested) this.resolveRun?.()
     this.changed()
@@ -261,6 +239,9 @@ export abstract class ChatSessionBase {
     this.threadRefreshTimer = undefined
     if (this.animationTimer) clearInterval(this.animationTimer)
     this.animationTimer = undefined
+    if (this.navigationTimer) clearInterval(this.navigationTimer)
+    this.navigationTimer = undefined
+    this.gitWatcher.stop()
     this.resolveRun?.()
     this.resolveRun = undefined
   }

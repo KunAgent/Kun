@@ -10,7 +10,7 @@ import type { DesignArtifact } from './design-types'
 
 export type DesignComposerContext = {
   id: string
-  kind: 'design-target' | 'html-artifact' | 'html-screen-frame' | 'html-element' | 'svg-artifact' | 'svg-artifact-frame' | 'canvas-selection' | 'extension-context' | 'dev-preview-element' | 'dev-preview-issue' | 'document-quote'
+  kind: 'design-target' | 'html-artifact' | 'html-screen-frame' | 'html-element' | 'svg-artifact' | 'svg-artifact-frame' | 'canvas-selection' | 'extension-context' | 'dev-preview-element' | 'dev-preview-issue' | 'document-quote' | 'message-quote'
   label: string
   detail?: string
   removable?: boolean
@@ -19,6 +19,12 @@ export type DesignComposerContext = {
     pageStart: number
     pageEnd: number
     charCount: number
+  }
+  /** A conversation passage the user is replying to. */
+  messageQuote?: {
+    text: string
+    role: 'assistant' | 'user'
+    truncated: boolean
   }
 }
 

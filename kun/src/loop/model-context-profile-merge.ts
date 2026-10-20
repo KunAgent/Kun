@@ -4,7 +4,7 @@ import type { ModelContextProfile } from './model-context-profile.js'
  * Provider-scoped profiles win; global profiles only fill in models the
  * provider does not describe. A provider that lists a model without its own
  * capacity facts must not mask a window declared for the same model globally,
- * otherwise the model falls back to the 32k placeholder window.
+ * otherwise the model falls back to the assumed default window.
  */
 export function mergeModelContextProfiles(
   primary: readonly ModelContextProfile[],

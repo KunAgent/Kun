@@ -269,7 +269,7 @@ export class ActivityStore implements RuntimeEventObserver {
    * restoredUnconfirmed.
    */
   async hydrate(store: {
-    list(options?: { limit?: number }): Promise<Array<{ id: string }>>
+    list(options?: { limit?: number }): Promise<Array<{ id: string; updatedAt?: string }>>
     getMetadata?(threadId: string): Promise<ThreadRecord | null>
   }): Promise<void> {
     const cutoff = Date.now() - 7 * 24 * 60 * 60_000
@@ -277,6 +277,9 @@ export class ActivityStore implements RuntimeEventObserver {
     const threads = await store.list({ limit }).catch(() => [])
     for (const summary of threads) {
       if (this.rows.has(summary.id)) continue
+      // Summaries carry updatedAt; old threads skip the per-thread metadata
+      // read, which is a Manager round trip in managed mode.
+      if (summary.updatedAt && Date.parse(summary.updatedAt) < cutoff) continue
       const record = await store.getMetadata?.(summary.id).catch(() => null)
       if (!record) continue
       if (Date.parse(record.updatedAt) < cutoff) continue

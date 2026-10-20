@@ -196,7 +196,6 @@
   "rewindCancel": "Cancel",
   "rewindResend": "Resend",
   "rewindHint": "Esc to cancel · ⌘/Ctrl + Enter to send",
-  "rewindFileRollbackNotice": "Resending will roll back file changes",
   "rewindBusyError": "Wait for the current turn to finish before rewinding.",
   "toolActionFile": "Edited file",
   "toolActionCommand": "Ran command",

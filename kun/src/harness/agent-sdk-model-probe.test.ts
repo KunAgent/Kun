@@ -108,6 +108,17 @@ describe('AgentSdkModelProbe', () => {
     expect(await probe.probe(definition)).toEqual(['custom-model'])
   })
 
+  it('reports successful catalogs only, so a failed probe never replaces a kept one', async () => {
+    const onCatalog = vi.fn()
+    const probe = new AgentSdkModelProbe({ onCatalog,
+      loadSdk: fakeSdk(() => ({ supportedModels: async () => MODEL_ROWS, close: () => undefined })) })
+    await probe.probe(definition)
+    expect(onCatalog).toHaveBeenCalledWith(definition, expect.objectContaining({ models: ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1'] }))
+    const failing = new AgentSdkModelProbe({ onCatalog, loadSdk: async () => { throw new Error('sdk missing') } })
+    expect(await failing.probe(definition)).toEqual([])
+    expect(onCatalog).toHaveBeenCalledOnce()
+  })
+
   it('returns [] when the SDK fails to load or spawn', async () => {
     const probe = new AgentSdkModelProbe({
       loadSdk: async () => {

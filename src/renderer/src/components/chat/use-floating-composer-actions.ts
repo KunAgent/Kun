@@ -48,7 +48,7 @@ export function useFloatingComposerActions(
     activeThreadId, archiveThread, attachments, buildResearchPrompt, busy,
     canAcceptComposerFileDrop,
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
-    canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
+    canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode,
     clearActiveThreadGoal, compact, compactActiveThread, composerRootRef, composerSendKey,
     dictationPrimaryActionRef, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
@@ -63,7 +63,7 @@ export function useFloatingComposerActions(
     parseResearchCommand, parseReviewCommand, parsedGoalCommand, primaryActionDisabled,
     route, routeComposerFileDrop, runtimeReady, setActiveThreadGoal, setActiveThreadGoalStatus,
     setComposerMenuOpen, setGoalInputMode, setGoalPanelOpen, setInput, setMode,
-    setPromptOptimizationBusy, setPromptOptimizationError, slashCommandMenu, slashCommands,
+    promptEnhance, slashCommandMenu, slashCommands,
     t, userInput
   } = context
   const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
@@ -310,34 +310,9 @@ export function useFloatingComposerActions(
     draft.focusComposer()
   }
 
-  const handlePromptOptimizationClick = (): void => {
-    if (!canOptimizePrompt) return
-    const sourceText = input
-    setPromptOptimizationBusy(true)
-    setPromptOptimizationError(null)
-    void window.kunGui.optimizePrompt({ text: sourceText })
-      .then((result) => {
-        if (!result.ok) {
-          setPromptOptimizationError(result.message)
-          return
-        }
-        setInput(result.text)
-        window.requestAnimationFrame(() => {
-          const textarea = draft.textareaRef.current
-          if (!textarea) return
-          textarea.focus()
-          const cursor = result.text.length
-          textarea.setSelectionRange(cursor, cursor)
-          fileMentions.setCursor(cursor)
-        })
-      })
-      .catch((error) => {
-        setPromptOptimizationError(error instanceof Error ? error.message : String(error))
-      })
-      .finally(() => setPromptOptimizationBusy(false))
-  }
-
   const handlePrimaryAction = (): void => {
+    // The draft is being rewritten; sending now would race the replacement.
+    if (promptEnhance?.running) return
     // While an ask-user request is pending, a plain text reply answers the
     // current question instead of being sent/queued as a chat message. Routing
     // through resolveUserInput (not onSend) bypasses the busy-turn queue. Slash
@@ -433,6 +408,8 @@ export function useFloatingComposerActions(
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
     const sendByHotkey = isComposerSendHotkey(event, composerSendKey)
     const composing = draft.isComposingEvent(event)
+
+    if (!composing && promptEnhance?.handleKeyDown(event)) return
 
     if (fileMentions.handleKeyDown(event, composing)) return
 
@@ -577,7 +554,6 @@ export function useFloatingComposerActions(
     handleAutoPlanBuildToolbarClick,
     handlePlanToolbarClick,
     handlePrimaryAction,
-    handlePromptOptimizationClick,
     setGoalFromComposerInput
   }
 }

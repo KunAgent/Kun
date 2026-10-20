@@ -1,0 +1,19 @@
+{
+  "messageQuoteToolbarLabel": "Selected text actions",
+  "messageQuoteStartSide": "Start branch conversation",
+  "messageQuoteStartSideTitle": "Ask about this passage in a branch conversation that keeps the full context",
+  "messageQuoteSideNeedsRuntime": "Available once the runtime is connected",
+  "messageQuoteSideNeedsThread": "Start a conversation first",
+  "messageQuoteReply": "Reply",
+  "messageQuoteReplyTitle": "Quote this passage in your next message",
+  "messageQuoteReplyingToAssistant": "Replying to Kun",
+  "messageQuoteReplyingToUser": "Replying to your message",
+  "messageQuoteTruncated": "first 2,000 characters",
+  "messageQuoteExpand": "Show the whole quote",
+  "messageQuoteCollapse": "Collapse quote",
+  "messageQuoteRemove": "Remove quote",
+  "messageQuoteComposerPlaceholder": "Reply to this passage…",
+  "messageQuoteSidePlaceholder": "Ask about this passage…",
+  "messageQuoteJumpToSource": "Jump to the original",
+  "messageQuoteJumpToSourceLabel": "Jump to the quoted text: {{text}}"
+}

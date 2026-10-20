@@ -1,4 +1,5 @@
 import { modelContextProfilesForProvider } from '../loop/model-context-profile.js'
+import { GenUiStore } from '../gen-ui/gen-ui-store.js'
 import {
   mkdir,
   join,
@@ -292,6 +293,7 @@ export async function createRuntimeCore(
   const acpClientHost = new AcpClientHost()
   const acpSessionManager = new AcpSessionManager({ coordinator: delegatedSessions })
   const teamStoreForAdmission = new FileTeamStore(activeOptions.dataDir, nowIso)
+  const genUiStore = new GenUiStore(join(options.dataDir, 'gen-ui'), nowIso)
   const threadService: ThreadService = new ThreadService({
     legacyTaskGraphRoot: join(activeOptions.dataDir, 'task-graphs'),
     threadStore,
@@ -334,6 +336,7 @@ export async function createRuntimeCore(
       await Promise.all([
         ...(llmDebug ? [llmDebug.deleteThread(threadId)] : []),
         delegatedSessions.invalidate(threadId),
+        genUiStore.deleteThreadState(threadId),
         contextWindows.deleteThreadData(threadId),
         contextWindowState.deleteThreadData(threadId),
         historyReferences.cleanupDeletedThread(threadId, historyRefId)
@@ -343,6 +346,7 @@ export async function createRuntimeCore(
     onForked: (sourceThreadId, targetThreadId) =>
       Promise.all([
         handleGraphThreadFork?.(sourceThreadId, targetThreadId),
+        genUiStore.copyThreadState(sourceThreadId, targetThreadId),
         contextWindows.forkThreadData(sourceThreadId, targetThreadId)
       ]).then(() => undefined)
   })
@@ -523,6 +527,7 @@ export async function createRuntimeCore(
     projectBoardStore,
     historyReferences,
     projectBoardService,
+    genUiStore,
     artifactStore,
     graphConfig,
     graphRuntime,

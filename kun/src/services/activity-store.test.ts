@@ -449,6 +449,24 @@ describe('ActivityStore', () => {
     expect(store.get('t-none')).toBeUndefined()
   })
 
+  it('skips summaries older than the hydrate window without reading metadata', async () => {
+    const recent = new Date(Date.parse(NOW) - 60_000).toISOString()
+    const getMetadata = vi.fn(async (id: string) => ({
+      id, title: id, workspace: '/w', status: 'running', updatedAt: recent,
+      turns: [{ id: `${id}-turn`, status: 'running' }]
+    }) as never)
+    const store = makeStore()
+    await store.hydrate({
+      list: async () => [
+        { id: 't-recent', updatedAt: recent },
+        { id: 't-stale', updatedAt: '2020-01-01T00:00:00.000Z' }
+      ],
+      getMetadata
+    })
+    expect(getMetadata.mock.calls.map(([id]) => id)).toEqual(['t-recent'])
+    expect(store.get('t-recent')).toMatchObject({ mainState: 'working' })
+  })
+
   it('clears stalled on the next runtime event', () => {
     const store = makeStore()
     registerThread(store, 't1')

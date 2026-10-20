@@ -16,7 +16,7 @@ export type { RoomNotificationPreference, RoomPreferenceDetail, RoomSearchQuery,
   RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../../kun/src/contracts/room-experience'
 export type {
   RoomRunDetail, RoomRunAvailability, RoomRunContentPage, RoomRunItemsPage,
-  RoomRunListPage, RoomMessageRunSource, RoomRunEvent
+  RoomRunListPage, RoomMessageRunSource, RoomRunEvent, RoomRunStep, RoomRunSteps
 } from '../../kun/src/contracts/room-run-query'
 export type {
   Room,

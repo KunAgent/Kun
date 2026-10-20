@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppSessionOwner } from '../contracts/app-session-owner.js'
 import type { RuntimeRegistration } from '../contracts/runtime-flavor.js'
 import {
+  armOwnerLossExitDeadline,
   drainManagerAfterOwnerLoss,
   ownedManagerRuntimes,
   stopManagerAfterOwnerLoss
@@ -89,5 +90,36 @@ describe('manager owner-loss drain', () => {
       fetchImpl: (async () => new Response(null, { status: 204 })) as typeof fetch
     })
     expect(manager.close).toHaveBeenCalledOnce()
+  })
+})
+
+describe('manager owner-loss exit deadline', () => {
+  it('exits when owner-loss cleanup stalls past the deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const exit = vi.fn()
+      const log = vi.fn()
+      armOwnerLossExitDeadline(exit, { deadlineMs: 1_000, log })
+      await vi.advanceTimersByTimeAsync(999)
+      expect(exit).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(exit).toHaveBeenCalledWith(75)
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('did not finish within 1000ms'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not exit once cleanup finished and the deadline was cancelled', async () => {
+    vi.useFakeTimers()
+    try {
+      const exit = vi.fn()
+      const cancel = armOwnerLossExitDeadline(exit, { deadlineMs: 1_000, log: vi.fn() })
+      cancel()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(exit).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

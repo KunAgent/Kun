@@ -1,3 +1,4 @@
+import { buildCanvasKunMcpServer, CANVAS_MCP_SERVER_ID, canvasMcpEnabled } from '../canvas-mcp/canvas-mcp-config'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
@@ -156,6 +157,11 @@ export async function syncGuiManagedKunConfig(
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
   const retainedMcpServers = stripGeneratedProjectMcpServers(objectValue(mcp.servers))
+  // The built-in canvas MCP App is host-owned: rebuilt from the Lab flag every sync.
+  delete retainedMcpServers[CANVAS_MCP_SERVER_ID]
+  const canvasMcpServer = options?.scheduleMcp && canvasMcpEnabled(appSettings)
+    ? { [CANVAS_MCP_SERVER_ID]: buildCanvasKunMcpServer(options.scheduleMcp.launch, dataDir) }
+    : {}
   // Replace only the host-authored entry. Use the stable ownership marker and
   // transport identity here so legacy Kun entries missing githubPolicy are
   // rebuilt instead of being mistaken for user-owned `github` servers.
@@ -279,6 +285,7 @@ export async function syncGuiManagedKunConfig(
           ...retainedMcpServers,
           ...importedMcpServers,
           ...projectMcpServers,
+          ...canvasMcpServer,
           ...(options?.scheduleMcp ? {
             [GUI_SCHEDULE_MCP_SERVER_NAME]: buildGuiScheduleKunMcpServer(
               options.scheduleMcp.settings,
@@ -357,7 +364,9 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
     codexReferenceBranches: { enabled: lab?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: lab?.projectBoard?.enabled === true
-    }
+    },
+    genUi: { enabled: lab?.genUi?.enabled === true },
+    mcpApps: { enabled: lab?.mcpApps?.enabled === true }
   }
 }
 

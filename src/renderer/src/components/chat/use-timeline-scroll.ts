@@ -60,6 +60,10 @@ export function deriveTimelineRenderedTurnCount({
   busy: boolean
   historyExpansionRequested?: boolean
 }): number {
+  // A short thread shows every turn. The stored count only catches up in an
+  // effect, so trusting it here would hide the oldest turn for one render after
+  // each send and remount it (and any embedded app surface) for no reason.
+  if (!shouldCollapseTimelineHistory(totalTurns, pageSize)) return totalTurns
   if (
     busy &&
     !historyExpansionRequested &&

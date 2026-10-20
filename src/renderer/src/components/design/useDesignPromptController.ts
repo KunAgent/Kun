@@ -97,6 +97,14 @@ export type SendDesignPromptOptions = {
   screenShapeId?: string
   svgArtifactId?: string
   imageEditReferencePath?: string
+  /** Profile for a pass the Code agent requested; the composer has no Design selection then. */
+  profileSelection?: DesignTaskProfileSelection
+  allowMultiPage?: boolean
+  /** Agent-started passes render as a notice instead of a user bubble. */
+  messageSource?: 'design_continuation'
+  ignoreComposerAttachments?: boolean
+  /** Names a newly created drawing instead of deriving it from the prompt. */
+  drawingTitle?: string
 }
 
 type PreparedDrawing = {
@@ -232,10 +240,11 @@ export function useDesignPromptController({
 
   const prepareDrawingForFirstPrompt = (
     titleSource: string,
-    profileLock: DesignTaskProfile | null
+    profileLock: DesignTaskProfile | null,
+    selection: DesignTaskProfileSelection | undefined = designTaskProfileSelection
   ): PreparedDrawing | null => {
     const state = useDesignWorkspaceStore.getState()
-    const unlockedTaskNeedsOwnDrawing = Boolean(designTaskProfileSelection && !profileLock)
+    const unlockedTaskNeedsOwnDrawing = Boolean(selection && !profileLock)
     const shouldCreate = !profileLock && (
       unlockedTaskNeedsOwnDrawing ||
       state.drawingCreationOpen || state.documents.length === 0 || !state.activeDocumentId
@@ -389,7 +398,7 @@ export function useDesignPromptController({
     // thread-scoped target; restored if this first send fails.
     let previousSurface: CodeCanvasDesignSurface | undefined = null
     try {
-      drawing = prepareDrawingForFirstPrompt(brief, profileLock)
+      drawing = prepareDrawingForFirstPrompt(brief, profileLock, resolvedProfileSelection ?? designTaskProfileSelection)
       if (!drawing) return false
       previousSurface = useCodeCanvasDesignSurface.getState().surface
       const threadId = await ensureDesignThreadForWorkspace(designWorkspaceRoot, drawing.docId)
@@ -483,12 +492,13 @@ export function useDesignPromptController({
 
   async function sendDesignPrompt(value: string, options: SendDesignPromptOptions = {}): Promise<boolean> {
     const source = options.source ?? 'user'
+    const selection = options.profileSelection ?? designTaskProfileSelection
     const authoritativeProfile = await resolveSubmitDesignProfile()
     // A file-tree preview is never an implicit retarget. Existing Design tasks
     // always return to their immutable whiteboard before routing or admission.
     if (!(await activateLockedDesignDocument(authoritativeProfile))) return false
     const initialDesignState = useDesignWorkspaceStore.getState()
-    if (designTaskProfileSelection?.outputMedium === 'image' && !imageGenerationAvailable) {
+    if (selection?.outputMedium === 'image' && !imageGenerationAvailable) {
       setError(imageGenerationReason || t('designImageGenerationUnavailable'))
       return false
     }
@@ -506,14 +516,14 @@ export function useDesignPromptController({
     const promptRoute = routeDesignPrompt({
       value,
       displayText: options.displayText,
-      attachments: composerAttachments,
+      attachments: options.ignoreComposerAttachments ? [] : composerAttachments,
       attachmentUploadEnabled,
       designState: useDesignWorkspaceStore.getState(),
       fallbackWorkspaceRoot: workspaceRoot,
       selectedCount: useCanvasSelectionStore.getState().selectedIds.size,
       imageOnlyDisplay: t('composerImageOnlyDisplay'),
       imageOnlyPrompt: t('composerImageOnlyPrompt'),
-      allowMultiPage: designTaskProfileSelection?.outputMedium !== 'image'
+      allowMultiPage: options.allowMultiPage !== false && selection?.outputMedium !== 'image'
     })
     if (promptRoute.kind === 'ignore') return false
     if (promptRoute.kind === 'attachment-unsupported') {
@@ -525,17 +535,17 @@ export function useDesignPromptController({
       return false
     }
     let resolvedProfileSelection: ResolvedDesignTaskProfileSelection | undefined
-    if (designTaskProfileSelection) {
+    if (selection) {
       try {
         resolvedProfileSelection = authoritativeProfile
           ? {
-              ...designTaskProfileSelection,
+              ...selection,
               presetSource: authoritativeProfile.presetSource ?? (
                 authoritativeProfile.preset === 'none' ? 'none' : 'explicit'
               )
             }
           : await resolveDesignTaskProfileSelection(
-              designTaskProfileSelection,
+              selection,
               promptRoute.workspaceRoot
             )
       } catch (error) {
@@ -570,7 +580,7 @@ export function useDesignPromptController({
     try {
       // The drawing title comes from the user's raw description. Attachment-only
       // creation intentionally falls back to the localized untitled placeholder.
-      const drawing = prepareDrawingForFirstPrompt(routeText, authoritativeProfile)
+      const drawing = prepareDrawingForFirstPrompt(options.drawingTitle?.trim() || routeText, authoritativeProfile, selection)
       if (!drawing) return false
       const docId = drawing.docId
       if (drawing.created) {
@@ -623,9 +633,10 @@ export function useDesignPromptController({
         explicitScreenShapeId: options.screenShapeId,
         explicitSvgArtifactId: options.svgArtifactId,
         imageEditReferencePath: options.imageEditReferencePath,
+        ...(options.messageSource ? { messageSource: options.messageSource } : {}),
         clearAutoRepairScope: clearDesignAutoRepairScope,
         ...(drawing.created ? { waitForRuntimeAdmission: true } : {}),
-        ...(authoritativeProfile || designTaskProfileSelection
+        ...(authoritativeProfile || selection
           ? {
               designTaskProfileForTarget: (target: DesignDocumentTarget) =>
                 designProfileForTarget(target, resolvedProfileSelection, authoritativeProfile)!,

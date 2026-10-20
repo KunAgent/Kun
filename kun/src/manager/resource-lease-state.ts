@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { RuntimeFlavorSchema, type RuntimeFlavor } from '../contracts/runtime-flavor.js'
+import { FENCE_FLOOR_KEY } from './service-manager-state-fence-floor.js'
 
 export const RESOURCE_LEASE_TTL_MS = 10_000
 /** How often a lease holder renews, or a waiting instance retries acquisition. */
@@ -48,6 +49,8 @@ export class ResourceFenceStaleError extends Error {
 export class ManagerResourceLeaseRegistry {
   private readonly leases = new Map<string, ManagerResourceLease>()
   private readonly highWater = new Map<string, number>()
+  /** Highest token of every retired resource; see FENCE_FLOOR_KEY. */
+  private floor = 0
 
   static restore(input: {
     leases: readonly (ManagerResourceLease | z.infer<typeof LegacyManagerResourceLeaseSchema>)[]
@@ -55,7 +58,8 @@ export class ManagerResourceLeaseRegistry {
   }): ManagerResourceLeaseRegistry {
     const registry = new ManagerResourceLeaseRegistry()
     for (const [resource, token] of Object.entries(input.highWater ?? {})) {
-      registry.highWater.set(resource, token)
+      if (resource === FENCE_FLOOR_KEY) registry.floor = Math.max(registry.floor, token)
+      else registry.highWater.set(resource, token)
     }
     for (const value of input.leases) {
       const fencingToken = 'fencingToken' in value ? value.fencingToken : 1
@@ -91,7 +95,7 @@ export class ManagerResourceLeaseRegistry {
       return { acquired: false, lease: existing }
     }
     if (existing && !expired && sameOwner) return { acquired: true, lease: existing }
-    const fencingToken = (this.highWater.get(input.resource) ?? 0) + 1
+    const fencingToken = (this.highWater.get(input.resource) ?? this.floor) + 1
     const lease = ManagerResourceLeaseSchema.parse({
       ...input,
       fencingToken,
@@ -248,7 +252,22 @@ export class ManagerResourceLeaseRegistry {
     return [...this.leases.values()]
   }
 
+  /**
+   * Folds the high water of resources without a lease into the floor. Every
+   * data mutex, Registry file and thread binding is its own resource, so the
+   * map otherwise grows with each name ever locked and is rewritten on every
+   * state change.
+   */
+  retireIdleFences(): void {
+    for (const [resource, token] of this.highWater) {
+      if (this.leases.has(resource)) continue
+      if (token > this.floor) this.floor = token
+      this.highWater.delete(resource)
+    }
+  }
+
   highWaterSnapshot(): Record<string, number> {
-    return Object.fromEntries(this.highWater)
+    const snapshot = Object.fromEntries(this.highWater)
+    return this.floor > 0 ? { [FENCE_FLOOR_KEY]: this.floor, ...snapshot } : snapshot
   }
 }

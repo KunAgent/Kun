@@ -201,7 +201,11 @@ export function createSideActions(
         // Call the side action directly through the closure we are
         // currently building so store-level `state.sendSideMessage`
         // shims (e.g. test harnesses) cannot swallow the seed send.
-        const started = await actions.sendSideMessage(forked.id, seedText?.trim() ?? '')
+        const started = await actions.sendSideMessage(
+          forked.id,
+          seedText?.trim() ?? '',
+          options?.composerContexts?.length ? { composerContexts: options.composerContexts } : undefined
+        )
         if (!started) return forked.id
       }
       return forked.id
@@ -213,7 +217,7 @@ export function createSideActions(
       }))
     },
 
-    sendSideMessage: async (sideId, text) => {
+    sendSideMessage: async (sideId, text, sendOptions) => {
       const state = ctx.get()
       const side = state.sideConversations[sideId]
       if (!side) return false
@@ -248,7 +252,10 @@ export function createSideActions(
           // Keep their next turn explicitly Code even when the fork retains a
           // Design profile for later promotion or recovery.
           agentSurface: 'code',
-          ...(attachmentIds.length ? { attachmentIds } : {})
+          ...(attachmentIds.length ? { attachmentIds } : {}),
+          ...(sendOptions?.composerContexts?.length
+            ? { composerContexts: sendOptions.composerContexts }
+            : {})
         })
         ctx.set((s) =>
           patchSide(s, sideId, (cur) => ({

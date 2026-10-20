@@ -5,6 +5,8 @@ import type { ChatBlock, RuntimeDisclosureMetadata } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
 import { writePromptQuotesFromComposerContexts } from '../../write/write-composer-context-quotes'
+import { messageQuotesFromComposerContexts } from '../../lib/message-quote'
+import { SentMessageQuotes } from './MessageQuoteViews'
 import { parseClawUserPromptForDisplay, type ClawUserPromptDisplay } from '@shared/app-settings'
 import { parseBackgroundShellCompletionNotice } from '@shared/background-shell-notice'
 import { parseBackgroundSubagentCompletionNotice } from '@shared/background-subagent-notice'
@@ -15,6 +17,7 @@ import { UserAttachmentPreviews } from './message-timeline-media-views'
 import { CopyFeedbackButton, RuntimeMetaChips } from './message-timeline-bubble-support'
 import { metaUserFileReferences } from './message-timeline-bubble-meta'
 import { useTimelineSurface } from './timeline-surface'
+import { RewindFileResetChoice } from './rewind-file-reset-choice'
 
 export function BackgroundShellNoticeBubble({
   block,
@@ -337,6 +340,7 @@ export function UserMessageBubble({
   const surface = useTimelineSurface()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(block.text)
+  const [resetFiles, setResetFiles] = useState(false)
   const [writeMetaOpen, setWriteMetaOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const parsedWritePrompt = useMemo(() => {
@@ -346,6 +350,10 @@ export function UserMessageBubble({
   }, [block.text, route])
   const composerQuotes = useMemo(
     () => writePromptQuotesFromComposerContexts(block.meta?.composerContexts),
+    [block.meta?.composerContexts]
+  )
+  const messageQuotes = useMemo(
+    () => messageQuotesFromComposerContexts(block.meta?.composerContexts),
     [block.meta?.composerContexts]
   )
   const parsedClawPrompt = useMemo(() => {
@@ -392,7 +400,7 @@ export function UserMessageBubble({
     const trimmed = draft.trim()
     if (!trimmed || busy) return
     setEditing(false)
-    await rewindAndResend(block.id, trimmed)
+    await rewindAndResend(block.id, trimmed, { resetFiles })
   }
 
   if (editing) {
@@ -435,6 +443,7 @@ export function UserMessageBubble({
                 type="button"
                 onClick={() => void submit()}
                 disabled={!draft.trim() || busy}
+                data-rewind-resend
                 className="rounded-md bg-accent px-3 py-1 text-[13px] font-medium text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('rewindResend')}
@@ -442,14 +451,11 @@ export function UserMessageBubble({
             </div>
           </div>
         </div>
+        {block.meta?.workspaceCheckpointId ? (
+          <RewindFileResetChoice blockId={block.id} resetFiles={resetFiles} onChange={setResetFiles} />
+        ) : null}
         <div className="mt-2 flex min-w-0 items-center justify-between gap-3">
-          {block.meta?.workspaceCheckpointId ? (
-            <span className="min-w-0 flex-1 text-left text-[12px] font-medium leading-5 text-ds-faint">
-              {t('rewindFileRollbackNotice')}
-            </span>
-          ) : (
-            <span className="min-w-0 flex-1" />
-          )}
+          <span className="min-w-0 flex-1" />
           <ModelMetaTag label={block.modelLabel} />
         </div>
       </div>
@@ -467,6 +473,7 @@ export function UserMessageBubble({
           <ClawInboundMessageCard display={parsedClawPrompt} text={displayText} />
         ) : (
           <>
+          <SentMessageQuotes quotes={messageQuotes} />
           <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-left">
             {displayText}
           </div>
@@ -505,6 +512,7 @@ export function UserMessageBubble({
               type="button"
               onClick={startEdit}
               disabled={busy}
+              data-user-message-edit
               title={t('rewindEditMessage')}
               aria-label={t('rewindEditMessage')}
               className="rounded-full p-1.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:hover:text-ds-faint"

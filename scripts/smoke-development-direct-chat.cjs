@@ -128,6 +128,18 @@ async function main() {
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
+    // The loopback fixture stands in for the official DeepSeek API, but a
+    // deepseek-* model on any other host is an unproven relay and falls back to
+    // a 32k window. That is below a private chat's own prompt and tool overhead,
+    // so every step force-compacts the turn away and the scripted model never
+    // sees its own start message. Declare the official window on the built-in
+    // connection, as a user does for a relay in the model editor.
+    const declared = { source: 'user', status: 'declared', observedAt: new Date().toISOString() }
+    const fixtureModels = ['deepseek-v4-flash', 'deepseek-v4-pro']
+    settings.provider = { apiKey: settings.agents.kun.apiKey, baseUrl: modelFixture.baseUrl,
+      providers: [{ id: 'deepseek', models: fixtureModels, modelProfiles: Object.fromEntries(fixtureModels.map((id) => [id,
+        { metadata: { schemaVersion: 1, overrides: { contextWindowTokens: 1_000_000 },
+          overrideEvidence: { contextWindowTokens: declared }, observations: [] } }])) }] }
     if (process.argv.includes('--personal-workspace-only')) {
       // Existing exact-origin local-development policy; public SSRF rules stay unchanged.
       settings.agents.kun.browserUse = { ...settings.agents.kun.browserUse, enabled: true, mode: 'local-development' }

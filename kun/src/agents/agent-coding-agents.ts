@@ -91,7 +91,9 @@ export async function codingAgentCatalog(harnesses: WorkbenchHarnessService | un
 }
 
 async function discoverCodingAgents(harnesses: WorkbenchHarnessService): Promise<CodingAgentCatalog> {
-  const listed = await harnesses.list(undefined, undefined, { modelLimit: CODING_AGENT_CATALOG_MODEL_LIMIT })
+  // Only engines that may join conversations are detected and probed; listing the others would start their CLIs for nothing.
+  const listed = await harnesses.list(undefined, undefined, { modelLimit: CODING_AGENT_CATALOG_MODEL_LIMIT,
+    harnessIds: CONVERSATION_HARNESS_IDS })
   const agents: CodingAgentCatalogEntry[] = listed.agents.flatMap((agent) => conversational(agent.harnessId) ? [{
     harnessId: agent.harnessId, displayName: agent.displayName, available: agent.available,
     ...(agent.reason ? { reason: agent.reason } : {}),

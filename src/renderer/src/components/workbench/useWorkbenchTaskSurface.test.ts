@@ -237,7 +237,7 @@ describe('workbench task mode', () => {
     await act(async () => renderer.unmount())
   })
 
-  it('keeps an unlocked Design surface when the profile draft has not been accepted', async () => {
+  it('keeps Code for a stale Design draft and still falls its image profile back to HTML', async () => {
     const lockedThread = codeThread({ id: 'thread-summary', lockedTaskSurface: 'design' })
     const scope = workbenchTaskIntentScope(lockedThread.id, '/workspace')
     writeWorkbenchTaskIntent(scope, {
@@ -262,9 +262,10 @@ describe('workbench task mode', () => {
     let renderer!: ReactTestRenderer
     await act(async () => { renderer = create(createElement(Harness)) })
 
-    // A Code-owned thread is never surface-locked; the draft decides the next turn.
+    // A Code-owned thread is never surface-locked and always sends Code turns;
+    // the Code agent opens Design itself with design_open.
     expect(runtime!.taskSurfaceLocked).toBe(false)
-    expect(runtime!.taskSurface).toBe('design')
+    expect(runtime!.taskSurface).toBe('code')
     // Image generation is disabled and the profile is still unlocked, so the
     // unlocked AI-image draft falls back to HTML exactly like an empty thread.
     expect(runtime!.designTaskProfile.outputMedium).toBe('html')
@@ -272,7 +273,7 @@ describe('workbench task mode', () => {
     await act(async () => renderer.unmount())
   })
 
-  it('allows a Code-owned thread to switch to Design per turn', async () => {
+  it('keeps a Code-owned thread on Code when a Design switch is requested', async () => {
     const thread = codeThread({ latestTurnId: 'turn-existing' })
     const createThread = vi.fn(async () => 'unexpected')
     const deleteThread = vi.fn(async () => undefined)
@@ -296,11 +297,11 @@ describe('workbench task mode', () => {
     await act(async () => { renderer = create(createElement(Harness)) })
 
     act(() => runtime!.onTaskSurfaceChange('design'))
-    expect(runtime!.taskSurface).toBe('design')
+    expect(runtime!.taskSurface).toBe('code')
     expect(runtime!.taskSurfaceLocked).toBe(false)
     expect(runtime!.taskSurfaceTransitioning).toBe(false)
-    expect(setComposerMode).toHaveBeenCalledWith('agent')
-    expect(setComposerOrchestration).toHaveBeenCalledWith('direct')
+    expect(setComposerMode).not.toHaveBeenCalled()
+    expect(setComposerOrchestration).not.toHaveBeenCalled()
     expect(createThread).not.toHaveBeenCalled()
     expect(deleteThread).not.toHaveBeenCalled()
     await act(async () => renderer.unmount())
@@ -330,7 +331,7 @@ describe('workbench task mode', () => {
     await act(async () => renderer.unmount())
   })
 
-  it('uses direct Agent execution in Design and restores the unlocked Code draft', async () => {
+  it('leaves Code execution settings alone because Design is not a composer mode', async () => {
     const setComposerMode = vi.fn()
     const setComposerOrchestration = vi.fn()
     let runtime: ReturnType<typeof useWorkbenchTaskSurface> | null = null
@@ -353,14 +354,11 @@ describe('workbench task mode', () => {
     await act(async () => { renderer = create(createElement(Harness)) })
 
     act(() => runtime!.onTaskSurfaceChange('design'))
-    expect(runtime!.taskSurface).toBe('design')
-    expect(setComposerMode).toHaveBeenLastCalledWith('agent')
-    expect(setComposerOrchestration).toHaveBeenLastCalledWith('direct')
-
+    expect(runtime!.taskSurface).toBe('code')
     act(() => runtime!.onTaskSurfaceChange('code'))
     expect(runtime!.taskSurface).toBe('code')
-    expect(setComposerMode).toHaveBeenLastCalledWith('plan')
-    expect(setComposerOrchestration).toHaveBeenLastCalledWith('graph')
+    expect(setComposerMode).not.toHaveBeenCalled()
+    expect(setComposerOrchestration).not.toHaveBeenCalled()
     await act(async () => renderer.unmount())
   })
 
@@ -397,7 +395,7 @@ describe('workbench task mode', () => {
     await act(async () => renderer.unmount())
   })
 
-  it('preserves the pending Design intent while the first thread activates', async () => {
+  it('keeps the provisional drawing while the first Code thread activates', async () => {
     const workspaceScope = workbenchTaskIntentScope(null, '/workspace')
     writeWorkbenchTaskIntent(workspaceScope, {
       surface: 'design',
@@ -411,17 +409,6 @@ describe('workbench task mode', () => {
       id: 'doc-provisional', title: 'Pending', createdAt: '2026-08-13T00:00:00.000Z',
       updatedAt: '2026-08-13T00:00:00.000Z', order: 1, artifacts: [], activeArtifactId: null
     }
-    useDesignWorkspaceStore.setState({
-      workspaceRoot: '/workspace',
-      documents: [existingDocument, provisionalDocument],
-      activeDocumentId: provisionalDocument.id,
-      artifacts: [],
-      activeArtifactId: null,
-      drawingCreationOpen: true,
-      drawingCreationReturnDocumentId: existingDocument.id,
-      drawingCreationDocumentId: provisionalDocument.id,
-      drawingCreationSubmitting: true
-    })
 
     let activateThread!: (thread: NormalizedThread) => void
     let releaseCreation!: () => void
@@ -450,6 +437,18 @@ describe('workbench task mode', () => {
     }
     let renderer!: ReactTestRenderer
     await act(async () => { renderer = create(createElement(Harness)) })
+    // The design pass prepares its drawing after the workbench is mounted.
+    useDesignWorkspaceStore.setState({
+      workspaceRoot: '/workspace',
+      documents: [existingDocument, provisionalDocument],
+      activeDocumentId: provisionalDocument.id,
+      artifacts: [],
+      activeArtifactId: null,
+      drawingCreationOpen: true,
+      drawingCreationReturnDocumentId: existingDocument.id,
+      drawingCreationDocumentId: provisionalDocument.id,
+      drawingCreationSubmitting: true
+    })
 
     let ensureRequest!: Promise<string | null>
     await act(async () => {
@@ -457,9 +456,10 @@ describe('workbench task mode', () => {
       await Promise.resolve()
     })
 
-    expect(runtime!.taskSurface).toBe('design')
+    expect(runtime!.taskSurface).toBe('code')
     expect(runtime!.threadHasDesignDocument).toBe(true)
     expect(useDesignWorkspaceStore.getState().activeDocumentId).toBe(provisionalDocument.id)
+    expect(useDesignWorkspaceStore.getState().drawingCreationOpen).toBe(true)
 
     await act(async () => {
       releaseCreation()
@@ -469,7 +469,7 @@ describe('workbench task mode', () => {
       workbenchTaskIntentScope(createdThread.id, '/workspace'),
       '/workspace'
     ).surface).toBe('design')
-    expect(runtime!.taskSurface).toBe('design')
+    expect(runtime!.taskSurface).toBe('code')
     expect(runtime!.threadHasDesignDocument).toBe(true)
     await act(async () => renderer.unmount())
   })
@@ -537,8 +537,8 @@ describe('workbench task mode', () => {
     let renderer!: ReactTestRenderer
     await act(async () => { renderer = create(createElement(Harness, { thread: lockedThread })) })
     expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(runtime!.taskSurface).toBe('design')
-    // Code-owned threads keep the per-turn selector even with a locked profile.
+    // A locked Design profile keeps the canvas mounted but the next turn is Code.
+    expect(runtime!.taskSurface).toBe('code')
     expect(runtime!.taskSurfaceLocked).toBe(false)
     expect(runtime!.designProfileLocked).toBe(true)
     expect(runtime!.threadHasDesignDocument).toBe(true)

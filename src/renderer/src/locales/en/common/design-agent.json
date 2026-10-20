@@ -1,0 +1,22 @@
+{
+  "designAgentCardPending": "Preparing the design brief…",
+  "designAgentCardQueued": "Starts when this reply finishes",
+  "designAgentCardStarting": "Opening the design canvas…",
+  "designAgentCardDesigning": "Designing on the canvas…",
+  "designAgentCardReady": "Ready on the canvas",
+  "designAgentCardNotStarted": "Not started",
+  "designAgentCardStartFailed": "Couldn't start the design pass",
+  "designAgentCardStartFailedDetail": "Couldn't start: {{error}}",
+  "designAgentCardSuperseded": "Replaced by a newer design request",
+  "designAgentCardFailed": "Design request failed",
+  "designAgentCardFailedDetail": "Design request failed: {{error}}",
+  "designAgentCardScreens_one": "{{count}} screen",
+  "designAgentCardScreens_other": "{{count}} screens",
+  "designAgentCardTargetWeb": "Web",
+  "designAgentCardTargetApp": "App",
+  "designAgentCardOpen": "Open",
+  "designAgentCardOpenAria": "Open the design canvas for {{title}}",
+  "designAgentCardStart": "Start design",
+  "designAgentCardRetry": "Retry",
+  "toolBuiltinDesignOpen": "Open design canvas"
+}

@@ -129,11 +129,18 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   const openRoleModels = async () => {
     await page.locator('.direct-header').getByRole('button', { name: 'More actions', exact: true }).click()
     await page.getByRole('button', { name: 'Model settings', exact: true }).click()
-    await models.getByRole('combobox', { name: 'Main model', exact: true }).waitFor()
+    await models.getByLabel('Main model', { exact: true }).waitFor()
+  }
+  // Role models use a searchable listbox picker; options carry the exact provider/account/model key.
+  const chooseRoleModel = async (role, key) => {
+    await models.getByLabel(role, { exact: true }).click()
+    const list = page.getByRole('listbox', { name: role, exact: true })
+    await list.locator(`[role="option"][data-agent-model-option='${key}']`).click()
+    await list.waitFor({ state: 'hidden' })
   }
   await openRoleModels()
   await capture('06-model-settings')
-  assert((await models.innerText()).includes('Effective'))
+  assert((await models.innerText()).includes('Inherited default'), 'role models show where the effective model comes from')
   await models.getByRole('button', { name: 'Close', exact: true }).click()
   if (!real) {
     await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
@@ -153,13 +160,13 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     const other = options.options.find((item) => item.available && item.fastAvailable && item.model !== options.main.model)
     assert(other, 'A second configured model is available')
     const key = JSON.stringify([other.providerId, other.accountId, other.model])
-    await models.getByRole('combobox', { name: 'Main model', exact: true }).selectOption(key)
+    await chooseRoleModel('Main model', key)
     await poll(async () => {
       const saved = (await request(page, `/v1/agents/${newAgent.id}/models`)).agent.modelRef
       return JSON.stringify([saved?.providerId, saved?.accountId, saved?.model]) === key &&
-        await models.getByRole('combobox', { name: 'Lightweight model', exact: true }).isEnabled()
+        await models.getByLabel('Lightweight model', { exact: true }).isEnabled()
     }, 10000, 'main model saved immediately before lightweight selection')
-    await models.getByRole('combobox', { name: 'Lightweight model', exact: true }).selectOption(key)
+    await chooseRoleModel('Lightweight model', key)
     await poll(async () => {
       const saved = (await request(page, `/v1/agents/${newAgent.id}/models`)).agent
       return [saved.modelRef, saved.fastModelRef].every((ref) => JSON.stringify([ref?.providerId, ref?.accountId, ref?.model]) === key)

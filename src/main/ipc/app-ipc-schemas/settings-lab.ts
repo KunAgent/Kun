@@ -35,5 +35,7 @@ export const kunLabPatchSchema = z.object({
   }).strict().optional(),
   projectBoard: z.object({
     enabled: z.boolean().optional()
-  }).strict().optional()
+  }).strict().optional(),
+  genUi: z.object({ enabled: z.boolean().optional() }).strict().optional(),
+  mcpApps: z.object({ enabled: z.boolean().optional() }).strict().optional()
 }).strict()

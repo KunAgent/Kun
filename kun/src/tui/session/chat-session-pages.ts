@@ -8,7 +8,6 @@ import { ModelPage } from '../pages/model-page.js'
 import { ApprovalPage, SkillsPage, TimelinePage, UserInputPage } from '../pages/runtime-pages.js'
 import { HelpPage, InspectionPage, PermissionPage, SessionsPage } from '../pages/session-pages.js'
 import { SubagentPage } from '../pages/subagent-page.js'
-import { TranscriptPage } from '../pages/transcript-page.js'
 import { ProviderQuotaPage } from '../provider-quota.js'
 import type { ProjectedChildRun } from '../state.js'
 import { UsagePage } from '../usage-report.js'
@@ -360,11 +359,5 @@ export abstract class ChatSessionPages extends ChatSessionBase {
     this.subagentPopupReturn = undefined
     this.removePage(page)
     if (restore) onClose?.()
-  }
-
-  showTranscript(): void {
-    if (this.findPage('transcript')) return
-    const page: TranscriptPage = new TranscriptPage(this.controller, this.showReasoningValue, () => this.removePage(page), this.invalidate)
-    this.pushPage(page)
   }
 }
