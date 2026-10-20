@@ -8,7 +8,9 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 
-const ReviewOrList = z.union([MemoryRelationCommand.options[0], MemoryRelationCommand.options[2]])
+const ReviewOrList = z.union([
+  MemoryRelationCommand.options[0], MemoryRelationCommand.options[2], MemoryRelationCommand.options[3]
+])
 const activeAnalyses = new WeakSet<ServerRuntime>()
 
 export async function memoryRelations(runtime: ServerRuntime, request: Request, analyze: boolean): Promise<JsonResponse> {

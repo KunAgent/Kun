@@ -421,6 +421,8 @@ export function mergeKunRuntimeSettings(
       patch?.memoryDistillationEnabled ?? current.memoryDistillationEnabled ?? false,
     memoryDirectivesEnabled:
       patch?.memoryDirectivesEnabled ?? current.memoryDirectivesEnabled ?? true,
+    memoryRelationContextEnabled:
+      (patch?.memoryRelationContextEnabled ?? current.memoryRelationContextEnabled) === true,
     instructions: nextInstructions,
     computerUse: nextComputerUse,
     browserUse: nextBrowserUse,

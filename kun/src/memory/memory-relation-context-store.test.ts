@@ -7,6 +7,7 @@ import type { MemoryRelationContextRequest } from '../contracts/memory-working-c
 import { FileMemoryStore } from './memory-store.js'
 import { relationBinding } from './memory-relations.js'
 import { projectMemoryRelations } from './memory-relation-store.js'
+import { resolveMemoryTurnContext } from './memory-turn-context.js'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -60,6 +61,15 @@ describe('current canonical relation projection', () => {
     })
     f.configure({ enabled: false, relationContextEnabled: true })
     expect((await f.store.relationContext({ ...f.request, purpose: 'preview' })).state).toBe('disabled')
+  })
+
+  it('does not replace live retrieval diagnostics with preview activity', async () => {
+    const f = await fixture()
+    await f.store.retrieve({ query: 'database version', workspace: f.rootDir, limit: 8 })
+    f.store.setLastInjected([f.source.id])
+    const before = await f.store.diagnostics()
+    await resolveMemoryTurnContext(f.store, { query: 'unrelated sample', workspace: f.rootDir, preview: true })
+    expect(await f.store.diagnostics()).toEqual(before)
   })
 
   it('withdraws accepted decisions idempotently without allowing silent reacceptance', async () => {

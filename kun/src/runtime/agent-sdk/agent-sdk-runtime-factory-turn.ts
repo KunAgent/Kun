@@ -298,7 +298,8 @@ export function createAgentSdkTurnRuntimeDeps(
         await deps.turns.updateTurnMetadata(threadId, turnId, {
           ...memoryInjectionMetadata({
             memories: memoryContext.memories,
-            directives: memoryContext.directives
+            directives: memoryContext.directives,
+            relationContext: memoryContext.relationContext
           }),
           ...(instructionResolution ? {
             injectedInstructionSources: instructionResolution.sources,

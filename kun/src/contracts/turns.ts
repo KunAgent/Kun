@@ -7,6 +7,7 @@ export { RequiredToolGateSchema, type RequiredToolGate } from './turn-required-t
 import { PaperTurnContextSchema, validatePaperTurnCombination } from './paper-turn-context.js'
 import { HarnessGatewayBindingSchema, HarnessGatewayAliasGrantSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
+import { MemoryRelationAnnotation, MEMORY_CONTEXT_MAX_RELATIONS } from './memory-working-context.js'
 import { SteeringDeliverySchema } from './steering-delivery.js'
 import { TurnItem, UserFileReferenceSchema, UserMessageSource } from './items.js'
 import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
@@ -199,6 +200,7 @@ export const TurnSchema = z.object({
   activeSkillIds: z.array(z.string().min(1)).default([]),
   injectedMemoryIds: z.array(z.string().min(1)).default([]),
   injectedMemorySummaries: z.array(InjectedMemorySummarySchema).default([]),
+  injectedMemoryRelations: z.array(MemoryRelationAnnotation).max(MEMORY_CONTEXT_MAX_RELATIONS).optional(),
   /** User-approved standing rules injected this turn; see injectedMemoryIds. */
   injectedDirectiveIds: z.array(z.string().min(1)).default([]),
   injectedDirectiveSummaries: z.array(InjectedMemorySummarySchema).default([]),
