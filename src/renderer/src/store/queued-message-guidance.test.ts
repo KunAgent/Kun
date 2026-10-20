@@ -144,3 +144,15 @@ describe('canGuideQueuedMessage', () => {
     })).toBe(false)
   })
 })
+
+describe('Work queued guidance', () => {
+  it('steers with the user words and @files, not the document context', () => {
+    expect(queuedMessageGuidancePayload({
+      text: 'prompt', displayText: '补图', writeContext: { filePath: 'a.md' },
+      fileReferences: [{ path: '/w/fast_context.md', relativePath: 'fast_context.md', name: 'fast_context.md' }]
+    })).toEqual({ text: '补图\n\n@fast_context.md', displayText: '补图' })
+  })
+  it('stays unavailable when the user words cannot be recovered', () => {
+    expect(queuedMessageGuidancePayload({ text: 'prompt', writeContext: {} })).toBeNull()
+  })
+})

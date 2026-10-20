@@ -1,5 +1,6 @@
 import type { QueuedUserMessage } from './chat-store-types'
 import type { RuntimeDisclosureMetadata } from '../agent/types'
+import { parseWritePromptForDisplay } from '../write/quoted-selection'
 
 export type QueuedMessageGuidanceInput = {
   text: string
@@ -33,17 +34,28 @@ export function queuedMessageGuidancePayload(
 ): QueuedMessageGuidancePayload | null {
   const attachmentIds = normalizedAttachmentIds(message.attachmentIds)
   const hasAttachmentReferences = Boolean(message.attachments?.length)
+  // Work sends carry the open document as context; the running turn already
+  // holds it, so only the user's own words (and @files) need to steer.
+  const workSteer = Boolean(message.writeContext) && !message.paperContext && !message.composerContexts?.length
   if (
     !message.text.trim() ||
     attachmentIds === null ||
     (hasAttachmentReferences && attachmentIds.length === 0) ||
     message.attachments?.some((attachment) => !isImageAttachmentReference(attachment)) ||
-    message.fileReferences?.length ||
+    (!workSteer && (message.fileReferences?.length || message.writeContext)) ||
     message.composerContexts?.length ||
     message.guiDesignArtifact ||
-    message.writeContext || message.paperContext
+    message.paperContext
   ) {
     return null
+  }
+
+  if (workSteer) {
+    const userInput = message.displayText?.trim() || parseWritePromptForDisplay(message.text)?.userInput.trim() || ''
+    if (!userInput) return null
+    const refs = (message.fileReferences ?? []).map(fileReferenceLabel).filter(Boolean)
+    const text = refs.length ? `${userInput}\n\n${refs.map((ref) => `@${ref}`).join('\n')}` : userInput
+    return { text, displayText: userInput, ...(attachmentIds.length ? { attachmentIds } : {}) }
   }
 
   const hasDesignRouting = message.guiDesignCanvas === true || message.guiDesignMode === true
@@ -106,6 +118,12 @@ export function queuedMessageMatchesRunningTurn(
   return sameSnapshot(message.designProfile, running.designProfile) &&
     sameSnapshot(message.designDocumentTarget, running.designDocumentTarget) &&
     sameSnapshot(message.designImagePlacementTarget, running.designImagePlacementTarget)
+}
+
+function fileReferenceLabel(value: unknown): string {
+  const ref = (value && typeof value === 'object' ? value : {}) as { relativePath?: unknown; path?: unknown }
+  const label = ref.relativePath || ref.path
+  return typeof label === 'string' ? label : ''
 }
 
 function normalizedAttachmentIds(values: readonly unknown[] | undefined): string[] | null {
