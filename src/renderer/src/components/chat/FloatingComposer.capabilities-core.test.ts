@@ -163,13 +163,15 @@ describe('FloatingComposer capability controls', () => {
   it('keeps enabled composer actions available and never wraps the toolbar', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
-    const [composerSource, css] = await Promise.all([
+    const [composerSource, enhanceSource, css] = await Promise.all([
       readFile(new URL('./FloatingComposerSurfaceView.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('./ComposerPromptEnhance.tsx', import.meta.url), 'utf8'),
       readStylesheetBundle(new URL('../../styles/base-shell.css', import.meta.url))
     ])
 
     expect(composerSource).toContain('ds-composer-voice-action')
-    expect(composerSource).toContain('ds-composer-prompt-optimize-action')
+    expect(composerSource).toContain('<ComposerPromptEnhanceButton')
+    expect(enhanceSource).toContain('ds-composer-optional-action ds-composer-prompt-optimize-action')
     expect(composerSource).toContain('ref={composerToolbarFitRef}')
     expect(css).not.toMatch(/\.ds-composer-optional-action\s*\{[^}]*display:\s*none/)
     expect(css).not.toMatch(/\.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/s)

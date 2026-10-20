@@ -426,11 +426,24 @@ export type { ModelsDevCatalogModelHint, ModelsDevCatalogMetadataIssue, ModelsDe
 
 export type PromptOptimizationRequest = {
   text: string
+  /** Renderer-chosen id; `cancelPromptOptimization` aborts the matching request. */
+  requestId?: string
+  /** The composer's selected Kun model. A model pinned in Settings wins over it. */
+  providerId?: string
+  model?: string
 }
+
+export type PromptOptimizationFailureCode =
+  | 'empty'
+  | 'disabled'
+  | 'unsupported_model'
+  | 'cancelled'
+  | 'timeout'
+  | 'failed'
 
 export type PromptOptimizationResult =
   | { ok: true; text: string; model: string; providerId: string }
-  | { ok: false; message: string }
+  | { ok: false; code: PromptOptimizationFailureCode; message: string }
 
 export type ClawImInstallQrResult =
   | { ok: true; url: string; deviceCode: string; userCode: string; interval: number; expireIn: number }

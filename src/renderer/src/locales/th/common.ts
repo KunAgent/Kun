@@ -5,6 +5,7 @@ import phoneComposer from './common/phone-composer.json'
 import pluginMarket from './common/plugin-market.json'
 import pluginsPage from './common/plugins-page.json'
 import composerFastMode from './common/composer-fast-mode.json'
+import composerPromptEnhance from './common/composer-prompt-enhance.json'
 import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
 import sddFrameworks from './common/sdd-frameworks.json'
@@ -47,6 +48,7 @@ const common = {
   ...pluginMarket,
   ...pluginsPage,
   ...composerFastMode,
+  ...composerPromptEnhance,
   ...commandsSdd,
   ...providerErrors,
   ...sddFrameworks,

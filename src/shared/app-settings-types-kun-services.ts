@@ -134,14 +134,20 @@ export type KunTextToSpeechSettingsV1 = {
 }
 
 export type KunPromptOptimizationSettingsV1 = {
+  /** Shows the composer's prompt-enhance button. */
   enabled: boolean
-  /** Existing provider profile to use. Empty means inherit the active Kun provider. */
+  /**
+   * Pinned provider profile. Empty (with an empty model) follows the
+   * composer's selected Kun model.
+   */
   providerId: string
-  /** Empty means smallModel || main conversation model. */
+  /** Pinned model. Empty follows the composer, or the pinned provider's default. */
   model: string
   /** Empty means use DEFAULT_PROMPT_OPTIMIZATION_PROMPT. */
   prompt: string
   timeoutMs: number
+  /** Defaults migration marker; see KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION. */
+  defaultsVersion?: number
 }
 
 export type KunMusicGenerationSettingsV1 = {

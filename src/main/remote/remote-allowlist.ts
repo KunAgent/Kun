@@ -33,6 +33,7 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'provider:quota:list',
   'provider:models-dev-catalog',
   'prompt:optimize',
+  'prompt:optimize-cancel',
   'runtime:attachment:upload-image',
   'runtime:attachment:upload-document',
   'window:mini-mode:get',

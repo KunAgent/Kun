@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -97,7 +96,8 @@ import {
 } from './FloatingComposerAttachments'
 import { useComposerDraft } from './use-composer-draft'
 import { useComposerInputHistory } from './use-composer-input-history'
-import { usePromptOptimizationSettings, useSpeechToTextSettings, useVoiceDictation } from './use-voice-dictation'
+import { useSpeechToTextSettings, useVoiceDictation } from './use-voice-dictation'
+import { useComposerPromptEnhance } from './use-composer-prompt-enhance'
 import { VoiceRecordingStrip } from './VoiceRecordingStrip'
 import type { DesignComposerContext } from '../../design/design-composer-context'
 import { useComposerFileMentions } from './use-composer-file-mentions'
@@ -291,7 +291,6 @@ export function FloatingComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { speechToText: speechToTextSettings, credentialReady: speechCredentialReady } =
     useSpeechToTextSettings()
-  const promptOptimizationSettings = usePromptOptimizationSettings()
   const dictationInputRef = useRef(input)
   useEffect(() => {
     dictationInputRef.current = input
@@ -426,9 +425,6 @@ export function FloatingComposer({
   const [composerMenuOpen, setComposerMenuOpen] = useState(false)
   const [goalPanelOpen, setGoalPanelOpen] = useState(false)
   const [goalInputMode, setGoalInputMode] = useState(false)
-  const [promptOptimizationBusy, setPromptOptimizationBusy] = useState(false)
-  const [promptOptimizationError, setPromptOptimizationError] = useState<string | null>(null)
-  const onDismissPromptOptimizationError = useCallback((): void => setPromptOptimizationError(null), [])
   useEffect(() => {
     setGoalInputMode(false)
     setGoalPanelOpen(false)
@@ -450,6 +446,11 @@ export function FloatingComposer({
     focusComposer: draft.focusComposer,
     onAdd: onAddFileReference,
     onRemove: onRemoveFileReference
+  })
+  const promptEnhance = useComposerPromptEnhance({
+    available: !side, editable: canEditComposer, input, setInput, textareaRef: draft.textareaRef, setCursor: fileMentions.setCursor, activeThreadId,
+    providerId: composerProviderId ?? '', model: composerModel ?? '', kunHarness: adeComposer.harnessId === 'kun',
+    agentLabel: adeComposer.harnessId !== 'kun' && adeComposer.credentialMode === 'native-login' ? adeComposer.harnessLabel : undefined
   })
   const slashCommandMenu = useComposerSlashCommandMenu({
     slashQuery,
@@ -561,7 +562,7 @@ export function FloatingComposer({
       ? !canCompose || input.trim().length === 0
     : canSetGoalPanelDraft
       ? false
-    : !canSend || (route === 'ade' && adeComposerEnabled && !activeThreadId &&
+    : !canSend || promptEnhance.running || (route === 'ade' && adeComposerEnabled && !activeThreadId &&
       adeComposer.isolation === 'worktree' && !adeComposer.worktreeGit.worktreeGitReady)
   const primaryActionLoading = !runtimeReady
   const primaryActionKind = resolveComposerPrimaryActionKind({
@@ -572,13 +573,6 @@ export function FloatingComposer({
     fileReferenceEnabled,
     fileReferenceCount: fileReferences.length
   })
-  const canOptimizePrompt =
-    promptOptimizationSettings?.enabled === true &&
-    canEditComposer &&
-    !promptOptimizationBusy &&
-    input.trim().length > 0 &&
-    typeof window !== 'undefined' &&
-    typeof window.kunGui?.optimizePrompt === 'function'
   const goalElapsedLabel = useGoalElapsedLabel({ busy, goal: activeThreadGoal })
   const goalBannerLabel = activeThreadGoal
     ? activeThreadGoal.status === 'active'
@@ -629,7 +623,7 @@ export function FloatingComposer({
     activeThreadId, archiveThread, attachments, buildResearchPrompt, busy,
     canAcceptComposerFileDrop,
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
-    canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
+    canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode,
     clearActiveThreadGoal, compact, compactActiveThread, composerRootRef, composerSendKey,
     dictationPrimaryActionRef, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
@@ -644,7 +638,7 @@ export function FloatingComposer({
     queuedMessages,
     route, routeComposerFileDrop, runtimeReady, setActiveThreadGoal, setActiveThreadGoalStatus,
     setComposerMenuOpen, setGoalInputMode, setGoalPanelOpen, setInput, setMode,
-    setPromptOptimizationBusy, setPromptOptimizationError, slashCommandMenu, slashCommands,
+    promptEnhance, slashCommandMenu, slashCommands,
     t, userInput
   }
   const composerActions = useFloatingComposerActions(actionContext)
@@ -661,7 +655,7 @@ export function FloatingComposer({
     PauseCircle, Pencil, PlayCircle, Plus, Puzzle, Send, Share2, Sparkles,
     Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread,
     activeThreadGoal, activeThreadId, activeThreadTodos, adeComposer, adeComposerEnabled, attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
-    canCompose, canEditComposer, canOpenComposerMenu, canOpenGoalPanel, canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
+    canCompose, canEditComposer, canOpenComposerMenu, canOpenGoalPanel, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, canToggleWorktreeMode, clearActiveThreadGoal, compact, composerFastMode,
     composerMenuButtonRef, composerMenuOpen, composerMenuPanelRef, composerShellRef, composerModel, composerModelGroups: adeComposer.modelGroups ?? composerModelGroups, composerPickList: adeComposer.pickList ?? composerPickList, composerProviderId: adeComposer.aliasGroupKey ?? composerProviderId, composerReasoningEffort,
     ...collaboration,
@@ -675,7 +669,7 @@ export function FloatingComposer({
     onReorderQueuedMessage: onReorderQueuedMessage ?? storeReorderQueuedMessage, onResumeQueuedMessages: onResumeQueuedMessages ?? storeResumeQueuedMessages,
     onGuideQueuedMessage, onInterrupt, onOpenGraph, onOpenGraphChild, onPickAttachments, onRemoveAttachment, onRemoveContextChip, onRemoveFileReference,
     onRemoveQueuedMessage, onToggleWorktreeMode, onWorktreeBranchChange, openSettings, orchestration, pendingUserInputBlock, placeholder, primaryActionDisabled,
-    primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError, onDismissPromptOptimizationError, promptOptimizationSettings, queuedMessages,
+    primaryActionLabel, primaryActionLoading, promptEnhance, queuedMessages,
     pendingApprovals,
     route, runningGraphTurn, runtimeReady, setActiveThreadGoalStatus, setGoalInputMode, setGoalPanelOpen, setInput, showComposerMenuButton,
     showAutoPlanBuildMenuOption, showCodeExecutionControls, showExecutionSettingsPicker, showGoalFloater, showGoalMenuOption, showGraphMenuOption, showGraphProgress, showPlanMenuOption, showProviderInModelLabel, showTodoProgress, showToolbarStartControls, showUsageHistoryFooter,

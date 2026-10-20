@@ -177,7 +177,7 @@ import {
   KUN_GRAPH_PROJECT_CONSOLIDATE_TEMPLATE
 } from '../../../shared/kun-endpoints'
 import { MODEL_ENDPOINT_FORMATS } from '../../../shared/app-settings'
-import { MAX_BODY_BYTES, MAX_URL_LENGTH, trimmedString } from './common'
+import { MAX_BODY_BYTES, MAX_URL_LENGTH, optionalTrimmedString, trimmedString } from './common'
 export const providerProbePayloadSchema = z
   .object({
     providerId: trimmedString(128),
@@ -212,8 +212,15 @@ export const modelsDevCatalogPayloadSchema = z
 
 export const promptOptimizationPayloadSchema = z
   .object({
-    text: trimmedString(100_000)
+    text: trimmedString(100_000),
+    requestId: optionalTrimmedString(128),
+    providerId: z.string().trim().max(128).optional(),
+    model: z.string().trim().max(512).optional()
   })
+  .strict()
+
+export const promptOptimizationCancelPayloadSchema = z
+  .object({ requestId: trimmedString(128) })
   .strict()
 
 interface EndpointTemplate {
