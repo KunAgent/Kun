@@ -15,8 +15,8 @@ import {
 } from '../codex-responses-lite'
 
 /**
- * Shared one-shot model request used by prompt optimization and the paper
- * reader's translation service. Covers the three supported endpoint families:
+ * Shared one-shot model request used by prompt optimization, commit message
+ * generation and the paper reader's translation service. Covers the three supported endpoint families:
  * OpenAI chat completions, Anthropic messages, and OpenAI responses (plus the
  * Codex Responses Lite streaming variant). URL construction, headers, body
  * shape, and response parsing all live here so callers stay consistent.
@@ -25,7 +25,7 @@ import {
 export const DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS = 1600
 
 export type OneShotModelRequestInput = {
-  purpose?: 'prompt-optimization' | 'paper-translation'
+  purpose?: 'prompt-optimization' | 'paper-translation' | 'commit-message'
   baseUrl: string
   apiKey: string
   endpointFormat: ModelEndpointFormat
