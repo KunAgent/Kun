@@ -1,0 +1,303 @@
+/* GUI update chip beside Settings in the sidebar footer, and its card (SidebarGuiUpdate). */
+.ds-sidebar-footer-bar {
+  --ds-update-fg: #0f6e3c;
+  --ds-update-bg: rgba(18, 138, 74, 0.09);
+  --ds-update-border: rgba(18, 138, 74, 0.28);
+  --ds-update-solid: #128a4a;
+  --ds-update-danger-fg: #b8372e;
+  --ds-update-danger-bg: rgba(214, 73, 63, 0.1);
+  --ds-update-danger-border: rgba(214, 73, 63, 0.3);
+}
+
+[data-theme='dark'] .ds-sidebar-footer-bar {
+  --ds-update-fg: #6fd69c;
+  --ds-update-bg: rgba(64, 201, 119, 0.13);
+  --ds-update-border: rgba(64, 201, 119, 0.34);
+  --ds-update-solid: #40c977;
+  --ds-update-danger-fg: #f8736a;
+  --ds-update-danger-bg: rgba(248, 115, 106, 0.14);
+  --ds-update-danger-border: rgba(248, 115, 106, 0.34);
+}
+
+.ds-sidebar-update-chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--ds-update-border);
+  border-radius: 999px;
+  background: var(--ds-update-bg);
+  color: var(--ds-update-fg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  outline: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.ds-sidebar-update-chip:hover,
+.ds-sidebar-update-chip[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--ds-update-fg) 45%, transparent);
+  background: color-mix(in srgb, var(--ds-update-bg) 100%, var(--ds-update-solid) 7%);
+}
+
+.ds-sidebar-update-chip:focus-visible {
+  outline: 2px solid var(--ds-update-solid);
+  outline-offset: 2px;
+}
+
+.ds-sidebar-update-chip[data-phase='error'] {
+  --ds-update-fg: var(--ds-update-danger-fg);
+  --ds-update-bg: var(--ds-update-danger-bg);
+  --ds-update-border: var(--ds-update-danger-border);
+  --ds-update-solid: var(--ds-update-danger-fg);
+}
+
+.ds-sidebar-update-chip[data-phase='installing'] {
+  opacity: 0.85;
+}
+
+.ds-sidebar-update-chip-icon,
+.ds-sidebar-update-ring {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.ds-sidebar-update-ring-track,
+.ds-sidebar-update-ring-value {
+  fill: none;
+  stroke-width: 2;
+}
+
+.ds-sidebar-update-ring-track {
+  stroke: var(--ds-update-border);
+}
+
+.ds-sidebar-update-ring-value {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dasharray 200ms ease;
+}
+
+.ds-sidebar-update-chip-label {
+  font-variant-numeric: tabular-nums;
+}
+
+/* No room beside the settings gear: icon only. The label keeps its width so the chip can measure it. */
+.ds-sidebar-update-chip[data-compact='true'] {
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+}
+
+.ds-sidebar-update-chip[data-compact='true'] .ds-sidebar-update-chip-label {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Shown once when a new version first appears. */
+.ds-sidebar-update-chip[data-pulse='true'] {
+  animation: ds-sidebar-update-pulse 1.2s ease-out 2;
+}
+
+@keyframes ds-sidebar-update-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ds-update-solid) 45%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--ds-update-solid) 0%, transparent);
+  }
+}
+
+.ds-sidebar-update-card {
+  position: absolute;
+  right: 0;
+  /* Clear the footer divider above the bar. */
+  bottom: calc(100% + 16px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--ds-border);
+  border-radius: 14px;
+  background: var(--ds-surface-card);
+  box-shadow: var(--ds-shadow-overlay);
+  color: var(--ds-text);
+  text-align: left;
+  cursor: default;
+}
+
+.ds-sidebar-update-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ds-sidebar-update-card-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ds-update-bg);
+  color: var(--ds-update-fg);
+}
+
+.ds-sidebar-update-card[data-phase='error'] .ds-sidebar-update-card-icon {
+  background: var(--ds-update-danger-bg);
+  color: var(--ds-update-danger-fg);
+}
+
+.ds-sidebar-update-card-title {
+  padding-top: 1px;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.ds-sidebar-update-card-subtitle {
+  margin-top: 3px;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.ds-sidebar-update-card-close {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--ds-text-faint);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.ds-sidebar-update-card-close:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.ds-sidebar-update-card-body {
+  margin: 0;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.ds-sidebar-update-card-error {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ds-update-danger-bg);
+  color: var(--ds-update-danger-fg);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.ds-sidebar-update-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ds-sidebar-update-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ds-text-faint) 22%, transparent);
+}
+
+.ds-sidebar-update-progress-value {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ds-update-solid);
+  transition: width 200ms ease;
+}
+
+.ds-sidebar-update-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ds-text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-sidebar-update-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-sidebar-update-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.ds-sidebar-update-button:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.ds-sidebar-update-button[data-primary='true'] {
+  padding: 0 14px;
+  border-color: transparent;
+  background: var(--ds-control);
+  color: var(--ds-control-foreground);
+  font-weight: 600;
+}
+
+.ds-sidebar-update-button[data-primary='true']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-control) 88%, var(--ds-control-foreground));
+  color: var(--ds-control-foreground);
+}
+
+.ds-sidebar-update-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ds-sidebar-update-button:focus-visible,
+.ds-sidebar-update-card-close:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-sidebar-update-chip,
+  .ds-sidebar-update-ring-value,
+  .ds-sidebar-update-progress-value {
+    transition: none;
+  }
+
+  .ds-sidebar-update-chip[data-pulse='true'] {
+    animation: none;
+  }
+}
