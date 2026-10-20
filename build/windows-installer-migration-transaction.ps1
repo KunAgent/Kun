@@ -354,9 +354,7 @@ function Initialize-UpdateTransaction {
   }
   $transactionPath = Get-UpdateTransactionPath
   $assets = "$transactionPath.assets"
-  foreach ($path in @($stage, ($target + '.kun-failed'), $assets)) {
-    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
-  }
+  foreach ($path in @($stage, ($target + '.kun-failed'), $assets)) { Remove-PayloadTreeIfPresent $path }
   [IO.Directory]::CreateDirectory($assets) | Out-Null
 
   $inPlace = [bool](Test-PathEqual $source $target)
@@ -426,7 +424,7 @@ function Invoke-SwitchUpdatePayload {
   Invoke-InstallerFaultPoint 'validate.before_check'
   Assert-PackagedInstallPayloadAt $stage
   if ([string]$transaction.Phase -eq 'payload_switched') { return }
-  if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+  Remove-PayloadTreeIfPresent $old
   if (Test-Path -LiteralPath $target) {
     if (Test-PathEqual ([string]$transaction.Source) $target) {
       Move-Item -LiteralPath $target -Destination $old
@@ -555,7 +553,7 @@ function Invoke-RollbackUpdateTransaction {
       Write-BlockingProcessDiagnostic $stopResult
       throw 'The candidate application could not be stopped before rollback.'
     }
-    if (Test-Path -LiteralPath $failed) { Remove-Item -LiteralPath $failed -Recurse -Force }
+    Remove-PayloadTreeIfPresent $failed
     if (Test-Path -LiteralPath $target) {
       if ((Test-PathEqual ([string]$transaction.Source) $target) -and (Test-Path -LiteralPath $old)) {
         Move-Item -LiteralPath $target -Destination $failed
@@ -608,11 +606,7 @@ function Invoke-RollbackUpdateTransaction {
       ([string]$transaction.StageRoot),
       ([string]$transaction.FailedPayloadRoot),
       ([string]$transaction.AssetsRoot)
-    )) {
-      if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-        Remove-Item -LiteralPath $path -Recurse -Force
-      }
-    }
+    )) { Remove-PayloadTreeIfPresent $path }
     Assert-RecoveryPayload (Normalize-FullPath ([string]$transaction.Source))
     $copy = @{}
     foreach ($property in $transaction.PSObject.Properties) { $copy[$property.Name] = $property.Value }
@@ -684,12 +678,7 @@ function Finalize-TerminalUpdateTransaction {
     ([string]$transaction.BackupRoot),
     ([string]$transaction.AssetsRoot),
     ([string]$transaction.HealthResult)
-  )) {
-    if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-      . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
-      Remove-RecoveryPayloadTree $path
-    }
-  }
+  )) { Remove-PayloadTreeIfPresent $path }
   Remove-Journal
   Invoke-InstallerFaultPoint 'finalize.before_transaction_removal'
   Remove-Item -LiteralPath (Get-UpdateTransactionPath) -Force
