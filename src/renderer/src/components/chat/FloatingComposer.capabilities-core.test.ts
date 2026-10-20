@@ -177,7 +177,7 @@ describe('FloatingComposer capability controls', () => {
     expect(css).not.toMatch(/\.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/s)
     expect(css).not.toContain('--ds-composer-model-min')
     // Words give way level by level (composer-toolbar-fit.ts sets data-fit-N), never the actions.
-    expect(css).toMatch(/\[data-fit-1\] \.ds-composer-context-control,[\s\S]*?\.ds-composer-agent-surface\s*\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-1\] \.ds-composer-context-control,[\s\S]*?\.ds-composer-agent-picker[^{]*\{[^}]*display:\s*none/s)
     expect(css).toMatch(/\[data-fit-2\] \.ds-composer-task-surface-label\s*\{[^}]*display:\s*none/s)
     expect(css).toMatch(/\[data-fit-3\] \.ds-composer-model-trigger-model,[\s\S]*?\{[^}]*display:\s*none/s)
     expect(css).toMatch(/\[data-fit-4\] \.ds-composer-model-trigger-dot,[\s\S]*?\{[^}]*display:\s*none/s)

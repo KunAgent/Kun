@@ -1,7 +1,7 @@
 import { hasHarnessUpdate, useHarnessUpdateStore } from '../../store/harness-update-store'
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { Briefcase, Check, ChevronDown, Code2, History, Loader2, Palette, Settings2 } from 'lucide-react'
+import { Check, ChevronDown, History, Loader2, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AgentIcon } from '../agent-icon'
@@ -31,12 +31,8 @@ export type ComposerAgentModeControls = {
 export type AgentModeSurface = ComposerTaskSurface | 'write'
 type Selection = { harnessId: string; label: string; surface: AgentModeSurface }
 const MENU_WIDTH = 288
-const KUN_MODE_LABEL_KEYS: Record<AgentModeSurface, string> = {
-  code: 'taskTypeCode', design: 'taskTypeDesign', write: 'workspaceModeWorkLabel'
-}
-const KUN_MODE_ICONS = { code: Code2, design: Palette, write: Briefcase }
 
-/** Agent identity and Kun's next-turn surface share the original Code/Design entry. */
+/** Agent identity and Kun's next-turn surface share one entry; Kun has a single mode so it shows as plain "Kun". */
 export function FloatingComposerAgentModePicker({
   controls, surface, disabled = false
 }: {
@@ -58,8 +54,7 @@ export function FloatingComposerAgentModePicker({
   const kunRow = controls.rows.find((row) => row.definition.id === 'kun')
   const externalRows = controls.rows.filter((row) => row.definition.id !== 'kun' && harnessRowAvailable(row))
   const kun = controls.harnessId === 'kun'
-  const surfaceLabel = t(KUN_MODE_LABEL_KEYS[surface])
-  const triggerLabel = kun ? `Kun · ${surfaceLabel}` : controls.harnessLabel
+  const triggerLabel = kun ? 'Kun' : controls.harnessLabel
 
   const close = useCallback((): void => {
     setOpen(false)
@@ -200,21 +195,16 @@ export function FloatingComposerAgentModePicker({
       ) : (
         <>
           <div role="group" aria-label="Kun" data-agent-mode-group="kun">
-            <div className="flex items-center gap-2 px-2.5 py-2 text-[11px] font-semibold text-ds-faint">
-              <AgentIcon harnessId="kun" size={16} /><span>Kun</span>
-            </div>
             {kunModes.map((mode) => {
-              const label = t(KUN_MODE_LABEL_KEYS[mode])
               const selected = kun && surface === mode
-              const Icon = KUN_MODE_ICONS[mode]
               return (
                 <button key={mode} type="button" role="menuitemradio" aria-checked={selected} tabIndex={-1}
                   disabled={Boolean(kunUnavailable)} data-agent-mode-option={`kun-${mode}`} data-harness-id="kun"
                   data-task-surface-option={mode} data-task-surface={mode}
-                  onClick={() => select({ harnessId: 'kun', surface: mode, label: `Kun · ${label}` })}
+                  onClick={() => select({ harnessId: 'kun', surface: mode, label: 'Kun' })}
                   className={`flex h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-55 ${selected ? 'bg-accent/10' : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'}`}>
-                  <Icon className="h-4 w-4 shrink-0" strokeWidth={1.9} aria-hidden />
-                  <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+                  <AgentIcon harnessId="kun" size={16} className="shrink-0" />
+                  <span className="min-w-0 flex-1 truncate font-medium">Kun</span>
                   {selected ? <Check className="h-4 w-4 shrink-0 text-accent" aria-hidden /> : null}
                 </button>
               )
@@ -288,10 +278,8 @@ export function FloatingComposerAgentModePicker({
           }}
           className="inline-flex h-8 max-w-[180px] items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-card px-2.5 text-[13px] font-medium text-ds-ink transition-colors hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-55">
           <AgentIcon harnessId={controls.harnessId} size={14} className="shrink-0" />
-          {/* Name and Kun surface are separate so a narrow composer can drop the surface, then both. */}
           <span className="ds-composer-task-surface-label min-w-0 truncate">
             <span className="ds-composer-agent-name">{kun ? 'Kun' : controls.harnessLabel}</span>
-            {kun ? <span className="ds-composer-agent-surface"> · {surfaceLabel}</span> : null}
           </span>
           <ChevronDown className={`ds-composer-agent-chevron h-3.5 w-3.5 shrink-0 text-ds-faint transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={1.8} aria-hidden />
         </button>
