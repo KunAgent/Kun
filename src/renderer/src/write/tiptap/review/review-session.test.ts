@@ -14,7 +14,7 @@ import {
   serializeWorkDocument,
   type WorkDocContext
 } from '../../markdown/document-codec'
-import { writeReviewPlugin, writeReviewPluginKey } from './review-plugin'
+import { isChunkValidForDoc, writeReviewPlugin, writeReviewPluginKey } from './review-plugin'
 import { WriteReviewSession } from './review-session'
 
 const schema = getSchema(buildWriteRichExtensions())
@@ -180,5 +180,24 @@ describe('WriteReviewSession', () => {
     harness.session.begin({ original, nextDoc: next })
     harness.session.resolveAll('accept')
     expect(harness.emitted).toEqual([next])
+  })
+
+  it('never leaves chunks that disagree with the document between dispatches', () => {
+    const harness = makeHarness(ORIGINAL)
+    const view = harness.editor.view as unknown as { dispatch: (tr: Transaction) => void }
+    const dispatch = view.dispatch
+    view.dispatch = (tr) => {
+      dispatch(tr)
+      const state = harness.editor.state
+      for (const chunk of writeReviewPluginKey.getState(state)?.chunks ?? []) {
+        expect(isChunkValidForDoc(state.doc, chunk)).toBe(true)
+      }
+    }
+    harness.session.begin({ original: ORIGINAL, nextDoc: NEXT })
+    const shorter = NEXT.split('\n\n').slice(0, 1).join('\n\n') + '\n'
+    harness.session.begin({ original: ORIGINAL, nextDoc: shorter })
+    harness.session.begin({ original: ORIGINAL, nextDoc: NEXT + '\n\nlonger tail\n' })
+    harness.session.resolveAll('reject')
+    expect(harness.emitted).toEqual([ORIGINAL])
   })
 })
