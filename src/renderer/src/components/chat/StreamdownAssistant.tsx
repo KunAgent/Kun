@@ -1,4 +1,4 @@
-import { useState, type ComponentPropsWithRef, type MouseEvent, type ReactElement } from 'react'
+import { useEffect, useState, type ComponentPropsWithRef, type MouseEvent, type ReactElement } from 'react'
 import { Streamdown, type StreamdownProps } from 'streamdown'
 import remarkGfm from 'remark-gfm'
 import { harden } from 'rehype-harden'
@@ -6,6 +6,7 @@ import 'streamdown/styles.css'
 import { parseFileReferenceHref, rehypeFileReferences } from '../../lib/file-references'
 import { useValidatedFileReference } from '../../lib/file-reference-validation'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
+import { loadKatexCopyTex } from '../../lib/katex-copy-tex'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import { sanitizeAssistantCanvasToolDisplay } from '../../design/canvas/strip-canvas-tool-display'
 import { StreamdownCode } from './StreamdownCode'
@@ -162,6 +163,9 @@ export function StreamdownAssistant({
 }: Props): ReactElement {
   const displayText = sanitizeAssistantCanvasToolDisplay(text)
   const { text: pacedText, fade } = useAssistantTextReveal(displayText, streaming)
+  useEffect(() => {
+    void loadKatexCopyTex()
+  }, [])
   const [fadeSource] = useState(createStreamFadeSource)
   const [fadingRehypePlugins] = useState(
     () => [...rehypePlugins, [rehypeStreamFade, fadeSource]] as StreamdownProps['rehypePlugins']
