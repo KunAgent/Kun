@@ -1,5 +1,6 @@
 import { acpToolPresentation } from './acp-tool-presentation'
 import { mergeToolPresentations, toolPresentationFromItem } from './tool-presentation'
+import { readToolFileState } from '../lib/turn-file-undo-inputs'
 import { externalSubagentChildMeta, readExternalSubagentMeta } from './external-subagent'
 import type {
   ApprovalStatusPayload,
@@ -393,6 +394,8 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   const paperDetails = paperDetailsFromToolItem(item)
   if (paperDetails) meta.paperDetails = paperDetails
   applyOfficeEditMeta(meta, item, payload)
+  const fileState = item.kind === 'tool_result' && !item.isError ? readToolFileState(item.meta) : null
+  if (fileState) meta.fileState = fileState
   if (presentation.command) meta.command = presentation.command
   if (presentation.toolKind === 'command_execution' || item.toolName === 'background_shell') {
     applyCommandResultMeta(meta, item)

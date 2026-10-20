@@ -587,7 +587,12 @@ export type ChatState = {
   attachComposerContext: (event: PendingComposerContextEvent) => void
   removeComposerContext: (attachmentId: string) => void
   clearComposerContexts: (filter?: { source?: 'dev-preview'; threadId?: string }) => void
-  rewindAndResend: (userBlockId: string, newText: string) => Promise<void>
+  /**
+   * Edit an earlier message and resend it. `resetFiles` also undoes the file
+   * changes of that turn and every later one when all of them are safe to
+   * restore; otherwise only the conversation is reset.
+   */
+  rewindAndResend: (userBlockId: string, newText: string, options?: { resetFiles?: boolean }) => Promise<void>
   rollbackWorkspaceToCheckpoint: (checkpointId: string) => Promise<void>
   interrupt: (options?: { discard?: boolean }) => Promise<void>
   cancelToolCall: (threadId: string, turnId: string, callId: string) => Promise<boolean>

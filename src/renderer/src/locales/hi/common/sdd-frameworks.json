@@ -552,7 +552,6 @@
   "rewindCancel": "रद्द करें",
   "rewindResend": "पुनः भेजें",
   "rewindHint": "रद्द करने के लिए Esc · ⌘/Ctrl + भेजने के लिए Enter करें",
-  "rewindFileRollbackNotice": "पुनः भेजने से फ़ाइल परिवर्तन वापस आ जायेंगे",
   "rewindBusyError": "रिवाइंडिंग से पहले वर्तमान मोड़ समाप्त होने तक प्रतीक्षा करें।",
   "toolActionFile": "संपादित फ़ाइल",
   "toolActionCommand": "दौड़ा आदेश",

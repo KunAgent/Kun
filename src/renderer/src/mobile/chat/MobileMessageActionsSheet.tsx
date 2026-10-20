@@ -61,7 +61,7 @@ export function MobileMessageActionsSheet(): React.JSX.Element {
                 }}
               >
                 <RotateCcw size={18} aria-hidden />
-                {payload.rollbackAction.busy ? t('rollingBackWorkspace') : t('rollbackWorkspace')}
+                {payload.rollbackAction.busy ? t('turnUndoWorking') : t('turnUndoMessageAction')}
               </button>
             </li>
           ) : null}

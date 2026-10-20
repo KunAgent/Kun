@@ -40,6 +40,7 @@ import designAgent from './common/design-agent.json'
 import artifactsLibrary from './common/artifacts-library.json'
 import workspaceFiles from './common/workspace-files.json'
 import changesCommit from './common/changes-commit.json'
+import turnUndo from './common/turn-undo.json'
 
 const common = {
   ...agentUpdates,
@@ -83,6 +84,7 @@ const common = {
   ...artifactsLibrary,
   ...workspaceFiles,
   ...changesCommit,
+  ...turnUndo,
 }
 
 export default common

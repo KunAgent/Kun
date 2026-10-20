@@ -552,7 +552,6 @@
   "rewindCancel": "취소",
   "rewindResend": "재전송",
   "rewindHint": "취소하려면 Esc · 전송하려면 ⌘/Ctrl + Enter",
-  "rewindFileRollbackNotice": "다시 보내면 파일 변경사항이 롤백됩니다.",
   "rewindBusyError": "되감기 전에 현재 회전이 완료될 때까지 기다리십시오.",
   "toolActionFile": "편집된 파일",
   "toolActionCommand": "실행 명령",

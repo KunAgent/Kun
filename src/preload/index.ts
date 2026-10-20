@@ -16,6 +16,7 @@ import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
 import { quotaReminderPreloadApi } from './quota-reminder-bridge'
 import { worktreePreloadApi } from './worktree-bridge'
+import { gitTurnUndoPreloadApi } from './git-turn-undo-api'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
@@ -268,6 +269,7 @@ const api = {
   removeGitBranchWorktree: (params) =>
     ipcRenderer.invoke('git:remove-branch-worktree', params),
   ...worktreePreloadApi,
+  ...gitTurnUndoPreloadApi,
   listEditors: () => ipcRenderer.invoke('editor:list'),
   openEditorPath: (options) =>
     ipcRenderer.invoke('editor:open-path', options),
