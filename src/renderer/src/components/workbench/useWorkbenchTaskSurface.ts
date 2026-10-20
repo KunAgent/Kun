@@ -19,7 +19,6 @@ import {
 } from '../../design/design-task-classification'
 import {
   useWorkbenchTaskIntent,
-  hasWorkbenchTaskIntent,
   workbenchTaskIntentScope,
   writeWorkbenchTaskIntent,
   type WorkbenchTaskIntentDraft
@@ -85,23 +84,14 @@ export function useWorkbenchTaskSurface(input: {
       ? { ...draft, profile: { ...draft.profile, outputMedium: 'html' } }
       : draft
   ), [draft, draftNeedsImageFallback])
-  const hasPersistedDraft = hasWorkbenchTaskIntent(draftScope)
   const designRegistry = readDesignThreadRegistry()
   const legacyDesignThread = Boolean(activeThread &&
     isLegacyDesignWorkbenchThread(activeThread.id, activeThread, designRegistry))
-  // Next-turn surface: legacy standalone Design stays Design; Code-owned
-  // conversations follow the per-thread draft, fall back to Design when a
-  // locked profile exists, and default to Code otherwise. The selector stays
-  // available because taskSurfaceLocked is false for Code-owned threads.
-  const taskSurface: ComposerTaskSurface = legacyDesignThread
-    ? 'design'
-    : hasPersistedDraft
-      ? effectiveDraft.surface
-      : pendingDesignThreadIntent
-        ? 'design'
-        : lockedProfile
-          ? 'design'
-          : 'code'
+  // Next-turn surface: legacy standalone Design stays Design. Code-owned
+  // conversations always send Code turns; the Code agent starts Design passes
+  // itself with `design_open`, so a persisted Design draft or a locked profile
+  // no longer flips the composer into a separate Design mode.
+  const taskSurface: ComposerTaskSurface = legacyDesignThread ? 'design' : 'code'
   const profile: DesignTaskComposerProfile = lockedProfile
       ? {
         outputMedium: lockedProfile.outputMedium,
@@ -266,41 +256,11 @@ export function useWorkbenchTaskSurface(input: {
     if (draftNeedsImageFallback) updateDraft(effectiveDraft)
   }, [draftNeedsImageFallback, effectiveDraft, updateDraft])
 
-  const onSurfaceChange = useCallback((surface: ComposerTaskSurface): void => {
-    if (taskSurfaceLocked || surface === taskSurface) return
-    const next = surface === 'design'
-      ? {
-          ...effectiveDraft,
-          surface,
-          codeExecution: effectiveDraft.codeExecution ?? {
-            mode: input.composerMode ?? 'agent',
-            orchestration: input.composerOrchestration ?? 'direct'
-          }
-        }
-      : { ...effectiveDraft, surface }
-    updateDraft(next)
-    if (surface === 'design') {
-      input.setComposerMode('agent')
-      input.setComposerOrchestration('direct')
-      const workspace = normalizeWorkspaceRoot(draftWorkspace)
-      if (!workspace) return
-      const store = useDesignWorkspaceStore.getState()
-      if (normalizeWorkspaceRoot(store.workspaceRoot) !== workspace) store.setWorkspaceRoot(workspace)
-      void useDesignWorkspaceStore.getState().loadDesignSettings().then(() => {
-        useDesignWorkspaceStore.getState().updateDesignContext({
-          designTarget: next.profile.target,
-          designSystemPreset: next.profile.preset
-        })
-      })
-    } else {
-      const codeExecution = next.codeExecution
-      if (codeExecution?.mode && codeExecution.orchestration) {
-        input.setComposerMode(codeExecution.mode)
-        input.setComposerOrchestration(codeExecution.orchestration)
-      }
-      useDesignWorkspaceStore.getState().cancelDrawingCreation()
-    }
-  }, [draftWorkspace, effectiveDraft, input, taskSurface, taskSurfaceLocked, updateDraft])
+  // Design passes are started by the Code agent with `design_open`, so a
+  // Code-owned conversation has no per-turn surface to switch and legacy
+  // Design threads are locked. The callback stays so the unified Agent picker
+  // keeps rendering its Kun row.
+  const onSurfaceChange = useCallback<(surface: ComposerTaskSurface) => void>(() => undefined, [])
 
   const onProfileChange = useCallback((patch: Partial<DesignTaskComposerProfile>): void => {
     if (taskSurfaceLocked) return

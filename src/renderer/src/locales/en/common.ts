@@ -67,6 +67,7 @@ import codeTour from './common/code-tour.json'
 import gmail from './common/gmail.json'
 import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
+import designAgent from './common/design-agent.json'
 
 const common = {
   ...composerSubscriptionQuota,
@@ -143,6 +144,7 @@ const common = {
   ...gmail,
   ...messageQuote,
   ...appSurfaces,
+  ...designAgent,
 }
 
 export default common

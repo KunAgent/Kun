@@ -35,6 +35,7 @@ import wardrobeInvite from './common/wardrobe-invite.json'
 import codeTour from './common/code-tour.json'
 import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
+import designAgent from './common/design-agent.json'
 
 const common = {
   ...agentUpdates,
@@ -73,6 +74,7 @@ const common = {
   ...codeTour,
   ...messageQuote,
   ...appSurfaces,
+  ...designAgent,
 }
 
 export default common

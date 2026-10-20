@@ -108,6 +108,8 @@ export type SubmitDesignTurnOptions = SubmitDesignTurnDeps & {
    */
   boardArtifactId?: string
   waitForRuntimeAdmission?: boolean
+  /** Agent-started passes render as a notice instead of a user bubble. */
+  messageSource?: 'design_continuation'
   /** Called after local preparation but immediately before the runtime request. */
   onBeforeSend?: () => void | Promise<void>
 }
@@ -345,6 +347,7 @@ export async function submitDesignTurn(
         ...(!omitLockedProfile && designProfile ? { designProfile, designDocumentTarget } : {}),
         ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
         ...(options.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
+        ...(options.messageSource ? { messageSource: options.messageSource } : {}),
         attachmentIds: options.attachmentIds ?? [],
         attachments: options.attachments ?? [],
         ...(resolvedTarget.svgArtifactId ? {

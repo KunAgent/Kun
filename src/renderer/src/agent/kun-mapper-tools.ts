@@ -85,6 +85,7 @@ import {
   toolStatus
 } from './kun-mapper-core'
 import { extractToolGeneratedFiles } from './kun-mapper-generated-files'
+import { designOpenStatusOverride, extractDesignOpenRequest } from './design-open-request'
 
 
 export function extractComponentPrototype(item: CoreTurnItemJson): ComponentPrototypeMetadata | undefined {
@@ -362,6 +363,8 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   if (componentPrototype) meta.componentPrototype = componentPrototype
   const diagramPrototype = extractDiagramPrototype(item)
   if (diagramPrototype) meta.diagramPrototype = diagramPrototype
+  const designOpenRequest = extractDesignOpenRequest(item)
+  if (designOpenRequest) meta.designOpenRequest = designOpenRequest
   if (item.toolName === 'show_visualization' && !item.isError) {
     const visualization = visualizationFromToolPayload(
       item.kind === 'tool_result' ? item.output : item.arguments
@@ -400,7 +403,8 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     const plan = extractPlanMetadata(item)
     if (plan) meta.plan = plan
   }
-  const status = componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item)
+  const status = componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ??
+    designOpenStatusOverride(item, designOpenRequest) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item)
   const semantic = meta.toolPresentation as ReturnType<typeof toolPresentationFromItem>
   if (status === 'running' && ['completed', 'failed', 'canceled'].includes(semantic.state)) semantic.state = 'running'
   else if (status === 'success') semantic.state = 'completed'

@@ -19,6 +19,7 @@ import {
 } from './message-timeline-process'
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
+import { DesignOpenCard } from './DesignOpenCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
 import { AppSurfaceBlocks } from '../../app-surfaces/AppSurfaceBlocks'
 import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
@@ -143,6 +144,7 @@ export function ConversationTurn({
     runtimeErrorsBeforeFinalContent,
     runtimeErrorsAfterFinalContent,
     componentPrototypeBlocks,
+    designOpenBlocks,
     diagramPrototypeBlocks,
     conversationVisualizationBlocks,
     appSurfaceBlocks,
@@ -288,6 +290,7 @@ export function ConversationTurn({
     planResult ||
     turnFileChanges.length > 0 ||
     componentPrototypeBlocks.length > 0 ||
+    designOpenBlocks.length > 0 ||
     diagramPrototypeBlocks.length > 0 ||
     conversationVisualizationBlocks.length > 0 ||
     appSurfaceBlocks.length > 0 ||
@@ -425,6 +428,10 @@ export function ConversationTurn({
           block={block}
           workspaceRoot={filePreviewWorkspaceRoot}
         />
+      ))}
+
+      {designOpenBlocks.map((block) => (
+        <DesignOpenCard key={block.id} block={block} threadId={threadId} requestTurnLive={isProcessing} />
       ))}
 
       {assistantContentBlocks.map((block) => (

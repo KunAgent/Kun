@@ -32,7 +32,7 @@ export function FloatingComposerSurfaceView({
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
     FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerIsolationPicker, FloatingComposerModelPicker,
-    FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
+    FloatingComposerTaskProfile,
     Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread, activeThreadGoal,
     activeThreadId, adeComposer, adeComposerEnabled, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
@@ -352,13 +352,7 @@ export function FloatingComposerSurfaceView({
                             onContinueLocalSession: openContinueLocalSession
                           }}
                         />
-                      ) : (
-                        <FloatingComposerTaskSurfacePicker
-                          surface={taskSurface}
-                          disabled={!canCompose || busy}
-                          onSurfaceChange={onTaskSurfaceChange}
-                        />
-                      )
+                      ) : null
                     ) : null}
                     {showCodeExecutionControls && mode === 'plan' ? (
                       <button
