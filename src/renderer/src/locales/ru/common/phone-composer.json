@@ -326,8 +326,6 @@
   "composerVoiceStop": "Остановить запись",
   "composerVoiceSend": "Остановить и отправить",
   "composerVoiceTranscribing": "Расшифровка…",
-  "composerPromptOptimize": "Оптимизировать подсказку",
-  "composerPromptOptimizing": "Оптимизация подсказки…",
   "composerVoiceMicDenied": "Доступ к микрофону был запрещен. Разрешите это в настройках системы и повторите попытку.",
   "composerVoiceTooShort": "Запись была слишком короткой. Подожди еще немного.",
   "composerVoiceFailed": "Не удалось транскрибировать голос: {{message}}",

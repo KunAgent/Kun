@@ -125,15 +125,14 @@ export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, an
                       const providerId = e.target.value
                       const nextProvider = modelProviders.find((item: ModelProviderProfileV1) => item.id === providerId) ?? activeProvider
                       const keepModel = nextProvider?.models.includes(promptOptimization.model) === true
+                      // Choosing "Follow composer" unpins both fields.
                       updatePromptOptimization({
                         providerId,
-                        model: keepModel ? promptOptimization.model : ''
+                        model: providerId && keepModel ? promptOptimization.model : ''
                       })
                     }}
                   >
-                    <option value="">{t('modelSelectDefaultSuffix', {
-                      model: activeProvider?.name ?? DEFAULT_MODEL_PROVIDER_ID
-                    })}</option>
+                    <option value="">{t('kunPromptOptimizationFollowComposer')}</option>
                     {modelProviders.map((item: ModelProviderProfileV1) => (
                       <option key={item.id} value={item.id}>{item.name}</option>
                     ))}
@@ -144,9 +143,9 @@ export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, an
                   <ModelSelect
                     value={promptOptimization.model}
                     options={promptOptimizationModels}
-                    defaultLabel={t('kunPromptOptimizationModelDefault', {
-                      model: promptOptimizationDefaultModel
-                    })}
+                    defaultLabel={promptOptimization.providerId?.trim()
+                      ? t('kunPromptOptimizationModelDefault', { model: promptOptimizationDefaultModel })
+                      : t('kunPromptOptimizationFollowComposer')}
                     optionLabel={(model) => model}
                     allowCustom
                     customLabel={t('modelSelectCustomOption')}
@@ -156,15 +155,18 @@ export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, an
                   />
                 </label>
                 <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-ds-muted">
-                  {t('kunPromptOptimizationTimeout')}
+                  {t('kunPromptOptimizationTimeoutSeconds')}
                   <input
                     type="number"
-                    min={1000}
-                    max={600000}
-                    step={1000}
+                    min={5}
+                    max={115}
+                    step={5}
                     className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
-                    value={promptOptimization.timeoutMs}
-                    onChange={(e) => updatePromptOptimization({ timeoutMs: Number(e.target.value) })}
+                    value={Math.round(promptOptimization.timeoutMs / 1000)}
+                    onChange={(e) => {
+                      const seconds = Number(e.target.value)
+                      if (Number.isFinite(seconds) && seconds > 0) updatePromptOptimization({ timeoutMs: Math.round(seconds * 1000) })
+                    }}
                   />
                 </label>
                 <label className="flex min-w-0 flex-col gap-1.5 text-[12px] font-medium text-ds-muted lg:col-span-3">

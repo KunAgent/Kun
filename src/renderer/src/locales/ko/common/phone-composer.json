@@ -326,8 +326,6 @@
   "composerVoiceStop": "녹음 중지",
   "composerVoiceSend": "중지하고 보내세요.",
   "composerVoiceTranscribing": "스크립트 작성 중…",
-  "composerPromptOptimize": "프롬프트 최적화",
-  "composerPromptOptimizing": "프롬프트 최적화 중…",
   "composerVoiceMicDenied": "마이크 액세스가 거부되었습니다. 시스템 설정에서 허용하고 다시 시도해 보세요.",
   "composerVoiceTooShort": "녹음 시간이 너무 짧았습니다. 조금만 더 참으세요.",
   "composerVoiceFailed": "음성 녹음 실패: {{message}}",

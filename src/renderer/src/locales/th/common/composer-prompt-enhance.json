@@ -1,0 +1,20 @@
+{
+  "composerPromptEnhance": "ปรับปรุงพรอมต์",
+  "composerPromptEnhanceHint": "ปรับปรุงพรอมต์ · เขียนร่างใหม่ด้วย {{model}}",
+  "composerPromptEnhanceHintDefault": "ปรับปรุงพรอมต์ · เขียนร่างใหม่ด้วยโมเดลเริ่มต้นของ Kun",
+  "composerPromptEnhanceCancel": "ยกเลิกการปรับปรุง",
+  "composerPromptEnhanceCancelHint": "ยกเลิกการปรับปรุง (Esc)",
+  "composerPromptEnhanceRunning": "กำลังปรับปรุงด้วย {{model}}… ร่างจะอ่านได้อย่างเดียวชั่วคราว คลิกปุ่มอีกครั้งหรือกด Esc เพื่อยกเลิก",
+  "composerPromptEnhanceRunningDefault": "กำลังปรับปรุง… ร่างจะอ่านได้อย่างเดียวชั่วคราว คลิกปุ่มอีกครั้งหรือกด Esc เพื่อยกเลิก",
+  "composerPromptEnhanceDone": "ปรับปรุงด้วย {{model}} และแทนที่ร่างแล้ว",
+  "composerPromptEnhanceUndo": "เลิกทำ",
+  "composerPromptEnhanceUndoHint": "คืนร่างก่อนการปรับปรุง",
+  "composerPromptEnhanceDismiss": "ปิด",
+  "composerPromptEnhanceEmpty": "พิมพ์พรอมต์ที่ต้องการปรับปรุงก่อน",
+  "composerPromptEnhanceUnsupportedAgent": "โมเดลปัจจุบันใช้การลงชื่อเข้าใช้ของ {{agent}} เอง Kun จึงเรียกใช้โดยตรงไม่ได้ สลับไปใช้โมเดลจากผู้ให้บริการของ Kun หรือระบุโมเดลสำหรับปรับปรุงในการตั้งค่า",
+  "composerPromptEnhanceUnsupported": "โมเดลปัจจุบันใช้ปรับปรุงพรอมต์ไม่ได้ สลับไปใช้โมเดลจากผู้ให้บริการของ Kun หรือระบุโมเดลสำหรับปรับปรุงในการตั้งค่า",
+  "composerPromptEnhanceOpenSettings": "เปิดการตั้งค่า",
+  "composerPromptEnhanceFailed": "ปรับปรุงไม่สำเร็จ: {{message}} ร่างไม่ได้ถูกเปลี่ยน",
+  "composerPromptEnhanceTimeout": "การปรับปรุงหมดเวลา ร่างไม่ได้ถูกเปลี่ยน ลองอีกครั้งหรือเพิ่มเวลาหมดในการตั้งค่า",
+  "composerPromptEnhanceDisabled": "การปรับปรุงพรอมต์ถูกปิดอยู่ในการตั้งค่า"
+}

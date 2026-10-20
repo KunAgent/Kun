@@ -326,8 +326,6 @@
   "composerVoiceStop": "หยุดการบันทึก",
   "composerVoiceSend": "หยุดแล้วส่ง.",
   "composerVoiceTranscribing": "กำลังถอดเสียง...",
-  "composerPromptOptimize": "เพิ่มประสิทธิภาพพร้อมท์",
-  "composerPromptOptimizing": "กำลังเพิ่มประสิทธิภาพข้อความแจ้ง...",
   "composerVoiceMicDenied": "การเข้าถึงไมโครโฟนถูกปฏิเสธ อนุญาตในการตั้งค่าระบบแล้วลองอีกครั้ง",
   "composerVoiceTooShort": "การบันทึกสั้นเกินไป อดทนอีกสักหน่อย",
   "composerVoiceFailed": "การถอดเสียงเป็นคำล้มเหลว: {{message}}",

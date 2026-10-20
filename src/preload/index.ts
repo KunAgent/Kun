@@ -143,6 +143,7 @@ const api = {
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
   ...providerBridge,
   optimizePrompt: (payload) => ipcRenderer.invoke('prompt:optimize', payload),
+  cancelPromptOptimization: (payload) => ipcRenderer.invoke('prompt:optimize-cancel', payload),
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) => ipcRenderer.invoke('claw:task:run', taskId),
   getScheduleStatus: () => ipcRenderer.invoke('schedule:status'),
