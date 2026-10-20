@@ -67,6 +67,21 @@ describe('Windows process identity inspection', () => {
     expect(runtimeProcessIsAlive(pid, { startedAt: birth, processIdentity: `win32-v1:${birth}` })).toBe(true)
   })
 
+  it('retries one admission timeout but never a definitive not-found answer', async () => {
+    const { requireRuntimeProcessIdentity } = await windowsInspector()
+    const timeout = () => { throw Object.assign(new Error(), { code: 'ETIMEDOUT' }) }
+    vi.spyOn(process, 'kill').mockReturnValue(true)
+    vi.mocked(execFileSync).mockImplementationOnce(timeout).mockReturnValueOnce(birth)
+    expect(requireRuntimeProcessIdentity(pid)).toBe(`win32-v1:${birth}`)
+    expect(execFileSync).toHaveBeenCalledTimes(2)
+    vi.mocked(execFileSync).mockReset().mockImplementation(timeout)
+    expect(() => requireRuntimeProcessIdentity(pid)).toThrow('timed out after 3000ms (2 attempts)')
+    expect(execFileSync).toHaveBeenCalledTimes(2)
+    vi.mocked(execFileSync).mockReset().mockImplementation(() => { throw Object.assign(new Error(), { status: 3 }) })
+    expect(() => requireRuntimeProcessIdentity(pid)).toThrow('not found by the identity query')
+    expect(execFileSync).toHaveBeenCalledTimes(1)
+  })
+
   it('distinguishes a dead child from a failed query without authorizing admission', async () => {
     const { requireRuntimeProcessIdentity, runtimeProcessIsAlive } = await windowsInspector()
     vi.mocked(execFileSync).mockImplementation(() => { throw Object.assign(new Error(), { status: 3 }) })

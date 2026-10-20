@@ -24,6 +24,7 @@ export function isValidRuntimeProcessIdentity(value: unknown): value is string |
 }
 
 const PROCESS_INSPECTION_TIMEOUT_MS = 3_000
+const PROCESS_ADMISSION_ATTEMPTS = 2
 const PROCESS_INSPECTION_MAX_BUFFER = 16 * 1024
 let cachedCurrentProcessInspection: RuntimeProcessInspection | undefined
 
@@ -137,19 +138,27 @@ export function inspectRuntimeProcess(pid: number): RuntimeProcessInspection | u
 
 /** Admission needs a verified birth identity; errors must not become permission to proceed. */
 export function requireRuntimeProcessIdentity(pid = process.pid): string {
-  try { return inspectRuntimeProcessOrThrow(pid).identity! } catch (error) {
-    const code = errnoCode(error)
-    const status = typeof error === 'object' && error !== null && 'status' in error
-      ? (error as { status?: unknown }).status : undefined
-    const reason = code === 'ETIMEDOUT' ? `process identity query timed out after ${PROCESS_INSPECTION_TIMEOUT_MS}ms`
-      : status === 3 ? 'process was not found by the identity query'
-        : code === 'ENOENT' ? 'process identity query executable or process data is unavailable'
-          : 'process identity query failed or returned an invalid response'
-    // Never copy child stderr, command arguments or environment into diagnostics.
-    const state = Number.isSafeInteger(pid) && pid > 0 && processExists(pid)
-      ? 'PID still exists or its state is inaccessible' : 'PID is no longer present'
-    throw new Error(`Unable to verify owned process ${pid}: ${reason}; ${state}`)
+  let error: unknown
+  // A cold query process under startup load can miss the budget once. Retry
+  // only a timeout; not-found and invalid answers are definitive.
+  for (let attempt = 1; attempt <= PROCESS_ADMISSION_ATTEMPTS; attempt += 1) {
+    try { return inspectRuntimeProcessOrThrow(pid).identity! } catch (caught) {
+      error = caught
+      if (errnoCode(caught) !== 'ETIMEDOUT') break
+    }
   }
+  const code = errnoCode(error)
+  const status = typeof error === 'object' && error !== null && 'status' in error
+    ? (error as { status?: unknown }).status : undefined
+  const reason = code === 'ETIMEDOUT'
+    ? `process identity query timed out after ${PROCESS_INSPECTION_TIMEOUT_MS}ms (${PROCESS_ADMISSION_ATTEMPTS} attempts)`
+    : status === 3 ? 'process was not found by the identity query'
+      : code === 'ENOENT' ? 'process identity query executable or process data is unavailable'
+        : 'process identity query failed or returned an invalid response'
+  // Never copy child stderr, command arguments or environment into diagnostics.
+  const state = Number.isSafeInteger(pid) && pid > 0 && processExists(pid)
+    ? 'PID still exists or its state is inaccessible' : 'PID is no longer present'
+  throw new Error(`Unable to verify owned process ${pid}: ${reason}; ${state}`)
 }
 
 export function runtimeProcessIdentity(pid = process.pid): string | undefined {
