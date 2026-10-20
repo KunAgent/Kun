@@ -154,7 +154,9 @@
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
-.work-session-item:is(:hover, :focus-within) .work-session-time { visibility: hidden; }
+.work-session-activity { flex: none; }
+/* The hover menu takes the row's trailing slot, so it must not paint over the time or status icon. */
+.work-session-item:is(:hover, :focus-within) :is(.work-session-time, .work-session-activity) { visibility: hidden; }
 .work-session-menu {
   position: absolute;
   top: 4px;
