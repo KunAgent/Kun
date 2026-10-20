@@ -391,7 +391,7 @@ function RoomComposerEditor({
       setBusy(false)
     }
   }
-  const attach = async (files: FileList | null): Promise<void> => {
+  const attach = async (files: FileList | File[] | null): Promise<void> => {
     if (!files || room.archivedAt || busy) return
     const selected = Array.from(files)
     if (fileRef.current) fileRef.current.value = ''

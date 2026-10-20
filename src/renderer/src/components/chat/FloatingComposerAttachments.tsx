@@ -265,6 +265,32 @@ export function imageTransferHasImages(source: ComposerImageTransferSource | nul
   )
 }
 
+/**
+ * Word, PowerPoint and Excel put a picture of the selection on the clipboard
+ * beside the text, and Chromium hands that bitmap to paste as an unnamed or
+ * bare `image.<ext>` file. An image copied in Finder/Explorer keeps its name.
+ */
+const RENDERED_CLIPBOARD_IMAGE_NAME = /^image\.(png|jpe?g|gif|webp|tiff?|bmp)$/iu
+
+function isRenderedClipboardImage(file: File): boolean {
+  const name = file.name.trim()
+  return RENDERED_CLIPBOARD_IMAGE_NAME.test(name) || (name === '' && isComposerImageMimeType(file.type))
+}
+
+/**
+ * Images a paste should attach. When the clipboard also carries text, the
+ * bitmap its source rendered of that text is dropped so the text wins; a
+ * screenshot has no text and a copied image file keeps its own name.
+ */
+export function selectPastedClipboardImages(text: string, files: File[]): File[] {
+  if (!text.trim()) return files
+  return files.filter((file) => !isRenderedClipboardImage(file))
+}
+
+function hasRichClipboardText(clipboardData: ComposerClipboardImageSource): boolean {
+  return Boolean(clipboardData.getData?.('text/html') || clipboardData.getData?.('text/rtf'))
+}
+
 export function handleComposerAttachmentPaste({
   canPickAttachment,
   clipboardData,
@@ -281,10 +307,13 @@ export function handleComposerAttachmentPaste({
   onPasteLongText?: (text: string) => void | Promise<void>
 }): boolean {
   if (!canPickAttachment || (!onPickAttachments && !onPasteClipboardImage && !onPasteLongText)) return false
-  const files = imageFilesFromTransfer(clipboardData)
   const plainText = clipboardData.getData?.('text/plain') ?? ''
+  const transferFiles = imageFilesFromTransfer(clipboardData)
+  const files = selectPastedClipboardImages(plainText, transferFiles)
   const hasPlainText = Boolean(plainText)
-  const hasImageTransfer = imageTransferHasImages(clipboardData)
+  // Only a rendered picture of the text came along: paste it as text.
+  const renderedOnly = transferFiles.length > 0 && files.length === 0
+  const hasImageTransfer = !renderedOnly && imageTransferHasImages(clipboardData)
   if (files.length > 0) {
     preventDefault()
     if (onPasteClipboardImage) {
@@ -300,6 +329,9 @@ export function handleComposerAttachmentPaste({
     return true
   }
   if (!onPasteClipboardImage) return false
+  // The native clipboard image beside rich text is the source's rendering of
+  // that text (Office, Keynote), even when Chromium did not expose it as a file.
+  if (renderedOnly || (hasPlainText && hasRichClipboardText(clipboardData))) return false
 
   const shouldPreventDefault = !hasPlainText || hasImageTransfer
   if (shouldPreventDefault) preventDefault()

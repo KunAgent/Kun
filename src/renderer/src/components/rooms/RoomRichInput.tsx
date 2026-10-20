@@ -18,6 +18,7 @@ import StarterKit from '@tiptap/starter-kit'
 import type { Room } from '@shared/rooms-api'
 import { useTranslation } from 'react-i18next'
 import { bodyZoom } from '../../lib/body-zoom'
+import { selectPastedClipboardImages } from '../chat/FloatingComposerAttachments'
 import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
 import { roomPopoverPlacement } from './RoomPopover'
 import { ROOM_ALL_MENTION, roomMentionToken, roomRichContent, roomRichDraft } from './room-mentions'
@@ -126,7 +127,7 @@ function RoomMentionMenu({
 export const RoomRichInput = forwardRef<RoomRichInputHandle, {
   room: Room; value: string; mentions: string[]; disabled?: boolean; placeholder: string;
   onDictationPendingChange?: (pending: boolean) => void
-  onChange: (value: { body: string; mentions: string[] }) => void; onSubmit: () => void; onPasteFiles?: (files: FileList) => void
+  onChange: (value: { body: string; mentions: string[] }) => void; onSubmit: () => void; onPasteFiles?: (files: File[]) => void
 }>(function RoomRichInput(props, ref) {
   const { t } = useTranslation('common')
   const menuId = useId()
@@ -170,8 +171,10 @@ export const RoomRichInput = forwardRef<RoomRichInputHandle, {
         return false
       },
       handlePaste: (view, event) => {
-        if (event.clipboardData?.files.length) { latest.current.onPasteFiles?.(event.clipboardData.files); return true }
         const text = event.clipboardData?.getData('text/plain')
+        // Office pastes carry a rendered picture of the text; the text wins.
+        const files = selectPastedClipboardImages(text ?? '', Array.from(event.clipboardData?.files ?? []))
+        if (files.length) { latest.current.onPasteFiles?.(files); return true }
         if (text === undefined) return false
         view.dispatch(view.state.tr.insertText(text.slice(0, Math.max(0, 64000 - latest.current.value.length))))
         return true
