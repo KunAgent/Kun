@@ -92,6 +92,8 @@ export function WorkWhiteboardSidebarSection({
         onClick={onToggle}
         className="min-h-[34px]"
         buttonStyle={{ paddingLeft: 10 }}
+        actionsVisibility="hidden"
+        actionsLayout="overlay"
         trailing={(
           <SidebarActivityIndicator
             activity={groupActivity(whiteboards, activityForBoard)}
@@ -137,6 +139,8 @@ export function WorkWhiteboardSidebarSection({
                   onClick={() => onOpen(board.id)}
                   className="min-h-[34px]"
                   buttonStyle={{ paddingLeft: 24 }}
+                  actionsVisibility="hidden"
+                  actionsLayout="overlay"
                   trailing={activity === 'idle' ? phaseIndicator(board.phase) : (
                     <SidebarActivityIndicator
                       activity={activity}

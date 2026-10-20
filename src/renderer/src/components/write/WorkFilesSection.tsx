@@ -110,7 +110,11 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
           renameLabel={t('writeRenameEntry')}
           deleteLabel={t('writeEntryDialogDelete')}
           {...activityLabels}
-          activityForBoard={(board) => writeActivityForThreadIds(workWhiteboardThreadIds(board), activityContext).activity}
+          activityForBoard={(board) => {
+            const activity = writeActivityForThreadIds(workWhiteboardThreadIds(board), activityContext).activity
+            // Boards a session created earlier share its thread; only the board being worked on is "running".
+            return activity === 'running' && board.id !== activeWhiteboardId ? 'idle' : activity
+          }}
           onToggle={() => setWhiteboardsExpanded((value) => !value)}
           onCreate={() => void actions.openNewWhiteboard()}
           onOpen={openWhiteboard}
