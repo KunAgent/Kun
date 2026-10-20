@@ -248,6 +248,19 @@ export class WorkspacePreviewProtocolRegistry {
   }
 }
 
+let sharedRegistry: WorkspacePreviewProtocolRegistry | null = null
+
+/**
+ * The app-wide registry. Its handler must be installed before the first window
+ * is created: Electron hands a renderer its custom-scheme loaders at creation,
+ * so a later `protocol.handle` serves navigations (iframes) but leaves media
+ * subresources failing with ERR_UNKNOWN_URL_SCHEME.
+ */
+export function sharedWorkspacePreviewProtocols(): WorkspacePreviewProtocolRegistry {
+  sharedRegistry ??= new WorkspacePreviewProtocolRegistry()
+  return sharedRegistry
+}
+
 export function buildWorkspacePreviewUrl(leaseId: string, relativePath: string): string {
   const encodedPath = normalizeRelativePath(relativePath)
     .split('/')

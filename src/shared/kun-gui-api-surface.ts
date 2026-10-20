@@ -37,6 +37,7 @@ import type {
 import type { DesktopStartupStatePayload } from './desktop-startup-state'
 import type { EditorListResult, EditorOpenResult, OpenEditorPathOptions } from './editor'
 import type { GitBranchesResult, GitBranchWorktreesResult, GitWorktreeCheckoutResult } from './git-branches'
+import type { GitFileStatusResult } from './git-file-status'
 import type { GitCheckpointCreateResult, GitCheckpointRestoreResult } from './git-checkpoint'
 import type { MergeResult, SyncResult, WorktreeChanges, WorktreeInfo, WorktreePoolStatus } from './worktree'
 import type {
@@ -92,6 +93,8 @@ import type {
   WorkspaceFileOpenResult,
   WorkspaceFileRevealTarget,
   WorkspaceFileResolveResult,
+  WorkspaceFileListResult,
+  WorkspaceFileReadPayload,
   WorkspaceFileTarget,
   WorkspaceFileWatchPayload,
   WorkspaceFileWatchResult,
@@ -477,6 +480,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   ) => Promise<KunProjectConfigFileResult>
   openKunProjectConfigDir: (workspaceRoot: string) => Promise<PathOpenResult>
   getGitBranches: (workspaceRoot: string) => Promise<GitBranchesResult>
+  getGitFileStatus: (workspaceRoot: string) => Promise<GitFileStatusResult>
   getWorkspaceCreationTimes: (workspaceRoots: string[]) => Promise<WorkspaceCreationTimeEntry[]>
   switchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createAndSwitchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
@@ -536,10 +540,11 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   listEditors: () => Promise<EditorListResult>
   openEditorPath: (options: OpenEditorPathOptions) => Promise<EditorOpenResult>
   listWorkspaceDirectory: (options: WorkspaceDirectoryTarget) => Promise<WorkspaceDirectoryListResult>
+  listWorkspaceFiles: (options: { workspaceRoot: string }) => Promise<WorkspaceFileListResult>
   resolveWorkspaceFile: (options: WorkspaceFileTarget) => Promise<WorkspaceFileResolveResult>
   openWorkspaceFileInSystem: (options: WorkspaceFileTarget) => Promise<WorkspaceFileOpenResult>
   revealWorkspaceFileInFolder: (options: WorkspaceFileRevealTarget) => Promise<WorkspaceFileOpenResult>
-  readWorkspaceFile: (options: WorkspaceFileTarget) => Promise<WorkspaceFileReadResult>
+  readWorkspaceFile: (options: WorkspaceFileReadPayload) => Promise<WorkspaceFileReadResult>
   lintProjectDesignMd: (content: string) => Promise<ProjectDesignMdOfficialLintResult>
   readWorkspaceImage: (options: WorkspaceFileTarget) => Promise<WorkspaceImageReadResult>
   readWorkspacePdf: (options: WorkspaceFileTarget) => Promise<WorkspacePdfReadResult>

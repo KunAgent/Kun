@@ -52,6 +52,48 @@ describe('workspace text preview decoding', () => {
   })
 })
 
+describe('workspace text reads', () => {
+  it('opens any extension as text and reports the detected encoding', async () => {
+    const workspaceRoot = await createWorkspace()
+    await writeFile(join(workspaceRoot, '.env.local'), 'KEY=1\n', 'utf8')
+    await writeFile(join(workspaceRoot, 'notes.txt'), Buffer.from('d6d0cec40a', 'hex'))
+
+    expect(await readWorkspaceFile({ workspaceRoot, path: '.env.local' })).toEqual(expect.objectContaining({
+      ok: true, content: 'KEY=1\n', encoding: 'utf-8', truncated: false, bytesRead: 6
+    }))
+    expect(await readWorkspaceFile({ workspaceRoot, path: 'notes.txt' })).toEqual(expect.objectContaining({
+      ok: true, content: '中文\n', encoding: 'gb18030'
+    }))
+    expect(await readWorkspaceFile({ workspaceRoot, path: 'notes.txt', encoding: 'windows-1252' })).toEqual(
+      expect.objectContaining({ ok: true, encoding: 'windows-1252' })
+    )
+  })
+
+  it('returns a binary code with the file head, and not_found for missing files', async () => {
+    const workspaceRoot = await createWorkspace()
+    await writeFile(join(workspaceRoot, 'blob.bin'), Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x01]))
+
+    expect(await readWorkspaceFile({ workspaceRoot, path: 'blob.bin' })).toEqual(expect.objectContaining({
+      ok: false, code: 'binary', size: 5, headBase64: Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x01]).toString('base64')
+    }))
+    expect(await readWorkspaceFile({ workspaceRoot, path: join(workspaceRoot, 'gone.ts') })).toEqual(
+      expect.objectContaining({ ok: false, code: 'not_found' })
+    )
+  })
+
+  it('reads a head slice and more on request', async () => {
+    const workspaceRoot = await createWorkspace()
+    await writeFile(join(workspaceRoot, 'big.log'), 'x'.repeat(100), 'utf8')
+
+    expect(await readWorkspaceFile({ workspaceRoot, path: 'big.log', maxBytes: 40 })).toEqual(expect.objectContaining({
+      ok: true, truncated: true, bytesRead: 40, size: 100
+    }))
+    expect(await readWorkspaceFile({ workspaceRoot, path: 'big.log', maxBytes: 200 })).toEqual(expect.objectContaining({
+      ok: true, truncated: false, bytesRead: 100
+    }))
+  })
+})
+
 describe('workspace file metadata and conflict-aware writes', () => {
   it('returns size and modification metadata without failing for directories', async () => {
     const workspaceRoot = await createWorkspace()

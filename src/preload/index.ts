@@ -247,6 +247,7 @@ const api = {
     ipcRenderer.invoke('kun:project-config:open-dir', { workspaceRoot }),
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
+  getGitFileStatus: (workspaceRoot) => ipcRenderer.invoke('git:status-files', workspaceRoot),
   getWorkspaceCreationTimes,
   switchGitBranch: (workspaceRoot, branch) =>
     ipcRenderer.invoke('git:switch-branch', { workspaceRoot, branch }),
@@ -270,6 +271,7 @@ const api = {
     ipcRenderer.invoke('editor:open-path', options),
   listWorkspaceDirectory: (options) =>
     ipcRenderer.invoke('file:list-workspace-directory', options),
+  listWorkspaceFiles: (options) => ipcRenderer.invoke('file:list-workspace-files', options),
   resolveWorkspaceFile: (options) =>
     ipcRenderer.invoke('file:resolve-workspace', options),
   openWorkspaceFileInSystem: (options) =>

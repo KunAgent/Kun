@@ -17,6 +17,7 @@ import {
   MAX_WORKSPACE_SPREADSHEET_MUTATION_BYTES,
   MAX_WORKSPACE_SPREADSHEET_MUTATIONS
 } from '../../../shared/workspace-spreadsheet'
+import { WORKSPACE_TEXT_ENCODINGS, WORKSPACE_TEXT_PREVIEW_MAX_BYTES } from '../../../shared/workspace-file'
 import {
   MAX_BODY_BYTES,
   MAX_BRANCH_LENGTH,
@@ -208,6 +209,11 @@ export const workspaceFileTargetPayloadSchema = z
     column: z.number().int().positive().max(1_000_000).optional()
   })
   .strict()
+
+export const workspaceFileReadPayloadSchema = workspaceFileTargetPayloadSchema.extend({
+  encoding: z.enum(WORKSPACE_TEXT_ENCODINGS).optional(),
+  maxBytes: z.number().int().positive().max(WORKSPACE_TEXT_PREVIEW_MAX_BYTES).optional()
+})
 
 /**
  * Unlike generic file reads, Office previews are always scoped to an

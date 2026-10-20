@@ -1,0 +1,620 @@
+/* File-type icon tints, workspace file tree rows and the file preview viewers. */
+
+:root {
+  --ds-ft-ts: #2f6fbf;
+  --ds-ft-js: #a87700;
+  --ds-ft-py: #3572a5;
+  --ds-ft-go: #0b7f9f;
+  --ds-ft-rs: #b4471c;
+  --ds-ft-java: #a5621c;
+  --ds-ft-c: #55708f;
+  --ds-ft-rb: #b8372e;
+  --ds-ft-php: #6a5bb3;
+  --ds-ft-swift: #c4501e;
+  --ds-ft-code: #5f6b80;
+  --ds-ft-html: #d1491f;
+  --ds-ft-css: #7048e8;
+  --ds-ft-data: #9a6a00;
+  --ds-ft-md: #4f6bed;
+  --ds-ft-txt: #687083;
+  --ds-ft-sh: #24804f;
+  --ds-ft-env: #b45309;
+  --ds-ft-cfg: #5f6b80;
+  --ds-ft-img: #13854b;
+  --ds-ft-vid: #7c4ddb;
+  --ds-ft-aud: #c22a6e;
+  --ds-ft-pdf: #c63f36;
+  --ds-ft-doc: #2b579a;
+  --ds-ft-sheet: #1d7a46;
+  --ds-ft-slide: #c0461d;
+  --ds-ft-zip: #8a6d3b;
+  --ds-ft-bin: #7c8496;
+  --ds-ft-folder: #7c8496;
+  --ds-git-modified: #b45309;
+  --ds-git-added: #147a43;
+  --ds-git-deleted: #b8372e;
+  --ds-file-preview-warning-ink: #8f5500;
+  --ds-file-preview-warning-bg: #fff6e8;
+  --ds-file-preview-warning-border: #f1dcb4;
+  --ds-file-preview-check-a: #ffffff;
+  --ds-file-preview-check-b: #eef0f4;
+}
+
+html[data-theme='dark'] {
+  --ds-ft-ts: #6aa6ee;
+  --ds-ft-js: #e3b341;
+  --ds-ft-py: #78a9dc;
+  --ds-ft-go: #4cc4e2;
+  --ds-ft-rs: #ec8a5c;
+  --ds-ft-java: #dba05b;
+  --ds-ft-c: #9db3cf;
+  --ds-ft-rb: #f8736a;
+  --ds-ft-php: #a99cf0;
+  --ds-ft-swift: #f0905e;
+  --ds-ft-code: #a3acbd;
+  --ds-ft-html: #f0805d;
+  --ds-ft-css: #a98bff;
+  --ds-ft-data: #d9a94a;
+  --ds-ft-md: #8aa2ff;
+  --ds-ft-txt: #a7acb6;
+  --ds-ft-sh: #4cc38a;
+  --ds-ft-env: #e3a04f;
+  --ds-ft-cfg: #a3acbd;
+  --ds-ft-img: #43c783;
+  --ds-ft-vid: #b49bff;
+  --ds-ft-aud: #f27bb0;
+  --ds-ft-pdf: #f8736a;
+  --ds-ft-doc: #7ea3e0;
+  --ds-ft-sheet: #4cc38a;
+  --ds-ft-slide: #ee7a54;
+  --ds-ft-zip: #c9a66b;
+  --ds-ft-bin: #9da3ae;
+  --ds-ft-folder: #a0a6b2;
+  --ds-git-modified: #e3a04f;
+  --ds-git-added: #4cc38a;
+  --ds-git-deleted: #f8736a;
+  --ds-file-preview-warning-ink: #f2b45a;
+  --ds-file-preview-warning-bg: #352a17;
+  --ds-file-preview-warning-border: #57421f;
+  --ds-file-preview-check-a: #2a2a2a;
+  --ds-file-preview-check-b: #232323;
+}
+
+.ds-file-icon { color: var(--ds-ft-bin); }
+.ds-file-icon[data-file-icon='ts'] { color: var(--ds-ft-ts); }
+.ds-file-icon[data-file-icon='js'] { color: var(--ds-ft-js); }
+.ds-file-icon[data-file-icon='py'] { color: var(--ds-ft-py); }
+.ds-file-icon[data-file-icon='go'] { color: var(--ds-ft-go); }
+.ds-file-icon[data-file-icon='rs'] { color: var(--ds-ft-rs); }
+.ds-file-icon[data-file-icon='java'] { color: var(--ds-ft-java); }
+.ds-file-icon[data-file-icon='c'] { color: var(--ds-ft-c); }
+.ds-file-icon[data-file-icon='rb'] { color: var(--ds-ft-rb); }
+.ds-file-icon[data-file-icon='php'] { color: var(--ds-ft-php); }
+.ds-file-icon[data-file-icon='swift'] { color: var(--ds-ft-swift); }
+.ds-file-icon[data-file-icon='code'] { color: var(--ds-ft-code); }
+.ds-file-icon[data-file-icon='html'] { color: var(--ds-ft-html); }
+.ds-file-icon[data-file-icon='css'] { color: var(--ds-ft-css); }
+.ds-file-icon[data-file-icon='json'] { color: var(--ds-ft-data); }
+.ds-file-icon[data-file-icon='md'] { color: var(--ds-ft-md); }
+.ds-file-icon[data-file-icon='txt'] { color: var(--ds-ft-txt); }
+.ds-file-icon[data-file-icon='sh'] { color: var(--ds-ft-sh); }
+.ds-file-icon[data-file-icon='env'] { color: var(--ds-ft-env); }
+.ds-file-icon[data-file-icon='cfg'],
+.ds-file-icon[data-file-icon='lock'] { color: var(--ds-ft-cfg); }
+.ds-file-icon[data-file-icon='img'] { color: var(--ds-ft-img); }
+.ds-file-icon[data-file-icon='vid'] { color: var(--ds-ft-vid); }
+.ds-file-icon[data-file-icon='aud'] { color: var(--ds-ft-aud); }
+.ds-file-icon[data-file-icon='pdf'] { color: var(--ds-ft-pdf); }
+.ds-file-icon[data-file-icon='doc'] { color: var(--ds-ft-doc); }
+.ds-file-icon[data-file-icon='sheet'] { color: var(--ds-ft-sheet); }
+.ds-file-icon[data-file-icon='slide'] { color: var(--ds-ft-slide); }
+.ds-file-icon[data-file-icon='zip'] { color: var(--ds-ft-zip); }
+.ds-file-icon[data-file-icon='folder'] { color: var(--ds-ft-folder); }
+
+/* Workspace file tree */
+
+.ds-file-tree-row {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 26px;
+  flex: 0 0 26px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0 8px 0 0;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ds-file-tree-row:hover {
+  background: var(--ds-sidebar-row-hover);
+}
+
+.ds-file-tree-row[aria-selected='true'] {
+  background: color-mix(in srgb, var(--ds-accent) 14%, var(--ds-sidebar-surface-bg));
+}
+
+.ds-file-tree-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ds-accent);
+}
+
+.ds-file-tree-row.is-ignored {
+  opacity: 0.5;
+}
+
+.ds-file-tree-row.is-tall {
+  height: 40px;
+  flex-basis: 40px;
+}
+
+.ds-file-tree-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ds-border-muted);
+  pointer-events: none;
+}
+
+.ds-file-tree-chevron {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ds-text-faint);
+  transition: transform 120ms ease;
+}
+
+.ds-file-tree-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.ds-file-tree-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ds-file-tree-name-separator {
+  color: var(--ds-text-faint);
+}
+
+.ds-file-tree-hit {
+  border-radius: 3px;
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent);
+  font-weight: 650;
+}
+
+.ds-file-tree-row[data-git='modified'],
+.ds-file-tree-row[data-git='renamed'] { color: var(--ds-git-modified); }
+.ds-file-tree-row[data-git='added'],
+.ds-file-tree-row[data-git='untracked'] { color: var(--ds-git-added); }
+.ds-file-tree-row[data-git='deleted'],
+.ds-file-tree-row[data-git='conflicted'] { color: var(--ds-git-deleted); }
+.ds-file-tree-row[data-git='deleted'] .ds-file-tree-name { text-decoration: line-through; }
+
+.ds-file-tree-git {
+  width: 14px;
+  flex: 0 0 14px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ds-file-tree-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: var(--ds-git-modified);
+}
+
+.ds-file-tree-meta {
+  flex: 0 0 auto;
+  color: var(--ds-text-muted);
+  font-size: 11px;
+}
+
+.ds-file-tree-skeleton {
+  display: block;
+  height: 9px;
+  border-radius: 5px;
+  background: var(--ds-surface-hover);
+}
+
+/* Preview: status bar, banners and state cards */
+
+.ds-file-preview-statusbar {
+  display: flex;
+  height: 26px;
+  flex: 0 0 26px;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  border-top: 1px solid var(--ds-border-muted);
+  background: var(--ds-sidebar-surface-chrome-bg);
+  padding: 0 6px;
+  color: var(--ds-text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* The encoding menu opens upward out of the bar, so items truncate instead of the bar clipping. */
+.ds-file-preview-status-item {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 6px;
+  color: inherit;
+  font: inherit;
+  line-height: 20px;
+}
+
+button.ds-file-preview-status-item {
+  cursor: pointer;
+}
+
+button.ds-file-preview-status-item:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.ds-file-preview-status-item.is-notice {
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent);
+  font-weight: 600;
+}
+
+.ds-file-preview-banner {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  border-bottom: 1px solid var(--ds-border-muted);
+  padding: 8px 14px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ds-file-preview-banner.is-warning {
+  border-bottom-color: var(--ds-file-preview-warning-border);
+  background: var(--ds-file-preview-warning-bg);
+  color: var(--ds-file-preview-warning-ink);
+}
+
+.ds-file-preview-banner.is-info {
+  background: var(--ds-accent-soft);
+  color: var(--ds-text);
+}
+
+.ds-file-preview-banner.is-danger {
+  background: var(--ds-danger-soft);
+  color: var(--ds-text);
+}
+
+.ds-file-preview-banner-text {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.ds-file-preview-button {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--ds-border);
+  border-radius: 8px;
+  background: var(--ds-surface-card);
+  padding: 0 14px;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ds-file-preview-button:hover {
+  background: var(--ds-surface-hover);
+}
+
+.ds-file-preview-button.is-small {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.ds-file-preview-button.is-primary {
+  border-color: var(--ds-control);
+  background: var(--ds-control);
+  color: var(--ds-control-foreground);
+}
+
+.ds-file-preview-button.is-primary:hover {
+  background: color-mix(in srgb, var(--ds-control) 88%, var(--ds-surface-card));
+}
+
+.ds-file-preview-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.ds-file-preview-link {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  color: var(--ds-accent);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ds-file-preview-state {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: auto;
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.ds-file-preview-state-badge {
+  display: inline-flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 14px;
+  background: var(--ds-surface-card);
+}
+
+.ds-file-preview-state-badge.is-danger {
+  border-color: transparent;
+  background: var(--ds-danger-soft);
+}
+
+.ds-file-preview-state-title {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--ds-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.ds-file-preview-state-meta {
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+.ds-file-preview-state-body {
+  max-width: 360px;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  line-height: 20px;
+}
+
+.ds-file-preview-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.ds-file-preview-skeleton {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 11px;
+  padding: 16px 18px;
+  animation: ds-file-preview-appear 180ms ease 150ms both;
+}
+
+.ds-file-preview-skeleton > span {
+  display: block;
+  height: 10px;
+  border-radius: 4px;
+  background: var(--ds-surface-hover);
+}
+
+@keyframes ds-file-preview-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ds-file-preview-hex {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  background: var(--ds-code-sidebar-editor-bg);
+  padding: 10px 16px;
+  color: var(--ds-text);
+  font-family: 'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 21px;
+  white-space: pre;
+}
+
+.ds-file-preview-hex .is-offset { color: var(--ds-text-faint); }
+.ds-file-preview-hex .is-ascii { color: var(--ds-text-muted); }
+
+/* Image viewer */
+
+.ds-file-preview-image-frame {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ds-file-preview-image-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: auto;
+  background-color: var(--ds-file-preview-check-a);
+  background-image:
+    linear-gradient(45deg, var(--ds-file-preview-check-b) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--ds-file-preview-check-b) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--ds-file-preview-check-b) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--ds-file-preview-check-b) 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+  box-sizing: border-box;
+  padding: 24px;
+}
+
+.ds-file-preview-image-stage > img {
+  display: block;
+  flex: 0 0 auto;
+  margin: auto;
+  box-shadow: 0 2px 12px rgba(20, 30, 50, 0.12);
+}
+
+.ds-file-preview-image-stage > img.is-pixelated {
+  image-rendering: pixelated;
+}
+
+.ds-file-preview-floating {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  transform: translateX(-50%);
+  border: 1px solid var(--ds-border);
+  border-radius: 10px;
+  background: var(--ds-surface-card);
+  padding: 3px;
+  box-shadow: var(--ds-shadow-overlay);
+  font-size: 12px;
+}
+
+.ds-file-preview-floating > button {
+  height: 26px;
+  min-width: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 0 8px;
+  color: var(--ds-text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ds-file-preview-floating > button:hover,
+.ds-file-preview-floating > button[aria-pressed='true'] {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.ds-file-preview-floating > .is-label {
+  min-width: 48px;
+  padding: 0 4px;
+  color: var(--ds-text);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* CSV / TSV table */
+
+.ds-file-preview-table-wrap {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.ds-file-preview-table {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-file-preview-table th,
+.ds-file-preview-table td {
+  max-width: 360px;
+  overflow: hidden;
+  border-right: 1px solid var(--ds-border-muted);
+  border-bottom: 1px solid var(--ds-border-muted);
+  padding: 6px 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-file-preview-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ds-surface-subtle);
+  font-weight: 600;
+}
+
+.ds-file-preview-table .is-rownum {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ds-surface-card);
+  color: var(--ds-text-muted);
+  text-align: right;
+}
+
+.ds-file-preview-table thead .is-rownum {
+  z-index: 2;
+  background: var(--ds-surface-subtle);
+}
+
+.ds-file-preview-table .is-numeric {
+  text-align: right;
+}
+
+@container (max-width: 460px) {
+  .ds-file-preview-openwith-label {
+    display: none;
+  }
+}
+
+/* Bottom bar while a text file has unsaved edits */
+
+.ds-file-preview-savebar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--ds-border-muted);
+  padding: 6px 10px 6px 14px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+/* The tab strip scrolls with the wheel; a visible bar would overlap the tabs. */
+.ds-code-sidebar-tabs {
+  scrollbar-width: none;
+}
