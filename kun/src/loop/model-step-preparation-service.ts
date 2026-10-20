@@ -3,7 +3,6 @@ import type { ModelToolSpec } from '../ports/model-client.js'
 import type { TurnItem } from '../contracts/items.js'
 import { makeErrorItem } from '../domain/item.js'
 import { repairModelHistoryItemsForModel } from '../domain/model-history-repair.js'
-import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
 import {
   DESIGN_SVG_ANIMATE_TOOL_NAME,
   DESIGN_SVG_EDIT_TOOL_NAME,
@@ -419,9 +418,9 @@ export abstract class ModelStepPreparationService {
       historyItems,
       turnId
     ).expectedToolName
-    // Plan creation is deliberately a soft completion condition. A Plan turn
-    // may investigate, ask for user input, or stop on a genuine clarification
-    // before its prose is materialized through create_plan.
+    // Plan-mode turns never require create_plan: the model decides whether a
+    // request needs a saved plan, so a question answered in prose just ends
+    // the turn instead of being written to .kunsdd/plan.
     const softRequiredToolName =
       pptCompletionToolName && toolSpecs.some((tool) => tool.name === pptCompletionToolName)
         ? pptCompletionToolName
@@ -429,10 +428,6 @@ export abstract class ModelStepPreparationService {
       !graphCreateSatisfied &&
       toolSpecs.some((tool) => tool.name === GRAPH_DEFINE_PLAN_TOOL_NAME)
         ? GRAPH_DEFINE_PLAN_TOOL_NAME
-        : planTurnActive &&
-      !createPlanSatisfied &&
-      toolSpecs.some((tool) => tool.name === CREATE_PLAN_TOOL_NAME)
-        ? CREATE_PLAN_TOOL_NAME
         : undefined
     const suggestVerification =
       !planTurnActive &&

@@ -46,7 +46,7 @@ import {
 } from '../loop-test-harness.js'
 
 describe('AgentLoop', () => {
-  it('fails GUI plan turns only when neither create_plan nor plan text is returned', async () => {
+  it('does not fail a GUI plan turn that skips create_plan', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-empty-'))
     try {
       const h = makeHarness(
@@ -77,19 +77,19 @@ describe('AgentLoop', () => {
       const items = await h.sessionStore.loadItems(h.threadId)
       const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
 
-      expect(status).toBe('failed')
+      expect(status).toBe('completed')
       expect(items.some((item) =>
         item.kind === 'error' && item.code === 'required_tool_missing'
-      )).toBe(true)
+      )).toBe(false)
       expect(events.some((event) =>
         event.kind === 'error' && event.code === 'required_tool_missing'
-      )).toBe(true)
+      )).toBe(false)
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
   })
 
-  it('keeps create_plan as a soft completion condition after unrelated tool calls', async () => {
+  it('never forces create_plan on a GUI plan turn after unrelated tool calls', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-other-tool-'))
     const observedRequiredToolNames: Array<string | undefined> = []
     let calls = 0
@@ -134,10 +134,8 @@ describe('AgentLoop', () => {
       const status = await h.loop.runTurn(h.threadId, h.turnId)
 
       expect(status).toBe('completed')
-      expect(observedRequiredToolNames).toEqual([undefined, undefined, undefined])
-      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).resolves.toBe(
-        '## Plan\nImplement auth after checking context.'
-      )
+      expect(observedRequiredToolNames).toEqual([undefined, undefined])
+      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).rejects.toThrow()
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
