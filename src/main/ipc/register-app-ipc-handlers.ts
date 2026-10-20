@@ -1,3 +1,4 @@
+import { registerProductAnalytics } from '../product-analytics/register'
 import { registerMobileLink } from '../mobile-link/register'
 import { registerKunArtIpc } from './register-kun-art-ipc'
 import { ipcMain } from 'electron'
@@ -30,6 +31,7 @@ import { registerAppSandboxIpcHandlers } from '../app-sandbox/app-sandbox-host'
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const accountAccess = registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
+  registerProductAnalytics(options, accountAccess)
   registerMobileLink(options, accountAccess)
   registerKunArtIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }), accountAccess)

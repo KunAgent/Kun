@@ -1,3 +1,4 @@
+import { productAnalyticsApi } from './product-analytics'
 import { USER_ATTENTION_CHANNEL } from '../shared/user-attention'
 import { mobileLink } from './mobile-link'
 import { kunArtApi } from './kun-art'
@@ -31,11 +32,9 @@ registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // process via additionalArguments and read off process.argv instead.
 const HOME_DIR_ARG = '--kun-home-dir='
 const homeDirFromArgs = process.argv.find((arg) => arg.startsWith(HOME_DIR_ARG))?.slice(HOME_DIR_ARG.length) ?? ''
-
 const APP_ENVIRONMENT_ARG = '--kun-app-environment='
 const appEnvironment = parseAppEnvironment(process.argv
   .find((arg) => arg.startsWith(APP_ENVIRONMENT_ARG))?.slice(APP_ENVIRONMENT_ARG.length))
-
 const DESKTOP_TITLE_BAR_MODE_ARG = '--kun-desktop-title-bar-mode='
 const desktopTitleBarMode = normalizeDesktopTitleBarMode(
   process.platform, // Per-window additionalArguments are appended; prefer the last occurrence.
@@ -47,6 +46,7 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 
 const api = {
   mobileLink,
+  productAnalytics: productAnalyticsApi,
   kunAccount: kunAccountApi,
   kunArt: kunArtApi,
   platform: process.platform,

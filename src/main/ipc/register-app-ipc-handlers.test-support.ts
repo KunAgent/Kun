@@ -83,6 +83,8 @@ vi.mock('electron', () => ({
   },
   app: {
     quit: vi.fn(),
+    getVersion: vi.fn(() => '0.0.0-test'),
+    once: vi.fn(),
     getPath: vi.fn(() => electronMock.userDataPath),
     getAppPath: vi.fn(() => '/tmp/kun-app'),
     getLocale: vi.fn(() => electronMock.appLocale),

@@ -1,3 +1,4 @@
+import { ProductAnalyticsConsent } from '../../product-analytics/PrivacyControl'
 import type { ReactElement } from 'react'
 import { Check, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -28,6 +29,7 @@ export function OnboardingWelcomeStep({ locale, theme, onLocale, onTheme }: {
   const { t } = useTranslation('settings')
   return (
     <>
+      <ProductAnalyticsConsent freshOnly />
       <section aria-labelledby="kun-onb-language">
         <div className="kun-onb-section-label">
           <span id="kun-onb-language">{t('onboarding.welcome.language')}</span>

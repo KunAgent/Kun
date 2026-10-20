@@ -1,3 +1,4 @@
+import { ProductAnalyticsObserver } from '../analytics/observer.js'
 import { join } from 'node:path'
 import { RoomNotificationObserver } from '../rooms/room-notification-observer.js'
 import { GatewayMiddlewareHost } from './routes/gateway-middleware.js'
@@ -184,6 +185,7 @@ export function createServerRuntimeComposition(
   events.addObserver(new RoomNotificationObserver({ threadStore: stores.threadStore, store: roomComposition.rooms.deps.store }))
   // Code task turns roll wardrobe bottles too; Agent conversation turns are counted by their room runs.
   events.addObserver(new CodeWardrobeObserver({ threadStore: stores.threadStore, turns: turnService, store: roomComposition.rooms.deps.store }))
+  events.addObserver(new ProductAnalyticsObserver({ store: roomComposition.rooms.deps.store, threads: stores.threadStore, turns: turnService }))
   bindAgentCommitmentService(core.threadStore, roomComposition.rooms.commitments)
   bindAgentArtifactLibrary(core.threadStore, roomComposition.rooms.artifactLibrary)
   bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)

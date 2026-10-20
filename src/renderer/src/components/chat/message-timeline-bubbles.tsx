@@ -1,3 +1,5 @@
+import { useResultPresented } from '../../product-analytics/presentation'
+import { trackProduct } from '../../product-analytics/client'
 import { TimelineApprovalCard } from './TimelineApprovalCard'
 import { memo, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -119,6 +121,7 @@ function MessageBubbleImpl({
   turnUsageStale?: boolean
   allowThreadActions?: boolean
 }): ReactElement {
+  useResultPresented(block)
   const { t, i18n } = useTranslation('common')
   const turnTimingMetrics = useChatStore((s) => s.turnTimingMetrics)
   const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
@@ -214,7 +217,7 @@ function MessageBubbleImpl({
               <AssistantSpeakButton blockId={block.id} text={block.text} />
               <AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} />
               <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode} />
-              <CopyFeedbackButton text={block.text} />
+              <CopyFeedbackButton text={block.text} onCopied={() => trackProduct({ name: 'result_action', properties: { mode: 'code', action: 'copy' } })} />
               {surface === 'mobile' ? (
                 <button
                   type="button"

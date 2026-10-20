@@ -188,10 +188,12 @@ export function RuntimeMetaChips({
 
 export function CopyFeedbackButton({
   text,
-  iconOnly = false
+  iconOnly = false,
+  onCopied
 }: {
   text: string
   iconOnly?: boolean
+  onCopied?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -217,6 +219,7 @@ export function CopyFeedbackButton({
       if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable')
       await navigator.clipboard.writeText(text)
       setStatus('success')
+      onCopied?.()
     } catch {
       setStatus('error')
     }

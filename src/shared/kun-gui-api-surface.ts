@@ -256,6 +256,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
   import('./git-turn-undo').KunGuiGitTurnUndoApi &
   import('./ade-collaboration-settings').AdeCollaborationSettingsBridge & import('./ade-project-defaults').AdeProjectDefaultsBridge & {
+  productAnalytics?: import('./product-analytics').ProductAnalyticsApi
   platform: string
   /** Native Kun account, unavailable in the remote browser client. */
   kunArt?: import('./kun-art').KunArtApi

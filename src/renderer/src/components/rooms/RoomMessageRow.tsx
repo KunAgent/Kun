@@ -1,3 +1,5 @@
+import { trackProduct } from '../../product-analytics/client'
+import { noteAnalyticsRoomRendered } from '../../product-analytics/presentation'
 import { RoomPopover } from './RoomPopover'
 import { useLayoutEffect, useState } from 'react'
 import { ArrowUpRight, BellRing, Check, Copy, MoreHorizontal, Pin, Reply } from 'lucide-react'
@@ -64,7 +66,7 @@ export function RoomMessageRow({
   turn?: RoomTurnPosition
 }) {
   const { t } = useTranslation('common')
-  useLayoutEffect(() => { noteRoomMessageRendered(message) }, [message])
+  useLayoutEffect(() => { noteRoomMessageRendered(message); noteAnalyticsRoomRendered(message) }, [message])
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [reactBusy, setReactBusy] = useState(false)
@@ -86,6 +88,7 @@ export function RoomMessageRow({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(message.body)
+      if (message.authorKind === 'member') trackProduct({ name: 'result_action', properties: { mode: 'room', action: 'copy' } })
       setCopied(true)
       setCopyError('')
     } catch (cause) {

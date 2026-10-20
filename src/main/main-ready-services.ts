@@ -1,3 +1,5 @@
+import { detectAnalyticsInstallation } from './product-analytics/storage'
+import { homedir } from 'node:os'
 import {
   app,
   ipcMain,
@@ -150,6 +152,7 @@ export async function initializeMainServices(input: {
     const productionSettingsUserDataPath = appIdentity.flavor === 'production'
       ? app.getPath('userData')
       : join(app.getPath('appData'), 'Kun')
+    await detectAnalyticsInstallation(app.getPath('userData'), join(homedir(), '.kun'))
     const productionSettingsPath = input.productionSettingsPath
     if (appIdentity.flavor === 'production') {
       traceStartup('runtime data migration:start')

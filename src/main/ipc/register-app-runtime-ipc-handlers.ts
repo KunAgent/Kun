@@ -1,3 +1,4 @@
+import { captureDesktopAnalytics } from '../product-analytics/report'
 import {
   ipcMain,
   shell
@@ -131,9 +132,15 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   }
   ipcMain.handle('upstream:models', async () => fetchUpstreamModels())
 
-  ipcMain.handle('provider:probe', async (_, payload: unknown) => {
+  ipcMain.handle('provider:probe', async (event, payload: unknown) => {
+    const report = captureDesktopAnalytics(event)
     const request = parseIpcPayload('provider:probe', providerProbePayloadSchema, payload)
-    return probeModelProvider(request, await store.load())
+    const started = Date.now()
+    const result = await probeModelProvider(request, await store.load())
+    report({ name: 'provider_check_finished', properties: {
+      status: result.ok ? 'completed' : 'failed', durationMs: Math.min(86_400_000, Date.now() - started)
+    } })
+    return result
   })
 
   // Protocol detection for the custom-provider flow is a Kun route; forward
