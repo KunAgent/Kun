@@ -43,14 +43,48 @@ async function seedWorkspace(root) {
   }))
   await write('.kun-whiteboards/index.json', JSON.stringify({
     version: 1,
-    whiteboards: [{ id: 'wb_runtime', title: 'Runtime map', threadId: null, phase: 'blank', revision: 1, createdAt: now, updatedAt: now }]
+    whiteboards: [{ id: 'wb_runtime', title: 'Runtime map', threadId: null, phase: 'blank', revision: 1, createdAt: now, updatedAt: now, engine: 'excalidraw' }]
   }))
+  await write('.kun-whiteboards/wb_runtime/excalidraw.json', JSON.stringify({
+    type: 'excalidraw', version: 2, source: 'kun',
+    elements: [{
+      id: 'box', type: 'rectangle', x: 0, y: 0, width: 240, height: 120, angle: 0, strokeColor: '#0f7a63', backgroundColor: '#e6f6f2',
+      fillStyle: 'solid', strokeWidth: 2, strokeStyle: 'solid', roughness: 0, opacity: 100, groupIds: [], frameId: null, roundness: null,
+      seed: 1, version: 1, versionNonce: 1, isDeleted: false, boundElements: null, updated: 1, link: null, locked: false
+    }],
+    appState: { viewBackgroundColor: '#ffffff' },
+    files: {}
+  }))
+  await write('reports/release-notes.pdf', minimalPdf('Kun release notes'))
   await write('.kun/images/mascot.png', Buffer.from(PNG_1PX, 'base64'))
   const sheet = XLSX.utils.aoa_to_sheet([['Agent', 'Usage source'], ['Kun', 'Runtime events'], ['Devin', 'Session database']])
   const book = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(book, sheet, 'Compare')
   await mkdir(join(root, 'reports'), { recursive: true })
   XLSX.writeFile(book, join(root, 'reports', 'agent-usage.xlsx'))
+}
+
+function minimalPdf(text) {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    null,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  ]
+  const stream = `BT /F1 24 Tf 72 700 Td (${text}) Tj ET`
+  objects[3] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
+  let body = '%PDF-1.4\n'
+  const offsets = []
+  objects.forEach((object, index) => {
+    offsets.push(body.length)
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`
+  })
+  const xref = body.length
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  for (const offset of offsets) body += `${String(offset).padStart(10, '0')} 00000 n \n`
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return body
 }
 
 async function poll(check, timeoutMs, description) {
@@ -67,9 +101,9 @@ async function runFlow({ page, capture, timeoutMs }) {
   const checks = []
   await page.locator('nav.sidebar-code-nav').getByText('Artifacts', { exact: true }).click()
   await page.locator('[data-artifacts-page]').waitFor({ timeout: timeoutMs })
-  await poll(async () => (await page.locator('[data-artifact-card]').count()) === 4, timeoutMs, 'four seeded artifacts')
+  await poll(async () => (await page.locator('[data-artifact-card]').count()) === 5, timeoutMs, 'five seeded artifacts')
   diagnostics.cards = await page.locator('[data-artifact-card]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-artifact-card')))
-  assert.deepEqual([...diagnostics.cards].sort(), ['board', 'design', 'image', 'sheet'])
+  assert.deepEqual([...diagnostics.cards].sort(), ['board', 'design', 'doc', 'image', 'sheet'])
   await capture('artifacts-1-grid')
   checks.push('The sidebar entry opens the library and indexes the design draft, whiteboard, image and spreadsheet')
 
@@ -77,7 +111,7 @@ async function runFlow({ page, capture, timeoutMs }) {
   assert.equal(await page.locator('[data-artifact-card]').count(), 1)
   await page.getByRole('tab', { name: /^All/ }).click()
   await page.getByRole('button', { name: 'List view' }).click()
-  await poll(async () => (await page.locator('[data-artifact-row]').count()) === 4, timeoutMs, 'list rows')
+  await poll(async () => (await page.locator('[data-artifact-row]').count()) === 5, timeoutMs, 'list rows')
   await capture('artifacts-2-list')
   await page.getByRole('button', { name: 'Grid view' }).click()
   checks.push('Type tabs filter and the list view shows the same items')
@@ -103,10 +137,15 @@ async function runFlow({ page, capture, timeoutMs }) {
   await capture('artifacts-5-image-viewer')
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
   await page.locator('[data-artifact-card="board"]').click()
-  await page.locator('[data-artifact-stage="board"]').waitFor({ timeout: timeoutMs })
+  await page.locator('[data-artifact-stage="board"] img').waitFor({ timeout: timeoutMs })
   await capture('artifacts-6-board-viewer')
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
-  checks.push('Image and whiteboard viewers open with their own stages')
+  await page.locator('[data-artifact-card="doc"]').click()
+  await page.locator('[data-artifact-stage="pdf"]').waitFor({ timeout: timeoutMs })
+  await poll(async () => (await page.locator('[data-artifact-stage="pdf"] canvas').count()) > 0, timeoutMs, 'rendered PDF page')
+  await capture('artifacts-8-pdf-viewer')
+  await page.getByRole('button', { name: 'Back to artifacts' }).click()
+  checks.push('Image, whiteboard (rendered from its Excalidraw scene) and PDF viewers show real previews')
 
   await page.locator('[data-artifact-new="design"]').click()
   await poll(async () => (await page.locator('.ds-composer-textarea').inputValue()).startsWith('Design a page for'), timeoutMs, 'composer prefill')

@@ -17,6 +17,8 @@ import {
 import { ARTIFACT_KIND_ICONS, ArtifactCard, ArtifactListRow } from './ArtifactCard'
 import { ArtifactViewer } from './ArtifactViewer'
 
+const RESCAN_THROTTLE_MS = 4_000
+
 const NEW_HINT_KEYS: Record<LibraryArtifactKind, string> = {
   design: 'artifactsNewDesignHint', doc: 'artifactsNewDocHint', slides: 'artifactsNewSlidesHint',
   board: 'artifactsNewBoardHint', sheet: 'artifactsNewDocHint', image: 'artifactsNewDesignHint'
@@ -44,6 +46,24 @@ export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar }: {
   const [view, setView] = useState<'grid' | 'list'>('grid')
 
   useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    // Turns keep producing files while the library is open; rescan when one
+    // finishes and when the window comes back, at most every few seconds.
+    let last = Date.now()
+    const rescan = (): void => {
+      if (Date.now() - last < RESCAN_THROTTLE_MS) return
+      last = Date.now()
+      void refresh()
+    }
+    const unsubscribe = useChatStore.subscribe((state, previous) => {
+      if (previous.busy && !state.busy) rescan()
+    })
+    window.addEventListener('focus', rescan)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', rescan)
+    }
+  }, [refresh])
 
   const projects = useMemo(() => projectOptions(items), [items])
   const scoped = useMemo(() => filterArtifacts(items, { kind: 'all', project, query: '', sort }), [items, project, sort])
