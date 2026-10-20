@@ -186,9 +186,10 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
       const latestConfiguredTurn = [...detail.turns].reverse().find((turn) =>
         turn.model || turn.providerId || turn.accountId || turn.reasoningEffort
       )
-      this.options.model = latestConfiguredTurn?.model ?? detail.model
-      this.options.providerId = latestConfiguredTurn?.providerId ?? detail.providerId ?? this.options.providerId
-      this.options.accountId = latestConfiguredTurn?.accountId ?? detail.accountId ?? this.options.accountId
+      const pending = this.pendingSessionSelections.get(threadId)
+      this.options.model = pending?.model ?? latestConfiguredTurn?.model ?? detail.model
+      this.options.providerId = pending?.providerId ?? latestConfiguredTurn?.providerId ?? detail.providerId ?? this.options.providerId
+      this.options.accountId = pending?.accountId ?? latestConfiguredTurn?.accountId ?? detail.accountId ?? this.options.accountId
       const reasoningEffort = this.resolveReasoningEffort({
         model: this.options.model,
         providerId: this.options.providerId,
@@ -233,6 +234,8 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
           if (this.eventsAbort !== abort || this.stateValue.projection?.thread.id !== threadId) return
           const projection = applyRuntimeEvent(this.stateValue.projection, event)
           if (event.kind === 'turn_started' && !event.child) {
+            // The turn now records the selection; the pending pick is spent.
+            this.pendingSessionSelections.delete(threadId)
             this.options.model = event.model ?? this.options.model
             this.options.providerId = event.providerId ?? this.options.providerId
             this.options.accountId = event.accountId ?? this.options.accountId
