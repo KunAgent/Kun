@@ -14,6 +14,7 @@ import {
 } from './transcript-exploration.js'
 import { splitStableMarkdown } from './markdown-blocks.js'
 import type { TurnOutcome, WorkTrailSummary } from './transcript-trail.js'
+import type { TurnTiming } from './turn-timing.js'
 
 type VisibleItem = Exclude<TurnItem, { kind: 'goal_context' | 'model_context' | 'runtime_context_source' | 'interruption_note' }>
 
@@ -39,7 +40,7 @@ export type TranscriptEntry = (
   | { kind: 'child-group'; key: string; turnId: string; children: ProjectedChildRun[] }
   | { kind: 'approval-review'; key: string; review: ProjectedApprovalReview }
   | { kind: 'work'; key: string; turnId: string; trail: WorkTrailSummary; expanded: boolean }
-  | { kind: 'turn-footer'; key: string; turnId: string; model?: string; durationMs?: number; outcome: TurnOutcome }
+  | { kind: 'turn-footer'; key: string; turnId: string; model?: string; durationMs?: number; timing?: TurnTiming; outcome: TurnOutcome }
 ) & {
   /** Final: the entry will not change (in-progress entries show live hints). */
   settled: boolean
@@ -110,9 +111,22 @@ export function buildTranscriptEntries(
     labeledTurns.add(turnId)
     order.push(`${KUN_REPLY_GROUP_PREFIX}${turnId}`)
   }
+  // A delegation is shown by its child's card or the turn's agent tree; its
+  // own tool row would repeat it (and count the agent twice in a trail).
+  const delegatedChild = (item: Extract<VisibleItem, { kind: 'tool_call' }>): ProjectedChildRun | undefined => {
+    const resultChildId = childIdFromToolResult(toolResults.get(item.callId))
+    const label = typeof item.arguments.label === 'string' ? item.arguments.label.trim() : ''
+    const prompt = typeof item.arguments.prompt === 'string' ? item.arguments.prompt.trim() : ''
+    return projection.childRuns.find((child) => child.parentTurnId === item.turnId && (
+      child.childId === resultChildId ||
+      (label !== '' && child.label === label) ||
+      (prompt !== '' && child.prompt?.trim() === prompt)
+    ))
+  }
   for (const item of visible) {
     if (isKunReplyItem(item)) addReplyLabel(item.turnId)
-    if (!groupedIds.has(item.id)) order.push(item.id)
+    const delegation = item.kind === 'tool_call' && item.toolName === 'delegate_task'
+    if (!groupedIds.has(item.id) && !(delegation && delegatedChild(item))) order.push(item.id)
     if (item.kind !== 'tool_call' || item.toolName !== 'delegate_task') continue
     const grouped = childRunsByTurn.get(item.turnId) ?? []
     if (grouped.length > 1) {

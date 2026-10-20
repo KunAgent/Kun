@@ -79,6 +79,7 @@ import { parseTuiFileMentions } from './file-mentions.js'
 const execFile = promisify(execFileCallback)
 import { safeMessage, modelConnectionUnavailableMessage, isRefreshConflict, isMissingThread, replaceGraphRun, splitWords, extensionGrantArguments, todoInput, resolveTodo, attachmentIdsFromProjection, mergeAttachmentMetadata, attachmentMimeType, isLikelyUtf8Text, isVideoPath, formatBytes, normalizeSkillId, skillTemplate, assertPathMissing, writeTextAtomically, isPathInside, validateSkillImportTree } from './controller-utils.js'
 import { TuiControllerBase } from './controller-base.js'
+import { threadUsageSummary } from './turn-timing.js'
 
 export abstract class TuiControllerThreads extends TuiControllerBase {
   protected abstract hydrateAttachmentMetadata(attachmentIds: readonly string[], threadId: string, generation: number): Promise<void>
@@ -214,6 +215,7 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
         threadId,
         attachmentHydrationGeneration
       )
+      void this.hydrateUsageSummary(threadId)
       const abort = new AbortController()
       this.eventsAbort = abort
       const subscription = this.client.subscribeThreadEvents({
@@ -277,7 +279,13 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
           if (this.eventsAbort !== abort || abort.signal.aborted) {
             throw new Error('thread subscription was replaced during replay recovery')
           }
-          const projection = hydrateProjectedChildRuns(projectThreadSnapshot(detail), delegation)
+          const previous = this.stateValue.projection?.thread.id === threadId ? this.stateValue.projection : undefined
+          const projection = {
+            ...hydrateProjectedChildRuns(projectThreadSnapshot(detail), delegation),
+            ...(previous?.turnTiming ? { turnTiming: previous.turnTiming } : {}),
+            ...(previous?.usageSummary ? { usageSummary: previous.usageSummary } : {}),
+            ...(previous?.usage ? { usage: previous.usage } : {})
+          }
           this.patch({ projection, graphRuns, connection: 'connecting' })
           return projection.lastSeq
         },
@@ -307,6 +315,24 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
       })
     } catch (error) {
       this.fail(error)
+    }
+  }
+
+  /**
+   * Seed the sidebar's Usage with the thread's totals; per-turn TTFT and
+   * tok/s are live-only, as in the GUI, since native turns persist no timing
+   * outside their usage events. Live usage supersedes this. Best effort.
+   */
+  protected async hydrateUsageSummary(threadId: string): Promise<void> {
+    if (typeof this.client.threadUsage !== 'function') return
+    try {
+      const response = await this.client.threadUsage(threadId)
+      const bucket = response.buckets.find((entry) => entry.thread_id === threadId)
+      const projection = this.stateValue.projection
+      if (!bucket || projection?.thread.id !== threadId) return
+      this.patch({ projection: { ...projection, usageSummary: threadUsageSummary(bucket) } })
+    } catch {
+      // The sidebar falls back to live usage after the next turn.
     }
   }
 

@@ -34,6 +34,7 @@ export function projectThreadSnapshot(thread: ThreadDetail): ThreadProjection {
     lastSeq: thread.latestSeq,
     childRuns: [],
     approvalReviews: [],
+    ...(thread.contextSnapshot ? { contextSnapshot: thread.contextSnapshot } : {}),
     ...(running ? { runningTurnId: running.id } : {}),
     ...(running ? { activity: activityFromTurn(running) } : {}),
     ...(pendingApprovalItem ? {

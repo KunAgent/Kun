@@ -2,8 +2,6 @@ import { formatTokenCount, type ActivityVisualKind } from './activity.js'
 import { elapsedDuration, formatDurationMs } from './render-utils.js'
 import type { ProjectedChildRun } from './state.js'
 
-export type ChildStatusTone = 'focus' | 'success' | 'danger'
-
 export function sortChildRuns(children: readonly ProjectedChildRun[]): ProjectedChildRun[] {
   return [...children].sort((left, right) =>
     (left.childSeq ?? Number.MAX_SAFE_INTEGER) - (right.childSeq ?? Number.MAX_SAFE_INTEGER) ||
@@ -33,23 +31,6 @@ export function childStatusCounts(children: readonly ProjectedChildRun[]): {
   return counts
 }
 
-export function childStatusLabel(child: ProjectedChildRun): string {
-  if (child.detached && isActiveChildRun(child)) return '◐ Background'
-  switch (child.status) {
-    case 'queued': return 'Waiting'
-    case 'running': return 'Running'
-    case 'completed': return '✓ Completed'
-    case 'failed': return '✗ Failed'
-    case 'aborted': return '✗ Stopped'
-  }
-}
-
-export function childStatusTone(child: ProjectedChildRun): ChildStatusTone {
-  if (child.status === 'failed' || child.status === 'aborted') return 'danger'
-  if (child.status === 'completed') return 'success'
-  return 'focus'
-}
-
 export function childMetrics(child: ProjectedChildRun, nowMs = Date.now()): string {
   const active = isActiveChildRun(child)
   return [
@@ -65,38 +46,15 @@ export function childMetrics(child: ProjectedChildRun, nowMs = Date.now()): stri
   ].filter(Boolean).join(' · ')
 }
 
-export function childGroupSummary(children: readonly ProjectedChildRun[], nowMs = Date.now()): {
-  active: boolean
-  failed: boolean
-  title: string
-  breakdown: string
-  metrics: string
-} {
-  const counts = childStatusCounts(children)
-  const active = counts.running + counts.waiting + counts.background > 0
-  const breakdown = [
-    counts.completed ? `${counts.completed} done` : undefined,
-    counts.failed ? `${counts.failed} failed` : undefined,
-    counts.running ? `${counts.running} running` : undefined,
-    counts.waiting ? `${counts.waiting} waiting` : undefined,
-    counts.background ? `${counts.background} background` : undefined
-  ].filter(Boolean).join(', ')
-  const totalTools = children.reduce((sum, child) => sum + (child.toolInvocations ?? 0), 0)
-  const totalTokens = children.reduce((sum, child) => sum + (child.totalTokens ?? 0), 0)
-  const maxElapsed = Math.max(0, ...children.map((child) =>
-    child.durationMs ?? elapsedMilliseconds(child.startedAt, child.updatedAt, isActiveChildRun(child), nowMs)
-  ))
-  return {
-    active,
-    failed: counts.failed > 0,
-    title: active ? `Running ${children.length} agents` : `${children.length} agents finished`,
-    breakdown,
-    metrics: [
-      totalTools ? `${totalTools} tools` : undefined,
-      totalTokens ? `${formatTokenCount(totalTokens)} tok` : undefined,
-      maxElapsed ? formatDurationMs(maxElapsed) : undefined
-    ].filter(Boolean).join(' · ')
-  }
+/** "12 tools · 1m 12s": what a sidebar row or a tree branch has room for. */
+export function childBriefMetrics(child: ProjectedChildRun, nowMs = Date.now()): string {
+  const tools = child.toolInvocations
+  return [
+    tools ? `${tools} tool${tools === 1 ? '' : 's'}` : undefined,
+    child.durationMs !== undefined
+      ? formatDurationMs(child.durationMs)
+      : elapsedDuration(child.startedAt, undefined, isActiveChildRun(child), nowMs)
+  ].filter(Boolean).join(' · ')
 }
 
 export function elapsedMilliseconds(startedAt: string, updatedAt: string, active: boolean, nowMs = Date.now()): number {
@@ -122,4 +80,55 @@ export function childActivityVisualKind(child: ProjectedChildRun): ActivityVisua
     case 'retrying': return 'retrying'
     default: return 'waiting'
   }
+}
+
+/** "deepseek-flash · read-only · 12 tools · 18.4k tok · cache 82%": a card's second row. */
+export function childCardMeta(child: ProjectedChildRun): string {
+  const tools = child.toolInvocations
+  const cost = [
+    ...(child.costCny && child.costCny > 0 ? [`¥${child.costCny.toFixed(2)}`] : []),
+    ...(child.costUsd && child.costUsd > 0 ? [`$${child.costUsd.toFixed(child.costUsd < 1 ? 3 : 2)}`] : [])
+  ].join(' · ')
+  return [
+    child.model,
+    child.toolPolicy === 'readOnly' ? 'read-only' : child.toolPolicy === 'inherit' ? 'inherit tools' : undefined,
+    child.detached ? 'background' : undefined,
+    tools !== undefined ? `${tools} tool${tools === 1 ? '' : 's'}` : undefined,
+    child.totalTokens ? `${formatTokenCount(child.totalTokens)} tok` : undefined,
+    child.cacheHitRate !== undefined && child.cacheHitRate !== null ? `cache ${Math.round(child.cacheHitRate * 100)}%` : undefined,
+    cost || undefined
+  ].filter(Boolean).join(' · ')
+}
+
+/** Right column of a card's title row: a state word (none while running) and the time. */
+export function childCardStatus(child: ProjectedChildRun, nowMs = Date.now()): { state?: string; failed: boolean; elapsed: string } {
+  const active = isActiveChildRun(child)
+  const elapsed = child.durationMs !== undefined
+    ? formatDurationMs(child.durationMs)
+    : elapsedDuration(child.startedAt, undefined, active, nowMs)
+  const failed = child.status === 'failed' || child.status === 'aborted'
+  const state = child.detached && active
+    ? 'background'
+    : child.status === 'queued'
+      ? 'waiting'
+      : child.status === 'completed'
+        ? 'done'
+        : child.status === 'failed'
+          ? 'failed'
+          : child.status === 'aborted'
+            ? 'stopped'
+            : undefined
+  return { ...(state ? { state } : {}), failed, elapsed }
+}
+
+/** "2 running · 1 done" for a parallel group's header. */
+export function childGroupBreakdown(children: readonly ProjectedChildRun[]): string {
+  const counts = childStatusCounts(children)
+  return [
+    counts.running ? `${counts.running} running` : undefined,
+    counts.waiting ? `${counts.waiting} waiting` : undefined,
+    counts.background ? `${counts.background} background` : undefined,
+    counts.completed ? `${counts.completed} done` : undefined,
+    counts.failed ? `${counts.failed} failed` : undefined
+  ].filter(Boolean).join(' · ')
 }

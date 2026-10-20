@@ -4,6 +4,7 @@ import type { ThreadProjection } from './state.js'
 import { isActiveChildRun } from './subagent-format.js'
 import { explorationEntryFailed } from './transcript-exploration.js'
 import type { TranscriptEntry } from './transcript-model.js'
+import { hasTurnTiming } from './turn-timing.js'
 
 /**
  * Turn-level shaping of the transcript for the session view: finished turns
@@ -182,6 +183,7 @@ export function withTurnFooters(entries: readonly TranscriptEntry[], projection:
       turnId,
       ...(turn.model ? { model: turn.model } : {}),
       ...(Number.isFinite(start) && Number.isFinite(end) ? { durationMs: Math.max(0, end - start) } : {}),
+      ...(hasTurnTiming(projection?.turnTiming?.[turnId]) ? { timing: projection!.turnTiming![turnId] } : {}),
       outcome: turn.status as TurnOutcome,
       settled: true,
       separated: true

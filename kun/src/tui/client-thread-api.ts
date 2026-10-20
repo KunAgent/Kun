@@ -298,6 +298,12 @@ export class KunTuiClientThreadApi extends KunTuiClientModelApi {
     return this.request('/v1/usage?group_by=thread', ThreadUsageResponseSchema)
   }
 
+  /** One thread's usage totals; an indexed read, unlike a replay of its events. */
+  threadUsage(threadId: string) {
+    const query = new URLSearchParams({ group_by: 'thread', thread_id: threadId })
+    return this.request(`/v1/usage?${query}`, ThreadUsageResponseSchema)
+  }
+
   providerQuotas() {
     return this.request('/v1/provider-quotas', ProviderQuotaListResponseSchema)
   }

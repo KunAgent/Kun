@@ -17,7 +17,8 @@ function SessionHeader(): JSX.Element {
   const view = createMemo(() => {
     app.tick()
     const projection = app.session.state.projection
-    const usage = projection?.usage
+    // Live usage once this session has seen a turn; the history totals before.
+    const usage = projection?.usage ?? projection?.usageSummary
     return {
       title: sanitizeTerminalText(projection?.thread.title || 'Untitled'),
       context: sessionContextUsage(app),

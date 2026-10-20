@@ -54,6 +54,7 @@ import {
   type ThreadRecord,
   type ThreadSummary
 } from '../contracts/index.js'
+import { ContextSnapshotEvent } from '../contracts/context-snapshot.js'
 import { createApprovalConsentToken, KUN_APPROVAL_CONSENT_HEADER } from '../server/approval-consent.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
 import { readRuntimeDiscovery, type RuntimeDiscoveryRecord } from '../server/runtime-discovery.js'
@@ -73,7 +74,10 @@ export const ThreadDetailResponse = ThreadSchema.extend({
   pendingUserInputIds: z.array(z.string()).default([]),
   // Omitted by older servers. Keep omission distinct from an authoritative
   // empty gate so clients do not hide legacy pending approval records.
-  pendingApprovalIds: z.array(z.string()).optional()
+  pendingApprovalIds: z.array(z.string()).optional(),
+  // The latest request's context split; omitted by older servers and when
+  // the session store cannot read it.
+  contextSnapshot: ContextSnapshotEvent.nullable().optional()
 })
 
 export const UserInputResolutionResponse = z.object({
