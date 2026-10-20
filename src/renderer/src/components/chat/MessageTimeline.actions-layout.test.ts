@@ -17,6 +17,7 @@ import {
   GeneratedFilesPanel,
   MessageBubble,
   generatedMediaScrollAvailability,
+  settledTurnMetrics,
   turnMetricsLabel
 } from './message-timeline-bubbles'
 import { WorkMetaRow } from './message-timeline-cards'
@@ -250,6 +251,24 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     } finally {
       useChatStore.setState({ turnTimingMetrics: new Map() })
     }
+  })
+
+  it('shows a reopened turn\'s stamped TTFT/TPS from its turn usage', () => {
+    const turnUsage = {
+      turnId: 'turn_1', requests: 1, inputTokens: 10, outputTokens: 5, reasoningTokens: 0,
+      cachedTokens: 0, cacheWriteTokens: 0, totalTokens: 15, actualCost: null,
+      referenceEstimateUsd: null, referencePriceBreakdown: null, estimateCoverage: 'unavailable' as const,
+      providerIds: [], models: [], avgTtftMs: 640, avgTokensPerSecond: 52.4
+    }
+    const html = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'hello' },
+        turnUsage
+      })
+    )
+    expect(html).toContain('Avg TTFT 0.6s · Avg 52.4 tok/s')
+    expect(settledTurnMetrics({ ...turnUsage, avgTtftMs: null, avgTokensPerSecond: null })).toBeUndefined()
+    expect(settledTurnMetrics(undefined)).toBeUndefined()
   })
 
   it('omits segments without timing data from the footer label', () => {

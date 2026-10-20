@@ -305,7 +305,10 @@ export type UsageEventSource = z.infer<typeof UsageEventSourceSchema>
 export const TurnUsageBucketSchema = TurnUsageCountersSchema.extend({
   turn_id: z.string().min(1),
   reference_price_breakdown: TurnUsageReferencePriceBreakdownSchema.nullable().optional(),
-  sources: z.array(UsageEventSourceSchema).optional()
+  sources: z.array(UsageEventSourceSchema).optional(),
+  /** The settled turn's average model timing (`Turn.modelTiming`); absent while it runs. */
+  avg_ttft_ms: z.number().nonnegative().nullable().optional(),
+  avg_tokens_per_second: z.number().nonnegative().nullable().optional()
 }).strict()
 export type TurnUsageBucket = z.infer<typeof TurnUsageBucketSchema>
 

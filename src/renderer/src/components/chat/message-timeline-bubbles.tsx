@@ -72,6 +72,13 @@ type TurnMetricsLike = {
   avgTtftMs: number | null
   avgTokensPerSecond: number | null
 }
+/** The settled turn's stamped timing, when the runtime measured any. */
+export function settledTurnMetrics(usage: TurnUsageSummary | undefined): TurnMetricsLike | undefined {
+  const avgTtftMs = usage?.avgTtftMs ?? null
+  const avgTokensPerSecond = usage?.avgTokensPerSecond ?? null
+  return avgTtftMs === null && avgTokensPerSecond === null ? undefined : { avgTtftMs, avgTokensPerSecond }
+}
+
 /**
  * Renders a turn's average TTFT/TPS as a compact footer label. Segments with
  * no data are omitted so legacy turns show nothing at all.
@@ -150,9 +157,11 @@ function MessageBubbleImpl({
     const createdAtLabel = block.createdAt
       ? formatMessageDateTime(block.createdAt, i18n.language)
       : null
+    // Live usage events cover turns that ran in this view; the runtime
+    // stamps the same averages on settled turns for reopened history.
     const turnMetrics =
       !streaming && block.turnId
-        ? turnTimingMetrics.get(block.turnId)
+        ? turnTimingMetrics.get(block.turnId) ?? settledTurnMetrics(turnUsage)
         : undefined
     return (
       <LiveAssistantStreamingProvider streaming={effectiveStreaming}>

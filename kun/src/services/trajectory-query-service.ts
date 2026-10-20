@@ -1,5 +1,6 @@
 import type { TurnItem } from '../contracts/items.js'
 import type { ModelRequestTraceRecord } from '../contracts/model-request-trace.js'
+import type { UsageSnapshot } from '../contracts/usage.js'
 import {
   TRAJECTORY_SCHEMA_VERSION,
   TrajectoryPageSchema,
@@ -171,7 +172,7 @@ async function projectRequests(
     const step = trace.step ?? turnSteps.get(roundId) ?? turnSteps.size
     turnSteps.set(roundId, step)
     steps.set(trace.turnId, turnSteps)
-    const usage = trace.decoded?.usage
+    const usage = withTraceTiming(trace.decoded?.usage, trace)
     const manifest = trace.manifestId
       ? await recorder.loadPromptManifest(threadId, trace.manifestId)
       : null
@@ -226,6 +227,28 @@ async function projectRequests(
     if (promptFingerprint) previousPromptFingerprint = promptFingerprint
   }
   return projected
+}
+
+/**
+ * Native traces are recorded below the model timing decorator, so their
+ * decoded usage carries no request timing. Derive it from the trace's own
+ * stamps (request start, first content chunk, finish) so native requests
+ * count toward the summary's TTFT and tok/s like Agent-reported ones do.
+ */
+export function withTraceTiming(
+  usage: UsageSnapshot | undefined,
+  trace: Pick<ModelRequestTraceRecord, 'startedAt' | 'firstTokenAt' | 'finishedAt'>
+): UsageSnapshot | undefined {
+  if (!usage || usage.requestTtftMs !== undefined || !trace.firstTokenAt) return usage
+  const started = Date.parse(trace.startedAt)
+  const firstToken = Date.parse(trace.firstTokenAt)
+  if (!Number.isFinite(started) || !Number.isFinite(firstToken) || firstToken < started) return usage
+  const finished = trace.finishedAt ? Date.parse(trace.finishedAt) : Number.NaN
+  return {
+    ...usage,
+    requestTtftMs: firstToken - started,
+    ...(Number.isFinite(finished) && finished >= firstToken ? { requestGenerationMs: finished - firstToken } : {})
+  }
 }
 
 function projectItems(

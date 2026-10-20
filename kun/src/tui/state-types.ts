@@ -99,7 +99,7 @@ export type ThreadProjection = {
   pendingUserInput?: PendingUserInput
   usage?: UsageSnapshot
   contextSnapshot?: ContextSnapshotEvent
-  /** Average TTFT and tok/s per turn, from this session's live usage events. */
+  /** Average TTFT and tok/s per turn: settled turns' `modelTiming`, then live usage events. */
   turnTiming?: Record<string, TurnTiming>
   /** Thread usage totals read when the session opened; live `usage` supersedes them. */
   usageSummary?: ThreadUsageSummary

@@ -27,6 +27,18 @@ export function threadUsageSummary(bucket: ThreadUsageBucket): ThreadUsageSummar
   }
 }
 
+/**
+ * Averages the runtime stamped on settled turns (`Turn.modelTiming`), so a
+ * reopened session shows the numbers its turns ended with.
+ */
+export function settledTurnTiming(turns: readonly { id: string; modelTiming?: TurnTiming }[]): Record<string, TurnTiming> {
+  const timing: Record<string, TurnTiming> = {}
+  for (const turn of turns) {
+    if (hasTurnTiming(turn.modelTiming)) timing[turn.id] = turn.modelTiming
+  }
+  return timing
+}
+
 /** The live per-turn averages a parent usage event carries, if any. */
 export function turnTimingFromUsageEvent(event: UsageEvent): { turnId: string; timing: TurnTiming } | undefined {
   if (!event.turnId || event.child) return undefined

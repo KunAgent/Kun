@@ -22,6 +22,7 @@ import {
 } from './composer-context.js'
 import { GraphOrchestrationStrategySchema } from './graph.js'
 import { TurnReasoningEffortSchema } from './turn-reasoning.js'
+import { TurnModelTimingSchema } from './turn-model-timing.js'
 import { ThreadRetentionPolicySchema } from './thread-retention.js'
 import {
   DesignDocumentTargetSchema,
@@ -38,6 +39,7 @@ import { HarnessSettingValuesSchema } from './harness-session-settings.js'
 export * from './turn-manager-lease.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
+export { TurnModelTimingSchema, type TurnModelTiming } from './turn-model-timing.js'
 export type { TurnReasoningEffort } from './turn-reasoning.js'
 
 /**
@@ -193,6 +195,8 @@ export const TurnSchema = z.object({
   /** Fresh input admitted after Stop when no older queued input existed. */
   queueResumeSourceTurnId: z.string().optional(),
   finishedAt: z.string().optional(),
+  /** Average TTFT and tok/s over this turn's model calls; set when it settles. */
+  modelTiming: TurnModelTimingSchema.optional(),
   items: z.array(TurnItem).default([]),
   attachmentIds: z.array(z.string().min(1)).default([]),
   composerContexts: z.array(ComposerContextAttachmentSchema).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),

@@ -280,9 +280,10 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
             throw new Error('thread subscription was replaced during replay recovery')
           }
           const previous = this.stateValue.projection?.thread.id === threadId ? this.stateValue.projection : undefined
+          const rebuilt = hydrateProjectedChildRuns(projectThreadSnapshot(detail), delegation)
           const projection = {
-            ...hydrateProjectedChildRuns(projectThreadSnapshot(detail), delegation),
-            ...(previous?.turnTiming ? { turnTiming: previous.turnTiming } : {}),
+            ...rebuilt,
+            ...(previous?.turnTiming ? { turnTiming: { ...rebuilt.turnTiming, ...previous.turnTiming } } : {}),
             ...(previous?.usageSummary ? { usageSummary: previous.usageSummary } : {}),
             ...(previous?.usage ? { usage: previous.usage } : {})
           }
@@ -319,9 +320,8 @@ export abstract class TuiControllerThreads extends TuiControllerBase {
   }
 
   /**
-   * Seed the sidebar's Usage with the thread's totals; per-turn TTFT and
-   * tok/s are live-only, as in the GUI, since native turns persist no timing
-   * outside their usage events. Live usage supersedes this. Best effort.
+   * Seed the sidebar's Usage with the thread's totals (per-turn timing comes
+   * with the thread itself). Live usage supersedes this. Best effort.
    */
   protected async hydrateUsageSummary(threadId: string): Promise<void> {
     if (typeof this.client.threadUsage !== 'function') return

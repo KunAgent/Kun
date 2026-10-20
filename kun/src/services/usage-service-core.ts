@@ -15,6 +15,7 @@ import type {
   ThreadUsageResponse,
   UsageSnapshot
 } from '../contracts/usage.js'
+import type { TurnModelTiming } from '../contracts/turn-model-timing.js'
 
 /**
  * Coordinates usage and cache telemetry. The service records each
@@ -112,6 +113,17 @@ export class UsageService {
       this.clearCacheHistory(threadId)
     }
     this.clearTurnTiming(threadId)
+  }
+
+  /**
+   * The averages this turn's usage events carried, for stamping on the turn
+   * when it settles. Undefined when no call measured anything.
+   */
+  turnModelTiming(threadId: string, turnId: string): TurnModelTiming | undefined {
+    const timing = this.turnTiming.get(this.turnKey(threadId, turnId))
+    if (!timing) return undefined
+    const averages = turnTimingAverages(timing)
+    return averages.avgTtftMs === null && averages.avgTokensPerSecond === null ? undefined : averages
   }
 
   /**
@@ -252,10 +264,18 @@ export function emptyTurnTiming(): TurnTiming {
  * generation time.
  */
 export function attachTurnAverages(snapshot: UsageSnapshot, timing: TurnTiming): UsageSnapshot {
+  const averages = turnTimingAverages(timing)
   return {
     ...snapshot,
-    turnAvgTtftMs: timing.ttftCalls > 0 ? timing.ttftSumMs / timing.ttftCalls : null,
-    turnAvgTokensPerSecond:
+    turnAvgTtftMs: averages.avgTtftMs,
+    turnAvgTokensPerSecond: averages.avgTokensPerSecond
+  }
+}
+
+export function turnTimingAverages(timing: TurnTiming): TurnModelTiming {
+  return {
+    avgTtftMs: timing.ttftCalls > 0 ? timing.ttftSumMs / timing.ttftCalls : null,
+    avgTokensPerSecond:
       timing.generationSumMs > 0
         ? (timing.completionTokensSum / timing.generationSumMs) * 1_000
         : null

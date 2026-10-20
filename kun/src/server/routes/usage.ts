@@ -1,4 +1,4 @@
-import { TurnUsageResponseSchema } from '../../contracts/usage.js'
+import { TurnUsageResponseSchema, type TurnUsageResponse } from '../../contracts/usage.js'
 import {
   ServiceManagerHttpError,
   ServiceManagerTransportError,
@@ -129,17 +129,17 @@ export async function usageJsonResponse(
         await loadUsageHistory(runtime, { threadId: turnQuery.threadId }, strategy), turnQuery
       )
       if (!runtime.sessionStore.aggregateUsage) {
-        return jsonResponse(TurnUsageResponseSchema.parse(
+        return jsonResponse(await withTurnModelTiming(runtime, TurnUsageResponseSchema.parse(
           markFallback(await buildFallback('index-first'))
-        ))
+        )))
       }
-      return jsonResponse(TurnUsageResponseSchema.parse(await indexOrFallback(
+      return jsonResponse(await withTurnModelTiming(runtime, TurnUsageResponseSchema.parse(await indexOrFallback(
         async () => runtime.sessionStore.aggregateUsage!(
           turnQuery,
           await loadLiveUsageRemainders(runtime, { threadId: turnQuery.threadId }, true)
         ),
         () => buildFallback('jsonl-only')
-      )))
+      ))))
     }
   } catch (error) {
     if (error instanceof UsageValidationError) {
@@ -163,6 +163,24 @@ export async function usageJsonResponse(
     }, 400)
   }
   return jsonResponse(await buildUsageResponse(runtime))
+}
+
+/**
+ * Join each settled turn's model timing (`Turn.modelTiming`) onto its usage
+ * bucket. The usage index keeps token and cost deltas only, so timing lives
+ * on the turn record; a missing thread store or thread just leaves it out.
+ */
+async function withTurnModelTiming(runtime: ServerRuntime, response: TurnUsageResponse): Promise<TurnUsageResponse> {
+  const thread = await runtime.threadStore?.get(response.thread_id).catch(() => null)
+  const timing = new Map((thread?.turns ?? []).flatMap((turn) => turn.modelTiming ? [[turn.id, turn.modelTiming] as const] : []))
+  if (!timing.size) return response
+  return {
+    ...response,
+    buckets: response.buckets.map((bucket) => {
+      const entry = timing.get(bucket.turn_id)
+      return entry ? { ...bucket, avg_ttft_ms: entry.avgTtftMs, avg_tokens_per_second: entry.avgTokensPerSecond } : bucket
+    })
+  }
 }
 
 function queryRecord(request: Request): Record<string, string> {

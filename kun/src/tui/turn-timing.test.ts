@@ -115,6 +115,17 @@ describe('turn timing', () => {
     expect(turnTimingParts(undefined)).toEqual([])
   })
 
+  it('reopens a session with the timing its settled turns were stamped with', () => {
+    const settled = thread()
+    settled.turns = [{ ...settled.turns[0]!, modelTiming: { avgTtftMs: 640, avgTokensPerSecond: 52.37 } }]
+    const projection = projectThreadSnapshot(settled)
+    expect(projection.turnTiming).toEqual({ turn_1: { avgTtftMs: 640, avgTokensPerSecond: 52.37 } })
+    expect(projectThreadSnapshot(thread()).turnTiming).toBeUndefined()
+    // A live usage event of this session replaces the stamped copy.
+    const live = applyRuntimeEvent(projection, usageEvent({ usage: { turnAvgTtftMs: 300, turnAvgTokensPerSecond: 60 } }) as RuntimeEvent)
+    expect(live.turnTiming).toEqual({ turn_1: { avgTtftMs: 300, avgTokensPerSecond: 60 } })
+  })
+
   it('records a usage event on the projection and shows it on the turn footer', () => {
     const projection = applyRuntimeEvent(projectThreadSnapshot(thread()), usageEvent() as RuntimeEvent)
     expect(projection.turnTiming).toEqual({ turn_1: { avgTtftMs: 640, avgTokensPerSecond: 52.37 } })

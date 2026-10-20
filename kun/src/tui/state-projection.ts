@@ -11,6 +11,7 @@ import type { DelegationDiagnostics, ThreadDetail } from './client.js'
 import type { z } from 'zod'
 import type { ProjectedChildRun, ThreadProjection } from './state-types.js'
 import { activityFromTurn } from './state-reducers.js'
+import { settledTurnTiming } from './turn-timing.js'
 
 export function projectThreadSnapshot(thread: ThreadDetail): ThreadProjection {
   const items = thread.turns.flatMap((turn) => turn.items)
@@ -28,6 +29,7 @@ export function projectThreadSnapshot(thread: ThreadDetail): ThreadProjection {
     (item): item is UserInputTurnItem =>
       item.kind === 'user_input' && item.status === 'pending' && thread.pendingUserInputIds.includes(item.inputId)
   )
+  const turnTiming = settledTurnTiming(thread.turns)
   return {
     thread,
     items,
@@ -35,6 +37,7 @@ export function projectThreadSnapshot(thread: ThreadDetail): ThreadProjection {
     childRuns: [],
     approvalReviews: [],
     ...(thread.contextSnapshot ? { contextSnapshot: thread.contextSnapshot } : {}),
+    ...(Object.keys(turnTiming).length ? { turnTiming } : {}),
     ...(running ? { runningTurnId: running.id } : {}),
     ...(running ? { activity: activityFromTurn(running) } : {}),
     ...(pendingApprovalItem ? {
