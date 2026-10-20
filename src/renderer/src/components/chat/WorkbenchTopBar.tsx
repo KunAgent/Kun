@@ -2,7 +2,6 @@ import type { ReactElement } from 'react'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
 import { WorkbenchSideRailDivider, WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
-import { WorkbenchGuiUpdateButton } from './WorkbenchGuiUpdateButton'
 import { useWardrobe } from '../rooms/room-wardrobe'
 import {
   Blocks,
@@ -239,8 +238,6 @@ export function WorkbenchTopActions({
           <Search className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
-
-      <WorkbenchGuiUpdateButton />
 
       {/* Host-side affordances (editor picker, runtime restart) are dropped on
           Remote mobile — they operate on the desktop host and crowd the bar. */}
