@@ -560,6 +560,7 @@ export const kunRuntimePatchSchema = z.object({
   memoryEnabled: z.boolean().optional(),
   memoryDistillationEnabled: z.boolean().optional(),
   memoryDirectivesEnabled: z.boolean().optional(),
+  memoryRelationContextEnabled: z.boolean().optional(),
   instructions: z.object({
     enabled: z.boolean().optional()
   }).strict().optional(),
