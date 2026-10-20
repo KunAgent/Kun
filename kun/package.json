@@ -138,6 +138,9 @@
     "qs": "6.16.0",
     "@connectrpc/connect-node": {
       "undici": "6.28.1"
+    },
+    "solid-js@1.9.12": {
+      "seroval": "1.6.4"
     }
   }
 }

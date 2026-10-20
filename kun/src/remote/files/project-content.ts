@@ -1,12 +1,12 @@
 import { constants } from 'node:fs'
 import { open, realpath, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { isAbsolute, relative, resolve, basename } from 'node:path'
+import { isAbsolute, relative, resolve, basename, sep } from 'node:path'
 import type { Stats } from 'node:fs'
 export const FILE_MAX_BYTES = 25 * 1024 * 1024
 export function inside(root: string, path: string): boolean {
   const rel = relative(root, path)
-  return rel === '' || rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel)
+  return rel === '' || rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel)
 }
 export function fileRevision(info: Stats): string {
   return 'file-v1:' + createHash('sha256').update(JSON.stringify([

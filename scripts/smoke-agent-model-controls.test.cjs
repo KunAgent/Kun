@@ -24,8 +24,8 @@ test('Agent model scenario waits for exact private identity and captures the loa
   assert.match(source('smoke-agent-chat-workbench.cjs'), /state\.route === 'agent-chat' && state\.conversationRoomId === roomId/)
   assert(opened < scenario.indexOf("await entryRow.getAttribute('aria-current') === 'page'"))
   const conversationReady = scenario.indexOf('await waitCodeConversation(page, poll, current.id, created.name)')
-  const pickerOpened = scenario.indexOf('await picker.click()')
-  const modelSelected = scenario.indexOf('await group.locator(\'[role="menuitemradio"]')
+  const pickerOpened = scenario.indexOf('await prepareModelSelection(')
+  const modelSelected = scenario.indexOf('await target.click(')
   assert(conversationReady > 0 && pickerOpened > conversationReady && modelSelected > pickerOpened)
   assert.doesNotMatch(scenario, /switchRooms|rooms-im-sidebar|data-room-surface="rooms"/)
   const loaded = scenario.indexOf('await overviewRow.getByText(roleLabel, { exact: true }).waitFor()')
@@ -88,4 +88,71 @@ test('native primary-button screenshot and geometry are retained before validati
   const checked = scenario.indexOf('assertPrimaryGroupGeometry(appearance)')
   assert(captured > 0 && diagnostic > captured && checked > diagnostic)
   assert.match(scenario, /groupPrimaryGeometry: appearance/)
+})
+
+const { setupCancellationSettled, prepareModelSelection } = require('./smoke-agent-model-readiness.cjs')
+const activity = (status = 'cancelled', extra = {}) => ({ requests: [{ id: 'setup', status }], pendingCount: 0, ...extra })
+test('model smoke waits for exact terminal cancellation with no remaining activity', () => {
+  for (const status of ['pending', 'running', 'stopping']) assert.equal(setupCancellationSettled(activity(status), 'setup'), false)
+  assert.equal(setupCancellationSettled(activity(), 'setup'), true)
+  for (const extra of [{ active: {} }, { execution: {} }, { pendingCount: 1 }]) {
+    assert.equal(setupCancellationSettled(activity('cancelled', extra), 'setup'), false)
+  }
+  for (const status of ['failed', 'recovery_required', 'completed']) assert.throws(() => setupCancellationSettled(activity(status), 'setup'))
+  for (const requests of [[], [{ id: 'other', status: 'cancelled' }]]) assert.throws(() => setupCancellationSettled(activity('cancelled', { requests }), 'setup'))
+})
+
+function panelFixture(overrides = {}) {
+  const state = { visible: false, ready: true, target: true, opens: 0, expands: 0, captures: 0 }
+  const callbacks = {
+    poll: async (check) => { for (let index = 0; index < 5; index++) if (await check()) return; throw new Error('deadline') },
+    ready: async () => state.ready, panelVisible: async () => state.visible,
+    open: async () => { state.opens++; state.visible = true },
+    expand: async () => { state.expands++ }, targetVisible: async () => state.target,
+    capture: async () => { state.captures++ }, ...overrides
+  }
+  return { state, callbacks }
+}
+test('model panel opens once and does not toggle an already open panel', async () => {
+  for (const visible of [false, true]) {
+    const { state, callbacks } = panelFixture(); state.visible = visible
+    assert(await prepareModelSelection(callbacks) > 0)
+    assert.equal(state.opens, visible ? 0 : 1)
+    assert.equal(state.expands, 1)
+  }
+})
+test('model panel reopens only after verified closure during capture', async () => {
+  const { state, callbacks } = panelFixture()
+  callbacks.capture = async () => { if (++state.captures === 1) state.visible = false }
+  await prepareModelSelection(callbacks)
+  assert.equal(state.opens, 2)
+  assert.equal(state.captures, 2)
+})
+test('model panel retries interrupted expansion only when the panel closed', async () => {
+  const { state, callbacks } = panelFixture()
+  callbacks.expand = async () => { if (++state.expands === 1) { state.visible = false; throw new Error('detached') } }
+  await prepareModelSelection(callbacks)
+  assert.equal(state.opens, 2)
+  callbacks.expand = async () => { throw new Error('blocked while open') }
+  await assert.rejects(prepareModelSelection(callbacks), /blocked while open/)
+})
+test('model panel keeps missing options and busy metadata as failures without blind toggling', async () => {
+  for (const key of ['ready', 'target']) {
+    const { state, callbacks } = panelFixture(); state[key] = false
+    await assert.rejects(prepareModelSelection(callbacks), /deadline/)
+    assert.equal(state.opens, key === 'ready' ? 0 : 1)
+  }
+})
+test('model smoke synchronizes cancellation before UI and performs only one exact model click', () => {
+  const scenario = source('smoke-agent-model-controls.cjs')
+  assert(scenario.indexOf('setupCancellationSettled(await request') < scenario.indexOf("getByText('Response stopped'"))
+  assert.match(scenario, /getAttribute\('aria-busy'\) === 'false'/)
+  assert.equal((scenario.match(/await target\.click\(/g) ?? []).length, 1)
+  assert.match(scenario, /timeout: selectionTimeout/)
+  assert.match(scenario, /saved\?\.providerId === binding\.providerId && saved\?\.accountId === binding\.accountId && saved\?\.model === binding\.model/)
+})
+test('model panel never starts interaction after its original deadline', async () => {
+  const { state, callbacks } = panelFixture()
+  await assert.rejects(prepareModelSelection({ ...callbacks, timeoutMs: 0 }), /Timed out preparing/)
+  assert.equal(state.opens, 0)
 })

@@ -193,6 +193,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
       touch(join(unpackedRoot, relativePath))
     }
     touch(join(unpackedRoot, 'kun/node_modules/@cursor/sdk-darwin-arm64/package.json'))
+    touch(join(unpackedRoot, 'kun/node_modules/@opentui/core-darwin-arm64/package.json'))
     touch(join(unpackedRoot, 'node_modules/better-sqlite3/package.json'))
 
     expect(() => afterPack._internals.validateBundledKunRuntime(context)).not.toThrow()
