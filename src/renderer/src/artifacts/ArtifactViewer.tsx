@@ -8,7 +8,7 @@ import { askKunToRevise, openDesignCanvas, openSourceConversation, openWhiteboar
 import type { LibraryArtifact } from './artifact-types'
 import { fileTypeLabel, formatArtifactSize, formatArtifactTime } from './artifact-view-model'
 import { ArtifactKindChip } from './ArtifactCard'
-import { BoardStage, DesignStage, ImageStage, OfficeStage, useDesignScreens, type DesignScreen } from './ArtifactViewerStages'
+import { BoardStage, DesignStage, ImageStage, OfficeStage, PdfStage, useDesignScreens, type DesignScreen } from './ArtifactViewerStages'
 
 function TopBarButton({ label, onClick, children, iconOnly = false }: {
   label: string
@@ -140,7 +140,9 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
       ? <ImageStage artifact={artifact} />
       : artifact.kind === 'board'
         ? <BoardStage artifact={artifact} />
-        : <OfficeStage artifact={artifact} />
+        : artifact.ext === '.pdf'
+          ? <PdfStage artifact={artifact} />
+          : <OfficeStage artifact={artifact} />
 
   return (
     <div className="ds-drag flex h-full min-h-0 flex-col bg-ds-main" data-artifact-viewer={artifact.kind}>

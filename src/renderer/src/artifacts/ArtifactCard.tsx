@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileText, Image as ImageIcon, MessageSquare, Palette, Presentation, Shapes, Table2, type LucideIcon } from 'lucide-react'
+import { useBoardPreview } from './artifact-board-preview'
 import { LIBRARY_ARTIFACT_KIND_STYLE, type LibraryArtifact, type LibraryArtifactKind } from './artifact-types'
 import { ARTIFACT_KIND_LABEL_KEYS, fileTypeLabel, formatArtifactSize, formatArtifactTime } from './artifact-view-model'
 
@@ -40,6 +41,7 @@ export function useArtifactImage(artifact: LibraryArtifact | null): string {
 
 function Thumbnail({ artifact }: { artifact: LibraryArtifact }): ReactElement {
   const image = useArtifactImage(artifact)
+  const board = useBoardPreview(artifact.kind === 'board' ? artifact : null)
   if (artifact.kind === 'image') {
     return image
       ? <img src={image} alt="" className="h-full w-full object-cover" draggable={false} />
@@ -76,6 +78,9 @@ function Thumbnail({ artifact }: { artifact: LibraryArtifact }): ReactElement {
         ))}
       </div>
     )
+  }
+  if (artifact.kind === 'board' && board.url) {
+    return <img src={board.url} alt="" className="h-full w-full bg-white object-contain p-3" draggable={false} />
   }
   if (artifact.kind === 'board') {
     return (

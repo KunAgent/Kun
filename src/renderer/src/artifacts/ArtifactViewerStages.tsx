@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import { Suspense, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import type { WorkspacePdfReadResult } from '@shared/workspace-file'
+import { WorkspacePdfViewer } from '../components/workspace-file-preview-support'
+import { useBoardPreview } from './artifact-board-preview'
 import { useTranslation } from 'react-i18next'
 import { FolderOpen, Loader2, Maximize, Minus, Palette, Plus, Shapes } from 'lucide-react'
 import { useWorkspaceOfficePreview } from '../components/useWorkspaceOfficePreview'
@@ -68,10 +71,17 @@ export function OfficeStage({ artifact }: { artifact: LibraryArtifact }): ReactE
 }
 
 const ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.5, 2]
+const DOT_GRID = 'bg-zinc-100 [background-image:radial-gradient(rgb(212_212_216)_1px,transparent_1px)] [background-size:20px_20px] dark:bg-zinc-900 dark:[background-image:radial-gradient(rgb(63_63_70)_1px,transparent_1px)]'
 
-export function ImageStage({ artifact }: { artifact: LibraryArtifact }): ReactElement {
+function ZoomableImageStage({ src, alt, loading, stage, dark, extraControls }: {
+  src: string
+  alt: string
+  loading: boolean
+  stage: string
+  dark: boolean
+  extraControls?: ReactNode
+}): ReactElement {
   const { t } = useTranslation('common')
-  const image = useArtifactImage(artifact)
   const [zoom, setZoom] = useState<number | 'fit'>('fit')
   const step = (direction: 1 | -1): void => {
     const current = zoom === 'fit' ? 1 : zoom
@@ -80,13 +90,13 @@ export function ImageStage({ artifact }: { artifact: LibraryArtifact }): ReactEl
     setZoom(next)
   }
   return (
-    <div className="relative h-full min-h-0 overflow-auto bg-zinc-900" data-artifact-stage="image">
+    <div className={`relative h-full min-h-0 overflow-auto ${dark ? 'bg-zinc-900' : DOT_GRID}`} data-artifact-stage={stage}>
       <div className="flex min-h-full min-w-full items-center justify-center p-10 pb-24">
-        {image ? (
-          <img src={image} alt={artifact.title} draggable={false}
-            className="rounded-lg shadow-[0_24px_60px_rgba(0,0,0,0.45)]"
+        {src ? (
+          <img src={src} alt={alt} draggable={false}
+            className={`rounded-lg ${dark ? 'shadow-[0_24px_60px_rgba(0,0,0,0.45)]' : 'bg-white shadow-[0_8px_30px_rgba(24,24,27,0.12)]'}`}
             style={zoom === 'fit' ? { maxWidth: '100%', maxHeight: 'calc(100vh - 260px)' } : { width: 'auto', transform: `scale(${zoom})`, transformOrigin: 'center' }} />
-        ) : <Loader2 className="h-5 w-5 animate-spin text-zinc-400" aria-label={t('artifactsPreviewLoading')} />}
+        ) : loading ? <Loader2 className="h-5 w-5 animate-spin text-zinc-400" aria-label={t('artifactsPreviewLoading')} /> : null}
       </div>
       <StagePill label={t('artifactsStageControls')}>
         <PillButton label={t('artifactsZoomOut')} onClick={() => step(-1)}><Minus className="h-4 w-4" aria-hidden /></PillButton>
@@ -94,7 +104,38 @@ export function ImageStage({ artifact }: { artifact: LibraryArtifact }): ReactEl
         <PillButton label={t('artifactsZoomIn')} onClick={() => step(1)}><Plus className="h-4 w-4" aria-hidden /></PillButton>
         <PillDivider />
         <PillButton label={t('artifactsFit')} active={zoom === 'fit'} onClick={() => setZoom('fit')}><Maximize className="h-4 w-4" aria-hidden /></PillButton>
+        {extraControls ? <><PillDivider />{extraControls}</> : null}
       </StagePill>
+    </div>
+  )
+}
+
+export function ImageStage({ artifact }: { artifact: LibraryArtifact }): ReactElement {
+  const image = useArtifactImage(artifact)
+  return <ZoomableImageStage src={image} alt={artifact.title} loading={!image} stage="image" dark />
+}
+
+export function PdfStage({ artifact }: { artifact: LibraryArtifact }): ReactElement {
+  const { t } = useTranslation('common')
+  const [result, setResult] = useState<WorkspacePdfReadResult | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    setResult(null)
+    void window.kunGui?.readWorkspacePdf?.({ workspaceRoot: artifact.workspaceRoot, path: artifact.path })
+      .then((next) => { if (!cancelled) setResult(next) })
+      .catch((error) => { if (!cancelled) setResult({ ok: false, message: error instanceof Error ? error.message : String(error) }) })
+    return () => { cancelled = true }
+  }, [artifact.workspaceRoot, artifact.path])
+  if (!result) return <StageMessage><Loader2 className="h-4 w-4 animate-spin" aria-hidden />{t('artifactsPreviewLoading')}</StageMessage>
+  if (!result.ok) return <FallbackStage artifact={artifact} detail={result.message} />
+  return (
+    <div className="h-full min-h-0 overflow-hidden p-6" data-artifact-stage="pdf">
+      <div className="h-full min-h-0 overflow-hidden rounded-xl border border-ds-border bg-ds-card shadow-[0_16px_40px_rgba(24,24,27,0.08)]">
+        <Suspense fallback={<StageMessage><Loader2 className="h-4 w-4 animate-spin" aria-hidden />{t('artifactsPreviewLoading')}</StageMessage>}>
+          <WorkspacePdfViewer filePath={result.path} dataBase64={result.dataBase64} size={result.size} mtimeMs={result.mtimeMs}
+            workspaceRoot={artifact.workspaceRoot} onSelectionChange={() => undefined} />
+        </Suspense>
+      </div>
     </div>
   )
 }
@@ -190,8 +231,17 @@ export function DesignStage({ artifact, screens, loading, selectedId, onSelect }
 
 export function BoardStage({ artifact }: { artifact: LibraryArtifact }): ReactElement {
   const { t } = useTranslation('common')
+  const preview = useBoardPreview(artifact)
+  const openInWork = (
+    <PillButton label={t('artifactsOpenWork')} onClick={() => void openWhiteboard(artifact)}>
+      <Shapes className="h-4 w-4" aria-hidden /><span className="pr-1">{t('artifactsOpenWork')}</span>
+    </PillButton>
+  )
+  if (preview.url || preview.loading) {
+    return <ZoomableImageStage src={preview.url} alt={artifact.title} loading={preview.loading} stage="board" dark={false} extraControls={openInWork} />
+  }
   return (
-    <div className="h-full bg-zinc-100 [background-image:radial-gradient(rgb(212_212_216)_1px,transparent_1px)] [background-size:20px_20px] dark:bg-zinc-900 dark:[background-image:radial-gradient(rgb(63_63_70)_1px,transparent_1px)]" data-artifact-stage="board">
+    <div className={`h-full ${DOT_GRID}`} data-artifact-stage="board">
       <StageMessage>
         <Shapes className="h-7 w-7 text-teal-600" aria-hidden />
         <span className="max-w-[360px]">{t('artifactsWhiteboardHint')}</span>
