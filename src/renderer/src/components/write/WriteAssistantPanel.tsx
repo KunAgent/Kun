@@ -89,6 +89,7 @@ type Props = {
   attachmentUploadError?: string | null
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
+  onPasteLongText?: (text: string) => void
   onRemoveAttachment?: (id: string) => void
   onSend: () => void
   onInterrupt: (options?: { discard?: boolean }) => void
@@ -146,6 +147,7 @@ export function WriteAssistantPanel({
   attachmentUploadError = null,
   onPickAttachments,
   onPasteClipboardImage,
+  onPasteLongText,
   onRemoveAttachment,
   onSend,
   onInterrupt,
@@ -575,6 +577,7 @@ export function WriteAssistantPanel({
             attachmentUploadError={attachmentUploadError}
             onPickAttachments={onPickAttachments}
             onPasteClipboardImage={onPasteClipboardImage}
+            onPasteLongText={onPasteLongText}
             onRemoveAttachment={onRemoveAttachment}
             // A draft or empty home becomes a new session before the turn; the
             // open document or paper travels with it as context, never a dialog.

@@ -504,3 +504,11 @@ describe('chat-store Claw helpers', () => {
     })
   })
 })
+
+describe('composer reasoning default without model facts', () => {
+  it('shows Auto, as the picker does, instead of an unseen max', () => {
+    const profile = { inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'] }
+    const groups = [{ providerId: 'p', label: 'P', modelIds: ['m1'], modelProfiles: { m1: profile } }] as never
+    expect(composerReasoningEffortForSelection(groups, 'm1', 'p')).toBe('auto')
+  })
+})

@@ -201,14 +201,16 @@ export function composerReasoningEffortForSelection(
   // An external Agent keeps its own configured level until the user picks one for that model.
   if (options.nativeAgent) return storedComposerReasoningEffort(modelId, providerId) ?? 'auto'
   const stored = readStoredComposerReasoningEffort(modelId, providerId)
+  const picked = storedComposerReasoningEffort(modelId, providerId)
   const profile = modelProfileForComposerSelection(modelGroups, modelId, providerId)
   const resolved = profile?.reasoning
     ? profile.reasoning.supportedEfforts.includes(stored)
       ? stored
       : profile.reasoning.defaultEffort
-    : LEGACY_COMPOSER_REASONING_EFFORTS.includes(stored)
-      ? stored
-      : 'max'
+    : picked && LEGACY_COMPOSER_REASONING_EFFORTS.includes(picked)
+      ? picked
+      // Nothing recorded for this model: the picker offers Auto alone (or Off), so default to what it shows.
+      : profile?.supportsReasoning === false ? 'off' : 'auto'
   persistComposerReasoningEffort(modelId, providerId, resolved)
   return resolved
 }
