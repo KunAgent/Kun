@@ -15,6 +15,7 @@ import {
   type CodeCanvasPromptControllerOptions
 } from '../design/canvas/useCodeCanvasPromptController'
 import { useAgentDesignRequestDispatch } from './useAgentDesignRequestDispatch'
+import { useComposerPrefillEvent } from './useComposerPrefillEvent'
 import type { DesignTaskComposerProfile } from '../chat/FloatingComposerTaskProfile'
 
 type WorkbenchDesignAgentRuntimeOptions = {
@@ -170,6 +171,7 @@ export function useWorkbenchDesignAgentRuntime({
     clearComposerAttachments,
     clearHtmlElementContext
   })
+  useComposerPrefillEvent(setInput)
   useAgentDesignRequestDispatch({
     activeThreadId,
     busy,

@@ -38,6 +38,9 @@ const AgentChatPickerHost = lazy(() =>
 const WardrobePageView = lazy(() =>
   import('../wardrobe/WardrobePageView').then((module) => ({ default: module.WardrobePageView }))
 )
+const ArtifactsPage = lazy(() =>
+  import('../../artifacts/ArtifactsPage').then((module) => ({ default: module.ArtifactsPage }))
+)
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
     default: module.ExtensionManagementCenter
@@ -193,6 +196,10 @@ export function WorkbenchStageRouter({
         ) : normalizedRoute === 'wardrobe' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
             <WardrobePageView leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} onClose={closeWardrobePage} />
+          </Suspense>
+        ) : normalizedRoute === 'artifacts' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <ArtifactsPage leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

@@ -36,6 +36,7 @@ import codeTour from './common/code-tour.json'
 import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
 import designAgent from './common/design-agent.json'
+import artifactsLibrary from './common/artifacts-library.json'
 
 const common = {
   ...agentUpdates,
@@ -75,6 +76,7 @@ const common = {
   ...messageQuote,
   ...appSurfaces,
   ...designAgent,
+  ...artifactsLibrary,
 }
 
 export default common

@@ -31,8 +31,7 @@ import {
   Sparkles,
   Target,
   Workflow,
-  type LucideIcon
-} from 'lucide-react'
+  type LucideIcon, Layers } from 'lucide-react'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { NormalizedThread } from '../agent/types'
 import type { AppRoute, SettingsRouteSection } from '../store/chat-store-types'
@@ -111,7 +110,8 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   schedule: 'schedule',
   workflow: 'workflowCreate',
   ade: 'workspaceModeAdeLabel',
-  wardrobe: 'roomsWardrobeMine'
+  wardrobe: 'roomsWardrobeMine',
+  artifacts: 'artifactsNav'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
@@ -128,7 +128,8 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   schedule: Clock3,
   workflow: Workflow,
   ade: Network,
-  wardrobe: Shirt
+  wardrobe: Shirt,
+  artifacts: Layers
 }
 
 /**
