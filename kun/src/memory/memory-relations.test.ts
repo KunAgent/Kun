@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { MemoryRelationCommand, MemoryRelationModelOutput, MemoryRelationProposal } from '../contracts/memory-relations.js'
 import { FileMemoryStore } from './memory-store.js'
-import { relationBinding } from './memory-relations.js'
+import { relationBinding, sameRelationScope } from './memory-relations.js'
 
 const directories: string[] = []
 afterEach(async () => {
@@ -53,6 +53,7 @@ describe('Memory relation storage', () => {
     await expect(restarted.relations({ action: 'review', id: suggestion.id, decision: 'rejected', access: {} })).rejects.toThrow(/stale/)
     expect(await restarted.getById(f.source.id)).toEqual(f.source)
     expect(await restarted.getById(f.target.id)).toEqual(f.target)
+    expect(Object.keys(accepted.relations[0].source).sort()).toEqual(['content', 'id', 'revision', 'scope', 'sources'])
     expect((await restarted.retrieve({ query: 'PostgreSQL database', limit: 8 })).map((x) => x.id)).toEqual(before.map((x) => x.id))
     const ledger = await readFile(join(f.rootDir, 'relations/suggestions.json'), 'utf8')
     expect(ledger).not.toContain('PostgreSQL')
@@ -73,7 +74,10 @@ describe('Memory relation storage', () => {
     await f.store.relations({ action: 'review', id, decision: 'accepted', access: {} })
     const changed = await f.store.update(f.target.id, { content: 'Use SQLite.', expectedRevision: f.target.revision })
     await f.store.lifecycle(f.target.id, { action: 'rollback', expectedRevision: changed.revision, targetRevision: 1 })
-    expect((await f.store.relations({ action: 'list', memoryId: f.source.id, access: {} })).relations[0].stale).toBe(true)
+    const stale = (await f.store.relations({ action: 'list', memoryId: f.source.id, access: {} })).relations[0]
+    expect(stale.stale).toBe(true)
+    expect(stale.source.content).toBe('')
+    expect(stale.target.sources).toEqual([])
     await expect(f.propose()).rejects.toThrow(/stale/)
     await expect(f.store.relations({ action: 'review', id, decision: 'accepted', access: {} })).rejects.toThrow(/stale/)
   })
@@ -84,6 +88,15 @@ describe('Memory relation storage', () => {
     const results = await Promise.allSettled(['accepted', 'rejected'].map((decision) =>
       f.store.relations({ action: 'review', id, decision: decision as 'accepted' | 'rejected', access: {} })))
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+  })
+
+  it('requires matching canonical project ownership, not just a shared label', async () => {
+    const f = await fixture()
+    const source = { ...f.source, scope: 'project' as const, project: '/checkout/a', projectIdentity: '/repo/a/.git' }
+    const worktree = { ...f.target, scope: 'project' as const, project: '/checkout/b', projectIdentity: '/repo/a/.git' }
+    expect(sameRelationScope(source, worktree)).toBe(true)
+    expect(sameRelationScope(source, { ...worktree, projectIdentity: '/repo/b/.git' })).toBe(false)
+    expect(sameRelationScope(source, { ...worktree, projectIdentity: undefined })).toBe(false)
   })
 
   it('blocks cross-scope, unauthorized, directive, inactive, and invalid-evidence endpoints atomically', async () => {

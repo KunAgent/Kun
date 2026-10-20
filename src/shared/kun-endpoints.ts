@@ -104,6 +104,8 @@ export function kunAttachmentContentPath(attachmentId: string): string {
 
 export const KUN_MEMORY_PATH = '/v1/memory'
 export const KUN_MEMORY_TEMPLATE = '/v1/memory'
+export const KUN_MEMORY_RELATIONS_PATH = '/v1/memory/relations'
+export const KUN_MEMORY_RELATIONS_ANALYZE_PATH = '/v1/memory/relations/analyze'
 export const KUN_MEMORY_DIAGNOSTICS_PATH = '/v1/memory/diagnostics'
 export const KUN_MEMORY_DIAGNOSTICS_TEMPLATE = '/v1/memory/diagnostics'
 export const KUN_MEMORY_RECORD_TEMPLATE = '/v1/memory/{id}'
