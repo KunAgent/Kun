@@ -7,6 +7,7 @@ import {
   formatFilePathForDisplay,
 } from '../../lib/diff-stats'
 import { isAppSurfaceBlock } from '../../app-surfaces/app-surface-tool-meta'
+import { isDesignOpenBlock } from '../../agent/design-open-request'
 import { isPendingRenderChartTool } from '../../agent/chart-spec-adapter'
 import { isPendingPaperReportTool } from '../../agent/paper-list-adapter'
 import {
@@ -58,6 +59,7 @@ export type TurnSections = {
   paperListBlocks: Extract<ChatBlock, { kind: 'paper-list' }>[]
   pendingPaperListBlocks: ToolBlock[]
   componentPrototypeBlocks: ToolBlock[]
+  designOpenBlocks: ToolBlock[]
   diagramPrototypeBlocks: ToolBlock[]
   conversationVisualizationBlocks: ToolBlock[]
   /** Gen UI widgets and MCP App pages, rendered after the conclusion. */
@@ -344,6 +346,7 @@ export function deriveTurnSections({
     block.meta?.toolName === 'design_component' &&
     Boolean(block.meta.componentPrototype)
   ))
+  const designOpenBlocks: ToolBlock[] = turn.blocks.filter(isDesignOpenBlock)
   const diagramPrototypeBlocks: ToolBlock[] = turn.blocks.filter((block): block is ToolBlock => (
     block.kind === 'tool' &&
     block.meta?.toolName === 'show_diagram' &&
@@ -372,6 +375,7 @@ export function deriveTurnSections({
     runtimeErrorsBeforeFinalContent,
     runtimeErrorsAfterFinalContent,
     componentPrototypeBlocks,
+    designOpenBlocks,
     diagramPrototypeBlocks,
     conversationVisualizationBlocks,
     appSurfaceBlocks,

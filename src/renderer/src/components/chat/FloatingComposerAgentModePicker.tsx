@@ -170,7 +170,8 @@ export function FloatingComposerAgentModePicker({
     buttons[next]?.focus()
   }
   const kunUnavailable = kunRow ? harnessConnectionPresentation(kunRow).code : null
-  const kunModes: AgentModeSurface[] = surface === 'write' ? ['write'] : ['code', 'design']
+  // Design is a capability the Code agent opens itself (design_open), not a mode.
+  const kunModes: AgentModeSurface[] = surface === 'write' ? ['write'] : ['code']
   const menu = open && !disabled ? (
     <div ref={menuRef} id={menuId} role="menu" aria-label={t('composerAgentMode.title')}
       data-agent-mode-menu data-task-surface-menu data-placement={placement.placement}

@@ -113,16 +113,17 @@ describe('unified composer Agent control wiring', () => {
     expect(context.onComposerModelChange).not.toHaveBeenCalled()
   })
 
-  it('pins Kun before changing an implicit Kun draft to Design and removes external SDK model routes', async () => {
+  it('pins Kun when an implicit Kun draft reselects Code and removes external SDK model routes', async () => {
     await render()
     expect(host.querySelector('[data-test-model-providers]')?.getAttribute('data-test-model-providers')).toBe('deepseek')
     const trigger = host.querySelector<HTMLButtonElement>('[data-agent-mode-trigger]')!
     await act(async () => trigger.click())
-    await act(async () => document.querySelector<HTMLButtonElement>('[data-agent-mode-option="kun-design"]')!.click())
+    // Design is no longer a composer mode; the Code agent opens it with design_open.
+    expect(document.querySelector('[data-agent-mode-option="kun-design"]')).toBeNull()
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-agent-mode-option="kun-code"]')!.click())
     expect(context.adeComposer.selectHarness).not.toHaveBeenCalled()
     expect(state.setComposerHarness).toHaveBeenCalledWith('kun', '')
-    expect(context.onTaskSurfaceChange).toHaveBeenCalledWith('design')
-    expect(state.setComposerHarness.mock.invocationCallOrder[0]).toBeLessThan(context.onTaskSurfaceChange.mock.invocationCallOrder[0])
+    expect(context.onTaskSurfaceChange).not.toHaveBeenCalled()
     expect(host.querySelector('textarea')?.value).toBe('Keep this draft')
   })
 
