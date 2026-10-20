@@ -226,6 +226,9 @@ module.exports = {
     // dependency test exclusions do not apply. gifwrap's ~6 MiB of test images
     // are not used by its src/ runtime; keep the runtime and LICENSE intact.
     '!**/node_modules/gifwrap/test{,/**/*}',
+    // Jimp's jest image snapshots are never loaded and carry ~200-character
+    // paths; on Windows they push update backup/stage copies past MAX_PATH.
+    '!**/node_modules/**/__image_snapshots__{,/**/*}',
     // Lark SDK ships an ESM (`es/`) build for bundlers alongside its CJS `main`
     // (`lib/`). The main process resolves `@larksuiteoapi/node-sdk` through
     // Node's `main` field, so the ESM copy is dead weight at runtime.
