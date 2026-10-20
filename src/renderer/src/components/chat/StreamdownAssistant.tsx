@@ -1,4 +1,4 @@
-import type { ComponentPropsWithRef, MouseEvent, ReactElement } from 'react'
+import { useState, type ComponentPropsWithRef, type MouseEvent, type ReactElement } from 'react'
 import { Streamdown, type StreamdownProps } from 'streamdown'
 import remarkGfm from 'remark-gfm'
 import { harden } from 'rehype-harden'
@@ -9,12 +9,14 @@ import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import { sanitizeAssistantCanvasToolDisplay } from '../../design/canvas/strip-canvas-tool-display'
 import { StreamdownCode } from './StreamdownCode'
+import { StreamFadeChar } from './StreamFadeChar'
+import { createStreamFadeSource, rehypeStreamFade, STREAM_FADE_TAG } from './rehype-stream-fade'
 import { useAssistantTextReveal } from './use-assistant-text-reveal'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { createMathPlugin } from '@streamdown/math'
 import 'katex/dist/katex.min.css'
 
-export { nextVisibleLength, visibleTextForTypewriter } from './assistant-text-reveal'
+export { visibleTextForTypewriter } from './assistant-text-reveal'
 
 const rehypePlugins = [
   rehypeFileReferences,
@@ -63,8 +65,9 @@ const math = createMathPlugin({
 
 const components = {
   code: StreamdownCode,
-  a: StreamdownLink
-} satisfies StreamdownProps['components']
+  a: StreamdownLink,
+  [STREAM_FADE_TAG]: StreamFadeChar
+} as StreamdownProps['components']
 
 type StreamdownLinkProps = ComponentPropsWithRef<'a'> & { node?: unknown }
 
@@ -141,8 +144,9 @@ type Props = {
   /** Markdown source */
   text: string
   /**
-   * When true (live SSE chunking), uses Streamdown `streaming` mode with a
-   * char-level blur-in on newly appended content.
+   * When true (live SSE chunking), paces the text and fades in only the
+   * in-flight tail. A settled renderer that takes over an unfinished reveal
+   * finishes that tail before showing static text.
    */
   streaming: boolean
   className?: string
@@ -157,7 +161,13 @@ export function StreamdownAssistant({
   hideHtmlComments = false
 }: Props): ReactElement {
   const displayText = sanitizeAssistantCanvasToolDisplay(text)
-  const pacedText = useAssistantTextReveal(displayText, streaming)
+  const { text: pacedText, fade } = useAssistantTextReveal(displayText, streaming)
+  const [fadeSource] = useState(createStreamFadeSource)
+  const [fadingRehypePlugins] = useState(
+    () => [...rehypePlugins, [rehypeStreamFade, fadeSource]] as StreamdownProps['rehypePlugins']
+  )
+  // Read by the plugin while Streamdown renders below in this same pass.
+  fadeSource.current = fade
   const remarkPlugins = hideHtmlComments
     ? [remarkGfm, remarkHideHtmlComments]
     : [remarkGfm]
@@ -177,14 +187,16 @@ export function StreamdownAssistant({
       mode="static"
       parseIncompleteMarkdown={false}
       isAnimating={false}
-      // The pacing hook above is the typewriter. Keep Streamdown's own
-      // streaming/remend pipeline disabled here: in long Markdown responses
-      // with GFM tables, its block repair path can leave stale text fragments
-      // next to the repaired block, producing copied DOM text such as
-      // "Work Workstreamstream".
+      // The pacing hook above is the typewriter and rehypeStreamFade the
+      // fade. Keep Streamdown's own streaming/remend pipeline disabled here:
+      // in long Markdown responses with GFM tables, its block repair path can
+      // leave stale text fragments next to the repaired block, producing
+      // copied DOM text such as "Work Workstreamstream".
       animated={false}
       remarkPlugins={remarkPlugins}
-      rehypePlugins={rehypePlugins}
+      // Settled text shares the default processor; only a reply that is
+      // still fading uses its own.
+      rehypePlugins={fade ? fadingRehypePlugins : rehypePlugins}
       components={components}
       plugins={{ math }}
     >
