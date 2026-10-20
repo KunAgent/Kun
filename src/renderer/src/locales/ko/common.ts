@@ -37,6 +37,7 @@ import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
 import designAgent from './common/design-agent.json'
 import artifactsLibrary from './common/artifacts-library.json'
+import workspaceFiles from './common/workspace-files.json'
 
 const common = {
   ...agentUpdates,
@@ -77,6 +78,7 @@ const common = {
   ...appSurfaces,
   ...designAgent,
   ...artifactsLibrary,
+  ...workspaceFiles,
 }
 
 export default common

@@ -63,6 +63,7 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'workspace:creation-times',
   'conversation:create-workspace',
   'file:list-workspace-directory',
+  'file:list-workspace-files',
   'file:resolve-workspace',
   'file:read-workspace',
   'file:write-workspace',
@@ -87,6 +88,7 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'clipboard:read-image',
   // Git and worktrees.
   'git:branches',
+  'git:status-files',
   'git:switch-branch',
   'git:create-and-switch-branch',
   'git:checkpoint:create',

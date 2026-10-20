@@ -1,55 +1,42 @@
 import type {
-  Dispatch,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   MutableRefObject,
   ReactElement,
   RefObject,
-  SetStateAction,
   WheelEvent as ReactWheelEvent
 } from 'react'
 import {
-  Check,
-  ChevronRight,
-  Code2,
-  Copy,
-  Eye,
+  ChevronDown,
   ExternalLink,
-  Files,
-  FolderOpen,
-  FolderSearch,
-  Loader2,
+  Eye,
+  FolderTree,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   PanelRightClose,
   Pencil,
   Pin,
-  RotateCcw,
-  Save,
   X
 } from 'lucide-react'
-import type {
-  WorkspaceFileReadResult,
-  WorkspaceFileTarget,
-  WorkspaceImageReadResult,
-  WorkspacePdfReadResult,
-  WorkspacePreviewLeaseResult
-} from '@shared/workspace-file'
-import type { WorkspaceOfficePreviewResult } from '@shared/office-document'
+import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import { formatFilePathForDisplay } from '../lib/diff-stats'
-import { languageFromFilePath } from '../lib/code-highlighting'
-import {
-  extensionBadge,
-  fileNameFromPath,
-  formatBytes,
-  targetKey,
-  type CachedTextDraft
-} from './workspace-file-preview-support'
+import { FileTypeIcon } from './FileTypeIcon'
+import { PreviewMenuButton, type PreviewMenuItem } from './WorkspaceFilePreviewMenus'
+import { fileNameFromPath, targetKey } from './workspace-file-preview-support'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
-type TabMenu = { target: WorkspaceFileTarget; x: number; y: number }
 
-type WorkspaceFilePreviewChromeProps = {
+export type PreviewViewMode = {
+  /** Label of the rendered view: "Preview", "Table", ... */
+  renderedLabel: string
+  rendered: boolean
+  disabled: boolean
+  onShowRendered: () => void
+  onShowSource: () => void
+}
+
+type Props = {
   t: Translate
   tabsScrollRef: RefObject<HTMLDivElement | null>
   handleTabWheel: (event: ReactWheelEvent<HTMLDivElement>) => void
@@ -65,57 +52,26 @@ type WorkspaceFilePreviewChromeProps = {
   openTargetInEditor: (target: WorkspaceFileTarget) => void
   tabActionsEnabled: boolean
   openTabMenu: (event: ReactMouseEvent<HTMLButtonElement>, target: WorkspaceFileTarget) => void
-  handleTabKeyDown: (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-    target: WorkspaceFileTarget,
-    index: number
-  ) => void
-  onCloseTarget?: (target: WorkspaceFileTarget) => void
-  setPendingCloseTarget: Dispatch<SetStateAction<WorkspaceFileTarget | null>>
-  textDraftsRef: MutableRefObject<Map<string, CachedTextDraft>>
-  setDirtyTargetKeys: Dispatch<SetStateAction<Set<string>>>
-  badge: string
+  handleTabKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>, target: WorkspaceFileTarget, index: number) => void
+  onRequestCloseTarget?: (target: WorkspaceFileTarget, dirty: boolean) => void
   currentFileName: string
-  onTogglePreserveAcrossThreads?: () => void
-  preserveAcrossThreads: boolean
-  readingMode: boolean
-  setReadingMode: Dispatch<SetStateAction<boolean>>
-  isMarkdownFile: boolean
-  markdownRendered: boolean
-  setMarkdownRendered: Dispatch<SetStateAction<boolean>>
-  result: WorkspaceFileReadResult | null
-  editingText: boolean
-  isSvgFile: boolean
-  svgRendered: boolean
-  setSvgRendered: Dispatch<SetStateAction<boolean>>
-  isHtmlFile: boolean
-  htmlRendered: boolean
-  setHtmlRendered: Dispatch<SetStateAction<boolean>>
-  previewLease: WorkspacePreviewLeaseResult | null
+  breadcrumbSegments: string[]
+  viewMode: PreviewViewMode | null
   editableText: boolean
-  setEditingText: Dispatch<SetStateAction<boolean>>
-  saveText: (force?: boolean) => Promise<unknown>
-  savingText: boolean
-  setTextDraft: Dispatch<SetStateAction<string>>
-  setTextSaveError: Dispatch<SetStateAction<string | null>>
-  setDiskConflict: Dispatch<SetStateAction<boolean>>
-  openInEditor: () => void
+  editingText: boolean
+  onToggleEditing: () => void
+  readingMode: boolean
+  onToggleReadingMode: () => void
+  openWithItems: PreviewMenuItem[]
+  moreItems: PreviewMenuItem[]
   onToggleFileTree?: () => void
   fileTreeOpen: boolean
-  openInSystem: () => void
-  revealInFileManager: () => void
-  copyContent: () => Promise<void>
-  copyContentAvailable: boolean
-  copied: boolean
   onClose: () => void
-  breadcrumbSegments: string[]
-  imageResult: WorkspaceImageReadResult | null
-  pdfResult: WorkspacePdfReadResult | null
-  officeResult: WorkspaceOfficePreviewResult | null
-  language: string
 }
 
-export function WorkspaceFilePreviewChrome(props: WorkspaceFilePreviewChromeProps): ReactElement {
+const ICON_BUTTON = 'ds-code-sidebar-icon-button'
+
+export function WorkspaceFilePreviewChrome(props: Props): ReactElement {
   const {
     t,
     tabsScrollRef,
@@ -133,50 +89,24 @@ export function WorkspaceFilePreviewChrome(props: WorkspaceFilePreviewChromeProp
     tabActionsEnabled,
     openTabMenu,
     handleTabKeyDown,
-    onCloseTarget,
-    setPendingCloseTarget,
-    textDraftsRef,
-    setDirtyTargetKeys,
-    badge,
+    onRequestCloseTarget,
     currentFileName,
-    onTogglePreserveAcrossThreads,
-    preserveAcrossThreads,
-    readingMode,
-    setReadingMode,
-    isMarkdownFile,
-    markdownRendered,
-    setMarkdownRendered,
-    result,
-    editingText,
-    isSvgFile,
-    svgRendered,
-    setSvgRendered,
-    isHtmlFile,
-    htmlRendered,
-    setHtmlRendered,
-    previewLease,
+    breadcrumbSegments,
+    viewMode,
     editableText,
-    setEditingText,
-    saveText,
-    savingText,
-    setTextDraft,
-    setTextSaveError,
-    setDiskConflict,
-    openInEditor,
+    editingText,
+    onToggleEditing,
+    readingMode,
+    onToggleReadingMode,
+    openWithItems,
+    moreItems,
     onToggleFileTree,
     fileTreeOpen,
-    openInSystem,
-    revealInFileManager,
-    copyContent,
-    copyContentAvailable,
-    copied,
-    onClose,
-    breadcrumbSegments,
-    imageResult,
-    pdfResult,
-    officeResult,
-    language
+    onClose
   } = props
+  const editLabel = editingText
+    ? t('filePreviewStopEditing', { defaultValue: 'Stop editing' })
+    : t('filePreviewEditText', { defaultValue: 'Edit file' })
   return (
     <>
       <div className="ds-code-sidebar-topbar">
@@ -188,15 +118,12 @@ export function WorkspaceFilePreviewChrome(props: WorkspaceFilePreviewChromeProp
           onWheel={handleTabWheel}
         >
           {visibleTargets.map((item, index) => {
-            const active = targetKey(item) === activeTargetKey
             const itemKey = targetKey(item)
+            const active = itemKey === activeTargetKey
             const dirty = dirtyTargetKeys.has(itemKey) || (active && textDirty)
-            const pinned = pinnedTargetKeySet.has(targetKey(item))
-            const itemPath = item.path
-            const itemRoot = item.workspaceRoot ?? workspaceRoot
-            const itemLabel = fileNameFromPath(itemPath)
-            const itemBadge = extensionBadge(itemPath, languageFromFilePath(itemPath))
-            const itemTitle = formatFilePathForDisplay(itemPath, itemRoot) ?? itemPath
+            const pinned = pinnedTargetKeySet.has(itemKey)
+            const itemLabel = fileNameFromPath(item.path)
+            const itemTitle = formatFilePathForDisplay(item.path, item.workspaceRoot ?? workspaceRoot) ?? item.path
             return (
               <div
                 key={itemKey}
@@ -206,9 +133,8 @@ export function WorkspaceFilePreviewChrome(props: WorkspaceFilePreviewChromeProp
               >
                 <button
                   ref={(element) => {
-                    const key = targetKey(item)
-                    if (element) tabButtonRefs.current.set(key, element)
-                    else tabButtonRefs.current.delete(key)
+                    if (element) tabButtonRefs.current.set(itemKey, element)
+                    else tabButtonRefs.current.delete(itemKey)
                   }}
                   type="button"
                   role="tab"
@@ -223,41 +149,24 @@ export function WorkspaceFilePreviewChrome(props: WorkspaceFilePreviewChromeProp
                   onKeyDown={(event) => handleTabKeyDown(event, item, index)}
                 >
                   {pinned ? (
-                    <Pin
-                      aria-hidden="true"
-                      className="h-3 w-3 shrink-0"
-                      style={{ color: 'var(--ds-accent)' }}
-                      strokeWidth={1.8}
-                    />
+                    <Pin aria-hidden="true" className="h-3 w-3 shrink-0" style={{ color: 'var(--ds-accent)' }} strokeWidth={1.8} />
                   ) : null}
-                  <span className="ds-code-sidebar-file-badge">{itemBadge}</span>
+                  <FileTypeIcon path={item.path} size={14} />
                   <span className="min-w-0 truncate">{itemLabel}</span>
                   {dirty ? (
                     <span
                       aria-label={t('filePreviewUnsavedChanges', { defaultValue: 'Unsaved changes' })}
-                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--ds-git-modified)]"
                     />
                   ) : null}
                 </button>
-                {onCloseTarget ? (
+                {onRequestCloseTarget ? (
                   <button
                     type="button"
                     aria-label={t('filePreviewCloseTab', { file: itemLabel })}
                     title={t('filePreviewCloseTab', { file: itemLabel })}
                     className="ds-code-sidebar-tab-close"
-                    onClick={() => {
-                      if (dirty) {
-                        setPendingCloseTarget(item)
-                        return
-                      }
-                      textDraftsRef.current.delete(itemKey)
-                      setDirtyTargetKeys((current) => {
-                        const updated = new Set(current)
-                        updated.delete(itemKey)
-                        return updated
-                      })
-                      onCloseTarget(item)
-                    }}
+                    onClick={() => onRequestCloseTarget(item, dirty)}
                   >
                     <X className="h-3 w-3" strokeWidth={2} />
                   </button>
@@ -266,247 +175,42 @@ export function WorkspaceFilePreviewChrome(props: WorkspaceFilePreviewChromeProp
             )
           })}
           {!visibleTargets.length ? (
-            <div
-              role="presentation"
-              className="ds-code-sidebar-tab"
-              title={t('filePreviewEmpty')}
-            >
+            <div role="presentation" className="ds-code-sidebar-tab is-active" title={t('filePreviewEmpty')}>
               <button type="button" role="tab" aria-selected="false" disabled className="ds-code-sidebar-tab-selector">
-                <span className="ds-code-sidebar-file-badge">{badge}</span>
                 <span className="truncate">{currentFileName}</span>
               </button>
             </div>
           ) : null}
         </div>
-
         <div className="ds-code-sidebar-actions">
-          {onTogglePreserveAcrossThreads ? (
-            <button
-              type="button"
-              onClick={onTogglePreserveAcrossThreads}
-              className="ds-code-sidebar-icon-button"
-              title={t('filePreviewPreserveAcrossThreads')}
-              aria-label={t('filePreviewPreserveAcrossThreads')}
-              aria-pressed={preserveAcrossThreads}
-            >
-              <Files
-                className="h-4 w-4"
-                style={preserveAcrossThreads ? { color: 'var(--ds-accent)' } : undefined}
-                strokeWidth={1.75}
-              />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setReadingMode((value) => !value)}
-            className="ds-code-sidebar-icon-button"
-            title={readingMode ? t('filePreviewExitReadingMode') : t('filePreviewEnterReadingMode')}
-            aria-label={readingMode ? t('filePreviewExitReadingMode') : t('filePreviewEnterReadingMode')}
-            aria-pressed={readingMode}
-          >
-            {readingMode ? (
-              <Minimize2 className="h-4 w-4" strokeWidth={1.8} />
-            ) : (
-              <Maximize2 className="h-4 w-4" strokeWidth={1.8} />
-            )}
-          </button>
-          {isMarkdownFile ? (
-            <button
-              type="button"
-              onClick={() => setMarkdownRendered((value) => !value)}
-              disabled={!result?.ok || editingText}
-              className="ds-code-sidebar-icon-button"
-              title={markdownRendered ? t('filePreviewShowSource') : t('filePreviewRenderMarkdown')}
-              aria-label={markdownRendered ? t('filePreviewShowSource') : t('filePreviewRenderMarkdown')}
-              aria-pressed={markdownRendered}
-            >
-              {markdownRendered ? (
-                <Code2 className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <Eye className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </button>
-          ) : null}
-          {isSvgFile ? (
-            <button
-              type="button"
-              onClick={() => setSvgRendered((value) => !value)}
-              disabled={!result?.ok || result.truncated || editingText}
-              className="ds-code-sidebar-icon-button"
-              title={svgRendered ? t('filePreviewShowSvgSource') : t('filePreviewRenderSvg')}
-              aria-label={svgRendered ? t('filePreviewShowSvgSource') : t('filePreviewRenderSvg')}
-              aria-pressed={svgRendered}
-            >
-              {svgRendered ? (
-                <Code2 className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <Eye className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </button>
-          ) : null}
-          {isHtmlFile ? (
-            <button
-              type="button"
-              onClick={() => setHtmlRendered((value) => !value)}
-              disabled={!result?.ok || result.truncated || editingText || !previewLease?.ok}
-              className="ds-code-sidebar-icon-button"
-              title={htmlRendered
-                ? t('filePreviewShowSource')
-                : t('filePreviewRenderHtml', { defaultValue: 'Render HTML' })}
-              aria-label={htmlRendered
-                ? t('filePreviewShowSource')
-                : t('filePreviewRenderHtml', { defaultValue: 'Render HTML' })}
-              aria-pressed={htmlRendered}
-            >
-              {htmlRendered ? (
-                <Code2 className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <Eye className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </button>
-          ) : null}
-          {editableText ? (
-            <button
-              type="button"
-              onClick={() => setEditingText((value) => !value)}
-              className="ds-code-sidebar-icon-button"
-              title={editingText
-                ? t('filePreviewStopEditing', { defaultValue: 'Stop editing' })
-                : t('filePreviewEditText', { defaultValue: 'Edit file' })}
-              aria-label={editingText
-                ? t('filePreviewStopEditing', { defaultValue: 'Stop editing' })
-                : t('filePreviewEditText', { defaultValue: 'Edit file' })}
-              aria-pressed={editingText}
-            >
-              {editingText ? (
-                <Eye className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <Pencil className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </button>
-          ) : null}
-          {editableText ? (
-            <button
-              type="button"
-              onClick={() => void saveText()}
-              disabled={!textDirty || savingText}
-              className="ds-code-sidebar-icon-button"
-              title={t('filePreviewSaveText', { defaultValue: 'Save file' })}
-              aria-label={t('filePreviewSaveText', { defaultValue: 'Save file' })}
-            >
-              {savingText ? (
-                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.8} />
-              ) : (
-                <Save className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </button>
-          ) : null}
-          {editableText && textDirty ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!result?.ok) return
-                setTextDraft(result.content)
-                textDraftsRef.current.delete(activeTargetKey)
-                setDirtyTargetKeys((current) => {
-                  const updated = new Set(current)
-                  updated.delete(activeTargetKey)
-                  return updated
-                })
-                setTextSaveError(null)
-                setDiskConflict(false)
-              }}
-              className="ds-code-sidebar-icon-button"
-              title={t('filePreviewRevertText', { defaultValue: 'Revert changes' })}
-              aria-label={t('filePreviewRevertText', { defaultValue: 'Revert changes' })}
-            >
-              <RotateCcw className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={openInEditor}
-            disabled={!target}
-            className="ds-code-sidebar-icon-button"
-            title={t('filePreviewOpenEditor')}
-            aria-label={t('filePreviewOpenEditor')}
-          >
-            <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
-          </button>
           {onToggleFileTree ? (
             <button
               type="button"
               onClick={() => {
-                if (readingMode) setReadingMode(false)
+                if (readingMode) onToggleReadingMode()
                 onToggleFileTree()
               }}
-              className={`ds-code-sidebar-icon-button ${fileTreeOpen ? 'is-active' : ''}`}
+              className={`${ICON_BUTTON} ${fileTreeOpen ? 'is-active' : ''}`}
               title={fileTreeOpen ? t('fileTreeClose') : t('fileTreeOpen')}
               aria-label={fileTreeOpen ? t('fileTreeClose') : t('fileTreeOpen')}
               aria-pressed={fileTreeOpen}
             >
-              <FolderOpen className="h-4 w-4" strokeWidth={1.75} />
+              <FolderTree className="h-4 w-4" strokeWidth={1.75} />
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={openInSystem}
-              disabled={!target}
-              className="ds-code-sidebar-icon-button"
-              title={t('filePreviewOpenSystem', { defaultValue: 'Open with system app' })}
-              aria-label={t('filePreviewOpenSystem', { defaultValue: 'Open with system app' })}
-            >
-              <FolderOpen className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={revealInFileManager}
-            disabled={!target}
-            className="ds-code-sidebar-icon-button"
-            title={t('filePreviewRevealInFolder', { defaultValue: 'Show in file manager' })}
-            aria-label={t('filePreviewRevealInFolder', { defaultValue: 'Show in file manager' })}
-          >
-            <FolderSearch className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-          <button
-            type="button"
-            onClick={() => void copyContent()}
-            disabled={!copyContentAvailable}
-            className="ds-code-sidebar-icon-button"
-            title={copied ? t('copySuccess') : t('filePreviewCopyContent')}
-            aria-label={copied ? t('copySuccess') : t('filePreviewCopyContent')}
-          >
-            {copied ? (
-              <Check className="h-4 w-4 text-emerald-600" strokeWidth={2} />
-            ) : (
-              <Copy className="h-4 w-4" strokeWidth={1.75} />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="ds-code-sidebar-icon-button"
-            title={t('rightPanelCollapse')}
-            aria-label={t('rightPanelCollapse')}
-          >
+          ) : null}
+          <button type="button" onClick={onClose} className={ICON_BUTTON} title={t('rightPanelCollapse')} aria-label={t('rightPanelCollapse')}>
             <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
           </button>
         </div>
       </div>
 
       <div className="ds-code-sidebar-breadcrumbs">
-        <div className="min-w-0 flex flex-1 items-center gap-1 overflow-hidden">
+        <nav aria-label={t('filePreviewPath')} className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
           {breadcrumbSegments.length ? breadcrumbSegments.map((segment, index) => (
             <span key={`${segment}-${index}`} className="contents">
-              {index > 0 ? (
-                <ChevronRight className="h-3 w-3 shrink-0 text-ds-faint/70" strokeWidth={1.8} />
-              ) : null}
+              {index > 0 ? <span aria-hidden="true" className="shrink-0 text-ds-faint">/</span> : null}
               <span
-                className={[
-                  'truncate',
-                  index === breadcrumbSegments.length - 1 ? 'text-ds-ink' : 'text-ds-muted'
-                ].join(' ')}
+                className={index === breadcrumbSegments.length - 1 ? 'truncate font-semibold text-ds-ink' : 'truncate text-ds-muted'}
                 title={segment}
               >
                 {segment}
@@ -515,25 +219,73 @@ export function WorkspaceFilePreviewChrome(props: WorkspaceFilePreviewChromeProp
           )) : (
             <span className="truncate text-ds-muted">{t('filePreviewEmpty')}</span>
           )}
-        </div>
-        {result?.ok || imageResult?.ok || pdfResult?.ok || officeResult?.ok || previewLease?.ok ? (
-          <span className="shrink-0 font-mono text-[10px] text-ds-faint">
-            {formatBytes(
-              result?.ok
-                ? result.size
-                : imageResult?.ok
-                  ? imageResult.size
-                  : pdfResult?.ok
-                    ? pdfResult.size
-                    : officeResult?.ok
-                      ? officeResult.size
-                      : previewLease?.ok
-                        ? previewLease.size
-                        : 0
-            )}
-            {language ? ` · ${language}` : ''}
-          </span>
+        </nav>
+        {viewMode ? (
+          <div role="group" aria-label={t('filePreviewViewMode')} className="inline-flex shrink-0 rounded-lg bg-ds-subtle p-0.5">
+            <button
+              type="button"
+              aria-pressed={viewMode.rendered}
+              aria-label={viewMode.renderedLabel}
+              disabled={viewMode.disabled}
+              onClick={viewMode.onShowRendered}
+              className={`inline-flex h-6 items-center gap-1 rounded-md px-2.5 text-[12px] font-semibold transition disabled:opacity-45 ${
+                viewMode.rendered ? 'bg-ds-card text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'
+              }`}
+            >
+              <Eye className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {viewMode.renderedLabel}
+            </button>
+            <button
+              type="button"
+              aria-pressed={!viewMode.rendered}
+              aria-label={t('filePreviewShowSource')}
+              disabled={viewMode.disabled}
+              onClick={viewMode.onShowSource}
+              className={`inline-flex h-6 items-center rounded-md px-2.5 text-[12px] font-semibold transition disabled:opacity-45 ${
+                !viewMode.rendered ? 'bg-ds-card text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'
+              }`}
+            >
+              {t('filePreviewSourceTab')}
+            </button>
+          </div>
         ) : null}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {editableText ? (
+            <button
+              type="button"
+              onClick={onToggleEditing}
+              className={`${ICON_BUTTON} ${editingText ? 'is-active' : ''}`}
+              title={editLabel}
+              aria-label={editLabel}
+              aria-pressed={editingText}
+            >
+              <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />
+            </button>
+          ) : null}
+          <PreviewMenuButton
+            label={t('filePreviewOpenWith')}
+            items={openWithItems}
+            className="inline-flex h-7 items-center gap-1 rounded-[7px] px-2 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45"
+          >
+            <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} />
+            <span className="ds-file-preview-openwith-label">{t('filePreviewOpenWith')}</span>
+            <ChevronDown className="h-3 w-3" strokeWidth={2} />
+          </PreviewMenuButton>
+          <PreviewMenuButton label={t('filePreviewMoreActions')} items={moreItems} className={ICON_BUTTON}>
+            <MoreHorizontal className="h-4 w-4" strokeWidth={1.8} />
+          </PreviewMenuButton>
+          <button
+            type="button"
+            onClick={onToggleReadingMode}
+            disabled={!target && !readingMode}
+            className={ICON_BUTTON}
+            title={readingMode ? t('filePreviewExitReadingMode') : t('filePreviewEnterReadingMode')}
+            aria-label={readingMode ? t('filePreviewExitReadingMode') : t('filePreviewEnterReadingMode')}
+            aria-pressed={readingMode}
+          >
+            {readingMode ? <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.8} /> : <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.8} />}
+          </button>
+        </div>
       </div>
     </>
   )
