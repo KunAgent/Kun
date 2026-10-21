@@ -26,11 +26,22 @@ export type AssistantView = {
   keyAvailable: boolean
 }
 
+/** An assistant asking to join; the user approves it after comparing verification codes. */
+export type AssistantJoinRequestView = {
+  requestId: string
+  platform: string
+  agentVersion: string
+  createdAt: string
+  /** What the assistant must also show; null when another computer created this enrollment. */
+  verificationCode: string | null
+}
+
 export type AssistantEnrollmentView = {
   enrollmentId: string
   name: string
   kind: AssistantKind
   expiresAt: string
+  requests: AssistantJoinRequestView[]
 }
 
 export type AssistantTaskUpdate = {
@@ -82,6 +93,9 @@ export type AssistantMailboxApi = {
   status(): Promise<AssistantMailboxStatus>
   refresh(): Promise<AssistantMailboxStatus>
   createEnrollment(request: AssistantEnrollmentRequest): Promise<AssistantEnrollmentResult>
+  approve(enrollmentId: string, requestId: string): Promise<AssistantMailboxStatus>
+  reject(enrollmentId: string, requestId: string): Promise<AssistantMailboxStatus>
+  cancelEnrollment(enrollmentId: string): Promise<AssistantMailboxStatus>
   revoke(assistantId: string): Promise<AssistantMailboxStatus>
   assign(request: AssistantAssignRequest): Promise<AssistantTaskView>
   cancel(taskId: string): Promise<AssistantTaskView>
@@ -92,6 +106,9 @@ export const ASSISTANT_MAILBOX_CHANNELS = {
   status: 'assistant-mailbox:status',
   refresh: 'assistant-mailbox:refresh',
   enroll: 'assistant-mailbox:enroll',
+  approve: 'assistant-mailbox:approve',
+  reject: 'assistant-mailbox:reject',
+  cancelEnrollment: 'assistant-mailbox:cancel-enrollment',
   revoke: 'assistant-mailbox:revoke',
   assign: 'assistant-mailbox:assign',
   cancel: 'assistant-mailbox:cancel',

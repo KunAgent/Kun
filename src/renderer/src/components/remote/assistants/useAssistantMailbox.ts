@@ -29,6 +29,14 @@ export function useAssistantMailbox() {
     }
   }, [api])
 
+  // While an enrollment waits, check often so a join request shows up within seconds.
+  const waiting = (status?.enrollments.length ?? 0) > 0
+  useEffect(() => {
+    if (!api || !waiting) return
+    const timer = setInterval(() => { void api.status().then(setStatus).catch(() => {}) }, 5000)
+    return () => clearInterval(timer)
+  }, [api, waiting])
+
   const run = useCallback(async <T,>(work: () => Promise<T>): Promise<T | undefined> => {
     setBusy(true)
     setError('')
@@ -44,6 +52,17 @@ export function useAssistantMailbox() {
 
   const refresh = useCallback(() => run(async () => { if (api) setStatus(await api.refresh()) }), [api, run])
   const revoke = useCallback((id: string) => run(async () => { if (api) setStatus(await api.revoke(id)) }), [api, run])
+  /** Resolves to the new status, or undefined when the approval failed. */
+  const approve = useCallback((enrollmentId: string, requestId: string) =>
+    run(async () => {
+      const next = await api!.approve(enrollmentId, requestId)
+      setStatus(next)
+      return next
+    }), [api, run])
+  const reject = useCallback((enrollmentId: string, requestId: string) =>
+    run(async () => { if (api) setStatus(await api.reject(enrollmentId, requestId)) }), [api, run])
+  const cancelEnrollment = useCallback((enrollmentId: string) =>
+    run(async () => { if (api) setStatus(await api.cancelEnrollment(enrollmentId)) }), [api, run])
   const cancel = useCallback((taskId: string) => run(async () => { await api?.cancel(taskId) }), [api, run])
   const createEnrollment = useCallback(
     (request: AssistantEnrollmentRequest): Promise<AssistantEnrollmentResult | undefined> =>
@@ -51,5 +70,5 @@ export function useAssistantMailbox() {
     [api, run]
   )
 
-  return { api, status, busy, error, setError, refresh, revoke, cancel, createEnrollment }
+  return { api, status, busy, error, setError, refresh, revoke, cancel, createEnrollment, approve, reject, cancelEnrollment }
 }

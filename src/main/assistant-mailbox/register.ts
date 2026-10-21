@@ -61,6 +61,24 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
     if (typeof input.name !== 'string' || !isAssistantKind(input.kind)) throw new Error('INVALID_REQUEST')
     return service.createEnrollment({ name: input.name, kind: input.kind, locale: input.locale === 'en' ? 'en' : 'zh' } satisfies AssistantEnrollmentRequest)
   })
+  const ids = (...values: unknown[]): string[] => {
+    if (!values.every((value) => typeof value === 'string' && /^[0-9a-f-]{36}$/.test(value))) throw new Error('INVALID_REQUEST')
+    return values as string[]
+  }
+  ipcMain.handle(channels.approve, (event, enrollmentId: unknown, requestId: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    const [enrollment, request] = ids(enrollmentId, requestId)
+    return service.approve(enrollment, request)
+  })
+  ipcMain.handle(channels.reject, (event, enrollmentId: unknown, requestId: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    const [enrollment, request] = ids(enrollmentId, requestId)
+    return service.reject(enrollment, request)
+  })
+  ipcMain.handle(channels.cancelEnrollment, (event, enrollmentId: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.cancelEnrollment(ids(enrollmentId)[0])
+  })
   ipcMain.handle(channels.revoke, (event, id: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     if (typeof id !== 'string') throw new Error('INVALID_REQUEST')

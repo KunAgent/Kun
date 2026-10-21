@@ -1,36 +1,44 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { Bot, Check, Copy, Loader2 } from 'lucide-react'
+import { Bot, Check, CheckCircle2, Copy, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   ASSISTANT_KINDS, ASSISTANT_NAME_MAX,
-  type AssistantEnrollmentRequest, type AssistantEnrollmentResult, type AssistantKind, type AssistantPromptLocale
+  type AssistantEnrollmentRequest, type AssistantEnrollmentResult, type AssistantKind, type AssistantMailboxStatus,
+  type AssistantPromptLocale
 } from '@shared/assistant-mailbox'
 import { REMOTE_BUTTON_CLASS, REMOTE_INPUT_CLASS, REMOTE_PRIMARY_BUTTON_CLASS } from '../remote-panel-ui'
 import { assistantKindKey, assistantKindShortName, relativeTime } from './assistant-mailbox-format'
+import { JoinRequestCard } from './JoinRequestCard'
 
 type Props = {
   busy: boolean
   error: string
+  status: AssistantMailboxStatus | null
   onCreate: (request: AssistantEnrollmentRequest) => Promise<AssistantEnrollmentResult | undefined>
+  onApprove: (enrollmentId: string, requestId: string) => Promise<unknown>
+  onReject: (enrollmentId: string, requestId: string) => Promise<unknown>
   onClose: () => void
 }
 
 /**
- * Two steps: choose the assistant, then copy the generated prompt. The prompt carries a
- * one-time code with the enrollment secret, so it is shown once and never stored here.
+ * Choose the assistant, copy the prompt (it holds no secret), then approve the join request the
+ * assistant sends after checking that both sides show the same verification code.
  */
-export function AddAssistantDialog({ busy, error, onCreate, onClose }: Props): ReactElement {
+export function AddAssistantDialog({ busy, error, status, onCreate, onApprove, onReject, onClose }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const [kind, setKind] = useState<AssistantKind>('cue')
   const [name, setName] = useState('')
   const [locale, setLocale] = useState<AssistantPromptLocale>((i18n.language ?? '').startsWith('zh') ? 'zh' : 'en')
   const [result, setResult] = useState<AssistantEnrollmentResult | null>(null)
   const [copied, setCopied] = useState(false)
+  const [approved, setApproved] = useState<string | null>(null)
   const nameInput = useRef<HTMLInputElement>(null)
   const defaultName = t('assistantMailboxDefaultName', { kind: assistantKindShortName(kind) })
   const finalName = (name.trim() || defaultName).slice(0, ASSISTANT_NAME_MAX)
 
   useEffect(() => { nameInput.current?.focus() }, [])
+  const enrollment = result ? status?.enrollments.find((item) => item.enrollmentId === result.enrollmentId) : undefined
+  const connected = approved !== null && Boolean(status?.assistants.some((assistant) => assistant.id === approved))
 
   const copy = (): void => {
     if (!result) return
@@ -113,7 +121,34 @@ export function AddAssistantDialog({ busy, error, onCreate, onClose }: Props): R
               onFocus={(event) => event.currentTarget.select()}
               className="h-64 w-full resize-none rounded-lg border border-ds-border-muted bg-ds-subtle p-2.5 font-mono text-[11.5px] leading-[17px] text-ds-ink outline-none"
             />
-            <p className="text-[11px] leading-4 text-amber-600 dark:text-amber-400">{t('assistantMailboxSecretWarning')}</p>
+            {connected ? (
+              <p className="flex items-center gap-2 text-[13px] font-medium text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 size={16} aria-hidden="true" />
+                {t('assistantMailboxApproved', { name: finalName })}
+              </p>
+            ) : enrollment && enrollment.requests.length > 0 ? (
+              enrollment.requests.map((request) => (
+                <JoinRequestCard
+                  key={request.requestId}
+                  name={finalName}
+                  request={request}
+                  busy={busy}
+                  onApprove={() => {
+                    setApproved(request.requestId)
+                    void onApprove(enrollment.enrollmentId, request.requestId).then((next) => { if (!next) setApproved(null) })
+                  }}
+                  onReject={() => void onReject(enrollment.enrollmentId, request.requestId)}
+                />
+              ))
+            ) : enrollment || approved ? (
+              <p className="flex items-center gap-2 text-[12px] text-ds-muted">
+                <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                {t('assistantMailboxWaitingForRequest', { name: finalName })}
+              </p>
+            ) : status ? (
+              <p className="text-[12px] text-amber-600 dark:text-amber-400">{t('assistantMailboxCodeExpired')}</p>
+            ) : null}
+            {error ? <p role="alert" className="text-[12px] text-ds-danger">{t('assistantMailboxError', { message: error })}</p> : null}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={onClose} className={REMOTE_BUTTON_CLASS}>{t('assistantMailboxClose')}</button>
               <button type="button" onClick={copy} className={REMOTE_PRIMARY_BUTTON_CLASS}>

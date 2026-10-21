@@ -55,7 +55,20 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean } = {
     })
     return { code, stdout, stderr }
   }
-  return { server, service, run, emitted, timers, registrations }
+  /** The user's side of joining: the assistant asks, the desktop shows the same code, the user allows. */
+  const connect = async (code: string) => {
+    const asked = await run(['login', code, '--wait', '0'])
+    expect(asked.code).toBe(5)
+    const shown = /Verification code: (\S+)/.exec(asked.stdout)![1]
+    const status = await service.refresh()
+    const enrollment = status.enrollments.find((item) => code.includes(item.enrollmentId.replaceAll('-', '')))!
+    expect(enrollment.requests.map((request) => request.verificationCode)).toEqual([shown])
+    await service.approve(enrollment.enrollmentId, enrollment.requests[0].requestId)
+    const done = await run(['login'])
+    expect(done.code).toBe(0)
+    return { shown, enrollmentId: enrollment.enrollmentId, requestId: enrollment.requests[0].requestId }
+  }
+  return { server, service, run, connect, emitted, timers, registrations }
 }
 
 describe('assistant mailbox service', () => {
@@ -73,12 +86,14 @@ describe('assistant mailbox service', () => {
   it('enrolls an assistant, assigns a task and collects its result', async () => {
     const t = await setup()
     const enrollment = await t.service.createEnrollment({ name: 'My Cue', kind: 'cue', locale: 'en' })
-    expect(enrollment.prompt).toContain(`enroll ${enrollment.code}`)
+    expect(enrollment.prompt).toContain(`login ${enrollment.code}`)
     expect(t.registrations).toEqual([{ device: expect.any(String), body: { name: 'Desk', platform: 'macos', role: 'host' } }])
-    expect(t.emitted.at(-1)?.enrollments.map((item) => item.name)).toEqual(['My Cue'])
+    expect(enrollment.code).toMatch(/^KUN2-[0-9a-f]{32}-[A-Za-z0-9_-]{43}$/)
+    expect(t.emitted.at(-1)?.enrollments.map((item) => [item.name, item.requests])).toEqual([['My Cue', []]])
     expect(t.timers.at(-1)?.ms).toBe(20_000)
 
-    expect((await t.run(['enroll', enrollment.code])).code).toBe(0)
+    const joined = await t.connect(enrollment.code)
+    expect(joined.requestId).toMatch(/^[0-9a-f-]{36}$/)
     let status = await t.service.refresh()
     expect(status.assistants).toMatchObject([{ name: 'My Cue', kind: 'cue', keyAvailable: true }])
     expect(status.enrollments).toEqual([])
@@ -109,7 +124,7 @@ describe('assistant mailbox service', () => {
     const t = await setup()
     const tools = assistantToolHandler(t.service)
     const { code } = await t.service.createEnrollment({ name: 'Grok', kind: 'grok_bot', locale: 'zh' })
-    await t.run(['enroll', code])
+    await t.connect(code)
     const listed = await tools('/assistants', {}) as { assistants: Array<{ name: string; canReceiveTasks: boolean }> }
     expect(listed.assistants).toMatchObject([{ name: 'Grok', canReceiveTasks: true }])
     await expect(tools('/tasks/assign', { assistant: 'nobody', instructions: 'x' })).rejects.toThrow('No connected assistant')
@@ -126,5 +141,33 @@ describe('assistant mailbox service', () => {
     expect(results.tasks[0].status).toBe('blocked')
     expect(results.tasks[0].updates.at(-1)?.body).toBe('Which city?')
     await expect(tools('/tasks/results', { taskId: 'ffffffff' })).rejects.toThrow('No task')
+  })
+})
+
+describe('assistant join requests', () => {
+  it('lets the user reject a request or cancel the enrollment, and keeps the pairing key while it waits', async () => {
+    const t = await setup()
+    const { code, enrollmentId } = await t.service.createEnrollment({ name: 'Muse', kind: 'muse', locale: 'zh' })
+    expect((await t.run(['login', code, '--wait', '0'])).code).toBe(5)
+    let status = await t.service.refresh()
+    const [request] = status.enrollments[0].requests
+    expect(request.verificationCode).toMatch(/^[0-9A-Z]{5}-[0-9A-Z]{5}$/)
+    status = await t.service.reject(enrollmentId, request.requestId)
+    expect(status.enrollments[0].requests).toEqual([])
+    expect((await t.run(['login'])).code).toBe(3)
+
+    // A fresh request from the same code can still be approved: the pairing key was kept.
+    expect((await t.run(['login', code, '--wait', '0'])).code).toBe(5)
+    status = await t.service.refresh()
+    await t.service.approve(enrollmentId, status.enrollments[0].requests[0].requestId)
+    expect((await t.run(['login'])).code).toBe(0)
+
+    const other = await t.service.createEnrollment({ name: 'Dots', kind: 'dots', locale: 'en' })
+    status = await t.service.cancelEnrollment(other.enrollmentId)
+    expect(status.enrollments).toEqual([])
+    expect((await t.run(['forget', '--yes'])).code).toBe(0)
+    const late = await t.run(['login', other.code])
+    expect(late.code).toBe(1)
+    expect(late.stderr).toContain('no longer valid')
   })
 })

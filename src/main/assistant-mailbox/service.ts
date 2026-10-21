@@ -194,7 +194,9 @@ export class AssistantMailboxService {
     const latest = received ? await session.host.list() : listed
     session.assistants = latest.assistants
     session.enrollments = latest.enrollments
-    await session.secrets.retain(new Set([...latest.assistants.map((a) => a.enrollmentId), ...latest.enrollments.map((e) => e.enrollmentId)]), this.now())
+    // Mailbox secrets of current assistants, and pairing keys of enrollments still waiting.
+    await session.secrets.retain(new Set([...latest.assistants.map((a) => a.enrollmentId),
+      ...latest.enrollments.map((e) => `pairing:${e.enrollmentId}`)]), this.now())
     this.lastSyncAt = this.now().toISOString()
   }
 
@@ -253,8 +255,13 @@ export class AssistantMailboxService {
       keyAvailable: Boolean(await session.secrets.get(assistant.enrollmentId))
     })))
     const view = await session.tasks.view(new Map(assistants.map((assistant) => [assistant.id, assistant.name])))
+    const enrollments = session.enrollments.map((enrollment) => ({
+      enrollmentId: enrollment.enrollmentId, name: enrollment.name, kind: enrollment.kind, expiresAt: enrollment.expiresAt,
+      requests: (enrollment.requests ?? []).map(({ requestId, platform, agentVersion, createdAt, verificationCode }) =>
+        ({ requestId, platform, agentVersion, createdAt, verificationCode: verificationCode ?? null }))
+    }))
     return {
-      availability: this.availability, assistants, enrollments: session.enrollments, ...view,
+      availability: this.availability, assistants, enrollments, ...view,
       ...(this.lastSyncAt ? { lastSyncAt: this.lastSyncAt } : {}), ...(this.error ? { error: this.error } : {})
     }
   }
@@ -266,11 +273,27 @@ export class AssistantMailboxService {
     const locale = request.locale === 'en' ? 'en' : 'zh'
     return this.serial(async () => {
       const created = await this.withHost((session) => session.host.createEnrollment({ name, kind: request.kind, locale }))
-      if (this.session) this.session.enrollments = [...this.session.enrollments, { enrollmentId: created.enrollmentId, name, kind: request.kind, expiresAt: created.expiresAt }]
+      if (this.session) this.session.enrollments = [...this.session.enrollments, { enrollmentId: created.enrollmentId, name, kind: request.kind, expiresAt: created.expiresAt, requests: [] }]
       this.schedule()
       this.deps.emit(await this.snapshot())
       return created
     })
+  }
+
+  /** Admits a join request the user recognised; only the user can do this, never a Kun tool. */
+  async approve(enrollmentId: string, requestId: string): Promise<AssistantMailboxStatus> {
+    await this.serial(() => this.withHost((session) => session.host.approve(enrollmentId, requestId)))
+    return this.refresh()
+  }
+
+  async reject(enrollmentId: string, requestId: string): Promise<AssistantMailboxStatus> {
+    await this.serial(() => this.withHost((session) => session.host.reject(enrollmentId, requestId)))
+    return this.refresh()
+  }
+
+  async cancelEnrollment(enrollmentId: string): Promise<AssistantMailboxStatus> {
+    await this.serial(() => this.withHost((session) => session.host.cancelEnrollment(enrollmentId)))
+    return this.refresh()
   }
 
   async revoke(assistantId: string): Promise<AssistantMailboxStatus> {

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { AssistantTaskView } from '@shared/assistant-mailbox'
 import { AddAssistantDialog } from './AddAssistantDialog'
 import { AssistantTaskRows } from './AssistantTaskRows'
+import { JoinRequestCard } from './JoinRequestCard'
 import { isOpenAssistantTask, recentlySeen, relativeTime, taskHeadline } from './assistant-mailbox-format'
 
 const task = (status: AssistantTaskView['status'], body = 'Find a dentist near Shibuya\nOpen Saturday'): AssistantTaskView => ({
@@ -25,9 +26,21 @@ describe('assistant mailbox panel', () => {
     expect(html.match(/assistantMailboxCancelTask/g)).toHaveLength(1)
   })
 
+  it('shows the verification code to compare and blocks approval without this computer\'s key', () => {
+    const request = { requestId: 'r1', platform: 'linux-x64', agentVersion: '0.2.0', createdAt: '2026-10-22T00:00:00Z', verificationCode: '7KQ2M-X9CHD' }
+    const html = renderToStaticMarkup(createElement(JoinRequestCard, { name: 'My Cue', request, busy: false, onApprove: () => {}, onReject: () => {} }))
+    expect(html).toContain('7KQ2M-X9CHD')
+    expect(html).toContain('assistantMailboxRequestHint')
+    expect(html.match(/disabled=""/g)).toBeNull()
+    const foreign = renderToStaticMarkup(createElement(JoinRequestCard, { name: 'My Cue', request: { ...request, verificationCode: null }, busy: false, onApprove: () => {}, onReject: () => {} }))
+    expect(foreign).toContain('assistantMailboxNoKeyForRequest')
+    expect(foreign.match(/disabled=""/g)).toHaveLength(1)
+  })
+
   it('opens the add dialog on the assistant form, not on a prompt', () => {
     const html = renderToStaticMarkup(createElement(AddAssistantDialog, {
-      busy: false, error: '', onCreate: async () => undefined, onClose: () => {}
+      busy: false, error: '', status: null, onCreate: async () => undefined, onApprove: async () => undefined,
+      onReject: async () => undefined, onClose: () => {}
     }))
     expect(html).toContain('role="dialog"')
     expect(html.match(/<option/g)).toHaveLength(7)

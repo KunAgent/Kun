@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { Bot, Hourglass, Plus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -6,6 +6,7 @@ import {
 } from '../remote-panel-ui'
 import { AddAssistantDialog } from './AddAssistantDialog'
 import { AssistantTaskRows } from './AssistantTaskRows'
+import { JoinRequestCard } from './JoinRequestCard'
 import { assistantKindKey, recentlySeen, relativeTime } from './assistant-mailbox-format'
 import { useAssistantMailbox } from './useAssistantMailbox'
 
@@ -19,6 +20,21 @@ export function AssistantMailboxSection(): ReactElement | null {
   const { status, busy, error } = mailbox
   const [adding, setAdding] = useState(false)
   const [confirming, setConfirming] = useState<string | null>(null)
+  const requests = status?.enrollments.flatMap((enrollment) => enrollment.requests.map((request) => ({ enrollment, request }))) ?? []
+  const firstRequest = requests[0]
+
+  // A join request waits on the user: surface it like a phone pairing request.
+  useEffect(() => {
+    const request = window.kunGui?.requestUserAttention
+    if (!request || !firstRequest) return
+    void request({
+      key: `assistant-join:${firstRequest.request.requestId}`,
+      title: t('assistantMailboxAttentionTitle', { name: firstRequest.enrollment.name }),
+      body: t('assistantMailboxAttentionBody'),
+      badge: requests.length
+    }).catch(() => undefined)
+  }, [firstRequest?.request.requestId, requests.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!mailbox.api || !status || status.availability === 'disabled') return null
   const available = status.availability === 'available'
   const notice = status.availability === 'unavailable'
@@ -96,13 +112,32 @@ export function AssistantMailboxSection(): ReactElement | null {
               )
             })}
             {status.enrollments.map((enrollment) => (
-              <RemoteRow key={enrollment.enrollmentId}>
-                <RemoteIconTile active={false}><Hourglass size={14} /></RemoteIconTile>
-                <RemoteRowText
-                  title={enrollment.name}
-                  subtitle={t('assistantMailboxPendingCode', { name: enrollment.name, time: relativeTime(enrollment.expiresAt, i18n.language || 'en') })}
-                />
-              </RemoteRow>
+              <div key={enrollment.enrollmentId}>
+                <RemoteRow>
+                  <RemoteIconTile active={enrollment.requests.length > 0}><Hourglass size={14} /></RemoteIconTile>
+                  <RemoteRowText
+                    title={enrollment.name}
+                    subtitle={t('assistantMailboxPendingCode', { name: enrollment.name, time: relativeTime(enrollment.expiresAt, i18n.language || 'en') })}
+                  />
+                  <button type="button" disabled={busy} onClick={() => void mailbox.cancelEnrollment(enrollment.enrollmentId)} className="text-[12px] text-ds-muted transition hover:text-ds-danger disabled:opacity-50">
+                    {t('assistantMailboxCancel')}
+                  </button>
+                </RemoteRow>
+                {enrollment.requests.length > 0 && !adding ? (
+                  <div className="flex flex-col gap-2 px-3 pb-3">
+                    {enrollment.requests.map((request) => (
+                      <JoinRequestCard
+                        key={request.requestId}
+                        name={enrollment.name}
+                        request={request}
+                        busy={busy}
+                        onApprove={() => void mailbox.approve(enrollment.enrollmentId, request.requestId)}
+                        onReject={() => void mailbox.reject(enrollment.enrollmentId, request.requestId)}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ))}
           </RemoteGroup>
         ) : null}
@@ -114,7 +149,10 @@ export function AssistantMailboxSection(): ReactElement | null {
         <AddAssistantDialog
           busy={busy}
           error={error}
+          status={status}
           onCreate={mailbox.createEnrollment}
+          onApprove={mailbox.approve}
+          onReject={mailbox.reject}
           onClose={() => setAdding(false)}
         />
       ) : null}
