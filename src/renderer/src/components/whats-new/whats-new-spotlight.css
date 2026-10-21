@@ -369,10 +369,114 @@ background: var(--wn-accent);
 transform: translateX(5px);
 }
 
+/* A plain action in the switch's frame (WhatsNewArtifactsSpotlight). */
+.kun-wn-spotlight-action {
+gap: 6px;
+padding: 0 12px;
+}
+
+.kun-wn-spotlight-action svg {
+transition: transform 160ms ease;
+}
+
+.kun-wn-spotlight-action:hover svg {
+transform: translateX(2px);
+}
+
+/* The Artifacts preview: a library bar over one tile per kind. */
+.kun-wn-ap {
+display: flex;
+width: 196px;
+height: 148px;
+flex: none;
+flex-direction: column;
+gap: 8px;
+overflow: hidden;
+padding: 9px;
+border: 1px solid var(--wn-line);
+border-radius: 12px;
+background: var(--wn-surface);
+}
+
+.kun-wn-ap-bar {
+display: flex;
+align-items: center;
+gap: 4px;
+color: var(--wn-text-2);
+}
+
+.kun-wn-ap-title {
+font-size: 10.5px;
+font-weight: 600;
+line-height: 1;
+}
+
+.kun-wn-ap-search {
+display: flex;
+width: 54px;
+height: 13px;
+align-items: center;
+margin-left: auto;
+padding: 0 4px;
+border: 1px solid var(--wn-line);
+border-radius: 999px;
+color: var(--wn-text-3);
+}
+
+.kun-wn-ap-grid {
+display: grid;
+min-height: 0;
+flex: 1;
+grid-template-columns: repeat(3, minmax(0, 1fr));
+grid-template-rows: repeat(2, minmax(0, 1fr));
+gap: 6px;
+}
+
+.kun-wn-ap-tile {
+display: flex;
+min-width: 0;
+flex-direction: column;
+gap: 3px;
+padding: 3px;
+border: 1px solid var(--wn-line);
+border-radius: 7px;
+background: var(--wn-surface-2);
+animation: kun-wn-ap-file 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+animation-delay: calc(160ms + var(--i, 0) * 70ms);
+}
+
+.kun-wn-ap-thumb {
+display: flex;
+min-height: 0;
+flex: 1;
+align-items: center;
+justify-content: center;
+border-radius: 5px;
+}
+
+.kun-wn-ap-label {
+overflow: hidden;
+padding: 0 1px;
+color: var(--wn-text-3);
+font-size: 8.5px;
+font-weight: 500;
+line-height: 1.2;
+text-overflow: ellipsis;
+white-space: nowrap;
+}
+
+@keyframes kun-wn-ap-file {
+from {
+opacity: 0;
+transform: translateY(6px) scale(0.94);
+}
+}
+
 @media (prefers-reduced-motion: reduce) {
 .kun-wn-spotlight *,
 .kun-wn-spotlight *::before {
 transition: none !important;
+animation: none !important;
 }
 }
 

@@ -29,5 +29,10 @@
   "whatsNewFocusWhere": "Переключайте его в любой момент кнопкой «Фокус» внизу боковой панели",
   "whatsNewFocusPreviewLogo": "Логотип Kun",
   "whatsNewFocusPreviewAccount": "Аккаунт",
-  "whatsNewFocusPreviewCalm": "Только чат"
+  "whatsNewFocusPreviewCalm": "Только чат",
+  "whatsNewArtifactsTag": "Библиотека артефактов",
+  "whatsNewArtifactsTitle": "Всё, что создал Kun, в одном месте",
+  "whatsNewArtifactsBody": "Макеты, документы, слайды, таблицы, доски и сгенерированные изображения, разложенные по проектам и типам. Откройте любой для просмотра или попросите Kun доработать его в исходной беседе.",
+  "whatsNewArtifactsOpen": "Открыть артефакты",
+  "whatsNewArtifactsWhere": "Открывайте в любой момент через «Артефакты» в боковой панели"
 }

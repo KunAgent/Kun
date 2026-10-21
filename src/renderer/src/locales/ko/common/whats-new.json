@@ -29,5 +29,10 @@
   "whatsNewFocusWhere": "사이드바 아래쪽의 '초점' 스위치로 언제든 전환할 수 있습니다",
   "whatsNewFocusPreviewLogo": "Kun 로고",
   "whatsNewFocusPreviewAccount": "계정 카드",
-  "whatsNewFocusPreviewCalm": "대화만"
+  "whatsNewFocusPreviewCalm": "대화만",
+  "whatsNewArtifactsTag": "산출물 라이브러리",
+  "whatsNewArtifactsTitle": "Kun이 만든 모든 것을 한곳에",
+  "whatsNewArtifactsBody": "디자인 시안, 문서, 슬라이드, 표, 화이트보드, 생성된 이미지를 프로젝트와 유형별로 정리합니다. 열어서 미리 보거나 원래 대화에서 Kun에게 수정을 요청하세요.",
+  "whatsNewArtifactsOpen": "산출물 열기",
+  "whatsNewArtifactsWhere": "사이드바의 '산출물'에서 언제든 열 수 있습니다"
 }

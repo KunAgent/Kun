@@ -36,9 +36,19 @@ async function exerciseWhatsNew({ page, capture }) {
 
   await page.locator('[data-whats-new-reopen]').click()
   await dialog.waitFor()
-  await page.locator('[data-whats-new-primary]').click()
-  await dialog.waitFor({ state: 'detached' })
-  return { variant, title, fixRows }
+  const spotlight = await dialog.getAttribute('data-spotlight')
+  const openArtifacts = dialog.locator('[data-whats-new-open-artifacts]')
+  if (await openArtifacts.count()) {
+    await openArtifacts.click()
+    await dialog.waitFor({ state: 'detached' })
+    await page.locator('[data-artifacts-page]').waitFor()
+    await settle()
+    await capture('whats-new-04-artifacts')
+  } else {
+    await page.locator('[data-whats-new-primary]').click()
+    await dialog.waitFor({ state: 'detached' })
+  }
+  return { variant, title, fixRows, spotlight }
 }
 
 module.exports = { exerciseWhatsNew }
