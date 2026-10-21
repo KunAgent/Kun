@@ -106,3 +106,30 @@ it.each(['cancel', 'deadline'])('fences queued Manager relation writes after %s'
     await rm(root, { recursive: true, force: true })
   }
 })
+
+it('preserves paging cursors and status filtering across the Manager boundary', async () => {
+  const { root, owner, server, connection } = await fixture()
+  try {
+    const remote = new ManagerRemoteMemoryStore(connection, MemoryCapabilityConfig.parse({ enabled: true }))
+    const source = await remote.create({ content: 'Source database.', scope: 'user' })
+    for (let i = 0; i < 3; i++) {
+      const target = await remote.create({ content: `Target database ${i}.`, scope: 'user' })
+      const result = await remote.relations({ action: 'propose', access: {}, proposals: [{
+        source: relationBinding(source), target: relationBinding(target), kind: 'extends',
+        sourceEvidence: { start: 0, end: 6 }, targetEvidence: { start: 0, end: 6 }
+      }] })
+      await remote.relations({ action: 'review', id: result.relations[0].suggestion.id, decision: 'accepted', access: {} })
+    }
+    const first = await remote.relations({ action: 'list', memoryId: source.id, access: {}, limit: 1, status: 'accepted' })
+    expect(first.nextCursor).toBeDefined()
+    const next = await remote.relations({ action: 'list', memoryId: source.id, access: {}, before: first.nextCursor, status: 'accepted' })
+    expect(next.relations).toHaveLength(2)
+    expect(next.nextCursor).toBeUndefined()
+    expect(next.relations.map((item) => item.suggestion.id)).not.toContain(first.relations[0].suggestion.id)
+    expect((await remote.relations({ action: 'list', memoryId: source.id, access: {}, status: 'pending' })).relations).toEqual([])
+  } finally {
+    await server.close()
+    await owner.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})

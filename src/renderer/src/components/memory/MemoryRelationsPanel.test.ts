@@ -101,4 +101,46 @@ describe('Memory relation review UI', () => {
     await click('memoryRelationsRefresh')
     expect(renderer!.root.findAllByProps({ role: 'alert' })).toHaveLength(0)
   })
+
+  it('loads bounded pages, returns to previous pages and withdraws an older accepted relation', async () => {
+    const cursor = { createdAt: entry.suggestion.createdAt, id: entry.suggestion.id }
+    const older = { ...entry, suggestion: { ...entry.suggestion, id: 'relation_' + 'b'.repeat(64), status: 'accepted' as const } }
+    vi.mocked(requestMemoryRelations).mockImplementation(async (request) => {
+      if (request.action !== 'list') return { relations: [] }
+      return request.before ? { relations: [older] } : { relations: [entry], nextCursor: cursor }
+    })
+    await render(); await click('memoryRelationsTitle')
+    expect(requestMemoryRelations).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'list', limit: 20, before: undefined }), expect.any(AbortSignal))
+    await click('memoryRelationsNext')
+    expect(requestMemoryRelations).toHaveBeenLastCalledWith(expect.objectContaining({ before: cursor }), expect.any(AbortSignal))
+    await click('memoryRelationsWithdraw')
+    expect(requestMemoryRelations).toHaveBeenCalledWith(expect.objectContaining({ action: 'withdraw', id: older.suggestion.id }), expect.any(AbortSignal))
+    await click('memoryRelationsPrevious')
+    expect(requestMemoryRelations).toHaveBeenLastCalledWith(expect.objectContaining({ before: undefined }), expect.any(AbortSignal))
+    await click('memoryRelationsNext')
+    await act(async () => renderer!.root.findByType('select').props.onChange({ target: { value: 'accepted' } }))
+    expect(requestMemoryRelations).toHaveBeenLastCalledWith(expect.objectContaining({ before: undefined, status: 'accepted' }), expect.any(AbortSignal))
+    expect(renderer!.root.findAllByType('button').find((node) => node.children.includes('memoryRelationsPrevious'))!.props.disabled).toBe(true)
+  })
+
+  it('keeps empty filters recoverable and refreshes evidence when reopened', async () => {
+    await render(); await click('memoryRelationsTitle')
+    await act(async () => renderer!.root.findByType('select').props.onChange({ target: { value: 'accepted' } }))
+    expect(renderer!.root.findByType('select').props.value).toBe('accepted')
+    await act(async () => renderer!.root.findByType('select').props.onChange({ target: { value: 'all' } }))
+    await click('memoryRelationsTitle'); await click('memoryRelationsTitle')
+    expect(requestMemoryRelations).toHaveBeenCalledTimes(4)
+    expect(analyzeRuntimeMemoryRelations).not.toHaveBeenCalled()
+  })
+
+  it('clears old evidence during a page request and aborts it on unmount', async () => {
+    vi.mocked(requestMemoryRelations).mockResolvedValueOnce({ relations: [entry], nextCursor: { createdAt: entry.suggestion.createdAt, id: entry.suggestion.id } })
+      .mockImplementationOnce(() => new Promise(() => {}))
+    await render(); await click('memoryRelationsTitle'); await click('memoryRelationsNext')
+    expect(renderer!.root.findAllByType('mark')).toHaveLength(0)
+    expect(renderer!.root.findByType('select').props.disabled).toBe(true)
+    const signal = vi.mocked(requestMemoryRelations).mock.calls.at(-1)![1]!
+    act(() => renderer!.unmount()); renderer = undefined
+    expect(signal.aborted).toBe(true)
+  })
 })

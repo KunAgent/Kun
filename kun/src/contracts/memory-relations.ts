@@ -35,6 +35,8 @@ export const MemoryRelationSuggestion = z.object({
 }).strict()
 export type MemoryRelationSuggestion = z.infer<typeof MemoryRelationSuggestion>
 
+export const MemoryRelationCursor = MemoryRelationSuggestion.pick({ createdAt: true, id: true })
+
 // Never accept agent management privileges or all:true from this UI/API surface.
 export const MemoryRelationAccess = z.object({
   workspace: z.string().min(1).max(4096).optional(),
@@ -42,7 +44,12 @@ export const MemoryRelationAccess = z.object({
 }).strict()
 
 export const MemoryRelationCommand = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('list'), memoryId: MemoryId, access: MemoryRelationAccess }).strict(),
+  z.object({
+    action: z.literal('list'), memoryId: MemoryId, access: MemoryRelationAccess,
+    before: MemoryRelationCursor.optional(),
+    limit: z.number().int().min(1).max(200).optional(),
+    status: z.enum(['pending', 'accepted', 'rejected', 'stale']).optional()
+  }).strict(),
   z.object({
     action: z.literal('propose'),
     proposals: z.array(MemoryRelationProposal).max(8),
@@ -75,7 +82,9 @@ export const MemoryRelationView = z.object({
   source: MemoryRelationEndpoint,
   target: MemoryRelationEndpoint
 }).strict()
-export const MemoryRelationResult = z.object({ relations: z.array(MemoryRelationView).max(200) }).strict()
+export const MemoryRelationResult = z.object({
+  relations: z.array(MemoryRelationView).max(200), nextCursor: MemoryRelationCursor.optional()
+}).strict()
 export type MemoryRelationResult = z.infer<typeof MemoryRelationResult>
 
 export const MemoryRelationAnalyzeRequest = z.object({

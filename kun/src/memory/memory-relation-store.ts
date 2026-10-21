@@ -40,15 +40,15 @@ export async function executeMemoryRelationCommand(options: {
   }
   assertCurrent()
   const ledger = await readLedger(rootDir)
-  const originalCount = ledger.suggestions.length
   const forgetting = await readMemoryForgetting(rootDir)
   const cache = new Map<string, MemoryRecord | undefined>()
+  const removed = new Set<string>()
   const involved = ledger.suggestions.filter((entry) => command.action === 'list'
     ? entry.proposal.source.id === command.memoryId || entry.proposal.target.id === command.memoryId
     : command.action === 'propose'
       ? command.proposals.some((proposal) => relationId(proposal) === entry.id)
       : entry.id === command.id)
-  for (const entry of involved) {
+  const present = async (entry: MemoryRelationSuggestion) => {
     for (const binding of [entry.proposal.source, entry.proposal.target]) {
       if (cache.has(binding.id)) continue
       try {
@@ -64,14 +64,18 @@ export async function executeMemoryRelationCommand(options: {
         cache.set(binding.id, undefined)
       }
     }
-  }
-  const removed = new Set(involved.filter((entry) =>
-    [entry.proposal.source, entry.proposal.target].some((binding) => {
+    const missing = [entry.proposal.source, entry.proposal.target].some((binding) => {
       const record = cache.get(binding.id)
       return !record || record.deletedAt
-    })).map((entry) => entry.id))
-  ledger.suggestions = ledger.suggestions.filter((entry) => !removed.has(entry.id))
-  if (ledger.suggestions.length !== originalCount) await writeLedger(rootDir, ledger, options.signal, assertCurrent)
+    })
+    if (missing) removed.add(entry.id)
+    return !missing
+  }
+  const cleanExamined = async () => {
+    if (!removed.size) return
+    ledger.suggestions = ledger.suggestions.filter((entry) => !removed.has(entry.id))
+    await writeLedger(rootDir, ledger, options.signal, assertCurrent)
+  }
 
   const view = async (entry: MemoryRelationSuggestion) => {
     const [source, target] = await Promise.all([
@@ -88,13 +92,27 @@ export async function executeMemoryRelationCommand(options: {
   if (command.action === 'list') {
     await authorize(command.memoryId, command.access)
     const relations: MemoryRelationResult['relations'] = []
-    for (const entry of ledger.suggestions.filter((entry) =>
-      entry.proposal.source.id === command.memoryId || entry.proposal.target.id === command.memoryId
-    ).slice(-200).reverse()) {
-      try { relations.push(await view(entry)) } catch { /* Never disclose a hidden endpoint. */ }
+    let nextCursor: MemoryRelationResult['nextCursor']
+    const entries = involved.filter((entry) => !command.before || compareRelationKey(entry, command.before) < 0)
+      .sort((a, b) => compareRelationKey(b, a))
+    for (const entry of entries) {
+      if (command.status && command.status !== 'stale' && command.status !== entry.status) continue
+      if (!await present(entry)) continue
+      let result: MemoryRelationResult['relations'][number]
+      try { result = await view(entry) } catch { continue /* Never disclose a hidden endpoint. */ }
+      if (command.status && command.status !== (result.stale ? 'stale' : entry.status)) continue
+      if (relations.length === (command.limit ?? 200)) {
+        const last = relations[relations.length - 1].suggestion
+        nextCursor = { createdAt: last.createdAt, id: last.id }
+        break
+      }
+      relations.push(result)
     }
-    return { relations }
+    await cleanExamined()
+    return { relations, ...(nextCursor ? { nextCursor } : {}) }
   }
+  for (const entry of involved) await present(entry)
+  await cleanExamined()
   if (command.action === 'withdraw') {
     const entry = ledger.suggestions.find((item) => item.id === command.id)
     if (!entry || entry.status === 'pending') throw new MemoryRelationConflictError()
@@ -139,6 +157,11 @@ export async function executeMemoryRelationCommand(options: {
   if (ledger.suggestions.length > MAX_RELATIONS) throw new Error('Memory relation storage is full')
   if (command.proposals.length) await writeLedger(rootDir, ledger, options.signal, assertCurrent)
   return { relations }
+}
+
+function compareRelationKey(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }) {
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
 
 /** Read once, authorize selected endpoints only; no cleanup or content persistence. */

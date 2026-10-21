@@ -27,10 +27,13 @@ describe('Memory relation HTTP boundary', () => {
     for (const value of [
       { action: 'propose', proposals: [], access: {} },
       { action: 'list', memoryId: 'mem_a', access: { agent: { manage: true } } },
+      { action: 'list', memoryId: 'mem_a', access: {}, limit: 201 },
+      { action: 'list', memoryId: 'mem_a', access: {}, before: { id: '../secret', createdAt: 'yesterday' } },
       { action: 'list', memoryId: '../secret', access: {} }
     ]) expect((await memoryRelations(runtime, request(value), false)).status).toBe(400)
     expect(relations).not.toHaveBeenCalled()
-    const value = { action: 'list', memoryId: 'mem_a', access: { workspace: '/workspace' } }
+    const value = { action: 'list', memoryId: 'mem_a', access: { workspace: '/workspace' }, limit: 20,
+      status: 'accepted', before: { createdAt: '2026-10-21T00:00:00Z', id: 'relation_' + 'a'.repeat(64) } }
     expect((await memoryRelations(runtime, request(value), false)).status).toBe(200)
     expect(relations).toHaveBeenCalledWith(value, expect.any(AbortSignal))
   })

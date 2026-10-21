@@ -68,6 +68,15 @@ explicitly rejects a previously accepted relation, including a stale one. This s
 future use without changing either record. The same pair/version remains rejected
 on re-analysis; withdrawal does not rewrite past chat context.
 
+The browser loads 20 relations per page, newest first. Filtering is applied before
+pagination, not just to the visible page. **Previous** and **Next** keep older
+decisions reachable, including accepted relations beyond the first 200. Refresh
+or reopen the browser to restart at the newest page. Pages are live views, not a
+snapshot: concurrent decisions can change filtered membership. Stable creation-time
+and ID cursors avoid shifting older records when a newer entry is inserted or the
+cursor's entry is removed. A stale accepted relation remains withdrawable under
+the stale filter.
+
 Forgetting or permanently erasing an endpoint scrubs associated relation references,
 including affected derivative records and erasure retries. The existing canonical
 forgetting barriers still prevent replay. Unreadable records or ledgers fail closed;
@@ -99,6 +108,9 @@ All endpoints require the existing runtime authentication and accept POST only:
 
 - `/v1/memory/relations`: `list`, `review`, or `withdraw`, with a strict workspace/project access
   object. No caller-authored proposal, `all`, or agent-management privilege is accepted.
+  Lists accept optional `limit` (1-200, default 200), `status`, and `before`
+  (`createdAt`/`id`) fields. Use the returned `nextCursor` as the next `before`;
+  its absence means there are no further visible matching relations at that moment.
 - `/v1/memory/relations/analyze`: Memory ID, expected revision, and access. The
   configured model generates suggestions; there is no caller-supplied model or prompt.
 - `/v1/memory/context/preview`: query and workspace path. The server selects records;

@@ -3,6 +3,7 @@ import { FileMemoryStore } from '../../kun/src/memory/memory-store.js'
 import { memoryRelations } from '../../kun/src/server/routes/memory-relations.js'
 import { previewMemoryWorkingContext } from '../../kun/src/server/routes/memory-working-context.js'
 import { resolveMemoryTurnContext } from '../../kun/src/memory/memory-turn-context.js'
+import { relationBinding } from '../../kun/src/memory/memory-relations.js'
 import type { ServerRuntime } from '../../kun/src/server/routes/server-runtime.js'
 import type { ModelClient } from '../../kun/src/ports/model-client.js'
 
@@ -59,6 +60,25 @@ export async function createRelationSmokeBackend(rootDir: string) {
     },
     async snapshot() {
       return store.relations({ action: 'list', memoryId: source.id, access: {} })
+    },
+    async seedPagination() {
+      let oldestId = ''
+      let oldestTarget = target
+      for (let index = 0; index < 25; index++) {
+        const record = await store.createWithId(`mem_page_${index}`, { content: `Synthetic page sample ${index}.`, scope: 'user' })
+        const proposal = { source: relationBinding(source), target: relationBinding(record), kind: 'extends' as const,
+          sourceEvidence: { start: 0, end: 3 }, targetEvidence: { start: 0, end: 9 } }
+        const id = (await store.relations({ action: 'propose', proposals: [proposal], access: {} })).relations[0].suggestion.id
+        if (index === 0) {
+          oldestId = id
+          oldestTarget = record
+          await store.relations({ action: 'review', id, decision: 'accepted', access: {} })
+        }
+      }
+      return { id: oldestId, projection: () => store.relationContext({
+        selected: [source, oldestTarget].map(({ id, revision, content }) => ({ id, revision, content })),
+        access: {}, purpose: 'injection', remainingCharacters: 1600
+      }) }
     }
   }
 }

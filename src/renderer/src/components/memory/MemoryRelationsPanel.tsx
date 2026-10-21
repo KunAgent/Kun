@@ -6,6 +6,10 @@ import { settingsButtonClass } from '../settings-button'
 import { MemoryEvidence } from './MemoryEvidence'
 
 type Relation = MemoryRelationResult['relations'][number]
+type Cursor = MemoryRelationResult['nextCursor']
+type Page = { before?: Cursor; previous: Cursor[] }
+type Filter = 'all' | 'pending' | 'accepted' | 'rejected' | 'stale'
+const firstPage: Page = { previous: [] }
 
 export function MemoryRelationsPanel({ memory, t }: {
   memory: CoreMemoryRecordJson
@@ -16,7 +20,9 @@ export function MemoryRelationsPanel({ memory, t }: {
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter] = useState<Filter>('all')
+  const [page, setPage] = useState<Page>(firstPage)
+  const [nextCursor, setNextCursor] = useState<Cursor>()
   const controller = useRef<AbortController | null>(null)
   const access = { workspace: memory.workspace, project: memory.project }
   const expired = [memory.expiresAt, memory.validTo].some((value) => value && Date.parse(value) <= Date.now())
@@ -29,15 +35,23 @@ export function MemoryRelationsPanel({ memory, t }: {
     controller.current?.abort()
     controller.current = null
     setOpened(false); setRelations([]); setLoaded(false); setBusy(false); setError(false); setFilter('all')
+    setPage(firstPage); setNextCursor(undefined)
     return () => controller.current?.abort()
   }, [memory.id, memory.revision, memory.updatedAt])
 
-  const run = async (operation: 'list' | 'analyze' | 'accepted' | 'rejected' | 'withdraw', relation?: Relation) => {
+  const run = async (
+    operation: 'list' | 'analyze' | 'accepted' | 'rejected' | 'withdraw', relation?: Relation,
+    requestedPage = page, requestedFilter = filter
+  ) => {
     if (controller.current) return
     const pending = new AbortController()
     controller.current = pending
     setBusy(true)
     setError(false)
+    setRelations([])
+    setNextCursor(undefined)
+    setPage(requestedPage)
+    setFilter(requestedFilter)
     try {
       if (operation === 'analyze') {
         await analyzeRuntimeMemoryRelations({ memoryId: memory.id, expectedRevision: memory.revision ?? 1, access }, pending.signal)
@@ -46,9 +60,13 @@ export function MemoryRelationsPanel({ memory, t }: {
       } else if (relation) {
         await requestMemoryRelations({ action: 'review', id: relation.suggestion.id, decision: operation as 'accepted' | 'rejected', access }, pending.signal)
       }
-      const result = await requestMemoryRelations({ action: 'list', memoryId: memory.id, access }, pending.signal)
+      const result = await requestMemoryRelations({
+        action: 'list', memoryId: memory.id, access, limit: 20,
+        before: requestedPage.before, status: requestedFilter === 'all' ? undefined : requestedFilter
+      }, pending.signal)
       if (!pending.signal.aborted) {
         setRelations(result.relations)
+        setNextCursor(result.nextCursor)
         setLoaded(true)
       }
     } catch {
@@ -67,7 +85,7 @@ export function MemoryRelationsPanel({ memory, t }: {
     <button type="button" aria-expanded={opened} className={settingsButtonClass()}
       onClick={() => {
         setOpened(!opened)
-        if (!opened && !loaded) void run('list')
+        if (!opened) void run('list', undefined, firstPage)
       }}>
       {t('memoryRelationsTitle')}
     </button>
@@ -76,18 +94,19 @@ export function MemoryRelationsPanel({ memory, t }: {
       <p className="max-w-[72ch] text-[12px] leading-5 text-ds-muted">{t('memoryRelationsPrivacy')}</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" disabled={busy || !eligible} className={settingsButtonClass({ variant: 'primary' })}
-          onClick={() => void run('analyze')}>{t('memoryRelationsAnalyze')}</button>
+          onClick={() => void run('analyze', undefined, firstPage, 'all')}>{t('memoryRelationsAnalyze')}</button>
         <button type="button" disabled={busy} className={settingsButtonClass()}
-          onClick={() => void run('list')}>{t('memoryRelationsRefresh')}</button>
+          onClick={() => void run('list', undefined, firstPage)}>{t('memoryRelationsRefresh')}</button>
       </div>
       {!eligible ? <p className="text-[12px] text-ds-muted">{t('memoryRelationsIneligible')}</p> : null}
       {busy ? <p role="status" className="text-[12px] text-ds-muted">{t('memoryRelationsBusy')}</p> : null}
       {error ? <p role="alert" className="text-[12px] text-ds-danger">{t('memoryRelationsError')}</p> : null}
       {!busy && loaded && !error && relations.length === 0
         ? <p role="status" className="text-[12px] text-ds-muted">{t('memoryRelationsEmpty')}</p> : null}
-      {relations.length ? <label className="flex flex-wrap items-center gap-2 text-[12px] text-ds-muted">
+      {loaded ? <label className="flex flex-wrap items-center gap-2 text-[12px] text-ds-muted">
         {t('memoryRelationsFilter')}
-        <select aria-label={t('memoryRelationsFilter')} value={filter} onChange={(event) => setFilter(event.target.value)}
+        <select aria-label={t('memoryRelationsFilter')} value={filter} disabled={busy}
+          onChange={(event) => void run('list', undefined, firstPage, event.target.value as Filter)}
           className="rounded border border-ds-border bg-ds-elevated p-1.5 text-ds-ink">
           {['all', 'pending', 'accepted', 'rejected', 'stale'].map((value) =>
             <option key={value} value={value}>{t(value === 'all' ? 'memoryAuthority_all' : `memoryRelations_${value}`)}</option>)}
@@ -125,6 +144,18 @@ export function MemoryRelationsPanel({ memory, t }: {
           </div> : null}
         </li>)}
       </ul>
+      {page.previous.length || nextCursor ? <nav aria-label={t('memoryRelationsPagination')}
+        className="flex flex-wrap items-center gap-2">
+        <button type="button" disabled={busy || !page.previous.length} className={settingsButtonClass()}
+          onClick={() => void run('list', undefined, {
+            before: page.previous[page.previous.length - 1], previous: page.previous.slice(0, -1)
+          })}>{t('memoryRelationsPrevious')}</button>
+        <span className="text-[12px] text-ds-muted" aria-live="polite">{t('memoryRelationsPage')} {page.previous.length + 1}</span>
+        <button type="button" disabled={busy || !nextCursor} className={settingsButtonClass()}
+          onClick={() => void run('list', undefined, {
+            before: nextCursor, previous: [...page.previous, page.before]
+          })}>{t('memoryRelationsNext')}</button>
+      </nav> : null}
     </div> : null}
   </section>
 }
