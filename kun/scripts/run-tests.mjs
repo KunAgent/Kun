@@ -32,6 +32,7 @@ const vitest = join(dirname(fileURLToPath(import.meta.url)), '..', 'node_modules
 const doctorFiles = [
   'src/manager/large-thread-mutations.test.ts',
   'src/adapters/hybrid/hybrid-memory-distillation.test.ts',
+  'src/adapters/hybrid/hybrid-memory-context.test.ts',
   'src/adapters/hybrid/hybrid-memory-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-workbench.test.ts',
