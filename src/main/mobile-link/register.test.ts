@@ -41,6 +41,11 @@ vi.mock('./service', () => ({ MobileLinkService: class {
 } }))
 import { registerMobileLink } from './register'
 
+const account = {
+  getState: async () => ({ status: 'anonymous', user: null, error: null }),
+  onState: () => () => {}, onSessionEnding: () => () => {}
+} as any
+
 beforeEach(() => {
   vi.useFakeTimers()
   vi.clearAllMocks()
@@ -52,7 +57,7 @@ afterEach(() => { mock.quit?.(); vi.useRealTimers() })
 
 describe('desktop mobile recovery composition', () => {
   it('stays off by default and connects host power/network recovery without changing device grants', async () => {
-    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, {} as any)
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, account)
     expect(mock.enable).not.toHaveBeenCalled()
     mock.power.get('suspend')?.()
     expect(mock.suspend).toHaveBeenCalledOnce()
@@ -67,10 +72,11 @@ describe('desktop mobile recovery composition', () => {
     expect(mock.power.size).toBe(0)
     await vi.advanceTimersByTimeAsync(30000)
     expect(mock.reconnect).toHaveBeenCalledTimes(count)
-    expect(mock.dispose).toHaveBeenCalled()
+    // Never started in this launch, so quitting revokes rather than keeping access.
+    expect(mock.dispose).toHaveBeenCalledWith(false)
   })
   it('requires the trusted workbench for advanced permission changes and forwards only explicit UI choices', async () => {
-    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, {} as any)
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, account)
     mock.trusted.mockImplementationOnce(() => { throw new Error('untrusted') })
     expect(() => mock.handlers.get('mobile-link:set-scopes')!({}, 'grant', ['groups.read'])).toThrow('untrusted')
     expect(mock.setScopes).not.toHaveBeenCalled()
@@ -80,7 +86,7 @@ describe('desktop mobile recovery composition', () => {
     expect(mock.confirm).toHaveBeenCalledWith('pairing', ['groups.read'])
   })
   it('requires the trusted workbench before status or start and logs only fixed diagnostic metadata', async () => {
-    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, {} as any)
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, account)
     mock.trusted.mockImplementation(() => { throw new Error('untrusted') })
     expect(() => mock.handlers.get('mobile-link:status')!({})).toThrow('untrusted')
     expect(() => mock.handlers.get('mobile-link:enable')!({}, true)).toThrow('untrusted')

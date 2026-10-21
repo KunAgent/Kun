@@ -180,12 +180,12 @@ function MessageBubbleImpl({
                   onClick={() => rollbackAction.onRollback()}
                   disabled={rollbackAction.busy}
                   className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:opacity-60"
-                  title={t('rollbackWorkspaceFromAssistantResponse')}
-                  aria-label={t('rollbackWorkspaceFromAssistantResponse')}
+                  title={t('turnUndoMessageActionTitle')}
+                  aria-label={t('turnUndoMessageActionTitle')}
                   data-assistant-action="rollback"
                 >
                   <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
-                  <span>{rollbackAction.busy ? t('rollingBackWorkspace') : t('rollbackWorkspace')}</span>
+                  <span>{rollbackAction.busy ? t('turnUndoWorking') : t('turnUndoMessageAction')}</span>
                 </button>
               ) : null}
               {forkAction ? (

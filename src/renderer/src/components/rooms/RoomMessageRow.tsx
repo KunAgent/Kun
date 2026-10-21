@@ -12,6 +12,8 @@ import { RoomProposalCard } from './RoomProposalCard'
 import { RoomAppConnectionCard } from './RoomAppConnectionCard'
 import { RoomWorkbenchTaskCard } from './RoomWorkbenchTaskCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
+import { RoomTurnClock, RoomTurnResult, RoomTurnTrail } from './RoomTurnParts'
+import type { RoomTurnPosition } from './room-turn-steps'
 import './rooms-reminders.css'
 import './rooms-polish.css'
 import { noteRoomMessageRendered } from './room-im-response-metrics'
@@ -39,7 +41,8 @@ export function RoomMessageRow({
   onRun,
   onHandoff,
   onOpenContent,
-  continuation = false
+  continuation = false,
+  turn
 }: {
   message: RoomMessage
   room?: Room
@@ -57,6 +60,8 @@ export function RoomMessageRow({
   onHandoff?: (id: string) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
   continuation?: boolean
+  /** Private chat only: this Agent message's place in its turn. */
+  turn?: RoomTurnPosition
 }) {
   const { t } = useTranslation('common')
   useLayoutEffect(() => { noteRoomMessageRendered(message) }, [message])
@@ -144,7 +149,9 @@ export function RoomMessageRow({
               minute: '2-digit'
             })}
           </time>
+          {turn?.first ? <RoomTurnClock roomId={message.roomId} runId={turn.runId} /> : null}
         </div>
+        {turn ? <RoomTurnTrail roomId={message.roomId} runId={turn.runId} since={turn.since} until={message.createdAt} /> : null}
         <div
           className={`rooms-message-bubble${message.attachmentIds.length ? ' rooms-message-wide' : ''}`}
         >
@@ -236,6 +243,10 @@ export function RoomMessageRow({
             </RoomPopover>
           </div>
         </div>
+        {turn?.last ? <>
+          <RoomTurnTrail roomId={message.roomId} runId={turn.runId} since={message.createdAt} />
+          <RoomTurnResult roomId={message.roomId} runId={turn.runId} onRun={onRun} />
+        </> : null}
         {pinned ? <p role="status" className="rooms-message-feedback">{t('roomsPinnedAsRule')}</p> : null}
         {copyError ? (
           <p role="alert" className="rooms-message-error">

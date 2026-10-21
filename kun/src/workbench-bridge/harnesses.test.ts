@@ -148,6 +148,15 @@ describe('Code harness discovery and validation', () => {
       models: [{ harnessId: 'devin', credentialMode: 'native-login', model: 'devin-cold-model' }] })
   })
 
+  it('neither detects nor probes engines a caller does not list', async () => {
+    const probe = vi.fn(async (_definition: import('../contracts/harness.js').HarnessDefinition) => ['cold-model'])
+    const h = harnessFixture(probe)
+    const { agents } = await h.service.list(undefined, undefined, { harnessIds: ['codex', 'opencode'] })
+    expect(agents.map((agent) => agent.harnessId).sort()).toEqual(['codex', 'opencode'])
+    expect(probe.mock.calls.map(([definition]) => definition.id)).toEqual(['opencode'])
+    expect(new Set(h.detector.status.mock.calls.map(([id]) => id))).toEqual(new Set(['codex', 'opencode']))
+  })
+
   it('lists from fresh detector verdicts without re-detecting each engine', async () => {
     const h = harnessFixture()
     for (const [id, status] of h.statuses) h.cached.set(id, status)

@@ -11,6 +11,7 @@ import {
 } from '../operations.js'
 import { removeLocalShareSnapshot, writeLocalShareSnapshot } from '../local-share.js'
 import { sanitizeTerminalText } from '../safe-text.js'
+import { sidebarDocks } from '../session-view-model.js'
 import { isActiveChildRun } from '../subagent-format.js'
 import { runSelfUpdateCommand } from '../../cli/self-update.js'
 import {
@@ -107,20 +108,28 @@ export class ChatSession extends ChatSessionInput {
 
   toggleToolDetails(): void {
     this.showToolDetailsValue = !this.showToolDetailsValue
+    this.refreshEntries()
     this.controller.notify(this.showToolDetailsValue
-      ? 'Tool details expanded for new output · Ctrl+O opens the full transcript.'
-      : 'Tool details collapsed for new output.')
-    this.planScrollback()
+      ? `Tool details expanded · ${this.keymap.display('tool_details_toggle')} collapses them.`
+      : 'Tool details collapsed.')
     this.changed()
   }
 
   toggleReasoning(): void {
     this.showReasoningValue = !this.showReasoningValue
     this.liveReasoningOverrides.clear()
-    this.controller.notify(this.showReasoningValue
-      ? 'Thinking expanded for new output · Ctrl+O shows it for earlier turns.'
-      : 'Thinking collapsed for new output.')
-    this.planScrollback()
+    this.controller.notify(this.showReasoningValue ? 'Thinking expanded.' : 'Thinking collapsed.')
+    this.refreshEntries()
+    this.changed()
+  }
+
+  toggleSidebar(): void {
+    if (sidebarDocks(this.terminal?.size().width ?? 0)) {
+      this.sidebarVisibleValue = !this.sidebarVisibleValue
+      this.sidebarOverlayValue = false
+    } else {
+      this.sidebarOverlayValue = !this.sidebarOverlayValue
+    }
     this.changed()
   }
 
@@ -139,8 +148,8 @@ export class ChatSession extends ChatSessionInput {
     this.terminal?.setMouseEnabled(enabled)
     if (notify) {
       this.controller.notify(enabled
-        ? 'Mouse clicks enabled · click live Thinking, Graph, or Subagent rows. Shift+drag selects in supported terminals.'
-        : `Text selection mode · drag to select; ${this.keymap.display('pointer_mode_toggle')} restores clicks.`)
+        ? 'Mouse on · the wheel scrolls, clicks open rows, and dragging selects and copies text.'
+        : `Mouse off · the terminal owns selection; PgUp/PgDn scroll · ${this.keymap.display('pointer_mode_toggle')} turns the mouse back on.`)
     }
     this.changed()
   }
@@ -149,7 +158,12 @@ export class ChatSession extends ChatSessionInput {
 
   protected override executeKeyAction(action: TuiKeyAction): void {
     if (action.startsWith('session_quick_')) {
-      void this.controller.openQuickSession(Number(action.slice('session_quick_'.length)))
+      // Ctrl+X 1-9 switch between the open session tabs; without a tab in
+      // that slot it falls back to the thread list's quick slots.
+      const slot = Number(action.slice('session_quick_'.length))
+      const tab = this.navigation.tabAt(slot)
+      if (tab) void this.controller.openThread(tab)
+      else void this.controller.openQuickSession(slot)
       return
     }
     switch (action) {
@@ -170,7 +184,15 @@ export class ChatSession extends ChatSessionInput {
       case 'agent_list': this.showAgentModes(); break
       case 'thinking_toggle': this.toggleReasoning(); break
       case 'pointer_mode_toggle': this.setPointerModeFromCommand(); break
-      case 'tool_details_toggle': this.showTranscript(); break
+      case 'tool_details_toggle': this.toggleToolDetails(); break
+      case 'messages_page_up': this.viewport?.scroll('page-up'); break
+      case 'messages_page_down': this.viewport?.scroll('page-down'); break
+      case 'messages_line_up': this.viewport?.scroll('line-up'); break
+      case 'messages_line_down': this.viewport?.scroll('line-down'); break
+      case 'messages_half_page_up': this.viewport?.scroll('half-page-up'); break
+      case 'messages_half_page_down': this.viewport?.scroll('half-page-down'); break
+      case 'messages_first': this.viewport?.scroll('first'); break
+      case 'messages_last': this.viewport?.scroll('last'); break
       case 'subagent_detach': {
         const child = [...(this.state.projection?.childRuns ?? [])].reverse().find((run) => !run.detached && isActiveChildRun(run))
         if (child) void this.controller.manageSubagents(`background ${child.childId}`)
@@ -183,7 +205,7 @@ export class ChatSession extends ChatSessionInput {
       case 'app_exit': this.requestQuit(); break
       case 'command_list': this.showCommandPalette(); break
       case 'variant_cycle': this.controller.cycleReasoningEffort(); break
-      case 'sidebar_toggle': this.controller.showThreads(); break
+      case 'sidebar_toggle': this.toggleSidebar(); break
       case 'theme_list': this.controller.setTheme(); break
       case 'session_share':
       case 'share': void this.shareThread(); break
@@ -205,7 +227,7 @@ export class ChatSession extends ChatSessionInput {
       case 'help': c.showHelp(); break
       case 'threads': c.showThreads(command.search); break
       case 'resume': await c.resumeLatest(command.search); break
-      case 'clear': this.terminal?.clearScreen(); break
+      case 'clear': this.terminal?.repaint(); break
       case 'new': await c.createThread(command.title); break
       case 'open': await c.openThread(command.threadId); break
       case 'rename': await c.rename(command.title); break
@@ -224,7 +246,7 @@ export class ChatSession extends ChatSessionInput {
       case 'copy': await this.copyLastResponse(); break
       case 'export': await this.exportThread(command.path); break
       case 'details': this.toggleToolDetails(); break
-      case 'transcript': this.showTranscript(); break
+      case 'sidebar': this.toggleSidebar(); break
       case 'permission': this.showPermissions(); break
       case 'undo': await c.undoLastTurn(); break
       case 'redo': await c.redoBranch(); break
@@ -307,7 +329,6 @@ export class ChatSession extends ChatSessionInput {
     } finally {
       this.suspended = false
       this.terminal.setTitle('Kun')
-      this.planScrollback()
       this.changed()
     }
   }
@@ -372,6 +393,16 @@ export class ChatSession extends ChatSessionInput {
         cwd: this.state.projection?.thread.workspace ?? this.controller.options.workspace
       })
     })
+  }
+
+  /** Copy text selected with the mouse (OSC 52 plus the host clipboard). */
+  async copySelection(text: string): Promise<void> {
+    const safeText = sanitizeTerminalText(text)
+    if (!safeText.trim()) return
+    this.terminal?.copyToClipboard(safeText)
+    const method = await copyWithSystemClipboard(safeText)
+    const count = Array.from(safeText).length
+    this.controller.notify(`Copied ${count} character${count === 1 ? '' : 's'}${method ? ` with ${method}` : ' with OSC52'}.`)
   }
 
   async copyLastResponse(): Promise<void> {

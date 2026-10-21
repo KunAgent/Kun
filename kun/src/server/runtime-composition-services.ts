@@ -68,6 +68,7 @@ import {
   seedUsageCarryover
 } from './runtime-factory-storage.js'
 import { createRuntimeBackgroundMaintenance } from './runtime-background-maintenance.js'
+import { createMaintenanceCompletionLog } from './runtime-maintenance-schedule.js'
 import { createRuntimeMaintenanceSlices } from './runtime-maintenance-slices.js'
 import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
@@ -179,6 +180,7 @@ export async function createRuntimeServices(
     // store at spawn/probe time; values never reach config or logs.
     revision: () => core.optionsRevision,
     readinessProofStorePath: join(core.activeOptions.dataDir, 'harness-readiness.json'),
+    modelCatalogStorePath: join(core.activeOptions.dataDir, 'harness-model-catalogs.json'),
     resolveProviderCredential: model.resolveLegacyRequestCredentials,
     resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding),
     resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)
@@ -358,6 +360,7 @@ export async function createRuntimeServices(
     pruneAttachments: maintenanceSlices.runAttachmentSlice,
     inspectThreads: maintenanceSlices.runGuardianSlice,
     rebuildEventIndex: maintenanceSlices.runEventIndexSlice,
+    completions: createMaintenanceCompletionLog(core.activeOptions.dataDir),
     onError: (task, error) => {
       console.warn(`[kun] background ${task} failed:`, error)
     }

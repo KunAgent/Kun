@@ -25,6 +25,7 @@ import {
   MIN_KUN_LOCAL_PORT,
   KUN_CONTEXT_COMPACTION_DEFAULTS_VERSION,
   KUN_RUNTIME_TUNING_DEFAULTS_VERSION,
+  KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION,
   MODEL_REQUEST_RETRY_DEFAULTS_VERSION,
   PROVIDER_PROXY_ROUTING_VERSION,
   SCHEDULE_MODEL_IDS,
@@ -509,7 +510,8 @@ export const kunRuntimePatchSchema = z.object({
     providerId: z.string().trim().max(64).optional(),
     model: optionalModelIdSchema,
     prompt: z.string().trim().max(MAX_BODY_BYTES).optional(),
-    timeoutMs: z.number().int().positive().max(600_000).optional()
+    timeoutMs: z.number().int().positive().max(600_000).optional(),
+    defaultsVersion: z.number().int().positive().max(KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION).optional()
   }).strict().optional(),
   musicGeneration: z.object({
     enabled: z.boolean().optional(),

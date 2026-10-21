@@ -12,7 +12,12 @@ import { startServiceManager } from './service-manager.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { installLiveProcessLog } from '../cli/live-process-log.js'
 import { appSessionOwnerFromEnvironment, KUN_APP_SESSION_RESERVATION_ENV } from '../contracts/app-session-owner.js'
-import { drainManagerAfterOwnerLoss, monitorManagerOwner, stopManagerAfterOwnerLoss } from './manager-owner-channel.js'
+import {
+  armOwnerLossExitDeadline,
+  drainManagerAfterOwnerLoss,
+  monitorManagerOwner,
+  stopManagerAfterOwnerLoss
+} from './manager-owner-channel.js'
 
 export const KUN_MANAGER_READY_PREFIX = 'KUN_MANAGER_READY '
 
@@ -67,7 +72,12 @@ export async function main(): Promise<number> {
       stopping = true
       void (async () => {
         if (ownerLost) {
-          await stopManagerAfterOwnerLoss(handle)
+          const cancelDeadline = armOwnerLossExitDeadline((code) => process.exit(code))
+          try {
+            await stopManagerAfterOwnerLoss(handle)
+          } finally {
+            cancelDeadline()
+          }
           return
         }
         handle.beginDrain()

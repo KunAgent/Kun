@@ -1,0 +1,19 @@
+{
+  "messageQuoteToolbarLabel": "Действия с выделенным текстом",
+  "messageQuoteStartSide": "Начать беседу в ветке",
+  "messageQuoteStartSideTitle": "Задать вопрос об этом фрагменте в ветке, сохраняющей весь контекст беседы",
+  "messageQuoteSideNeedsRuntime": "Доступно после подключения к среде выполнения",
+  "messageQuoteSideNeedsThread": "Сначала начните беседу",
+  "messageQuoteReply": "Ответить",
+  "messageQuoteReplyTitle": "Процитировать этот фрагмент в следующем сообщении",
+  "messageQuoteReplyingToAssistant": "Ответ Kun",
+  "messageQuoteReplyingToUser": "Ответ на ваше сообщение",
+  "messageQuoteTruncated": "первые 2000 символов",
+  "messageQuoteExpand": "Показать цитату полностью",
+  "messageQuoteCollapse": "Свернуть цитату",
+  "messageQuoteRemove": "Удалить цитату",
+  "messageQuoteComposerPlaceholder": "Ответить на этот фрагмент…",
+  "messageQuoteSidePlaceholder": "Спросить об этом фрагменте…",
+  "messageQuoteJumpToSource": "Перейти к оригиналу",
+  "messageQuoteJumpToSourceLabel": "Перейти к цитируемому тексту: {{text}}"
+}

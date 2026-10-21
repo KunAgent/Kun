@@ -20,6 +20,7 @@ import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 import onboarding from './settings/onboarding.json'
+import appSurfaces from './settings/app-surfaces.json'
 
 const settings = {
   ...providerConfiguration,
@@ -43,7 +44,8 @@ const settings = {
   guiUpdateErrFeedUnavailable: 'Сейчас ни один источник обновлений недоступен. Повторите попытку позже или перейдите на страницу загрузки.',
   ...speak,
   ...ade,
-  ...onboarding
+  ...onboarding,
+  ...appSurfaces
 }
 
 export default settings

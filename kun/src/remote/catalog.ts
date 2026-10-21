@@ -75,9 +75,26 @@ export async function remoteCapabilityDescriptors(
   }).sort((left, right) => order.get(left.operation)! - order.get(right.operation)!)
 }
 
+/**
+ * Phones re-read the catalog on every reconnect and screen; projects and models scan every Code
+ * thread. Within this window concurrent and repeated catalog reads share one scan. Task creation
+ * and other mutations keep reading the directory directly.
+ */
+export const CATALOG_SCAN_TTL_MS = 10000
+const scans = new WeakMap<object, Map<string, { at: number; value: Promise<unknown> }>>()
+function scanned<T>(runtime: object, key: string, read: () => Promise<T>): Promise<T> {
+  let entries = scans.get(runtime)
+  if (!entries) scans.set(runtime, entries = new Map())
+  const hit = entries.get(key)
+  if (hit && Date.now() - hit.at < CATALOG_SCAN_TTL_MS) return hit.value as Promise<T>
+  const value = read(), owner = entries
+  owner.set(key, { at: Date.now(), value })
+  value.catch(() => { if (owner.get(key)?.value === value) owner.delete(key) })
+  return value
+}
+
 export async function remoteCatalog(runtime: ServerRuntime, scope: Envelope, models: () => Promise<string[]>, descriptors: () => Promise<unknown[]>) {
-  const list = await projects(runtime)
-  const availableModels = await models()
+  const [list, availableModels] = await Promise.all([scanned(runtime, 'projects', () => projects(runtime)), scanned(runtime, 'models', models)])
   return {
     host: { runtimeVersion: KUN_VERSION, protocolVersion: REMOTE_PROTOCOL_VERSION,
       releaseChannel: KUN_RELEASE_CHANNEL, confirmedAt: Date.now() },

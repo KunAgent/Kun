@@ -292,7 +292,7 @@ function terminalStreams(input: TerminalInput, output: TerminalOutput): { stdin?
 /**
  * node:ffi emits an ExperimentalWarning the first time it loads. The flag
  * --disable-warning covers the CLI handoff, but an embedding process may
- * not pass it; the warning would otherwise land in the inline transcript.
+ * not pass it; the warning would otherwise be printed over the TUI.
  */
 function suppressFfiExperimentalWarning(): void {
   const original = process.emitWarning

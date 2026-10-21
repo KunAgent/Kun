@@ -18,6 +18,7 @@ export type NamedPreloadName =
   | 'runtime-data-recovery'
   | 'tray-quota'
   | 'protected-room-dialog'
+  | 'app-sandbox-shell'
 
 export function resolvePreloadPath(
   appPath: string,

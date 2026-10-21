@@ -552,7 +552,6 @@
   "rewindCancel": "キャンセル",
   "rewindResend": "再送信",
   "rewindHint": "Esc でキャンセル · ⌘/Ctrl + Enter で送信",
-  "rewindFileRollbackNotice": "再送信するとファイルの変更がロールバックされます",
   "rewindBusyError": "巻き戻す前に、現在のターンが終了するまで待ちます。",
   "toolActionFile": "編集したファイル",
   "toolActionCommand": "実行コマンド",

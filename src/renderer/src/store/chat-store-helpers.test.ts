@@ -298,7 +298,7 @@ describe('chat-store Claw helpers', () => {
       }
     ]
 
-    expect(DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS).toBe(32_000)
+    expect(DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS).toBe(1_000_000)
     expect(resolveComposerContextWindowTokens(modelGroups, 'custom-model', 'custom')).toBe(
       DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS
     )

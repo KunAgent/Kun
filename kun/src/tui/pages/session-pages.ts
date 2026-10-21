@@ -158,10 +158,11 @@ export class HelpPage implements TuiPage {
         { kind: 'text', text: ` ${key('/connect')} ${dim('providers')}  ·  ${key('/model')} ${dim('model')}  ·  ${key('/sessions')} ${dim('previous work')}` },
         { kind: 'text', text: ` ${key(this.keymap.display('agent_list'))} ${dim('Agent / Plan / Graph / Goal mode')}  ·  ${key('/graph')} ${dim('Graph then type requirement')}` },
         { kind: 'spacer' },
-        sectionBlock('Transcript'),
-        { kind: 'text', text: ` ${key(this.keymap.display('tool_details_toggle'))} ${dim('open the full transcript with tool details and Thinking')}` },
-        { kind: 'text', text: ` ${dim('Finished output is written to the terminal scrollback: wheel or Shift+PgUp scrolls it, drag selects text to copy.')}` },
-        { kind: 'text', text: ` ${key(this.keymap.display('pointer_mode_toggle'))} ${dim('enable direct clicks on live Thinking/Subagent rows; toggle again to restore native selection')}` },
+        sectionBlock('Conversation view'),
+        { kind: 'text', text: ` ${key('PgUp/PgDn')} ${dim('scroll')}  ·  ${key(this.keymap.display('messages_first'))} ${dim('first')}  ·  ${key(this.keymap.display('messages_last'))} ${dim('latest')}  ·  ${dim('mouse wheel scrolls')}` },
+        { kind: 'text', text: ` ${key(this.keymap.display('tool_details_toggle'))} ${dim('expand or collapse tool details')}  ·  ${key(this.keymap.display('sidebar_toggle'))} ${dim('sidebar')}` },
+        { kind: 'text', text: ` ${dim('Drag over text to select and copy it; click Thinking or Subagent rows to open them.')}` },
+        { kind: 'text', text: ` ${key(this.keymap.display('pointer_mode_toggle'))} ${dim('turn the mouse off to let the terminal handle selection, and on again')}` },
         { kind: 'text', text: ` ${dim('Ctrl+C acts as back on every page.')}` }
       ],
       footer: [

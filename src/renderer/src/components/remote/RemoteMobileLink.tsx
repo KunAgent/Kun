@@ -57,7 +57,7 @@ function mobileSubtitle(link: MobileLink): string {
   if (signedIn && state?.online) return zh ? '中继已连接 · 聊天记录留在电脑' : 'Relay connected · history stays here'
   if (signedIn && state?.enabled) return zh ? '连接中' : 'Connecting'
   if (!signedIn) return zh ? '官方中继需登录 Kun 账号后使用' : 'The official relay needs a Kun account sign-in'
-  return zh ? '已关闭 · 每次打开 Kun 默认关闭' : 'Off · off each time Kun opens'
+  return zh ? '已关闭 · 开启后会记住，下次打开 Kun 自动连接' : 'Off · once on, it reconnects whenever Kun opens'
 }
 
 /** The Kun iOS row in the access-method list. */

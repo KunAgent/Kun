@@ -38,6 +38,7 @@ export type DesignTurnSendOptions = DesignAssistantModelOptions & {
   designImagePlacementTarget?: DesignImagePlacementTarget
   waitForRuntimeAdmission?: boolean
   canvasEngine?: 'kun' | 'excalidraw'
+  messageSource?: 'design_continuation'
 }
 
 export type CodeCanvasSendOptions = {
@@ -83,6 +84,7 @@ export function buildDesignTurnSendOverrides(options: DesignTurnSendOptions): Se
       ? { designImagePlacementTarget: options.designImagePlacementTarget }
       : {}),
     ...(options.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
+    ...(options.messageSource ? { messageSource: options.messageSource } : {}),
     ...(options.target === 'canvas' && options.canvasEngine !== 'excalidraw'
       ? { guiDesignCanvas: true, guiDesignMode: true }
       : {}),

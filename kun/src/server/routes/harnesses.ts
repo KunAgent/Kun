@@ -1,5 +1,5 @@
 import { gatewayPoolTargets } from '../../domain/model-gateway-export-policy.js'
-import type { HarnessModelCatalogError } from '../../contracts/harness-models.js'
+import type { HarnessModelCatalog, HarnessModelCatalogError } from '../../contracts/harness-models.js'
 import { nativeAgentNetworkStatus } from '../../harness/native-agent-network.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -200,17 +200,20 @@ export async function listHarnessModels(
 
   const url = new URL(request.url)
   if (url.searchParams.get('refresh') === '1') harnesses.invalidateModels?.(definition.id)
-  const cachedModels = harnesses.probedModels?.(definition)
+  // Only this process's own probe counts as cached; a catalog kept from before
+  // a restart is served as a fallback below, never instead of asking the Agent.
+  const cachedModels = (harnesses.liveProbedModels ?? harnesses.probedModels)?.(definition)
   const selectedModelParam = url.searchParams.get('selected_model')?.trim() || undefined
-  const reply = (body: Record<string, unknown>, source: 'native' | 'cache' | 'fallback' | 'provider' | 'static') => {
+  const reply = (body: Record<string, unknown>, source: 'native' | 'cache' | 'fallback' | 'provider' | 'static',
+    keptAt?: string) => {
     const detected = harnesses.detector?.cachedStatus?.(definition.id)
     const { error, ...rest } = body as Record<string, unknown> & { error?: HarnessModelCatalogError }
     // fetchedAt is the probe's own timestamp; a response time would claim a
     // fresh lookup that never happened.
-    const fetchedAt = definition.transport === 'acp'
+    const fetchedAt = keptAt ?? (definition.transport === 'acp'
       ? harnesses.acpModels?.fetchedAt?.(definition, selectedModelParam)
       : definition.transport === 'agent-sdk' ? harnesses.agentSdkModels?.fetchedAt?.(definition)
-        : definition.transport === 'codex-app-server' ? harnesses.codexModels?.fetchedAt?.(definition) : undefined
+        : definition.transport === 'codex-app-server' ? harnesses.codexModels?.fetchedAt?.(definition) : undefined)
     return jsonResponse({ ...rest, catalogStatus: { source,
       fetchedAt: fetchedAt ?? new Date().toISOString(),
       ...(detected?.version ? { version: detected.version } : {}),
@@ -221,6 +224,14 @@ export async function listHarnessModels(
   // A live failure that still carries the last good catalog is served as cache.
   const catalogSource = (catalog: { models: string[]; error?: unknown }): 'native' | 'cache' | 'fallback' =>
     catalog.models.length === 0 ? 'fallback' : catalog.error || cachedModels ? 'cache' : 'native'
+  // A failed live lookup keeps showing what this Agent listed before a
+  // restart. A sign-in prompt and per-model detail lookups are never masked.
+  const keptReply = (error: HarnessModelCatalogError | undefined) => {
+    const kept = selectedModelParam || error?.code === 'auth_required' ? undefined : harnesses.modelCatalogs?.get(definition)
+    return kept ? reply({ harnessId: definition.id, ...kept.catalog, error: error ?? { code: 'unavailable' } }, 'cache', kept.fetchedAt) : undefined
+  }
+  const replyCatalog = (catalog: HarnessModelCatalog) => (catalog.models.length === 0 ? keptReply(catalog.error) : undefined) ??
+    reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
   const credentialMode = url.searchParams.get('credential_mode') ?? undefined
   if (credentialMode && !definition.credentialModes.some((mode) => mode === credentialMode)) {
     return ERRORS.validation(`credentialMode ${credentialMode} is not supported by ${definition.id}`)
@@ -282,21 +293,19 @@ export async function listHarnessModels(
       }, 'provider')
     case 'probe': {
       if (definition.transport === 'antigravity-cli' && harnesses.antigravityModels) {
-        const catalog = await harnesses.antigravityModels.probeCatalog(definition)
-        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
+        return replyCatalog(await harnesses.antigravityModels.probeCatalog(definition))
       }
       if (definition.transport === 'pi-rpc' && harnesses.piModels) {
         const models = await harnesses.piModels.probe(definition, request.signal)
-        return reply({ harnessId: definition.id, models }, models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
+        return (models.length ? undefined : keptReply(undefined)) ??
+          reply({ harnessId: definition.id, models }, models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
       }
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
         if (selectedModelParam && selectedModelParam.length > 1024) return ERRORS.validation('invalid model id')
-        const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModelParam)
-        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
+        return replyCatalog(await harnesses.acpModels.probeCatalog(definition, selectedModelParam))
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
-        const catalog = await harnesses.codexModels.probeCatalog(definition)
-        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
+        return replyCatalog(await harnesses.codexModels.probeCatalog(definition))
       }
       if (definition.transport === 'agent-sdk' && harnesses.agentSdkModels?.probeCatalog) {
         // Keeps Claude Code's recommended default and labels; empty falls through to staticModels.
@@ -315,8 +324,9 @@ export async function listHarnessModels(
         return reply({ harnessId: definition.id, models: probed }, cachedModels ? 'cache' : 'native')
       }
       // A probe that fails (missing binary, auth gate, timeout) falls back to
-      // the harness's static list rather than failing the models request.
-      return reply({ harnessId: definition.id, models: definition.staticModels,
+      // the last kept catalog, else the harness's static list, rather than
+      // failing the models request.
+      return keptReply(undefined) ?? reply({ harnessId: definition.id, models: definition.staticModels,
         error: { code: 'unavailable' } }, 'fallback')
     }
   }

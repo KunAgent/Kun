@@ -1,0 +1,47 @@
+/* Selection toolbar, composer quote blocks and sent-quote jump targets for
+   replying to a passage of the conversation. */
+
+.ds-message-selection-toolbar {
+  box-shadow: var(--ds-shadow-overlay);
+  animation: ds-message-selection-toolbar-in 120ms ease-out;
+}
+
+@keyframes ds-message-selection-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--ds-message-selection-toolbar-shift, 3px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ds-message-selection-toolbar[data-placement='below'] {
+  --ds-message-selection-toolbar-shift: -3px;
+}
+
+::highlight(kun-message-quote-source) {
+  background-color: color-mix(in srgb, var(--ds-accent) 24%, transparent);
+}
+
+.ds-message-quote-source-flash {
+  border-radius: 12px;
+  animation: ds-message-quote-source-flash 1.6s ease-out;
+}
+
+@keyframes ds-message-quote-source-flash {
+  0%,
+  35% {
+    background-color: color-mix(in srgb, var(--ds-accent) 12%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-message-selection-toolbar {
+    animation: none;
+  }
+}

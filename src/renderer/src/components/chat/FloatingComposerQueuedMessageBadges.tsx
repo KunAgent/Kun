@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { kunToolPermissionModeFromSettings } from '@shared/app-settings'
 import { writePromptQuotesFromComposerContexts } from '../../write/write-composer-context-quotes'
+import { messageQuotesFromComposerContexts } from '../../lib/message-quote'
 import type { QueuedComposerMessage } from './FloatingComposerQueuedMessages'
 import css from './FloatingComposerQueuedMessages.module.css'
 
@@ -18,7 +19,8 @@ export function QueuedMessageSnapshotBadges({
 }): ReactElement | null {
   const { t } = useTranslation('common')
   const badges: ReactElement[] = []
-  const quoteCount = writePromptQuotesFromComposerContexts(message.composerContexts).length
+  const quoteCount = writePromptQuotesFromComposerContexts(message.composerContexts).length +
+    messageQuotesFromComposerContexts(message.composerContexts).length
 
   if (quoteCount > 0) {
     badges.push(

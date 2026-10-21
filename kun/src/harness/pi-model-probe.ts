@@ -1,5 +1,6 @@
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
+import type { HarnessModelCatalog } from '../contracts/harness-models.js'
 import { resolveExecutable } from '../process/owned-process.js'
 import { harnessExecutableEnv } from './harness-executable-env.js'
 import { probePiHandshake } from './pi-handshake-probe.js'
@@ -16,6 +17,8 @@ export class PiModelProbe {
     binaryPath?: (id: string) => string | undefined
     resolveSecretEnv?: HarnessSecretRefResolver
     probe?: typeof probePiHandshake
+    /** Receives each successful listing, e.g. to keep it across restarts. */
+    onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
   } = {}) {}
 
   peek(definition: HarnessDefinition): string[] | undefined {
@@ -42,6 +45,7 @@ export class PiModelProbe {
       if (!result.ok || bounded.aborted || this.key(definition) !== key) return []
       const models = result.models ?? []
       this.cache.set(definition.id, { key, models, expires: Date.now() + 60_000 })
+      if (models.length > 0) this.deps.onCatalog?.(definition, { models, modelInfo: [] })
       return models
     } catch { return [] }
   }

@@ -96,7 +96,7 @@ This guide is for AI agents working in this repository. It collects the project 
 
 - Start with `git status --short --branch`. If the checkout is detached, create a named branch before committing.
 - For feature fixes, sync to the latest `upstream/develop` first when the worktree baseline is suspicious. Old worktree diffs may already be upstream.
-- New branches should use the `codex/` prefix, for example `codex/fix-provider-endpoint`.
+- New branches should use the `kun/` prefix, for example `kun/fix-provider-endpoint`.
 - Use Angular-style commit messages such as `fix(scope): ...`, `feat(scope): ...`, or `docs(agents): ...`. Keep the title outcome-focused and do not include `[codex]`.
 - DeepSeek-GUI/Kun PRs should target `develop` explicitly. Do not rely on the GitHub default branch, and do not accidentally open PRs against `master`.
 - Before creating a PR, verify the canonical repository slug and the issue repository. Remote names can be misleading; prefer `gh repo view --json nameWithOwner,defaultBranchRef` or `gh api repos/<owner>/<repo>`.

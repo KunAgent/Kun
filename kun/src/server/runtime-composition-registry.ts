@@ -12,6 +12,7 @@ import {
   buildDiagramVisualizationToolProvider,
   buildConversationVisualizationToolProvider,
   buildChartToolProvider,
+  buildGenUiToolProvider,
   protocolSupportsImageEdit,
   buildRuntimeCapabilityManifest,
   DEFAULT_APPROVAL_REVIEWER,
@@ -477,6 +478,7 @@ export function createRuntimeRegistry(
     ...buildChartToolProvider(
       () => core.activeOptions.lab?.conversationVisualization
     ),
+    ...buildGenUiToolProvider(() => core.activeOptions.lab?.genUi, () => core.genUiStore),
     ...buildPaperSearchToolProvider({
       proxyUrl: () => core.activeOptions.modelProxyUrl,
       enabledSources: () => core.activeOptions.capabilities?.paperSearch?.enabledSources,

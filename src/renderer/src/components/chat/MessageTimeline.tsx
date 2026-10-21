@@ -60,6 +60,7 @@ import { MemoMessageTurn } from './message-timeline-conversation-turn'
 import { TimelineSurfaceProvider } from './timeline-surface'
 import { useMobileJumpLatest } from './use-mobile-jump-latest'
 import type { MessageTimelineProps } from './message-timeline-props'
+import { MessageSelectionToolbar } from './MessageSelectionToolbar'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
 import { RoomWardrobeDropCard } from '../rooms/RoomWardrobeDropCard'
 import {
@@ -113,6 +114,7 @@ export function MessageTimeline({
   onOpenGeneratedDocuments,
   compactCards = false,
   surface = 'desktop',
+  messageSelectionToolbar = false,
   onOpenChildThread,
   onComponentPrototypePrompt,
   extensionMessageActions = [],
@@ -650,6 +652,7 @@ export function MessageTimeline({
         ) : null}
         <div ref={endRef} aria-hidden className="h-px w-full shrink-0" />
       </div>
+      {messageSelectionToolbar && surface !== 'mobile' ? <MessageSelectionToolbar containerRef={containerRef} surface="main" /> : null}
       {onExtensionCommand ? (
         <DeclarativeContextMenuOverlay
           contributions={messageContextMenu?.context &&

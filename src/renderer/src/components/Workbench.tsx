@@ -487,7 +487,7 @@ export function Workbench(): ReactElement {
     clearDesignHistory,
     ensureDesignThreadForWorkspace: ensureDesignThread,
     rollbackProvisionalThread,
-    designTaskProfileSelection: taskSurface === 'design' ? designTaskProfile : undefined,
+    designTaskProfileSelection: taskSurface === 'design' ? designTaskProfile : undefined, agentDesignTaskProfile: designTaskProfile,
     lockedDesignProfile,
     expectedThreadId: activeThreadId,
     imageGenerationAvailable: runtimeInfo?.capabilities.imageGen?.available === true,
@@ -691,7 +691,7 @@ export function Workbench(): ReactElement {
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
       actions={{ routes: { chat: openCodeMode, 'agent-chat': () => setRoute('agent-chat'), ade: openAdeMode, write: openWriteMode, design: openDesignMode, rooms: () => setRoute('rooms'),
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
-        claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView, wardrobe: () => setRoute('wardrobe') },
+        claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView, wardrobe: () => setRoute('wardrobe'), artifacts: () => setRoute('artifacts') },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,
         openCode, setInput, setError, setComposerModel, archiveThread, pinThread }}
       input={input}

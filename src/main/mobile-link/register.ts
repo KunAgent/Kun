@@ -11,6 +11,8 @@ import { loadIdentity } from './identity'
 import { MobileLinkService, type LinkDependencies } from './service'
 import { transferFiles } from './files'
 import { MobileLinkRecovery } from './recovery'
+import { RelayPreference } from './relay-preference'
+import { MobileRelayResume } from './relay-resume'
 import { logInfo, logWarn } from '../logger'
 import { MobileLinkSockets } from './socket'
 const networkKey = () => Object.entries(networkInterfaces()).flatMap(([name, addresses]) =>
@@ -25,7 +27,8 @@ const DIAGNOSTIC_CODES = new Set([
   'PEER_METADATA_REFRESH_FAILED', 'PEER_RESYNC_FAILED',
   'NOTIFICATIONS_UNAVAILABLE', 'NOTIFICATION_POST_FAILED', 'NOTIFICATION_STREAM_RETRY',
   'SHARE_CAPABILITIES_UNAVAILABLE', 'SHARE_METADATA_UNAVAILABLE', 'SHARE_AUTHORIZATION_UNAVAILABLE', 'SHARE_CONNECTED', 'SHARE_RENEWED', 'SHARE_PONG_TIMEOUT', 'SHARE_RENEW_RETRY',
-  'WSS_PROXY', 'WSS_DIRECT', 'WSS_PROXY_RESOLUTION_FAILED'
+  'WSS_PROXY', 'WSS_DIRECT', 'WSS_PROXY_RESOLUTION_FAILED',
+  'RELAY_RESUMED', 'RELAY_RESUME_RETRY', 'RELAY_PREFERENCE_FAILED'
 ])
 export function registerMobileLink(
   options: RegisterAppIpcHandlersOptions,
@@ -38,10 +41,11 @@ export function registerMobileLink(
     for (const key of ['attempt', 'elapsedMs'] as const)
       if (Number.isFinite(details?.[key]) && details![key]! >= 0)
         safe[key] = Math.min(1e9, details![key]!)
-    const log = ['CONNECTING', 'CONNECTED', 'RENEWED', 'WSS_PROXY', 'WSS_DIRECT', 'NETWORK_HINT_CHECK'].includes(code) ? logInfo : logWarn
+    const log = ['CONNECTING', 'CONNECTED', 'RENEWED', 'WSS_PROXY', 'WSS_DIRECT', 'NETWORK_HINT_CHECK', 'RELAY_RESUMED'].includes(code) ? logInfo : logWarn
     log('mobile-link', code, Object.keys(safe).length ? safe : undefined)
   }
   const sockets = new MobileLinkSockets(undefined, diagnostic)
+  const links = join(app.getPath('userData'), 'mobile-link')
   const desktopSchedules = new MobileDesktopSchedules(options)
   const service = new MobileLinkService({
     account,
@@ -54,10 +58,7 @@ export function registerMobileLink(
         : process.platform === 'win32'
           ? 'windows'
           : 'linux',
-    identity: (owner) =>
-      loadIdentity(
-        join(app.getPath('userData'), 'mobile-link', owner, 'identity.enc')
-      ),
+    identity: (owner) => loadIdentity(join(links, owner, 'identity.enc')),
     fetch: (input, init) =>
       net.fetch(
         typeof input === 'string'
@@ -74,6 +75,7 @@ export function registerMobileLink(
     sharedFiles: transferSharedFiles,
     files: transferFiles
   })
+  const resume = new MobileRelayResume({ account, relay: service, preference: new RelayPreference(links), diagnostic })
   const recovery = new MobileLinkRecovery({
     online: () => net.isOnline(), network: networkKey,
     suspend: () => service.suspend(), reconnect: (reason) => service.reconnect(reason),
@@ -94,7 +96,7 @@ export function registerMobileLink(
   ipcMain.handle(channels.enable, (event, value) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     if (typeof value !== 'boolean') throw new Error('INVALID_VALUE')
-    return service.enable(value)
+    return resume.manual(value)
   })
   ipcMain.handle(channels.confirm, (event, id, scopes) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
@@ -108,6 +110,6 @@ export function registerMobileLink(
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return service.revoke(id)
   })
-  // Remote access is session-only: registration and sign-in never start it.
-  app.once('before-quit', () => { recovery.dispose(); service.dispose(); sockets.dispose() })
+  // Sign-in alone never starts remote access; only a start the user left on resumes after a relaunch.
+  app.once('before-quit', () => { recovery.dispose(); resume.dispose(); sockets.dispose() })
 }

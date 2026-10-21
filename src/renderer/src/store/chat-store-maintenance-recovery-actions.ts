@@ -42,6 +42,7 @@ import {
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import { emptyLiveProjection } from './chat-store-live-projection'
 import { invalidatePendingTurnStarts } from './turn-start-fence'
+import { resetFilesForRewind } from './chat-store-rewind-file-reset'
 
 /**
  * Release the worktree pool slot owned by a thread when the task completes
@@ -391,7 +392,7 @@ export function createMaintenanceRecoveryActions(
     }
   },
 
-  rewindAndResend: async (userBlockId, newText) => {
+  rewindAndResend: async (userBlockId, newText, options) => {
     const trimmed = newText.trim()
     if (!trimmed) return
     const state = get()
@@ -418,22 +419,16 @@ export function createMaintenanceRecoveryActions(
     if (rewindAndResendInFlight.has(operationKey)) return
     rewindAndResendInFlight.add(operationKey)
     try {
-      const checkpointId = targetBlock.meta?.workspaceCheckpointId
-      if (checkpointId) {
-        const expectedWorkspaceRoot = resolveCheckpointExpectedWorkspaceRoot(state)
-        const restored = await window.kunGui.restoreGitCheckpoint({
-          checkpointId,
-          expectedThreadId: threadId,
-          ...(expectedWorkspaceRoot ? { expectedWorkspaceRoot } : {})
-        }).catch((error) => ({
-          ok: false as const,
-          reason: 'error' as const,
-          message: error instanceof Error ? error.message : String(error)
-        }))
-        if (!restored.ok) {
-          set({ error: restored.message })
+      // Files are reset per file, never with a workspace-wide git reset; an
+      // unsafe file falls back to resetting the conversation alone.
+      let fileResetNotice: string | null = null
+      if (options?.resetFiles && targetBlock.meta?.workspaceCheckpointId) {
+        const reset = await resetFilesForRewind(state, targetBlock.id)
+        if (reset.kind === 'failed') {
+          set({ error: reset.message })
           return
         }
+        if (reset.kind === 'fell_back') fileResetNotice = i18n.t('common:rewindResetFellBack')
       }
 
       const trimmedBlocks = state.blocks.slice(0, idx)
@@ -509,6 +504,7 @@ export function createMaintenanceRecoveryActions(
       } else {
         await get().sendMessage(trimmed)
       }
+      if (fileResetNotice) set({ error: fileResetNotice })
     } catch (e) {
       const message = formatRuntimeError(e)
       // Rewind can lose a race with a server-started continuation. The SSE

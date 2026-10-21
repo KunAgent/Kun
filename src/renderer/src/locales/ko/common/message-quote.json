@@ -1,0 +1,19 @@
+{
+  "messageQuoteToolbarLabel": "선택한 텍스트 작업",
+  "messageQuoteStartSide": "분기 대화 시작",
+  "messageQuoteStartSideTitle": "현재 대화의 전체 맥락을 유지한 분기 대화에서 이 부분을 질문합니다",
+  "messageQuoteSideNeedsRuntime": "런타임에 연결되면 사용할 수 있습니다",
+  "messageQuoteSideNeedsThread": "먼저 대화를 시작하세요",
+  "messageQuoteReply": "답장",
+  "messageQuoteReplyTitle": "다음 메시지에서 이 부분을 인용합니다",
+  "messageQuoteReplyingToAssistant": "Kun에게 답장",
+  "messageQuoteReplyingToUser": "내 메시지에 답장",
+  "messageQuoteTruncated": "처음 2,000자",
+  "messageQuoteExpand": "전체 인용 보기",
+  "messageQuoteCollapse": "인용 접기",
+  "messageQuoteRemove": "인용 삭제",
+  "messageQuoteComposerPlaceholder": "이 부분에 답장…",
+  "messageQuoteSidePlaceholder": "이 부분에 대해 질문…",
+  "messageQuoteJumpToSource": "원문으로 이동",
+  "messageQuoteJumpToSourceLabel": "인용한 원문으로 이동: {{text}}"
+}

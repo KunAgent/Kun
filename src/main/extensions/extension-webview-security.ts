@@ -8,6 +8,7 @@ import {
   type ExtensionViewSessionRecord
 } from './extension-view-sessions'
 import { DEV_PREVIEW_PARTITION } from '../../shared/dev-preview-capture'
+import { isAppSandboxSource, type AppSandboxWebviewGuard } from '../app-sandbox/app-sandbox-guards'
 
 type WebviewSecurityOptions = {
   app: Pick<App, 'on'>
@@ -19,6 +20,8 @@ type WebviewSecurityOptions = {
   isTrustedWorkbench(contents: WebContents): boolean
   isAllowedDevPreviewUrl(url: string): boolean
   isAuthorizedPrototypeFileUrl(url: string): boolean
+  /** Gen UI / MCP App sandbox pages served from `kun-app://`. */
+  appSandbox?: AppSandboxWebviewGuard
   onDenied?: (detail: { code: string; url?: string }) => void
 }
 
@@ -32,6 +35,12 @@ export function installWebviewSecurityGuards(options: WebviewSecurityOptions): v
 
     contents.on('will-attach-webview', (event, webPreferences, params) => {
       const src = typeof params.src === 'string' ? params.src : ''
+      if (isAppSandboxSource(src)) {
+        if (!options.appSandbox?.prepareAttach(contents, src, webPreferences, params as Record<string, unknown>)) {
+          event.preventDefault()
+        }
+        return
+      }
       if (src.startsWith('kun-extension:')) {
         if (!options.isTrustedWorkbench(contents)) {
           event.preventDefault()
@@ -84,6 +93,7 @@ export function installWebviewSecurityGuards(options: WebviewSecurityOptions): v
     })
 
     contents.on('did-attach-webview', (_event, guest) => {
+      if (options.appSandbox?.didAttach(contents, guest)) return
       const record = options.sessions.bindNextGuest(contents.id, guest)
       if (record) {
         hardenAttachedExtensionGuest(guest, record, options)
@@ -95,6 +105,11 @@ export function installWebviewSecurityGuards(options: WebviewSecurityOptions): v
 
     contents.on('will-navigate', (event, navigationUrl) => {
       if (contents.getType() !== 'webview') return
+      const sandboxNavigation = options.appSandbox?.isAllowedNavigation(contents, navigationUrl)
+      if (sandboxNavigation !== undefined) {
+        if (!sandboxNavigation) event.preventDefault()
+        return
+      }
       const external = options.sessions.findExternalByGuest(contents.id)
       if (external) {
         if (!isAllowedExternalWebviewUrl(navigationUrl, external.allowedHosts)) {

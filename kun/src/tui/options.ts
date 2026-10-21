@@ -40,8 +40,8 @@ Options:
 Keys:
   Enter send/steer  Ctrl+J/Shift+Enter newline  Ctrl+T reasoning effort
   Ctrl+X Leader  Ctrl+X L sessions  Ctrl+X N new  Ctrl+P commands
-  Escape interrupt  Ctrl+C clear/exit  Mouse wheel scrollback  Drag select/copy
-  Ctrl+X P direct clicks  Shift+PgUp/PgDn terminal scrollback
+  Escape interrupt  Ctrl+C clear/exit  PgUp/PgDn or mouse wheel scroll
+  Ctrl+O tool details  Ctrl+X B sidebar  Drag select/copy  Ctrl+X P mouse on/off
 `
 
 export type TuiOptions = {

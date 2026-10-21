@@ -552,7 +552,6 @@
   "rewindCancel": "Отмена",
   "rewindResend": "Отправить повторно",
   "rewindHint": "Esc для отмены · ⌘/Ctrl + Enter для отправки",
-  "rewindFileRollbackNotice": "Повторная отправка приведет к отмене изменений файла.",
   "rewindBusyError": "Прежде чем перематывать назад, дождитесь завершения текущего хода.",
   "toolActionFile": "Отредактированный файл",
   "toolActionCommand": "Выполнил команду",

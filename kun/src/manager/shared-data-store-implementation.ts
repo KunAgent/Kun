@@ -430,6 +430,9 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             request.expiresBeforeIso
           ) ?? { deleted: 0, released: 0 }
         }
+        case 'expiredLeaseCandidates':
+          return store.expiredLeaseCandidates?.(z.object({ expiresBeforeIso: z.string() }).strict()
+            .parse(body.value).expiresBeforeIso) ?? []
         case 'replaceMetadata': {
           await store.replaceMetadata?.(AttachmentMetadata.parse(body.value))
           return null

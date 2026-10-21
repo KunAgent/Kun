@@ -196,7 +196,6 @@
   "rewindCancel": "取消",
   "rewindResend": "重新发送",
   "rewindHint": "Esc 取消 · ⌘/Ctrl + Enter 发送",
-  "rewindFileRollbackNotice": "重新发送会撤回文件修改",
   "rewindBusyError": "当前回合还在进行，等结束后再回退。",
   "toolActionFile": "修改文件",
   "toolActionCommand": "运行命令",

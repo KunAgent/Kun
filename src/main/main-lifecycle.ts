@@ -64,6 +64,8 @@ import {
   installWebviewSecurityGuards
 } from './extensions/extension-webview-security'
 import { probeRuntimeApi } from './main-runtime-health'
+import { createAppSandboxWebviewGuard } from './app-sandbox/app-sandbox-guards'
+import { appSandboxRegistry, notifyAppSandboxClosed, registerAppSandboxShellRelay } from './app-sandbox/app-sandbox-host'
 import {
   beginBrowserUseHostShutdown,
   stopBrowserUseHost,
@@ -324,6 +326,7 @@ export async function readGuiUpdateState(): Promise<GuiUpdateState> {
 export function installDevPreviewWebviewGuards(options: {
   viewProtocols: ExtensionViewProtocolRegistry
 }): void {
+  registerAppSandboxShellRelay()
   installWebviewSecurityGuards({
     app,
     existingWebContents: mainState.mainWindow && !mainState.mainWindow.isDestroyed()
@@ -339,6 +342,14 @@ export function installDevPreviewWebviewGuards(options: {
     ),
     isAllowedDevPreviewUrl,
     isAuthorizedPrototypeFileUrl,
+    appSandbox: createAppSandboxWebviewGuard({
+      registry: appSandboxRegistry,
+      preloadPath: resolveNamedPreloadPath(app.getAppPath(), 'app-sandbox-shell'),
+      isTrustedWorkbench: (contents) => Boolean(
+        mainState.mainWindow && !mainState.mainWindow.isDestroyed() && contents.id === mainState.mainWindow.webContents.id
+      ),
+      onGuestGone: (instanceId, reason) => notifyAppSandboxClosed(instanceId, reason)
+    }),
     onDenied: ({ code }) => {
       logWarn('extension-webview', 'Denied extension Webview operation.', { code })
     }

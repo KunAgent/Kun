@@ -90,6 +90,9 @@ export {
   type McpStdioEnvironmentOptions
 } from './mcp-stdio-environment.js'
 
+import { isModelVisibleMcpTool } from '../../contracts/mcp-apps.js'
+import { createMcpAppsAccess, type McpAppsAccess } from './mcp-apps-access.js'
+
 export type McpToolProviderBuildResult = {
   providers: CapabilityToolProvider[]
   diagnostics: McpServerDiagnostic[]
@@ -127,6 +130,8 @@ export type McpToolProviderBuildResult = {
    */
   authorizeOAuth: (serverId: string) => Promise<McpOAuthAuthorizeResult>
   close: () => Promise<void>
+  /** Live MCP Apps access for desktop pages (resources and app-visible tools). */
+  apps: McpAppsAccess
 }
 
 export type McpToolProviderOptions = {
@@ -262,7 +267,8 @@ export async function buildMcpToolProviders(
       startBackgroundReconnect: async () => undefined,
       clearOAuthCredentials: async () => ({ cleared: [] }),
       authorizeOAuth: async (serverId) => ({ serverId, status: 'disabled', authorized: false }),
-      close: async () => undefined
+      close: async () => undefined,
+      apps: createMcpAppsAccess([], new Map())
     }
   }
 
@@ -443,7 +449,9 @@ export async function buildMcpToolProviders(
     const records: McpSearchCatalogRecord[] = []
     const nextDirect = new Map<string, CapabilityToolProvider>()
     for (const state of connected) {
-      const listed = nextListed.get(state.serverId)
+      // App-only tools (`_meta.ui.visibility` without "model") stay callable by
+      // their own MCP App pages but never enter the model tool catalog.
+      const listed = nextListed.get(state.serverId)?.filter(isModelVisibleMcpTool)
       if (!listed) continue
       records.push(...listed.map((tool) => createMcpSearchCatalogRecord(state, tool)))
       nextDirect.set(state.serverId, {
@@ -582,6 +590,7 @@ export async function buildMcpToolProviders(
     diagnostics,
     oauth: oauthDiagnostics,
     search: searchDiagnostic,
+    apps: createMcpAppsAccess(connected, listedByServer),
     get connectedServers(): number {
       return diagnostics.filter((diagnostic) => diagnostic.status === 'connected').length
     },

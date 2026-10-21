@@ -237,6 +237,7 @@ export type ManagerAttachmentStoreOperation =
   | 'delete'
   | 'releaseLease'
   | 'pruneExpiredLeases'
+  | 'expiredLeaseCandidates'
   | 'replaceMetadata'
   | 'resolveContent'
   | 'diagnostics'

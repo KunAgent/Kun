@@ -109,6 +109,25 @@ describe('deriveTimelineVisibleTurnCount', () => {
     ).toBe(23)
   })
 
+  it('renders every turn of a short thread before the stored count catches up', () => {
+    expect(
+      deriveTimelineRenderedTurnCount({
+        visibleTurnCount: 1,
+        totalTurns: 2,
+        pageSize: 18,
+        busy: true
+      })
+    ).toBe(2)
+    expect(
+      deriveTimelineRenderedTurnCount({
+        visibleTurnCount: 3,
+        totalTurns: 4,
+        pageSize: 18,
+        busy: false
+      })
+    ).toBe(4)
+  })
+
   it('keeps an automatically growing busy history window collapsed', () => {
     expect(
       deriveTimelineRenderedTurnCount({

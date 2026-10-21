@@ -107,7 +107,8 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
 
   await page.getByRole('button', { name: 'Changes', exact: true }).click()
   const changes = page.locator('[data-code-changes-panel]')
-  await changes.getByRole('combobox').selectOption(worker.taskWorkspaceId)
+  await changes.locator('[data-change-source-picker]').click()
+  await changes.locator(`[data-change-source-option="${worker.taskWorkspaceId}"]`).click()
   await changes.locator(`[data-review-workspace-id="${worker.taskWorkspaceId}"]`).waitFor()
   await changes.getByText('smoke-worker.txt', { exact: true }).first().waitFor()
   await poll(async () => (await changes.innerText()).includes('Worker smoke ready'),

@@ -51,7 +51,10 @@ import {
 import { localizeProtectedExtensionPrompt } from './extensions/protected-extension-prompt'
 import { ProtectedCredentialSurfaceController } from './extensions/protected-credential-surface'
 import { ExtensionContentScriptController } from './extensions/extension-content-script-controller'
-import { WorkspacePreviewProtocolRegistry } from './services/workspace-preview-protocol'
+import {
+  sharedWorkspacePreviewProtocols,
+  type WorkspacePreviewProtocolRegistry
+} from './services/workspace-preview-protocol'
 import {
   configureBrowserUseHost
 } from './browser-use/browser-use-host'
@@ -309,8 +312,8 @@ export async function initializeMainServices(input: {
       })
     }
     registerExtensionProtocol(protocol)
-    const workspacePreviewProtocols = new WorkspacePreviewProtocolRegistry()
-    workspacePreviewProtocols.register(protocol)
+    // Registered in main-ready before the window exists; see sharedWorkspacePreviewProtocols.
+    const workspacePreviewProtocols = sharedWorkspacePreviewProtocols()
 
     const extensionProtocolForPartition = (partition: string) => session.fromPartition(partition).protocol
     const extensionMediaProtocols = new ExtensionMediaProtocolRegistry({

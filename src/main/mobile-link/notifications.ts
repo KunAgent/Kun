@@ -38,9 +38,16 @@ export class MobileNotifications {
     })
   }
   private async run(api: RemoteApi, signal: AbortSignal, current: () => boolean) {
-    let capabilities: any
-    try { capabilities = await api.request('/capabilities', 'GET', undefined, false, signal) } catch { return }
-    if (!current() || capabilities?.notifications?.available !== true) return
+    // The relay api lives for the whole session: keep checking so a transient failure or the
+    // server enabling notifications later starts the stream without restarting phone access.
+    for (let check = 0; ; check++) {
+      let capabilities: any
+      try { capabilities = await api.request('/capabilities', 'GET', undefined, false, signal) } catch { capabilities = undefined }
+      if (!current()) return
+      if (capabilities?.notifications?.available === true) break
+      await delay(capabilities ? 600000 : Math.min(300000, 5000 * 2 ** Math.min(check, 6)), signal)
+      if (!current()) return
+    }
     let attempt = 0
     while (current()) {
       const connection = new AbortController(), abort = () => connection.abort()
