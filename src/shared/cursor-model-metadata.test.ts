@@ -8,7 +8,7 @@ describe('Cursor SDK capability metadata', () => {
       { displayName: 'Max', params: [{ id: 'context', value: '1m' }] }
     ] })
     expect(profile).toMatchObject({ contextWindowTokens: 200_000, supportsReasoning: true,
-      reasoning: { supportedEfforts: ['auto'], nativeEfforts: ['high'] },
+      reasoning: { supportedEfforts: ['high'], defaultEffort: 'high', nativeEfforts: ['high'], effortMapping: { high: 'high' } },
       conditionalCapabilities: [{ condition: 'cursor-sdk-variant:Max', contextWindowTokens: 1_000_000 }] })
   })
   it('does not activate a possible variant when no default is declared', () => {
@@ -22,11 +22,37 @@ describe('Cursor SDK capability metadata', () => {
       { id: 'reasoning', values: [{ value: 'high' }, { value: 'xhigh' }] }
     ] })
     expect(profile?.contextWindowTokens).toBeUndefined()
-    expect(profile?.reasoning).toBeUndefined()
+    expect(profile?.reasoning).toMatchObject({
+      supportedEfforts: ['high', 'max'],
+      defaultEffort: 'high',
+      effortMapping: { high: 'high', max: 'xhigh' },
+      nativeEfforts: ['high', 'xhigh']
+    })
     expect(profile?.conditionalCapabilities).toEqual(expect.arrayContaining([
-      expect.objectContaining({ condition: 'cursor-sdk-parameter:context=1m', contextWindowTokens: 1_000_000 }),
-      expect.objectContaining({ condition: 'cursor-sdk-parameter:reasoning=xhigh', reasoning: expect.objectContaining({ nativeEfforts: ['xhigh'] }) })
+      expect.objectContaining({ condition: 'cursor-sdk-parameter:context=1m', contextWindowTokens: 1_000_000 })
     ]))
+    expect(profile?.conditionalCapabilities?.some((entry) => 'reasoning' in entry)).toBe(false)
+  })
+
+  it('uses the default variant value and drops levels Kun cannot name', () => {
+    const profile = cursorModelMetadata({ id: 'test', displayName: 'Test', parameters: [
+      { id: 'reasoning_effort', values: [{ value: 'low' }, { value: 'high' }, { value: 'xhigh' }, { value: 'ultra' }] },
+      { id: 'fast', values: [{ value: 'true' }, { value: 'false' }] }
+    ], variants: [
+      { displayName: 'Default', isDefault: true, params: [{ id: 'reasoning_effort', value: 'xhigh' }] }
+    ] })
+    expect(profile?.reasoning).toMatchObject({
+      supportedEfforts: ['low', 'high', 'max'],
+      defaultEffort: 'max',
+      nativeEfforts: ['low', 'high', 'xhigh', 'ultra'],
+      effortMapping: { low: 'low', high: 'high', max: 'xhigh' }
+    })
+    expect(cursorModelMetadata({ id: 'test', displayName: 'Test', parameters: [
+      { id: 'optimize_for', values: [{ value: 'cost' }, { value: 'intelligence' }] }
+    ] })).toBeUndefined()
+    expect(cursorModelMetadata({ id: 'test', displayName: 'Test', parameters: [
+      { id: 'thinking', values: [{ value: 'not-a-level' }] }
+    ] })).toBeUndefined()
   })
 
   it('discards an invalid output limit without losing a valid context observation', () => {

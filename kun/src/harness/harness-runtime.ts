@@ -23,6 +23,7 @@ import { HarnessTokenService } from './harness-token-service.js'
 import type { HarnessSecretRefResolver } from './harness-secret-env.js'
 import { ExtensionAgentProviderSource } from './extension-agent-providers.js'
 import { HarnessModelCatalogStore, harnessModelCatalogIdentity } from './harness-model-catalog-store.js'
+import { clearCursorSubscriptionCatalog, loadCursorSubscriptionCatalog, type CursorSubscriptionCatalogSource } from './cursor-subscription-catalog.js'
 
 /** Executable override from the engine's environment variable (e.g. a dev build). */
 function binaryEnvOverride(id: string): string | undefined {
@@ -43,6 +44,8 @@ export type HarnessRuntimeComposition = {
   piModels: PiModelProbe
   /** `agy models` for the Antigravity CLI transport. */
   antigravityModels: AntigravityModelProbe
+  /** Cursor SDK account catalog for the provider credential mode. */
+  cursorModels: CursorSubscriptionCatalogSource
   updates: HarnessUpdates
   integration(id: string): Promise<HarnessIntegrationInfo | undefined>
   resolveIntegration(request: HarnessIntegrationOpenRequest): Promise<HarnessIntegrationTarget | undefined>
@@ -212,12 +215,17 @@ export function createHarnessComposition(
   // Refreshing one Agent must not discard another Agent's catalog.
   const invalidateModels = (id: string): void => {
     const transport = catalog.get(id)?.transport
-    if (!transport) { agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate(); antigravityModels.invalidate(); return }
+    if (!transport) {
+      agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate(); antigravityModels.invalidate()
+      clearCursorSubscriptionCatalog()
+      return
+    }
     if (transport === 'acp') acpModels.invalidate(id)
     else if (transport === 'agent-sdk') agentSdkModels.invalidate()
     else if (transport === 'codex-app-server') codexModels.invalidate()
     else if (transport === 'pi-rpc') piModels.invalidate()
     else if (transport === 'antigravity-cli') antigravityModels.invalidate()
+    else if (transport === 'cursor-sdk') clearCursorSubscriptionCatalog()
   }
   const updates = new HarnessUpdates({
     definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),
@@ -270,6 +278,20 @@ export function createHarnessComposition(
     codexModels,
     piModels,
     antigravityModels,
+    cursorModels: {
+      async list({ providerId, refresh, signal }) {
+        const provider = options().providers?.[providerId]
+        if (!provider || provider.kind !== 'cursor-sdk') return undefined
+        const direct = provider.apiKey?.trim()
+        const resolved = !direct && provider.credentialSourceId && deps.resolveProviderCredential
+          ? (await deps.resolveProviderCredential(provider.credentialSourceId).catch(() => null))?.apiKey?.trim()
+          : undefined
+        const apiKey = direct || resolved
+        if (!apiKey) return undefined
+        const proxyUrl = provider.useProxy ? provider.modelProxyUrl?.trim() : undefined
+        return loadCursorSubscriptionCatalog({ apiKey, refresh, signal, ...(proxyUrl ? { proxyUrl } : {}) })
+      }
+    },
     installNetwork: () => options().nativeAgentNetwork?.installer,
     probedModels,
     liveProbedModels,

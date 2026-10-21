@@ -283,6 +283,8 @@ export type ServerRuntime = {
     codexModels?: CodexModelProbe
     piModels?: import('../../harness/pi-model-probe.js').PiModelProbe
     antigravityModels?: import('../../harness/antigravity-model-probe.js').AntigravityModelProbe
+    /** Account catalog for Cursor provider mode. Absent in tests that keep saved model ids. */
+    cursorModels?: import('../../harness/cursor-subscription-catalog.js').CursorSubscriptionCatalogSource
     installNetwork?: () => import('../../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
     /**
      * Spawn-free model list: this process's fresh probe, else the catalog the

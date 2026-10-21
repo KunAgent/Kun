@@ -300,6 +300,10 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     endpointFormat: 'custom_endpoint',
     models: [...CHATGPT_SUBSCRIPTION_MODEL_IDS],
     modelProfiles: {
+      'gpt-6.1-sol': withPriorityServiceTier(visionChatProfile(1_050_000, CODEX_RESPONSES_REASONING)),
+      'gpt-6-astra': withPriorityServiceTier(visionChatProfile(1_050_000, CODEX_RESPONSES_REASONING)),
+      'gpt-6-sol': withPriorityServiceTier(visionChatProfile(1_050_000, CODEX_RESPONSES_REASONING)),
+      'gpt-6-luna': withPriorityServiceTier(visionChatProfile(1_050_000, CODEX_RESPONSES_REASONING)),
       'gpt-5.5': withPriorityServiceTier(
         visionChatProfile(1_000_000, CODEX_RESPONSES_REASONING)
       ),
