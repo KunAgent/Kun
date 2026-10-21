@@ -9,6 +9,8 @@ import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { loadKatexCopyTex } from '../../lib/katex-copy-tex'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import { sanitizeAssistantCanvasToolDisplay } from '../../design/canvas/strip-canvas-tool-display'
+import { ResolvedPreviewImage } from '../workspace-file-preview-support'
+import { localImageSource, LOCAL_IMAGE_SCHEME, rehypeLocalImages } from './rehype-local-images'
 import { StreamdownCode } from './StreamdownCode'
 import { StreamFadeChar } from './StreamFadeChar'
 import { createStreamFadeSource, rehypeStreamFade, STREAM_FADE_TAG } from './rehype-stream-fade'
@@ -21,6 +23,7 @@ export { visibleTextForTypewriter } from './assistant-text-reveal'
 
 const rehypePlugins = [
   rehypeFileReferences,
+  rehypeLocalImages,
   [
     harden,
     {
@@ -28,7 +31,10 @@ const rehypePlugins = [
       // Internal scheme synthesized by rehypeFileReferences; StreamdownLink
       // re-validates every target against the workspace before any click
       // handling, so allowing this protocol does not widen access.
-      allowedProtocols: ['deepseek-file:'],
+      allowedProtocols: ['deepseek-file:', LOCAL_IMAGE_SCHEME],
+      // Local image references are wrapped by rehypeLocalImages and loaded
+      // through the workspace image bridge in StreamdownImage.
+      allowedImagePrefixes: ['*'],
       // Harden's default "indicator" policy appends " [blocked]" after every
       // denied link; that internal security state must not leak into chat.
       linkBlockPolicy: 'text-only'
@@ -67,8 +73,31 @@ const math = createMathPlugin({
 const components = {
   code: StreamdownCode,
   a: StreamdownLink,
+  img: StreamdownImage,
   [STREAM_FADE_TAG]: StreamFadeChar
 } as StreamdownProps['components']
+
+type StreamdownImageProps = ComponentPropsWithRef<'img'> & { node?: unknown }
+
+/** Workspace images load through the image bridge; remote ones render as-is. */
+function StreamdownImage({ src, alt, title }: StreamdownImageProps): ReactElement {
+  const workspaceRoot = useTimelineFilePreviewWorkspaceRoot()
+  const local = typeof src === 'string' ? localImageSource(src) : null
+  const className = 'my-2 block max-h-[480px] max-w-full rounded-lg object-contain'
+  if (local === null) {
+    return <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} title={title} className={className} loading="lazy" />
+  }
+  // Relative paths resolve against the conversation's workspace.
+  return (
+    <ResolvedPreviewImage
+      src={local}
+      alt={alt}
+      title={title}
+      className={className}
+      filePath={workspaceRoot ? `${workspaceRoot.replace(/[\\/]+$/, '')}/.chat.md` : null}
+    />
+  )
+}
 
 type StreamdownLinkProps = ComponentPropsWithRef<'a'> & { node?: unknown }
 
