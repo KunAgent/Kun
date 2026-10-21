@@ -503,6 +503,7 @@
   "sidebarThreadRunning": "ランニング",
   "sidebarThreadAwaitingInput": "入力を待っています",
   "awaitingYourInput": "入力を待っています…",
+  "liveTurnSilentMinutes": "{{minutes}} 分間出力なし",
   "sidebarThreadUnread": "新しい返信",
   "sidebarThreadFailed": "タスクがエラーで終了しました。開いて確認",
   "sidebarThreadScheduled": "{{time}} に実行予定",

@@ -503,6 +503,7 @@
   "sidebarThreadRunning": "วิ่ง",
   "sidebarThreadAwaitingInput": "กำลังรอการป้อนข้อมูลของคุณ",
   "awaitingYourInput": "กำลังรอการป้อนข้อมูลของคุณ…",
+  "liveTurnSilentMinutes": "ไม่มีเอาต์พุตมา {{minutes}} นาที",
   "sidebarThreadUnread": "ตอบกลับใหม่",
   "sidebarThreadFailed": "งานจบด้วยข้อผิดพลาด — เปิดเพื่อตรวจสอบ",
   "sidebarThreadScheduled": "กำหนดไว้เวลา {{time}}",

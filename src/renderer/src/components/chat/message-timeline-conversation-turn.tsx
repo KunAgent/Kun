@@ -569,6 +569,7 @@ export function ConversationTurn({
           awaitingUserInput={awaitingUserInput}
           durationMs={durationMs}
           liveStartedAtMs={liveStartedAtMs}
+          threadId={threadId}
         />
       ) : null}
     </div>

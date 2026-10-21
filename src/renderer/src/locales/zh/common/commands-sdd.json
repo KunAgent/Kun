@@ -516,6 +516,7 @@
   "sidebarThreadRunning": "运行中",
   "sidebarThreadAwaitingInput": "等待你的输入",
   "awaitingYourInput": "等待你的输入…",
+  "liveTurnSilentMinutes": "已 {{minutes}} 分钟无新输出",
   "sidebarThreadUnread": "有新回复",
   "sidebarThreadFailed": "任务出错结束，打开查看错误",
   "sidebarThreadScheduled": "计划于 {{time}} 执行",

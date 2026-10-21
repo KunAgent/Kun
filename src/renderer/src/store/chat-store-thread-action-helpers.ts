@@ -1,5 +1,6 @@
 import type { AgentProvider, ThreadEventSink } from '../agent/types'
 import type { ChatState, ChatStoreGet } from './chat-store-types'
+import { noteThreadLiveActivity } from './thread-live-activity'
 import {
   noteThreadRecoveryEvidence,
   markThreadRecoveryCatchingUp,
@@ -54,6 +55,7 @@ export function subscribeThreadEventsWithRecovery(
   const recoverySink: ThreadEventSink = {
     ...sink,
     onSeq: (seq) => {
+      noteThreadLiveActivity(threadId)
       resetSseRecovery(threadId, subscription)
       sink.onSeq(seq)
     },

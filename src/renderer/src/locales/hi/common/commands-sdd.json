@@ -503,6 +503,7 @@
   "sidebarThreadRunning": "चल रहा है",
   "sidebarThreadAwaitingInput": "आपके इनपुट की प्रतीक्षा",
   "awaitingYourInput": "आपके इनपुट की प्रतीक्षा…",
+  "liveTurnSilentMinutes": "{{minutes}} मिनट से कोई आउटपुट नहीं",
   "sidebarThreadUnread": "नया उत्तर",
   "sidebarThreadFailed": "कार्य त्रुटि के साथ समाप्त — समीक्षा के लिए खोलें",
   "sidebarThreadScheduled": "{{time}} के लिए निर्धारित",

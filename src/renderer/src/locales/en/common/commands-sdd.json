@@ -516,6 +516,7 @@
   "sidebarThreadRunning": "Running",
   "sidebarThreadAwaitingInput": "Awaiting your input",
   "awaitingYourInput": "Awaiting your input…",
+  "liveTurnSilentMinutes": "no output for {{minutes}} min",
   "sidebarThreadUnread": "New reply",
   "sidebarThreadFailed": "Task ended with an error — open to review",
   "sidebarThreadScheduled": "Scheduled for {{time}}",

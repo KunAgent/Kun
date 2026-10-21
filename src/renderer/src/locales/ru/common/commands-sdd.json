@@ -503,6 +503,7 @@
   "sidebarThreadRunning": "Бег",
   "sidebarThreadAwaitingInput": "Ожидает вашего ввода",
   "awaitingYourInput": "Ожидает вашего ввода…",
+  "liveTurnSilentMinutes": "нет вывода {{minutes}} мин",
   "sidebarThreadUnread": "Новый ответ",
   "sidebarThreadFailed": "Задача завершилась с ошибкой — откройте для просмотра",
   "sidebarThreadScheduled": "Запланировано на {{time}}",

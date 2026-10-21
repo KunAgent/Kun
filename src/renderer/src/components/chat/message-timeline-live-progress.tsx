@@ -16,7 +16,7 @@ import { useUiPluginWorkLabel } from '../../store/ui-plugin-store'
 import { summarizeToolBlock } from './message-timeline-process'
 import { liveTurnProgressClass } from './message-timeline-jump-preview'
 import { formatDuration } from './message-timeline-tools'
-import { LiveElapsedText } from './LiveElapsedText'
+import { LiveElapsedText, LiveSilenceText } from './LiveElapsedText'
 
 /**
  * The live "working" row under the active turn. The elapsed suffix is a
@@ -30,7 +30,8 @@ export function LiveTurnProgressRow({
   activityLabel,
   awaitingUserInput = false,
   durationMs,
-  liveStartedAtMs
+  liveStartedAtMs,
+  threadId
 }: {
   tool?: Extract<ChatBlock, { kind: 'tool' }>
   thinking: boolean
@@ -38,6 +39,7 @@ export function LiveTurnProgressRow({
   awaitingUserInput?: boolean
   durationMs?: number
   liveStartedAtMs?: number
+  threadId?: string
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const swimMode = useWorkLogoSwimMode(true)
@@ -74,6 +76,7 @@ export function LiveTurnProgressRow({
     <LiveTurnActivityRow
       label={label}
       liveStartedAtMs={liveStartedAtMs}
+      threadId={threadId}
       ikunVariant={ikunVariant}
       swimMode={swimMode}
       awaitingUserInput={awaitingUserInput}
@@ -86,10 +89,12 @@ function LiveTurnActivityRow({
   liveStartedAtMs,
   ikunVariant,
   swimMode,
-  awaitingUserInput = false
+  awaitingUserInput = false,
+  threadId
 }: {
   label: string
   liveStartedAtMs?: number
+  threadId?: string
   ikunVariant?: IkunWorkLogoVariant
   swimMode?: WorkLogoSwimMode
   awaitingUserInput?: boolean
@@ -118,6 +123,9 @@ function LiveTurnActivityRow({
           {' · '}
           <LiveElapsedText sinceMs={liveStartedAtMs} />
         </span>
+      ) : null}
+      {typeof liveStartedAtMs === 'number' && threadId && !awaitingUserInput ? (
+        <LiveSilenceText threadId={threadId} sinceMs={liveStartedAtMs} />
       ) : null}
     </div>
   )
