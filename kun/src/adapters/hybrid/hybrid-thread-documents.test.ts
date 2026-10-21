@@ -6,7 +6,7 @@ import { makeAssistantTextItem } from '../../domain/item.js'
 import { createThreadRecord } from '../../domain/thread.js'
 import { appendTurnItem, createTurnRecord } from '../../domain/turn.js'
 import { stripThreadItemBodies } from './hybrid-thread-projection.js'
-import { HybridThreadDocumentRepository } from './hybrid-thread-documents.js'
+import { HybridThreadDocumentRepository, threadRecordBytesUpTo } from './hybrid-thread-documents.js'
 import * as sessionJsonl from '../file/file-session-jsonl.js'
 import { JsonlFileAccessCoordinator } from '../file/jsonl-file-access.js'
 
@@ -97,6 +97,27 @@ describe('HybridThreadDocumentRepository cache budget', () => {
       bytes: 0,
       maxBytes: 1_024
     })
+  })
+
+  it('sizes a record exactly while it fits and stops early once it cannot', () => {
+    const threadId = 'thread_record_size'
+    const turns = ['turn_1', 'turn_2'].map((turnId, turnIndex) => [0, 1, 2].reduce(
+      (turn, index) => appendTurnItem(turn, makeAssistantTextItem({
+        id: `${turnId}_item_${index}`, threadId, turnId, text: `é🙂${'x'.repeat(index * 10)}`, status: 'completed'
+      })),
+      createTurnRecord({ id: turnId, threadId, prompt: `prompt ${turnIndex}`, status: 'completed' })
+    ))
+    const record = { ...createThreadRecord({ id: threadId, title: 'Size', workspace: '/tmp', model: 'test' }), turns }
+    const exact = Buffer.byteLength(JSON.stringify(record))
+    expect(threadRecordBytesUpTo(record, exact)).toBe(exact)
+
+    let serialized = 0
+    const counted = (index: number) => ({
+      toJSON: () => { serialized += 1; return { id: `large_${index}`, text: 'x'.repeat(1_000) } }
+    })
+    const large = { ...record, turns: [{ ...turns[0], items: Array.from({ length: 1_000 }, (_, index) => counted(index)) }] }
+    expect(threadRecordBytesUpTo(large as unknown as typeof record, 4_096)).toBeGreaterThan(4_096)
+    expect(serialized).toBeLessThan(10)
   })
 })
 

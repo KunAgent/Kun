@@ -1,5 +1,5 @@
 import type { TurnItem } from '../../contracts/items.js'
-import { serializedBytes } from './file-session-jsonl.js'
+import { serializedArrayBytesUpTo, serializedBytes } from './file-session-jsonl.js'
 
 /**
  * Small bounded LRU cache for deduped item histories. The agent loop reloads
@@ -30,7 +30,7 @@ export class ItemsCache {
 
   set(threadId: string, items: TurnItem[]): void {
     this.remove(threadId)
-    const bytes = serializedBytes(items)
+    const bytes = serializedArrayBytesUpTo(items, this.maxBytes / 2)
     if (bytes > this.maxBytes / 2 || bytes > this.maxBytes) return
     this.items.set(threadId, items)
     this.bytes.set(threadId, bytes)
