@@ -2,6 +2,7 @@ import type { CSSProperties, ReactElement } from 'react'
 import { Check, ChevronDown, FilePlus2, Folder, Import, Search, Shapes } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import kunLaptopUrl from '../../../../asset/img/kun_laptop.png'
 import { RoomAvatarPortrait } from '../rooms/RoomAvatar'
 import { RoomPopover } from '../rooms/RoomPopover'
@@ -10,11 +11,13 @@ import { createWorkDraftDocument, ensureWorkSpaceMounted, mountWorkSpace, openPa
 import { useWorkWhiteboardCreation } from './use-work-whiteboard-creation'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 
-/** Kun's face for the Work assistant (quill) and paper contexts (glasses). */
+/** Kun's face for the Work assistant (quill) and paper contexts (glasses); hidden in Focus mode. */
 export function WorkKunAvatar({ variant = 'writer', size = 22 }: {
   variant?: 'writer' | 'researcher'
   size?: number
-}): ReactElement {
+}): ReactElement | null {
+  const focusMode = useFocusModeStore((state) => state.enabled)
+  if (focusMode) return null
   return (
     <span className="work-kun-avatar rooms-avatar" aria-hidden="true"
       style={{ '--rooms-avatar-size': `${size}px` } as CSSProperties}>
