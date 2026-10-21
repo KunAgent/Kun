@@ -1,6 +1,7 @@
 import { useChatStore } from '../store/chat-store'
 import { writeConversationResourcePath } from '../paper/paper-mode-actions'
 import { usePaperModeStore } from '../paper/paper-mode-store'
+import { selectPaperResearchSession } from '../paper/paper-research-actions'
 import { openLibraryEntry } from '../paper/paper-library-actions'
 import { useWriteWorkspaceStore, writeDirnameFromPath, writeJoinPath } from './write-workspace-store'
 import { normalizePath } from './write-workspace-store-helpers'
@@ -46,7 +47,7 @@ function relativeTo(root: string, path: string): string {
   return target.toLowerCase().startsWith(`${base.toLowerCase()}/`) ? target.slice(base.length + 1) : target
 }
 
-/** Open what a session is attached to when it has no remembered tabs. */
+/** Open the document, board, paper, or research run a session is attached to. */
 async function openSessionAnchor(root: string, session: WorkSessionEntry): Promise<void> {
   const write = useWriteWorkspaceStore.getState()
   const anchor = session.anchor
@@ -60,7 +61,7 @@ async function openSessionAnchor(root: string, session: WorkSessionEntry): Promi
     if (entry) await openLibraryEntry(entry, root)
   } else if (anchor.kind === 'research') {
     write.openPaperViewTab('discover:search')
-    write.setPaperResearch({ agentTab: true, sessionId: anchor.sessionId })
+    selectPaperResearchSession(anchor.sessionId)
   }
 }
 
@@ -139,7 +140,10 @@ export async function openWorkSession(session: WorkSessionEntry, root?: string):
     if (!spaceRoot) return
     useWorkSessionStore.getState().select(spaceRoot, session.id)
     await useChatStore.getState().selectWriteThread(session.id, spaceRoot)
-    if (!(await restoreSessionTabs(spaceRoot, session.id))) await openSessionAnchor(spaceRoot, session)
+    const restored = await restoreSessionTabs(spaceRoot, session.id)
+    // Restoring the discover tab does not carry the research run. Apply it
+    // anyway, or the page stays on the empty "new research" composer.
+    if (!restored || session.anchor.kind === 'research') await openSessionAnchor(spaceRoot, session)
   } finally {
     end()
   }
