@@ -61,7 +61,7 @@ export type ProviderImportLinkStageResult =
   | { ok: false; message: string }
 
 export type ProviderImportLinkCommitResult =
-  | { ok: true; providerId: string }
+  | { ok: true; providerId: string; unchanged?: boolean }
   | { ok: false; message: string }
 
 export type ProviderDetectedProtocol = {

@@ -269,8 +269,8 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     )
     const result = commitProviderImportLink(request.token, await store.load())
     if (!result.ok) return { ok: false, message: result.message }
-    await appendProviderProfile(result.profile)
-    return { ok: true, providerId: result.profile.id }
+    if (!result.unchanged) await appendProviderProfile(result.profile)
+    return { ok: true, providerId: result.profile.id, ...(result.unchanged ? { unchanged: true } : {}) }
   })
 
   ipcMain.handle('provider:icon:import', async (event, payload: unknown) => {

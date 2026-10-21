@@ -253,6 +253,7 @@ export class FileSessionStore implements SessionStore {
     const path = this.messagesPath(threadId)
     const record = serializeItemRecord(item)
     await this.withThreadWrite(threadId, () => this.fileAccess.withRead(path, async () => {
+      this.itemsCache.remove(threadId) // Live insertion order can differ from first durable occurrence.
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
       await this.liveItems.stageFinal(this.liveItemsPath(threadId), threadId, item)
       await this.itemIndex.append({
@@ -266,7 +267,6 @@ export class FileSessionStore implements SessionStore {
       })
       await this.liveItems.remove(this.liveItemsPath(threadId), threadId, item.id)
       this.bumpItemsVersion(threadId)
-      this.applyItemToCache(threadId, item)
       this.bumpItemHistoryRevision(threadId)
     }))
   }

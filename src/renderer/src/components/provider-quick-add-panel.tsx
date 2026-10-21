@@ -1,4 +1,5 @@
 import type { ModelProviderPresetMode, ModelProviderProfileV1 } from '@shared/app-settings'
+import { MAGPIE_TOKEN } from '@shared/magpie-import'
 import type { ModelProviderPreset } from '@shared/model-provider-presets'
 import {
   modelProviderPresetAccountProfile,
@@ -63,7 +64,7 @@ export function ProviderQuickAddPanel({
 }): ReactElement {
   const regions = mode === 'token-plan' ? preset.tokenPlan?.regions : preset.regions
   const defaultBaseUrl = mode === 'token-plan' ? preset.tokenPlan?.baseUrl ?? preset.baseUrl : preset.baseUrl
-  const [apiKey, setApiKey] = useState('')
+  const [apiKey, setApiKey] = useState(preset.id === 'magpie' ? MAGPIE_TOKEN : '')
   const [regionId, setRegionId] = useState(regions?.[0]?.id ?? '')
   const [baseUrl, setBaseUrl] = useState('')
   const [useProxy, setUseProxy] = useState(false)

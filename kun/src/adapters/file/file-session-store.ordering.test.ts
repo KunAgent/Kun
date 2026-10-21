@@ -1,7 +1,7 @@
 import { appendFile, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   makeAssistantReasoningItem,
   makeAssistantTextItem,
@@ -23,6 +23,71 @@ afterEach(async () => {
 })
 
 describe('FileSessionStore item ordering', () => {
+  it('keeps finalized stream order identical in warm and cold histories', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-live-order-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_live_order'
+    const turnId = 'turn_live_order'
+    const user = makeUserItem({ id: 'user', threadId, turnId, text: 'hello' })
+    const reasoning = makeAssistantReasoningItem({
+      id: 'reasoning', threadId, turnId, text: 'thinking', status: 'running'
+    })
+    const call = makeToolCallItem({
+      id: 'call', threadId, turnId, callId: 'tc', toolName: 'acp:fs.write', arguments: {}
+    })
+    await store.appendItem(threadId, user)
+    await store.loadItems(threadId)
+    await store.checkpointLiveItem(threadId, reasoning, 1)
+    await store.appendItem(threadId, call)
+    // A host-mediated tool can be persisted before the reasoning stream ends.
+    const final = makeAssistantReasoningItem({ ...reasoning, text: 'thinking', status: 'completed' })
+    await store.finalizeLiveItem(threadId, final)
+    expect((await store.loadItems(threadId)).map((item) => item.id))
+      .toEqual(['user', 'call', 'reasoning'])
+    store.clearThreadMemory(threadId)
+    expect((await store.loadItems(threadId)).map((item) => item.id))
+      .toEqual(['user', 'call', 'reasoning'])
+
+    await store.appendItem(threadId, makeAssistantTextItem({
+      id: 'answer', threadId, turnId, text: 'done', status: 'completed'
+    }))
+    // Retrying finalization must preserve an already-durable item's position.
+    await store.finalizeLiveItem(threadId, final)
+    const warm = await store.loadItems(threadId)
+    await store.close()
+    const restarted = new FileSessionStore({ dataDir: root })
+    expect(await restarted.loadItems(threadId)).toEqual(warm)
+    expect(warm.map((item) => item.id)).toEqual(['user', 'call', 'reasoning', 'answer'])
+    await restarted.close()
+  })
+
+  it('does not retain live ordering if cleanup fails after the final append', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-live-order-retry-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_live_retry'
+    const turnId = 'turn_live_retry'
+    const reasoning = makeAssistantReasoningItem({
+      id: 'reasoning', threadId, turnId, text: 'thinking', status: 'running'
+    })
+    await store.loadItems(threadId)
+    await store.checkpointLiveItem(threadId, reasoning, 1)
+    await store.appendItem(threadId, makeAssistantTextItem({
+      id: 'other', threadId, turnId, text: 'other', status: 'completed'
+    }))
+    const remove = vi.spyOn(store.liveItems, 'remove').mockRejectedValueOnce(new Error('cleanup failed'))
+    const final = makeAssistantReasoningItem({ ...reasoning, text: 'thinking', status: 'completed' })
+    await expect(store.finalizeLiveItem(threadId, final)).rejects.toThrow('cleanup failed')
+    remove.mockRestore()
+    expect((await store.loadItems(threadId)).map((item) => item.id)).toEqual(['other', 'reasoning'])
+    await store.finalizeLiveItem(threadId, final)
+    const warm = await store.loadItems(threadId)
+    store.clearThreadMemory(threadId)
+    expect(await store.loadItems(threadId)).toEqual(warm)
+    await store.close()
+  })
+
   it('checkpoints a long assistant stream without cumulative canonical appends', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-session-live-item-'))
     roots.push(root)

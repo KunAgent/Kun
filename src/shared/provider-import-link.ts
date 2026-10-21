@@ -1,10 +1,18 @@
 import { isLocalModelProviderBaseUrl } from './app-settings-provider-failover'
+import {
+  isMagpieProviderImportLink,
+  MAGPIE_PROVIDER_ID,
+  MAGPIE_TOKEN,
+  magpieConnection,
+  parseMagpieImportLink
+} from './magpie-import'
 
 /**
  * `kun://import` deep-link parsing and validation. Two forms:
  *
  *   kun://import?preset=<presetId>&key=<apiKey>
  *   kun://import?name=<name>&chat=<baseUrl>&anthropic=<baseUrl>&responses=<baseUrl>&models=a,b&key=<apiKey>
+ *   kun://provider/import?v=1&data=<base64url JSON>  (local Magpie only)
  *
  * The parsed result is a draft for the add-provider confirmation sheet; it
  * is never applied without explicit user confirmation.
@@ -33,7 +41,8 @@ const MAX_KEY_LENGTH = 8_192
 const KEY_PATTERN = /^[!-~]+$/
 
 export function isProviderImportLink(raw: string): boolean {
-  return /^kun:\/\/import(?:[/?#]|$)/iu.test(raw.trim())
+  const trimmed = raw.trim()
+  return /^kun:\/\/import(?:[/?#]|$)/iu.test(trimmed) || isMagpieProviderImportLink(trimmed)
 }
 
 function validateEndpointUrl(raw: string): { ok: true; url: string } | { ok: false; message: string } {
@@ -61,6 +70,26 @@ function validateEndpointUrl(raw: string): { ok: true; url: string } | { ok: fal
 
 export function parseProviderImportLink(raw: string): ProviderImportLinkResult {
   const trimmed = raw.trim()
+  if (isMagpieProviderImportLink(trimmed)) {
+    try {
+      const connection = magpieConnection(parseMagpieImportLink(trimmed))
+      return {
+        ok: true,
+        draft: {
+          presetId: MAGPIE_PROVIDER_ID,
+          name: 'Magpie',
+          key: MAGPIE_TOKEN,
+          models: [],
+          ...(connection.chatBaseUrl ? { chatBaseUrl: connection.chatBaseUrl } : {}),
+          ...(connection.anthropicBaseUrl ? { anthropicBaseUrl: connection.anthropicBaseUrl } : {}),
+          ...(connection.responsesBaseUrl ? { responsesBaseUrl: connection.responsesBaseUrl } : {})
+        },
+        warnings: []
+      }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : 'Invalid Magpie import' }
+    }
+  }
   if (!isProviderImportLink(trimmed)) {
     return { ok: false, message: 'Not a kun://import link.' }
   }
