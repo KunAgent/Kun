@@ -88,7 +88,9 @@ app.on('window-all-closed', () => app.quit())
     report.blockedRequests.push(requested)
     return route.abort('blockedbyclient')
   })
-  await page.goto(url)
+  // The first load waits on Vite's forced dependency re-optimization, which
+  // can outlast Playwright's 30 s default on Windows runners.
+  await page.goto(url, { timeout: 90_000 })
   await page.locator('[data-settings-category-view="general"]').waitFor({ timeout: 90_000 })
   cdp = await page.context().newCDPSession(page)
   await cdp.send('DOM.enable')
