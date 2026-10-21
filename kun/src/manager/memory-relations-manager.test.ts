@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { relationBinding } from '../memory/memory-relations.js'
 import { startNodeHttpServer } from '../server/node-http-server.js'
@@ -9,8 +9,9 @@ import type { ServiceManagerConnection } from './manager-client.js'
 import { ManagerRemoteMemoryStore } from './remote-data-stores.js'
 import { buildServiceManagerRouter, ServiceManagerState } from './service-manager.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
+import { withMemoryMutation } from '../memory/memory-mutation-queue.js'
 
-it('round-trips relation review through the Manager owner and scrubs erased endpoints', async () => {
+async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'kun-relations-manager-'))
   const dataDir = join(root, 'data')
   const owner = await ManagerSharedDataStore.create(dataDir)
@@ -26,6 +27,11 @@ it('round-trips relation review through the Manager owner and scrubs erased endp
     startedAt, host: '127.0.0.1', port: server.port, baseUrl: `http://127.0.0.1:${server.port}`,
     managerToken: 'test-token', serviceVersion: '0.4.1', dataDir, settingsPath: join(root, 'settings.json')
   } }
+  return { root, dataDir, owner, server, connection }
+}
+
+it('round-trips relation review through the Manager owner and scrubs erased endpoints', async () => {
+  const { root, owner, server, connection } = await fixture()
   try {
     const config = MemoryCapabilityConfig.parse({ enabled: true, relationContextEnabled: true })
     const first = new ManagerRemoteMemoryStore(connection, config)
@@ -53,6 +59,48 @@ it('round-trips relation review through the Manager owner and scrubs erased endp
     expect((await second.relations({ action: 'list', memoryId: source.id, access: {} })).relations).toEqual([])
     expect((await second.relationContext(projection)).annotations).toEqual([])
   } finally {
+    await server.close()
+    await owner.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+it.each(['cancel', 'deadline'])('fences queued Manager relation writes after %s', async (reason) => {
+  const { root, dataDir, owner, server, connection } = await fixture()
+  let release: () => void = () => {}
+  try {
+    const remote = new ManagerRemoteMemoryStore(connection, MemoryCapabilityConfig.parse({ enabled: true }))
+    const source = await remote.create({ content: 'Database version 17.', scope: 'user' })
+    const target = await remote.create({ content: 'Database version 16.', scope: 'user' })
+    const hold = withMemoryMutation(join(dataDir, 'memory'), () => new Promise<void>((resolve) => { release = resolve }))
+    let arrived!: (signal: AbortSignal) => void
+    const received = new Promise<AbortSignal>((resolve) => { arrived = resolve })
+    const original = owner.executeMemory.bind(owner)
+    vi.spyOn(owner, 'executeMemory').mockImplementation((operation, value, signal) => {
+      if (operation === 'relations') arrived(signal!)
+      return original(operation, value, signal)
+    })
+    const controller = new AbortController()
+    const deadlineAt = Date.now() + 60_000
+    const pending = remote.relations({ action: 'propose', access: {}, deadlineAt, proposals: [{
+      source: relationBinding(source), target: relationBinding(target), kind: 'contradicts',
+      sourceEvidence: { start: 0, end: 19 }, targetEvidence: { start: 0, end: 19 }
+    }] }, controller.signal)
+    const rejected = expect(pending).rejects.toThrow()
+    const ownerSignal = await received
+    if (reason === 'cancel') {
+      const cancelled = new Promise<void>((resolve) => ownerSignal.addEventListener('abort', () => resolve(), { once: true }))
+      controller.abort()
+      await cancelled
+    } else vi.spyOn(Date, 'now').mockReturnValue(deadlineAt + 1)
+    release()
+    await hold
+    await rejected
+    vi.restoreAllMocks()
+    expect((await remote.relations({ action: 'list', memoryId: source.id, access: {} })).relations).toEqual([])
+  } finally {
+    release()
+    vi.restoreAllMocks()
     await server.close()
     await owner.close()
     await rm(root, { recursive: true, force: true })

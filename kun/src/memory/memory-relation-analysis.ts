@@ -54,6 +54,7 @@ export async function analyzeMemoryRelations(options: {
   const controller = new AbortController()
   const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal
   const timeoutMs = options.timeoutMs ?? MEMORY_RELATION_TIMEOUT_MS
+  const deadlineAt = Date.now() + timeoutMs
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   let rejectAbort: () => void = () => {}
   try {
@@ -75,7 +76,7 @@ export async function analyzeMemoryRelations(options: {
           status: 'completed', text, createdAt: now }],
         tools: [], stream: false, maxTokens: 2048, temperature: 0, topP: 1,
         responseFormat: 'json_object', reasoningEffort: 'off', abortSignal: signal,
-        deadlineAt: Date.now() + timeoutMs, redactedRequestValues: [text, source.content, ...targets.map((x) => x.content)]
+        deadlineAt, redactedRequestValues: [text, source.content, ...targets.map((x) => x.content)]
       })) {
         signal.throwIfAborted()
         if (chunk.kind === 'assistant_text_delta') {
@@ -106,7 +107,10 @@ export async function analyzeMemoryRelations(options: {
         targetEvidence: exactSpan(target.content, entry.targetQuote)
       }
     })
-    return await store.relations({ action: 'propose', proposals, access: input.access })
+    return await Promise.race([
+      store.relations({ action: 'propose', proposals, access: input.access, deadlineAt }, signal),
+      aborted
+    ])
   } finally {
     clearTimeout(timer)
     signal.removeEventListener('abort', rejectAbort)

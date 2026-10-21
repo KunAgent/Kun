@@ -42,6 +42,9 @@ The model has no tools, a 2,048-token output budget, a 20-second application dea
 and a strict eight-suggestion JSON contract. Only one analysis request per runtime
 is admitted at a time. Cancellation requests are forwarded to the adapter; late
 output cannot persist suggestions, even if an adapter ignores cancellation.
+The original deadline and cancellation are checked after waiting for storage and
+again immediately before the atomic ledger commit, including in managed mode.
+Cancellation cannot undo a write that already crossed that commit boundary.
 Provider-side cancellation and actual billing remain provider-dependent.
 
 Every quote must be an unambiguous, exact substring of a supplied record. Unknown

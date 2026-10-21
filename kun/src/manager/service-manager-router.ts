@@ -484,7 +484,8 @@ export function buildServiceManagerRouter(input: {
       try {
         const result = await input.sharedData!.executeMemory(
           operation.data as ManagerMemoryStoreOperation,
-          body.value
+          body.value,
+          request.signal
         )
         return jsonResponse({ result })
       } catch (error) {

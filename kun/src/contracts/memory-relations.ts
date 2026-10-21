@@ -46,6 +46,8 @@ export const MemoryRelationCommand = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('propose'),
     proposals: z.array(MemoryRelationProposal).max(8),
+    // Internal model-analysis deadline, carried to the Manager commit boundary.
+    deadlineAt: z.number().int().positive().optional(),
     access: MemoryRelationAccess
   }).strict(),
   z.object({

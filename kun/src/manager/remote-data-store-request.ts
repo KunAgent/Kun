@@ -13,13 +13,15 @@ export async function callManagerStore(
   manager: ServiceManagerConnection,
   store: ManagerStore,
   operation: string,
-  value?: unknown
+  value?: unknown,
+  signal?: AbortSignal
 ): Promise<unknown> {
   const turnFence = shouldFenceManagerStoreMutation(store, operation)
     ? mutationFenceForValue(value)
     : undefined
   const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
     method: 'POST',
+    signal,
     retrySafe: isManagerStoreRead(store, operation),
     body: store === 'thread' || store === 'session'
       ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}) }

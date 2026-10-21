@@ -32,7 +32,7 @@ describe('Memory relation HTTP boundary', () => {
     expect(relations).not.toHaveBeenCalled()
     const value = { action: 'list', memoryId: 'mem_a', access: { workspace: '/workspace' } }
     expect((await memoryRelations(runtime, request(value), false)).status).toBe(200)
-    expect(relations).toHaveBeenCalledWith(value)
+    expect(relations).toHaveBeenCalledWith(value, expect.any(AbortSignal))
   })
 
   it('requires explicit revision and a configured model before analysis', async () => {

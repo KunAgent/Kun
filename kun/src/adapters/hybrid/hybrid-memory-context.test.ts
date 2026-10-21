@@ -6,6 +6,7 @@ import { MemoryCapabilityConfig } from '../../contracts/capabilities.js'
 import { relationBinding } from '../../memory/memory-relations.js'
 import { resolveMemoryTurnContext } from '../../memory/memory-turn-context.js'
 import { HybridMemoryStore } from './hybrid-memory-store.js'
+import { withMemoryMutation } from '../../memory/memory-mutation-queue.js'
 
 describe('Hybrid relation context parity and preview diagnostics', () => {
   it.each([false, true])('keeps selected records and live diagnostics stable (degraded=%s)', async (degraded) => {
@@ -19,6 +20,19 @@ describe('Hybrid relation context parity and preview diagnostics', () => {
       const source = await store.createWithId('mem_a', { content: 'Project database version 17.', scope: 'user' })
       const target = await store.createWithId('mem_b', { content: 'Project database version 16.', scope: 'user' })
       await store.waitForBackfill()
+      let release!: () => void
+      const hold = withMemoryMutation(join(root, 'memory'), () => new Promise<void>((resolve) => { release = resolve }))
+      const controller = new AbortController()
+      const cancelled = store.relations({ action: 'propose', access: {}, proposals: [{
+        source: relationBinding(source), target: relationBinding(target), kind: 'contradicts',
+        sourceEvidence: { start: 0, end: 28 }, targetEvidence: { start: 0, end: 28 }
+      }] }, controller.signal)
+      await Promise.resolve()
+      controller.abort()
+      release()
+      await hold
+      await expect(cancelled).rejects.toThrow()
+      expect((await store.relations({ action: 'list', memoryId: source.id, access: {} })).relations).toEqual([])
       const id = (await store.relations({ action: 'propose', access: {}, proposals: [{
         source: relationBinding(source), target: relationBinding(target), kind: 'contradicts',
         sourceEvidence: { start: 0, end: 28 }, targetEvidence: { start: 0, end: 28 }

@@ -28,9 +28,17 @@ export async function executeMemoryRelationCommand(options: {
   command: MemoryRelationCommand
   authorize: (id: string, access: MemoryAccess) => Promise<MemoryRecord>
   now: string
+  signal?: AbortSignal
 }): Promise<MemoryRelationResult> {
   const { rootDir, authorize, now } = options
   const command = MemoryRelationCommand.parse(options.command)
+  const assertCurrent = () => {
+    options.signal?.throwIfAborted()
+    if (command.action === 'propose' && command.deadlineAt !== undefined && Date.now() >= command.deadlineAt) {
+      throw new Error('Memory relation analysis deadline expired')
+    }
+  }
+  assertCurrent()
   const ledger = await readLedger(rootDir)
   const originalCount = ledger.suggestions.length
   const forgetting = await readMemoryForgetting(rootDir)
@@ -63,7 +71,7 @@ export async function executeMemoryRelationCommand(options: {
       return !record || record.deletedAt
     })).map((entry) => entry.id))
   ledger.suggestions = ledger.suggestions.filter((entry) => !removed.has(entry.id))
-  if (ledger.suggestions.length !== originalCount) await writeLedger(rootDir, ledger)
+  if (ledger.suggestions.length !== originalCount) await writeLedger(rootDir, ledger, options.signal, assertCurrent)
 
   const view = async (entry: MemoryRelationSuggestion) => {
     const [source, target] = await Promise.all([
@@ -94,7 +102,7 @@ export async function executeMemoryRelationCommand(options: {
     if (entry.status === 'accepted') {
       entry.status = 'rejected'
       entry.decidedAt = now
-      await writeLedger(rootDir, ledger)
+      await writeLedger(rootDir, ledger, options.signal, assertCurrent)
     }
     return { relations: [result] }
   }
@@ -108,7 +116,7 @@ export async function executeMemoryRelationCommand(options: {
     if (entry.status === 'pending') {
       entry.status = command.decision
       entry.decidedAt = now
-      await writeLedger(rootDir, ledger)
+      await writeLedger(rootDir, ledger, options.signal, assertCurrent)
     }
     return { relations: [result] }
   }
@@ -129,7 +137,7 @@ export async function executeMemoryRelationCommand(options: {
     }
   }
   if (ledger.suggestions.length > MAX_RELATIONS) throw new Error('Memory relation storage is full')
-  if (command.proposals.length) await writeLedger(rootDir, ledger)
+  if (command.proposals.length) await writeLedger(rootDir, ledger, options.signal, assertCurrent)
   return { relations }
 }
 
@@ -215,10 +223,10 @@ async function readLedger(rootDir: string): Promise<Ledger> {
   }
 }
 
-async function writeLedger(rootDir: string, ledger: Ledger): Promise<void> {
+async function writeLedger(rootDir: string, ledger: Ledger, signal?: AbortSignal, beforeCommit?: () => void): Promise<void> {
   const directory = join(rootDir, 'relations')
   const text = JSON.stringify(Ledger.parse(ledger))
   if (Buffer.byteLength(text) > 2_000_000) throw new Error('Memory relation storage exceeds its limit')
   await mkdir(directory, { recursive: true, mode: 0o700 })
-  await atomicWriteFile(join(directory, 'suggestions.json'), text)
+  await atomicWriteFile(join(directory, 'suggestions.json'), text, { signal, beforeCommit, allowDirectWriteFallback: false })
 }

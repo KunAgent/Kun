@@ -192,7 +192,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     return executeArtifactStoreOperation(this.artifactStore, operation, value)
   }
 
-  async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown): Promise<unknown> {
+  async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown, signal?: AbortSignal): Promise<unknown> {
     if (operation === 'distillationPending') {
       const body = z.object({ value: z.unknown() }).strict().parse(value)
       const run = this.memoryQueue.catch(() => undefined)
@@ -217,7 +217,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           return store.relationContext(MemoryRelationContextRequest.parse(body.value), body.config)
         case 'relations':
           if (!store.relations) throw new Error('Memory relations are unavailable')
-          return store.relations(MemoryRelationCommand.parse(body.value))
+          return store.relations(MemoryRelationCommand.parse(body.value), signal)
         case 'erasureReceipt':
         case 'history':
         case 'isForgotten': return executeMemoryLifecycleOperation(store, operation, body.value)

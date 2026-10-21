@@ -6,9 +6,12 @@ import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
 import { FileMemoryStore } from './memory-store.js'
 import { analyzeMemoryRelations, relationCandidates } from './memory-relation-analysis.js'
+import { withMemoryMutation } from './memory-mutation-queue.js'
 
 const directories: string[] = []
 afterEach(async () => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 async function fixture() {
@@ -23,7 +26,7 @@ async function fixture() {
     yield { kind: 'assistant_text_delta', text: JSON.stringify(value) } as ModelStreamChunk
     yield { kind: 'completed', stopReason: 'stop' } as ModelStreamChunk
   }) })
-  return { store, input, relation, model }
+  return { rootDir, store, input, relation, model }
 }
 
 describe('Memory relation analysis', () => {
@@ -128,5 +131,31 @@ describe('Memory relation analysis', () => {
     release()
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect((await f.store.relations({ action: 'list', memoryId: f.input.memoryId, access: {} })).relations).toEqual([])
+  })
+
+  it.each(['cancel', 'timeout'])('never persists a queued analysis after %s', async (reason) => {
+    const f = await fixture()
+    let release!: () => void
+    const hold = withMemoryMutation(f.rootDir, () => new Promise<void>((resolve) => { release = resolve }))
+    let entered!: () => void
+    const queued = new Promise<void>((resolve) => { entered = resolve })
+    const original = f.store.relations.bind(f.store)
+    vi.spyOn(f.store, 'relations').mockImplementation((...args) => { entered(); return original(...args) })
+    const controller = new AbortController()
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const pending = analyzeMemoryRelations({ ...f, model: f.model({ relations: [f.relation] }),
+      modelId: 'configured', signal: controller.signal, timeoutMs: 1000 })
+    const rejected = expect(pending).rejects.toThrow(/cancelled|timed out/)
+    try {
+      await queued
+      if (reason === 'cancel') controller.abort()
+      else await vi.advanceTimersByTimeAsync(1001)
+      await rejected
+    } finally {
+      vi.useRealTimers()
+      release()
+      await hold
+    }
+    expect((await original({ action: 'list', memoryId: f.input.memoryId, access: {} })).relations).toEqual([])
   })
 })

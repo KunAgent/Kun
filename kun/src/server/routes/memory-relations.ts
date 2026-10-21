@@ -20,7 +20,7 @@ export async function memoryRelations(runtime: ServerRuntime, request: Request, 
   if (!analyze) {
     const parsed = ReviewOrList.safeParse(body.value)
     if (!parsed.success) return ERRORS.validation('Invalid memory relation request')
-    try { return jsonResponse(await runtime.memoryStore.relations(parsed.data)) }
+    try { return jsonResponse(await runtime.memoryStore.relations(parsed.data, request.signal)) }
     catch (error) { return relationError(error) }
   }
   const parsed = MemoryRelationAnalyzeRequest.safeParse(body.value)

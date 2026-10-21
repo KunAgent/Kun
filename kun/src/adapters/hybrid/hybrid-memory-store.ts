@@ -102,8 +102,8 @@ export class HybridMemoryStore implements MemoryStore {
   }
 
   async ready(): Promise<void> { await this.readyPromise }
-  async relations(command: MemoryRelationCommand) {
-    return this.enqueueMutation(() => this.canonical.relations(command))
+  async relations(command: MemoryRelationCommand, signal?: AbortSignal) {
+    return this.enqueueMutation(() => this.canonical.relations(command, signal))
   }
   async relationContext(request: MemoryRelationContextRequest, policy = this.config()) {
     return this.enqueueMutation(() => this.canonical.relationContext(request, policy))

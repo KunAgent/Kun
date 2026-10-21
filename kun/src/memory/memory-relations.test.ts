@@ -1,14 +1,16 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { MemoryRelationCommand, MemoryRelationModelOutput, MemoryRelationProposal } from '../contracts/memory-relations.js'
 import { FileMemoryStore } from './memory-store.js'
 import { relationBinding, sameRelationScope } from './memory-relations.js'
+import { executeMemoryRelationCommand } from './memory-relation-store.js'
 
 const directories: string[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
@@ -149,5 +151,25 @@ describe('Memory relation storage', () => {
     await writeFile(join(f.rootDir, f.target.id + '.json'), '{invalid-endpoint')
     await expect(f.store.relations({ action: 'list', memoryId: f.source.id, access: {} })).rejects.toThrow(/endpoint is unavailable/)
     expect(await readFile(path, 'utf8')).toBe(before)
+  })
+
+  it.each(['cancel', 'timeout'])('checks %s again after asynchronous endpoint validation', async (reason) => {
+    const f = await fixture()
+    const controller = new AbortController()
+    let now = Date.now()
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const command = { action: 'propose' as const, proposals: [f.proposal], access: {}, deadlineAt: now + 60_000 }
+    await expect(executeMemoryRelationCommand({ rootDir: f.rootDir, command,
+      now: new Date().toISOString(), signal: controller.signal,
+      authorize: async (id, access) => {
+        const record = await f.store.getById(id, access)
+        if (id === f.target.id) {
+          if (reason === 'cancel') controller.abort()
+          else now += 60_001
+        }
+        return record
+      }
+    })).rejects.toThrow()
+    expect((await f.store.relations({ action: 'list', memoryId: f.source.id, access: {} })).relations).toEqual([])
   })
 })

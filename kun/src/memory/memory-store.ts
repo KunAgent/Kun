@@ -55,7 +55,7 @@ import {
 
 export interface MemoryStore {
   relationContext?(request: MemoryRelationContextRequest, policy?: MemoryCapabilityConfig): Promise<MemoryRelationContextResult>
-  relations?(command: MemoryRelationCommand): Promise<MemoryRelationResult>
+  relations?(command: MemoryRelationCommand, signal?: AbortSignal): Promise<MemoryRelationResult>
   erasureReceipt?(operationId: string): Promise<string[]>
   isForgotten?(input: MemoryCreateRequest, id?: string): Promise<boolean>
   history?(id: string, access?: MemoryAccess): Promise<MemoryHistoryResult>
@@ -119,9 +119,9 @@ export class FileMemoryStore implements MemoryStore {
 
   async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> { return this.mustGet(id, access) }
 
-  async relations(command: MemoryRelationCommand): Promise<MemoryRelationResult> {
+  async relations(command: MemoryRelationCommand, signal?: AbortSignal): Promise<MemoryRelationResult> {
     return withMemoryMutation(this.options.rootDir, () => executeMemoryRelationCommand({
-      rootDir: this.options.rootDir, command, now: this.now(),
+      rootDir: this.options.rootDir, command, now: this.now(), signal,
       authorize: (id, access) => this.mustGet(id, access)
     }))
   }

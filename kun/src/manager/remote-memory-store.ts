@@ -36,8 +36,8 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     return MemoryRelationContextResult.parse(await this.call('relationContext', request))
   }
 
-  async relations(command: MemoryRelationCommand): Promise<MemoryRelationResult> {
-    return MemoryRelationResult.parse(await this.call('relations', command))
+  async relations(command: MemoryRelationCommand, signal?: AbortSignal): Promise<MemoryRelationResult> {
+    return MemoryRelationResult.parse(await this.call('relations', command, signal))
   }
 
   constructor(
@@ -125,10 +125,10 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     this.lastInjectedIds = [...ids]
   }
 
-  private call(operation: string, value?: unknown): Promise<unknown> {
+  private call(operation: string, value?: unknown, signal?: AbortSignal): Promise<unknown> {
     return callManagerStore(this.manager, 'memory', operation, {
       config: this.config,
       value: value ?? {}
-    })
+    }, signal)
   }
 }
