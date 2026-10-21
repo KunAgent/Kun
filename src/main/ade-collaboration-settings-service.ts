@@ -24,6 +24,7 @@ function valueFromAde(ade: KunAdeSettingsV1): AdeCollaborationSettingsValue {
     ...(ade.budget ? { budget: { ...ade.budget } } : {}),
     hibernation: { ...ade.hibernation },
     stall: { ...ade.stall },
+    dispatch: { ...ade.dispatch },
     harnessRouter: ade.harnessRouter,
     deterministicHandoff: ade.deterministicHandoff
   }
@@ -77,6 +78,7 @@ export function createAdeCollaborationSettingsService(options: {
             budget: request.value.budget ?? null,
             hibernation: request.value.hibernation,
             stall: request.value.stall,
+            dispatch: request.value.dispatch,
             harnessRouter: request.value.harnessRouter,
             deterministicHandoff: request.value.deterministicHandoff
           } } }

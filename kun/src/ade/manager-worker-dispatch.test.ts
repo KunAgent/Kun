@@ -196,6 +196,37 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild.mock.calls[0][0]).toMatchObject({ prompt: expect.stringContaining('Perform the revised task.') })
   })
 
+  it('switches one worker of a batch to another Agent and model from the card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent.recommendation.assignments).toEqual([
+      expect.objectContaining({ label: 'Independent task', agentId: 'kun', model: 'main-model' }),
+      expect.objectContaining({ label: 'Second', agentId: 'kun', model: 'main-model' })])
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, ...route }) => route)
+    f.clock.now += 30_000
+    const updated = await f.service.act(intent.intentId, { action: 'update', requestId: 'route', expectedRevision: intent.revision,
+      recommendation: { assignments: [routes[0], { agentId: 'claude-code', model: 'other-model', credentialMode: 'native-login' }] } })
+    expect(updated).toMatchObject({ state: 'countdown', recommendation: { agentSelection: 'user', assignments: [
+      { agentId: 'kun', model: 'main-model' }, { agentId: 'claude-code', model: 'other-model', agentName: 'Claude Code' }] } })
+    f.clock.now += 59_000; await f.service.reconcile(); expect(f.runChild).not.toHaveBeenCalled()
+    f.clock.now += 1_000; await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
+    const harnesses = f.runChild.mock.calls.map(([input]) => (input as { harnessId?: string }).harnessId).sort()
+    expect(harnesses).toEqual(['claude-code', 'kun'])
+  })
+
+  it('rejects an unavailable model choice without changing the card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    await expect(f.service.act(intent.intentId, { action: 'update', requestId: 'bad', expectedRevision: intent.revision,
+      recommendation: { assignments: [{ agentId: 'claude-code', model: 'missing-model', credentialMode: 'native-login' }] } }))
+      .rejects.toThrow(/missing-model/)
+    expect(await f.service.get(intent.intentId)).toMatchObject({ revision: intent.revision,
+      recommendation: { agentId: 'kun', assignments: [{ agentId: 'kun' }] } })
+  })
+
   it('revalidates disabled profiles before workspace creation', async () => {
     const f = await setup('full-access'); const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
     f.disabled.add('kun'); f.clock.now += 60_000; await f.service.reconcile()

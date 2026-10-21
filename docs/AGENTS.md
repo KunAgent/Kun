@@ -109,8 +109,12 @@ Ordinary new Code tasks can delegate without the advanced ADE switch. External
 main Agents require a functioning scoped Kun tool bridge; workers and delegated
 children must never create recursive teams. Both worker tools and private assistant
 Code handoffs use the shared host-owned dispatch intent: user confirmation,
-immediate automatic review, or a 60-second full-access intervention window.
-Renderer timers display deadlines only. Do not implement auto-click or create
+immediate automatic review, or a full-access intervention window. The
+no-response window is `agents.kun.ade.dispatch.autoStartSeconds` (default 60,
+0 = always wait); `autoStartWhenConfirmationRequired` extends it to
+ask-for-approval cards, and every user adjustment restarts it. Worker cards carry
+per-worker routes (`recommendation.assignments`) that stay switchable until
+admission. Renderer timers display deadlines only. Do not implement auto-click or create
 workspaces/processes before host admission. Controls use revisions and replay IDs;
 source authority only narrows, and completion preserves the source main route.
 

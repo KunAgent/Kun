@@ -37,6 +37,7 @@ import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
 import { useTimelineSurface } from './timeline-surface'
 import { LiveTurnProgressRow } from './message-timeline-live-progress'
 import { GmailRequestedCards } from './gmail-tool-card'
+import { AgentDispatchGroup } from './AgentDispatchCard'
 import { useTurnUndo } from './turn-undo-controls'
 import {
   parseDelegateDetail,
@@ -396,6 +397,10 @@ export function ConversationTurn({
 
       {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
         <GmailRequestedCards blocks={workProcessBlocks} />
+      ) : null}
+
+      {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
+        <AgentDispatchGroup blocks={workProcessBlocks} readOnly={!allowMainThreadActions} />
       ) : null}
 
       {!hasOrderedTimeline

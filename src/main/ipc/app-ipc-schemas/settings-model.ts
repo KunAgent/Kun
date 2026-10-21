@@ -642,6 +642,10 @@ export const kunRuntimePatchSchema = z.object({
       structuredMinutes: z.number().int().min(1).max(240).optional(),
       terminalMinutes: z.number().int().min(1).max(480).optional()
     }).strict().optional(),
+    dispatch: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
+      autoStartWhenConfirmationRequired: z.boolean().optional()
+    }).strict().optional(),
     notifications: z.object({
       waiting: z.boolean().optional(),
       failed: z.boolean().optional(),

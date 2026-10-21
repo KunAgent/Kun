@@ -1,4 +1,5 @@
 import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
+import { AdeDispatchConfigSchema } from './ade-dispatch-config.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -455,6 +456,7 @@ export const AdeConfigSchema = z
     managerMayApprove: z.boolean().default(false),
     /** Unattended turns may keep full-access when true; otherwise clamped. */
     allowUnattendedFullAccess: z.boolean().default(false),
+    dispatch: AdeDispatchConfigSchema,
     limits: z
       .object({
         softWorkers: z.number().int().min(1).max(16).default(4),

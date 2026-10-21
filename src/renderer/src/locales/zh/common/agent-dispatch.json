@@ -1,24 +1,24 @@
 {
   "dispatchIntent": {
     "loading": "正在加载 Agent 任务…",
-    "countdown": "{{seconds}} 秒后按推荐自动执行",
-    "startNow": "立即按推荐执行",
-    "confirm": "确认并执行",
-    "resume": "恢复推荐方案",
-    "adjust": "调整",
+    "countdown": "{{seconds}} 秒后自动派发",
+    "startNow": "立即派发",
+    "confirm": "确认派发",
+    "resume": "继续",
+    "adjust": "编辑任务",
     "stop": "停止",
     "cancel": "取消",
     "title": "任务标题",
     "task": "任务说明",
-    "save": "保存推荐方案",
-    "keepRecommendation": "保留原推荐方案",
+    "save": "保存修改",
+    "keepRecommendation": "放弃修改",
     "details": "任务与验收条件",
     "viewProcess": "查看过程",
     "updateFailed": "无法保存推荐方案，任务仍保持暂停。",
     "status": {
       "pending_confirmation": "等待你确认",
       "reviewing": "Agent 正在审批派工",
-      "countdown": "准备自动执行",
+      "countdown": "准备自动派发",
       "paused": "已暂停，可调整方案",
       "queued": "排队中",
       "starting": "正在启动 Agent",
@@ -38,7 +38,35 @@
     },
     "takeover": "接管",
     "takenOver": "你已接管，Agent 不会自动续派。",
-    "elapsed": "当前阶段 {{seconds}} 秒"
+    "elapsed": "当前阶段 {{seconds}} 秒",
+    "kicker": "派发任务",
+    "kickerBatch": "并行派发",
+    "batchTitle": "{{n}} 个任务并行执行",
+    "autoIn": "{{time}} 后自动派发",
+    "autoIfNoReply": "{{time}} 内无回应将自动派发",
+    "pausedHold": "已暂停 · 不会自动派发",
+    "pause": "暂停",
+    "executor": "执行者",
+    "routeHint": "可为每个任务切换 Agent 和模型，修改后重新计时。",
+    "agentMenuHint": "只改这一路任务的执行 Agent，修改后重新计时。",
+    "view": "查看",
+    "autoStarted": "无人回应，已按推荐自动派发",
+    "routeUpdateFailed": "无法切换：{{message}}",
+    "batchTaskHint": "补充说明会附加到这一批的每个任务。",
+    "worker": {
+      "pending": "等待启动",
+      "working": "执行中",
+      "waiting": "需要处理",
+      "done": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
+    "waitingReason": {
+      "approval": "等待审批",
+      "user_input": "等待输入",
+      "question": "等待回答",
+      "terminal_prompt": "等待终端输入"
+    }
   },
-  "roomsWorkbenchDispatchPolicyHint": "Code 任务卡片按当前对话权限处理：需要确认、自动审批，或完全访问时在 60 秒后启动。其他操作使用上面的策略。"
+  "roomsWorkbenchDispatchPolicyHint": "Code 任务卡片按当前对话权限处理：需要确认、自动审批或完全访问。无人回应的卡片会在「设置 › 协作」设定的等待时间后启动。其他操作使用上面的策略。"
 }

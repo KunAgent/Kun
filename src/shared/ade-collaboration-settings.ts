@@ -8,6 +8,8 @@ export type AdeCollaborationSettingsValue = {
   budget?: { softTokens?: number; hardTokens?: number }
   hibernation: { enabled: boolean; idleMinutes: number }
   stall: { structuredMinutes: number; terminalMinutes: number }
+  /** Seconds a waiting dispatch card gives the user before starting on its own (0 = never). */
+  dispatch: { autoStartSeconds: number; autoStartWhenConfirmationRequired: boolean }
   /** Rollback switches for harness-aware turn routing and deterministic handoff briefs. */
   harnessRouter: boolean
   deterministicHandoff: boolean

@@ -490,6 +490,12 @@ export type KunAdeSettingsV1 = {
     structuredMinutes: number
     terminalMinutes: number
   }
+  /** Waiting dispatch cards start after `autoStartSeconds` without a response (0 = always
+   *  wait); ask-for-approval cards join only with `autoStartWhenConfirmationRequired`. */
+  dispatch: {
+    autoStartSeconds: number
+    autoStartWhenConfirmationRequired: boolean
+  }
   /** GUI-only notification switches; never written into Kun config. */
   notifications: {
     waiting: boolean

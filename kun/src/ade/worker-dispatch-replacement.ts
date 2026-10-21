@@ -49,7 +49,14 @@ export async function replaceFailedWorkerDispatch(
     const recommendation: AgentDispatchRecommendation = {
       ...intent.recommendation, agentId: alternative.route.harnessId,
       agentName: definition.displayName, model: alternative.route.model,
-      agentSelection: 'auto'
+      agentSelection: 'auto',
+      // The card's route must name the replacement, or the start would rebuild the failed one.
+      ...(intent.recommendation.assignments ? { assignments: [{
+        label: intent.recommendation.assignments[0]?.label ?? input.label,
+        agentId: alternative.route.harnessId, agentName: definition.displayName, model: alternative.route.model,
+        ...(alternative.route.providerId ? { providerId: alternative.route.providerId } : {}),
+        credentialMode: alternative.route.credentialMode
+      }] } : {})
     }
     const replacementInput = { ...input, agent: alternative.route,
       workspace: { ...input.workspace, reuseTaskWorkspaceId: workspace.workspaceId } }

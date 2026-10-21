@@ -319,6 +319,10 @@ export function adeConfigForRuntime(
       structuredMinutes: ade?.stall.structuredMinutes ?? 10,
       terminalMinutes: ade?.stall.terminalMinutes ?? 20
     },
+    dispatch: {
+      autoStartSeconds: ade?.dispatch?.autoStartSeconds ?? 60,
+      autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true
+    },
     approvedWorktreeConfigs: [...(extras.approvedWorktreeConfigs ?? [])]
       .sort((a, b) => a.repoRoot.localeCompare(b.repoRoot)),
     worktreeSharedPaths: extras.worktreeSharedPaths ?? {}

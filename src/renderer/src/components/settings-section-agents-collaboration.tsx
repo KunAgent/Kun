@@ -14,6 +14,7 @@ import type {
 import type { KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
 import { defaultKunAdeSettings } from '@shared/app-settings-kun-harness'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
+import { DispatchAutoStartSettingRows } from './settings-dispatch-auto-start'
 import { isKunModelProviderGroup } from '../lib/kun-model-provider-groups'
 import type { SettingsDraftController } from './settings-draft-navigation'
 
@@ -43,6 +44,8 @@ type Draft = {
   idleMinutes: string
   structuredMinutes: string
   terminalMinutes: string
+  autoStartSeconds: number
+  autoStartWhenConfirmationRequired: boolean
   harnessRouter: boolean
   deterministicHandoff: boolean
 }
@@ -66,6 +69,8 @@ function draftFrom(ade: AdeCollaborationSettingsValue): Draft {
     idleMinutes: String(ade.hibernation.idleMinutes),
     structuredMinutes: String(ade.stall.structuredMinutes),
     terminalMinutes: String(ade.stall.terminalMinutes),
+    autoStartSeconds: ade.dispatch.autoStartSeconds,
+    autoStartWhenConfirmationRequired: ade.dispatch.autoStartWhenConfirmationRequired,
     harnessRouter: ade.harnessRouter,
     deterministicHandoff: ade.deterministicHandoff
   }
@@ -108,6 +113,8 @@ function draftValue(
     ...(softTokens === undefined && hardTokens === undefined ? {} : { budget: { softTokens, hardTokens } }),
     hibernation: { enabled: draft.hibernationEnabled, idleMinutes },
     stall: { structuredMinutes, terminalMinutes },
+    dispatch: { autoStartSeconds: draft.autoStartSeconds,
+      autoStartWhenConfirmationRequired: draft.autoStartWhenConfirmationRequired },
     harnessRouter: draft.harnessRouter,
     deterministicHandoff: draft.deterministicHandoff
   }
@@ -346,6 +353,10 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
             </div>
           }
         />
+        <DispatchAutoStartSettingRows t={t} seconds={draft.autoStartSeconds}
+          whenConfirmationRequired={draft.autoStartWhenConfirmationRequired}
+          onSeconds={(value) => edit('autoStartSeconds', value)}
+          onWhenConfirmationRequired={(value) => edit('autoStartWhenConfirmationRequired', value)} />
         <details className="mt-4 border-t border-ds-border-muted pt-4">
           <summary className="cursor-pointer text-[13px] font-medium text-ds-ink">
             {t('adeSettings.collaborationAdvanced')}

@@ -36,6 +36,8 @@ type Props = {
   onContinueLocalSession?: () => void
   onOpen?: () => void
   onSelect: (harnessId: string) => void
+  /** Menu footnote; defaults to the composer's next-turn rule, null hides it. */
+  hint?: string | null
 }
 
 /** New-turn picker: only explicitly enabled profiles with current readiness are selectable. */
@@ -48,7 +50,8 @@ export function FloatingComposerHarnessPicker({
   needsConfirm,
   onContinueLocalSession,
   onOpen,
-  onSelect
+  onSelect,
+  hint
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const [open, setOpen] = useState(false)
@@ -222,9 +225,9 @@ export function FloatingComposerHarnessPicker({
             <Settings2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             {t('adeHarnessOpenSettings')}
           </button>
-          <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
-            {t('adeHarnessPicker.nextTurnHint')}
-          </div>
+          {hint === null ? null : <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
+            {hint ?? t('adeHarnessPicker.nextTurnHint')}
+          </div>}
         </>
       )}
     </div>

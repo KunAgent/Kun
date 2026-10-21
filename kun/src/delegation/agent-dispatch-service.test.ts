@@ -12,7 +12,7 @@ import { currentTurnMutationFence, runWithTurnMutationFence } from '../manager/t
 import { FileAgentDispatchIntentStore } from './agent-dispatch-intent-store.js'
 import {
   AGENT_DISPATCH_MAX_START_ATTEMPTS, AgentDispatchConflictError, AgentDispatchService,
-  type AgentDispatchHandler, type AgentDispatchProposal
+  type AgentDispatchAutoStartPolicy, type AgentDispatchHandler, type AgentDispatchProposal
 } from './agent-dispatch-service.js'
 
 const roots: string[] = []
@@ -22,7 +22,8 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
-async function setup(overrides: Partial<AgentDispatchHandler> = {}, applicationSessionId = 'app-1') {
+async function setup(overrides: Partial<AgentDispatchHandler> = {}, applicationSessionId = 'app-1',
+  autoStart?: () => AgentDispatchAutoStartPolicy) {
   const root = await mkdtemp(join(tmpdir(), 'kun-dispatch-')); roots.push(root)
   const clock = { now: Date.parse('2026-10-07T00:00:00.000Z') }
   const start = vi.fn(async () => ({ threadId: 'child-1' }))
@@ -31,7 +32,7 @@ async function setup(overrides: Partial<AgentDispatchHandler> = {}, applicationS
   const handler = { validate, start, cancel, ...overrides }
   const updates: AgentDispatchIntent[] = []
   const store = new FileAgentDispatchIntentStore(root)
-  const service = new AgentDispatchService({ store, applicationSessionId, now: () => clock.now,
+  const service = new AgentDispatchService({ store, applicationSessionId, now: () => clock.now, autoStart,
     onUpdated: (intent) => { updates.push(intent) } })
   service.registerHandler('worker', handler); service.registerHandler('workbench', handler)
   services.push(service); await service.start()
@@ -441,5 +442,79 @@ describe('scheduler reconciliation and cancellation', () => {
     await fixture.service.reconcile(); await fixture.service.updateTarget(intent.intentId, { state: 'failed', error: 'Second failure' })
     await expect(fixture.service.replace(intent.intentId, { recommendation: replacement.recommendation, payload: {} }))
       .rejects.toThrow('another automatic replacement')
+  })
+})
+
+describe('no-response automatic dispatch', () => {
+  it('starts an ask-for-approval card after the configured window without a reply', async () => {
+    const fixture = await setup({}, 'app-1', () => ({ delayMs: 180_000, whenConfirmationRequired: true }))
+    const intent = await fixture.service.propose(proposal('ask-for-approval'))
+    expect(intent).toMatchObject({ state: 'countdown', deadline: '2026-10-07T00:03:00.000Z' })
+    fixture.clock.now += 179_000; await fixture.service.reconcile()
+    expect(fixture.start).not.toHaveBeenCalled()
+    fixture.clock.now += 1_000; await fixture.service.reconcile()
+    expect(fixture.start).toHaveBeenCalledTimes(1)
+    expect(await fixture.service.get(intent.intentId)).toMatchObject({ state: 'running',
+      decision: { decision: 'allow', reason: expect.stringContaining('no response') } })
+  })
+
+  it('keeps confirmation cards waiting unless the policy covers them', async () => {
+    const fixture = await setup({}, 'app-1', () => ({ delayMs: 60_000, whenConfirmationRequired: false }))
+    const intent = await fixture.service.propose(proposal('ask-for-approval'))
+    expect(intent.state).toBe('pending_confirmation'); expect(intent.deadline).toBeUndefined()
+    fixture.clock.now += 3_600_000; await fixture.service.reconcile()
+    expect(fixture.start).not.toHaveBeenCalled()
+  })
+
+  it('waits for confirmation in full access when automatic starts are off', async () => {
+    const policy = { delayMs: 0, whenConfirmationRequired: true }
+    const fixture = await setup({}, 'app-1', () => policy)
+    const intent = await fixture.service.propose(proposal('full-access'))
+    expect(intent.state).toBe('pending_confirmation')
+    fixture.clock.now += 3_600_000; await fixture.service.reconcile()
+    expect(fixture.start).not.toHaveBeenCalled()
+  })
+
+  it('applies a disabled policy to a window that is already counting down', async () => {
+    const policy = { delayMs: 60_000, whenConfirmationRequired: true }
+    const fixture = await setup({}, 'app-1', () => policy)
+    const intent = await fixture.service.propose(proposal('full-access'))
+    expect(intent.state).toBe('countdown')
+    policy.delayMs = 0
+    fixture.clock.now += 60_000; await fixture.service.reconcile()
+    expect(fixture.start).not.toHaveBeenCalled()
+    expect(await fixture.service.get(intent.intentId)).toMatchObject({ state: 'pending_confirmation' })
+    expect((await fixture.service.get(intent.intentId))!.deadline).toBeUndefined()
+  })
+
+  it('restarts the full window when the user adjusts a counting-down card', async () => {
+    const fixture = await setup()
+    const intent = await fixture.service.propose(proposal('full-access'))
+    fixture.clock.now += 50_000
+    const updated = await fixture.service.act(intent.intentId, { action: 'update', requestId: 'route',
+      expectedRevision: intent.revision, recommendation: { agentId: 'other-agent', model: 'fast-model' } })
+    expect(updated).toMatchObject({ state: 'countdown', deadline: '2026-10-07T00:01:50.000Z', recommendation: {
+      agentId: 'other-agent', model: 'fast-model', agentSelection: 'user',
+      assignments: [{ label: 'Implement task', agentId: 'other-agent', model: 'fast-model' }] } })
+    fixture.clock.now += 20_000; await fixture.service.reconcile()
+    expect(fixture.start).not.toHaveBeenCalled()
+    fixture.clock.now += 40_000; await fixture.service.reconcile()
+    expect(fixture.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('edits batch routes by worker index and rejects partial route lists', async () => {
+    const fixture = await setup()
+    const assignments = [{ label: 'First', agentId: 'kun', model: 'main' }, { label: 'Second', agentId: 'kun', model: 'main' }]
+    const base = proposal('full-access')
+    const intent = await fixture.service.propose({ ...base, recommendation: { ...base.recommendation, assignments } })
+    await expect(fixture.service.act(intent.intentId, { action: 'update', requestId: 'partial', expectedRevision: intent.revision,
+      recommendation: { assignments: [{ agentId: 'codex' }] } })).rejects.toThrow(/every worker/)
+    const updated = await fixture.service.act(intent.intentId, { action: 'update', requestId: 'routes', expectedRevision: intent.revision,
+      recommendation: { assignments: [{ agentId: 'kun', model: 'main' },
+        { agentId: 'codex', model: 'gpt', credentialMode: 'native-login' }] } })
+    expect(updated.recommendation).toMatchObject({ agentSelection: 'user', agentId: 'kun', assignments: [
+      { label: 'First', agentId: 'kun', model: 'main' },
+      { label: 'Second', agentId: 'codex', model: 'gpt', credentialMode: 'native-login' }] })
+    expect(updated.recommendation.assignments![1].agentName).toBeUndefined()
   })
 })

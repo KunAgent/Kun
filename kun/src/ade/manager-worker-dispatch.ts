@@ -2,7 +2,11 @@ import { replaceFailedWorkerDispatch } from './worker-dispatch-replacement.js'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { ToolHostContext } from '../ports/tool-host.js'
-import { publicAgentDispatchIntent, type AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
+import {
+  publicAgentDispatchIntent,
+  type AgentDispatchAssignment,
+  type AgentDispatchIntent
+} from '../contracts/agent-dispatch-intents.js'
 import { ChildSecuritySnapshot } from '../delegation/delegation-runtime-contracts.js'
 import type { AgentDispatchReconciliation } from '../delegation/agent-dispatch-service.js'
 import { childSecurity } from '../adapters/tool/delegation-tool-context.js'
@@ -107,6 +111,12 @@ export class ManagerWorkerDispatch {
           selection: resolved.selection, profileId: resolved.profileId, definition: resolved.definition })
       }
       const first = saved[0]
+      const assignments: AgentDispatchAssignment[] = saved.map(({ input, definition }) => ({
+        label: input.label, agentId: input.agent.harnessId, agentName: definition.displayName,
+        ...(input.agent.model ? { model: input.agent.model } : {}),
+        ...(input.agent.providerId ? { providerId: input.agent.providerId } : {}),
+        credentialMode: input.agent.credentialMode
+      }))
       const title = items.length === 1 ? first.input.label : items.map((item) => item.label).join(' / ').slice(0, 512)
       const task = items.map((item) => items.length === 1 ? item.task : `${item.label}\n${item.task}`).join('\n\n').slice(0, 128_000)
       const thread = await this.deps.threads.get(ctx.threadId)
@@ -129,7 +139,8 @@ export class ManagerWorkerDispatch {
           permissionMode: ctx.authority.kunPermissionMode,
           effectivePermissionMode: first.definition.permissionModes.find((mode) => mode.id === first.input.permissionMode)?.kunPermissionMode ?? ctx.authority.kunPermissionMode,
           agentSelection: items.some((item, index) => item.agentSelection === 'user' ||
-            userNamedAgent(context.approvalIntent, saved[index].input.agent.harnessId, saved[index].definition.displayName)) ? 'user' : 'auto'
+            userNamedAgent(context.approvalIntent, saved[index].input.agent.harnessId, saved[index].definition.displayName)) ? 'user' : 'auto',
+          assignments
         },
         payload: {
           items: saved.map(({ definition: _definition, ...entry }) => entry),
@@ -156,7 +167,7 @@ export class ManagerWorkerDispatch {
         userReport: intent.state === 'cancelled' ? 'Dispatch cancelled. No new work will start.'
           : intent.state === 'failed' ? intent.error ?? 'Automatic dispatch review failed.'
           : intent.state === 'pending_confirmation' ? 'Dispatch saved. Waiting for your confirmation.'
-          : intent.state === 'countdown' ? 'Dispatch saved. It will start in 60 seconds unless you adjust or cancel it.'
+          : intent.state === 'countdown' ? countdownReport(intent, Date.parse(this.deps.nowIso()))
           : intent.state === 'running' ? 'Dispatch started. The parent Agent will receive the result for review.'
           : 'Dispatch saved. Automatic review and task admission are managed by Kun.'
       }
@@ -170,17 +181,26 @@ export class ManagerWorkerDispatch {
     if (intent.recommendation.workspace !== payload.security.sandboxRoot) {
       throw new Error('The source workspace is frozen; propose a new dispatch to change it.')
     }
+    const assignments = intent.recommendation.assignments
+    if (assignments && assignments.length !== payload.items.length) {
+      throw new Error('The card routes no longer match its workers; propose a new dispatch.')
+    }
     if (payload.items.length > 1) {
-      if (intent.recommendation.agentId !== payload.originalAgentId || intent.recommendation.model !== payload.originalModel) {
+      if (!assignments && (intent.recommendation.agentId !== payload.originalAgentId || intent.recommendation.model !== payload.originalModel)) {
         throw new Error('Batch Agent routes are fixed; propose a new batch to change the execution Agents.')
       }
       return payload.items.map(({ input }, index) => ({ ...input,
+        ...(assignments ? { agent: assignmentAgent(input.agent, assignments[index]) } : {}),
         ...(intent.recommendation.title !== payload.originalTitle ? { label: `${intent.recommendation.title} ${index + 1}`.slice(0, 64) } : {}),
         ...(intent.recommendation.task !== payload.originalTask
           ? { task: `${input.task}\n\nUser adjustment for this dispatch batch:\n${intent.recommendation.task}`.slice(0, 32_000) } : {})
       }))
     }
     const saved = payload.items[0].input
+    if (assignments) {
+      return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
+        agent: assignmentAgent(saved.agent, assignments[0]) }]
+    }
     const changedAgent = intent.recommendation.agentId !== payload.originalAgentId
     return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
       agent: changedAgent
@@ -211,6 +231,15 @@ export class ManagerWorkerDispatch {
     if (intent.recommendation.workspace !== ctx.workspace) throw new Error('The dispatch workspace cannot differ from its source task.')
     for (const [index, input] of this.inputs(intent).entries()) {
       const resolved = await this.resolve(ctx, input)
+      const assignment = intent.recommendation.assignments?.[index]
+      if (assignment) {
+        // Show the resolved route on the card (defaults filled, gateway addresses normalized).
+        intent.recommendation.assignments![index] = { label: assignment.label, agentId: resolved.route.harnessId,
+          agentName: resolved.definition.displayName,
+          ...(resolved.route.model ? { model: resolved.route.model } : {}),
+          ...(resolved.route.providerId ? { providerId: resolved.route.providerId } : {}),
+          credentialMode: resolved.route.credentialMode }
+      }
       if (index === 0) {
         intent.recommendation.agentName = resolved.definition.displayName
         intent.recommendation.model = resolved.route.model
@@ -227,9 +256,14 @@ export class ManagerWorkerDispatch {
     const dispatchIds: string[] = []
     const payload = PayloadSchema.parse(intent.payload)
     for (let index = 0; index < inputs.length; index += 1) {
+      // A route the user switched on the card has no selector rationale or credential profile.
+      const savedRoute = !intent.recommendation.assignments ||
+        sameAssignmentRoute(payload.items[index]?.input.agent, intent.recommendation.assignments[index])
       const allocation = { ...workerDispatchIds(intent, index), intentId: intent.intentId,
-        selection: payload.items[index]?.selection as import('../contracts/ade.js').WorkerRecord['selection'],
-        profileId: payload.items[index]?.profileId }
+        ...(savedRoute ? {
+          selection: payload.items[index]?.selection as import('../contracts/ade.js').WorkerRecord['selection'],
+          profileId: payload.items[index]?.profileId
+        } : {}) }
       const current = await this.deps.agentDispatchService?.get(intent.intentId)
       if (current?.cancellationRequested || current?.takenOver || signal.aborted) break
       const result = await this.runtime.createWorkerNow(ctx, inputs[index], context, allocation)
@@ -366,6 +400,31 @@ export class ManagerWorkerDispatch {
     }
     return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target }
   }
+}
+
+type SavedAgent = WorkerCreateInput['agent']
+
+function sameAssignmentRoute(saved: SavedAgent, assignment: AgentDispatchAssignment | undefined): boolean {
+  if (!saved || !assignment) return !assignment
+  return saved.harnessId === assignment.agentId && (saved.model ?? '') === (assignment.model ?? '') &&
+    (saved.providerId ?? '') === (assignment.providerId ?? '') &&
+    (saved.credentialMode ?? '') === (assignment.credentialMode ?? '')
+}
+
+/** Keep the proposed route (and its gateway binding) unless the user switched it on the card. */
+function assignmentAgent(saved: SavedAgent, assignment: AgentDispatchAssignment): NonNullable<SavedAgent> {
+  if (saved && sameAssignmentRoute(saved, assignment)) return saved
+  return { harnessId: assignment.agentId, ...(assignment.model ? { model: assignment.model } : {}),
+    ...(assignment.providerId ? { providerId: assignment.providerId } : {}),
+    ...(assignment.credentialMode ? { credentialMode: assignment.credentialMode } : {}) }
+}
+
+function countdownReport(intent: AgentDispatchIntent, now: number): string {
+  const seconds = intent.deadline ? Math.max(1, Math.round((Date.parse(intent.deadline) - now) / 1000)) : 0
+  const window = seconds >= 120 && seconds % 60 === 0 ? `${seconds / 60} minutes` : `${seconds} seconds`
+  return intent.recommendation.permissionMode === 'full-access'
+    ? `Dispatch saved. It will start in ${window} unless the user adjusts or cancels it.`
+    : `Dispatch saved. Waiting for the user's confirmation; it starts automatically if there is no response within ${window}.`
 }
 
 function userNamedAgent(intent: string | undefined, id: string, name: string): boolean {
