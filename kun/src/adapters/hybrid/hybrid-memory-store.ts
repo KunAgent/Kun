@@ -132,7 +132,7 @@ export class HybridMemoryStore implements MemoryStore {
   async erasureReceipt(operationId: string): Promise<string[]> {
     return this.enqueueMutation(async () => {
       await this.ready()
-      const ids = await this.canonical.erasureReceipt(operationId)
+      const ids = await this.canonical.erasureReceipt(operationId).catch((error: unknown) => this.finishPendingErasure(error))
       if (ids.length) this.eraseIndexProjections(ids)
       return ids
     })
@@ -151,7 +151,10 @@ export class HybridMemoryStore implements MemoryStore {
       this.mutationGeneration += 1
       await this.ready()
       if (request.action === 'erase' || request.action === 'forget') this.indexStale = true
-      const result = await this.canonical.lifecycle(id, request, access)
+      const result = await this.canonical.lifecycle(id, request, access).catch((error: unknown) => {
+        if (request.action === 'erase') return this.finishPendingErasure(error)
+        throw error
+      })
       this.lastInjectedIds = []
       this.lastRetrieval = undefined
       this.lastDirectiveInjection = undefined
@@ -165,6 +168,17 @@ export class HybridMemoryStore implements MemoryStore {
       this.reconcileStaleIndex()
       return result
     })
+  }
+
+  private finishPendingErasure(error: unknown): never {
+    if (error instanceof MemoryErasureIncompleteError && error.affectedIds.length) {
+      // An optional ledger failure must not retain the erased content in SQLite.
+      this.lastInjectedIds = []
+      this.lastRetrieval = undefined
+      this.lastDirectiveInjection = undefined
+      this.eraseIndexProjections(error.affectedIds)
+    }
+    throw error
   }
 
   private eraseIndexProjections(ids: readonly string[]): void {
@@ -230,11 +244,11 @@ export class HybridMemoryStore implements MemoryStore {
     return this.enqueueMutation(async () => {
       this.mutationGeneration += 1
       await this.ready()
-      const record = await this.canonical.delete(id, access)
       this.indexStale = true
       this.lastInjectedIds = []
       this.lastRetrieval = undefined
       this.lastDirectiveInjection = undefined
+      const record = await this.canonical.delete(id, access)
       await this.projectRecord(record)
       this.reconcileStaleIndex()
       return record
@@ -245,7 +259,7 @@ export class HybridMemoryStore implements MemoryStore {
     return this.enqueueMutation(async () => {
       this.mutationGeneration += 1
       await this.ready()
-      await this.canonical.purge(id, access)
+      await this.canonical.purge(id, access).catch((error: unknown) => this.finishPendingErasure(error))
       if (!this.index) return
       try {
         this.options.beforeIndexRemove?.(id)

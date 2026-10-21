@@ -107,8 +107,8 @@ export class FileMemoryStore implements MemoryStore {
     return withMemoryMutation(this.options.rootDir, async () => {
       const ledger = await readMemoryForgetting(this.options.rootDir)
       const ids = ledger.barriers.filter((entry) => entry.erased && entry.operationId === operationId).map((entry) => entry.memoryId)
-      await removeMemoryRelations(this.options.rootDir, ids)
       for (const id of ids) await purgeCanonicalMemoryRecord(this.options.rootDir, id)
+      await removeMemoryRelations(this.options.rootDir, ids)
       return ids
     })
   }
@@ -298,7 +298,6 @@ export class FileMemoryStore implements MemoryStore {
     })
     const affected = memoryDescendants((await readCanonicalMemoryDirectory(this.options.rootDir)).records, id)
     await recordMemoryForgetting(this.options.rootDir, affected, false, now)
-    await removeMemoryRelations(this.options.rootDir, affected.map((record) => record.id))
     const revised = reviseMemory(current, next, 'forget')
     for (const record of affected) {
       await this.write(record.id === id ? revised : reviseMemory(record,
@@ -306,6 +305,7 @@ export class FileMemoryStore implements MemoryStore {
     }
     this.setLastInjected([])
     this.lastDirectiveInjection = undefined
+    await removeMemoryRelations(this.options.rootDir, affected.map((record) => record.id))
     return revised
   }
 
@@ -329,8 +329,8 @@ export class FileMemoryStore implements MemoryStore {
         const ledger = await readMemoryForgetting(this.options.rootDir)
         const approved = new Set(ledger.barriers.filter((entry) => entry.erased && entry.operationId === operationId).map((entry) => entry.memoryId))
         if (!approved.has(id) || receipt.affectedIds.some((affectedId) => !approved.has(affectedId))) throw error
-        await removeMemoryRelations(this.options.rootDir, receipt.affectedIds)
         for (const affectedId of receipt.affectedIds) await purgeCanonicalMemoryRecord(this.options.rootDir, affectedId)
+        await removeMemoryRelations(this.options.rootDir, receipt.affectedIds)
         return { erased: true, affectedIds: receipt.affectedIds }
       }
       assertMemoryRevision(current, request.expectedRevision)
@@ -358,11 +358,11 @@ export class FileMemoryStore implements MemoryStore {
       }
       await prepareMemoryErasureOperation(this.options.rootDir, operationId, current, affected.map((record) => record.id), this.now())
       await recordMemoryForgetting(this.options.rootDir, affected, true, this.now(), operationId)
-      await removeMemoryRelations(this.options.rootDir, affected.map((record) => record.id))
       for (const record of affected) await purgeCanonicalMemoryRecord(this.options.rootDir, record.id)
       this.setLastInjected([])
       this.lastRetrieval = undefined
       this.lastDirectiveInjection = undefined
+      await removeMemoryRelations(this.options.rootDir, affected.map((record) => record.id))
       return { erased: true, affectedIds: affected.map((record) => record.id) }
     })
   }
@@ -371,8 +371,8 @@ export class FileMemoryStore implements MemoryStore {
     await withMemoryMutation(this.options.rootDir, async () => {
       const record = await this.get(id)
       if (record && !agentMemoryVisible(record, access ?? {})) throw new MemoryNotFoundError()
-      await removeMemoryRelations(this.options.rootDir, [id])
       await purgeCanonicalMemoryRecord(this.options.rootDir, id)
+      await removeMemoryRelations(this.options.rootDir, [id])
     })
   }
 

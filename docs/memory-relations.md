@@ -70,6 +70,14 @@ including affected derivative records and erasure retries. The existing canonica
 forgetting barriers still prevent replay. Unreadable records or ledgers fail closed;
 an IO error is not treated as evidence that a record was deleted.
 
+Canonical forgetting/erasure commits before optional relation cleanup. If the
+relation ledger is damaged, oversized or unreadable, content erasure still removes
+canonical files and attempts SQLite removal; the operation reports incomplete
+cleanup rather than success. The unreadable ledger is preserved. Restore its
+readability and retry the same erasure to finish reference cleanup. Ordinary
+relation commands inspect only involved endpoints, so an unrelated damaged record
+does not block browsing or reviewing a healthy pair.
+
 The local versioned ledger is `memory/relations/suggestions.json` under the runtime
 data directory. It stores IDs, hashes, quote offsets, relation types, timestamps and
 decisions, not copies of Memory content. Evidence is resolved from currently

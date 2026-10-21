@@ -7,6 +7,7 @@ import type { MemoryRecord } from '../contracts/memory.js'
 import { MemoryRelationContextRequest, emptyMemoryRelationContext, type MemoryRelationAnnotation } from '../contracts/memory-working-context.js'
 import { assembleMemoryRelationContext } from './memory-working-context.js'
 import type { MemoryAccess } from './memory-store.js'
+import { MemoryErasureIncompleteError } from './memory-erasure-error.js'
 import { memoryRecordPath } from './memory-canonical-files.js'
 import { normalizeMemoryRecord } from './memory-record-normalizer.js'
 import { applyMemoryForgetting, readMemoryForgetting } from './memory-forgetting.js'
@@ -34,7 +35,12 @@ export async function executeMemoryRelationCommand(options: {
   const originalCount = ledger.suggestions.length
   const forgetting = await readMemoryForgetting(rootDir)
   const cache = new Map<string, MemoryRecord | undefined>()
-  for (const entry of ledger.suggestions) {
+  const involved = ledger.suggestions.filter((entry) => command.action === 'list'
+    ? entry.proposal.source.id === command.memoryId || entry.proposal.target.id === command.memoryId
+    : command.action === 'propose'
+      ? command.proposals.some((proposal) => relationId(proposal) === entry.id)
+      : entry.id === command.id)
+  for (const entry of involved) {
     for (const binding of [entry.proposal.source, entry.proposal.target]) {
       if (cache.has(binding.id)) continue
       try {
@@ -51,11 +57,12 @@ export async function executeMemoryRelationCommand(options: {
       }
     }
   }
-  ledger.suggestions = ledger.suggestions.filter((entry) =>
-    [entry.proposal.source, entry.proposal.target].every((binding) => {
+  const removed = new Set(involved.filter((entry) =>
+    [entry.proposal.source, entry.proposal.target].some((binding) => {
       const record = cache.get(binding.id)
-      return record && !record.deletedAt
-    }))
+      return !record || record.deletedAt
+    })).map((entry) => entry.id))
+  ledger.suggestions = ledger.suggestions.filter((entry) => !removed.has(entry.id))
   if (ledger.suggestions.length !== originalCount) await writeLedger(rootDir, ledger)
 
   const view = async (entry: MemoryRelationSuggestion) => {
@@ -181,12 +188,18 @@ function endpoint(record: MemoryRecord, stale: boolean) {
 }
 
 export async function removeMemoryRelations(rootDir: string, ids: readonly string[]): Promise<void> {
-  const ledger = await readLedger(rootDir)
-  const removed = new Set(ids)
-  const remaining = ledger.suggestions.filter((entry) =>
-    !removed.has(entry.proposal.source.id) && !removed.has(entry.proposal.target.id))
-  if (remaining.length !== ledger.suggestions.length) {
-    await writeLedger(rootDir, { version: 1, suggestions: remaining })
+  if (!ids.length) return
+  try {
+    const ledger = await readLedger(rootDir)
+    const removed = new Set(ids)
+    const remaining = ledger.suggestions.filter((entry) =>
+      !removed.has(entry.proposal.source.id) && !removed.has(entry.proposal.target.id))
+    if (remaining.length !== ledger.suggestions.length) {
+      await writeLedger(rootDir, { version: 1, suggestions: remaining })
+    }
+  } catch (error) {
+    // Canonical removal has already committed. Keep unreadable decisions for recovery.
+    throw new MemoryErasureIncompleteError(error, ids)
   }
 }
 
