@@ -91,7 +91,7 @@
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
     "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.19.0.tgz",
-    "@modelcontextprotocol/client": "^2.2.0",
+    "@modelcontextprotocol/client": "^2.3.1",
     "@opentui/core": "0.6.6",
     "@opentui/solid": "0.6.6",
     "@xmldom/xmldom": "^0.9.12",
