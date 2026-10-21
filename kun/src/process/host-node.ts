@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 
 /**
@@ -17,10 +18,32 @@ export type HostNodeLaunch = { command: string; runAsNode: boolean; isCurrentPro
 
 export function hostNodeLaunch(env: NodeJS.ProcessEnv = process.env): HostNodeLaunch {
   const packaged = env.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()
-  if (packaged) return { command: packaged, runAsNode: true, isCurrentProcess: packaged === process.execPath }
+  if (packaged) {
+    const isCurrentProcess = packaged === process.execPath
+    return { command: isCurrentProcess ? packaged : backgroundElectronExecutable(packaged), runAsNode: true, isCurrentProcess }
+  }
   const host = env.KUN_HOST_NODE_EXECUTABLE?.trim()
   if (host) return { command: host, runAsNode: false, isCurrentProcess: host === process.execPath }
   return { command: process.execPath, runAsNode: Boolean(process.versions.electron), isCurrentProcess: true }
+}
+
+/**
+ * On macOS an Electron main executable run as Node still registers as a
+ * foreground app and gets a Dock icon. The bundled `<Name> Helper.app` is an
+ * agent (LSUIElement) with the same runtime, so background children use it.
+ */
+export function backgroundElectronExecutable(
+  executable: string,
+  platform: NodeJS.Platform = process.platform,
+  exists: (path: string) => boolean = existsSync
+): string {
+  if (platform !== 'darwin') return executable
+  const macOsDir = dirname(executable)
+  const contents = dirname(macOsDir)
+  if (basename(macOsDir) !== 'MacOS' || basename(contents) !== 'Contents') return executable
+  const name = basename(executable)
+  const helper = join(contents, 'Frameworks', `${name} Helper.app`, 'Contents', 'MacOS', `${name} Helper`)
+  return exists(helper) ? helper : executable
 }
 
 let electronHostProbe: string | null | undefined

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { tuiHandoffEnv } from '../tui/tui-node.js'
-import { electronHostForNativeModules, resetElectronHostProbeForTest } from './host-node.js'
+import { backgroundElectronExecutable, electronHostForNativeModules, resetElectronHostProbeForTest } from './host-node.js'
 
 const ELECTRON = process.execPath
 
@@ -51,5 +51,18 @@ describe('tuiHandoffEnv', () => {
     const explicit = tuiHandoffEnv({ KUN_HOST_NODE_EXECUTABLE: '/opt/node' }, () => '/checkout/Electron')
     expect(explicit.KUN_HOST_NODE_EXECUTABLE).toBe('/opt/node')
     expect(explicit.KUN_PACKAGED_RUNTIME_EXECUTABLE).toBeUndefined()
+  })
+})
+
+describe('backgroundElectronExecutable', () => {
+  const main = '/A/Kun.app/Contents/MacOS/Kun'
+  const helper = '/A/Kun.app/Contents/Frameworks/Kun Helper.app/Contents/MacOS/Kun Helper'
+  it('maps a macOS bundle executable to its agent helper', () => {
+    expect(backgroundElectronExecutable(main, 'darwin', (p) => p === helper)).toBe(helper)
+  })
+  it('keeps the executable when there is no helper or off macOS', () => {
+    expect(backgroundElectronExecutable(main, 'darwin', () => false)).toBe(main)
+    expect(backgroundElectronExecutable(main, 'linux', () => true)).toBe(main)
+    expect(backgroundElectronExecutable('/usr/bin/node', 'darwin', () => true)).toBe('/usr/bin/node')
   })
 })
