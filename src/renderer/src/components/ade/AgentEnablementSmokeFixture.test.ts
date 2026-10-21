@@ -26,8 +26,40 @@ afterAll(async () => {
 // Default vi.waitFor gives up after 1s, which a CPU-starved CI worker can exceed.
 const waitFor = <T>(callback: () => T | Promise<T>) => vi.waitFor(callback, { timeout: 20_000 })
 
+// AgentCenter applies settingsHarnessId in an effect. Its first committed card
+// can be another disabled Agent; wait for Pi, not just any matching control.
+const piCard = '[data-agent-detail-slot="pi"]:not([hidden]) [data-agent-enablement="pi"]'
+async function piModelButton(): Promise<HTMLButtonElement> {
+  return waitFor(() => {
+    const button = document.querySelector<HTMLButtonElement>(`${piCard} [data-agent-profile-model]`)
+    expect(button).toBeTruthy()
+    return button!
+  })
+}
+
+it('waits for the selected Pi card instead of clicking a transient disabled Agent', async () => {
+  const container = document.getElementById('root')!
+  container.innerHTML = '<div data-agent-detail-slot="claude-code"><div data-agent-enablement="claude-code" data-agent-enablement-state="disabled"><button data-agent-profile-model></button></div></div>'
+  const transient = container.querySelector('button')!
+  const clicked = vi.fn()
+  transient.addEventListener('click', clicked)
+  const selection = piModelButton().then((button) => { button.click(); return button })
+  try {
+    // Simulate the initial fallback card surviving a scheduler turn before the
+    // deep-link selection effect commits. A generic selector clicks it now.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(clicked).not.toHaveBeenCalled()
+    container.innerHTML = '<div data-agent-detail-slot="pi"><div data-agent-enablement="pi" data-agent-enablement-state="disabled"><button data-agent-profile-model></button></div></div>'
+    expect(await selection).toBe(container.querySelector('button'))
+    expect(clicked).not.toHaveBeenCalled()
+  } finally {
+    container.innerHTML = ''
+  }
+})
+
 async function chooseCustomModel(value: string): Promise<void> {
-  document.querySelector<HTMLButtonElement>('[data-agent-profile-model]')!.click()
+  const button = await piModelButton()
+  button.click()
   await waitFor(() => expect(document.querySelector('[data-agent-custom-model]')).toBeTruthy())
   document.querySelector<HTMLButtonElement>('[data-agent-custom-model]')!.click()
   await waitFor(() => expect(document.querySelector('[data-agent-custom-model-input]')).toBeTruthy())
@@ -46,7 +78,7 @@ it('runs the real settings check, composer gate and late-result cancellation wit
     close(): void; reopen(): void; restart(): void; setNavigationBusy(busy: boolean): void
     snapshot(): { enabledProfiles: unknown[]; defaults: Record<string, { model?: string }>; calls: { tests: number; mutations: number } }
   } }).agentEnablementFixture
-  const state = (value: string) => vi.waitFor(() => expect(document.querySelector('[data-agent-enablement]')?.getAttribute('data-agent-enablement-state'), document.body.textContent?.slice(-2500)).toBe(value), { timeout: 20_000 })
+  const state = (value: string) => vi.waitFor(() => expect(document.querySelector(piCard)?.getAttribute('data-agent-enablement-state'), document.body.textContent?.slice(-2500)).toBe(value), { timeout: 20_000 })
   const click = (selector: string) => document.querySelector<HTMLButtonElement>(selector)!.click()
   await fixture.reset(); await state('disabled')
   await chooseCustomModel('fixture-model')
@@ -97,7 +129,7 @@ it('applies the saved theme through SettingsView and retains it after saves and 
     snapshot(): { defaults: Record<string, { model?: string }> }
   } }).agentEnablementFixture
   await fixture.reset()
-  await waitFor(() => expect(document.querySelector('[data-agent-profile-model]')).toBeTruthy())
+  await piModelButton()
   const changed = vi.fn()
   window.addEventListener('kun:settings-changed', changed)
   try {
@@ -112,7 +144,7 @@ it('applies the saved theme through SettingsView and retains it after saves and 
     fixture.close()
     await waitFor(() => expect(document.querySelector('[data-agent-enablement]')).toBeNull())
     fixture.reopen()
-    await waitFor(() => expect(document.querySelector('[data-agent-profile-model]')).toBeTruthy())
+    await piModelButton()
     expect(document.documentElement.dataset.theme).toBe('dark')
     fixture.theme('light')
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'))
