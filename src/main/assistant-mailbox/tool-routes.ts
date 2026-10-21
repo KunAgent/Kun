@@ -42,7 +42,7 @@ export function assistantToolHandler(service: AssistantMailboxService) {
     if (route === '/assistants') {
       return {
         assistants: status.assistants.map((item) => ({
-          id: item.id, name: item.name, kind: item.kind, lastSeenAt: item.lastSeenAt,
+          id: item.id, name: item.name, kind: item.kind, ...(item.product ? { product: item.product } : {}), lastSeenAt: item.lastSeenAt,
           waitingForAssistant: item.pendingToAssistant, canReceiveTasks: item.keyAvailable
         })),
         pendingEnrollments: status.enrollments.map((item) => ({ name: item.name, kind: item.kind, expiresAt: item.expiresAt }))

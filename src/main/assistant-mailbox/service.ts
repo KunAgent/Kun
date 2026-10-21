@@ -7,11 +7,13 @@ import { RemoteApi } from '@kun/remote-protocol'
 import type { DeviceIdentity } from '@kun/remote-protocol'
 import { hasKunAccountSession, type KunAccountState } from '../../shared/kun-account'
 import {
-  ASSISTANT_BODY_MAX_BYTES, ASSISTANT_NAME_MAX, ASSISTANT_TITLE_MAX, isAssistantKind,
+  ASSISTANT_BODY_MAX_BYTES, ASSISTANT_NAME_MAX, ASSISTANT_TITLE_MAX, customAssistantKind, isAssistantKind,
   type AssistantAssignRequest, type AssistantEnrollmentRequest, type AssistantEnrollmentResult,
   type AssistantMailboxAvailability, type AssistantMailboxStatus, type AssistantTaskView, type AssistantView
 } from '../../shared/assistant-mailbox'
+import { AssistantProfileStore } from './profile-store'
 import { AssistantSecretStore, type SecretCipher } from './secret-store'
+import { normalizeWebsite } from './site-icon'
 import { AssistantTaskStore } from './task-store'
 
 const ACTIVE_POLL_MS = 60_000
@@ -38,6 +40,8 @@ export type AssistantMailboxDeps = {
   log(level: 'info' | 'warn', message: string, detail?: Record<string, unknown>): void
   now?: () => Date
   timers?: { set(callback: () => void, ms: number): unknown; clear(handle: unknown): void }
+  /** Finds a custom assistant's icon on its website; a data URL or null. */
+  fetchIcon?: (website: string) => Promise<string | null>
 }
 
 type Session = {
@@ -46,6 +50,7 @@ type Session = {
   host: AssistantHost
   secrets: AssistantSecretStore
   tasks: AssistantTaskStore
+  profiles: AssistantProfileStore
   registered?: Promise<void>
   assistants: AssistantSummary[]
   enrollments: AssistantMailboxStatus['enrollments']
@@ -130,7 +135,8 @@ export class AssistantMailboxService {
         return { accessToken, deviceId: identity.id, deviceCredential: identity.credential }
       }
     })
-    const session: Session = { owner, identity, host, secrets, tasks: new AssistantTaskStore(join(dir, 'tasks.json')), assistants: [], enrollments: [] }
+    const session: Session = { owner, identity, host, secrets, tasks: new AssistantTaskStore(join(dir, 'tasks.json')),
+      profiles: new AssistantProfileStore(join(dir, 'profiles.json')), assistants: [], enrollments: [] }
     this.session = session
     return session
   }
@@ -197,6 +203,7 @@ export class AssistantMailboxService {
     // Mailbox secrets of current assistants, and pairing keys of enrollments still waiting.
     await session.secrets.retain(new Set([...latest.assistants.map((a) => a.enrollmentId),
       ...latest.enrollments.map((e) => `pairing:${e.enrollmentId}`)]), this.now())
+    await session.profiles.retain(new Set([...latest.assistants, ...latest.enrollments].map((item) => item.enrollmentId)))
     this.lastSyncAt = this.now().toISOString()
   }
 
@@ -248,15 +255,22 @@ export class AssistantMailboxService {
     if (!session) {
       return { availability: this.availability, assistants: [], enrollments: [], tasks: [], notes: [], ...(this.error ? { error: this.error } : {}) }
     }
+    const profiles = await session.profiles.all()
+    const profile = (enrollmentId: string) => {
+      const found = profiles.get(enrollmentId)
+      return { ...(found?.product ? { product: found.product } : {}), ...(found?.icon ? { icon: found.icon } : {}) }
+    }
     const assistants: AssistantView[] = await Promise.all(session.assistants.map(async (assistant) => ({
-      id: assistant.id, name: assistant.name, kind: isAssistantKind(assistant.kind) ? assistant.kind : 'other',
+      id: assistant.id, enrollmentId: assistant.enrollmentId, name: assistant.name,
+      kind: isAssistantKind(assistant.kind) ? assistant.kind : 'other', ...profile(assistant.enrollmentId),
       platform: assistant.platform, agentVersion: assistant.agentVersion, createdAt: assistant.createdAt,
       lastSeenAt: assistant.lastSeenAt, pendingToAssistant: assistant.pendingToAssistant, pendingToHost: assistant.pendingToHost,
       keyAvailable: Boolean(await session.secrets.get(assistant.enrollmentId))
     })))
     const view = await session.tasks.view(new Map(assistants.map((assistant) => [assistant.id, assistant.name])))
     const enrollments = session.enrollments.map((enrollment) => ({
-      enrollmentId: enrollment.enrollmentId, name: enrollment.name, kind: enrollment.kind, expiresAt: enrollment.expiresAt,
+      enrollmentId: enrollment.enrollmentId, name: enrollment.name, kind: enrollment.kind, ...profile(enrollment.enrollmentId),
+      expiresAt: enrollment.expiresAt,
       requests: (enrollment.requests ?? []).map(({ requestId, platform, agentVersion, createdAt, verificationCode }) =>
         ({ requestId, platform, agentVersion, createdAt, verificationCode: verificationCode ?? null }))
     }))
@@ -271,13 +285,54 @@ export class AssistantMailboxService {
     if (!name || name.length > ASSISTANT_NAME_MAX || [...name].some((char) => char.charCodeAt(0) < 0x20)) throw new AssistantMailboxError('INVALID_NAME')
     if (!isAssistantKind(request.kind)) throw new AssistantMailboxError('INVALID_KIND')
     const locale = request.locale === 'en' ? 'en' : 'zh'
+    const product = String(request.product ?? '').trim().slice(0, 60)
+    const website = request.website ? normalizeWebsite(String(request.website)) : null
+    if (request.website && String(request.website).trim() && !website) throw new AssistantMailboxError('INVALID_WEBSITE')
+    // A custom product travels to the server only as a slug of its name; the name and icon stay here.
+    const kind = product && request.kind === 'other' ? customAssistantKind(product) : request.kind
     return this.serial(async () => {
-      const created = await this.withHost((session) => session.host.createEnrollment({ name, kind: request.kind, locale }))
-      if (this.session) this.session.enrollments = [...this.session.enrollments, { enrollmentId: created.enrollmentId, name, kind: request.kind, expiresAt: created.expiresAt, requests: [] }]
+      const created = await this.withHost(async (session) => {
+        const result = await session.host.createEnrollment({ name, kind, locale })
+        if (product || website) await session.profiles.update(result.enrollmentId, { ...(product ? { product } : {}), ...(website ? { website } : {}) })
+        return result
+      })
+      const session = this.session
+      if (session) session.enrollments = [...session.enrollments, { enrollmentId: created.enrollmentId, name, kind, expiresAt: created.expiresAt, requests: [] }]
+      if (session && website && this.deps.fetchIcon) {
+        void this.deps.fetchIcon(website).then(async (icon) => {
+          if (!icon || this.session !== session) return
+          await session.profiles.update(created.enrollmentId, { icon })
+          this.deps.emit(await this.snapshot())
+        }).catch(() => {})
+      }
       this.schedule()
       this.deps.emit(await this.snapshot())
       return created
     })
+  }
+
+  /** The prompt of a pending enrollment, rebuilt from this desktop's pairing key. */
+  async promptFor(enrollmentId: string, locale: 'zh' | 'en'): Promise<{ code: string; prompt: string } | null> {
+    return this.serial(() => this.withHost(async (session) => {
+      const enrollment = session.enrollments.find((item) => item.enrollmentId === enrollmentId)
+      return enrollment ? session.host.promptFor({ enrollmentId, kind: enrollment.kind, locale }) : null
+    }))
+  }
+
+  /** Answers a task (usually one the assistant marked blocked) with a note about it. */
+  async reply(taskId: string, body: string): Promise<AssistantMailboxStatus> {
+    const text = String(body ?? '')
+    if (!text.trim() || Buffer.byteLength(text) > ASSISTANT_BODY_MAX_BYTES) throw new AssistantMailboxError('INVALID_BODY')
+    await this.serial(() => this.withHost(async (session) => {
+      const task = await session.tasks.task(taskId)
+      if (!task) throw new AssistantMailboxError('TASK_NOT_FOUND')
+      const assistant = await this.findAssistant(session, task.assistantId)
+      const message = await session.host.send(assistant, { kind: 'note', inReplyTo: taskId, body: text })
+      await session.tasks.addOutgoingNote({ id: message.id, assistantId: assistant.id, assistantName: assistant.name, body: text, at: message.createdAt, inReplyTo: taskId })
+    }))
+    const status = await this.snapshot()
+    this.deps.emit(status)
+    return status
   }
 
   /** Admits a join request the user recognised; only the user can do this, never a Kun tool. */

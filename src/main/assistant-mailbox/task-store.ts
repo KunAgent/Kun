@@ -100,9 +100,18 @@ export class AssistantTaskStore {
         return
       }
       file.notes.push({
-        id: message.id, assistantId: assistant.id, assistantName: assistant.name, body: message.body, at: message.createdAt,
+        id: message.id, from: 'assistant', assistantId: assistant.id, assistantName: assistant.name, body: message.body, at: message.createdAt,
         ...(message.title ? { title: message.title } : {}), ...(message.inReplyTo ? { inReplyTo: message.inReplyTo } : {})
       })
+    })
+  }
+
+  /** Records a message the user sent about a task, so it shows in that assistant's conversation. */
+  addOutgoingNote(note: Omit<AssistantNoteView, 'from'>): Promise<void> {
+    return this.mutate((file) => {
+      if (file.seen.includes(note.id)) return
+      file.seen.push(note.id)
+      file.notes.push({ ...note, from: 'you' })
     })
   }
 
@@ -115,7 +124,7 @@ export class AssistantTaskStore {
         ...task, assistantName: name(task.assistantId, task.assistantName),
         updates: updates.map(({ status, body, at }) => ({ status, body, at }))
       })),
-      notes: file.notes.slice(-limit).reverse().map((note) => ({ ...note, assistantName: name(note.assistantId, note.assistantName) }))
+      notes: file.notes.slice(-limit).reverse().map((note) => ({ ...note, from: note.from ?? 'assistant', assistantName: name(note.assistantId, note.assistantName) }))
     }
   }
 }

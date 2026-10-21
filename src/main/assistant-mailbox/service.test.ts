@@ -15,7 +15,7 @@ afterEach(async () => {
   while (cleanup.length) await rm(cleanup.pop()!, { recursive: true, force: true })
 })
 
-async function setup(options: { enabled?: boolean; serverEnabled?: boolean } = {}) {
+async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetchIcon?: (website: string) => Promise<string | null> } = {}) {
   const server = fakeMailbox({ origin: ORIGIN })
   const host = await server.credentials()
   const dir = await mkdtemp(join(tmpdir(), 'kun-assistant-service-'))
@@ -45,7 +45,8 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean } = {
     enabled: () => options.enabled !== false,
     emit: (status) => emitted.push(status),
     log: () => {},
-    timers: { set: (_callback, ms) => { timers.push({ ms }); return timers.length }, clear: () => {} }
+    timers: { set: (_callback, ms) => { timers.push({ ms }); return timers.length }, clear: () => {} },
+    ...(options.fetchIcon ? { fetchIcon: options.fetchIcon } : {})
   })
   const run = async (args: string[]) => {
     let stdout = '', stderr = ''
@@ -169,5 +170,44 @@ describe('assistant join requests', () => {
     const late = await t.run(['login', other.code])
     expect(late.code).toBe(1)
     expect(late.stderr).toContain('no longer valid')
+  })
+})
+
+describe('custom assistants and replies', () => {
+  it('connects any product under its own name and icon, and re-shows the prompt from the kept key', async () => {
+    const icons: string[] = []
+    const t = await setup({ fetchIcon: async (website) => { icons.push(website); return 'data:image/png;base64,AAAA' } })
+    await expect(t.service.createEnrollment({ name: 'Zo', kind: 'other', product: 'Zo', website: 'http://zo.computer', locale: 'en' }))
+      .rejects.toThrow('INVALID_WEBSITE')
+    const created = await t.service.createEnrollment({ name: 'My Zo', kind: 'other', product: 'Zo Computer', website: 'zo.computer', locale: 'en' })
+    expect(icons).toEqual(['https://zo.computer'])
+    // The icon arrives in the background, followed by a fresh status.
+    for (let tries = 0; tries < 100 && !t.emitted.at(-1)?.enrollments[0]?.icon; tries++) await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(t.emitted.at(-1)?.enrollments).toMatchObject([{ name: 'My Zo', kind: 'zo_computer', product: 'Zo Computer', icon: 'data:image/png;base64,AAAA' }])
+
+    expect(await t.service.promptFor(created.enrollmentId, 'en')).toEqual({ code: created.code, prompt: created.prompt })
+    expect((await t.service.promptFor(created.enrollmentId, 'zh'))?.prompt).toContain(`login ${created.code}`)
+    expect(await t.service.promptFor('00000000-0000-4000-8000-000000000000', 'en')).toBeNull()
+
+    await t.connect(created.code)
+    const status = await t.service.refresh()
+    expect(status.assistants).toMatchObject([{ name: 'My Zo', kind: 'zo_computer', product: 'Zo Computer', icon: 'data:image/png;base64,AAAA' }])
+    expect(status.assistants[0].enrollmentId).toBe(created.enrollmentId)
+  })
+
+  it('answers a blocked task as a note about that task and shows it as the user\'s message', async () => {
+    const t = await setup()
+    const { code } = await t.service.createEnrollment({ name: 'Today', kind: 'today', locale: 'en' })
+    await t.connect(code)
+    const [assistant] = (await t.service.refresh()).assistants
+    const task = await t.service.assign({ assistantId: assistant.id, body: 'Book a train to Kyoto' })
+    await t.run(['inbox'])
+    await t.run(['reply', task.id.slice(0, 8), '--status', 'blocked', 'Which day?'])
+    await t.service.refresh()
+    await expect(t.service.reply(task.id, '  ')).rejects.toThrow('INVALID_BODY')
+    await expect(t.service.reply('missing', 'Saturday')).rejects.toThrow('TASK_NOT_FOUND')
+    const status = await t.service.reply(task.id, 'Saturday morning')
+    expect(status.notes).toMatchObject([{ from: 'you', body: 'Saturday morning', inReplyTo: task.id, assistantName: 'Today' }])
+    expect((await t.run(['inbox'])).stdout).toContain('Saturday morning')
   })
 })

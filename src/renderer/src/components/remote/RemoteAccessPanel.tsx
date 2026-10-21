@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import type { RemoteAccessConfigPatch, RemoteAccessStatus, RemoteTailscaleInfo } from '@shared/remote-access'
 import { MobileChannelRow, MobileGrantRows, MobilePairingRequests } from './RemoteMobileLink'
 import { RemoteSettingsGroup } from './RemoteSettingsGroup'
-import { AssistantMailboxSection } from './assistants/AssistantMailboxSection'
 import { useMobileLink } from './useMobileLink'
 import {
   REMOTE_BUTTON_CLASS,
@@ -302,8 +301,6 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
               {t('remoteAccessNoDevices')}
             </p>
           ) : null}
-
-          <AssistantMailboxSection />
 
           <RemoteSettingsGroup
             status={status}

@@ -15,6 +15,8 @@ export const assistantMailboxApi: AssistantMailboxApi = {
   revoke: (assistantId) => ipcRenderer.invoke(channels.revoke, assistantId),
   assign: (request) => ipcRenderer.invoke(channels.assign, request),
   cancel: (taskId) => ipcRenderer.invoke(channels.cancel, taskId),
+  reply: (taskId, body) => ipcRenderer.invoke(channels.reply, taskId, body),
+  promptFor: (enrollmentId, locale) => ipcRenderer.invoke(channels.promptFor, enrollmentId, locale),
   onStatus: (listener) => {
     const wrapped = (_: Electron.IpcRendererEvent, status: AssistantMailboxStatus) => listener(status)
     ipcRenderer.on(channels.changed, wrapped)

@@ -2,8 +2,9 @@ import type { ReactElement } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AssistantJoinRequestView } from '@shared/assistant-mailbox'
-import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS } from '../remote-panel-ui'
-import { relativeTime } from './assistant-mailbox-format'
+import { relativeTime } from './assistant-format'
+
+const BUTTON = 'inline-flex h-9 items-center justify-center rounded-[10px] px-4 text-[13px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50'
 
 /**
  * One assistant asking to join. The user compares the code with the one the assistant reported
@@ -24,7 +25,7 @@ export function JoinRequestCard({
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-accent/30 bg-accent-soft/40 p-3">
+    <div className="flex flex-col gap-3 rounded-[18px] border-[1.5px] border-accent-tint/50 bg-ds-card p-5 shadow-[0_14px_36px_rgba(15,23,42,0.08)]">
       <div className="flex items-center gap-2 text-[13px] font-semibold text-ds-ink">
         <ShieldCheck size={15} className="shrink-0 text-accent" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{t('assistantMailboxRequestTitle', { name })}</span>
@@ -33,7 +34,7 @@ export function JoinRequestCard({
       {request.verificationCode ? (
         <>
           <div className="text-[11px] text-ds-muted">{t('assistantMailboxVerificationCode')}</div>
-          <div className="select-all font-mono text-[20px] font-semibold tracking-[0.12em] text-ds-ink" data-testid="assistant-verification-code">
+          <div className="select-all font-mono text-[32px] font-semibold tracking-[0.14em] text-ds-ink" data-testid="assistant-verification-code">
             {request.verificationCode}
           </div>
           <p className="text-[11.5px] leading-4 text-ds-muted">{t('assistantMailboxRequestHint')}</p>
@@ -43,10 +44,10 @@ export function JoinRequestCard({
       )}
       <div className="text-[11px] text-ds-faint">{request.platform} · kun-agent {request.agentVersion}</div>
       <div className="flex justify-end gap-2">
-        <button type="button" disabled={busy} onClick={onReject} className={REMOTE_BUTTON_CLASS}>
+        <button type="button" disabled={busy} onClick={onReject} className={`${BUTTON} border border-ds-border-muted bg-ds-card text-ds-danger hover:bg-ds-hover`}>
           {t('assistantMailboxReject')}
         </button>
-        <button type="button" disabled={busy || !request.verificationCode} onClick={onApprove} className={REMOTE_PRIMARY_BUTTON_CLASS}>
+        <button type="button" disabled={busy || !request.verificationCode} onClick={onApprove} className={`${BUTTON} bg-accent font-semibold text-white hover:opacity-90`}>
           {t('assistantMailboxApprove')}
         </button>
       </div>

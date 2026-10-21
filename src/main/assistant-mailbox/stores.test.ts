@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { AssistantProfileStore } from './profile-store'
 import { AssistantSecretStore } from './secret-store'
 import { AssistantTaskStore } from './task-store'
 
@@ -42,5 +43,27 @@ describe('assistant mailbox stores', () => {
     expect(view.tasks[0]).toMatchObject({ status: 'cancelled', assistantName: 'Cue (renamed)' })
     expect(view.tasks[0].updates.map((update) => update.status)).toEqual(['done', 'working'])
     expect(view.notes.map((note) => [note.assistantName, note.body])).toEqual([['Cue (renamed)', 'Hello'], ['Grok', 'Booked']])
+  })
+
+  it('records the user\'s own replies once and labels who wrote each note', async () => {
+    const path = join(await temp(), 'tasks.json')
+    const store = new AssistantTaskStore(path)
+    const note = { id: 'm-9', assistantId: 'as-1', assistantName: 'Cue', body: 'Saturday', at: '2026-10-22T00:30:00Z', inReplyTo: 't-1' }
+    await store.addOutgoingNote(note)
+    await store.addOutgoingNote(note)
+    await store.applyIncoming({ id: 'as-1', name: 'Cue' }, { id: 'm-10', kind: 'note', createdAt: '2026-10-22T00:40:00Z', body: 'Thanks' })
+    const view = await new AssistantTaskStore(path).view(new Map())
+    expect(view.notes.map((item) => [item.from, item.body])).toEqual([['assistant', 'Thanks'], ['you', 'Saturday']])
+  })
+
+  it('keeps custom assistant profiles on disk and drops the ones that no longer exist', async () => {
+    const path = join(await temp(), 'profiles.json')
+    const store = new AssistantProfileStore(path)
+    await store.update('e-1', { product: 'Zo', website: 'https://zo.computer' })
+    await store.update('e-1', { icon: 'data:image/png;base64,AAAA' })
+    await store.update('e-2', { product: 'Other' })
+    await store.retain(new Set(['e-1']))
+    const reloaded = await new AssistantProfileStore(path).all()
+    expect([...reloaded]).toEqual([['e-1', { product: 'Zo', website: 'https://zo.computer', icon: 'data:image/png;base64,AAAA' }]])
   })
 })

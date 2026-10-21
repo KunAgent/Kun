@@ -13,6 +13,7 @@ import {
 } from '../../shared/assistant-mailbox'
 import { assistantMailboxEnabled } from './mcp-config'
 import { electronSecretCipher, type SecretCipher } from './secret-store'
+import { fetchSiteIcon } from './site-icon'
 import { AssistantMailboxService } from './service'
 import { AssistantToolEndpoint, assistantToolEndpointPaths } from './tool-endpoint'
 import { ASSISTANT_TOOL_ROUTES, assistantToolHandler } from './tool-routes'
@@ -27,13 +28,16 @@ function record(value: unknown): Record<string, unknown> {
 export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions, account: ArtAccountAccess): void {
   const userData = app.getPath('userData')
   let cipher: Promise<SecretCipher> | null = null
+  const fetchViaNet: typeof fetch = (input, init) =>
+    net.fetch(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init)
   const service = new AssistantMailboxService({
     origin: ORIGIN,
     account,
     identity: (owner) => loadIdentity(join(userData, 'mobile-link', owner, 'identity.enc')),
     storageDir: join(userData, 'assistant-mailbox'),
     cipher: () => (cipher ??= electronSecretCipher().catch((error: unknown) => { cipher = null; throw error })),
-    fetch: (input, init) => net.fetch(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init),
+    fetch: fetchViaNet,
+    fetchIcon: (website) => fetchSiteIcon(website, fetchViaNet),
     deviceName: hostname(),
     platform: process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux',
     enabled: async () => assistantMailboxEnabled(await options.store.load()),
@@ -59,7 +63,11 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     const input = record(value)
     if (typeof input.name !== 'string' || !isAssistantKind(input.kind)) throw new Error('INVALID_REQUEST')
-    return service.createEnrollment({ name: input.name, kind: input.kind, locale: input.locale === 'en' ? 'en' : 'zh' } satisfies AssistantEnrollmentRequest)
+    return service.createEnrollment({
+      name: input.name, kind: input.kind, locale: input.locale === 'en' ? 'en' : 'zh',
+      ...(typeof input.product === 'string' ? { product: input.product } : {}),
+      ...(typeof input.website === 'string' ? { website: input.website } : {})
+    } satisfies AssistantEnrollmentRequest)
   })
   const ids = (...values: unknown[]): string[] => {
     if (!values.every((value) => typeof value === 'string' && /^[0-9a-f-]{36}$/.test(value))) throw new Error('INVALID_REQUEST')
@@ -78,6 +86,15 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
   ipcMain.handle(channels.cancelEnrollment, (event, enrollmentId: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return service.cancelEnrollment(ids(enrollmentId)[0])
+  })
+  ipcMain.handle(channels.reply, (event, taskId: unknown, body: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    if (typeof body !== 'string') throw new Error('INVALID_REQUEST')
+    return service.reply(ids(taskId)[0], body)
+  })
+  ipcMain.handle(channels.promptFor, (event, enrollmentId: unknown, locale: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.promptFor(ids(enrollmentId)[0], locale === 'en' ? 'en' : 'zh')
   })
   ipcMain.handle(channels.revoke, (event, id: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

@@ -2,8 +2,11 @@
 // Kunserve's end-to-end encrypted assistant mailbox. Secrets and access tokens stay in Main;
 // the renderer and the Kun tool bridge only see these projections.
 
-export const ASSISTANT_KINDS = ['cue', 'grok_bot', 'muse', 'dots', 'other'] as const
-export type AssistantKind = (typeof ASSISTANT_KINDS)[number]
+/** Assistants with a tailored preset (logo and install notes). Any other product is a custom kind. */
+export const ASSISTANT_PRESET_KINDS = ['cue', 'grok_bot', 'muse', 'dots', 'hark', 'today'] as const
+export type AssistantPresetKind = (typeof ASSISTANT_PRESET_KINDS)[number]
+/** A preset id, `other`, or a lowercase slug derived from a custom product name. */
+export type AssistantKind = string
 export type AssistantPromptLocale = 'zh' | 'en'
 
 /** `sent` until the assistant acknowledges; `cancelled` is set by Kun and stays. */
@@ -14,8 +17,13 @@ export type AssistantMailboxAvailability = 'unknown' | 'available' | 'unavailabl
 
 export type AssistantView = {
   id: string
+  enrollmentId: string
   name: string
   kind: AssistantKind
+  /** Product name the user typed for a custom assistant. */
+  product?: string
+  /** Icon fetched from a custom assistant's website, as a data URL. */
+  icon?: string
   platform: string
   agentVersion: string
   createdAt: string
@@ -40,6 +48,8 @@ export type AssistantEnrollmentView = {
   enrollmentId: string
   name: string
   kind: AssistantKind
+  product?: string
+  icon?: string
   expiresAt: string
   requests: AssistantJoinRequestView[]
 }
@@ -65,6 +75,8 @@ export type AssistantTaskView = {
 
 export type AssistantNoteView = {
   id: string
+  /** `you`: a reply the user sent from Kun; `assistant`: a message the assistant sent. */
+  from: 'assistant' | 'you'
   assistantId: string
   assistantName: string
   title?: string
@@ -85,7 +97,14 @@ export type AssistantMailboxStatus = {
   error?: string
 }
 
-export type AssistantEnrollmentRequest = { name: string; kind: AssistantKind; locale: AssistantPromptLocale }
+export type AssistantEnrollmentRequest = {
+  name: string
+  kind: AssistantKind
+  locale: AssistantPromptLocale
+  /** Custom assistants: the product's name and website (its icon is fetched from there). */
+  product?: string
+  website?: string
+}
 export type AssistantEnrollmentResult = { enrollmentId: string; code: string; expiresAt: string; prompt: string }
 export type AssistantAssignRequest = { assistantId: string; title?: string; body: string; deadline?: string }
 
@@ -99,6 +118,10 @@ export type AssistantMailboxApi = {
   revoke(assistantId: string): Promise<AssistantMailboxStatus>
   assign(request: AssistantAssignRequest): Promise<AssistantTaskView>
   cancel(taskId: string): Promise<AssistantTaskView>
+  /** Answers a task the assistant marked blocked; delivered as a note about that task. */
+  reply(taskId: string, body: string): Promise<AssistantMailboxStatus>
+  /** The install prompt of a pending enrollment, rebuilt from this computer's key. */
+  promptFor(enrollmentId: string, locale: AssistantPromptLocale): Promise<{ code: string; prompt: string } | null>
   onStatus(listener: (status: AssistantMailboxStatus) => void): () => void
 }
 
@@ -112,6 +135,8 @@ export const ASSISTANT_MAILBOX_CHANNELS = {
   revoke: 'assistant-mailbox:revoke',
   assign: 'assistant-mailbox:assign',
   cancel: 'assistant-mailbox:cancel',
+  reply: 'assistant-mailbox:reply',
+  promptFor: 'assistant-mailbox:prompt-for',
   changed: 'assistant-mailbox:changed'
 } as const
 
@@ -120,5 +145,15 @@ export const ASSISTANT_BODY_MAX_BYTES = 32 * 1024
 export const ASSISTANT_NAME_MAX = 80
 
 export function isAssistantKind(value: unknown): value is AssistantKind {
-  return typeof value === 'string' && (ASSISTANT_KINDS as readonly string[]).includes(value)
+  return typeof value === 'string' && /^[a-z0-9_]{1,32}$/.test(value)
+}
+
+export function isAssistantPresetKind(value: unknown): value is AssistantPresetKind {
+  return typeof value === 'string' && (ASSISTANT_PRESET_KINDS as readonly string[]).includes(value)
+}
+
+/** Server kind for a custom product: its ASCII letters and digits as a slug, else `other`. */
+export function customAssistantKind(product: string): AssistantKind {
+  const slug = product.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32)
+  return slug && !isAssistantPresetKind(slug) ? slug : 'other'
 }
