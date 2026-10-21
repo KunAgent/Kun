@@ -11,6 +11,7 @@ import {
   writeWorkspaceKey
 } from '../../write/write-thread-registry'
 import { buildWorkSessions, type WorkSessionEntry } from '../../write/work-sessions-model'
+import { useWorkSessionStore } from '../../write/work-session-store'
 import { usePaperBatchInterpret } from '../../paper/paper-batch-interpret'
 
 const PAGE_LIMIT = 80
@@ -124,6 +125,11 @@ export function useWorkSessions(query: string): {
       query
     })
   }, [key, listed, query, root, threads, whiteboards])
+
+  // The assistant panel names the open session from the same listing.
+  useEffect(() => {
+    useWorkSessionStore.getState().rememberTitles(sessions)
+  }, [sessions])
 
   return { root, sessions, loading: loading && listed.key !== key, patchThread, forgetThread, reload }
 }

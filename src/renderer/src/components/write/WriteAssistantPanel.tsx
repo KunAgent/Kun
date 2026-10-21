@@ -46,6 +46,7 @@ import { focusedPaperViewId, paperResearchStageActive } from '../../paper/paper-
 import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { workSessionDisplayTitle } from '../../write/work-sessions-model'
+import { useWorkSessionStore } from '../../write/work-session-store'
 import { prepareWorkSessionForSend } from '../../write/work-session-actions'
 import { workAssistantHarnessId } from '../../write/work-assistant-agent'
 import { AgentIcon } from '../agent-icon'
@@ -192,8 +193,10 @@ export function WriteAssistantPanel({
   useEffect(() => {
     if (detachedKey && detachedKey !== contextKey) useWorkContextStore.getState().attach()
   }, [contextKey, detachedKey])
+  const listedTitle = useWorkSessionStore((s) => s.titles)
   const sessionTitle = useChatStore((s) =>
-    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title))
+    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title)) ||
+    (activeThreadId ? listedTitle[activeThreadId] ?? '' : '')
   const agentHarnessId = useChatStore(workAssistantHarnessId)
   const paperEntries = usePaperModeStore((s) => s.entries)
   const readerPage = usePaperModeStore((s) => s.readerPage)
