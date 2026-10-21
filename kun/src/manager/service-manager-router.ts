@@ -8,7 +8,7 @@ import { readJsonBody } from '../server/read-json-body.js'
 import { jsonResponse } from '../server/response.js'
 import { Router } from '../server/router.js'
 import { GraphRunConflictError } from '../graph/graph-run-store.js'
-import { managerMemoryErrorResponse } from './manager-memory-errors.js'
+import { addManagerMemoryRoute } from './service-manager-router-memory.js'
 import { KUN_VERSION } from '../version.js'
 import {
   KUN_MANAGER_PROTOCOL_VERSION
@@ -18,7 +18,6 @@ import {
   type ManagerAttachmentStoreOperation,
   type ManagerArtifactStoreOperation,
   type ManagerGraphStoreOperation,
-  type ManagerMemoryStoreOperation,
   type ManagerSessionStoreOperation
 } from './shared-data-store.js'
 import {
@@ -37,7 +36,6 @@ import {
   GraphStoreOperationSchema,
   KUN_MANAGER_CAPABILITIES,
   MAX_MANAGER_DATA_BODY_BYTES,
-  MemoryStoreOperationSchema,
   RUNTIME_HEARTBEAT_TTL_MS,
   RuntimeRegistrationRequiredError,
   ServiceManagerState,
@@ -473,29 +471,7 @@ export function buildServiceManagerRouter(input: {
       }
     }
   ))
-  if (input.sharedData) router.add('POST', '/v1/data/memory/:operation', (request, context) => authorizedAsync(
-    request,
-    input.managerToken,
-    async () => {
-      const operation = MemoryStoreOperationSchema.safeParse(context.params.operation)
-      if (!operation.success) return validation('invalid memory-store operation')
-      const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
-      if (!body.ok) return body.response
-      try {
-        const result = await input.sharedData!.executeMemory(
-          operation.data as ManagerMemoryStoreOperation,
-          body.value,
-          request.signal
-        )
-        return jsonResponse({ result })
-      } catch (error) {
-        if (error instanceof z.ZodError) return validation('invalid memory-store request', error.issues)
-        const response = managerMemoryErrorResponse(error)
-        if (response) return response
-        throw error
-      }
-    }
-  ))
+  if (input.sharedData) addManagerMemoryRoute(router, input.managerToken, input.sharedData)
   if (input.sharedData) router.add('POST', '/v1/data/graph/:operation', (request, context) => authorizedAsync(
     request,
     input.managerToken,
