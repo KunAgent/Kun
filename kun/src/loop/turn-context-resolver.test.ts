@@ -262,6 +262,46 @@ describe('TurnContextResolver', () => {
     ])
   })
 
+  it('gives a reserved HTML page turn one fixed read/write catalog and drops unreachable skills', async () => {
+    const contexts: Array<Record<string, unknown>> = []
+    const listTools = vi.fn(async (context) => {
+      contexts.push(context)
+      return [{ name: 'write', description: 'write', inputSchema: {}, providerId: 'local' }]
+    })
+    const resolveTurn = vi.fn(async () => ({
+      activeSkillIds: ['design-system'], activations: [], instructions: [],
+      allowedToolNames: ['browser_use'], injectedBytes: 0
+    }))
+    const resolver = new TurnContextResolver({
+      toolHost: { listTools },
+      resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
+      skillRuntime: { resolveTurn },
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
+    })
+    const inputTurn = turn({
+      clientSurface: 'gui', agentSurface: 'design', attachmentIds: [],
+      guiDesignArtifact: { kind: 'html', artifactId: 'page_1', relativePath: '.kun-design/doc/page_1/v1.html' }
+    })
+
+    await resolver.resolve({
+      threadId: 'thread_1', turnId: 'turn_1', thread: thread(), turn: inputTurn,
+      history: [], model: 'model_1', modelCapabilities: capabilities(['text']),
+      signal: new AbortController().signal,
+      mode: resolveTurnModeContext({ turn: inputTurn, workspace: '/workspace', threadMode: 'agent' }),
+      goalNoToolRecoverySteps: 0
+    })
+
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0]?.agentSurface).toBe('design')
+    expect([...(contexts[0]?.allowedToolNames as string[])].sort()).toEqual([
+      'edit', 'fast_context', 'find', 'get_goal', 'glob', 'grep', 'ls', 'read',
+      'task_create', 'task_get', 'task_list', 'task_update', 'update_goal', 'write'
+    ])
+    expect(resolveTurn).toHaveBeenCalledWith(expect.objectContaining({
+      blockedSkillIds: expect.arrayContaining(['automation', 'browser', 'canvas', 'component'])
+    }))
+  })
+
   it('drops stale plan state and forces SVG turns to agent mode', () => {
     const stalePlan = turn({
       mode: 'plan',

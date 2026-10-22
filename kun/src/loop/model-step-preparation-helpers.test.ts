@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeToolResultItem } from '../domain/item.js'
 import {
   adeManagerContextBlock,
+  planningTeamContextBlocks,
   pptSourceReadToolGate,
   pptWorkflowCompletionToolGate,
   requiredWorkflowToolGate,
@@ -161,6 +162,28 @@ describe('adeManagerContextBlock', () => {
   ])('skips %s', async (_label, thread) => {
     const block = await adeManagerContextBlock(thread, 'thr_mgr', resolve)
     expect(block).toBeNull()
+  })
+
+  it('skips a Design pass on a Code-owned collaboration thread', async () => {
+    const thread = { workspaceMode: 'code' as const, agentSurface: 'code' as const, collaboration: { enabled: true }, harnessId: 'kun' }
+    const resolve = vi.fn(async () => 'manager context')
+    await expect(adeManagerContextBlock(thread, 'thr_code', resolve, 'design')).resolves.toBeNull()
+    expect(resolve).not.toHaveBeenCalled()
+    const codeTurn = await adeManagerContextBlock(thread, 'thr_code', resolve, 'code')
+    expect(codeTurn?.content).toBe('manager context')
+  })
+
+  it('keeps the block when a planning turn carries a Code surface', async () => {
+    const blocks = await planningTeamContextBlocks(
+      { orchestration: 'direct', agentSurface: 'code' }, false,
+      { workspaceMode: 'ade', harnessId: 'kun', relation: 'primary' }, 'thr_mgr', undefined, resolve
+    )
+    expect(blocks.map((block) => block.kind)).toEqual(['graph-harnesses', 'ade-manager'])
+    const design = await planningTeamContextBlocks(
+      { orchestration: 'direct', agentSurface: 'design' }, false,
+      { workspaceMode: 'ade', harnessId: 'kun', relation: 'primary' }, 'thr_mgr', undefined, resolve
+    )
+    expect(design.map((block) => block.kind)).toEqual(['graph-harnesses'])
   })
 
   it('skips when no resolver is wired', async () => {

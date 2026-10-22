@@ -60,6 +60,8 @@ export type BuildDesignTurnPromptPayloadOptions = {
   selectedFrame?: CanvasShape | null
   previousOpErrors?: OpError[]
   imageEditReferencePath?: string
+  /** Kun attaches this turn's stable rules as its mode policy; see DesignTurnOptions. */
+  runtimeModePolicy?: boolean
 }
 
 export type DesignTurnPromptPayload = {
@@ -176,6 +178,7 @@ export async function buildDesignTurnPromptPayload(
   const prompt = buildDesignTurnPrompt({
     target: options.target,
     mode: options.mode,
+    ...(options.runtimeModePolicy ? { runtimeModePolicy: true } : {}),
     text: options.promptText,
     artifactRelativePath: options.artifactRelativePath,
     workspaceRoot: options.workspaceRoot,

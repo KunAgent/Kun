@@ -131,6 +131,7 @@ describe('submitDesignTurn', () => {
     expect(buildPromptPayload).toHaveBeenCalledWith(expect.objectContaining({
       mode: 'image',
       target: 'canvas',
+      runtimeModePolicy: true,
       previousOpErrors: []
     }))
     expect(takeLastCanvasErrors).toHaveBeenCalledWith('/workspace:doc:board')
@@ -147,6 +148,41 @@ describe('submitDesignTurn', () => {
       attachmentIds: [attachment.id],
       attachments: [attachment]
     })
+  })
+
+  it.each([
+    ['reserves the page and lets Kun supply its rules', 'page_1', '.kun-design/doc/page_1/v2.html', true],
+    ['keeps the rules inline when the page cannot be reserved', undefined, '.kun-design/doc/page_1/v2.html', false]
+  ] as const)('%s', async (_label, htmlArtifactId, artifactRelativePath, reserved) => {
+    const designState = makeDesignState()
+    const buildPromptPayload = vi.fn(async (
+      _options: BuildDesignTurnPromptPayloadOptions
+    ): Promise<DesignTurnPromptPayload> => ({ prompt: 'PAGE PROMPT', promptState: designState }))
+    const sendMessage = vi.fn(async (..._args: unknown[]) => true)
+    await submitDesignTurn({
+      promptText: 'Build the page', displayText: 'Build the page', workspaceRoot: '/workspace', source: 'user',
+      sendMessage, resolveProviderId: () => 'deepseek', suppressedIds: new Set(), htmlElementContext: null,
+      getDesignState: () => designState,
+      getCanvasShapeState: () => ({ document: createEmptyDocument() }) as never,
+      getCanvasSelectionState: () => ({ selectedIds: new Set() }) as never,
+      getCanvasViewportState: () => ({ vbox: { x: 0, y: 0, width: 1200, height: 800 } }) as never,
+      getDesignSystemState: () => ({ system: createEmptyDesignSystem() }) as never,
+      getDesignTokensState: () => ({ byArtifact: {} }) as never,
+      takeLastCanvasErrors: vi.fn(() => []),
+      resolveTarget: vi.fn(async () => resolvedTarget({
+        target: 'screen', artifactRelativePath, designNotesPath: '.kun-design/doc/page_1/DESIGN.md',
+        ...(htmlArtifactId ? { htmlArtifactId } : {})
+      })),
+      prepareTurnFiles: vi.fn(async (): Promise<PrepareDesignTurnFilesResult> => ({ ok: true, notesWritten: false })),
+      buildPromptPayload
+    })
+    const payloadOptions = buildPromptPayload.mock.calls[0]?.[0]
+    expect(payloadOptions?.runtimeModePolicy === true).toBe(reserved)
+    const overrides = sendMessage.mock.calls[0]?.[2] as { guiDesignArtifact?: unknown }
+    expect(overrides.guiDesignArtifact).toEqual(reserved ? {
+      kind: 'html', artifactId: 'page_1', relativePath: artifactRelativePath,
+      designMdPath: '.kun-design/doc/page_1/DESIGN.md'
+    } : undefined)
   })
 
   it('carries the bound profile and target while enforcing the AI-image output lane', async () => {

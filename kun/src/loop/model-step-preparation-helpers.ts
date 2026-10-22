@@ -210,13 +210,19 @@ export async function graphHarnessContextBlock(
  * get a bounded runtime block with the delegation contract, live team state,
  * and the harness routing menu. Worker threads carry parentThreadId and are
  * excluded; external-harness managers skip the Kun-specific guidance.
+ *
+ * Unified workbench threads stay Code-owned while a Design pass runs on them,
+ * so the thread surface alone cannot tell a Design turn apart. A Design turn
+ * writes one reserved page or operates the canvas; delegation guidance there
+ * conflicts with that scope, so the turn's own surface gates the block too.
  */
 export async function adeManagerContextBlock(
   thread:
     | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext'>
     | undefined,
   threadId: string,
-  resolve?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
+  resolve?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>,
+  turnSurface?: Turn['agentSurface']
 ): Promise<KunTurnContextBlock | null> {
   const newWorkAllowed = thread?.collaboration?.enabled ?? thread?.workspaceMode === 'ade'
   const controlsAllowed = newWorkAllowed || thread?.collaboration?.everEnabled === true
@@ -228,6 +234,7 @@ export async function adeManagerContextBlock(
     thread.executionUnit?.kind === 'worker' ||
     thread.roomContext !== undefined ||
     (thread.agentSurface !== undefined && thread.agentSurface !== 'code') ||
+    (turnSurface !== undefined && turnSurface !== 'code') ||
     (thread.harnessId !== undefined && thread.harnessId !== 'kun')
   ) {
     return null
@@ -259,7 +266,7 @@ export async function taskSuggestionContextBlock(
  * and the suggestion-card block on conversations that own cards.
  */
 export async function planningTeamContextBlocks(
-  orchestration: Turn['orchestration'],
+  turn: Pick<Turn, 'orchestration' | 'agentSurface'>,
   graphPlanCommitted: boolean,
   thread:
     | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext' | 'relation'>
@@ -270,8 +277,8 @@ export async function planningTeamContextBlocks(
   taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>
 ): Promise<KunTurnContextBlock[]> {
   const [graph, ade, tasks] = await Promise.all([
-    graphHarnessContextBlock(orchestration, graphPlanCommitted, graphHarnessSummary),
-    adeManagerContextBlock(thread, threadId, adeManagerContext),
+    graphHarnessContextBlock(turn.orchestration, graphPlanCommitted, graphHarnessSummary),
+    adeManagerContextBlock(thread, threadId, adeManagerContext, turn.agentSurface),
     taskSuggestionContextBlock(thread, threadId, taskSuggestionContext)
   ])
   return [graph, ade, tasks].filter(

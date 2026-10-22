@@ -283,11 +283,20 @@ export async function submitDesignTurn(
         '.kun-design'
       )
     : null
+  // Kun attaches the stable page rules to reserved HTML page turns and the
+  // canvas reference to Design canvas turns, so those prompts stay short.
+  const reservedHtml = !resolvedTarget.svgArtifactId &&
+    (resolvedTarget.target === 'screen' || resolvedTarget.target === 'html')
+    ? reservedHtmlArtifactContext(resolvedTarget)
+    : undefined
+  const runtimeModePolicy = Boolean(reservedHtml) ||
+    (resolvedTarget.target === 'canvas' && canvasEngine !== 'excalidraw')
   let promptPayload: DesignTurnPromptPayload
   try {
     promptPayload = await buildPayload({
       target: resolvedTarget.target,
       mode: (options.attachmentIds?.length ?? 0) > 0 ? 'image' : 'text',
+      ...(runtimeModePolicy ? { runtimeModePolicy: true } : {}),
       promptText: options.promptText,
       artifactRelativePath: resolvedTarget.artifactRelativePath,
       workspaceRoot: options.workspaceRoot,
@@ -357,12 +366,7 @@ export async function submitDesignTurn(
             artifactId: resolvedTarget.svgArtifactId,
             relativePath: resolvedTarget.artifactRelativePath
           }
-        } : resolvedTarget.target === 'screen' || resolvedTarget.target === 'html'
-          ? (() => {
-              const reserved = reservedHtmlArtifactContext(resolvedTarget)
-              return reserved ? { guiDesignArtifact: reserved } : {}
-            })()
-          : {})
+        } : reservedHtml ? { guiDesignArtifact: reservedHtml } : {})
       })
     )
   } catch (error) {

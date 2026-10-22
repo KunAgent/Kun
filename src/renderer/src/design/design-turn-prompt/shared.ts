@@ -1,4 +1,5 @@
 import { WRITE_PROTOTYPE_DEFAULT_PROMPT, WRITE_PROTOTYPE_MAX_TEXT_CHARS } from '@shared/write-prototype'
+import { PROTOTYPE_NAVIGATION_MARKUP_LINES } from '../../../../../kun/src/prompt/design-authoring-rules'
 import {
   DESIGN_CRAFT_LINES,
   DESIGN_DELIVERY_LINES,
@@ -54,6 +55,14 @@ export type DesignFrameContext = {
 export type DesignTurnOptions = {
   target: DesignTurnTarget
   mode: 'text' | 'image'
+  /**
+   * Kun attaches the stable rules for this turn as its mode policy: reserved
+   * HTML page turns (`guiDesignArtifact.kind === 'html'`) and Design-surface
+   * canvas turns. The prompt then carries only turn-specific context. Leave it
+   * unset for prompts Kun cannot attach a policy to, such as delegated page
+   * children, so they keep the rules inline.
+   */
+  runtimeModePolicy?: boolean
   /** Free-form description of the design to produce (text mode). */
   text?: string
   /** Workspace-relative path the agent must write the artifact to. */
@@ -213,15 +222,6 @@ export function buildPrototypeHref(fromHtmlPath: string | undefined, toHtmlPath:
   return [...up, ...down].join('/') || './'
 }
 
-export const PROTOTYPE_NAVIGATION_MARKUP_LINES = [
-  'Prototype link markup contract:',
-  '- Use `<a href="...">` for navigation items that are semantically links.',
-  '- For button-like, card-like, form-submit, or tab-like controls that navigate to another screen, keep the right element and set `data-href="..."` / `data-prototype-href="..."` to the listed prototype href, or `data-prototype-target="Exact Screen Title"` when only the target page title is available; the prototype player intercepts those attributes.',
-  '- If a scripted router is necessary, call `history.pushState(...)` / `history.replaceState(...)` or `location.assign` / `location.replace` / `location.href` / `location.hash` with a prototype href or exact screen title; the prototype player intercepts those too.',
-  '- For Back / Previous controls that should return to the last prototype screen, call `history.back()` or `history.go(-1)`; the prototype player maps that to its own screen history.',
-  '- Prefer native `<a>` / `<button>` elements. If a whole card/tab must be a non-native clickable region, add `role="button"` or `role="tab"`, `tabindex="0"`, and the same `data-prototype-*` target so click and keyboard activation both work in prototype mode.',
-  '- Do not rely on text-only mentions, comments, or dead `href="#"` links for cross-screen navigation.'
-]
 
 export function formatDesignTargetFrameLines(ctx: DesignContext | undefined): string[] {
   const target = normalizeDesignTarget(ctx?.designTarget)
@@ -288,9 +288,14 @@ export type ParallelDesignPagesPromptOptions = {
  * Render the "other pages in this project" block shared by the HTML and screen
  * turn prompts. Lets a generated/iterated page align with its siblings.
  */
+/** Stands in for the page rules Kun attaches as the reserved page's mode policy. */
+export const RUNTIME_PAGE_POLICY_LINE =
+  '- Follow the Design page rules in the runtime mode policy: responsive frame layout, authoring discipline, prototype link markup, delivery checklist, and craft.'
+
 export function formatScreenManifestLines(
   manifest: ScreenManifestEntry[] | undefined,
-  currentHtmlPath?: string
+  currentHtmlPath?: string,
+  options: { runtimeModePolicy?: boolean } = {}
 ): string[] {
   if (!manifest || manifest.length === 0) return []
   const built = manifest.filter((s) => !s.planned)
@@ -329,7 +334,7 @@ export function formatScreenManifestLines(
   }
   lines.push(
     'Prototype navigation: turn relevant nav items, cards, tabs, and primary/secondary actions into clickable routes using the listed prototype hrefs; keep same-page controls as buttons and avoid dead `#` links.',
-    ...PROTOTYPE_NAVIGATION_MARKUP_LINES
+    ...(options.runtimeModePolicy ? [] : PROTOTYPE_NAVIGATION_MARKUP_LINES)
   )
   if (built.length > 0) {
     lines.push(
