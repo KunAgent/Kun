@@ -1,3 +1,4 @@
+import { githubToolThread } from './github-tool-card'
 import { AgentDispatchGroup, isOutcomeCardBlock } from './AgentDispatchCard'
 import { ToolTerminalButton } from './message-timeline-terminal-action'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement, RefObject } from 'react'
@@ -110,7 +111,7 @@ export function ProcessSectionRow({
     (processing && hasRuntimeError) ||
     sectionHasPendingApproval(section) ||
     (processing && section.kind === 'execution' && sectionHasRequestUserInput(section)) ||
-    section.blocks.some(isGmailConnectionTool)
+    section.blocks.some(isNativeConnectionTool)
   const forceExpanded = sectionHasPendingApproval(section)
   const expanded = hasDetails && (forceExpanded || (userExpanded ?? defaultExpanded))
   const title = describeProcessSection(section, t, {
@@ -290,7 +291,7 @@ function ProcessStackRows({
         const isError = errorTone !== null
         // Keep failed tool payloads tucked away while the turn continues. The
         // warning-toned row still surfaces the failure and remains expandable.
-        const defaultOpen = processing && isError && block.kind !== 'tool' || isGmailConnectionTool(block)
+        const defaultOpen = processing && isError && block.kind !== 'tool' || isNativeConnectionTool(block)
         const forceOpen = autoOpenPending || autoOpenRequestInput
         const userClosed = closedBlockIds.has(block.id)
         const userOpened = openBlockId === block.id
@@ -441,7 +442,7 @@ function ProcessEntryRow({
   const forceOpen = isAutoOpenPending || isAssistantProcessText || isStreamingAssistant
   // A tool failure should not interrupt the live process by expanding its
   // often verbose result. Runtime errors still open so they are not hidden.
-  const defaultOpen = processing && isError && block.kind !== 'tool' || isGmailConnectionTool(block)
+  const defaultOpen = processing && isError && block.kind !== 'tool' || isNativeConnectionTool(block)
   const open =
     canExpand &&
     (forceOpen || (userOpen ?? defaultOpen))
@@ -568,6 +569,6 @@ function ProcessEntryRow({
   )
 }
 
-function isGmailConnectionTool(block: ChatBlock): boolean {
-  return block.kind === 'tool' && gmailToolThread(readToolPresentation(block)) !== null
+function isNativeConnectionTool(block: ChatBlock): boolean {
+  return block.kind === 'tool' && (gmailToolThread(readToolPresentation(block)) !== null || githubToolThread(readToolPresentation(block)) !== null)
 }

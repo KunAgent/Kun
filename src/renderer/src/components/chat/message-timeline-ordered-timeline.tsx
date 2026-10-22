@@ -1,3 +1,4 @@
+import { GitHubRequestedCards } from './github-tool-card'
 import type { ReactElement, RefObject } from 'react'
 import type { ToolBlock } from '../../agent/types'
 import type {
@@ -147,7 +148,7 @@ export function OrderedTurnTimeline({
                 allowThreadActions={allowThreadActions}
               />
             ) : null}
-            {!isProcessing && !expanded ? <GmailRequestedCards blocks={segment.blocks} /> : null}
+            {!isProcessing && !expanded ? <><GmailRequestedCards blocks={segment.blocks} /><GitHubRequestedCards blocks={segment.blocks} /></> : null}
             {!isProcessing && !expanded
               ? <AgentDispatchGroup blocks={segment.blocks} readOnly={!allowThreadActions} /> : null}
             {!isProcessing ? <PptDeckCards blocks={segment.blocks} readOnly={!allowThreadActions} /> : null}

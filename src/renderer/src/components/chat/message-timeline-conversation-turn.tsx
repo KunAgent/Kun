@@ -1,3 +1,4 @@
+import { GitHubRequestedCards } from './github-tool-card'
 import { memo, useMemo, useState, type ReactElement, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock, RuntimeChildActivity, ToolBlock } from '../../agent/types'
@@ -397,7 +398,8 @@ export function ConversationTurn({
       ) : null}
 
       {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
-        <GmailRequestedCards blocks={workProcessBlocks} />
+        <><GmailRequestedCards blocks={workProcessBlocks} />
+        <GitHubRequestedCards blocks={workProcessBlocks} /></>
       ) : null}
 
       {!hasOrderedTimeline && !isProcessing && !workExpanded ? (

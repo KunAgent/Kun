@@ -59,6 +59,7 @@ import { GatewayCredentialService } from '../services/gateway-credential-service
 import { GatewayUsageService } from '../services/gateway-usage-service.js'
 import { createApprovalReviewModelContextResolver } from '../services/approval-review-context-resolver.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
+import { createRuntimeGitHubApp } from './runtime-github-app-composition.js'
 import { createRuntimeGmailComposition } from './runtime-gmail-composition.js'
 import { GoogleWorkspaceModelClient } from '../gmail/model-data-policy.js'
 import { bindGmailThreadDataProtection } from '../gmail/thread-data-state.js'
@@ -98,6 +99,9 @@ export async function createRuntimeModelComposition(
   const gmail = await createRuntimeGmailComposition({ core, extensionCredentialKeyProvider,
     networkProxy: gmailNetworkProxy })
   startup.registerCleanup?.(() => gmail.dispose())
+  const githubApp = await createRuntimeGitHubApp({ dataDir: core.activeOptions.dataDir,
+    encryptor: extensionCredentialKeyProvider.encryptor, networkProxy: gmailNetworkProxy })
+  if (githubApp) startup.registerCleanup?.(() => githubApp.service.dispose())
   bindGmailThreadDataProtection(core.rawThreadStore, gmail)
   bindGmailThreadDataProtection(core.threadStore, gmail)
   const extensionCredentials = new ExtensionCredentialStore({
@@ -622,6 +626,7 @@ export async function createRuntimeModelComposition(
     routeHealth,
     modelClient,
     gmail,
+    githubApp,
     gmailLocalModel: undefined as import('../gmail/local-ollama-service.js').ManagedLocalGmailOllama | undefined,
     gmailDataPolicy,
     timedModelClient,

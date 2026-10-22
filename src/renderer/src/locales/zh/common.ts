@@ -1,3 +1,4 @@
+import githubApp from './common/github-app.json'
 import composerSubscriptionQuota from './common/composer-subscription-quota.json'
 import toolApprovalDetails from './common/tool-approval-details.json'
 import toolDetails from './common/tool-details.json'
@@ -81,6 +82,7 @@ import pptDeck from './common/ppt-deck.json'
 import workersPanel from './common/workers-panel.json'
 
 const common = {
+  ...githubApp,
   ...composerSubscriptionQuota,
   ...toolApprovalDetails,
   ...toolDetails,

@@ -1,3 +1,4 @@
+import { GitHubToolCard, githubToolThread } from './github-tool-card'
 import { useResultPresented } from '../../product-analytics/presentation'
 import { trackProduct } from '../../product-analytics/client'
 import { TimelineApprovalCard } from './TimelineApprovalCard'
@@ -413,6 +414,8 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
 
   const hasDetail = Boolean(block.meta?.toolPresentation || block.meta?.acpKind || block.detail?.trim())
   const canExpand = hasDetail || running
+  const githubThread = githubToolThread(presentation)
+  if (githubThread) return <GitHubToolCard threadId={githubThread} presentation={presentation} />
   const gmailThread = gmailToolThread(presentation)
   if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
 

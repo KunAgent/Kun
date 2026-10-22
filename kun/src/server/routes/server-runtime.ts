@@ -184,6 +184,7 @@ export type ExtensionPlatformRuntime = {
  */
 export type ServerRuntime = {
   /** Native installed-app Gmail connection; credentials remain in the local encrypted store. */
+  githubApp?: import('../../github-app/service.js').GitHubAppServicePort
   gmail?: import('../../gmail/ports.js').GmailServicePort
   gmailDataPolicy?: import('../../gmail/model-data-policy.js').GmailModelDataPolicyPort
   gmailLocalModel?: Pick<import('../../gmail/local-ollama-service.js').ManagedLocalGmailOllama, 'status' | 'prepare'>
