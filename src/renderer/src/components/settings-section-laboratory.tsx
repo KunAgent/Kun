@@ -25,6 +25,7 @@ import {
 import { GraphModeSettingsPanel } from './settings-section-graph-panel'
 import { ConversationVisualizationSettingsPanel } from './settings-section-lab-conversation-visualization'
 import { AppSurfacesSettingsPanels } from './settings-section-lab-app-surfaces'
+import { AssistantMailboxSettingsPanel } from './settings-section-lab-assistant-mailbox'
 import { ContextWindowSettingsPanel } from './settings-section-lab-context-window'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
@@ -85,6 +86,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
     graph.enabled,
     lab.pptAgent.enabled,
     lab.projectBoard.enabled,
+    lab.assistantMailbox?.enabled === true,
     computerUse.enabled,
     browserUse.enabled
   ].filter(Boolean).length
@@ -92,7 +94,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
   return (
     <>
       <p className="ds-settings-lab-summary" role="status">
-        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 11 })}
+        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 12 })}
       </p>
       <LabFeatureGroup label={t('settingsIaLabsGroupConversation')}>
         <ContextWindowSettingsPanel
@@ -162,6 +164,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           value={lab}
           onChange={(patch) => updateKun({ lab: patch })}
         />
+        <AssistantMailboxSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
       </LabFeatureGroup>
 
       <LabFeatureGroup label={t('settingsIaLabsGroupControl')}>

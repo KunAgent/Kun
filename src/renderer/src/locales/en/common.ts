@@ -74,6 +74,7 @@ import artifactsLibrary from './common/artifacts-library.json'
 import workspaceFiles from './common/workspace-files.json'
 import changesCommit from './common/changes-commit.json'
 import turnUndo from './common/turn-undo.json'
+import assistantMailbox from './common/assistant-mailbox.json'
 
 const common = {
   ...composerSubscriptionQuota,
@@ -157,6 +158,7 @@ const common = {
   ...workspaceFiles,
   ...changesCommit,
   ...turnUndo,
+  ...assistantMailbox,
 }
 
 export default common

@@ -1,5 +1,6 @@
 import { registerProductAnalytics } from '../product-analytics/register'
 import { registerMobileLink } from '../mobile-link/register'
+import { registerAssistantMailbox } from '../assistant-mailbox/register'
 import { registerKunArtIpc } from './register-kun-art-ipc'
 import { ipcMain } from 'electron'
 import { homedir } from 'node:os'
@@ -33,6 +34,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
   registerProductAnalytics(options, accountAccess)
   registerMobileLink(options, accountAccess)
+  registerAssistantMailbox(options, accountAccess)
   registerKunArtIpc(options.getMainWindow, (path, method, body) =>
     options.runtimeRequest(path, method, body, undefined, { priority: 'background' }), accountAccess)
   configureRuntimeModelExecutor(async (input, request) => {

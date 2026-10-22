@@ -42,6 +42,7 @@ import workspaceFiles from './common/workspace-files.json'
 import changesCommit from './common/changes-commit.json'
 import turnUndo from './common/turn-undo.json'
 import taskSuggestion from './common/task-suggestion.json'
+import assistantMailbox from './common/assistant-mailbox.json'
 
 const common = {
   ...taskSuggestion,
@@ -87,6 +88,7 @@ const common = {
   ...workspaceFiles,
   ...changesCommit,
   ...turnUndo,
+  ...assistantMailbox,
 }
 
 export default common

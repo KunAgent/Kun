@@ -194,6 +194,8 @@ export type KunLabSettingsV1 = {
   genUi: { enabled: boolean }
   /** Interactive pages of MCP tools that declare a `ui://` resource. */
   mcpApps: { enabled: boolean }
+  /** Personal assistants (Cue, Grok Bot, Muse, dots) driven through Kun's assistant mailbox. */
+  assistantMailbox: { enabled: boolean }
 }
 
 /** Partial settings patch for the Lab section. Nested fields merge with current values. */
@@ -209,6 +211,7 @@ export type KunLabSettingsPatchV1 = {
   projectBoard?: Partial<KunLabProjectBoardSettingsV1>
   genUi?: { enabled?: boolean }
   mcpApps?: { enabled?: boolean }
+  assistantMailbox?: { enabled?: boolean }
 }
 
 export const KUN_GRAPH_ROLLOUT_STAGES = [

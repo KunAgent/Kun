@@ -1,6 +1,8 @@
 import { productAnalyticsApi } from './product-analytics'
 import { USER_ATTENTION_CHANNEL } from '../shared/user-attention'
 import { mobileLink } from './mobile-link'
+import { assistantMailboxApi } from './assistant-mailbox'
+import { subscriptionPreloadApi } from './subscription-bridge'
 import { kunArtApi } from './kun-art'
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { KunGuiApi } from '../shared/kun-gui-api'
@@ -46,6 +48,7 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 
 const api = {
   mobileLink,
+  assistantMailbox: assistantMailboxApi,
   productAnalytics: productAnalyticsApi,
   kunAccount: kunAccountApi,
   kunArt: kunArtApi,
@@ -78,39 +81,7 @@ const api = {
   resetUnreadableCredentials: () => ipcRenderer.invoke('credentials:reset-unreadable'),
   cliInstallStatus: () => ipcRenderer.invoke('cli-install:status'),
   cliInstallAction: (action) => ipcRenderer.invoke('cli-install:action', action),
-  claudeSubscriptionStatus: () => ipcRenderer.invoke('claude-subscription:status'),
-  claudeSubscriptionLogin: () => ipcRenderer.invoke('claude-subscription:login'),
-  claudeSubscriptionProbe: (token, providerId) =>
-    ipcRenderer.invoke('claude-subscription:probe', token, providerId),
-  claudeSubscriptionModels: (token, providerId) =>
-    ipcRenderer.invoke('claude-subscription:models', token, providerId),
-  claudeSubscriptionModelCatalog: (token, providerId) =>
-    ipcRenderer.invoke('claude-subscription:model-catalog', token, providerId),
-  claudeSubscriptionSdkStatus: () => ipcRenderer.invoke('claude-subscription:sdk-status'),
-  claudeSubscriptionSdkInstall: () => ipcRenderer.invoke('claude-subscription:sdk-install'),
-  onClaudeSubscriptionSdkProgress: (handler) => {
-    const wrapped = (
-      _: Electron.IpcRendererEvent,
-      payload: Parameters<typeof handler>[0]
-    ) => handler(payload)
-    ipcRenderer.on('claude-subscription:sdk-progress', wrapped)
-    return () => ipcRenderer.removeListener('claude-subscription:sdk-progress', wrapped)
-  },
-  geminiSubscriptionCliStatus: () => ipcRenderer.invoke('gemini-subscription:cli-status'),
-  geminiSubscriptionCliInstall: () => ipcRenderer.invoke('gemini-subscription:cli-install'),
-  onGeminiSubscriptionCliProgress: (handler) => {
-    const wrapped = (
-      _: Electron.IpcRendererEvent,
-      payload: Parameters<typeof handler>[0]
-    ) => handler(payload)
-    ipcRenderer.on('gemini-subscription:cli-progress', wrapped)
-    return () => ipcRenderer.removeListener('gemini-subscription:cli-progress', wrapped)
-  },
-  geminiSubscriptionModels: () => ipcRenderer.invoke('gemini-subscription:models'),
-  geminiCliSubscriptionStatus: () => ipcRenderer.invoke('gemini-cli-subscription:status'),
-  geminiCliSubscriptionModels: (providerId) => ipcRenderer.invoke('gemini-cli-subscription:models', providerId),
-  cursorSubscriptionDiscover: (apiKey, providerId) =>
-    ipcRenderer.invoke('cursor-subscription:discover', { apiKey, providerId }),
+  ...subscriptionPreloadApi,
   setSettings: (partial) =>
     ipcRenderer.invoke('settings:set', partial),
   saveAdeCollaborationSettings: (request) =>

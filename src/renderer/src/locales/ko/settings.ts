@@ -21,6 +21,7 @@ import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 import onboarding from './settings/onboarding.json'
 import appSurfaces from './settings/app-surfaces.json'
+import assistantMailboxSettings from './settings/assistant-mailbox.json'
 
 const settings = {
   ...providerConfiguration,
@@ -45,7 +46,8 @@ const settings = {
   ...speak,
   ...ade,
   ...onboarding,
-  ...appSurfaces
+  ...appSurfaces,
+  ...assistantMailboxSettings
 }
 
 export default settings

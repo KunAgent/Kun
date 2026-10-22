@@ -16,6 +16,8 @@ export type ClawScheduleMcpLaunchConfig = {
   appPath: string
   execPath: string
   isPackaged: boolean
+  /** Electron userData; host-managed servers that call back into Main need it. */
+  userDataDir?: string
 }
 
 type ClawScheduleMcpConfigPaths = {
