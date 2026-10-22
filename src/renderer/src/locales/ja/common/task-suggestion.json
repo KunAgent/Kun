@@ -1,0 +1,107 @@
+{
+  "taskSuggestion": {
+    "loading": "提案タスクを読み込み中…",
+    "kicker": "提案タスク · 並行実行可",
+    "title": "互いに独立した {{count}} 件のフォローアップタスク",
+    "status": {
+      "pending": "未開始 {{count}} 件",
+      "progress": "開始済み {{started}} / {{total}}",
+      "countdown": "{{time}} 以内に応答がなければすべて開始",
+      "paused": "一時停止中 · 自動では開始しません",
+      "settled": "{{count}} 件の提案タスクが終了しました"
+    },
+    "summary": {
+      "done": "{{count}} 完了",
+      "live": "{{count}} 実行中",
+      "failed": "{{count}} 未完了",
+      "startFailed": "{{count}} 開始できず",
+      "ignored": "{{count}} スキップ"
+    },
+    "row": {
+      "suggested": "未開始",
+      "starting": "開始中…",
+      "running": "実行中",
+      "runningFor": "実行中 · {{minutes}} 分",
+      "waiting": "対応が必要",
+      "done": "完了",
+      "failed": "完了できませんでした",
+      "cancelled": "停止済み",
+      "ignored": "スキップ",
+      "here": "この会話で続行",
+      "start_failed": "開始できません"
+    },
+    "failure": {
+      "disk_space": "ディスク容量が不足しています",
+      "worktree_conflict": "ブランチまたはワークツリーが使用中です",
+      "agent_unavailable": "選択した Agent の準備ができていません",
+      "quota": "モデルのクォータを使い切りました",
+      "runtime": "Kun がセッションを開始できませんでした"
+    },
+    "actions": {
+      "start": "開始",
+      "startAll": "すべて開始 ({{count}})",
+      "startNow": "今すぐ開始",
+      "pause": "一時停止",
+      "resume": "カウントダウンを再開",
+      "dismiss": "無視",
+      "open": "開く",
+      "viewResult": "結果を見る",
+      "retry": "再試行",
+      "noWorktree": "ワークツリーなしで",
+      "more": "その他の開始方法",
+      "details": "概要を表示",
+      "hideDetails": "概要を閉じる"
+    },
+    "menu": {
+      "session": "新しいセッションで開始",
+      "here": "この会話で続行",
+      "copy": "概要だけコピー",
+      "ignore": "このタスクをスキップ",
+      "default": "既定"
+    },
+    "brief": {
+      "goal": "目標",
+      "scope": "範囲",
+      "done": "完了条件",
+      "edit": "概要を編集",
+      "save": "概要を保存",
+      "cancel": "キャンセル",
+      "copied": "概要をコピーしました",
+      "listHint": "1 行に 1 項目"
+    },
+    "options": {
+      "worktree": "独立したワークツリー",
+      "inheritContext": "この会話のコンテキストを引き継ぐ"
+    },
+    "meta": {
+      "worktreeOn": "タスクごとに独立したワークツリー",
+      "worktreeOff": "タスクは現在のチェックアウトを共有",
+      "hint": "開始した各タスクはこの会話の下のセッションになり、最初のメッセージが概要になります。",
+      "routeHint": "タスクごとに Agent とモデルを変更できます。変更するとカウントダウンがやり直しになります。",
+      "autoStarted": "応答がなかったため、提案どおり開始しました"
+    },
+    "report": {
+      "done": "タスク {{index}} が完了 · {{title}}",
+      "failed": "タスク {{index}} は完了できませんでした · {{title}}",
+      "cancelled": "タスク {{index}} は停止されました · {{title}}",
+      "open": "セッションを開く",
+      "dismiss": "閉じる",
+      "changedFiles": "{{count}} 個のファイルを変更",
+      "branch": "ブランチ {{branch}}",
+      "duration": "{{minutes}} 分",
+      "noSummary": "セッションは要約を残さずに終了しました。"
+    },
+    "session": {
+      "title": "タスクセッション {{index}} / {{total}}",
+      "from": "「{{title}}」から",
+      "back": "メインの会話に戻る",
+      "detach": "親の会話から切り離す",
+      "branch": "ワークツリー {{branch}}"
+    },
+    "sidebar": {
+      "count": "提案タスク {{total}} 件中 {{started}} 件を開始",
+      "expand": "タスクセッションを表示",
+      "collapse": "タスクセッションを隠す"
+    }
+  }
+}

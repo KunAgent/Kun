@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useMemo,
   useRef,
   type ComponentProps,
   type PointerEventHandler,
@@ -17,6 +18,8 @@ import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { MessageEditAssistProvider } from '../chat/UserMessageEditField'
 import { EMPTY_SKILL_COMMANDS } from '../chat/floating-composer-policy'
 import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
+import { TaskSessionBar } from '../chat/TaskSessionBar'
+import { useTaskReportSlot } from '../chat/TaskReportCards'
 import {
   GraphChildSessionBar,
   SubagentReturnBar,
@@ -197,6 +200,10 @@ export function WorkbenchChatStage({
   const updateTrajectoryUi = useTrajectoryUiStore((state) => state.update)
   const trajectoryUi = trajectoryUiState(trajectoryByThread, activeThreadId)
   const trajectoryOpen = trajectoryUi.view === 'trajectory' && Boolean(activeThreadId)
+  const devPreviewTrailing = useMemo(() => devPreviewVisible && devPreviewUrl
+    ? <DevPreviewLaunchCard url={devPreviewUrl} opened={devPreviewOpened} onOpen={onOpenDevPreview} />
+    : null, [devPreviewVisible, devPreviewUrl, devPreviewOpened, onOpenDevPreview])
+  const trailingTimelineCard = useTaskReportSlot(activeThreadId, devPreviewTrailing)
   const trajectoryData = useTrajectoryData({
     threadId: activeThreadId,
     visible: trajectoryOpen,
@@ -344,6 +351,7 @@ export function WorkbenchChatStage({
         {graphChildContext ? (
           <GraphChildSessionBar context={graphChildContext} onBack={onBackToParent} />
         ) : null}
+        <TaskSessionBar />
         <div
           ref={mainStackRef}
           className={`ds-chat-main-stack relative flex min-h-0 min-w-0 flex-1 flex-col ${
@@ -390,15 +398,7 @@ export function WorkbenchChatStage({
                 onPreviewGeneratedDocument={onPreviewGeneratedDocument}
                 onOpenGeneratedDocuments={onOpenGeneratedDocuments}
                 onComponentPrototypePrompt={composerProps.setInput}
-                devPreviewCard={
-                  devPreviewVisible && devPreviewUrl ? (
-                    <DevPreviewLaunchCard
-                      url={devPreviewUrl}
-                      opened={devPreviewOpened}
-                      onOpen={onOpenDevPreview}
-                    />
-                  ) : null
-                }
+                devPreviewCard={trailingTimelineCard}
                 extensionMessageActions={extensionMessageActions}
                 extensionContextMenus={extensionContextMenus}
                 extensionAttachmentContextMenus={extensionAttachmentContextMenus}

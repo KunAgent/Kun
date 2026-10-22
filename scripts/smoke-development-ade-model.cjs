@@ -48,6 +48,17 @@ async function startModelFixture(model, options = {}) {
     } else if (text.includes('[ade-smoke-worker-file]') && !supports('worker_create') && supports('write') && !completed('smoke-worker-write')) {
       counters.workerWrites += 1
       message = call('smoke-worker-write', 'write', { path: 'smoke-worker.txt', content: 'Worker smoke ready\n' })
+    } else if (text.includes('[task-smoke-suggest]') && supports('suggest_tasks') && !completed('task-smoke-suggest')) {
+      counters.taskSuggestions = (counters.taskSuggestions ?? 0) + 1
+      message = call('task-smoke-suggest', 'suggest_tasks', { reason: 'Three independent pieces.', tasks: [
+        { title: 'Drop the dead raw_messages column', area: 'backend · kun/src/sessions',
+          goal: '[task-smoke-session] Remove the column and report back.', scope: ['Add a migration'], done: ['Merge under 300 ms'] },
+        { title: 'Cache session scans', area: 'backend', goal: '[task-smoke-session] Narrow signature invalidation.', worktree: false },
+        { title: 'Trim first-paint requests', area: 'frontend', goal: '[task-smoke-session] One request on first paint.', worktree: false }
+      ] })
+    } else if (text.includes('[task-smoke-session]')) {
+      counters.taskSessions = (counters.taskSessions ?? 0) + 1
+      message.content = 'Task finished: the change is in place and verified with the smoke fixture.'
     } else if (text.includes('[ade-smoke-worker-message]')) {
       counters.workerMessages += 1
       message.content = 'Worker follow-up received.'

@@ -80,6 +80,8 @@ export type ModelStepServiceDeps = {
    * `workspaceMode === 'ade'` Kun-harness manager turns, never prefix.
    */
   adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
+  /** Suggestion cards owned by the thread: bounded per-turn block, never prefix. */
+  taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>
   awaitWorkspaceCheckpoint?: (
     checkpointRequestId: string,
     signal: AbortSignal

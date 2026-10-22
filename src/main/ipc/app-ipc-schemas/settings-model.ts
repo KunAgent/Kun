@@ -646,6 +646,11 @@ export const kunRuntimePatchSchema = z.object({
       autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
       autoStartWhenConfirmationRequired: z.boolean().optional()
     }).strict().optional(),
+    tasks: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
+      worktree: z.boolean().optional(),
+      inheritContext: z.boolean().optional()
+    }).strict().optional(),
     notifications: z.object({
       waiting: z.boolean().optional(),
       failed: z.boolean().optional(),

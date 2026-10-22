@@ -1,6 +1,9 @@
 export const KUN_AGENT_DISPATCH_INTENTS_TEMPLATE = '/v1/agent-dispatch-intents'
 export const KUN_AGENT_DISPATCH_INTENT_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}'
 export const KUN_AGENT_DISPATCH_ACTION_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}/actions'
+export const KUN_TASK_SUGGESTIONS_TEMPLATE = '/v1/task-suggestions'
+export const KUN_TASK_SUGGESTION_TEMPLATE = '/v1/task-suggestions/{intentId}'
+export const KUN_TASK_SUGGESTION_ACTION_TEMPLATE = '/v1/task-suggestions/{intentId}/actions'
 
 /**
  * Kun HTTP endpoint path templates. The renderer and the main

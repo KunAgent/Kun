@@ -16,20 +16,28 @@ import { assignmentRoute, dispatchAssignments, dispatchRoutesEditable, replaceAs
   sameAssignmentRoute } from './agent-dispatch-card-model'
 import { selectWorkerPreview } from '../workers/worker-view-store'
 import { OPEN_WORKERS_PANEL_EVENT } from './FloatingComposerWorkersPill'
+import { TaskSuggestionCard } from './TaskSuggestionCard'
+import { isTaskSuggestionBlock } from './task-suggestion-card-model'
 
 export function isAgentDispatchBlock(block: ChatBlock): block is ToolBlock & { meta: Record<string, unknown> & { dispatchIntentId: string } } {
   return block.kind === 'tool' && typeof block.meta?.dispatchIntentId === 'string'
 }
 
+/** Cards that are a turn's outcome and may need the user: dispatch and task-suggestion cards. */
+export function isOutcomeCardBlock(block: ChatBlock): boolean {
+  return isAgentDispatchBlock(block) || isTaskSuggestionBlock(block)
+}
+
 /**
- * Dispatch cards of one process run. Folded turns render them outside the fold
- * too: a waiting card needs the user, and a running one is the turn's outcome.
+ * Dispatch and suggestion cards of one process run. Folded turns render them
+ * outside the fold too: a waiting card needs the user, and a running one is the turn's outcome.
  */
 export function AgentDispatchGroup({ blocks, readOnly = false }: { blocks: readonly ChatBlock[]; readOnly?: boolean }) {
-  const cards = blocks.filter(isAgentDispatchBlock)
+  const cards = blocks.filter((block): block is ToolBlock => isOutcomeCardBlock(block))
   if (!cards.length) return null
-  return <div className="space-y-3">{cards.map((block) =>
-    <AgentDispatchCard key={block.id} block={block} readOnly={readOnly} />)}</div>
+  return <div className="space-y-3">{cards.map((block) => isTaskSuggestionBlock(block)
+    ? <TaskSuggestionCard key={block.id} block={block} readOnly={readOnly} />
+    : <AgentDispatchCard key={block.id} block={block} readOnly={readOnly} />)}</div>
 }
 
 type Draft = { title: string; task: string; routes: AgentDispatchAssignmentRoute[] }

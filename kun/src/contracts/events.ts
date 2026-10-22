@@ -1,4 +1,5 @@
 import { AgentDispatchIntentEvent } from './agent-dispatch-event.js'
+import { TaskSuggestionEvent } from './task-suggestion-event.js'
 import { z } from 'zod'
 import { ContextSnapshotEvent } from './context-snapshot.js'
 export { ContextSnapshotEvent, RequestContextTokenBreakdownSchema, type RequestContextTokenBreakdown } from './context-snapshot.js'
@@ -54,6 +55,7 @@ import { HarnessConfigOptionSchema, HarnessSessionSettingListSchema } from './ha
  */
 export const RuntimeEventKind = z.enum([
   'agent_dispatch_intent',
+  'task_suggestion',
   'thread_created',
   'thread_updated',
   'thread_pruned',
@@ -617,6 +619,7 @@ export type CanvasReceiptEvent = z.infer<typeof CanvasReceiptEvent>
 
 export const RuntimeEvent = z.discriminatedUnion('kind', [
   AgentDispatchIntentEvent,
+  TaskSuggestionEvent,
   ItemEvent,
   ThreadLifecycleEvent,
   TurnLifecycleEvent,

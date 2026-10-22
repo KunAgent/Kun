@@ -46,6 +46,7 @@ const LEGACY_WRITE_INTERACTION_AGREEMENT =
 export function createThreadRecord(input: {
   roomContext?: ThreadRecord['roomContext']
   workbenchOrigin?: ThreadRecord['workbenchOrigin']
+  taskOrigin?: ThreadRecord['taskOrigin']
   historyRefId?: string
   id: string
   title: string
@@ -131,6 +132,7 @@ export function createThreadRecord(input: {
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
     ...(input.roomContext ? { roomContext: input.roomContext } : {}),
     ...(input.workbenchOrigin ? { workbenchOrigin: input.workbenchOrigin } : {}),
+    ...(input.taskOrigin ? { taskOrigin: input.taskOrigin } : {}),
     mode: input.mode ?? 'agent',
     status: input.status ?? 'idle',
     approvalPolicy: input.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,
@@ -217,6 +219,7 @@ export function toThreadSummary(
     ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
     ...(thread.executionUnit ? { executionUnit: thread.executionUnit } : {}),
     ...(thread.workbenchOrigin ? { workbenchOrigin: thread.workbenchOrigin } : {}),
+    ...(thread.taskOrigin ? { taskOrigin: thread.taskOrigin } : {}),
     ...(thread.planBuildRunId ? { planBuildRunId: thread.planBuildRunId } : {}),
     ...(thread.planBuildAdmissionFingerprint
       ? { planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint }

@@ -496,6 +496,7 @@ export type KunAdeSettingsV1 = {
     autoStartSeconds: number
     autoStartWhenConfirmationRequired: boolean
   }
+  tasks: import('./ade-collaboration-settings').AdeTaskSuggestionSettings
   /** GUI-only notification switches; never written into Kun config. */
   notifications: {
     waiting: boolean

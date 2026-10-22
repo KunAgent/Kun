@@ -157,7 +157,7 @@ export type ThreadDetail = {
   latestTurnStartedAtMs?: number
   turnDurationByUserId?: Record<string, number>
   usage?: ThreadUsageSnapshot
-  relation?: 'primary' | 'fork' | 'side'
+  relation?: 'primary' | 'fork' | 'side' | 'task'
   parentThreadId?: string
   model?: string
   goal?: ThreadGoal | null

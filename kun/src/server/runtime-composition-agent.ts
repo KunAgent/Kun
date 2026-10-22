@@ -43,6 +43,8 @@ import {
 } from './runtime-composition-manager.js'
 import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { createAdeManagerContext } from '../ade/manager-context.js'
+import { createTaskSuggestionContext } from '../delegation/task-suggestion-context.js'
+import { createTaskSuggestionToolProvider } from '../adapters/tool/task-suggestion-tool-provider.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { providerModelIds } from './routes/model-gateway-core.js'
 import { FileDelegationStore } from './runtime-factory-dependencies.js'
@@ -320,6 +322,9 @@ export async function createRuntimeAgentComposition(
     providerPool,
     core
   })
+  // Like the manager provider, config apply re-lists it in the rebuilt registry.
+  const taskSuggestionToolProvider = createTaskSuggestionToolProvider(services.taskSuggestionService)
+  registryComposition.registry.registerProvider(taskSuggestionToolProvider)
   model.refreshModelConnectionDelegatedDeps = () => {
     const next = buildHarnessRuntimes(
       buildMainDelegatedRuntime({
@@ -379,6 +384,7 @@ export async function createRuntimeAgentComposition(
     sdkRuntime,
     harnessRouter,
     graphHarnessSummary, adeManagerContext,
+    taskSuggestionContext: createTaskSuggestionContext(services.taskSuggestionService),
     usage: usageService,
     events,
     turns: turnService,
@@ -528,6 +534,7 @@ export async function createRuntimeAgentComposition(
     queuedTurnDispatcher,
     managerRuntime,
     managerToolProvider,
+    taskSuggestionToolProvider,
     activityHibernation,
     dispatchDeliverer,
     workerNoticeCoordinator,

@@ -31,6 +31,7 @@ import type { SidebarThreadWorktreeRecord } from './sidebar-project-selectors'
 import type { ScheduledThreadActivity } from '../../store/chat-store-types'
 import type { SidebarDropPosition } from './sidebar-order'
 import { cancelThreadPrewarm, requestThreadPrewarm } from '../../store/thread-detail-prewarm'
+import { TaskGroupChevron, TaskGroupChip, TaskThreadChildren, useSidebarTaskGroup } from './SidebarTaskThreads'
 
 const DRAFT_HISTORY_PAGE_SIZE = 3
 
@@ -211,6 +212,7 @@ export function ThreadRow({
   onRestore
 }: ThreadRowProps): ReactElement {
   const { t } = useTranslation('common')
+  const taskGroup = useSidebarTaskGroup(thread.id)
   const showUnreadDot = showUnread && !showRunning
   const archived = thread.archived === true
   const pinned = thread.pinned === true
@@ -251,7 +253,7 @@ export function ThreadRow({
     worktreeLabel
   ].filter(Boolean).join(' - ')
 
-  return (
+  return (<>
     <SidebarTreeRow
       active={active}
       actionsVisibility={deleting ? 'visible' : 'hidden'}
@@ -334,6 +336,7 @@ export function ThreadRow({
       onBlurCapture={() => cancelThreadPrewarm(thread.id)}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
+        {taskGroup ? <TaskGroupChevron group={taskGroup} /> : null}
         {pinned ? <Pin className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} /> : null}
         {thread.workbenchOrigin ? (
           <span
@@ -362,9 +365,10 @@ export function ThreadRow({
         <span className={`ml-auto flex min-w-[3.75rem] shrink-0 items-center justify-end gap-1.5 transition ${
           deleting ? 'opacity-0' : 'group-hover:opacity-0 group-focus-within:opacity-0'
         }`}>
-          <span className="shrink-0 text-right text-[12px] leading-4 text-ds-faint tabular-nums">
+          {taskGroup && !taskGroup.collapsed ? null : <span className="shrink-0 text-right text-[12px] leading-4 text-ds-faint tabular-nums">
             {updatedLabel}
-          </span>
+          </span>}
+          {taskGroup ? <TaskGroupChip group={taskGroup} /> : null}
           <ThreadActivityIndicator
             running={showRunning}
             failed={showFailed}
@@ -379,7 +383,8 @@ export function ThreadRow({
         </span>
       </span>
     </SidebarTreeRow>
-  )
+    {taskGroup ? <TaskThreadChildren parentId={thread.id} group={taskGroup} /> : null}
+  </>)
 }
 
 export function ThreadRunningIndicator({

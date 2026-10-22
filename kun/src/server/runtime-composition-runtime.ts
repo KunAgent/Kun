@@ -40,6 +40,7 @@ import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/ow
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
 import { workbenchExecutionControl } from './runtime-workbench-execution.js'
 import { loadExtensionAgentProviders } from './extension-agent-provider-loader.js'
+import { TaskSuggestionLauncher } from '../delegation/task-suggestion-launcher.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -205,6 +206,8 @@ export function createServerRuntimeComposition(
   events.addObserver({ record: (event) => {
     if (event.kind === 'agent_dispatch_intent' && event.dispatchIntent.kind === 'workbench') roomComposition.rooms.workbench.wake()
   } })
+  services.taskSuggestionService.attach(new TaskSuggestionLauncher({ threads: threadService, turns: turnService, taskWorkspaces }))
+  events.addObserver({ record: (event) => services.taskSuggestionService.observe(event) })
   roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService, agentDispatch: services.agentDispatchService,
     harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector, readiness: services.harnesses.readiness,
       runtimes: agent.harnessRuntimeMap, router: agent.harnessRouter,
@@ -217,6 +220,7 @@ export function createServerRuntimeComposition(
     gmailDataPolicy: model.gmailDataPolicy,
     gmailLocalModel: model.gmailLocalModel,
     agentDispatchService: services.agentDispatchService,
+    taskSuggestionService: services.taskSuggestionService,
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,
@@ -260,6 +264,7 @@ export function createServerRuntimeComposition(
       backgroundMaintenance.start()
       roomComposition.start()
       void services.agentDispatchService.start().catch((error) => console.warn('[kun] Agent dispatch startup failed:', error))
+      void services.taskSuggestionService.start().catch((error) => console.warn('[kun] Task suggestion startup failed:', error))
     },
     prepareForRequests: async () => {
       await prepareUsageCarryover()
@@ -557,6 +562,7 @@ export function createServerRuntimeComposition(
               await Promise.allSettled([...remoteCleanups].map((cleanup) => cleanup()))
               remoteCleanups.clear()
               await services.agentDispatchService.stop()
+              services.taskSuggestionService.stop()
               await roomComposition.close()
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()

@@ -3,6 +3,7 @@ import toolApprovalDetails from './common/tool-approval-details.json'
 import toolDetails from './common/tool-details.json'
 import toolStates from './common/tool-states.json'
 import agentDispatch from './common/agent-dispatch.json'
+import taskSuggestion from './common/task-suggestion.json'
 import agentUpdates from './common/agent-updates.json'
 import roomsPolish from './common/rooms-polish.json'
 import executionTasks from './common/execution-tasks.json'
@@ -80,6 +81,7 @@ const common = {
   ...toolDetails,
   ...toolStates,
   ...agentDispatch,
+  ...taskSuggestion,
   ...agentUpdates,
   ...roomsInitIm,
   ...roomsDirect,

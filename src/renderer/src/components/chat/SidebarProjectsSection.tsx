@@ -122,6 +122,8 @@ import {
   type SidebarVirtualFolder
 } from './sidebar-folders'
 import { createSidebarProjectThreadActions } from './sidebar-project-thread-actions'
+import { splitSidebarTaskThreads } from './sidebar-task-threads'
+import { SidebarTaskThreadsProvider } from './SidebarTaskThreads'
 import {
   createSidebarProjectDragActions,
   type FolderDropTarget,
@@ -325,9 +327,11 @@ export function SidebarProjectsSection({
     [removedCodeWorkspaces]
   )
 
+  // Task sessions nest under their parent row instead of listing as their own rows.
+  const taskSplit = useMemo(() => splitSidebarTaskThreads(threads, { searching: Boolean(searchQuery.trim()) }), [threads, searchQuery])
   const groups = useMemo(() => {
     return buildSidebarWorkspaceGroups({
-      threads,
+      threads: taskSplit.rest,
       searchQuery,
       showArchived,
       workspaceRoot,
@@ -337,7 +341,7 @@ export function SidebarProjectsSection({
       removedProjectKeys,
       workspaceCreatedAt: workspaceCreationTimes
     })
-  }, [searchQuery, showArchived, threadWorktrees, threads, workspaceRoot, workspaceRoots, conversationRoot, removedProjectKeys, workspaceCreationTimes])
+  }, [searchQuery, showArchived, threadWorktrees, taskSplit, workspaceRoot, workspaceRoots, conversationRoot, removedProjectKeys, workspaceCreationTimes])
 
   const allProjectGroups = useMemo(() => {
     const byWorkspace = new Map<string, [string, NormalizedThread[]]>()
@@ -663,7 +667,8 @@ export function SidebarProjectsSection({
     onRemoveWorkspace,
     onArchiveThread
   })
-  return <SidebarProjectsContent {...{
+  return <SidebarTaskThreadsProvider value={{ childrenByParent: taskSplit.childrenByParent, activityOf: (thread) => sidebarThreadActivity(thread, sidebarThreadActivityContext), activeThreadId,
+    onSelect: onSelectThread, onContextMenu: openThreadContextMenu, onArchive: handleArchiveThread, onDelete: handleDeleteThread }}><SidebarProjectsContent {...{
     t, runtimeReady, workspaceRoot, searchQuery, showArchived, allGroupsCollapsed, searchVisible,
     busy, activeView, activeThreadId, locale, displayGroups, sidebarCollapse, sidebarOrder, orderTracker,
     threadListStatus, threadListError, onRetryThreads, onLoadMoreThreads, threadListCursorByWorkspace,
@@ -687,5 +692,5 @@ export function SidebarProjectsSection({
     handleRemoveWorkspace, archivableWorkspaceThreads, closeRenameThreadDialog,
     submitRenameThreadDialog, closeMoveThreadDialog, confirmThreadWorkspaceMove,
     submitMoveThreadDialog, closeActionDialog, submitActionDialog
-  }} />
+  }} /></SidebarTaskThreadsProvider>
 }

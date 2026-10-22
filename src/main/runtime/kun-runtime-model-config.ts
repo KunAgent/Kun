@@ -323,6 +323,11 @@ export function adeConfigForRuntime(
       autoStartSeconds: ade?.dispatch?.autoStartSeconds ?? 60,
       autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true
     },
+    tasks: {
+      autoStartSeconds: ade?.tasks?.autoStartSeconds ?? 0,
+      worktree: ade?.tasks?.worktree ?? true,
+      inheritContext: ade?.tasks?.inheritContext ?? false
+    },
     approvedWorktreeConfigs: [...(extras.approvedWorktreeConfigs ?? [])]
       .sort((a, b) => a.repoRoot.localeCompare(b.repoRoot)),
     worktreeSharedPaths: extras.worktreeSharedPaths ?? {}

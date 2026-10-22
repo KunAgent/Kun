@@ -1,4 +1,4 @@
-import { isAgentDispatchBlock } from './AgentDispatchCard'
+import { isOutcomeCardBlock } from './AgentDispatchCard'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { readToolPresentation } from '../../agent/tool-presentation'
 import { blockHasPendingRuntimeWork } from './message-timeline-turns'
@@ -66,7 +66,7 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
   const sections: ProcessSection[] = []
 
   for (const block of blocks) {
-    if (isAgentDispatchBlock(block)) {
+    if (isOutcomeCardBlock(block)) {
       sections.push({ id: `dispatch-${block.id}`, kind: 'execution', blocks: [block] })
       continue
     }

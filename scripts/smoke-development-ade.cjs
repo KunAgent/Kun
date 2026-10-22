@@ -36,6 +36,7 @@ const { writeDevinModelStub, runDevinModelFlow } = require('./smoke-development-
 const { runProtectedApprovalFlow } = require('./smoke-development-protected-approval.cjs')
 const { writeOpenCodeAgentStub, writeOpenCodeCredentialFixture, runOpenCodeAgentFlow } = require('./smoke-development-opencode-agents.cjs')
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
+const { runTaskSuggestionFlow } = require('./smoke-development-task-suggestions.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
 const { writeRoomsHarnessStub, configureRoomsHarnessFixture } = require('./smoke-rooms-harness-fixture.cjs')
@@ -54,6 +55,7 @@ async function main() {
   const roomsHarnessOnly = process.argv.includes('--rooms-harness-only')
   const codingAgentOnly = process.argv.includes('--coding-agent-only')
   const visualOnly = process.argv.includes('--visual-only')
+  const taskSuggestionsOnly = process.argv.includes('--task-suggestions-only')
   const agentModeOnly = process.argv.includes('--agent-mode-only')
   const nativeModelOnly = process.argv.includes('--native-model-only')
   const installOnly = process.argv.includes('--install-only')
@@ -285,6 +287,8 @@ async function main() {
       assertions = await runNativeModelFlow({ page, capture, poll })
     } else if (agentModeOnly) {
       assertions = await runAgentModeFlow({ page, capture, poll, runtimeRequest })
+    } else if (taskSuggestionsOnly) {
+      assertions = await runTaskSuggestionFlow({ page, capture, poll, runtimeRequest })
     } else if (visualOnly) {
       assertions = await runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest,
         resize: (width, height) => resize(electronApplication, width, height) })

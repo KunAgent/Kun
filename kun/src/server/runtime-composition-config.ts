@@ -386,7 +386,7 @@ export function createRuntimeConfigController(
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
     const nextRegistry = new CapabilityRegistry([
-      agent.managerToolProvider,
+      agent.managerToolProvider, agent.taskSuggestionToolProvider,
       buildHistoryReferenceToolProvider(services.model.core.historyReferences),
       roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,

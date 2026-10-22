@@ -222,6 +222,8 @@ export interface ThreadService {
       roomContext?: ThreadRecord['roomContext']
       /** Host-written provenance for a thread a bot Agent started; never from a request body. */
       workbenchOrigin?: ThreadRecord['workbenchOrigin']
+      /** Host-written suggestion-card provenance for `relation: 'task'`; never from a request body. */
+      taskOrigin?: ThreadRecord['taskOrigin']
       historyRefId?: string
     }
   ): Promise<ThreadRecord>;
@@ -250,6 +252,8 @@ export interface ThreadService {
     relation?: ThreadRelation
     /** Host-only provenance update; omitted from the public thread-update schema. */
     workbenchOrigin?: ThreadRecord['workbenchOrigin']
+    /** Host-only: binds a forked `task` session to its card row. */
+    taskOrigin?: ThreadRecord['taskOrigin']
   }, options?: { expectedRevision: number }): Promise<ThreadRecord>;
   getGoal(threadId: string): Promise<ThreadGoal | null>;
   setGoal(threadId: string, request: SetThreadGoalRequest, options?: { expectedRevision: string }): Promise<ThreadGoal>;
@@ -361,7 +365,8 @@ export function cloneTurnForFork(
   options: { relation: ThreadRelation; designDocumentTarget?: DesignDocumentTarget }
 ): Turn {
   const isInFlight = turn.status === 'queued' || turn.status === 'running'
-  if (options.relation === 'side' && isInFlight) {
+  // A task session forked with history may start while the suggesting turn still runs.
+  if ((options.relation === 'side' || options.relation === 'task') && isInFlight) {
     const userPromptItem = turn.items.find((item) => item.kind === 'user_message')
     const userPromptItemCloned = userPromptItem
       ? cloneItemForThread(userPromptItem, threadId, now, options.designDocumentTarget)

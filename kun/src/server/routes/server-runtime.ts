@@ -188,6 +188,7 @@ export type ServerRuntime = {
   gmailDataPolicy?: import('../../gmail/model-data-policy.js').GmailModelDataPolicyPort
   gmailLocalModel?: Pick<import('../../gmail/local-ollama-service.js').ManagedLocalGmailOllama, 'status' | 'prepare'>
   agentDispatchService?: AgentDispatchService
+  taskSuggestionService?: import('../../delegation/task-suggestion-service.js').TaskSuggestionService
   historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
   rooms?: RoomRuntime

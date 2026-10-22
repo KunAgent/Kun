@@ -182,6 +182,8 @@ async create(this: ThreadService,
       roomContext?: ThreadRecord['roomContext']
       /** Host-written provenance for a thread a bot Agent started; never from a request body. */
       workbenchOrigin?: ThreadRecord['workbenchOrigin']
+      /** Host-written suggestion-card provenance for `relation: 'task'`; never from a request body. */
+      taskOrigin?: ThreadRecord['taskOrigin']
       historyRefId?: string
     } = {}
   ): Promise<ThreadRecord> {
@@ -245,6 +247,7 @@ async create(this: ThreadService,
       ...(options.extensionMetadata ?? {}),
       ...(options.roomContext ? { roomContext: options.roomContext } : {}),
       ...(options.workbenchOrigin ? { workbenchOrigin: options.workbenchOrigin } : {}),
+      ...(options.taskOrigin ? { taskOrigin: options.taskOrigin } : {}),
       ...(options.historyRefId ? { historyRefId: options.historyRefId } : {}),
       ...(request.agentId?.trim() ? { agentId: request.agentId.trim() } : {}),
       ...(request.systemPrompt?.trim() ? { systemPrompt: request.systemPrompt.trim() } : {}),
@@ -313,6 +316,8 @@ async update(this: ThreadService, threadId: string, patch: {
     relation?: ThreadRelation
     /** Host-only provenance update; omitted from the public thread-update schema. */
     workbenchOrigin?: ThreadRecord['workbenchOrigin']
+    /** Host-only: binds a forked `task` session to its card row. */
+    taskOrigin?: ThreadRecord['taskOrigin']
   }, options?: { expectedRevision: number }): Promise<ThreadRecord> {
     const updated = await this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
@@ -333,6 +338,9 @@ async update(this: ThreadService, threadId: string, patch: {
       // thread's lifecycle marker.
       if (patch.status !== undefined && patch.status !== 'idle' && patch.status !== 'archived') {
         throw new Error(`thread status is managed by the runtime: ${patch.status}`)
+      }
+      if (patch.relation === 'task' && (current.relation ?? 'primary') !== 'task') {
+        throw new Error('task sessions are created from a suggestion card')
       }
       if (
         patch.taskWorkspaceId !== undefined &&
@@ -398,10 +406,11 @@ async update(this: ThreadService, threadId: string, patch: {
       } else if (costBudgetWarningSent !== undefined) {
         merged.costBudgetWarningSent = costBudgetWarningSent
       }
-      if (patch.relation !== undefined && patch.relation !== 'side') {
-        // Promoting a side thread clears the parent link so the thread
-        // surfaces in the default list as a standalone primary thread.
+      if (patch.relation !== undefined && patch.relation !== 'side' && patch.relation !== 'task') {
+        // Promoting a side thread (or detaching a task session) clears the
+        // parent link so it surfaces as a standalone primary thread.
         delete (merged as { parentThreadId?: string }).parentThreadId
+        delete (merged as { taskOrigin?: unknown }).taskOrigin
       }
       const next = touchThread(merged, this['nowIso']())
       let committed = next

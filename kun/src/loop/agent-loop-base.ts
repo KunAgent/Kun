@@ -272,6 +272,7 @@ export abstract class AgentLoopBase {
       get finalAnswerOnlyStep() { return opts.finalAnswerOnlyStep },
       get graphHarnessSummary() { return opts.graphHarnessSummary },
       get adeManagerContext() { return opts.adeManagerContext },
+      get taskSuggestionContext() { return opts.taskSuggestionContext },
       modelRouting: this.modelRouting,
       budgetGate: this.budgetGate,
       goalTurns: this.goalTurns,

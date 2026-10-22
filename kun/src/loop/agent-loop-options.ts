@@ -210,6 +210,8 @@ export type AgentLoopOptions = {
    * stable prefix; absent when the ADE manager block is not wired.
    */
   adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
+  /** Suggestion-card state for the owning thread, resolved per turn after the stable prefix. */
+  taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>
   /** Accepted per-turn context-window mode snapshots (frozen at admission). */
   contextWindowModes?: ContextWindowTurnModes
   /** Window transition coordinator backing the new_context tool. */

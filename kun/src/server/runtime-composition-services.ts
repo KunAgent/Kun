@@ -1,4 +1,5 @@
 import { createRuntimeAgentDispatch } from './runtime-composition-dispatch.js'
+import { createRuntimeTaskSuggestions } from './runtime-composition-tasks.js'
 import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { createReviewContextResolver } from '../services/review-composer-context.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
@@ -109,6 +110,7 @@ export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
   const agentDispatchService = createRuntimeAgentDispatch(model)
+  const taskSuggestionService = createRuntimeTaskSuggestions(model)
   const { core } = model
   const gmail = model.gmail
   const { options } = core
@@ -619,6 +621,7 @@ export async function createRuntimeServices(
     model,
     gmail,
     agentDispatchService,
+    taskSuggestionService,
     migrationMaintenance,
     executionLeases,
     turnService,

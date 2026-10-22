@@ -221,7 +221,7 @@ export type ChatState = {
    */
   adeThreads: NormalizedThread[]
   /** Relationship of the active thread (e.g. `side` for a subagent's own session). */
-  activeThreadRelation: 'primary' | 'fork' | 'side' | null
+  activeThreadRelation: 'primary' | 'fork' | 'side' | 'task' | null
   /** Parent thread of the active thread, when it is a `side`/`fork` branch. */
   activeThreadParentId: string | null
   activeThreadGoal: ThreadGoal | null

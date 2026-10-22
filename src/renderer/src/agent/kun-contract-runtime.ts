@@ -486,6 +486,7 @@ export type CoreRuntimeEventJson = {
   toolResultCount?: number
   /** Public Agent dispatch intent, replayed through the parent thread stream. */
   dispatchIntent?: unknown
+  taskSuggestion?: unknown
   /** Durable Graph domain event projected through the existing thread SSE. */
   graph?: unknown
   /** Durable pre-run Graph planning lifecycle projected through thread SSE. */

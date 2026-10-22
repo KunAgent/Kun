@@ -5,6 +5,7 @@ import {
   type KunAdeSettingsV1
 } from '../shared/app-settings'
 import { defaultKunAdeSettings } from '../shared/app-settings-kun-harness'
+import { DEFAULT_ADE_TASK_SUGGESTION_SETTINGS } from '../shared/ade-collaboration-settings'
 import type {
   AdeCollaborationSettingsMutation,
   AdeCollaborationSettingsMutationResult,
@@ -25,6 +26,7 @@ function valueFromAde(ade: KunAdeSettingsV1): AdeCollaborationSettingsValue {
     hibernation: { ...ade.hibernation },
     stall: { ...ade.stall },
     dispatch: { ...ade.dispatch },
+    tasks: { ...(ade.tasks ?? DEFAULT_ADE_TASK_SUGGESTION_SETTINGS) },
     harnessRouter: ade.harnessRouter,
     deterministicHandoff: ade.deterministicHandoff
   }
@@ -79,6 +81,7 @@ export function createAdeCollaborationSettingsService(options: {
             hibernation: request.value.hibernation,
             stall: request.value.stall,
             dispatch: request.value.dispatch,
+            tasks: request.value.tasks,
             harnessRouter: request.value.harnessRouter,
             deterministicHandoff: request.value.deterministicHandoff
           } } }

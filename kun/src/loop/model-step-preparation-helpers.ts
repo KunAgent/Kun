@@ -237,24 +237,44 @@ export async function adeManagerContextBlock(
 }
 
 /**
+ * Suggestion cards owned by a top-level native conversation: what started,
+ * what finished, and result summaries from the task sessions.
+ */
+export async function taskSuggestionContextBlock(
+  thread: Pick<ThreadRecord, 'relation' | 'harnessId' | 'agentSurface' | 'roomContext' | 'executionUnit'> | undefined,
+  threadId: string,
+  resolve?: (input: { threadId: string }) => Promise<string | undefined>
+): Promise<KunTurnContextBlock | null> {
+  const relation = thread?.relation ?? 'primary'
+  if (!resolve || !thread || relation === 'task' || relation === 'side' || thread.roomContext !== undefined ||
+    thread.executionUnit !== undefined || (thread.harnessId !== undefined && thread.harnessId !== 'kun') ||
+    (thread.agentSurface !== undefined && thread.agentSurface !== 'code')) return null
+  const content = (await resolve({ threadId }).catch(() => undefined)) ?? ''
+  return content ? kunContextBlock('task-suggestions', 'runtime', content) : null
+}
+
+/**
  * +: planning-mode runtime blocks — the Graph harness menu while
- * a plan is uncommitted and the bounded ADE manager block on manager turns.
+ * a plan is uncommitted, the bounded ADE manager block on manager turns,
+ * and the suggestion-card block on conversations that own cards.
  */
 export async function planningTeamContextBlocks(
   orchestration: Turn['orchestration'],
   graphPlanCommitted: boolean,
   thread:
-    | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext'>
+    | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext' | 'relation'>
     | undefined,
   threadId: string,
   graphHarnessSummary?: () => Promise<string | undefined>,
-  adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
+  adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>,
+  taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>
 ): Promise<KunTurnContextBlock[]> {
-  const [graph, ade] = await Promise.all([
+  const [graph, ade, tasks] = await Promise.all([
     graphHarnessContextBlock(orchestration, graphPlanCommitted, graphHarnessSummary),
-    adeManagerContextBlock(thread, threadId, adeManagerContext)
+    adeManagerContextBlock(thread, threadId, adeManagerContext),
+    taskSuggestionContextBlock(thread, threadId, taskSuggestionContext)
   ])
-  return [graph, ade].filter(
+  return [graph, ade, tasks].filter(
     (block): block is KunTurnContextBlock => block !== null
   )
 }
