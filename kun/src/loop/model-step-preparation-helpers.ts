@@ -266,7 +266,8 @@ export async function taskSuggestionContextBlock(
  */
 export async function delegationContextBlock(
   orchestration: Turn['orchestration'],
-  thread: Pick<ThreadRecord, 'relation' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'roomContext' | 'executionUnit' | 'workspace'> | undefined,
+  thread: (Pick<ThreadRecord, 'relation' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'roomContext' | 'executionUnit'> &
+    { workspace?: string }) | undefined,
   threadId: string,
   resolve?: (input: { threadId: string; workspace?: string; surface?: 'code' | 'write' | 'design' }) => Promise<string | undefined>,
   agentSurface?: Turn['agentSurface']
@@ -292,7 +293,8 @@ export async function planningTeamContextBlocks(
   turn: Pick<Turn, 'orchestration' | 'agentSurface'>,
   graphPlanCommitted: boolean,
   thread:
-    | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext' | 'relation' | 'workspace'>
+    | (Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext' | 'relation'> &
+      { workspace?: string })
     | undefined,
   threadId: string,
   graphHarnessSummary?: () => Promise<string | undefined>,
