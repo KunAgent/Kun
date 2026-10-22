@@ -251,10 +251,12 @@ export function WorkspaceSpreadsheetPreview({
           </>
         ) : null}
       </WorkspaceOfficePreviewToolbar>
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      {/* Padding lives inside the scroller so the sticky headers pin to its edge, and the
+          table uses CSS zoom so the scroll range and sticky offsets follow the zoom. */}
+      <div className="min-h-0 flex-1 overflow-auto">
         {tableWindow ? (
-          <div className="origin-top-left" style={{ width: `${100 / zoom}%`, transform: `scale(${zoom})` }}>
-            <table ref={tableRef} className="border-collapse bg-white text-[11px] text-slate-900 shadow-sm">
+          <div className="w-max p-4">
+            <table ref={tableRef} className="border-collapse bg-white text-[11px] text-slate-900 shadow-sm" style={{ zoom }}>
               <thead>
                 <tr>
                   <th className="sticky left-0 top-0 z-20 min-w-12 border border-slate-300 bg-slate-100 px-2 py-1" />

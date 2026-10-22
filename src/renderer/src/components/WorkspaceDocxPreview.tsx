@@ -207,9 +207,11 @@ export function WorkspaceDocxPreview({
       </WorkspaceOfficePreviewToolbar>
       <div ref={styleRef} className="hidden" />
       <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-auto p-4" style={{ position: 'relative' }}>
+        {/* CSS zoom, not transform: the scroll range must shrink and grow with the pages,
+            and pages wider than the pane overflow to the right where they can be scrolled to. */}
         <div
-          className="origin-top-left"
-          style={{ width: `${100 / zoom}%`, transform: `scale(${zoom})` }}
+          className="[&_.docx-wrapper]:[align-items:safe_center]"
+          style={{ zoom }}
           onClick={openWorkspaceOfficeExternalLink}
         >
           <div ref={bodyRef} className="workspace-docx-preview select-text" />

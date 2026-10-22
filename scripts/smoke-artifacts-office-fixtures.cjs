@@ -1,8 +1,9 @@
 'use strict'
 
-// Minimal multi-slide PPTX for the artifacts library smoke: one theme, one
-// master, one layout and N title slides, enough for pptx-preview to render a
-// deck whose thumbnail rail is taller than the viewer.
+// Minimal Office packages for the artifacts library smoke. The PPTX has one
+// theme, master and layout plus N title slides, enough for pptx-preview to
+// render a deck whose thumbnail rail is taller than the viewer. The DOCX has
+// one paragraph block per page separated by hard page breaks.
 
 const JSZip = require('jszip')
 
@@ -98,4 +99,28 @@ async function buildSmokePptx(slideTitles) {
   return zip.generateAsync({ type: 'nodebuffer' })
 }
 
-module.exports = { buildSmokePptx }
+const NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+async function buildSmokeDocx(pageTitles) {
+  const zip = new JSZip()
+  zip.file('[Content_Types].xml', `${XML_HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + '<Default Extension="xml" ContentType="application/xml"/>'
+    + '<Override PartName="/word/document.xml"'
+    + ' ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
+  zip.file('_rels/.rels', relationships([['rId1', 'officeDocument', 'word/document.xml']]))
+  zip.file('word/_rels/document.xml.rels', relationships([]))
+  const paragraph = (text, size = 24) => `<w:p><w:r><w:rPr><w:sz w:val="${size}"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`
+  const pages = pageTitles.map((title, index) => [
+    index > 0 ? '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' : '',
+    paragraph(title, 48),
+    ...Array.from({ length: 6 }, (_, line) => paragraph(`${title}, paragraph ${line + 1}.`))
+  ].join(''))
+  zip.file('word/document.xml', `${XML_HEAD}<w:document xmlns:w="${NS_W}"><w:body>${pages.join('')}`
+    + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+    + '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/>'
+    + '</w:sectPr></w:body></w:document>')
+  return zip.generateAsync({ type: 'nodebuffer' })
+}
+
+module.exports = { buildSmokeDocx, buildSmokePptx }

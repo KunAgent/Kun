@@ -20,7 +20,8 @@ const {
 } = require('./smoke-packaged-extension-desktop-runtime.cjs')
 const { availablePort, argumentValue, positiveIntegerArgument, terminateProcessTree } = require('./smoke-packaged-extension-desktop-process.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
-const { buildSmokePptx } = require('./smoke-artifacts-pptx-fixture.cjs')
+const { buildSmokeDocx, buildSmokePptx } = require('./smoke-artifacts-office-fixtures.cjs')
+const { checkDocScrolling, checkSheetScrolling, checkSlideRailScrolling } = require('./smoke-artifacts-office-checks.cjs')
 
 const diagnostics = {}
 const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -58,11 +59,14 @@ async function seedWorkspace(root) {
   }))
   await write('reports/release-notes.pdf', minimalPdf('Kun release notes'))
   await write('.kun/images/mascot.png', Buffer.from(PNG_1PX, 'base64'))
-  const sheet = XLSX.utils.aoa_to_sheet([['Agent', 'Usage source'], ['Kun', 'Runtime events'], ['Devin', 'Session database']])
+  const filler = Array.from({ length: 257 }, (_, row) => [`Agent ${row + 4}`, `Source ${row + 4}`,
+    ...Array.from({ length: 12 }, (_, column) => (row + 1) * (column + 1))])
+  const sheet = XLSX.utils.aoa_to_sheet([['Agent', 'Usage source'], ['Kun', 'Runtime events'], ['Devin', 'Session database'], ...filler])
   const book = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(book, sheet, 'Compare')
   await mkdir(join(root, 'reports'), { recursive: true })
   XLSX.writeFile(book, join(root, 'reports', 'agent-usage.xlsx'))
+  await write('reports/handbook.docx', await buildSmokeDocx(Array.from({ length: 6 }, (_, index) => `Handbook page ${index + 1}`)))
   await write('presentations/roadmap.pptx', await buildSmokePptx(Array.from({ length: 9 }, (_, index) => `Roadmap slide ${index + 1}`)))
 }
 
@@ -99,57 +103,22 @@ async function poll(check, timeoutMs, description) {
   throw new Error(`Timed out waiting for ${description}${last ? `: ${last.message}` : ''}`)
 }
 
-// The deck viewer must keep its thumbnail rail inside the stage card and scroll
-// it on its own: wheel input reaches the rail, and selecting the last slide
-// never scrolls the clipped ancestors that the wheel cannot scroll back.
-async function checkSlideRailScrolling({ page, capture, timeoutMs }) {
-  const rail = page.getByRole('complementary', { name: 'Slide thumbnails' })
-  await rail.waitFor({ timeout: timeoutMs })
-  await poll(async () => (await rail.locator('[data-thumbnail-state="ready"]').count()) > 0, timeoutMs, 'slide thumbnails')
-  const measure = () => rail.evaluate((node) => {
-    const stage = node.closest('[data-artifact-stage]').getBoundingClientRect()
-    const box = node.getBoundingClientRect()
-    let ancestorScroll = 0
-    for (let parent = node.parentElement; parent; parent = parent.parentElement) ancestorScroll += parent.scrollTop
-    return { clientHeight: node.clientHeight, scrollHeight: node.scrollHeight, scrollTop: node.scrollTop,
-      railBottom: Math.round(box.bottom), stageBottom: Math.round(stage.bottom), ancestorScroll }
-  })
-  diagnostics.slideRailInitial = await measure()
-  await capture('artifacts-9-slides-viewer')
-  assert(diagnostics.slideRailInitial.railBottom <= diagnostics.slideRailInitial.stageBottom, 'Slide rail overflows the stage')
-  assert(diagnostics.slideRailInitial.scrollHeight > diagnostics.slideRailInitial.clientHeight, 'Slide rail is not a bounded scroller')
-  await rail.hover()
-  await page.mouse.wheel(0, 1200)
-  await poll(async () => (await measure()).scrollTop > 0, timeoutMs, 'wheel scrolling the slide rail')
-  await rail.getByRole('button', { name: 'Go to slide 9' }).click()
-  await page.getByText('Slide 9 of 9').waitFor({ timeout: timeoutMs })
-  await page.keyboard.press('Home')
-  await page.getByText('Slide 1 of 9').waitFor({ timeout: timeoutMs })
-  await poll(async () => (await measure()).scrollTop === 0, timeoutMs, 'rail following the first slide')
-  await page.keyboard.press('End')
-  await page.getByText('Slide 9 of 9').waitFor({ timeout: timeoutMs })
-  await poll(async () => (await measure()).scrollTop > 0, timeoutMs, 'rail following the last slide')
-  diagnostics.slideRailAfterNavigation = await measure()
-  assert.equal(diagnostics.slideRailAfterNavigation.ancestorScroll, 0, 'Slide navigation scrolled a clipped ancestor')
-  await capture('artifacts-10-slides-last')
-  return 'The deck viewer scrolls its thumbnail rail by wheel and keeps it in step with slide navigation inside the stage'
-}
-
 async function runFlow({ page, capture, timeoutMs }) {
   const checks = []
+  const office = { page, capture, poll, diagnostics, timeoutMs }
   await page.locator('nav.sidebar-code-nav').getByText('Artifacts', { exact: true }).click()
   await page.locator('[data-artifacts-page]').waitFor({ timeout: timeoutMs })
-  await poll(async () => (await page.locator('[data-artifact-card]').count()) === 6, timeoutMs, 'six seeded artifacts')
+  await poll(async () => (await page.locator('[data-artifact-card]').count()) === 7, timeoutMs, 'seven seeded artifacts')
   diagnostics.cards = await page.locator('[data-artifact-card]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-artifact-card')))
-  assert.deepEqual([...diagnostics.cards].sort(), ['board', 'design', 'doc', 'image', 'sheet', 'slides'])
+  assert.deepEqual([...diagnostics.cards].sort(), ['board', 'design', 'doc', 'doc', 'image', 'sheet', 'slides'])
   await capture('artifacts-1-grid')
-  checks.push('The sidebar entry opens the library and indexes the design draft, whiteboard, image, spreadsheet and deck')
+  checks.push('The sidebar entry opens the library and indexes the design draft, whiteboard, image, spreadsheet, document and deck')
 
   await page.getByRole('tab', { name: /Spreadsheet/ }).click()
   assert.equal(await page.locator('[data-artifact-card]').count(), 1)
   await page.getByRole('tab', { name: /^All/ }).click()
   await page.getByRole('button', { name: 'List view' }).click()
-  await poll(async () => (await page.locator('[data-artifact-row]').count()) === 6, timeoutMs, 'list rows')
+  await poll(async () => (await page.locator('[data-artifact-row]').count()) === 7, timeoutMs, 'list rows')
   await capture('artifacts-2-list')
   await page.getByRole('button', { name: 'Grid view' }).click()
   checks.push('Type tabs filter and the list view shows the same items')
@@ -159,10 +128,15 @@ async function runFlow({ page, capture, timeoutMs }) {
   await poll(async () => (await page.locator('[data-artifact-stage="office"]').innerText()).includes('Runtime events'), timeoutMs, 'spreadsheet cells')
   await capture('artifacts-3-sheet-viewer')
   checks.push('The spreadsheet opens in a viewer that renders its cells with the shared office preview')
+  checks.push(await checkSheetScrolling(office))
+
+  await page.getByRole('button', { name: 'Back to artifacts' }).click()
+  await page.locator('[data-artifact-card="doc"]', { hasText: 'handbook' }).click()
+  checks.push(await checkDocScrolling(office))
 
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
   await page.locator('[data-artifact-card="slides"]').click()
-  checks.push(await checkSlideRailScrolling({ page, capture, timeoutMs }))
+  checks.push(await checkSlideRailScrolling(office))
 
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
   await page.locator('[data-artifact-card="design"]').click()
@@ -182,7 +156,7 @@ async function runFlow({ page, capture, timeoutMs }) {
   await page.locator('[data-artifact-stage="board"] img').waitFor({ timeout: timeoutMs })
   await capture('artifacts-6-board-viewer')
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
-  await page.locator('[data-artifact-card="doc"]').click()
+  await page.locator('[data-artifact-card="doc"]', { hasText: 'release-notes' }).click()
   await page.locator('[data-artifact-stage="pdf"]').waitFor({ timeout: timeoutMs })
   await poll(async () => (await page.locator('[data-artifact-stage="pdf"] canvas').count()) > 0, timeoutMs, 'rendered PDF page')
   await capture('artifacts-8-pdf-viewer')
