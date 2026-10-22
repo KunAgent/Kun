@@ -69,9 +69,17 @@ export const PptGeometryQaManifestProjection = z.object({
 export type PptGeometryQaManifestProjection = z.infer<typeof PptGeometryQaManifestProjection>
 
 /** Where an image used on a slide came from: user material, a generated supplement, or already in the project. */
+const UnitInterval = z.number().min(0).max(1)
+
 export const PptSlideAsset = z.object({
   path: WorkspaceRelativePath,
-  origin: z.enum(['user', 'generated', 'project'])
+  origin: z.enum(['user', 'generated', 'project']),
+  /** Image slot on the slide as fractions of the page size, for whiteboard overlays. */
+  rect: z.object({ x: UnitInterval, y: UnitInterval, width: UnitInterval, height: UnitInterval }).strict()
+    .refine((rect) => rect.x + rect.width <= 1.000_001 && rect.y + rect.height <= 1.000_001, {
+      message: 'image slot must stay inside the slide'
+    })
+    .optional()
 }).strict()
 export type PptSlideAsset = z.infer<typeof PptSlideAsset>
 

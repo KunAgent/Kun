@@ -2,6 +2,7 @@ import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import { SidebarTitlebarToggleButton } from '../../../sidebar/SidebarPrimitives'
 import { CanvasZoomBar } from '../CanvasZoomBar'
 import { CanvasMinimap } from '../CanvasMinimap'
+import { PptImageSlotToggle } from '../PptImageSlotToggle'
 
 export function CanvasViewportChrome({
   leftSidebarCollapsed,
@@ -41,6 +42,9 @@ export function CanvasViewportChrome({
         </div>
       </div>
       {children}
+      <div className="pointer-events-none absolute right-3 top-3 z-40">
+        <div className="pointer-events-auto"><PptImageSlotToggle /></div>
+      </div>
       <div className="pointer-events-none absolute right-4 z-40 hidden lg:block" style={bottomStyle}>
         <div className="pointer-events-auto"><CanvasZoomBar /></div>
       </div>

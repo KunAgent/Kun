@@ -61,14 +61,18 @@ export async function recordPptAsset(
   })
 }
 
-/** Classify the images a rendered page embeds; anything not imported through the ledger was already in the project. */
+/**
+ * Classify the image slots a rendered page embeds (project-relative paths);
+ * anything not imported through the ledger was already in the project.
+ */
 export function pptSlideAssets(
-  images: readonly string[],
+  slots: ReadonlyArray<{ path: string; rect?: PptSlideAsset['rect'] }>,
   ledger: Ledger,
   toWorkspacePath: (projectRelative: string) => string
 ): PptSlideAsset[] {
-  return images.slice(0, 32).map((image) => ({
-    path: toWorkspacePath(image),
-    origin: ledger.assets[image]?.origin ?? 'project'
+  return slots.slice(0, 32).map((slot) => ({
+    path: toWorkspacePath(slot.path),
+    origin: ledger.assets[slot.path]?.origin ?? 'project',
+    ...(slot.rect && slot.rect.width > 0 && slot.rect.height > 0 ? { rect: slot.rect } : {})
   }))
 }

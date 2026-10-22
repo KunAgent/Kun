@@ -28,10 +28,13 @@ export type PptdImageResolution =
   | { ok: true; image: PptdPreviewImage; relativePath: string }
   | { ok: false; reason: 'missing' | 'remote' | 'outside' | 'unsupported' | 'too-large' }
 
+/** Where an embedded image sits on the page, in page pixels. */
+export type PptdImagePlacement = { path: string; rect: PptdRect }
+
 /** Mutable state shared by every element of one rendered page. */
 export class PptdPaintContext {
   readonly defs: string[] = []
-  readonly images: string[] = []
+  readonly images: PptdImagePlacement[] = []
   private nextId = 0
   private imageBytes = 0
 
@@ -46,7 +49,7 @@ export class PptdPaintContext {
     return `${this.pagePrefix}-${kind}-${this.nextId}`
   }
 
-  async image(src: string): Promise<PptdImageResolution> {
+  async image(src: string, placement: PptdRect): Promise<PptdImageResolution> {
     if (/^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('//')) return { ok: false, reason: 'remote' }
     const lexical = isAbsolute(src) ? src : resolve(this.deckDir, src)
     const mime = IMAGE_MIME[extname(lexical).toLowerCase()]
@@ -71,7 +74,7 @@ export class PptdPaintContext {
     }
     this.imageBytes += bytes.byteLength
     const relativePath = relative(this.deckDir, lexical).split(sep).join('/')
-    this.images.push(relativePath)
+    this.images.push({ path: relativePath, rect: placement })
     const dimensions = detectPptImageDimensions(bytes, lexical)
     return {
       ok: true,

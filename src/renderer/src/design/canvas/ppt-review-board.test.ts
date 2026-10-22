@@ -171,6 +171,32 @@ describe('PPT review board', () => {
       .toBe('Revision 1 · images: 1 yours, 1 generated · visual review')
   })
 
+  it('outlines image slots as annotations and removes slots a revision dropped', () => {
+    const withSlots: PptReviewBundle = {
+      ...bundle,
+      slides: [{
+        ...bundle.slides[0],
+        assets: [
+          { path: 'deck/media/line.png', origin: 'user', rect: { x: 0.5, y: 0.1, width: 0.4, height: 0.8 } },
+          { path: 'deck/media/far.png', origin: 'generated', rect: { x: 0.9, y: 0.9, width: 0.5, height: 0.5 } }
+        ]
+      }]
+    }
+    const ops = pptReviewBoardOps(withSlots, [], 'thread-a')
+    for (const op of ops) expect(ShapeOpSchema.safeParse(op).success).toBe(true)
+    const added = materializeAdds(ops)
+    const slots = added.filter((item) => item.name.includes(':slot:'))
+    expect(slots.map((item) => item.name.split(':slot:')[1])).toEqual(['0:frame', '0:tag', '0:label'])
+    const frame = slots[0]
+    expect(frame).toMatchObject({ x: 8 + 0.5 * 464, y: 8 + 0.1 * 254, width: 0.4 * 464, strokes: [{ dash: 'dashed' }] })
+    expect(slots.every((item) => item.pptReviewRef?.role === 'annotation')).toBe(true)
+    expect(serializeActivePptReviewContexts(added, 'thread-a')[0]?.slides[0]).not.toHaveProperty('annotations')
+
+    const cleared = pptReviewBoardOps({ ...bundle, slides: [{ ...bundle.slides[0], revision: 2 }] }, added, 'thread-a') as Array<{ op: string; id?: string }>
+    expect(cleared.filter((op) => op.op === 'delete').map((op) => op.id).sort())
+      .toEqual(slots.map((item) => item.id).sort())
+  })
+
   it('rejects malformed or stale review bundles before they reach the canvas', () => {
     expect(isPptReviewBundle(bundle)).toBe(true)
     expect(isPptReviewBundle({ ...bundle, phase: 'completed' })).toBe(false)

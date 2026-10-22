@@ -148,6 +148,9 @@ describe('renderPptdPreviewDeck', () => {
     const [cover] = (await renderPptdPreviewDeck(await writeProject())).pages
 
     expect(cover.images).toEqual(['media/hero.png'])
+    expect(cover.imageSlots).toEqual([
+      { path: 'media/hero.png', rect: { x: 0.6667, y: 0.1481, width: 0.2708, height: 0.7038 } }
+    ])
     expect(cover.svg.match(/data:image\/png;base64,/g)).toHaveLength(1)
     expect(cover.svg).toContain('图片缺失')
   })

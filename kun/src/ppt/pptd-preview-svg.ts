@@ -41,6 +41,8 @@ export type PptdPreviewPage = {
   svg: string
   /** Project-relative images embedded in this page. */
   images: string[]
+  /** Each embedded image with its slot on the page, normalized to 0..1 of the page size. */
+  imageSlots: Array<{ path: string; rect: PptdRect }>
 }
 
 export type PptdPreviewDeck = {
@@ -97,7 +99,7 @@ function geometryMarkup(geometry: PptdShapeGeometry, rect: PptdRect, paint: stri
 }
 
 async function imageFillMarkup(fill: Record<string, unknown>, geometry: PptdShapeGeometry, rect: PptdRect, context: PptdPaintContext): Promise<string> {
-  const resolved = await context.image(asString(fill.src) ?? '')
+  const resolved = await context.image(asString(fill.src) ?? '', rect)
   if (!resolved.ok) return missingImageMarkup(rect, resolved.reason)
   const clipId = context.id('clip')
   context.defs.push(`<clipPath id="${clipId}">${geometryMarkup(geometry, rect, '')}</clipPath>`)
@@ -178,7 +180,7 @@ function lineMarkup(element: Record<string, unknown>, rect: PptdRect, context: P
 }
 
 async function imageElementMarkup(element: Record<string, unknown>, rect: PptdRect, context: PptdPaintContext): Promise<string> {
-  const resolved = await context.image(asString(element.src) ?? '')
+  const resolved = await context.image(asString(element.src) ?? '', rect)
   const cropShape = asRecord(element.cropShape)
   let body = resolved.ok
     ? imageMarkup(resolved.image, rect, element.fit, element.crop)
@@ -341,8 +343,22 @@ export async function renderPptdPageSvg(deck: PptdDeck, page: PptdPage): Promise
     index: page.index,
     pageFile: page.file,
     title: pptdPageTitle(page, asRecord(deck.theme.textStyles) ?? {}),
-    images: [...new Set(context.images)],
+    images: [...new Set(context.images.map((image) => image.path))],
+    imageSlots: context.images.map((image) => ({ path: image.path, rect: normalizedSlot(image.rect, width, height) })),
     svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><clipPath id="${clipId}"><rect width="${width}" height="${height}"/></clipPath></defs>${defs}<g clip-path="url(#${clipId})">${parts.join('')}</g></svg>`
+  }
+}
+
+/** Clip a page-pixel rect to the page and express it as fractions of the page size. */
+function normalizedSlot(rect: PptdRect, width: number, height: number): PptdRect {
+  const unit = (value: number) => Math.round(Math.min(Math.max(value, 0), 1) * 10_000) / 10_000
+  const left = unit(rect.x / width)
+  const top = unit(rect.y / height)
+  return {
+    x: left,
+    y: top,
+    width: Math.round((unit((rect.x + rect.width) / width) - left) * 10_000) / 10_000,
+    height: Math.round((unit((rect.y + rect.height) / height) - top) * 10_000) / 10_000
   }
 }
 

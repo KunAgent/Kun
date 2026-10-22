@@ -141,7 +141,11 @@ describe('editable PPT previews and slot assets', () => {
           {
             title: 'Line upgrade',
             previewPath: 'deck/.kun-ppt-review/previews/p01-r1.svg',
-            assets: [{ path: 'deck/media/line.png', origin: 'user' }]
+            assets: [{
+              path: 'deck/media/line.png',
+              origin: 'user',
+              rect: { x: 0.625, y: 0.1111, width: 0.3125, height: 0.7408 }
+            }]
           },
           {
             title: 'Next quarter',

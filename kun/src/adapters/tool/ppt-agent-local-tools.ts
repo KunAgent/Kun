@@ -259,10 +259,13 @@ function createPptGeneratePreviewsTool(
               ? { contentHash: existingManifest.slides[index].contentHash }
               : {}),
             previewPath: portableRelative(workspaceRoot, previewFiles[index]),
-            ...(rendered.pages[index].images.length
+            ...(rendered.pages[index].imageSlots.length
               ? {
                   assets: pptSlideAssets(
-                    rendered.pages[index].images.map((image) => portableRelative(projectDir, resolve(rendered.deckDir, image))),
+                    rendered.pages[index].imageSlots.map((slot) => ({
+                      path: portableRelative(projectDir, resolve(rendered.deckDir, slot.path)),
+                      rect: slot.rect
+                    })),
                     assetLedger,
                     (projectRelative) => portableRelative(workspaceRoot, resolve(projectDir, projectRelative))
                   )

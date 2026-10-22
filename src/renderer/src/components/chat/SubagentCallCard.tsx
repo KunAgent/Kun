@@ -55,6 +55,7 @@ import {
   type OpenChildThreadHandler
 } from './subagent-call-card-support'
 import { SubagentStopControl } from './SubagentStopControl'
+import { PptAgentProgressPanel } from './PptAgentProgressPanel'
 
 export { parseDelegateDetail } from './subagent-call-card-support'
 export type { OpenChildThreadHandler } from './subagent-call-card-support'
@@ -423,6 +424,7 @@ export function SubagentCallCard({
       </div>
 
       <LaneHairline status={status} animate={animate} />
+      {launcher === 'ppt_agent' && block.kind === 'tool' ? <PptAgentProgressPanel block={block as ToolBlock} status={status} t={t} /> : null}
 
       {expanded ? (
         <div
