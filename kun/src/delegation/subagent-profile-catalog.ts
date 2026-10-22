@@ -83,12 +83,15 @@ export async function resolveSubagentProfileSnapshot(
   return { id, source: configuredProfileSource(id, profile), profile }
 }
 
-/** Profiles visible to automatic routing, including workspace overlays. */
-export async function listRoutingSubagentProfiles(
+/**
+ * Every profile available on a surface, primary-session roles included, with
+ * the workspace overlay applied. Sorted by id.
+ */
+export async function listCatalogSubagentProfiles(
   configured: Readonly<Record<string, SubagentProfileConfig>>,
   workspace?: string,
   agentSurface: SubagentProfileSurface = 'code'
-): Promise<SubagentRoutingDocument[]> {
+): Promise<SubagentProfileSnapshot[]> {
   const profiles = new Map<string, SubagentProfileConfig>(Object.entries(configured))
   const sources = new Map<string, SubagentProfileSource>(
     Object.entries(configured).map(([id, profile]) => [id, configuredProfileSource(id, profile)])
@@ -101,17 +104,33 @@ export async function listRoutingSubagentProfiles(
     }
   }
   return [...profiles.entries()]
-    .filter(([, profile]) => profile.mode !== 'primary' && profileAvailableOnSurface(profile, agentSurface))
-    .map(([id, profile]) => ({
-      kind: 'profile' as const,
-      id,
-      source: sources.get(id) ?? 'configured',
-      profile,
-      ...(BUILTIN_AGENT_CATALOG_BY_ID[id]?.routingTerms
-        ? { routingTerms: BUILTIN_AGENT_CATALOG_BY_ID[id]!.routingTerms }
-        : {})
-    }))
+    .filter(([, profile]) => profileAvailableOnSurface(profile, agentSurface))
+    .map(([id, profile]) => ({ id, source: sources.get(id) ?? 'configured', profile }))
     .sort((left, right) => left.id.localeCompare(right.id))
+}
+
+/** Profiles visible to automatic routing, including workspace overlays. */
+export async function listRoutingSubagentProfiles(
+  configured: Readonly<Record<string, SubagentProfileConfig>>,
+  workspace?: string,
+  agentSurface: SubagentProfileSurface = 'code'
+): Promise<SubagentRoutingDocument[]> {
+  return (await listCatalogSubagentProfiles(configured, workspace, agentSurface))
+    .filter((snapshot) => snapshot.profile.mode !== 'primary')
+    .map(routingDocument)
+}
+
+/** A catalog snapshot in the shape the BM25/LLM router consumes. */
+export function routingDocument(snapshot: SubagentProfileSnapshot): SubagentRoutingDocument {
+  return {
+    kind: 'profile' as const,
+    id: snapshot.id,
+    source: snapshot.source,
+    profile: snapshot.profile,
+    ...(BUILTIN_AGENT_CATALOG_BY_ID[snapshot.id]?.routingTerms
+      ? { routingTerms: BUILTIN_AGENT_CATALOG_BY_ID[snapshot.id]!.routingTerms }
+      : {})
+  }
 }
 
 function configuredProfileSource(id: string, profile: SubagentProfileConfig): SubagentProfileSource {

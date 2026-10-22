@@ -189,6 +189,8 @@ export type ServerRuntime = {
   gmailLocalModel?: Pick<import('../../gmail/local-ollama-service.js').ManagedLocalGmailOllama, 'status' | 'prepare'>
   agentDispatchService?: AgentDispatchService
   taskSuggestionService?: import('../../delegation/task-suggestion-service.js').TaskSuggestionService
+  /** The one list of dispatchable roles shared by every dispatch lane. */
+  agentRoster?: import('../../delegation/agent-roster.js').AgentRoster
   historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
   rooms?: RoomRuntime

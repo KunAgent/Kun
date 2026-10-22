@@ -10,6 +10,7 @@ import type { ProviderQuotaListResponse } from '../contracts/provider-quota.js'
 import type { HarnessCatalog } from '../harness/harness-catalog.js'
 import type { HarnessDetector } from '../harness/harness-detector.js'
 import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
+import { resolveHarnessRoute, type HarnessRoutePin } from '../harness/harness-route-resolution.js'
 import {
   recallSubagents,
   type SubagentRecallHit,
@@ -138,46 +139,9 @@ async function buildCandidates(
 
   const routeFor = (
     defId: HarnessId,
-    profile?: { model?: string; providerId?: string; credentialMode?: HarnessCredentialMode; gatewayBinding?: HarnessGatewayBinding }
-  ): { route: HarnessRoute; rejectedReason?: string } => {
-    const def = byId.get(defId)
-    if (!def) {
-      return {
-        route: { harnessId: defId, model: '-', credentialMode: 'provider' },
-        rejectedReason: `unknown harness ${defId}`
-      }
-    }
-    const credentialMode = profile?.credentialMode ?? (profile?.gatewayBinding ? 'kun-gateway' : def.credentialModes[0])
-    if (!credentialMode || !def.credentialModes.includes(credentialMode)) {
-      return {
-        route: { harnessId: defId, model: '-', credentialMode: credentialMode ?? 'provider' },
-        rejectedReason: `credentialMode ${credentialMode ?? '(none)'} is not supported by harness ${def.id}`
-      }
-    }
-    if (profile?.gatewayBinding && (credentialMode !== 'kun-gateway' || !def.gateway || (profile.gatewayBinding.small && !def.gateway.env.smallModel) || !deps.gatewayAliasModel?.(profile.gatewayBinding))) return {
-      route: { harnessId: def.id, model: '-', credentialMode, gatewayBinding: profile.gatewayBinding }, rejectedReason: 'Agent gateway alias is unavailable'
-    }
-    const model =
-      (profile?.gatewayBinding ? deps.gatewayAliasModel?.(profile.gatewayBinding) : profile?.model?.trim()) ||
-      deps.configuredModel?.(def.id, profile?.providerId, credentialMode) || def.staticModels[0] ||
-      (def.modelSource === 'provider' ? manager.model?.trim() : '') ||
-      ''
-    if (!model) {
-      return {
-        route: { harnessId: defId, model: '-', credentialMode },
-        rejectedReason: `harness ${def.id} advertises no model; set agent.model explicitly`
-      }
-    }
-    const providerId =
-      credentialMode === 'native-login' || profile?.gatewayBinding
-        ? undefined
-        : profile?.providerId?.trim() ||
-          (def.modelSource === 'provider' ? manager.providerId?.trim() : undefined)
-    return {
-      route: { harnessId: def.id, model, ...(providerId ? { providerId } : {}), credentialMode,
-        ...(profile?.gatewayBinding ? { gatewayBinding: profile.gatewayBinding } : {}) }
-    }
-  }
+    profile?: HarnessRoutePin
+  ): { route: HarnessRoute; rejectedReason?: string } =>
+    resolveHarnessRoute({ harnessId: defId, definition: byId.get(defId), pin: profile, deps, parent: manager })
 
   // Profile-bound candidates: a role pinned to a harness/model.
   for (const doc of docs) {

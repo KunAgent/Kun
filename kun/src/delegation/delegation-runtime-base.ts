@@ -33,6 +33,7 @@ import { isHostShutdownTurnSuspension } from '../services/turn-service.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { WorkspaceAgentCatalogProfile } from './workspace-agents.js'
 import type { SubagentRoutingDocument } from './subagent-router.js'
+import type { AgentRoster } from './agent-roster.js'
 import {
   listConfiguredSubagentProfiles,
   listRoutingSubagentProfiles,
@@ -128,6 +129,7 @@ export abstract class DelegationRuntimeBase {
   /** A persistent child thread accepts at most one appended follow-up turn at a time. */
   protected readonly resumingChildren = new Set<string>()
   protected runTurn: RunTurnFn | null = null
+  private agentRoster: AgentRoster | undefined
   protected readonly detachedHandoffs: DetachedChildHandoffCoordinator
 
   constructor(protected options: {
@@ -161,6 +163,15 @@ export abstract class DelegationRuntimeBase {
 
   bindAgentLoop(input: { runTurn: RunTurnFn }): void {
     this.runTurn = input.runTurn
+  }
+
+  /** Late-bound: the roster needs harness runtimes composed after this runtime. */
+  attachRoster(roster: AgentRoster): void {
+    this.agentRoster = roster
+  }
+
+  get roster(): AgentRoster | undefined {
+    return this.agentRoster
   }
 
   replaceConfig(config: SubagentsCapabilityConfig): void {

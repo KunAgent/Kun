@@ -221,6 +221,7 @@ export function createServerRuntimeComposition(
     gmailLocalModel: model.gmailLocalModel,
     agentDispatchService: services.agentDispatchService,
     taskSuggestionService: services.taskSuggestionService,
+    agentRoster: agent.agentRoster,
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,

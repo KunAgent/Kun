@@ -76,19 +76,23 @@ export type KunSubagentProfileV1 = {
   blockedSkills?: string[]
   /** Reasoning depth applied to this profile's child model requests. Default 'off'. */
   reasoningEffort?: ModelReasoningEffort
-  /** ADE worker harness binding; empty/absent = native Kun loop. */
+  /** Engine binding honored by every dispatch lane; empty/absent = the lane default. */
   harnessId?: string
   /** Credential path on the bound harness; empty/absent = harness default. */
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
   gatewayBinding?: HarnessGatewayBinding
   /** "Best for / not for" notes read by the manager worker selector. */
   delegationNotes?: string
+  /** The work this role owns; dispatching turns hand that work over instead of doing it. */
+  owns?: string
 }
 
 export type KunSubagentsSettingsV1 = {
   enabled: boolean
   /** Defaults to true when absent for settings written by older app versions. */
   useExistingAgents?: boolean
+  /** delegate_task runs a role on its bound engine. Absent = on. */
+  honorEngineBinding?: boolean
   maxParallel?: number
   /** Main-agent continuation policy for failed ordinary delegate_task children. */
   proactiveRetry?: {

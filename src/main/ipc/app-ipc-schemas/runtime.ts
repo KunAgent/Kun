@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { ApprovalChoiceSchema } from '../../../../kun/src/contracts/approval-choice'
 import { KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, KUN_AGENT_DISPATCH_INTENT_TEMPLATE, KUN_AGENT_DISPATCH_ACTION_TEMPLATE,
-  KUN_TASK_SUGGESTIONS_TEMPLATE, KUN_TASK_SUGGESTION_TEMPLATE, KUN_TASK_SUGGESTION_ACTION_TEMPLATE } from '../../../shared/kun-endpoints'
+  KUN_TASK_SUGGESTIONS_TEMPLATE, KUN_TASK_SUGGESTION_TEMPLATE, KUN_TASK_SUGGESTION_ACTION_TEMPLATE,
+  KUN_AGENT_ROSTER_TEMPLATE } from '../../../shared/kun-endpoints'
 import { ROOM_ENDPOINTS, ROOM_TASK_ACTIONS } from '../../../shared/rooms-api'
 import {
   KUN_ATTACHMENT_CONTENT_TEMPLATE,
@@ -268,6 +269,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_TASK_SUGGESTIONS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_TASK_SUGGESTION_TEMPLATE, ['GET']),
   compileEndpoint(KUN_TASK_SUGGESTION_ACTION_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_AGENT_ROSTER_TEMPLATE, ['GET']),
   compileEndpoint('/v1/threads/{threadId}/handoff-preview', ['GET']),
   compileEndpoint('/v1/agents/{agentId}/commitments', ['GET', 'POST']),
   compileEndpoint('/v1/agents/{agentId}/commitments/{commitmentId}', ['GET', 'PATCH']),

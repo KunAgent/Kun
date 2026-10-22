@@ -45,6 +45,7 @@ import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { createAdeManagerContext } from '../ade/manager-context.js'
 import { createTaskSuggestionContext } from '../delegation/task-suggestion-context.js'
 import { createTaskSuggestionToolProvider } from '../adapters/tool/task-suggestion-tool-provider.js'
+import { createRuntimeAgentRoster } from './runtime-composition-roster.js'
 import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { providerModelIds } from './routes/model-gateway-core.js'
@@ -243,6 +244,13 @@ export async function createRuntimeAgentComposition(
       })
     )
   )
+  // One roster for delegate_task, workers, Graph tasks and conversation members.
+  const agentRoster = createRuntimeAgentRoster({
+    options: () => core.activeOptions,
+    harnesses: services.harnesses,
+    harnessRuntimeMap
+  })
+  delegationRuntime?.attachRoster(agentRoster)
   // Legacy provider-inference view kept in sync with the router's map so the
   // disabled-router path behaves exactly as before.
   const sdkRuntime = new ReplaceableDelegatedTurnRuntime(
@@ -530,6 +538,7 @@ export async function createRuntimeAgentComposition(
     harnessRouter,
     harnessRuntimeMap,
     harnesses: services.harnesses,
+    agentRoster,
     activeRuntimeRuns,
     trackRuntimeRun,
     runAgentTurn,

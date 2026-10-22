@@ -1,5 +1,7 @@
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import { LocalToolHost } from './local-tool-host.js'
+import type { AgentRosterLaneStatus } from '../../contracts/agent-roster.js'
+import { rosterFactTags } from '../../delegation/agent-roster-lanes.js'
 
 const DEFAULT_PROFILE_PAGE_LIMIT = 50
 const MAX_PROFILE_PAGE_LIMIT = 50
@@ -41,11 +43,11 @@ export function buildListSubagentProfilesTool(
         MAX_PROFILE_PAGE_LIMIT
       )
       const agentSurface = context.agentSurface ?? 'code'
-      const documents = useExistingAgents
-        ? await runtime.listRoutingProfiles(context.workspace, agentSurface)
+      const listings = useExistingAgents
+        ? await profileListings(runtime, context.workspace, agentSurface)
         : []
-      const page = documents.slice(offset, offset + limit)
-      const nextOffset = offset + page.length < documents.length
+      const page = listings.slice(offset, offset + limit)
+      const nextOffset = offset + page.length < listings.length
         ? offset + page.length
         : null
       return {
@@ -53,27 +55,14 @@ export function buildListSubagentProfilesTool(
           mode: useExistingAgents ? 'profiles-only' : 'custom-only',
           surface: agentSurface,
           ...(!useExistingAgents ? { customAgent: customAgentCapability() } : {}),
-          profileCount: documents.length,
+          profileCount: listings.length,
           offset,
           limit,
           nextOffset,
-          profiles: page.map((document) => ({
-            id: document.id,
-            name: boundedText(
-              document.profile.name ?? document.id,
-              MAX_PROFILE_NAME_LENGTH
-            ),
-            description: boundedText(
-              document.profile.description ?? 'No description provided.',
-              MAX_PROFILE_DESCRIPTION_LENGTH
-            ),
-            toolPolicy: document.profile.toolPolicy,
-            access: document.profile.toolPolicy === 'readOnly'
-              ? 'Read-only investigation; cannot modify the workspace.'
-              : 'May use only tools allowed by the parent capability and approval boundary.'
-          })),
+          profiles: page,
           guidance: useExistingAgents
-            ? 'Pass an exact id as delegate_task.profile, or omit profile for automatic routing over the effective catalog.'
+            ? 'Pass an exact id as delegate_task.profile, worker_create.profile, or a Graph task profile; omit it for automatic routing. ' +
+              'engine names who runs the role; lanes say where it can run now (ok, unchecked, or the reason it cannot).'
             : 'Reusable profiles are disabled. Define a one-run role with delegate_task.custom_agent.'
         }
       }
@@ -131,4 +120,57 @@ function boundedPositiveInteger(value: unknown, fallback: number, max: number): 
 
 function boundedText(value: string, maxLength: number): string {
   return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}…`
+}
+
+type ProfileListing = Record<string, unknown> & { id: string }
+
+/** Roster entries a delegation can target, shaped for the model; falls back to the plain catalog. */
+async function profileListings(
+  runtime: DelegationRuntime,
+  workspace: string,
+  surface: 'code' | 'write' | 'design'
+): Promise<ProfileListing[]> {
+  const roster = runtime.roster
+  if (!roster) {
+    return (await runtime.listRoutingProfiles(workspace, surface)).map((document) => ({
+      ...baseListing(document.id, document.profile.name, document.profile.description, document.profile.toolPolicy)
+    }))
+  }
+  return (await roster.list({ workspace, surface }))
+    .filter((entry) => entry.mode !== 'primary')
+    .map((entry) => ({
+      ...baseListing(entry.id, entry.name, entry.description, entry.toolPolicy),
+      ...(entry.owns ? { owns: entry.owns } : {}),
+      engine: entry.engine.kind === 'bound'
+        ? `${entry.engine.harnessId}${entry.engine.model ? ` · ${entry.engine.model}` : ''}`
+        : 'inherits main route',
+      tags: rosterFactTags(entry.facts),
+      lanes: {
+        delegate: laneText(entry.lanes.delegate),
+        worker: laneText(entry.lanes.worker),
+        graph: laneText(entry.lanes.graph)
+      },
+      ...(entry.source === 'learned' ? { source: 'learned' } : {})
+    }))
+}
+
+function baseListing(
+  id: string,
+  name: string | undefined,
+  description: string | undefined,
+  toolPolicy: 'readOnly' | 'inherit'
+): ProfileListing {
+  return {
+    id,
+    name: boundedText(name || id, MAX_PROFILE_NAME_LENGTH),
+    description: boundedText(description || 'No description provided.', MAX_PROFILE_DESCRIPTION_LENGTH),
+    toolPolicy,
+    access: toolPolicy === 'readOnly'
+      ? 'Read-only investigation; cannot modify the workspace.'
+      : 'May use only tools allowed by the parent capability and approval boundary.'
+  }
+}
+
+function laneText(status: AgentRosterLaneStatus): string {
+  return status.state === 'blocked' ? `${status.code}: ${status.message}` : status.state
 }
