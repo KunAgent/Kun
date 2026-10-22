@@ -1,4 +1,5 @@
 import { registerSharedTaskRoutes } from './sharing/routes.js'
+import { registerRemoteDirectoryRoutes } from './directory/routes.js'
 import { registerRemoteAvatarRoute } from './agents/avatar-route.js'
 import { registerDesktopScheduleAudit } from './schedules/desktop-audit.js'
 import { RemoteNotificationFeed } from './notifications/feed.js'
@@ -23,6 +24,7 @@ export function registerRemoteRoutes(router: Router, runtime: ServerRuntime) {
   registerDesktopScheduleAudit(router, runtime)
   registerSharedTaskRoutes(router, runtime)
   registerRemoteAvatarRoute(router, runtime)
+  registerRemoteDirectoryRoutes(router, runtime)
   const notifications = new RemoteNotificationFeed(runtime)
   router.add('GET', '/v1/remote/notification-events', (request) => {
     if (!authorize(request, runtime)) return jsonResponse({ code: 'unauthorized' }, 401)

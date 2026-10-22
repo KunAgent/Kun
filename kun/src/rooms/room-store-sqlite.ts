@@ -308,7 +308,7 @@ export class SqliteRoomStore implements RoomStore {
 
   async commit(input: RoomStoreCommit, assertCurrent?: () => void): Promise<RoomStoreCommitResult> {
     const result = await this.commitNow(input, assertCurrent)
-    notifyRoomStoreCommit()
+    notifyRoomStoreCommit(input)
     return result
   }
 
