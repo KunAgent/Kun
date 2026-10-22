@@ -1,6 +1,5 @@
 import { childSecurity, parentModelRoute } from './delegation-tool-context.js'
 import {
-  type ChildRunRecord,
   type ChildRoutingMetadata,
   type DelegationRuntime
 } from '../../delegation/delegation-runtime.js'
@@ -10,26 +9,21 @@ import {
   customSubagentProfileId,
   subagentTaskRequiresReadOnly,
   type CustomSubagentDefinition,
-  type SubagentRouteResult,
-  type SubagentRouter,
-  type SubagentRoutingDocument
+  type SubagentRouter
 } from '../../delegation/subagent-router.js'
 import type { ToolExecutionUpdate, ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
-import { proactiveRetryStatus } from '../../delegation/delegation-proactive-retry.js'
-import { elapsedMs } from '../../delegation/delegation-runtime-support.js'
+import { buildListSubagentProfilesTool } from './delegation-profile-list-tool.js'
+import {
+  childToolResult,
+  existingFallbackMetadata,
+  existingRouteMetadata,
+  explicitCustomMetadata,
+  selectExistingFallback,
+  type InlineProfile
+} from './delegation-tool-results.js'
 
-type InlineProfile = {
-  id: string
-  profile: ReturnType<typeof customSubagentProfile>
-  source?: 'builtin' | 'configured' | 'workspace' | 'custom' | 'generated'
-}
-
-const DEFAULT_PROFILE_PAGE_LIMIT = 50
-const MAX_PROFILE_PAGE_LIMIT = 50
-const MAX_PROFILE_NAME_LENGTH = 256
-const MAX_PROFILE_DESCRIPTION_LENGTH = 1_000
 const STRUCTURED_SUBAGENT_RESUME_PROMPT = [
   'Continue the interrupted delegated task in this persisted child session.',
   'Review the existing child history and current workspace state, avoid repeating completed work,',
@@ -174,74 +168,7 @@ export function buildDelegationToolProviders(
           })
         }
       }),
-      LocalToolHost.defineTool({
-        name: 'list_subagent_profiles',
-        description: buildListSubagentProfilesDescription(runtime),
-        inputSchema: {
-          type: 'object',
-          properties: {
-            offset: {
-              type: 'integer',
-              minimum: 0,
-              description: 'Zero-based reusable-profile offset.'
-            },
-            limit: {
-              type: 'integer',
-              minimum: 1,
-              maximum: MAX_PROFILE_PAGE_LIMIT,
-              description: `Reusable profiles to return, from 1 to ${MAX_PROFILE_PAGE_LIMIT}.`
-            }
-          },
-          additionalProperties: false
-        },
-        policy: 'auto',
-        sideEffect: 'read-only',
-        execute: async (args, context) => {
-          const offset = nonnegativeInteger(args.offset, 0)
-          const limit = boundedPositiveInteger(
-            args.limit,
-            DEFAULT_PROFILE_PAGE_LIMIT,
-            MAX_PROFILE_PAGE_LIMIT
-          )
-          const agentSurface = context.agentSurface ?? 'code'
-          const documents = useExistingAgents
-            ? await runtime.listRoutingProfiles(context.workspace, agentSurface)
-            : []
-          const page = documents.slice(offset, offset + limit)
-          const nextOffset = offset + page.length < documents.length
-            ? offset + page.length
-            : null
-          return {
-            output: {
-              mode: useExistingAgents ? 'profiles-only' : 'custom-only',
-              surface: agentSurface,
-              ...(!useExistingAgents ? { customAgent: customAgentCapability() } : {}),
-              profileCount: documents.length,
-              offset,
-              limit,
-              nextOffset,
-              profiles: page.map((document) => ({
-                id: document.id,
-                name: boundedText(
-                  document.profile.name ?? document.id,
-                  MAX_PROFILE_NAME_LENGTH
-                ),
-                description: boundedText(
-                  document.profile.description ?? 'No description provided.',
-                  MAX_PROFILE_DESCRIPTION_LENGTH
-                ),
-                toolPolicy: document.profile.toolPolicy,
-                access: document.profile.toolPolicy === 'readOnly'
-                  ? 'Read-only investigation; cannot modify the workspace.'
-                  : 'May use only tools allowed by the parent capability and approval boundary.'
-              })),
-              guidance: useExistingAgents
-                ? 'Pass an exact id as delegate_task.profile, or omit profile for automatic routing over the effective catalog.'
-                : 'Reusable profiles are disabled. Define a one-run role with delegate_task.custom_agent.'
-            }
-          }
-        }
-      })
+      buildListSubagentProfilesTool(runtime, useExistingAgents)
     ]
   }]
 }
@@ -259,38 +186,6 @@ function customAgentSchema(): Record<string, unknown> {
     },
     required: ['name', 'description', 'system_prompt'],
     additionalProperties: false
-  }
-}
-
-function customAgentCapability(): Record<string, unknown> {
-  return {
-    id: 'custom',
-    name: 'Custom Subagent',
-    description: 'Define a focused one-run child role directly in delegate_task.custom_agent when no reusable profile is the right fit.',
-    argument: 'custom_agent',
-    lifetime: 'one-run',
-    requiredFields: ['name', 'description', 'system_prompt'],
-    optionalFields: ['tool_policy', 'blocked_tools'],
-    toolPolicyOptions: [
-      {
-        value: 'readOnly',
-        description: 'Restrict the child to host-approved read-only investigation tools.'
-      },
-      {
-        value: 'inherit',
-        description: 'Allow only the subset of parent-authorized tools that remains inside the child security boundary.'
-      }
-    ],
-    hostControlled: [
-      'model',
-      'provider',
-      'reasoning',
-      'approval',
-      'sandbox',
-      'concurrency',
-      'budget',
-      'timeout'
-    ]
   }
 }
 
@@ -495,53 +390,6 @@ async function resumeChild(
   }
 }
 
-function childToolResult(
-  runtime: DelegationRuntime,
-  record: ChildRunRecord
-): { output: Record<string, unknown>; isError: boolean } {
-  return {
-    output: {
-      childId: record.id,
-      parentThreadId: record.parentThreadId,
-      parentTurnId: record.parentTurnId,
-      status: record.status,
-      detached: record.detached === true,
-      launcher: record.launcher,
-      terminationReason: record.terminationReason,
-      resumable: record.resumable === true,
-      resumeCount: record.resumeCount ?? 0,
-      ...(record.failure ? { failure: record.failure } : {}),
-      proactiveRetry: proactiveRetryStatus(
-        record,
-        runtime.proactiveRetryPolicy ?? { enabled: true, maxAttempts: 3 }
-      ),
-      summary: record.summary,
-      summaryTruncated: record.summaryTruncated,
-      resultRef: record.resultRef,
-      resultUnavailableReason: record.resultUnavailableReason,
-      error: record.error,
-      evidence: record.evidence,
-      usage: record.usage,
-      returnFormat: record.returnFormat,
-      ...(record.profile ? { profile: record.profile } : {}),
-      ...(record.profileSnapshot?.name ? { profileName: record.profileSnapshot.name } : {}),
-      ...(record.model ? { model: record.model } : {}),
-      ...(record.providerFallback ? { providerFallback: record.providerFallback } : {}),
-      ...(record.reasoningEffort ? { reasoningEffort: record.reasoningEffort } : {}),
-      ...(record.routing ? { routing: routingToolOutput(record.routing) } : {}),
-      ...(record.toolPolicy ? { toolPolicy: record.toolPolicy } : {}),
-      ...(record.toolInvocations !== undefined ? { toolInvocations: record.toolInvocations } : {}),
-      ...(record.startedAt ? {
-        attemptStartedAt: record.startedAt,
-        attemptDurationMs: elapsedMs(record.startedAt, record.updatedAt)
-      } : {}),
-      ...(record.durationMs !== undefined ? { durationMs: record.durationMs } : {}),
-      ...(record.queuedMs !== undefined ? { queuedMs: record.queuedMs } : {})
-    },
-    isError: record.status === 'failed' || record.status === 'aborted'
-  }
-}
-
 function parseCustomAgent(value: unknown): CustomSubagentDefinition | undefined | Error {
   if (value === undefined || value === null) return undefined
   if (!value || typeof value !== 'object' || Array.isArray(value)) return new Error('custom_agent must be an object')
@@ -558,92 +406,6 @@ function parseCustomAgent(value: unknown): CustomSubagentDefinition | undefined 
     : new Error(`invalid custom_agent: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`)
 }
 
-function explicitCustomMetadata(
-  inlineProfile: InlineProfile,
-  agentSurface: 'code' | 'write' | 'design'
-): ChildRoutingMetadata {
-  return {
-    method: 'explicit-custom',
-    selectedKind: 'custom',
-    selectedId: inlineProfile.id,
-    reason: 'The parent supplied a one-run standalone role.',
-    agentSurface,
-    candidates: [],
-    customAgent: inlineProfile.profile
-  }
-}
-
-function selectExistingFallback(
-  runtime: DelegationRuntime,
-  documents: SubagentRoutingDocument[]
-): SubagentRoutingDocument | undefined {
-  const preferredIds = [runtime.defaultProfileName, 'general'].filter(
-    (id): id is string => Boolean(id)
-  )
-  for (const id of preferredIds) {
-    const match = documents.find((document) => document.id === id)
-    if (match) return match
-  }
-  return documents[0]
-}
-
-function existingRouteMetadata(
-  route: SubagentRouteResult,
-  agentSurface: 'code' | 'write' | 'design'
-): ChildRoutingMetadata {
-  return {
-    method: route.source === 'llm-profile' ? 'bm25-llm-profile' : 'bm25-fallback-profile',
-    selectedKind: 'profile',
-    selectedId: route.profileId ?? 'general',
-    agentSurface,
-    reason: route.reason,
-    ...(route.confidence !== undefined ? { confidence: route.confidence } : {}),
-    candidates: route.candidates
-  }
-}
-
-function existingFallbackMetadata(
-  route: SubagentRouteResult | undefined,
-  selectedId: string,
-  agentSurface: 'code' | 'write' | 'design'
-): ChildRoutingMetadata {
-  return {
-    method: 'bm25-fallback-profile',
-    selectedKind: 'profile',
-    selectedId,
-    agentSurface,
-    reason: route
-      ? `${route.reason} Reused the configured default agent because existing-agent mode is enabled.`
-      : 'Reused the configured default agent because existing-agent mode is enabled.',
-    ...(route?.confidence !== undefined ? { confidence: route.confidence } : {}),
-    candidates: route?.candidates ?? []
-  }
-}
-
-function routingToolOutput(routing: ChildRoutingMetadata): Record<string, unknown> {
-  return {
-    method: routing.method,
-    selectedKind: routing.selectedKind,
-    selectedId: routing.selectedId,
-    ...(routing.reason ? { reason: routing.reason } : {}),
-    ...(routing.confidence !== undefined ? { confidence: routing.confidence } : {}),
-    candidates: routing.candidates.map((candidate) => ({
-      targetId: candidate.targetId,
-      name: candidate.name,
-      source: candidate.source,
-      score: candidate.score
-    })),
-    ...(routing.generation ? { generation: routing.generation } : {}),
-    ...(routing.customAgent ? {
-      agent: {
-        name: routing.customAgent.name,
-        description: routing.customAgent.description,
-        toolPolicy: routing.customAgent.toolPolicy
-      }
-    } : {})
-  }
-}
-
 function buildDelegateTaskDescription(runtime: DelegationRuntime): string {
   const modeDescription = runtime.useExistingAgents !== false
     ? 'Select an exact reusable profile id from list_subagent_profiles, or omit profile so Kun can route over the effective catalog. ' +
@@ -658,26 +420,6 @@ function buildDelegateTaskDescription(runtime: DelegationRuntime): string {
     'Issue multiple calls in one message only for independent work. Do not start a detached review and then a foreground review for the same scope.',
     `Children default to the "${runtime.defaultToolPolicy}" tool policy and can never recursively delegate.`
   ].join(' ')
-}
-
-function buildListSubagentProfilesDescription(runtime: DelegationRuntime): string {
-  return runtime.useExistingAgents !== false
-    ? 'List the effective reusable subagent profiles for the current workspace and product surface.'
-    : 'Describe the one-run custom subagent capability available while reusable profiles are disabled.'
-}
-
-function nonnegativeInteger(value: unknown, fallback: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
-  return Math.max(0, Math.floor(value))
-}
-
-function boundedPositiveInteger(value: unknown, fallback: number, max: number): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
-  return Math.min(max, Math.max(1, Math.floor(value)))
-}
-
-function boundedText(value: string, maxLength: number): string {
-  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}…`
 }
 
 function stringValue(value: unknown): string {

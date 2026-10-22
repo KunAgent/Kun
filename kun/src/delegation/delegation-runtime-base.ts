@@ -5,9 +5,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import {
   ModelReasoningEffort,
-  SubagentProfileConfig,
   SubagentToolPolicy,
-  type SubagentMode,
   type SubagentsCapabilityConfig
 } from '../contracts/capabilities.js'
 import {
@@ -33,22 +31,23 @@ import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { TurnService } from '../services/turn-service.js'
 import { isHostShutdownTurnSuspension } from '../services/turn-service.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
-import {
-  applyWorkspaceAgentSurfaceFallback,
-  loadWorkspaceAgentCatalogProfiles,
-  loadWorkspaceAgentProfiles
-} from './workspace-agents.js'
 import type { WorkspaceAgentCatalogProfile } from './workspace-agents.js'
 import type { SubagentRoutingDocument } from './subagent-router.js'
-import { BUILTIN_SUBAGENT_PROFILES } from './builtin-profiles.js'
-import { BUILTIN_AGENT_CATALOG_BY_ID } from './builtin-agent-catalog.js'
+import {
+  listConfiguredSubagentProfiles,
+  listRoutingSubagentProfiles,
+  listWorkspaceSubagentProfiles,
+  resolveSubagentProfileSnapshot,
+  type ConfiguredSubagentProfileSummary,
+  type SubagentProfileSnapshot,
+  type SubagentProfileSurface
+} from './subagent-profile-catalog.js'
 import { AtomicJsonFile, isManagerAtomicJsonPath } from '../extensions/atomic-json.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
 import {
   ChildRunRecord,
   FileDelegationStore,
   isResumableChildRun,
-  profileAvailableOnSurface,
   type ChildRunAggregate,
   type ChildRunExecutor,
   type ChildReturnFormat,
@@ -200,88 +199,30 @@ export abstract class DelegationRuntimeBase {
   }
 
   /** Configured profiles, surfaced to the delegate_task tool schema/UI. */
-  listProfiles(): { name: string; mode: SubagentMode; toolPolicy: SubagentToolPolicy; model?: string; providerId?: string; description?: string }[] {
-    return Object.entries(this.options.config.profiles).map(([name, profile]) => ({
-      name,
-      mode: profile.mode,
-      toolPolicy: profile.toolPolicy,
-      ...(profile.model ? { model: profile.model } : {}),
-      ...(profile.providerId ? { providerId: profile.providerId } : {}),
-      ...(profile.description ? { description: profile.description } : {})
-    }))
+  listProfiles(): ConfiguredSubagentProfileSummary[] {
+    return listConfiguredSubagentProfiles(this.options.config.profiles)
   }
 
-  /**
-   * Workspace `.kun/agents/*.md` overlays for the GUI roster.
-   * Returned separately from `listProfiles()` so Settings/Sidebar can merge
-   * them without rewriting persistent GUI settings.
-   */
+  /** Workspace `.kun/agents/*.md` overlays for the GUI roster. */
   async listWorkspaceProfiles(workspace: string): Promise<WorkspaceAgentCatalogProfile[]> {
-    return loadWorkspaceAgentCatalogProfiles(workspace, this.options.config.profiles)
+    return listWorkspaceSubagentProfiles(workspace, this.options.config.profiles)
   }
 
   /** Resolve one explicit profile once so routing and execution share a snapshot. */
   async resolveProfileSnapshot(
     profileId: string,
     workspace?: string,
-    agentSurface: 'code' | 'write' | 'design' = 'code'
-  ): Promise<{ id: string; source: 'builtin' | 'configured' | 'workspace'; profile: SubagentProfileConfig } | undefined> {
-    const id = profileId.trim()
-    if (!id) return undefined
-    if (workspace) {
-      const hit = (await loadWorkspaceAgentProfiles(workspace)).find((entry) => entry.id === id)
-      if (hit) {
-        const profile = applyWorkspaceAgentSurfaceFallback(hit, this.options.config.profiles[id])
-        return profileAvailableOnSurface(profile, agentSurface)
-          ? { id, source: 'workspace', profile }
-          : undefined
-      }
-    }
-    if (!Object.prototype.hasOwnProperty.call(this.options.config.profiles, id)) return undefined
-    const profile = this.options.config.profiles[id]
-    if (!profile) return undefined
-    if (!profileAvailableOnSurface(profile, agentSurface)) return undefined
-    return {
-      id,
-      source: BUILTIN_SUBAGENT_PROFILES[id] === profile ? 'builtin' : 'configured',
-      profile
-    }
+    agentSurface: SubagentProfileSurface = 'code'
+  ): Promise<SubagentProfileSnapshot | undefined> {
+    return resolveSubagentProfileSnapshot(this.options.config.profiles, profileId, workspace, agentSurface)
   }
 
   /** Profiles visible to automatic routing, including workspace overlays. */
   async listRoutingProfiles(
     workspace?: string,
-    agentSurface: 'code' | 'write' | 'design' = 'code'
+    agentSurface: SubagentProfileSurface = 'code'
   ): Promise<SubagentRoutingDocument[]> {
-    const profiles = new Map<string, SubagentProfileConfig>(Object.entries(this.options.config.profiles))
-    const sources = new Map<string, 'builtin' | 'configured' | 'workspace'>(
-      Object.entries(this.options.config.profiles).map(([id, profile]) => [
-        id,
-        BUILTIN_SUBAGENT_PROFILES[id] === profile ? 'builtin' : 'configured'
-      ])
-    )
-    if (workspace) {
-      const overlay = await loadWorkspaceAgentProfiles(workspace)
-      for (const entry of overlay) {
-        profiles.set(
-          entry.id,
-          applyWorkspaceAgentSurfaceFallback(entry, this.options.config.profiles[entry.id])
-        )
-        sources.set(entry.id, 'workspace')
-      }
-    }
-    return [...profiles.entries()]
-      .filter(([, profile]) => profile.mode !== 'primary' && profileAvailableOnSurface(profile, agentSurface))
-      .map(([id, profile]) => ({
-        kind: 'profile' as const,
-        id,
-        source: sources.get(id) ?? 'configured',
-        profile,
-        ...(BUILTIN_AGENT_CATALOG_BY_ID[id]?.routingTerms
-          ? { routingTerms: BUILTIN_AGENT_CATALOG_BY_ID[id]!.routingTerms }
-          : {})
-      }))
-      .sort((left, right) => left.id.localeCompare(right.id))
+    return listRoutingSubagentProfiles(this.options.config.profiles, workspace, agentSurface)
   }
 
   get defaultProfileName(): string | undefined {
