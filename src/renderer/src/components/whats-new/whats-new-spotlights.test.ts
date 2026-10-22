@@ -17,8 +17,8 @@ describe('whatsNewSpotlight', () => {
   it.each(['zh', 'en'] as const)('lets the 0.4.2 card replace only the Artifacts highlight (%s)', async (language) => {
     const content = await loadWhatsNewContent({ version: '0.4.2', previousVersion: '0.4.1', changelogUrl: '' }, language)
     const summary = content.current
-    expect(summary?.features).toHaveLength(11)
-    expect(summary?.fixes).toHaveLength(9)
+    expect(summary?.features).toHaveLength(16)
+    expect(summary?.fixes).toHaveLength(11)
 
     const spotlight = whatsNewSpotlight(content.version)
     const picked = pickHighlights(summary!, { exclude: spotlight?.covers, limit: SPOTLIGHT_HIGHLIGHT_LIMIT })
