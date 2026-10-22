@@ -84,6 +84,26 @@ test('rejects a payload whose runtime dependency is not packaged', () => {
   })
 })
 
+test('resolves a dependency nested under the package that requires it', () => {
+  withResources((root) => {
+    writeFile(
+      root,
+      'app.asar.unpacked/kun/node_modules/alpha/package.json',
+      JSON.stringify({ name: 'alpha', version: '1.0.0', dependencies: { gamma: '1.0.0' } })
+    )
+    writeFile(
+      root,
+      'app.asar.unpacked/kun/node_modules/alpha/node_modules/gamma/package.json',
+      JSON.stringify({ name: 'gamma', version: '1.0.0' })
+    )
+
+    const manifest = buildPackagedRuntimeIntegrity({ resourcesDir: root, platform: 'win32', arch: 'x64' })
+
+    const gamma = manifest.modules.find((module) => module.name === 'gamma')
+    assert.equal(gamma.dir, 'app.asar.unpacked/kun/node_modules/alpha/node_modules/gamma')
+  })
+})
+
 test('rejects a payload whose compiled runtime imports a missing file', () => {
   withResources((root) => {
     rmSync(join(root, 'app.asar.unpacked/kun/dist/cli/util.js'))

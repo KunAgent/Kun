@@ -123,8 +123,27 @@ function isBuiltinName(name) {
   return BUILTIN_MODULES.has(name) || BUILTIN_MODULES.has(name.replace(/^node:/u, ''))
 }
 
-function resolveModuleDir(resourcesDir, name) {
-  for (const modulesDir of KUN_MODULES_DIRS) {
+// Node looks for a dependency in the requiring package's own node_modules
+// first, then in each ancestor directory, so a nested copy (for example
+// @opentui/core/node_modules/marked) is the one the runtime actually loads.
+function nestedModulesDirs(fromDir) {
+  const dirs = []
+  let current = fromDir
+  while (current) {
+    dirs.push(`${current}/node_modules`)
+    const parts = current.split('/')
+    const cut = parts.length >= 2 && parts[parts.length - 2].startsWith('@') ? 2 : 1
+    if (parts.length <= cut) break
+    current = parts.slice(0, -cut).join('/')
+  }
+  return dirs
+}
+
+function resolveModuleDir(resourcesDir, name, fromDir) {
+  const modulesDirs = fromDir
+    ? [...nestedModulesDirs(fromDir), ...KUN_MODULES_DIRS]
+    : KUN_MODULES_DIRS
+  for (const modulesDir of modulesDirs) {
     const candidate = join(resourcesDir, ...modulesDir.split('/'), ...name.split('/'))
     if (existsSync(join(candidate, 'package.json'))) {
       return toPosix(relative(resourcesDir, candidate))
@@ -152,16 +171,18 @@ function packageDependencies(manifestPath) {
 // package whose own dependency was pruned or dropped from the payload.
 function runtimeModuleClosure(resourcesDir, rootNames) {
   const modules = new Map()
-  const pending = [...rootNames]
+  const pending = rootNames.map((name) => ({ name, fromDir: undefined }))
   while (pending.length > 0) {
-    const name = pending.pop()
+    const { name, fromDir } = pending.pop()
     if (!name || modules.has(name)) continue
-    const dir = resolveModuleDir(resourcesDir, name)
+    const dir = resolveModuleDir(resourcesDir, name, fromDir)
     modules.set(name, { name, dir })
     if (!dir) continue
     const absolute = join(resourcesDir, ...dir.split('/'))
     for (const dependency of packageDependencies(join(absolute, 'package.json'))) {
-      if (!isBuiltinName(dependency) && !modules.has(dependency)) pending.push(dependency)
+      if (!isBuiltinName(dependency) && !modules.has(dependency)) {
+        pending.push({ name: dependency, fromDir: dir })
+      }
     }
   }
   return [...modules.values()].sort((left, right) => left.name.localeCompare(right.name))
