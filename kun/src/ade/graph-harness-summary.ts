@@ -37,20 +37,30 @@ export type GraphHarnessSummaryDeps = {
   }
   detector: {
     cachedStatus(id: HarnessId): HarnessStatus | undefined
+    /** Settled verdict kept past its TTL; see HarnessDetector.lastKnownStatus. */
+    lastKnownStatus?(id: HarnessId): HarnessStatus | undefined
     status(id: HarnessId): Promise<HarnessStatus>
   }
   readiness?: Pick<import('../harness/harness-readiness.js').HarnessReadinessService, 'readyProfiles' | 'warmProfiles'>
   quota(): Promise<ProviderQuotaListResponse | null>
 }
 
+/**
+ * The menu re-renders on every model step and lands in the model context only
+ * when its text changes, so it must not track probe timing: an expired
+ * detector entry keeps its last verdict while a refresh runs, a failed quota
+ * read keeps the last snapshot, and quota shows in ten-point bands.
+ */
 export function createGraphHarnessSummary(
   deps: GraphHarnessSummaryDeps
 ): () => Promise<string | undefined> {
+  let lastSnapshot: ProviderQuotaListResponse | null = null
   return async () => {
     const definitions = deps.catalog
       .list()
       .filter((definition) => !deps.catalog.isDisabled?.(definition.id))
-    const snapshot = await deps.quota().catch(() => null)
+    const snapshot = (await deps.quota().catch(() => null)) ?? lastSnapshot
+    if (snapshot) lastSnapshot = snapshot
     const lines: string[] = []
     for (const definition of definitions) {
       if (definition.id !== 'kun' && deps.readiness) {
@@ -77,17 +87,19 @@ export function createGraphHarnessSummary(
 /**
  * Native loop is always ready. External harnesses gate on the cached
  * detector status so planning never blocks on a probe; a missing cache
- * entry triggers a background refresh exactly like the HarnessRouter.
+ * entry triggers a background refresh exactly like the HarnessRouter, and the
+ * last settled verdict stands in until that refresh lands.
  */
 function readiness(
   deps: GraphHarnessSummaryDeps,
   definition: HarnessDefinition
 ): string | undefined {
   if (definition.transport === 'native-loop') return ''
-  const status = deps.detector.cachedStatus(definition.id)
+  let status = deps.detector.cachedStatus(definition.id)
   if (!status) {
     void deps.detector.status(definition.id).catch(() => undefined)
-    return undefined
+    status = deps.detector.lastKnownStatus?.(definition.id)
+    if (!status) return undefined
   }
   if (status.installed !== 'yes') return undefined
   return status.login === 'signed-out' ? 'installed, not logged in; ' : ''
@@ -104,5 +116,8 @@ function quotaState(
     credentialMode: defaultCredentialMode(definition.id, definition)
   })
   const used = entry ? quotaUsedPercent(entry) : undefined
-  return used === undefined ? 'quota: unknown' : `quota: ${used}% used`
+  if (used === undefined) return 'quota: unknown'
+  if (used >= 100) return 'quota: 100% used'
+  const band = Math.max(0, Math.floor(used / 10) * 10)
+  return `quota: ${band}-${band + 9}% used`
 }
