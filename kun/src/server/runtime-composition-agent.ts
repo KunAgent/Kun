@@ -47,6 +47,7 @@ import { createTaskSuggestionContext } from '../delegation/task-suggestion-conte
 import { createTaskSuggestionToolProvider } from '../adapters/tool/task-suggestion-tool-provider.js'
 import { createRuntimeAgentRoster } from './runtime-composition-roster.js'
 import { createDelegationContext } from '../delegation/delegation-context.js'
+import { createLearnedRosterProfiles } from '../graph/graph-learned-roster.js'
 import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { providerModelIds } from './routes/model-gateway-core.js'
@@ -249,7 +250,8 @@ export async function createRuntimeAgentComposition(
   const agentRoster = createRuntimeAgentRoster({
     options: () => core.activeOptions,
     harnesses: services.harnesses,
-    harnessRuntimeMap
+    harnessRuntimeMap,
+    learned: createLearnedRosterProfiles(graphRuntime.registry)
   })
   delegationRuntime?.attachRoster(agentRoster)
   // Legacy provider-inference view kept in sync with the router's map so the
