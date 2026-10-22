@@ -183,7 +183,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
               model: 'gpt-5.4',
               providerId: 'codex-2',
               fast: true,
-              imageFirst: true
+              imageAssets: true
             },
             conversationVisualization: { enabled: false }
           },

@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { withoutRetiredPptAgentKeys } from './kun-config-retired-keys.js'
 import { ProviderAdmissionSchema, ProviderAuthProfileSchema, ProviderHeaderProfileSchema } from '../contracts/provider-configuration.js'
 import {
   ApprovalReviewModelSelectionSchema
@@ -342,14 +343,15 @@ export type FastContextConfig = z.infer<typeof FastContextConfigSchema>
  * model route + fast). The PPT child also inherits the main session unless
  * model and providerId are configured as a pair.
  */
-export const LabPptAgentConfigSchema = z
+export const LabPptAgentConfigSchema = z.preprocess(withoutRetiredPptAgentKeys, z
   .object({
     enabled: z.boolean().default(true),
     model: z.string().min(1).optional(),
     providerId: z.string().min(1).optional(),
     reasoningEffort: ModelReasoningEffort.optional(),
     fast: z.boolean().default(false),
-    imageFirst: z.boolean().default(true)
+    /** Fill PPT image slots with generated supplementary assets when an image model is available. */
+    imageAssets: z.boolean().default(true)
   })
   .strict()
   .superRefine((config, ctx) => {
@@ -361,7 +363,7 @@ export const LabPptAgentConfigSchema = z
       path: hasModel ? ['providerId'] : ['model'],
       message: 'pptAgent model and providerId must be configured together'
     })
-  })
+  }))
 export type LabPptAgentConfig = z.infer<typeof LabPptAgentConfigSchema>
 
 export const LabConversationVisualizationConfigSchema = z.object({
@@ -381,7 +383,7 @@ export const LabConfigSchema = z
     pptAgent: LabPptAgentConfigSchema.default({
       enabled: true,
       fast: false,
-      imageFirst: true
+      imageAssets: true
     }),
     conversationVisualization: LabConversationVisualizationConfigSchema.default({
       enabled: false

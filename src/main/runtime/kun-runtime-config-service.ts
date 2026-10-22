@@ -361,7 +361,7 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
   return {
     pptAgent: {
       ...labAgentConfigForRuntime(lab?.pptAgent),
-      imageFirst: lab?.pptAgent?.imageFirst !== false
+      imageAssets: lab?.pptAgent?.imageAssets !== false
     },
     conversationVisualization: {
       enabled: lab?.conversationVisualization?.enabled === true

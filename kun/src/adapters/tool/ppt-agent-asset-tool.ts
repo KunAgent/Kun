@@ -11,6 +11,12 @@ import {
 } from './ppt-agent-physical-path.js'
 import { assertCanWritePath } from './sandbox-policy.js'
 import {
+  PPT_GENERATED_ASSET_LIMIT,
+  generatedAssetCount,
+  readPptAssetLedger,
+  recordPptAsset
+} from './ppt-agent-asset-ledger.js'
+import {
   assertPptWorkflowBinding,
   stringArg,
   type PptAgentLocalToolOptions
@@ -18,14 +24,23 @@ import {
 
 export const PPT_IMPORT_ASSET_TOOL_NAME = 'ppt_import_asset'
 
-/** Copy an approved generated image into the governed PPTD project as binary data. */
+/**
+ * Copy one slide image into the governed PPTD project as binary data. Sources
+ * are either the user's own material anywhere in the workspace or a
+ * supplementary image from generate_image (.kun/images); the import is logged
+ * so reviews can show each image's origin and generated images stay capped.
+ */
 export function createPptImportAssetTool(
   options: PptAgentLocalToolOptions,
   shouldAdvertise: (context: ToolHostContext) => boolean
 ): LocalTool {
   return LocalToolHost.defineTool({
     name: PPT_IMPORT_ASSET_TOOL_NAME,
-    description: 'Import one reviewed image from .kun/images into the current governed PPT project media directory without text transcoding. Use this before referencing an approved generated image from PPTD.',
+    description: [
+      'Import one image into the current governed PPT project media directory without text transcoding, then reference it from PPTD as media/<name>.',
+      'Use it for the user\'s own material (any PNG/JPEG/WebP in the workspace, preferred when relevant) or for a supplementary asset generate_image wrote under .kun/images.',
+      `Generated images are slot assets, never whole slides; at most ${PPT_GENERATED_ASSET_LIMIT} per deck.`
+    ].join(' '),
     toolKind: 'file_change',
     policy: 'auto',
     sideEffect: 'unknown',
@@ -36,7 +51,7 @@ export function createPptImportAssetTool(
       properties: {
         source: {
           type: 'string',
-          description: 'Workspace-relative reviewed image path under .kun/images.'
+          description: 'Workspace-relative image path: user material in the workspace, or a generate_image result under .kun/images.'
         },
         name: {
           type: 'string',
@@ -55,8 +70,16 @@ export function createPptImportAssetTool(
         actions: ['start', 'select_direction', 'revise_previews', 'retry_failed', 'approve_and_build']
       })
       const sourceArg = stringArg(args.source).replaceAll('\\', '/')
-      if (!sourceArg.startsWith('.kun/images/') || sourceArg.includes('/../')) {
-        return { output: { error: 'source must be a reviewed image under .kun/images' }, isError: true }
+      const generated = sourceArg.startsWith('.kun/images/')
+      const projectPrefix = `${scope.projectDir.replaceAll('\\', '/').replace(/\/+$/, '')}/`
+      if (
+        !sourceArg || sourceArg.split('/').includes('..') ||
+        (!generated && (sourceArg.startsWith('.kun/') || sourceArg.startsWith(projectPrefix)))
+      ) {
+        return {
+          output: { error: 'source must be user material in the workspace or a generated image under .kun/images' },
+          isError: true
+        }
       }
       const source = await resolveWorkspacePath(sourceArg, context, { enforceWorkspaceBoundary: true })
       const sourceName = basename(source.relativePath)
@@ -70,8 +93,18 @@ export function createPptImportAssetTool(
         return { output: { error: 'name must be a safe PNG, JPEG, or WebP filename with the source extension' }, isError: true }
       }
 
-      const imageRoot = await resolveWorkspacePath('.kun/images', context, { enforceWorkspaceBoundary: true })
+      const imageRoot = generated
+        ? await resolveWorkspacePath('.kun/images', context, { enforceWorkspaceBoundary: true })
+        : { absolutePath: source.workspaceRoot }
       const project = await resolveWorkspacePath(scope.projectDir, context, { enforceWorkspaceBoundary: true })
+      if (generated && generatedAssetCount(await readPptAssetLedger(project.absolutePath)) >= PPT_GENERATED_ASSET_LIMIT) {
+        return {
+          output: {
+            error: `this deck already uses ${PPT_GENERATED_ASSET_LIMIT} generated images; reuse an imported asset, use the user's material, or compose the slot from native shapes`
+          },
+          isError: true
+        }
+      }
       const sourceProof = await assertPptScopedExistingPath({
         workspaceRoot: source.workspaceRoot,
         scopeRoot: imageRoot.absolutePath,
@@ -131,7 +164,17 @@ export function createPptImportAssetTool(
           expected: 'file'
         })
         const imported = relative(copied.physicalWorkspaceRoot, copied.physicalPath).replaceAll('\\', '/')
-        return { output: { source: source.relativePath, importedPath: imported, bytes: copied.bytes } }
+        const origin = generated ? 'generated' as const : 'user' as const
+        await recordPptAsset(currentProject.physicalPath, `media/${requestedName}`, { origin, source: source.relativePath })
+        return {
+          output: {
+            source: source.relativePath,
+            importedPath: imported,
+            pptdSrc: `media/${requestedName}`,
+            origin,
+            bytes: copied.bytes
+          }
+        }
       })
     })
   })

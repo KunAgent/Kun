@@ -377,12 +377,12 @@ function clawChannel(provider: ClawImProvider, label: string, name = label): Cla
 }
 
 describe('lab PPT settings', () => {
-  it('preserves explicit image-first disablement across partial and configured patches', () => {
+  it('preserves explicit image-asset disablement across partial and configured patches', () => {
     const disabled = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       lab: {
         pptAgent: {
           enabled: false,
-          imageFirst: false
+          imageAssets: false
         }
       }
     })
@@ -391,7 +391,7 @@ describe('lab PPT settings', () => {
       model: '',
       providerId: '',
       fast: false,
-      imageFirst: false
+      imageAssets: false
     })
 
     const configured = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
@@ -401,7 +401,7 @@ describe('lab PPT settings', () => {
           providerId: 'codex-2',
           reasoningEffort: 'high',
           fast: true,
-          imageFirst: false
+          imageAssets: false
         }
       }
     })
@@ -411,7 +411,25 @@ describe('lab PPT settings', () => {
       providerId: 'codex-2',
       reasoningEffort: 'high',
       fast: true,
-      imageFirst: false
+      imageAssets: false
+    })
+  })
+
+  it('drops the retired image-first switch from stored settings', () => {
+    const defaults = defaultKunRuntimeSettings()
+    const stored = mergeKunRuntimeSettings({
+      ...defaults,
+      lab: {
+        ...defaults.lab,
+        pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: false } as never
+      }
+    }, undefined)
+    expect(stored.lab.pptAgent).toEqual({
+      enabled: true,
+      model: '',
+      providerId: '',
+      fast: false,
+      imageAssets: true
     })
   })
 })

@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   blocksPptExport,
   effectivePptProviderId,
-  imageFirstFallbackNotice,
+  initialPptPreviewMode,
   managedPptProviderUnavailable,
+  pptGeneratedImagesAllowed,
+  pptImageAssetInstruction,
+  pptImageAssetState,
   visualWorkflowInstruction
 } from './ppt-agent-workflow-control.js'
 
@@ -74,28 +77,68 @@ describe('PPT agent workflow control', () => {
     expect(blocksPptExport('approve_and_build')).toBe(false)
   })
 
-  it('uses editable PPTD previews when image generation is unavailable', () => {
-    const config = { imageFirst: true, imageGenAvailable: false, imageGenReason: 'not configured' }
+  it('starts every new deck as an editable PPTD review rendered by the host', () => {
+    expect(initialPptPreviewMode()).toBe('editable')
     const started = visualWorkflowInstruction(
-      config, 'editable', 'start', 'ppt_workflow', 'thr_parent', '.kun/ppt/ppt_workflow', false
+      { imageGenAvailable: false }, 'editable', 'start', 'ppt_workflow', 'thr_parent', '.kun/ppt/ppt_workflow', false
     )
     const revised = visualWorkflowInstruction(
-      config, 'editable', 'revise_previews', 'ppt_workflow', 'thr_parent', '.kun/ppt/ppt_workflow', true
+      {}, 'editable', 'revise_previews', 'ppt_workflow', 'thr_parent', '.kun/ppt/ppt_workflow', true
     )
 
     expect(started).toContain('ppt_generate_previews')
+    expect(started).toContain('the host renders every page itself')
     expect(started).toContain('stop at awaiting_review')
+    expect(started).not.toContain('generate_image')
     expect(revised).toContain('PPT EDITABLE REVIEW FOLLOW-UP')
-    expect(revised).toContain('ppt_generate_previews')
-    expect(imageFirstFallbackNotice(config, 'start')).toContain('keep the review phase')
+    expect(revised).toContain('refill only that image slot')
   })
 
-  it('imports approved generated assets before the editable build', () => {
+  it('compares visual directions through rendered sample decks, never generated images', () => {
+    const instruction = visualWorkflowInstruction(
+      { imageGenAvailable: true }, 'editable', 'start', 'ppt_workflow', 'thr_parent', '.kun/ppt/ppt_workflow', false, true
+    )
+    expect(instruction).toContain('.kun/ppt/ppt_workflow/directions/<candidate-slug>/')
+    expect(instruction).toContain('sampleProject')
+    expect(instruction).toContain('no image generation is needed')
+    expect(instruction).not.toMatch(/call generate_image/)
+    expect(pptGeneratedImagesAllowed({ imageGenAvailable: true }, 'editable', 'direction')).toBe(false)
+    expect(pptImageAssetInstruction({ imageGenAvailable: true }, 'editable', 'direction'))
+      .toContain('Do not call generate_image for samples')
+  })
+
+  it('treats generated images as optional slot assets', () => {
+    const available = { imageGenAvailable: true }
+    expect(pptGeneratedImagesAllowed(available, 'editable', 'review')).toBe(true)
+    expect(pptImageAssetState(available)).toBe('enabled')
+    expect(pptImageAssetInstruction(available, 'editable', 'review')).toMatch(/user's relevant material.*generate_image asset.*six per deck/)
+
+    const off = { imageGenAvailable: true, imageAssets: false }
+    expect(pptGeneratedImagesAllowed(off, 'editable', 'review')).toBe(false)
+    expect(pptImageAssetState(off)).toBe('disabled')
+    expect(pptImageAssetInstruction(off, 'editable', 'build')).toContain('turned off in Lab settings')
+
+    const missing = { imageGenAvailable: false, imageGenReason: 'no image model' }
+    expect(pptImageAssetState(missing)).toBe('unavailable')
+    expect(pptImageAssetInstruction(missing, 'editable', 'review')).toContain('unavailable (no image model): do not call generate_image')
+  })
+
+  it('keeps legacy image-first reviews on their whole-page path', () => {
+    expect(pptGeneratedImagesAllowed({ imageGenAvailable: true, imageAssets: false }, 'image-first', 'review')).toBe(true)
+    expect(pptImageAssetInstruction({ imageGenAvailable: true }, 'image-first', 'review')).toBe('')
     const instruction = visualWorkflowInstruction(
       {}, 'image-first', 'approve_and_build',
       'ppt_workflow', 'thr_parent', '.kun/ppt/ppt_workflow', true
     )
     expect(instruction).toContain('ppt_import_asset')
     expect(instruction).toContain('native editable PPTD')
+  })
+
+  it('finalizes the reviewed editable deck in place on approval', () => {
+    const instruction = visualWorkflowInstruction(
+      {}, 'editable', 'approve_and_build',
+      'ppt_workflow', 'thr_parent', '.kun/ppt/ppt_workflow', true
+    )
+    expect(instruction).toContain('do not rebuild it from preview images')
   })
 })

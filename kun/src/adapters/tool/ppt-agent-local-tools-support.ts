@@ -153,34 +153,6 @@ export function directionReviewIdentityError(
   return ''
 }
 
-type PreviewRendererOutput = {
-  overview: string
-  images: Array<{ image: string; page?: string }>
-  exporter?: string
-}
-
-export function parsePreviewRendererOutput(value: string): PreviewRendererOutput {
-  const start = value.indexOf('{')
-  if (start < 0) throw new Error('preview renderer did not return a JSON summary')
-  const parsed = JSON.parse(value.slice(start)) as Record<string, unknown>
-  if (typeof parsed.overview !== 'string' || !Array.isArray(parsed.images)) {
-    throw new Error('preview renderer returned an invalid summary')
-  }
-  const images = parsed.images.flatMap((entry) => {
-    if (!entry || typeof entry !== 'object') return []
-    const image = (entry as { image?: unknown }).image
-    const page = (entry as { page?: unknown }).page
-    return typeof image === 'string' && image.trim()
-      ? [{ image, ...(typeof page === 'string' && page.trim() ? { page } : {}) }]
-      : []
-  })
-  return {
-    overview: parsed.overview,
-    images,
-    ...(typeof parsed.exporter === 'string' ? { exporter: parsed.exporter } : {})
-  }
-}
-
 type SlideSize = { width: number; height: number }
 type SlideRect = { x: number; y: number; width: number; height: number }
 

@@ -144,7 +144,8 @@ export const PPT_AGENT_PROFILE: SubagentProfileConfig = {
     '阶段协议：先读取 pptd.md；随后以宿主给出的 workflowId/projectDir 完整读取 slides_categories.md 和一个匹配场景指南。方向门禁命中时先创建 directionBundle 并停止，选择方向后才提交该候选设计计划；其他流程直接提交设计计划。所有预览、评审和导出工具都受当前策略哈希与计划指纹门禁。',
     'start/revise/retry 阶段按宿主控制生成最新 directionBundle 或 reviewBundle 后停止；approve_and_build 阶段才构建可编辑 PPTD，并在需要 PPTX 时调用 ppt_export。只有 validated=true 才能报告导出成功。',
     '短但可执行的请求应自主选择合理场景和设计计划；只有缺少无法安全推断的关键事实时才返回结构化缺口。不得捏造内容、证据、风格偏好或用户例外。',
-    '附件和文件引用属于用户来源；优先使用相关用户素材。普通文字、图表、表格和布局几何保持原生可编辑，不把整页压平成图片。'
+    '附件和文件引用属于用户来源；优先使用相关用户素材。普通文字、图表、表格和布局几何保持原生可编辑，不把整页压平成图片。',
+    '图片只是页面里的槽位素材：先用用户素材，其次在宿主允许时用 generate_image 补充（不含文字、不做整页画面），否则用原生图形；预览与风格样页由宿主直接渲染 PPTD，不需要生图。'
   ].join('\n')
 }
 

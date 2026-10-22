@@ -36,7 +36,7 @@ function directionBundle(workflowId: string, revision = 1) {
     workflowId,
     childId,
     manifestPath: `.kun/ppt/${workflowId}/.kun-ppt-review/manifest.json`,
-    previewMode: 'image-first',
+    previewMode: 'editable',
     deckTitle: 'Launch deck',
     phase: 'awaiting_direction',
     recommendedDirectionId: 'direction-2',
@@ -56,9 +56,9 @@ function directionBundle(workflowId: string, revision = 1) {
       background: 'solid',
       imagery: `Documentary imagery ${index}`,
       previews: [
-        { role: 'cover', imagePath: `.kun/images/${index}-cover.png`, sha256: `${index}1`.repeat(32), width: 160, height: 90 },
-        { role: 'representative', imagePath: `.kun/images/${index}-content.png`, sha256: `${index}2`.repeat(32), width: 160, height: 90 },
-        { role: 'complex', imagePath: `.kun/images/${index}-complex.png`, sha256: `${index}3`.repeat(32), width: 160, height: 90 }
+        { role: 'cover', imagePath: `.kun/ppt/${workflowId}/.kun-ppt-review/directions/${index}-cover.svg`, sha256: `${index}1`.repeat(32), width: 160, height: 90 },
+        { role: 'representative', imagePath: `.kun/ppt/${workflowId}/.kun-ppt-review/directions/${index}-content.svg`, sha256: `${index}2`.repeat(32), width: 160, height: 90 },
+        { role: 'complex', imagePath: `.kun/ppt/${workflowId}/.kun-ppt-review/directions/${index}-complex.svg`, sha256: `${index}3`.repeat(32), width: 160, height: 90 }
       ]
     }))
   }
@@ -69,7 +69,7 @@ function reviewBundle(workflowId: string) {
     workflowId,
     childId,
     manifestPath: `.kun/ppt/${workflowId}/.kun-ppt-review/manifest.json`,
-    previewMode: 'image-first',
+    previewMode: 'editable',
     deckTitle: 'Launch deck',
     styleFingerprint: 'style-1',
     designGovernance: {
@@ -78,7 +78,7 @@ function reviewBundle(workflowId: string) {
     },
     phase: 'awaiting_review',
     slides: [{
-      slideId: 'slide-1', index: 0, title: 'Opening', previewPath: '.kun/images/opening.png',
+      slideId: 'slide-1', index: 0, title: 'Opening', previewPath: `.kun/ppt/${workflowId}/.kun-ppt-review/previews/p01-r1.svg`,
       revision: 1, status: 'ready'
     }]
   }
@@ -109,7 +109,7 @@ function fakeRuntime(): FakeRuntime {
       const scope = input.pptWorkflowScope as {
         workflowId: string
         stage: 'direction'
-        previewMode: 'image-first'
+        previewMode: 'editable'
         directionGate: Record<string, unknown>
       }
       const bundle = directionBundle(scope.workflowId)
@@ -136,7 +136,7 @@ function fakeRuntime(): FakeRuntime {
         action: string
         workflowId: string
         stage: 'direction' | 'review'
-        previewMode: 'image-first'
+        previewMode: 'editable'
         directionGate?: Record<string, unknown>
       }
       if (scope.action === 'select_direction') {
@@ -249,7 +249,7 @@ function sourceReader(input: {
 
 function tool(fake: FakeRuntime, reader: PptAgentTurnReader) {
   return buildPptAgentToolProvider(fake.runtime, () => ({
-    enabled: true, imageFirst: true, imageGenAvailable: true
+    enabled: true, imageAssets: true, imageGenAvailable: true
   }), reader)[0].tools[0]
 }
 
@@ -280,6 +280,9 @@ describe('ppt_agent visual direction lifecycle', () => {
     })
     expect(String(fake.calls[0]?.controlPrompt)).toContain('create exactly three materially distinct')
     expect(String(fake.calls[0]?.controlPrompt)).toContain('Do not call ppt_submit_design_plan')
+    expect(String(fake.calls[0]?.controlPrompt)).toContain('sample deck')
+    expect(fake.calls[0]?.executionBlockedTools).toEqual(['ppt_export', 'generate_image'])
+    expect(result.output).toMatchObject({ mode: 'native' })
     expect(fake.calls[0]?.security).toMatchObject({
       allowedArtifactIds: ['artifact-allowed'],
       blockedSkillIds: ['skill-blocked']
@@ -299,7 +302,7 @@ describe('ppt_agent visual direction lifecycle', () => {
       })
     } as unknown as DelegationRuntime
     const ppt = buildPptAgentToolProvider(failedRuntime, () => ({
-      enabled: true, imageFirst: true, imageGenAvailable: true
+      enabled: true, imageAssets: true, imageGenAvailable: true
     }), sourceReader({ workflowId: () => '' }))[0].tools[0]
 
     const result = await ppt.execute({ title: 'Review deck' }, {

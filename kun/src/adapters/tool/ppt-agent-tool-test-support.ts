@@ -155,7 +155,7 @@ export function makePptTool(
 export function pptReviewBundle(
   childId: string,
   workflowId = 'ppt_workflow',
-  previewMode = 'image-first'
+  previewMode = 'editable'
 ) {
   return {
     workflowId,

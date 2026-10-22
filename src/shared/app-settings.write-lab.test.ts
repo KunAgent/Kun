@@ -138,7 +138,7 @@ describe('Fast Context settings', () => {
       model: '',
       providerId: '',
       fast: false,
-      imageFirst: true
+      imageAssets: true
     })
 
     const next = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
@@ -153,7 +153,7 @@ describe('Fast Context settings', () => {
       model: '',
       providerId: '',
       fast: false,
-      imageFirst: true
+      imageAssets: true
     })
 
     const configured = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
@@ -172,7 +172,7 @@ describe('Fast Context settings', () => {
       providerId: 'codex-2',
       reasoningEffort: 'high',
       fast: true,
-      imageFirst: true
+      imageAssets: true
     })
 
     // Half-configured model override falls back to follow-main.

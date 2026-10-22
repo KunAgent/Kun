@@ -290,7 +290,7 @@ describe('ppt_agent structured review freshness', () => {
 
     expect(result).toMatchObject({
       isError: true,
-      output: { phase: 'failed_recoverable', mode: 'visual-first', error: expect.stringContaining('currently unavailable') }
+      output: { phase: 'failed_recoverable', mode: 'visual-first', error: expect.stringContaining('whole-page generated previews') }
     })
     expect(resumed).toBe(false)
   })
@@ -305,7 +305,7 @@ describe('ppt_agent structured review freshness', () => {
       action: 'revise_previews', childId: CHILD_ID, workflowId: WORKFLOW_ID
     }, baseContext)
 
-    expect(result).toMatchObject({ isError: false, output: { mode: 'direct', phase: 'awaiting_review' } })
+    expect(result).toMatchObject({ isError: false, output: { mode: 'native', phase: 'awaiting_review' } })
     expect(String(resumed?.controlPrompt)).toContain('PPT EDITABLE REVIEW FOLLOW-UP')
     expect(String(resumed?.controlPrompt)).not.toContain('Regenerate only requested slideIds')
   })

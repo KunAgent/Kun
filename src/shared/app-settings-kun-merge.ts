@@ -1,4 +1,4 @@
-import { defaultKunLabSettings } from './app-settings-kun-lab-defaults'
+import { defaultKunLabSettings, normalizeStoredPptAgentSettings } from './app-settings-kun-lab-defaults'
 export { defaultKunLabSettings } from './app-settings-kun-lab-defaults'
 import {
   DEFAULT_APPROVAL_REVIEWER,
@@ -504,7 +504,7 @@ export function mergeKunLabSettings(
   const legacyAutomatic = legacyCurrent?.autoPlanBuild
   const legacyScheduled = legacyAutomatic?.scheduledDefaults
   const base: KunLabSettingsV1 = {
-    pptAgent: legacyCurrent?.pptAgent ?? defaults.pptAgent,
+    pptAgent: normalizeStoredPptAgentSettings(legacyCurrent?.pptAgent, defaults.pptAgent),
     conversationVisualization:
       legacyCurrent?.conversationVisualization ?? defaults.conversationVisualization,
     autoPlanBuild: {
@@ -536,7 +536,7 @@ export function mergeKunLabSettings(
   return {
     pptAgent: {
       ...mergeLabAgentSettings(base.pptAgent, patch.pptAgent),
-      imageFirst: patch.pptAgent?.imageFirst ?? base.pptAgent.imageFirst
+      imageAssets: patch.pptAgent?.imageAssets ?? base.pptAgent.imageAssets
     },
     conversationVisualization: {
       enabled: patch.conversationVisualization?.enabled

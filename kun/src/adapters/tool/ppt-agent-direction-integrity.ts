@@ -5,23 +5,29 @@ import type { PptReviewManifestV1 } from '../../ppt/ppt-review-manifest.js'
 import { detectPptImageDimensions } from '../../ppt/ppt-geometry-qa-image.js'
 import { resolveWorkspacePath } from './builtin-tool-utils.js'
 import { assertPptScopedExistingPath } from './ppt-agent-physical-path.js'
+import { PPT_DIRECTION_RENDER_DIR } from './ppt-agent-direction-samples.js'
 
 export async function pptDirectionPreviewIntegrityError(
   manifest: PptReviewManifestV1,
   context: ToolHostContext
 ): Promise<string> {
   if (!manifest.directions) return 'persisted visual directions are unavailable'
-  const imageRoot = await resolveWorkspacePath('.kun/images', context, { enforceWorkspaceBoundary: true })
+  // Rendered sample pages live in the project; legacy directions used generated images.
+  const renderedRoot = `${manifest.projectDir.replace(/\/+$/, '')}/${PPT_DIRECTION_RENDER_DIR}/`
+  const managedRoots = [renderedRoot, '.kun/images/']
   for (const candidate of manifest.directions.candidates) {
     for (const preview of candidate.previews) {
-      if (!preview.imagePath.replaceAll('\\', '/').startsWith('.kun/images/')) {
-        return `persisted direction preview left the managed image directory: ${preview.imagePath}`
+      const portable = preview.imagePath.replaceAll('\\', '/')
+      const root = managedRoots.find((prefix) => portable.startsWith(prefix))
+      if (!root) {
+        return `persisted direction preview left the managed preview directory: ${preview.imagePath}`
       }
       try {
+        const scope = await resolveWorkspacePath(root.slice(0, -1), context, { enforceWorkspaceBoundary: true })
         const image = await resolveWorkspacePath(preview.imagePath, context, { enforceWorkspaceBoundary: true })
         const proof = await assertPptScopedExistingPath({
           workspaceRoot: image.workspaceRoot,
-          scopeRoot: imageRoot.absolutePath,
+          scopeRoot: scope.absolutePath,
           targetPath: image.absolutePath,
           label: 'PPT direction preview',
           expected: 'file'

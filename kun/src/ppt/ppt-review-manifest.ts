@@ -68,6 +68,13 @@ export const PptGeometryQaManifestProjection = z.object({
 }).strict()
 export type PptGeometryQaManifestProjection = z.infer<typeof PptGeometryQaManifestProjection>
 
+/** Where an image used on a slide came from: user material, a generated supplement, or already in the project. */
+export const PptSlideAsset = z.object({
+  path: WorkspaceRelativePath,
+  origin: z.enum(['user', 'generated', 'project'])
+}).strict()
+export type PptSlideAsset = z.infer<typeof PptSlideAsset>
+
 export const PptReviewSlide = z.object({
   slideId: z.string().min(1),
   index: z.number().int().nonnegative(),
@@ -80,6 +87,7 @@ export const PptReviewSlide = z.object({
   attempts: z.number().int().nonnegative(),
   lastError: z.string().min(1).optional(),
   qaIssues: z.array(PptGeometryQaIssueV1).optional(),
+  assets: z.array(PptSlideAsset).max(32).optional(),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   promptHash: z.string().min(1)
 }).strict().superRefine((slide, ctx) => {
@@ -286,7 +294,8 @@ export const PptReviewBundleV1 = z.object({
     revision: z.number().int().nonnegative(),
     status: z.enum(['ready', 'failed']),
     error: z.string().min(1).optional(),
-    qaIssues: z.array(PptGeometryQaIssueV1).optional()
+    qaIssues: z.array(PptGeometryQaIssueV1).optional(),
+    assets: z.array(PptSlideAsset).max(32).optional()
   }).strict()).min(1)
 }).strict().superRefine((bundle, ctx) => {
   const slideIds = new Set<string>()
@@ -477,7 +486,8 @@ export function toPptReviewBundle(
       revision: slide.revision,
       status: slide.status === 'failed' ? 'failed' : 'ready',
       ...(slide.lastError ? { error: slide.lastError } : {}),
-      ...(slide.qaIssues ? { qaIssues: slide.qaIssues } : {})
+      ...(slide.qaIssues ? { qaIssues: slide.qaIssues } : {}),
+      ...(slide.assets?.length ? { assets: slide.assets } : {})
     }))
   })
 }

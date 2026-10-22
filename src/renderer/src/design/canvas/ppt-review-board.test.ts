@@ -152,6 +152,25 @@ describe('PPT review board', () => {
       .toBe('Revision 1 · QA 0 errors · 0 warnings · 0 unchecked')
   })
 
+  it('labels where slide images came from, including built-in SVG previews', () => {
+    const withAssets: PptReviewBundle = {
+      ...bundle,
+      slides: [{
+        ...bundle.slides[0],
+        previewPath: 'deck/.kun-ppt-review/previews/p01-r1.svg',
+        assets: [
+          { path: 'deck/media/line.png', origin: 'user' },
+          { path: 'deck/media/scene.png', origin: 'generated' }
+        ]
+      }]
+    }
+    expect(isPptReviewBundle(withAssets)).toBe(true)
+    const added = materializeAdds(pptReviewBoardOps(withAssets, [], 'thread-a'))
+    expect(added.find((item) => item.name.endsWith(':preview'))?.imageUrl).toBe('deck/.kun-ppt-review/previews/p01-r1.svg')
+    expect(added.find((item) => item.name.endsWith(':status'))?.textContent)
+      .toBe('Revision 1 · images: 1 yours, 1 generated · visual review')
+  })
+
   it('rejects malformed or stale review bundles before they reach the canvas', () => {
     expect(isPptReviewBundle(bundle)).toBe(true)
     expect(isPptReviewBundle({ ...bundle, phase: 'completed' })).toBe(false)

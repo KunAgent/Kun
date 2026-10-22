@@ -38,6 +38,8 @@ export const PptDirectionCandidate = z.object({
   revision: z.number().int().positive(),
   recommended: z.boolean(),
   plan: PptDesignPlanInput,
+  /** Editable 3-page sample deck the previews were rendered from (absent on legacy generated-image directions). */
+  sampleProject: PptWorkspaceRelativePath.optional(),
   previews: z.array(z.object({
     role: PptDirectionPreviewRole,
     imagePath: PptWorkspaceRelativePath,
@@ -92,7 +94,7 @@ export const PptDirectionState = z.object({
         ctx.addIssue({
           code: 'custom',
           path: ['candidates', index, 'previews', previewIndex, 'imagePath'],
-          message: 'each direction preview must be a distinct generated image'
+          message: 'each direction preview must be a distinct rendered sample page'
         })
       }
       previewPaths.add(preview.imagePath)

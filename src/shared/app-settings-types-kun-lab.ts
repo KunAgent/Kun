@@ -13,8 +13,8 @@ export type KunLabPptAgentSettingsV1 = {
   reasoningEffort?: ModelReasoningEffort
   /** Codex fast mode (serviceTier = priority). Only effective for Codex models that advertise priority. */
   fast: boolean
-  /** Generate and review a complete visual slide set before building the editable deck. Default true. */
-  imageFirst: boolean
+  /** Let the PPT agent fill image slots with generated supplementary assets when an image model is available. Default true. */
+  imageAssets: boolean
 }
 
 /** Experimental Lab session-display optimization (charts, diagrams, structured visuals). */

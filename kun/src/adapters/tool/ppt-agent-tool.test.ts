@@ -216,7 +216,7 @@ describe('ppt_agent tool provider', () => {
       inheritedProviderId: 'deepseek',
       inheritedReasoningEffort: 'high',
       inheritedServiceTier: 'priority',
-      executionBlockedTools: ['ppt_export'],
+      executionBlockedTools: ['ppt_export', 'generate_image'],
       returnFormat: 'summary',
       approvalPolicy: 'auto',
       approvalReviewer: 'user'
@@ -234,7 +234,8 @@ describe('ppt_agent tool provider', () => {
       sourceReadRequired: true,
       directionGate: { required: false, reason: 'work-document' }
     })
-    expect(String(received?.controlPrompt)).toContain('IMAGE-FIRST FALLBACK')
+    expect(String(received?.controlPrompt)).toContain('IMAGE SLOTS')
+    expect(String(received?.controlPrompt)).toContain('do not call generate_image')
     expect(String(received?.controlPrompt)).toContain('ppt_generate_previews')
     expect(String(received?.controlPrompt)).toContain('<PPT_CORE_DESIGN_POLICY')
     expect(String(received?.controlPrompt)).not.toContain('invent an 11-page neon purple outline')
@@ -245,9 +246,10 @@ describe('ppt_agent tool provider', () => {
     })
     expect(result.output).toMatchObject({
       phase: 'awaiting_review',
-      mode: 'direct',
-      fallbackNotice: expect.stringContaining('no configured image-generation model')
+      mode: 'native',
+      imageAssets: 'unavailable'
     })
+    expect(result.output).not.toHaveProperty('fallbackNotice')
     const inline = received?.inlineProfile as { id: string; source: string; profile: Record<string, unknown> }
     expect(inline.id).toBe('ppt')
     expect(inline.source).toBe('builtin')
@@ -259,7 +261,7 @@ describe('ppt_agent tool provider', () => {
     expect(inline.profile.promptPreamble).toBeUndefined()
   })
 
-  it('requires image-first review output and resumes the same PPT child for revisions', async () => {
+  it('starts native-first with optional image assets and resumes the same PPT child for revisions', async () => {
     dir = await mkdtemp(join(tmpdir(), 'ppt-agent-tool-'))
     const calls: Array<Record<string, unknown>> = []
     const runtime = makeRuntime(dir, async (input) => {
@@ -285,7 +287,7 @@ describe('ppt_agent tool provider', () => {
     })
     const tool = makeTool(runtime, () => ({
       enabled: true,
-      imageFirst: true,
+      imageAssets: true,
       imageGenAvailable: true,
       imageGenSupportsReferenceEdit: true
     }), sourceReader)
@@ -295,8 +297,12 @@ describe('ppt_agent tool provider', () => {
       output: { phase: 'awaiting_review', workflowId: expect.stringMatching(/^ppt_/), reviewBundle: {} }
     })
     expect(calls[0]?.prompt).toBe('创建一个发布会介绍 PPT，直接生成，不需要方向选择')
-    expect(String(calls[0]?.controlPrompt)).toContain('Do not create PPTD or PPTX yet')
+    expect(String(calls[0]?.controlPrompt)).not.toContain('Do not create PPTD or PPTX yet')
+    expect(String(calls[0]?.controlPrompt)).toContain('ppt_generate_previews')
+    expect(String(calls[0]?.controlPrompt)).toContain('supplementary generate_image asset')
     expect(calls[0]?.blockedTools).toContain('ppt_export')
+    expect(calls[0]?.blockedTools).not.toContain('generate_image')
+    expect(started.output).toMatchObject({ mode: 'native', imageAssets: 'enabled' })
     const childId = (started.output as { childId: string }).childId
     activeWorkflowId = (started.output as { workflowId: string }).workflowId
     activeChildId = childId
@@ -322,7 +328,7 @@ describe('ppt_agent tool provider', () => {
       workflowId: activeWorkflowId,
       projectDir: `.kun/ppt/${activeWorkflowId}`,
       parentThreadId: 'thr_main',
-      previewMode: 'image-first',
+      previewMode: 'editable',
       reviewContext: {
         childId,
         slides: [{ slideId: 'slide-1', revision: 1, annotations: ['larger headline'] }]
@@ -361,7 +367,7 @@ describe('ppt_agent tool provider', () => {
     })
     const tool = makeTool(runtime, () => ({
       enabled: true,
-      imageFirst: true,
+      imageAssets: true,
       imageGenAvailable: true
     }), sourceReader)
     const started = await tool.execute({ title: 'Review deck' }, baseContext)
@@ -390,7 +396,7 @@ describe('ppt_agent tool provider', () => {
       output: {
         childId,
         phase: 'completed',
-        mode: 'visual-first',
+        mode: 'native',
         deckArtifact: { output: 'presentations/deck.pptx', editableSlides: 1, validated: true }
       }
     })
@@ -418,7 +424,7 @@ describe('ppt_agent tool provider', () => {
     let activeWorkflowId = ''
     const tool = makeTool(runtime, () => ({
       enabled: true,
-      imageFirst: true,
+      imageAssets: true,
       imageGenAvailable: true
     }), makeSourceReader({
       review: (turnId) => turnId === 'turn_main' || !activeChildId
@@ -463,7 +469,7 @@ describe('ppt_agent tool provider', () => {
     })
     const tool = makeTool(runtime, () => ({
       enabled: true,
-      imageFirst: true,
+      imageAssets: true,
       imageGenAvailable: true
     }), makeSourceReader({
       prompt: (turnId) => turnId === 'turn_main'
@@ -500,7 +506,7 @@ describe('ppt_agent tool provider', () => {
     })
     const tool = makeTool(runtime, () => ({
       enabled: true,
-      imageFirst: true,
+      imageAssets: true,
       imageGenAvailable: true
     }), makeSourceReader({
       review: () => [{ workflowId: 'ppt_workflow', childId: general.id }]
@@ -514,12 +520,12 @@ describe('ppt_agent tool provider', () => {
     }, { ...baseContext, turnId: 'turn_approve_general' })).resolves.toMatchObject({ isError: true, output: { error: expect.stringContaining('no valid persisted review bundle') } })
   })
 
-  it('fails an image-first run that does not return a visual review bundle', async () => {
+  it('fails a run that does not return a visual review bundle', async () => {
     dir = await mkdtemp(join(tmpdir(), 'ppt-agent-tool-'))
     const runtime = makeRuntime(dir, async () => ({ summary: 'stopped early' }))
     const tool = makeTool(runtime, () => ({
       enabled: true,
-      imageFirst: true,
+      imageAssets: true,
       imageGenAvailable: true
     }))
     const result = await tool.execute({ title: 'Review deck' }, baseContext)

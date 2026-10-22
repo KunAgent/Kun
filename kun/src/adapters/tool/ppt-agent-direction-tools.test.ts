@@ -60,12 +60,34 @@ function directionInput(index: number, recommended = false, directionId?: string
     rationale: `A complete and materially distinct visual direction ${index}.`,
     recommended,
     plan: planFor(index),
-    previews: [
-      { role: 'cover', imagePath: `.kun/images/direction-${index}-cover.png` },
-      { role: 'representative', imagePath: `.kun/images/direction-${index}-content.png` },
-      { role: 'complex', imagePath: `.kun/images/direction-${index}-complex.png` }
-    ]
+    sampleProject: `${projectDir}/directions/d${index}`
   }
+}
+
+const accents = ['#C54A2C', '#286C8E', '#6B4AA5']
+
+async function writeSample(root: string, index: number, options: { pages?: number; size?: string } = {}) {
+  const directory = join(root, projectDir, 'directions', `d${index}`)
+  const count = options.pages ?? 3
+  await mkdir(join(directory, 'pages'), { recursive: true })
+  await writeFile(join(directory, 'sample.pptd'), [
+    'version: v2',
+    `title: Direction ${index}`,
+    `size: ${options.size ?? '[960, 540]'}`,
+    'pages:',
+    ...Array.from({ length: count }, (_, page) => `  - pages/${page + 1}.page`)
+  ].join('\n'))
+  await Promise.all(Array.from({ length: count }, (_, page) => writeFile(
+    join(directory, 'pages', `${page + 1}.page`),
+    [
+      'background: {type: solid, color: "#F7F8FA"}',
+      'elements:',
+      '  - elementId: title',
+      '    elementType: text',
+      '    bounds: [48, 40, 640, 60]',
+      `    content: {fontSize: 36, bold: true, color: "${accents[index - 1]}", text: "${slides[page]?.title ?? 'Extra'} ${index}"}`
+    ].join('\n')
+  )))
 }
 
 const slides = [
@@ -78,11 +100,6 @@ const png16x9 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAYAAAA/xl1SAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAB5ElEQVR4nO2UQQ3AQACDTgNapmX+ndxkrAk8MFBID897ow34aYNTfMXHjxsUYAHeAiyCa92gBxyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmAIckICYAhyQgJgCHJCAmA+WXFQH4MuCjwAAAABJRU5ErkJggg==',
   'base64'
 )
-const pngSquare = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAACXBIWXMAAAPoAAAD6AG1e1JrAAABkElEQVR4nO3YMRHEQBDEQGNYLMJi/kz8LF4TKJjcpT4n+xzv196ZBo/9Ae0N5IYfQn8IPkIg+OEDwY8dCH7gQPCjBoIfMhD8eIHgBwsEP1Ig+GECGYhxA+t0go8QCH74QPBjB4IfOBD8qIHghwwEP14g+MECwY8UCH6YQAZi3MA6neAjBIIfPhD82IHgBw4EP2og+CEDwY8XCH6wQPAjBYIfJpCBGDewTif4CIHghw8EP3Yg+IEDwY8aCH7IQPDjBYIfLBD8SIHghwlkIMYNrNMJPkIg+OEDwY8dCH7gQPCjBoIfMhD8eIHgBwsEP1Ig+GECGYhxA+t0go8QCH74QPBjB4IfOBD8qIHghwwEP14g+MECwY8UCH6YQAZi3MA6neAjBIIfPhD82IHgBw4EP2og+CEDwY8XCH6wQPAjBYIfJpCBGDewTif4CIHghw8EP3Yg+IEDwY8aCH7IQPDjBYIfLBD8SIHghwlkIMYNrNMJPkIg+OEDwY8dCH7gQPCjBoIfMhD8eIHgBwsEP9I/9wPEBbpTdS9tCwAAAABJRU5ErkJggg==',
-  'base64'
-)
-
 function context(root: string, scope: Partial<PptWorkflowScope> = {}): ToolHostContext {
   return {
     threadId: 'child_direction',
@@ -119,6 +136,7 @@ function tools() {
 }
 
 async function prepare(root: string) {
+  await Promise.all([1, 2, 3].map((index) => writeSample(root, index)))
   await mkdir(join(root, '.kun', 'images'), { recursive: true })
   await Promise.all(Array.from({ length: 3 }, (_, offset) => offset + 1).flatMap((index) =>
     ['cover', 'content', 'complex'].map((role) =>
@@ -260,7 +278,8 @@ describe('PPT direction tools', () => {
       output: {
         directionId: bundle.recommendedDirectionId,
         recommendedFallback: true,
-        plan: planFor(2)
+        plan: planFor(2),
+        sampleProject: `${projectDir}/directions/d2`
       }
     })
     const manifest = JSON.parse(await readFile(
@@ -316,13 +335,14 @@ describe('PPT direction tools', () => {
   })
 
   it.each([
-    ['corrupt bytes', Buffer.from([1, 2, 3]), 'invalid image bytes'],
-    ['the wrong aspect ratio', pngSquare, '16:9 aspect ratio']
-  ])('rejects direction previews with %s', async (_label, bytes, error) => {
-    const root = await mkdtemp(join(tmpdir(), 'kun-ppt-direction-image-'))
+    ['only two pages', { pages: 2 }, 'exactly 3 pages'],
+    ['a 4:3 page size', { size: '[720, 540]' }, '16:9 page size']
+  ])('rejects a direction sample deck with %s', async (_label, sample, error) => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-ppt-direction-sample-'))
     roots.push(root)
     await prepare(root)
-    await writeFile(join(root, '.kun', 'images', 'direction-1-cover.png'), bytes)
+    await rm(join(root, projectDir, 'directions', 'd1'), { recursive: true, force: true })
+    await writeSample(root, 1, sample)
     const create = tools().find((candidate) => candidate.name === PPT_CREATE_DIRECTION_BUNDLE_TOOL_NAME)!
     await expect(create.execute({
       workflowId,
@@ -338,14 +358,50 @@ describe('PPT direction tools', () => {
     })
   })
 
+  it('renders each sample deck into host-owned previews without image generation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-ppt-direction-render-'))
+    roots.push(root)
+    await prepare(root)
+    await rm(join(root, '.kun'), { recursive: true, force: true })
+    await createDirections(root)
+    const manifest = JSON.parse(await readFile(
+      join(root, projectDir, '.kun-ppt-review', 'manifest.json'), 'utf8'))
+    const candidate = manifest.directions.candidates[0]
+    expect(candidate.sampleProject).toBe(`${projectDir}/directions/d1`)
+    expect(candidate.previews.map((preview: { role: string }) => preview.role)).toEqual(['cover', 'representative', 'complex'])
+    for (const preview of candidate.previews as Array<{ imagePath: string; width: number; height: number }>) {
+      expect(preview.imagePath).toMatch(new RegExp(`^${projectDir}/\\.kun-ppt-review/directions/[a-f0-9]{16}-\\w+\\.svg$`))
+      expect(preview).toMatchObject({ width: 960, height: 540 })
+      expect(await readFile(join(root, preview.imagePath), 'utf8')).toContain('<svg')
+    }
+  })
+
+  it('rejects a sample deck outside the directions folder', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-ppt-direction-scope-'))
+    roots.push(root)
+    await prepare(root)
+    const create = tools().find((candidate) => candidate.name === PPT_CREATE_DIRECTION_BUNDLE_TOOL_NAME)!
+    await expect(create.execute({
+      workflowId,
+      parentThreadId: 'parent',
+      projectDir,
+      deckTitle: 'Architecture decision',
+      pageCount: 3,
+      slides,
+      directions: [{ ...directionInput(1), sampleProject: projectDir }, directionInput(2, true), directionInput(3)]
+    }, context(root))).resolves.toMatchObject({ isError: true })
+  })
+
   it('rejects selection after a persisted preview file is replaced in place', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-ppt-direction-integrity-'))
     roots.push(root)
     await prepare(root)
     const bundle = await createDirections(root)
+    const manifest = JSON.parse(await readFile(
+      join(root, projectDir, '.kun-ppt-review', 'manifest.json'), 'utf8'))
     await writeFile(
-      join(root, '.kun', 'images', 'direction-2-cover.png'),
-      Buffer.concat([png16x9, Buffer.from('replaced-after-validation')])
+      join(root, manifest.directions.candidates[1].previews[0].imagePath),
+      '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540"></svg>'
     )
     const read = tools().find((candidate) => candidate.name === PPT_READ_DIRECTION_SELECTION_TOOL_NAME)!
     await expect(read.execute(

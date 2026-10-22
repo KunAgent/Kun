@@ -9,6 +9,8 @@ export type PptReviewSlideBundle = {
   status: 'ready' | 'failed'
   error?: string
   qaIssues?: PptReviewQaIssue[]
+  /** Images placed on the slide and where they came from; generated images are optional slot assets. */
+  assets?: Array<{ path: string; origin: 'user' | 'generated' | 'project' }>
 }
 
 export type PptReviewQaIssue = {
@@ -351,10 +353,21 @@ function qaMarkerOps(
     })
 }
 
+function assetLabel(slide: PptReviewSlideBundle): string {
+  if (!Array.isArray(slide.assets) || slide.assets.length === 0) return ''
+  const count = (origin: string) => slide.assets!.filter((asset) => asset?.origin === origin).length
+  const parts = [
+    count('user') ? `${count('user')} yours` : '',
+    count('generated') ? `${count('generated')} generated` : '',
+    count('project') ? `${count('project')} from deck` : ''
+  ].filter(Boolean)
+  return parts.length ? ` · images: ${parts.join(', ')}` : ''
+}
+
 function reviewStatus(slide: PptReviewSlideBundle): string {
-  const base = slide.status === 'failed'
+  const base = `${slide.status === 'failed'
     ? `Preview failed${slide.error ? `: ${slide.error}` : ''}`
-    : `Revision ${slide.revision}`
+    : `Revision ${slide.revision}`}${assetLabel(slide)}`
   if (slide.qaIssues === undefined) return `${base} · visual review`
   const errors = slide.qaIssues.filter((issue) => issue.severity === 'error').length
   const warnings = slide.qaIssues.filter((issue) => issue.severity === 'warning').length

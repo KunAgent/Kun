@@ -9,12 +9,14 @@ const labels: Record<string, string> = {
   labPptDescription: 'PPT description',
   labPptEnabled: 'Enable ppt_agent',
   labPptEnabledDesc: 'Enable description',
-  labPptImageFirst: 'Generate visual previews first',
-  labPptImageFirstDesc: 'Generate complete previews before the deck.',
-  labPptImageFirstReadyHint: 'Image generation is available.',
-  labPptImageFirstReferenceEditHint: 'Reference edits are available.',
-  labPptImageFirstRegenerateOnlyHint: 'Only full-page regeneration is available.',
-  labPptImageFirstUnavailableHint: 'Image generation is not available.',
+  labPptImageAssets: 'Generated image assets',
+  labPptImageAssetsDesc: 'Fill image slots with generated assets.',
+  labPptImageAssetsReadyHint: 'Image generation is available.',
+  labPptImageAssetsUnavailableHint: 'No image model is configured.',
+  labPptImageAssetsOffHint: 'Image slots use your material only.',
+  labPptPreviewRenderer: 'Preview rendering',
+  labPptPreviewRendererDesc: 'Previews come from the editable deck.',
+  labPptPreviewRendererBuiltIn: 'Built in',
   labPptModelMode: 'Model policy',
   labPptModelModeDesc: 'Model policy description',
   labPptModelModeInherit: 'Follow main model',
@@ -35,10 +37,10 @@ const labels: Record<string, string> = {
 }
 const t = (key: string): string => labels[key] ?? key
 
-function settings(imageFirst: boolean): KunLabSettingsV1 {
+function settings(imageAssets: boolean): KunLabSettingsV1 {
   return {
     ...defaultKunLabSettings(),
-    pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst },
+    pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageAssets },
       conversationVisualization: { enabled: false }
   }
 }
@@ -56,24 +58,26 @@ function render(value: KunLabSettingsV1, imageGen: { available: boolean; reason?
   }))
 }
 
-describe('PptAgentSettingsPanel image-first mode', () => {
-  it('shows ready and fallback capability hints while defaulting the toggle on', () => {
+describe('PptAgentSettingsPanel image assets', () => {
+  it('defaults the asset toggle on and explains the capability state', () => {
     const ready = render(settings(true), { available: true, supportsReferenceEdit: true })
-    expect(ready).toContain('Generate visual previews first')
+    expect(ready).toContain('Generated image assets')
     expect(ready).toContain('Image generation is available.')
-    expect(ready).toContain('Reference edits are available.')
     expect(ready).toContain('aria-checked="true"')
 
     const unavailable = render(settings(true), { available: false, reason: 'provider is not configured' })
-    expect(unavailable).toContain('Image generation is not available. provider is not configured')
-
-    const regenerateOnly = render(settings(true), { available: true, supportsReferenceEdit: false })
-    expect(regenerateOnly).toContain('Only full-page regeneration is available.')
+    expect(unavailable).toContain('No image model is configured. provider is not configured')
   })
 
-  it('hides capability messaging when image-first is disabled', () => {
-    const direct = render(settings(false), { available: false })
-    expect(direct).toContain('Generate visual previews first')
-    expect(direct).not.toContain('Image generation is not available.')
+  it('says slots fall back to user material when the toggle is off', () => {
+    const off = render(settings(false), { available: true })
+    expect(off).toContain('Image slots use your material only.')
+    expect(off).not.toContain('Image generation is available.')
+  })
+
+  it('always shows the built-in preview renderer', () => {
+    const markup = render(settings(true), { available: false })
+    expect(markup).toContain('Preview rendering')
+    expect(markup).toContain('Built in')
   })
 })

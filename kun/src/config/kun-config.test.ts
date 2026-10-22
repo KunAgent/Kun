@@ -152,7 +152,12 @@ describe('readKunConfigFile provider compatibility', () => {
 describe('LabPptAgentConfigSchema', () => {
   it('defaults to enabled with follow-main model and no fast', () => {
     const parsed = LabPptAgentConfigSchema.parse({})
-    expect(parsed).toEqual({ enabled: true, fast: false, imageFirst: true })
+    expect(parsed).toEqual({ enabled: true, fast: false, imageAssets: true })
+  })
+
+  it('drops the retired imageFirst switch from older config files', () => {
+    expect(LabPptAgentConfigSchema.parse({ imageFirst: false, imageAssets: false }))
+      .toEqual({ enabled: true, fast: false, imageAssets: false })
   })
 
   it('accepts a paired model override with reasoning effort', () => {
@@ -176,7 +181,7 @@ describe('LabPptAgentConfigSchema', () => {
 
   it('defaults pptAgent inside LabConfigSchema', () => {
     const lab = LabConfigSchema.parse({})
-    expect(lab.pptAgent).toEqual({ enabled: true, fast: false, imageFirst: true })
+    expect(lab.pptAgent).toEqual({ enabled: true, fast: false, imageAssets: true })
   })
 
   it('defaults Fast Context at the config root', () => {

@@ -1,6 +1,4 @@
-import { createHash } from 'node:crypto'
 import { relative } from 'node:path'
-import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import {
@@ -14,7 +12,6 @@ import {
   pptDirectionPlanFingerprint,
   pptDirectionSlidesFingerprint
 } from '../../ppt/ppt-direction-workflow.js'
-import { detectPptImageDimensions } from '../../ppt/ppt-geometry-qa-image.js'
 import {
   PPT_REVIEW_MANIFEST_VERSION,
   createPptReviewManifest,
@@ -25,7 +22,7 @@ import {
   toPptDirectionBundle,
   writePptReviewManifest
 } from '../../ppt/ppt-review-manifest.js'
-import { resolveWorkspacePath, withToolBoundary } from './builtin-tool-utils.js'
+import { withToolBoundary } from './builtin-tool-utils.js'
 import { withFileMutationQueue } from './file-mutation-queue.js'
 import {
   designPlanInputSchema,
@@ -38,9 +35,13 @@ import {
   stringArg,
   type PptAgentLocalToolOptions
 } from './ppt-agent-local-tools-support.js'
-import { assertPptScopedExistingPath } from './ppt-agent-physical-path.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { pptDirectionPreviewIntegrityError } from './ppt-agent-direction-integrity.js'
+import {
+  PPT_DIRECTION_SAMPLE_DIR,
+  renderPptDirectionSamples,
+  type PptDirectionSamplePreview
+} from './ppt-agent-direction-samples.js'
 
 export const PPT_CREATE_DIRECTION_BUNDLE_TOOL_NAME = 'ppt_create_direction_bundle'
 export const PPT_READ_DIRECTION_SELECTION_TOOL_NAME = 'ppt_read_direction_selection'
@@ -51,11 +52,10 @@ const DirectionInput = z.object({
   rationale: z.string().trim().min(8).max(500),
   recommended: z.boolean(),
   plan: PptDesignPlanInput,
-  previews: z.array(z.object({
-    role: z.enum(['cover', 'representative', 'complex']),
-    imagePath: z.string().trim().min(1)
-  }).strict()).length(3)
+  sampleProject: z.string().trim().min(1)
 }).strict()
+
+type ResolvedDirectionInput = z.infer<typeof DirectionInput> & { previews: PptDirectionSamplePreview[] }
 
 const SlideInput = z.object({
   slideId: z.string().trim().min(1).optional(),
@@ -84,7 +84,8 @@ function createDirectionBundleTool(
     description: [
       'Persist exactly three governed visual directions before slide generation, or revise the host-selected direction set.',
       'Each direction uses the same audience, purpose, narrative, page count, and slide plan; only the visual system may differ.',
-      'Every direction requires cover, representative-content, and complex/data/process 16:9 previews from generate_image.'
+      `Each direction points at its own 3-page editable sample PPTD under <projectDir>/${PPT_DIRECTION_SAMPLE_DIR}/<name>/ (pages in order: cover, representative content, most complex data/process page).`,
+      'The host renders the samples itself; no image generation is needed.'
     ].join(' '),
     toolKind: 'file_change',
     policy: 'auto',
@@ -126,22 +127,13 @@ function createDirectionBundleTool(
               rationale: { type: 'string', minLength: 8 },
               recommended: { type: 'boolean' },
               plan: designPlanInputSchema(),
-              previews: {
-                type: 'array',
-                minItems: 3,
-                maxItems: 3,
-                items: {
-                  type: 'object',
-                  properties: {
-                    role: { type: 'string', enum: ['cover', 'representative', 'complex'] },
-                    imagePath: { type: 'string', minLength: 1 }
-                  },
-                  required: ['role', 'imagePath'],
-                  additionalProperties: false
-                }
+              sampleProject: {
+                type: 'string',
+                minLength: 1,
+                description: `Workspace-relative folder under <projectDir>/${PPT_DIRECTION_SAMPLE_DIR}/ holding this direction's 3-page sample .pptd.`
               }
             },
-            required: ['name', 'rationale', 'recommended', 'plan', 'previews'],
+            required: ['name', 'rationale', 'recommended', 'plan', 'sampleProject'],
             additionalProperties: false
           }
         }
@@ -183,38 +175,19 @@ function createDirectionBundleTool(
           return errorResult(`direction ${direction.name} does not match pageCount ${pageCount}`)
         }
       }
-      const imageRoot = await resolveWorkspacePath('.kun/images', context, { enforceWorkspaceBoundary: true })
-      const resolvedInputs = await Promise.all(inputs.data.map(async (direction) => ({
-        ...direction,
-        previews: await Promise.all(direction.previews.map(async (preview) => {
-          if (!preview.imagePath.replaceAll('\\', '/').startsWith('.kun/images/')) {
-            throw new Error(`direction preview must come from generate_image: ${preview.imagePath}`)
-          }
-          const image = await resolveWorkspacePath(preview.imagePath, context, { enforceWorkspaceBoundary: true })
-          const proof = await assertPptScopedExistingPath({
-            workspaceRoot: image.workspaceRoot,
-            scopeRoot: imageRoot.absolutePath,
-            targetPath: image.absolutePath,
-            label: 'PPT direction preview',
-            expected: 'file'
+      const resolvedInputs: ResolvedDirectionInput[] = []
+      for (const { sampleProject, ...direction } of inputs.data) {
+        resolvedInputs.push({
+          ...direction,
+          ...await renderPptDirectionSamples({
+            sampleProject,
+            directionName: direction.name,
+            workspaceRoot: project.workspaceRoot,
+            projectDir: project.projectDir,
+            context
           })
-          if (!proof.bytes || !/\.(?:png|jpe?g|webp)$/i.test(image.relativePath)) {
-            throw new Error(`direction preview must be an existing PNG, JPEG, or WebP file: ${preview.imagePath}`)
-          }
-          const bytes = await readFile(proof.physicalPath)
-          const dimensions = detectPptImageDimensions(bytes, proof.physicalPath)
-          if (!dimensions) throw new Error(`direction preview has invalid image bytes: ${preview.imagePath}`)
-          const ratioError = Math.abs(dimensions.width / dimensions.height - 16 / 9) / (16 / 9)
-          if (ratioError > 0.01) throw new Error(`direction preview must use a 16:9 aspect ratio: ${preview.imagePath}`)
-          return {
-            ...preview,
-            imagePath: image.relativePath,
-            sha256: createHash('sha256').update(bytes).digest('hex'),
-            width: dimensions.width,
-            height: dimensions.height
-          }
-        }))
-      })))
+        })
+      }
       return withFileMutationQueue(reviewManifestPath(project.projectDir), async () => {
         const existing = await readPptReviewManifest(project.projectDir)
         const revisesExistingDirections = scope.action === 'revise_directions' ||
@@ -354,7 +327,8 @@ function createReadDirectionSelectionTool(
                 directionId: candidate.directionId,
                 revision: candidate.revision,
                 recommended: candidate.recommended,
-                plan: candidate.plan
+                plan: candidate.plan,
+                ...(candidate.sampleProject ? { sampleProject: candidate.sampleProject } : {})
               })),
               slides: manifest.slides.map((slide) => ({
                 slideId: slide.slideId, index: slide.index, title: slide.title
@@ -386,6 +360,7 @@ function createReadDirectionSelectionTool(
             revision: selected.revision,
             recommendedFallback: requested.length === 0,
             plan: selected.plan,
+            ...(selected.sampleProject ? { sampleProject: selected.sampleProject } : {}),
             slides: manifest.slides.map((slide) => ({ slideId: slide.slideId, index: slide.index, title: slide.title }))
           }
         }
@@ -428,7 +403,7 @@ function mergeDirectionCandidates(input: {
   action: 'start' | 'revise_directions'
   workflowId: string
   existing: Awaited<ReturnType<typeof readPptReviewManifest>>
-  inputs: z.infer<typeof DirectionInput>[]
+  inputs: ResolvedDirectionInput[]
   targetIds: string[]
 }): PptDirectionCandidate[] {
   if (input.action === 'start') {

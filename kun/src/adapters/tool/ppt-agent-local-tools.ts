@@ -1,9 +1,7 @@
-import { execFile } from 'node:child_process'
-import { access, mkdir } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { createPptReviewManifest, readPptReviewManifest, reviewManifestPath, toPptReviewBundle, writePptReviewManifest } from '../../ppt/ppt-review-manifest.js'
 import { designPlanStyleSpec, markPptGovernanceReviewed, writePptDesignGovernance } from '../../ppt/ppt-design-governance.js'
-import { promisify } from 'node:util'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { resolveWorkspacePath, withToolBoundary } from './builtin-tool-utils.js'
@@ -17,14 +15,11 @@ import {
   requiresPptDesignGovernance
 } from './ppt-agent-governance-tools.js'
 import {
-  MAX_EXPORT_OUTPUT_CHARS,
   directionReviewIdentityError,
   governanceProjectionMatches,
   integerArg,
-  parsePreviewRendererOutput,
   parseReviewSlides,
   assertPptWorkflowBinding,
-  requireToolchainDirectory,
   reviewSlideRevision,
   stringArg,
   type PptAgentLocalToolOptions,
@@ -48,6 +43,9 @@ import {
   assertPptScopedExistingPath,
   assertPptScopedMutationPath
 } from './ppt-agent-physical-path.js'
+import { PPTD_PREVIEW_RENDERER, renderPptdPreviewDeck } from '../../ppt/pptd-preview-svg.js'
+import { portableRelative, writePptPreviewSvgs } from './ppt-agent-preview-files.js'
+import { pptSlideAssets, readPptAssetLedger } from './ppt-agent-asset-ledger.js'
 
 export const PPT_GENERATE_PREVIEWS_TOOL_NAME = 'ppt_generate_previews'
 export const PPT_CREATE_REVIEW_BUNDLE_TOOL_NAME = 'ppt_create_review_bundle'
@@ -60,8 +58,6 @@ export { PPT_READ_GUIDE_TOOL_NAME, PPT_SUBMIT_DESIGN_PLAN_TOOL_NAME }
 export { PPT_READ_REVIEW_CONTEXT_TOOL_NAME }
 export { PPT_IMPORT_ASSET_TOOL_NAME }
 export { PPT_CREATE_DIRECTION_BUNDLE_TOOL_NAME, PPT_READ_DIRECTION_SELECTION_TOOL_NAME }
-
-const execFileAsync = promisify(execFile)
 
 /**
  * Safe, first-party PPT helpers used by the Lab-gated PPT agent. They expose
@@ -78,8 +74,12 @@ export function buildPptAgentLocalTools(options: PptAgentLocalToolOptions = {}):
     createPptReadReviewContextTool(shouldAdvertise, () => options.enabled?.() !== false),
     createPptImportAssetTool(options, shouldAdvertise),
     createPptExportTool(options, shouldAdvertise),
-    createPptGeneratePreviewsTool(options, shouldAdvertise),
-    createPptCreateReviewBundleTool(options, shouldAdvertise)
+    // Each workflow reviews one kind of preview: editable decks are rendered by the host,
+    // legacy image-first reviews register generated whole-page images.
+    createPptGeneratePreviewsTool(options, (context) =>
+      shouldAdvertise(context) && context.pptWorkflowScope?.previewMode === 'editable'),
+    createPptCreateReviewBundleTool(options, (context) =>
+      shouldAdvertise(context) && context.pptWorkflowScope?.previewMode === 'image-first')
   ]
 }
 
@@ -90,14 +90,14 @@ function createPptGeneratePreviewsTool(
   return LocalToolHost.defineTool({
     name: PPT_GENERATE_PREVIEWS_TOOL_NAME,
     description: [
-      'Render every page of a workspace PPTD project into a 16:9 review bundle for the parent whiteboard.',
-      'The generated bundle is persisted with a stable manifest so failed or revised slides can be reviewed and retried independently.',
-      'Use generate_image first for approved visual assets; this tool renders the composed, editable slide plan for review and never exports a final PPTX.'
+      'Render every page of a workspace PPTD project with the built-in renderer into a review bundle for the parent whiteboard.',
+      'It needs no image generation and no external editor: the previews are drawn straight from the editable PPTD, so they show what the export will contain.',
+      'The bundle is persisted with a stable manifest so revised slides can be reviewed independently. Fill image slots before rendering; this tool never exports a final PPTX.'
     ].join(' '),
     toolKind: 'file_change',
     policy: 'auto',
     sideEffect: 'unknown',
-    effects: { network: false, externalWrite: false, processExecution: true, guiAutomation: false },
+    effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
     shouldAdvertise,
     inputSchema: {
       type: 'object',
@@ -177,36 +177,13 @@ function createPptGeneratePreviewsTool(
           })
       await inspectOutput()
       return withFileMutationQueue(output.absolutePath, async () => {
-        const [currentProject, currentInput] = await Promise.all([inspectProject(), inspectInput()])
-        const currentOutput = await inspectOutput()
-        const toolchain = await requireToolchainDirectory(options)
-        const renderer = resolve(toolchain, 'scripts', 'export_images.py')
-        await access(renderer)
-        const result = await execFileAsync(
-          'python3',
-          [renderer, currentInput.physicalPath, '--output', currentOutput.physicalPath, '--force'],
-          {
-            cwd: currentProject.physicalPath,
-            timeout: 5 * 60 * 1_000,
-            maxBuffer: MAX_EXPORT_OUTPUT_CHARS * 8,
-            signal: context.abortSignal
-          }
-        )
-        const rendered = parsePreviewRendererOutput(`${result.stdout ?? ''}`)
-        await inspectOutput(true)
-        const images = rendered.images
-        if (images.length === 0) throw new Error('preview renderer produced no page images')
-        const renderedImages = await Promise.all(images.map((image) => assertPptScopedExistingPath({
-          workspaceRoot: input.workspaceRoot, scopeRoot: output.absolutePath,
-          targetPath: resolve(output.absolutePath, image.image), label: 'PPT rendered preview', expected: 'file'
-        })))
-        const overview = await assertPptScopedExistingPath({
-          workspaceRoot: input.workspaceRoot, scopeRoot: output.absolutePath,
-          targetPath: resolve(output.absolutePath, rendered.overview), label: 'PPT preview overview', expected: 'file'
-        })
-        if (governance && images.length !== governance.snapshot.designPlan.pageStrategy.pageCount) {
+        const [, currentInput] = await Promise.all([inspectProject(), inspectInput()])
+        await inspectOutput()
+        const rendered = await renderPptdPreviewDeck(currentInput.physicalPath)
+        if (rendered.pages.length === 0) throw new Error('preview renderer produced no page images')
+        if (governance && rendered.pages.length !== governance.snapshot.designPlan.pageStrategy.pageCount) {
           throw new Error(
-            `preview slide count ${images.length} does not match governed page count ${governance.snapshot.designPlan.pageStrategy.pageCount}`
+            `preview slide count ${rendered.pages.length} does not match governed page count ${governance.snapshot.designPlan.pageStrategy.pageCount}`
           )
         }
         const existingManifest = await readPptReviewManifest(projectDir)
@@ -227,6 +204,14 @@ function createPptGeneratePreviewsTool(
         }
         const directionIdentityError = directionReviewIdentityError(existingManifest, scope)
         if (directionIdentityError) throw new Error(directionIdentityError)
+        const previewFiles = await writePptPreviewSvgs({
+          pages: rendered.pages,
+          outputDir: output.absolutePath,
+          workspaceRoot: input.workspaceRoot,
+          revisions: rendered.pages.map((_, index) => (existingManifest?.slides[index]?.revision ?? 0) + 1),
+          keep: existingManifest?.slides.map((slide) => slide.previewPath ?? '') ?? []
+        })
+        const assetLedger = await readPptAssetLedger(projectDir)
         const manifest = createPptReviewManifest({
           ...(governance
             ? { workflowId: governance.state.workflowId }
@@ -235,9 +220,11 @@ function createPptGeneratePreviewsTool(
               : {}),
           parentThreadId,
           childId: context.threadId,
-          projectDir: relative(workspaceRoot, projectDir).replaceAll('\\\\', '/'),
+          projectDir: portableRelative(workspaceRoot, projectDir) || '.',
           previewMode: 'editable',
-          deckTitle: inputProof.kind === 'directory' ? input.absolutePath.split(/[\\\\/]/).pop() || 'PPT review' : input.absolutePath.split(/[\\\\/]/).slice(-2, -1)[0] || 'PPT review',
+          deckTitle: rendered.title || (inputProof.kind === 'directory'
+            ? input.absolutePath.split(/[\\/]/).pop() || 'PPT review'
+            : input.absolutePath.split(/[\\/]/).slice(-2, -1)[0] || 'PPT review'),
           styleSpec: governance
             ? {
                 ...designPlanStyleSpec(governance.snapshot.designPlan),
@@ -249,17 +236,17 @@ function createPptGeneratePreviewsTool(
                 colorTokens: {},
                 typeScale: {},
                 spacingScale: [],
-                backgroundLanguage: 'PPT visual-first review',
-                imageTreatment: 'approved generated assets',
+                backgroundLanguage: 'PPT editable review',
+                imageTreatment: 'supplementary image assets',
                 chartTreatment: 'native editable PPT elements'
               },
           ...(governance ? { governance: governance.snapshot } : {}),
           ...(existingManifest?.directions ? { directions: existingManifest.directions } : {}),
-          slides: images.map((image, index) => ({
+          slides: rendered.pages.map((page, index) => ({
             ...(existingManifest?.slides[index] ? { slideId: existingManifest.slides[index].slideId } : {}),
-            title: existingManifest?.slides[index]?.title || `P${index + 1}`,
-            layoutSpecPath: image.page ?? image.image,
-            prompt: image.page ?? image.image
+            title: existingManifest?.slides[index]?.title || page.title || `P${index + 1}`,
+            layoutSpecPath: page.pageFile,
+            prompt: page.pageFile
           }))
         })
         const nextManifest = {
@@ -271,7 +258,16 @@ function createPptGeneratePreviewsTool(
             ...(scope.action === 'select_direction' && existingManifest?.slides[index]?.contentHash
               ? { contentHash: existingManifest.slides[index].contentHash }
               : {}),
-            previewPath: relative(workspaceRoot, renderedImages[index].physicalPath).replaceAll('\\\\', '/'),
+            previewPath: portableRelative(workspaceRoot, previewFiles[index]),
+            ...(rendered.pages[index].images.length
+              ? {
+                  assets: pptSlideAssets(
+                    rendered.pages[index].images.map((image) => portableRelative(projectDir, resolve(rendered.deckDir, image))),
+                    assetLedger,
+                    (projectRelative) => portableRelative(workspaceRoot, resolve(projectDir, projectRelative))
+                  )
+                }
+              : {}),
             revision: (existingManifest?.slides[index]?.revision ?? 0) + 1,
             status: 'ready' as const,
             attempts: (existingManifest?.slides[index]?.attempts ?? 0) + 1
@@ -289,13 +285,12 @@ function createPptGeneratePreviewsTool(
             markPptGovernanceReviewed(governance.state, governance.snapshot.designPlan.fingerprint)
           )
         }
-        const manifestPath = relative(workspaceRoot, resolve(projectDir, '.kun-ppt-review/manifest.json')).replaceAll('\\\\', '/')
+        const manifestPath = portableRelative(workspaceRoot, resolve(projectDir, '.kun-ppt-review/manifest.json'))
         return {
           output: {
             ...toPptReviewBundle(nextManifest, manifestPath),
             output: output.relativePath,
-            overview: relative(workspaceRoot, overview.physicalPath).replaceAll('\\\\', '/'),
-            renderer: rendered.exporter,
+            renderer: PPTD_PREVIEW_RENDERER,
             reviewBundle: toPptReviewBundle(nextManifest, manifestPath)
           }
         }

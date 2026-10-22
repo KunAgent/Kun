@@ -297,7 +297,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
     const followMain = renderPanel({
       ...defaultKunLabSettings(),
-      pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: true },
+      pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageAssets: true },
       conversationVisualization: { enabled: false }
     })
     expect(followMain).toContain('Enable ppt_agent')
@@ -306,7 +306,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
     const fixed = renderPanel({
       ...defaultKunLabSettings(),
-      pptAgent: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false, imageFirst: true },
+      pptAgent: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false, imageAssets: true },
       conversationVisualization: { enabled: false }
     })
     expect(fixed).toContain('Use fixed model')
@@ -315,7 +315,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
 
     const disabled = renderPanel({
       ...defaultKunLabSettings(),
-      pptAgent: { enabled: false, model: '', providerId: '', fast: false, imageFirst: true },
+      pptAgent: { enabled: false, model: '', providerId: '', fast: false, imageAssets: true },
       conversationVisualization: { enabled: false }
     })
     // Switched off, the policy controls stay folded away and inert.

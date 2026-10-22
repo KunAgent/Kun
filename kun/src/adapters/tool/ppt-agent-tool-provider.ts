@@ -25,10 +25,12 @@ import {
   blocksPptExport,
   deliverableInstruction,
   effectivePptProviderId,
-  imageFirstFallbackNotice,
   initialPptPreviewMode,
   managedPptProviderUnavailable,
   pptAgentAction,
+  pptGeneratedImagesAllowed,
+  pptImageAssetInstruction,
+  pptImageAssetState,
   visualWorkflowInstruction,
   type PptAgentAction
 } from './ppt-agent-workflow-control.js'
@@ -63,7 +65,8 @@ export type PptAgentToolConfig = {
   providerId?: string
   reasoningEffort?: ModelReasoningEffort
   fast?: boolean
-  imageFirst?: boolean
+  /** Lab switch: let the child fill image slots with generated supplementary assets. Default true. */
+  imageAssets?: boolean
   imageGenAvailable?: boolean
   imageGenReason?: string
   imageGenSupportsReferenceEdit?: boolean
@@ -82,9 +85,9 @@ export type PptSourceEnvelope = PptProviderSourceEnvelope
 /**
  * First-class PPT allow-list. Full file authoring plus the managed `ppt_export`
  * tool, web helpers and image generation
- * so the child can build a PPTD project, export a verified PPTX and generate
- * artwork. Deliberately excludes `ppt_to_board`, GUI design tools and the
- * delegation tools: whiteboard layout is replayed by the parent agent because
+ * so the child can build a PPTD project, export a verified PPTX and, when
+ * allowed, generate supplementary slot artwork. Deliberately excludes
+ * `ppt_to_board`, GUI design tools and the delegation tools: whiteboard layout is replayed by the parent agent because
  * child design-tool results never reach the canvas (verdict B), and the child
  * must not spin up further children.
  */
@@ -235,17 +238,6 @@ export function buildPptAgentToolProvider(
               : retryingDirection
                 ? retry?.directionGate
                 : undefined
-            if (directionGate?.required && resolvedCfg.imageGenAvailable !== true) {
-              return {
-                output: {
-                  workflowId,
-                  projectDir,
-                  phase: 'unavailable',
-                  error: 'Visual direction selection requires generate_image; configure an image-generation model or provide an explicit design authority'
-                },
-                isError: true
-              }
-            }
             const scopedDirection = scopePptDirectionContext(
               source.value.directionContexts, action, childId, workflowId)
             if (!scopedDirection.ok) {
@@ -349,11 +341,19 @@ export function buildPptAgentToolProvider(
               persistedPreviewMode = identity.previewMode
               persistedPlanFingerprint = identity.planFingerprint
             }
-            const previewMode = persistedPreviewMode ?? retry?.previewMode ?? initialPptPreviewMode(resolvedCfg)
+            const previewMode = persistedPreviewMode ?? retry?.previewMode ?? initialPptPreviewMode()
+            const workflowStage = retry?.stage ?? (
+              action === 'approve_and_build'
+                ? 'build'
+                : directionGate?.required === true || action === 'revise_directions'
+                  ? 'direction'
+                  : 'review'
+            )
+            // Only reviews started under the retired image-first flow still draw whole pages with generate_image.
             if (
+              previewMode === 'image-first' &&
+              workflowStage === 'review' &&
               action !== 'start' &&
-              action !== 'approve_and_build' &&
-              (previewMode === 'image-first' || action === 'revise_directions') &&
               resolvedCfg.imageGenAvailable !== true
             ) {
               return {
@@ -363,9 +363,7 @@ export function buildPptAgentToolProvider(
                   projectDir,
                   phase: 'failed_recoverable',
                   mode: 'visual-first',
-                  error: action === 'revise_directions'
-                    ? 'PPT visual directions cannot be revised because generate_image is currently unavailable; retry after restoring the image-generation capability'
-                    : 'PPT image-first review cannot continue because generate_image is currently unavailable; retry after restoring the image-generation capability'
+                  error: 'This PPT review was started with whole-page generated previews and cannot be revised while generate_image is unavailable; approve it to build the editable deck, or start a new PPT workflow'
                 },
                 isError: true
               }
@@ -375,7 +373,7 @@ export function buildPptAgentToolProvider(
               await loadPptCoreDesignPolicy(toolchain)
             )
             const inlineProfile = buildPptProviderProfile(resolvedCfg)
-            const fallbackNotice = imageFirstFallbackNotice(resolvedCfg, action)
+            const assetInstruction = pptImageAssetInstruction(resolvedCfg, previewMode, workflowStage)
             const workflowInstruction = visualWorkflowInstruction(
               resolvedCfg,
               previewMode,
@@ -388,16 +386,11 @@ export function buildPptAgentToolProvider(
               retry?.stage,
               retry?.stage === 'direction' ? retry.hasDirectionBundle : retry?.hasReviewBundle
             )
-            const executionBlockedTools = blocksPptExport(action)
-              ? ['ppt_export']
-              : undefined
-            const workflowStage = retry?.stage ?? (
-              action === 'approve_and_build'
-                ? 'build'
-                : directionGate?.required === true || action === 'revise_directions'
-                  ? 'direction'
-                  : 'review'
-            )
+            const blockedForRun = [
+              ...(blocksPptExport(action) ? ['ppt_export'] : []),
+              ...(pptGeneratedImagesAllowed(resolvedCfg, previewMode, workflowStage) ? [] : ['generate_image'])
+            ]
+            const executionBlockedTools = blockedForRun.length > 0 ? blockedForRun : undefined
             const pptWorkflowScope = {
               action,
               stage: workflowStage,
@@ -439,8 +432,8 @@ export function buildPptAgentToolProvider(
             const controlPrompt = [
               policyControl,
               `PPT WORKFLOW CONTROL: action=${action}; workflowId=${workflowId}; projectDir=${projectDir}.`,
-              fallbackNotice,
               workflowInstruction,
+              assetInstruction,
               deliverableInstruction(deliverable, action)
             ].filter(Boolean).join('\n\n')
             const childSecurity = pptProviderChildSecurity(context, workspace, projectDir)
@@ -620,9 +613,9 @@ export function buildPptAgentToolProvider(
                     : currentReviewBundle && action !== 'approve_and_build'
                       ? 'awaiting_review'
                       : 'completed',
-                mode: previewMode === 'editable' ? 'direct' : 'visual-first',
+                mode: previewMode === 'editable' ? 'native' : 'visual-first',
+                imageAssets: pptImageAssetState(resolvedCfg),
                 deliverable,
-                ...(fallbackNotice ? { fallbackNotice } : {}),
                 ...(currentDirectionBundle !== undefined ? { directionBundle: currentDirectionBundle } : {}),
                 ...(currentReviewBundle !== undefined ? { reviewBundle: currentReviewBundle } : {}),
                 ...(deckArtifact !== undefined ? { deckArtifact } : {}),

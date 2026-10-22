@@ -1,4 +1,4 @@
-import type { KunLabSettingsV1 } from './app-settings-types'
+import type { KunLabPptAgentSettingsV1, KunLabSettingsV1 } from './app-settings-types'
 
 export function defaultKunLabSettings(): KunLabSettingsV1 {
   return {
@@ -7,7 +7,7 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
       model: '',
       providerId: '',
       fast: false,
-      imageFirst: true
+      imageAssets: true
     },
     conversationVisualization: {
       enabled: false
@@ -34,4 +34,17 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
     mcpApps: { enabled: false },
     assistantMailbox: { enabled: false }
   }
+}
+
+/**
+ * Stored PPT agent settings may predate `imageAssets` and still carry the
+ * retired `imageFirst` preview switch; keep the user's other fields and drop it.
+ */
+export function normalizeStoredPptAgentSettings(
+  stored: KunLabPptAgentSettingsV1 | undefined,
+  defaults: KunLabPptAgentSettingsV1
+): KunLabPptAgentSettingsV1 {
+  if (!stored) return defaults
+  const { imageFirst: _retired, ...rest } = stored as KunLabPptAgentSettingsV1 & { imageFirst?: unknown }
+  return { ...rest, imageAssets: rest.imageAssets !== false }
 }
