@@ -13,6 +13,7 @@ import { FloatingComposer } from '../chat/FloatingComposer'
 import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { SubagentReturnBar } from '../chat/message-timeline-empty'
 import { WriteAssistantPanel } from './WriteAssistantPanel'
+import { prepareAssistantMarkdownRenderer } from '../../lib/assistant-markdown-loader'
 
 const provider = vi.hoisted(() => ({
   getThreadDetail: vi.fn(),
@@ -118,7 +119,9 @@ describe('WriteAssistantPanel subagent session', () => {
         runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: '{"sessions":[]}' }))
       }
     }
-  })
+    // Load lazy UI dependencies in setup, outside the five-second interaction assertion.
+    await Promise.all([import('../chat/MessageTimeline'), prepareAssistantMarkdownRenderer()])
+  }, 120_000)
 
   afterEach(() => {
     useChatStore.setState({ selectThread: originalSelectThread })

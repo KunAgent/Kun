@@ -8,8 +8,9 @@ export function registerProductAnalyticsRoutes(add: Add) {
   add('GET', '/v1/product-analytics', async rooms => (await readAnalytics(rooms.service.store)).value)
   add('POST', '/v1/product-analytics/lease', async (rooms, request) => {
     const raw = await readJsonBody(request); if (!raw.ok) return raw.response
-    const input = z.object({ epoch: z.string().uuid().nullable(), expectedEpoch: z.string().uuid().optional() }).strict().parse(raw.value)
-    await leaseAnalytics(rooms.service.store, input.epoch, input.expectedEpoch); return { ok: true }
+    const input = z.object({ epoch: z.string().uuid().nullable(), expectedEpoch: z.string().uuid().optional(),
+      workAnalyticsVersion: z.union([z.literal(0), z.literal(1)]).optional() }).strict().parse(raw.value)
+    await leaseAnalytics(rooms.service.store, input.epoch, input.expectedEpoch, input.workAnalyticsVersion); return { ok: true }
   })
   add('POST', '/v1/product-analytics/ack', async (rooms, request) => {
     const raw = await readJsonBody(request); if (!raw.ok) return raw.response

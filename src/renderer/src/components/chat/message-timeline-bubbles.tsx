@@ -1,8 +1,8 @@
 import { GitHubToolCard, githubToolThread } from './github-tool-card'
 import { useResultPresented } from '../../product-analytics/presentation'
-import { trackProduct } from '../../product-analytics/client'
+import { useWorkPresentation } from '../../product-analytics/work-presentation'
 import { TimelineApprovalCard } from './TimelineApprovalCard'
-import { memo, useEffect, useState, type ReactElement } from 'react'
+import { memo, useEffect, useState, type ReactElement, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
@@ -123,6 +123,7 @@ function MessageBubbleImpl({
   allowThreadActions?: boolean
 }): ReactElement {
   useResultPresented(block)
+  const workAnalytics = useWorkPresentation(block)
   const { t, i18n } = useTranslation('common')
   const turnTimingMetrics = useChatStore((s) => s.turnTimingMetrics)
   const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
@@ -169,7 +170,7 @@ function MessageBubbleImpl({
         : undefined
     return (
       <LiveAssistantStreamingProvider streaming={effectiveStreaming}>
-        <div className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
+        <div ref={workAnalytics.ref} className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
           <div className="ds-markdown ds-chat-answer min-w-0 max-w-full text-ds-ink">
             <AssistantMarkdown plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'} text={block.text} streaming={effectiveStreaming} />
           </div>
@@ -217,8 +218,9 @@ function MessageBubbleImpl({
               ) : null}
               <AssistantSpeakButton blockId={block.id} text={block.text} />
               <AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} />
-              <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode} />
-              <CopyFeedbackButton text={block.text} onCopied={() => trackProduct({ name: 'result_action', properties: { mode: 'code', action: 'copy' } })} />
+              <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode}
+                onExportStarted={() => workAnalytics.captureAction('export')} />
+              <CopyFeedbackButton text={block.text} onCopyStarted={() => workAnalytics.captureAction('copy')} />
               {surface === 'mobile' ? (
                 <button
                   type="button"
@@ -239,6 +241,7 @@ function MessageBubbleImpl({
   if (block.kind === 'reasoning') {
     return (
       <div
+        ref={workAnalytics.ref}
         className="ds-card-soft rounded-[20px] px-4 py-3 text-[13.5px] leading-6 text-ds-muted"
         data-timeline-block-id={block.id}
       >
@@ -249,7 +252,7 @@ function MessageBubbleImpl({
     )
   }
   if (block.kind === 'tool') {
-    return <ToolEntry block={block} nested={nested} />
+    return <ToolEntry block={block} nested={nested} analyticsRef={workAnalytics.ref} />
   }
   if (block.kind === 'user_input') {
     return (
@@ -368,7 +371,9 @@ function MessageBubbleImpl({
   return <></>
 }
 
-function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boolean }): ReactElement {
+function ToolEntry({ block, nested = false, analyticsRef }: {
+  block: ToolBlock; nested?: boolean; analyticsRef?: RefObject<HTMLDivElement | null>
+}): ReactElement {
   const { t } = useTranslation('common')
   const presentation = readToolPresentation(block)
   const running = presentation.state === 'running'
@@ -420,7 +425,7 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
   if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
 
   return (
-    <div className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
+    <div ref={analyticsRef} className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
       <button
         type="button"
         onClick={() => {

@@ -1,5 +1,6 @@
 import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { beginQueueAdmission } from './queue-admission-fence'
+import { bindWorkAnalyticsTurn } from '../product-analytics/work'
 import { confirmQueueAdmission } from './queue-admission-recovery'
 import type { AgentProvider } from '../agent/types'
 import type { AttachmentReference } from '../agent/types'
@@ -222,6 +223,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     })
     // Update the already-persisted starting row to in_flight with the
     // runtime-admitted turn identity.
+    bindWorkAnalyticsTurn(clientRequestId, activeThreadId, accepted.turnId)
     set((s) => {
       const existingIndex = s.queuedMessages.findIndex((message) =>
         message.id === queuedRow.id ||

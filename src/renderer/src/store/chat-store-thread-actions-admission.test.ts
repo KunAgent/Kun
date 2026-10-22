@@ -87,6 +87,7 @@ function buildHarness(): {
     loadComposerModels: vi.fn(async () => undefined),
     queuedMessages: [],
     recoverActiveTurn: vi.fn(async () => true),
+    drainQueuedMessages: vi.fn(async () => undefined),
     refreshThreads: vi.fn(async () => undefined),
     route: 'chat',
     runtimeConnection: 'ready',

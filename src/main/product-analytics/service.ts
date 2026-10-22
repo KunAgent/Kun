@@ -5,8 +5,19 @@ import { AnalyticsInput, AnalyticsEvent, ANALYTICS_LIMITS, type AnalyticsState }
 import { AnalyticsHttpError, AnalyticsTransport, type AnalyticsSession } from './transport'
 import type { AnalyticsStorage, AnalyticsDiskState } from './storage'
 
-type Runtime = (path: string, method?: string, body?: string) => Promise<{ ok: boolean; body: string }>
+type RuntimeResponse = { ok: boolean; status?: number; body: string }
+type Runtime = (path: string, method?: string, body?: string) => Promise<RuntimeResponse>
 const Pending = AnalyticsInput.extend({ eventId: z.string().uuid(), occurredAt: z.string().datetime() })
+function legacyLeaseRequired(response: RuntimeResponse): boolean {
+  if (response.ok || response.status !== 400) return false
+  try {
+    const error = z.object({ code: z.literal('validation_error'), details: z.array(z.object({
+      code: z.literal('unrecognized_keys'), keys: z.array(z.string()), path: z.array(z.unknown())
+    })) }).parse(JSON.parse(response.body))
+    return error.details.length === 1 && error.details[0].path.length === 0 &&
+      error.details[0].keys.length === 1 && error.details[0].keys[0] === 'workAnalyticsVersion'
+  } catch { return false }
+}
 export class ProductAnalyticsService {
   private state?: AnalyticsDiskState
   private loading?: Promise<void>
@@ -117,7 +128,10 @@ export class ProductAnalyticsService {
     })
   }
   private async collectRuntime(epoch: string) {
-    const lease = await this.deps.runtime('/v1/product-analytics/lease', 'POST', JSON.stringify({ epoch }))
+    // Old Runtime rejects this additive capability. Fall back to its original lease
+    // so Code/Room collection remains available during staggered upgrades.
+    let lease = await this.deps.runtime('/v1/product-analytics/lease', 'POST', JSON.stringify({ epoch, workAnalyticsVersion: 1 }))
+    if (legacyLeaseRequired(lease)) lease = await this.deps.runtime('/v1/product-analytics/lease', 'POST', JSON.stringify({ epoch }))
     if (!lease.ok || this.state?.epoch !== epoch || !this.state?.enabled) return
     const response = await this.deps.runtime('/v1/product-analytics')
     if (!response.ok || this.state?.epoch !== epoch) return
@@ -164,7 +178,8 @@ export class ProductAnalyticsService {
         this.session = session
       }
       if (token) this.session.headers = { Authorization: `Bearer ${token}` }
-      const batch = this.state.events.slice(0, ANALYTICS_LIMITS.batch)
+      const batch = this.state.events.filter(e => Date.now() - Date.parse(e.occurredAt) < ANALYTICS_LIMITS.ageMs
+        && (e.properties.mode !== 'work' || config.workAnalyticsVersion === 1)).slice(0, ANALYTICS_LIMITS.batch)
       if (!batch.length) return
       const acknowledged = await this.deps.transport.send(this.session, batch, signal)
       await this.mutate(s => { if (s.enabled && s.epoch === epoch) s.events = s.events.filter(e => !acknowledged.includes(e.eventId)) })

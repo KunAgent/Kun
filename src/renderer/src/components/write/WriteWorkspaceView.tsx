@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { saveWorkDocumentExplicitly } from '../../product-analytics/work'
 import { FileCode2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
@@ -532,7 +533,7 @@ export function WriteWorkspaceView({
 
   const saveNow = (): void => {
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-    void flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' })
+    void saveWorkDocumentExplicitly(() => flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' }))
   }
   const focusedStatusBar = activeFileIsText ? (
     <WriteDocumentStatusBar documentStatsLabel={documentStatsLabel} saveLabel={saveLabel} saveStatus={saveStatus}

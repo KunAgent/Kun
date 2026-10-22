@@ -1,4 +1,5 @@
 import { githubToolThread } from './github-tool-card'
+import { useWorkPresentation } from '../../product-analytics/work-presentation'
 import { AgentDispatchGroup, isOutcomeCardBlock } from './AgentDispatchCard'
 import { ToolTerminalButton } from './message-timeline-terminal-action'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement, RefObject } from 'react'
@@ -91,6 +92,7 @@ export function ProcessSectionRow({
 }): ReactElement {
   const { t } = useTranslation('common')
   const [userExpanded, setUserExpanded] = useTimelineRowState<boolean | null>('expanded', null)
+  const workAnalytics = useWorkPresentation(section.blocks.find(block => block.kind === 'reasoning' || block.kind === 'tool'), false)
 
   const assistantBlocks =
     section.kind === 'output'
@@ -179,7 +181,7 @@ export function ProcessSectionRow({
   }
 
   return (
-    <div className="flex flex-col">
+    <div ref={workAnalytics.ref} className="flex flex-col">
       {canToggleSection ? (
         <button
           type="button"
@@ -431,6 +433,7 @@ function ProcessEntryRow({
 }): ReactElement {
   const { t } = useTranslation('common')
   const [userOpen, setUserOpen] = useTimelineRowState<boolean | null>('expanded', null)
+  const workAnalytics = useWorkPresentation(block, false)
   const summary = describeProcessBlock(block, t)
   const detail = getProcessDetail(block, summary)
   const canExpand = detail.kind !== 'none'
@@ -470,7 +473,7 @@ function ProcessEntryRow({
   }
 
   return (
-    <div className="flex flex-col" data-block-id={block.id}>
+    <div ref={workAnalytics.ref} className="flex flex-col" data-block-id={block.id}>
       <div
         role={canToggle ? 'button' : undefined}
         tabIndex={canToggle ? 0 : undefined}

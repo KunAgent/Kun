@@ -1,4 +1,5 @@
 import type { AgentProvider } from '../agent/types'
+import { bindWorkAnalyticsTurn } from '../product-analytics/work'
 import { confirmQueueAdmission } from './queue-admission-recovery'
 import { queueAdmissionPending } from './queue-admission-fence'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -227,6 +228,7 @@ export async function drainBackgroundQueuedMessage(
           claw: Boolean(channel)
         }), enqueueIfBusy: true }
       ) })
+      bindWorkAnalyticsTurn(clientRequestId, threadId, accepted.turnId)
       if (accepted.retired) {
         saveQueuedMessagesForThread(threadId, queuedMessagesForThread(threadId).filter((row) => row.id !== submission.id))
         set((current) => current.activeThreadId === threadId
