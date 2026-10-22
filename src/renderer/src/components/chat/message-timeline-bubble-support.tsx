@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { captureOptionalCompletion } from '../../product-analytics/optional-completion'
 import { Check, Copy, Download, Loader2, Presentation } from 'lucide-react'
 import type { ChatBlock, RuntimeDisclosureMetadata, UserInputAnswer } from '../../agent/types'
 import type { WriteExportFormat } from '@shared/write-export'
@@ -189,11 +190,13 @@ export function RuntimeMetaChips({
 export function CopyFeedbackButton({
   text,
   iconOnly = false,
-  onCopied
+  onCopied,
+  onCopyStarted
 }: {
   text: string
   iconOnly?: boolean
   onCopied?: () => void
+  onCopyStarted?: () => (() => void)
 }): ReactElement {
   const { t } = useTranslation('common')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -215,11 +218,13 @@ export function CopyFeedbackButton({
   }
 
   const handleCopy = async (): Promise<void> => {
+    const copied = captureOptionalCompletion(onCopyStarted)
     try {
       if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable')
       await navigator.clipboard.writeText(text)
       setStatus('success')
       onCopied?.()
+      copied?.()
     } catch {
       setStatus('error')
     }
@@ -263,11 +268,13 @@ export function CopyFeedbackButton({
 export function AssistantExportButton({
   text,
   createdAt,
-  renderMode
+  renderMode,
+  onExportStarted
 }: {
   text: string
   createdAt?: string
   renderMode?: 'plain-text' | 'safe-markdown'
+  onExportStarted?: () => (() => void)
 }): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useChatStore((state) => state.workspaceRoot)
@@ -276,6 +283,7 @@ export function AssistantExportButton({
   const [error, setError] = useState('')
 
   const handleExport = async (format: WriteExportFormat): Promise<void> => {
+    const exported = captureOptionalCompletion(onExportStarted)
     if (typeof window.kunGui?.exportWriteDocument !== 'function') {
       setError(t('writeExportUnavailable'))
       return
@@ -297,6 +305,7 @@ export function AssistantExportButton({
         setError(result.message)
       } else if (result.ok) {
         detailsRef.current?.removeAttribute('open')
+        exported?.()
       }
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : String(exportError))

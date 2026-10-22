@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type MutableRefObject, type ReactElement, type RefObject } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { saveWorkDocumentExplicitly } from '../../product-analytics/work'
 import { useTranslation } from 'react-i18next'
 import type { WriteInlineCompletionSettingsV1 } from '@shared/app-settings'
 import { isWriteWorkspaceFilePath } from '@shared/write-text-file'
@@ -340,7 +341,7 @@ export function WriteEditorGroups({
                     else clearPresentationViewForGroup(group.id, source)
                   }}
                   onSaveShortcut={() => {
-                    if (path) void saveDocument(workspaceRoot, path, { resolveExternalConflict: 'keep-local' })
+                    if (path) void saveWorkDocumentExplicitly(() => saveDocument(workspaceRoot, path, { resolveExternalConflict: 'keep-local' }))
                   }}
                   onImagePasteSaved={() => { setFileError(null); void refreshWorkspace(workspaceRoot) }}
                   onImagePasteError={setFileError}

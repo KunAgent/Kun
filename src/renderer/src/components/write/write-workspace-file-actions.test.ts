@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { createWriteWorkspaceFileActions } from './write-workspace-file-actions'
+import { setProductCapture } from '../../product-analytics/client'
 
 type ActionParams = Parameters<typeof createWriteWorkspaceFileActions>[0]
 
@@ -36,8 +37,48 @@ function actionParams(overrides: Partial<ActionParams> = {}): ActionParams {
 }
 
 afterEach(() => {
+  setProductCapture(false)
   useWriteWorkspaceStore.getState().resetWorkspace()
   vi.unstubAllGlobals()
+})
+
+describe('Work document analytics stays optional and reports confirmed operations', () => {
+  const epoch = '0a937dda-cee5-462d-9fca-5abc6f514efd'
+  function analyticsBridge(overrides: Record<string, unknown> = {}) {
+    const track = vi.fn(async (_event: unknown, _epoch?: string) => {})
+    vi.stubGlobal('window', { kunGui: { productAnalytics: { track }, ...overrides } })
+    setProductCapture(true, epoch)
+    return track
+  }
+
+  it('reports export success without a task key, file path, document content or title', async () => {
+    const track = analyticsBridge({ exportWriteDocument: vi.fn(async () => ({ ok: true })) })
+    await createWriteWorkspaceFileActions(actionParams()).exportCurrentFile('docx')
+    expect(track).toHaveBeenCalledExactlyOnceWith({ name: 'work_document_action', properties: { mode: 'work', action: 'export' } }, epoch)
+  })
+
+  it.each([{ ok: false, canceled: true }, { ok: false, message: 'private error' }])('ignores canceled or failed exports: %j', async result => {
+    const track = analyticsBridge({ exportWriteDocument: vi.fn(async () => result) })
+    await createWriteWorkspaceFileActions(actionParams()).exportCurrentFile('pdf')
+    expect(track).not.toHaveBeenCalled()
+  })
+
+  it('retains normal export after consent is withdrawn during the save dialog', async () => {
+    const track = analyticsBridge({ exportWriteDocument: vi.fn(async () => { setProductCapture(false); return { ok: true } }) })
+    const showExportNotice = vi.fn()
+    await createWriteWorkspaceFileActions(actionParams({ showExportNotice })).exportCurrentFile('pdf')
+    expect(showExportNotice).toHaveBeenCalledWith(expect.objectContaining({ tone: 'success' }))
+    expect(track).not.toHaveBeenCalled()
+  })
+
+  it('does not attribute a successful clipboard operation to a new account epoch', async () => {
+    const track = analyticsBridge({ copyWriteDocumentAsRichText: vi.fn(async () => {
+      setProductCapture(true, 'bf5bcf48-b546-4b2e-bab1-154f8fa31f56')
+      return { ok: true }
+    }) })
+    await createWriteWorkspaceFileActions(actionParams()).copyCurrentFileAsRichText()
+    expect(track).not.toHaveBeenCalled()
+  })
 })
 
 describe('Write presentation action', () => {

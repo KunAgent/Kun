@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const ANALYTICS_VERSION = 1 as const
 export const ANALYTICS_POLICY = 'product-analytics-v1'
-export const AnalyticsMode = z.enum(['code', 'room'])
+export const AnalyticsMode = z.enum(['code', 'room', 'work'])
 export const AnalyticsSurface = z.enum(['desktop', 'mobile_web', 'mobile_native', 'execution_host'])
 export const AnalyticsFailure = z.enum(['network', 'authentication', 'quota', 'permission', 'configuration', 'runtime', 'unknown'])
 const Props = z.object({
@@ -11,7 +11,10 @@ const Props = z.object({
   operation: z.enum(['send_message', 'start_task', 'continue_task']).optional(),
   requestOutcome: z.enum(['accepted', 'failed', 'unknown']).optional(),
   step: z.enum(['welcome', 'model', 'permission', 'agents', 'account', 'ready', 'first_task']).optional(),
-  action: z.enum(['entered', 'completed', 'skipped', 'copy', 'continue', 'selected']).optional(),
+  action: z.enum(['entered', 'completed', 'skipped', 'copy', 'continue', 'selected', 'export', 'save']).optional(),
+  feedbackKind: z.enum(['text', 'reasoning', 'tool']).optional(),
+  waitKind: z.enum(['approval', 'user_input']).optional(),
+  waitOutcome: z.enum(['approved', 'denied', 'submitted', 'cancelled', 'timeout', 'unknown']).optional(),
   status: z.enum(['completed', 'failed', 'cancelled']).optional(),
   errorCategory: AnalyticsFailure.optional(),
   durationMs: z.number().int().min(0).max(86_400_000).optional(),
@@ -20,7 +23,9 @@ const Props = z.object({
 }).strict()
 export const AnalyticsInput = z.object({
   name: z.enum(['app_session_started', 'onboarding_step', 'provider_check_finished',
-    'remote_action_finished', 'workspace_ready', 'account_session_ready', 'run_started', 'run_finished', 'result_presented', 'result_action']),
+    'remote_action_finished', 'workspace_ready', 'account_session_ready', 'run_started', 'run_finished', 'result_presented', 'result_action',
+    'work_entered', 'work_task_submitted', 'work_submission_finished', 'work_feedback_presented',
+    'work_wait_started', 'work_wait_finished', 'work_document_action']),
   properties: Props.default({})
 }).strict()
 export type AnalyticsInput = z.input<typeof AnalyticsInput>
@@ -34,6 +39,7 @@ export const AnalyticsEvent = AnalyticsInput.extend({
 export type AnalyticsEvent = z.infer<typeof AnalyticsEvent>
 export const AnalyticsConfig = z.object({
   schemaVersion: z.literal(1), collectionEnabled: z.boolean(), guidanceEnabled: z.boolean(),
+  workAnalyticsVersion: z.union([z.literal(0), z.literal(1)]).optional().default(0),
   policyVersion: z.literal(ANALYTICS_POLICY)
 }).strip()
 export type AnalyticsConfig = z.infer<typeof AnalyticsConfig>

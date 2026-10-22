@@ -8,15 +8,20 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { RoomStore } from '../rooms/room-store.js'
 import type { RuntimeEventObserver } from '../services/runtime-event-recorder.js'
 import { readAnalytics, appendAnalytics, analyticsLeaseActive } from './outbox.js'
+import { WorkAnalyticsObserver } from './work-observer.js'
 
 /** Optional observer: never wait on disk/network in the runtime's event pipeline. */
 export class ProductAnalyticsObserver implements RuntimeEventObserver {
+  private readonly work: WorkAnalyticsObserver
   private lane = Promise.resolve()
   private pending = 0
   private active = new Map<string, { epoch: string; started: number; mode: 'code' | 'room'; runKey: string }>()
   constructor(private readonly deps: { store: RoomStore; threads: Pick<ThreadStore, 'get'>;
-    turns: { getTurn(threadId: string, turnId: string): Promise<Turn | null> } }) {}
+    turns: { getTurn(threadId: string, turnId: string): Promise<Turn | null> } }) {
+    this.work = new WorkAnalyticsObserver(deps)
+  }
   record(event: RuntimeEvent): void {
+    this.work.record(event)
     if (!analyticsLeaseActive(this.deps.store)) { this.active.clear(); return }
     if (!['turn_started', 'turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind) || !event.turnId || this.pending >= 100) return
     // Capture only opaque identifiers; never keep full runtime payloads in this queue.
@@ -37,6 +42,7 @@ export class ProductAnalyticsObserver implements RuntimeEventObserver {
       const turn = await this.deps.turns.getTurn(threadId, turnId)
       if (!thread || !turn || turn.messageSource || thread.parentThreadId || thread.executionUnit || thread.ownerExtensionId ||
         thread.workbenchOrigin || thread.designProfile || thread.workspaceMode === 'ade' ||
+        (!thread.roomContext && turn.agentSurface === 'write') ||
         (turn.clientSurface && turn.clientSurface !== 'gui') || (!thread.roomContext && !codeWardrobeThread(thread))) return
       if (this.active.size >= 256) return
       start = { epoch: state.epoch, started: Date.parse(timestamp), mode: thread.roomContext ? 'room' : 'code', runKey: thread.roomContext && turn.clientRequestId

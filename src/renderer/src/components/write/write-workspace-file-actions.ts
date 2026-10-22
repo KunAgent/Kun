@@ -1,4 +1,5 @@
 import type { RefObject } from 'react'
+import { captureWorkDocumentAction } from '../../product-analytics/work'
 import type { TFunction } from 'i18next'
 import {
   X_ARTICLE_IMAGE_MISSING,
@@ -189,6 +190,7 @@ export function createWriteWorkspaceFileActions({
     }
 
     setExportMenuOpen(false)
+    const exported = captureWorkDocumentAction('export')
     setExportingFormat(format)
     try {
       const renderedDiagrams = await renderExportDiagrams(fileContent).catch(() => undefined)
@@ -211,6 +213,7 @@ export function createWriteWorkspaceFileActions({
         }
         return
       }
+      exported()
       showExportNotice({
         tone: 'success',
         message: t('writeExportSuccess', { format: exportFormatLabel(format, t) })
@@ -238,6 +241,7 @@ export function createWriteWorkspaceFileActions({
     }
 
     setExportMenuOpen(false)
+    const copied = captureWorkDocumentAction('copy')
     setExportingFormat(WRITE_RICH_CLIPBOARD_ACTION)
     try {
       const result = await window.kunGui.copyWriteDocumentAsRichText({
@@ -254,6 +258,7 @@ export function createWriteWorkspaceFileActions({
         })
         return
       }
+      copied()
       if (profile === 'x-articles') {
         setXArticleImageState({ count: result.imageCount ?? 0, index: 0 })
       }
