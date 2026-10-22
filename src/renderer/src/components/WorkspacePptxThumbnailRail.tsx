@@ -42,7 +42,9 @@ export function WorkspacePptxThumbnailRail({
   }, [session?.sourceKey, slideCount])
 
   useEffect(() => {
-    slideButtonRefs.current.get(currentSlide)?.scrollIntoView({ block: 'nearest' })
+    const rail = railRef.current
+    const button = slideButtonRefs.current.get(currentSlide)
+    if (rail && button) revealRailItem(rail, button)
     setRequestedSlides((current) => includeRequestedSlide(current, currentSlide))
   }, [currentSlide])
 
@@ -114,7 +116,7 @@ export function WorkspacePptxThumbnailRail({
     <aside
       ref={railRef}
       aria-label={i18n.t('officeSlideThumbnails')}
-      className="w-[164px] shrink-0 overflow-y-auto border-r border-ds-border-muted bg-ds-card/55 p-2"
+      className="relative w-[164px] shrink-0 overflow-y-auto border-r border-ds-border-muted bg-ds-card/55 p-2"
     >
       <div className="flex flex-col gap-2">
         {Array.from({ length: slideCount }, (_, index) => {
@@ -192,6 +194,18 @@ function StaticPptxThumbnail({ content }: { content: HTMLElement }): ReactElemen
     }
   }, [content])
   return <div ref={hostRef} className="relative h-full w-full overflow-hidden [&_.pptx-preview-slide-wrapper]:!m-0" />
+}
+
+// Scrolls only the rail. scrollIntoView would also scroll every clipped
+// (overflow: hidden) ancestor, shifting the whole viewer with no way to wheel
+// it back. Offsets stay in layout pixels like scrollTop; getBoundingClientRect
+// is scaled by the app's body zoom. The rail is the items' offsetParent.
+function revealRailItem(rail: HTMLElement, item: HTMLElement): void {
+  const inset = Number.parseFloat(window.getComputedStyle(rail).paddingTop) || 0
+  const top = item.offsetTop - inset
+  const bottom = item.offsetTop + item.offsetHeight + inset
+  if (top < rail.scrollTop) rail.scrollTop = top
+  else if (bottom > rail.scrollTop + rail.clientHeight) rail.scrollTop = bottom - rail.clientHeight
 }
 
 function cloneStaticSlide(rendered: HTMLElement): HTMLElement {

@@ -45,10 +45,13 @@ import { selectionFromOfficeDom } from './workspace-office-selection'
 import { requestKnowledgeSourceNavigation } from '../lib/knowledge-source-navigation'
 import {
   createMockPptxPreviewer,
+  createPptxRailGeometryMock,
+  PPTX_TEST_RAIL_HEIGHT,
   type MockPptxPreviewer
 } from './workspace-office-renderers-test-support'
 
 let docxViewportWidth = 360
+let pptxRail = createPptxRailGeometryMock()
 
 function preview(
   viewer: WorkspaceOfficePreviewSuccess['viewer'],
@@ -117,6 +120,7 @@ describe('browser Office renderers', () => {
       body.append(wrapper)
     })
     docxViewportWidth = 360
+    pptxRail = createPptxRailGeometryMock()
     pptxInstances = []
     pptxSlideCount = 3
     libraryMocks.initPptx.mockReset()
@@ -416,7 +420,8 @@ describe('browser Office renderers', () => {
     await act(async () => renderer?.root.findByProps({ 'aria-label': 'Go to slide 10' }).props.onClick())
     expect(pptxInstances[0]!.renderSingleSlide).toHaveBeenCalledWith(9)
     expect(renderer!.root.findByProps({ 'aria-label': 'Go to slide 10' }).props['aria-current']).toBe('page')
-    expect(scrollIntoView).toHaveBeenCalled()
+    // Slide 10 spans 980..1080 in the rail and settles just above the 8px bottom inset.
+    expect(pptxRail.rail()!.scrollTop).toBe(1080 - (PPTX_TEST_RAIL_HEIGHT - 8))
 
     await act(async () => {
       renderer?.root.findByProps({ 'aria-label': 'Go to slide 50' }).props.onClick()
@@ -427,6 +432,10 @@ describe('browser Office renderers', () => {
       .toBe('ready')
     expect(renderer!.root.findAll((node) => node.props['data-thumbnail-state'] === 'ready'))
       .toHaveLength(MAX_MOUNTED_PPTX_THUMBNAILS)
+    await dispatchKey('Home')
+    expect(pptxRail.rail()!.scrollTop).toBe(0)
+    // scrollIntoView would also scroll the viewer's clipped ancestors.
+    expect(scrollIntoView).not.toHaveBeenCalled()
   })
 
   it('uses IntersectionObserver to release old thumbnail DOM before mounting a new window', async () => {
@@ -631,6 +640,7 @@ function createNodeMock(element: ReactElement<unknown>): HTMLElement | null {
   if (typeof element.type !== 'string') return null
   const props = element.props as { className?: string }
   const node = document.createElement(element.type)
+  pptxRail.apply(node, element.props as Record<string, unknown>)
   if (props.className === 'min-h-0 flex-1 overflow-auto p-4') {
     node.style.paddingLeft = '16px'
     node.style.paddingRight = '16px'

@@ -46,3 +46,33 @@ export function createMockPptxPreviewer(
     destroy: vi.fn()
   }
 }
+
+export const PPTX_TEST_RAIL_HEIGHT = 400
+const PPTX_TEST_THUMBNAIL_PITCH = 108
+
+// Layout for the thumbnail rail under react-test-renderer: an 8px-padded rail
+// with thumbnails stacked every 108px from its padding edge.
+export function createPptxRailGeometryMock(): {
+  rail: () => HTMLElement | undefined
+  apply: (node: HTMLElement, props: Record<string, unknown>) => void
+} {
+  let rail: HTMLElement | undefined
+  const define = (node: HTMLElement, key: string, value: number, writable = false): void => {
+    Object.defineProperty(node, key, writable ? { configurable: true, writable, value } : { configurable: true, value })
+  }
+  return {
+    rail: () => rail,
+    apply: (node, props) => {
+      if (props['aria-label'] === 'Slide thumbnails') {
+        rail = node
+        node.style.paddingTop = '8px'
+        define(node, 'scrollTop', 0, true)
+        define(node, 'clientHeight', PPTX_TEST_RAIL_HEIGHT)
+      }
+      const index = props['data-pptx-thumbnail-index']
+      if (typeof index !== 'number') return
+      define(node, 'offsetTop', 8 + index * PPTX_TEST_THUMBNAIL_PITCH)
+      define(node, 'offsetHeight', PPTX_TEST_THUMBNAIL_PITCH - 8)
+    }
+  }
+}
