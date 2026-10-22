@@ -184,7 +184,16 @@ export class HybridThreadDocumentRepository {
   ): void {
     // Replacing the hydrated record must preserve the offsets just read.
     this.removeCachedRecord(threadId)
-    const bytes = Buffer.byteLength(JSON.stringify(entry.record), 'utf-8')
+    // Size item bodies separately and bail out at the admission budget instead
+    // of constructing a second full JSON copy of an oversized history.
+    const metadata = { ...entry.record, turns: entry.record.turns.map(turn => ({ ...turn, items: [] })) }
+    let bytes = Buffer.byteLength(JSON.stringify(metadata), 'utf-8')
+    sizing: for (const turn of entry.record.turns) {
+      for (let index = 0; index < turn.items.length; index += 1) {
+        if (bytes > this.cacheMaxBytes / 2) break sizing
+        bytes += Buffer.byteLength(JSON.stringify(turn.items[index]), 'utf-8') + (index > 0 ? 1 : 0)
+      }
+    }
     if (bytes > this.cacheMaxBytes / 2 || bytes > this.cacheMaxBytes) {
       this.invalidate(threadId)
       return
