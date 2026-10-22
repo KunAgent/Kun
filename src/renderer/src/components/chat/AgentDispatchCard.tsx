@@ -16,6 +16,8 @@ import { assignmentRoute, dispatchAssignments, dispatchRoutesEditable, replaceAs
   sameAssignmentRoute } from './agent-dispatch-card-model'
 import { openWorkerSession } from '../workers/worker-view-store'
 import { TaskSuggestionCard } from './TaskSuggestionCard'
+import { AgentIcon } from '../agent-icon'
+import { agentIconId } from '../../lib/agent-icon-aliases'
 import { isTaskSuggestionBlock } from './task-suggestion-card-model'
 
 export function isAgentDispatchBlock(block: ChatBlock): block is ToolBlock & { meta: Record<string, unknown> & { dispatchIntentId: string } } {
@@ -67,6 +69,8 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const shown = draft ? assignments.map((assignment, index) => ({ label: assignment.label, ...draft.routes[index],
     ...(draft.routes[index].agentId === assignment.agentId && assignment.agentName ? { agentName: assignment.agentName } : {}) }))
     : assignments
+  const iconIds = shown.map((assignment) => agentIconId(assignment.agentId))
+  const sharedIconId = iconIds.every((id) => id === iconIds[0]) ? iconIds[0] : undefined
   const workerIds = intent.target?.workerIds ?? (intent.target?.threadId ? [intent.target.threadId] : [])
   const openWorker = (workerId: string, label?: string) => openWorkerSession(workerId, label)
   const changeRoute = (index: number, route: AgentDispatchAssignmentRoute) => {
@@ -92,7 +96,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
     data-agent-dispatch-card data-intent-id={id} data-state={intent.state}>
     <header className="flex min-w-0 items-start gap-3 px-4 py-3">
       <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-tint/10 text-accent">
-        <Split size={16} aria-hidden />
+        {sharedIconId ? <AgentIcon harnessId={sharedIconId} size={16} /> : <Split size={16} aria-hidden />}
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-[11.5px] font-medium text-ds-faint">{t(batch ? 'dispatchIntent.kickerBatch' : 'dispatchIntent.kicker')}</p>
