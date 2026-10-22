@@ -14,7 +14,7 @@ import {
   resolveMemoryTurnContext,
   type MemoryTurnStore
 } from '../memory/memory-turn-context.js'
-import type { GuiPlanContext, PptWorkflowScope, ToolHost, ToolHostContext } from '../ports/tool-host.js'
+import type { GuiPlanContext, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from './design-mode.js'
 import {
@@ -99,7 +99,6 @@ export type TurnContextResolverDeps = {
   allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
-  pptWorkflowScope?: PptWorkflowScope
   blockedProviderIds?: readonly string[]
   blockedToolNames?: readonly string[]
   blockedSkillIds?: readonly string[]
@@ -246,7 +245,6 @@ export class TurnContextResolver {
       ...(this.deps.allowHostReads ? { allowHostReads: true } : {}),
       ...(this.deps.allowedWritePaths ? { allowedWritePaths: this.deps.allowedWritePaths } : {}),
       ...(this.deps.allowedArtifactIds ? { allowedArtifactIds: this.deps.allowedArtifactIds } : {}),
-      ...(this.deps.pptWorkflowScope ? { pptWorkflowScope: this.deps.pptWorkflowScope } : {}),
       ...(this.deps.blockedProviderIds ? { blockedProviderIds: this.deps.blockedProviderIds } : {}),
       ...(this.deps.blockedToolNames ? { blockedToolNames: this.deps.blockedToolNames } : {}),
       ...(this.deps.blockedSkillIds ? { blockedSkillIds: this.deps.blockedSkillIds } : {}),

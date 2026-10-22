@@ -11,7 +11,6 @@ export function graphPlanningStepTools(tools: readonly ModelToolSpec[], active: 
     tool.name === 'user_input' || tool.sideEffect === 'read-only') : [...tools]
 }
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type {
   KunTurnContextAuthority,
   KunTurnContextBlock
@@ -65,58 +64,15 @@ export function subagentResumeToolGate(
   }
 }
 
-/**
- * A Work presentation has an explicit Markdown source. Make the first child
- * round read it instead of allowing the model to spend a full round reasoning
- * about a path it never opened. The ordinary `read` tool remains available
- * after this one host-enforced source inspection.
- */
-export function pptSourceReadToolGate(
-  scope: PptWorkflowScope | undefined,
-  items: readonly TurnItem[],
-  turnId: string
-): { requiredToolName?: 'read'; instruction?: string } {
-  if (
-    !scope?.sourceReadRequired ||
-    (scope.action !== 'start' && scope.action !== 'retry_failed') ||
-    hasToolResult(items, turnId, 'read')
-  ) return {}
-  return {
-    requiredToolName: 'read',
-    instruction: 'This Work PPT request has a declared Markdown source. Call `read` on that source file first. Do not plan slides, generate images, or answer in prose before reading it.'
-  }
-}
-
-export function pptWorkflowCompletionToolGate(
-  scope: PptWorkflowScope | undefined,
-  items: readonly TurnItem[],
-  turnId: string
-): { expectedToolName?: string } {
-  if (!scope?.stage) return {}
-  const expectedToolName = scope.stage === 'direction'
-    ? 'ppt_create_direction_bundle'
-    : scope.stage === 'build'
-      ? 'ppt_export'
-      : scope.previewMode === 'image-first'
-        ? 'ppt_create_review_bundle'
-        : 'ppt_generate_previews'
-  return hasSuccessfulToolResult(items, turnId, expectedToolName)
-    ? {}
-    : { expectedToolName }
-}
-
 export function requiredWorkflowToolGate(
   turn: Pick<Turn, 'subagentResume'>,
-  scope: PptWorkflowScope | undefined,
   items: readonly TurnItem[],
   turnId: string,
   svgValidationToolName: string | undefined
 ): { requiredToolName?: string; subagentResumeInstruction?: string } {
   const subagentResumeGate = subagentResumeToolGate(turn, items, turnId)
-  const pptSourceReadGate = pptSourceReadToolGate(scope, items, turnId)
   return {
     requiredToolName: subagentResumeGate.requiredToolName ??
-      pptSourceReadGate.requiredToolName ??
       svgValidationToolName,
     ...(subagentResumeGate.instruction
       ? { subagentResumeInstruction: subagentResumeGate.instruction }

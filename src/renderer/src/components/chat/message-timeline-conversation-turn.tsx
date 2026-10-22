@@ -38,6 +38,7 @@ import { useTimelineSurface } from './timeline-surface'
 import { LiveTurnProgressRow } from './message-timeline-live-progress'
 import { GmailRequestedCards } from './gmail-tool-card'
 import { AgentDispatchGroup } from './AgentDispatchCard'
+import { PptDeckCards } from './PptDeckCard'
 import { useTurnUndo } from './turn-undo-controls'
 import {
   parseDelegateDetail,
@@ -401,6 +402,10 @@ export function ConversationTurn({
 
       {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
         <AgentDispatchGroup blocks={workProcessBlocks} readOnly={!allowMainThreadActions} />
+      ) : null}
+
+      {!hasOrderedTimeline && !isProcessing ? (
+        <PptDeckCards blocks={workProcessBlocks} readOnly={!allowMainThreadActions} />
       ) : null}
 
       {!hasOrderedTimeline

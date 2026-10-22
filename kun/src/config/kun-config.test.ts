@@ -150,38 +150,24 @@ describe('readKunConfigFile provider compatibility', () => {
 })
 
 describe('LabPptAgentConfigSchema', () => {
-  it('defaults to enabled with follow-main model and no fast', () => {
-    const parsed = LabPptAgentConfigSchema.parse({})
-    expect(parsed).toEqual({ enabled: true, fast: false, imageAssets: true })
+  it('defaults the PPT tools and generated image assets on', () => {
+    expect(LabPptAgentConfigSchema.parse({})).toEqual({ enabled: true, imageAssets: true })
   })
 
-  it('drops the retired imageFirst switch from older config files', () => {
-    expect(LabPptAgentConfigSchema.parse({ imageFirst: false, imageAssets: false }))
-      .toEqual({ enabled: true, fast: false, imageAssets: false })
-  })
-
-  it('accepts a paired model override with reasoning effort', () => {
-    const parsed = LabPptAgentConfigSchema.parse({
-      enabled: true,
+  it('drops retired PPT sub-agent keys from older config files', () => {
+    expect(LabPptAgentConfigSchema.parse({
+      imageFirst: false,
+      imageAssets: false,
       model: 'gpt-5.4',
       providerId: 'codex-2',
       reasoningEffort: 'high',
       fast: true
-    })
-    expect(parsed.model).toBe('gpt-5.4')
-    expect(parsed.providerId).toBe('codex-2')
-    expect(parsed.reasoningEffort).toBe('high')
-    expect(parsed.fast).toBe(true)
-  })
-
-  it('rejects a half-configured model override', () => {
-    expect(LabPptAgentConfigSchema.safeParse({ model: 'gpt-5.4' }).success).toBe(false)
-    expect(LabPptAgentConfigSchema.safeParse({ providerId: 'codex-2' }).success).toBe(false)
+    })).toEqual({ enabled: true, imageAssets: false })
   })
 
   it('defaults pptAgent inside LabConfigSchema', () => {
     const lab = LabConfigSchema.parse({})
-    expect(lab.pptAgent).toEqual({ enabled: true, fast: false, imageAssets: true })
+    expect(lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
   })
 
   it('defaults Fast Context at the config root', () => {

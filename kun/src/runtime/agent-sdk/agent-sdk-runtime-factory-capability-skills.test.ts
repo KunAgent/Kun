@@ -201,13 +201,13 @@ describe('createAgentSdkRuntime turn context', () => {
       allowedProviderIds?: readonly string[]
       allowedReadPaths?: readonly string[]
       allowedWritePaths?: readonly string[]
-      pptWorkflowScope?: { workflowId: string }
       blockedToolNames?: readonly string[]
       blockedProviderIds?: readonly string[]
       blockedSkillIds?: readonly string[]
     }> = []
+    // Names that no SDK builtin overlaps, so discovery shows the boundary itself.
     const readTool = LocalToolHost.defineTool({
-      name: 'read',
+      name: 'inspect_notes',
       description: 'Read safely',
       inputSchema: { type: 'object', properties: {} },
       policy: 'auto',
@@ -217,7 +217,7 @@ describe('createAgentSdkRuntime turn context', () => {
       }
     })
     const writeTool = LocalToolHost.defineTool({
-      name: 'write',
+      name: 'mutate_notes',
       description: 'Write a file',
       inputSchema: { type: 'object', properties: {} },
       policy: 'auto',
@@ -254,7 +254,6 @@ describe('createAgentSdkRuntime turn context', () => {
         }, {
           id: 'item_user', turnId: 'tn', threadId: 'th', kind: 'user_message',
           role: 'user', status: 'completed', text: 'inspect',
-          composerContexts: [{ id: 'must-not-enter-the-prompt' }],
           createdAt: '2026-07-10T00:00:00.000Z'
         }]
       } as never,
@@ -277,15 +276,11 @@ describe('createAgentSdkRuntime turn context', () => {
       skillRuntime: skillRuntime as never,
       toolContextBoundary: {
         allowedProviderIds: ['builtin'],
-        allowedToolNames: ['read'],
+        allowedToolNames: ['inspect_notes'],
         allowedReadPaths: ['.kun/ppt/ppt_test', '.kun/images'],
         allowedWritePaths: ['.kun/ppt/ppt_test', 'presentations'],
-        pptWorkflowScope: {
-          action: 'start', workflowId: 'ppt_test', projectDir: '.kun/ppt/ppt_test',
-          parentThreadId: 'parent', previewMode: 'editable'
-        },
         blockedProviderIds: ['mcp:private'],
-        blockedToolNames: ['write'],
+        blockedToolNames: ['mutate_notes'],
         blockedSkillIds: ['blocked-skill']
       }
     })
@@ -311,29 +306,27 @@ describe('createAgentSdkRuntime turn context', () => {
     const context = await deps.loadTurnContext('th', 'tn')
     expect(context).toMatchObject({
       allowSdkBuiltins: false,
-      bridgeKunBuiltinOverlaps: true,
       userText: 'inspect',
-      bridgeableTools: [{ name: 'read' }]
+      bridgeableTools: [{ name: 'inspect_notes' }]
     })
     expect(context?.preserveExactUserPrompt).toBeUndefined()
     expect(context?.contextInstructions?.join('\n')).toContain(hostControl)
     expect(context?.contextInstructions?.join('\n')).toContain('Use a concise presenter voice.')
-    await expect(deps.executeKunTool('th', 'tn', 'read', {})).resolves.toEqual({
+    await expect(deps.executeKunTool('th', 'tn', 'inspect_notes', {})).resolves.toEqual({
       output: 'safe',
       isError: false
     })
-    await expect(deps.executeKunTool('th', 'tn', 'write', {})).resolves.toMatchObject({
+    await expect(deps.executeKunTool('th', 'tn', 'mutate_notes', {})).resolves.toMatchObject({
       isError: true
     })
     expect(executionContexts).toEqual([
       expect.objectContaining({
         allowedProviderIds: ['builtin'],
-        allowedToolNames: ['read'],
+        allowedToolNames: ['inspect_notes'],
         allowedReadPaths: ['.kun/ppt/ppt_test', '.kun/images'],
         allowedWritePaths: ['.kun/ppt/ppt_test', 'presentations'],
-        pptWorkflowScope: expect.objectContaining({ workflowId: 'ppt_test' }),
         blockedProviderIds: ['mcp:private'],
-        blockedToolNames: ['write'],
+        blockedToolNames: ['mutate_notes'],
         blockedSkillIds: ['blocked-skill'],
         clientSurface: 'tui'
       })

@@ -3,8 +3,6 @@ import { makeToolResultItem } from '../domain/item.js'
 import {
   adeManagerContextBlock,
   planningTeamContextBlocks,
-  pptSourceReadToolGate,
-  pptWorkflowCompletionToolGate,
   requiredWorkflowToolGate,
   subagentResumeToolGate
 } from './model-step-preparation-helpers.js'
@@ -37,78 +35,16 @@ describe('subagentResumeToolGate', () => {
 })
 
 describe('requiredWorkflowToolGate', () => {
-  it('keeps a delegated resume ahead of the Work PPT source-read gate', () => {
+  it('keeps a delegated resume ahead of the SVG validation gate', () => {
     const gate = requiredWorkflowToolGate(
       { subagentResume: { childId: 'child_resume', expectedResumeCount: 1 } },
-      {
-        action: 'start', workflowId: 'ppt_workflow', projectDir: '.kun/ppt/ppt_workflow',
-        parentThreadId: 'thread_parent', previewMode: 'image-first', sourceReadRequired: true
-      },
       [],
       'turn_resume',
-      undefined
+      'design_svg_validate'
     )
 
     expect(gate.requiredToolName).toBe('delegate_task')
     expect(gate.subagentResumeInstruction).toContain('child_resume')
-  })
-})
-
-describe('pptSourceReadToolGate', () => {
-  const scope = {
-    action: 'start' as const,
-    workflowId: 'ppt_workflow',
-    projectDir: '.kun/ppt/ppt_workflow',
-    parentThreadId: 'thread_parent',
-    previewMode: 'image-first' as const,
-    sourceReadRequired: true
-  }
-
-  it('hard-requires reading the Work Markdown before presentation planning', () => {
-    const gate = pptSourceReadToolGate(scope, [], 'turn_ppt')
-
-    expect(gate.requiredToolName).toBe('read')
-    expect(gate.instruction).toContain('Markdown source')
-  })
-
-  it('releases the gate once the read call has a result', () => {
-    const result = makeToolResultItem({
-      id: 'result_source', threadId: 'thread_child', turnId: 'turn_ppt',
-      callId: 'call_source', toolName: 'read', output: '# Source', isError: false
-    })
-
-    expect(pptSourceReadToolGate(scope, [result], 'turn_ppt')).toEqual({})
-  })
-})
-
-describe('pptWorkflowCompletionToolGate', () => {
-  const base = {
-    action: 'start' as const,
-    workflowId: 'ppt_workflow',
-    projectDir: '.kun/ppt/ppt_workflow',
-    parentThreadId: 'thread_parent',
-    previewMode: 'image-first' as const
-  }
-
-  it('keeps each PPT stage active until its structured completion tool succeeds', () => {
-    expect(pptWorkflowCompletionToolGate({ ...base, stage: 'direction' }, [], 'turn_ppt'))
-      .toEqual({ expectedToolName: 'ppt_create_direction_bundle' })
-    expect(pptWorkflowCompletionToolGate({ ...base, stage: 'review' }, [], 'turn_ppt'))
-      .toEqual({ expectedToolName: 'ppt_create_review_bundle' })
-    expect(pptWorkflowCompletionToolGate({
-      ...base, stage: 'review', previewMode: 'editable'
-    }, [], 'turn_ppt')).toEqual({ expectedToolName: 'ppt_generate_previews' })
-    expect(pptWorkflowCompletionToolGate({ ...base, stage: 'build' }, [], 'turn_ppt'))
-      .toEqual({ expectedToolName: 'ppt_export' })
-  })
-
-  it('releases the stage after a successful structured completion result', () => {
-    const result = makeToolResultItem({
-      id: 'result_review', threadId: 'thread_child', turnId: 'turn_ppt',
-      callId: 'call_review', toolName: 'ppt_create_review_bundle', output: {}, isError: false
-    })
-    expect(pptWorkflowCompletionToolGate({ ...base, stage: 'review' }, [result], 'turn_ppt'))
-      .toEqual({})
   })
 })
 

@@ -2,7 +2,7 @@ import {
   AgentsSettingsSection,
   FastContextSettingsPanel,
   LaboratorySettingsSection,
-  PptAgentSettingsPanel,
+  PptSkillSettingsPanel,
   act,
   baseCtx,
   createElement,
@@ -152,7 +152,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       'Codex history branches',
       'Automatic plan and build',
       'Graph mode',
-      'PPT agent',
+      'PPT skill',
       'Project board',
       'Computer control',
       'Browser'
@@ -281,44 +281,27 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(disabled).not.toContain('Follow main model')
   })
 
-  it('renders the ppt_agent lab panel with master switch and model policy', () => {
+  it('renders the PPT skill lab panel with its master switch and no model policy', () => {
     const renderPanel = (value: KunLabSettingsV1) => renderToStaticMarkup(createElement(
-      PptAgentSettingsPanel,
-      {
-        t,
-        value,
-        modelProviders: [],
-        leadProviderId: 'deepseek',
-        leadModel: 'deepseek-v4-pro',
-        selectControlClass: 'select',
-        onChange: () => undefined
-      }
+      PptSkillSettingsPanel,
+      { t, value, onChange: () => undefined }
     ))
 
-    const followMain = renderPanel({
+    const enabled = renderPanel({
       ...defaultKunLabSettings(),
-      pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageAssets: true },
+      pptAgent: { enabled: true, imageAssets: true },
       conversationVisualization: { enabled: false }
     })
-    expect(followMain).toContain('Enable ppt_agent')
-    expect(followMain).toContain('Follow main model')
-    expect(followMain).not.toContain('Codex Fast mode')
-
-    const fixed = renderPanel({
-      ...defaultKunLabSettings(),
-      pptAgent: { enabled: true, model: 'deepseek-v4-pro', providerId: 'deepseek', fast: false, imageAssets: true },
-      conversationVisualization: { enabled: false }
-    })
-    expect(fixed).toContain('Use fixed model')
-    expect(fixed).toContain('PPT reasoning effort')
-    expect(fixed).toContain('Codex Fast mode')
+    expect(enabled).toContain('Enable PPT tools')
+    expect(enabled).not.toContain('Follow main model')
+    expect(enabled).not.toContain('Codex Fast mode')
 
     const disabled = renderPanel({
       ...defaultKunLabSettings(),
-      pptAgent: { enabled: false, model: '', providerId: '', fast: false, imageAssets: true },
+      pptAgent: { enabled: false, imageAssets: true },
       conversationVisualization: { enabled: false }
     })
-    // Switched off, the policy controls stay folded away and inert.
+    // Switched off, the image-asset controls stay folded away and inert.
     expect(disabled).toContain('data-open="false" aria-hidden="true" inert=""')
   })
 

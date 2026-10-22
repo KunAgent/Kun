@@ -13,8 +13,6 @@ import {
   buildPptBoardLocalTools,
   buildDesignMotionLocalTools,
   buildDesignSvgLocalTools,
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID,
   LocalToolHost,
   buildDefaultLocalTools,
   buildExecutionTaskLocalTools,
@@ -57,6 +55,7 @@ import {
 import type { createRuntimeModelComposition } from './runtime-composition-model.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import {
+  buildPptDeckRuntimeProvider,
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   skillsConfigForRuntime,
@@ -473,27 +472,7 @@ export async function createRuntimeServices(
       ...buildPptBoardLocalTools()
     ]
   }
-  const pptAgentProvider = {
-    id: PPT_AGENT_LOCAL_PROVIDER_ID,
-    kind: 'built-in' as const,
-    enabled: true,
-    available: true,
-    effects: {
-      network: false,
-      externalWrite: false,
-      processExecution: true,
-      guiAutomation: false
-    },
-    tools: [
-      ...buildPptAgentLocalTools({
-        enabled: () => core.activeOptions.lab?.pptAgent?.enabled !== false,
-        toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
-        governanceDirectory: () => join(core.activeOptions.dataDir, 'ppt-governance'),
-        resolveSourceRequest: async (context) =>
-          (await turnService.getTurn(context.threadId, context.turnId))?.prompt
-      })
-    ]
-  }
+  const pptDeckProvider = buildPptDeckRuntimeProvider(() => core.activeOptions, () => imageGenProviders.available)
   const officeCliProviders = buildOfficeCliToolProviders({
     binaryPath: process.env.KUN_OFFICECLI_BINARY,
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile'),
@@ -594,7 +573,7 @@ export async function createRuntimeServices(
     ...musicGenProviders.providers,
     ...videoGenProviders.providers,
     ...officeCliProviders,
-    pptAgentProvider,
+    pptDeckProvider,
     designCanvasProvider,
     // NOTE: computer_use is intentionally NOT in baseToolProviders — host
     // control must not be delegable to subagents. browser_use follows the

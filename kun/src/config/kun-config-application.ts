@@ -339,31 +339,17 @@ export const FastContextConfigSchema = z
 export type FastContextConfig = z.infer<typeof FastContextConfigSchema>
 
 /**
- * Lab `ppt_agent` tool: same shape as Fast Context (enabled + optional child
- * model route + fast). The PPT child also inherits the main session unless
- * model and providerId are configured as a pair.
+ * Lab switches for the slides skill's PPT tools. They run in the main
+ * conversation, so there is no child model route to configure.
  */
 export const LabPptAgentConfigSchema = z.preprocess(withoutRetiredPptAgentKeys, z
   .object({
+    /** Advertise the slides skill's PPT tools (ppt_preview / ppt_export / ppt_import_asset). */
     enabled: z.boolean().default(true),
-    model: z.string().min(1).optional(),
-    providerId: z.string().min(1).optional(),
-    reasoningEffort: ModelReasoningEffort.optional(),
-    fast: z.boolean().default(false),
     /** Fill PPT image slots with generated supplementary assets when an image model is available. */
     imageAssets: z.boolean().default(true)
   })
-  .strict()
-  .superRefine((config, ctx) => {
-    const hasModel = Boolean(config.model?.trim())
-    const hasProvider = Boolean(config.providerId?.trim())
-    if (hasModel === hasProvider) return
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: hasModel ? ['providerId'] : ['model'],
-      message: 'pptAgent model and providerId must be configured together'
-    })
-  }))
+  .strict())
 export type LabPptAgentConfig = z.infer<typeof LabPptAgentConfigSchema>
 
 export const LabConversationVisualizationConfigSchema = z.object({
@@ -382,7 +368,6 @@ export const LabConfigSchema = z
   .object({
     pptAgent: LabPptAgentConfigSchema.default({
       enabled: true,
-      fast: false,
       imageAssets: true
     }),
     conversationVisualization: LabConversationVisualizationConfigSchema.default({

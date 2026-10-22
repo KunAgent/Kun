@@ -10,7 +10,8 @@ export const kunFastContextPatchSchema = z.object({
 
 /** Lab (experimental) settings patch accepted by the settings:set IPC. */
 export const kunLabPatchSchema = z.object({
-  pptAgent: kunFastContextPatchSchema.extend({
+  pptAgent: z.object({
+    enabled: z.boolean().optional(),
     imageAssets: z.boolean().optional()
   }).strict().optional(),
   conversationVisualization: z.object({

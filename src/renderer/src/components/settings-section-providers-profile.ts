@@ -273,9 +273,6 @@ export function modelProviderDeletionKunPatch(input: {
   if (matches(currentKun.fastContext?.providerId)) {
     patch.fastContext = { providerId: '', model: '' }
   }
-  if (matches(currentKun.lab?.pptAgent?.providerId)) {
-    patch.lab = { pptAgent: { providerId: '', model: '' } }
-  }
   if (
     currentKun.graph?.workerModel.mode === 'fixed' &&
     matches(currentKun.graph.workerModel.providerId)

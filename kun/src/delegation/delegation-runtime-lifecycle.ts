@@ -31,7 +31,6 @@ import {
 import type { EventBus } from '../ports/event-bus.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import { loadWorkspaceAgentProfiles } from './workspace-agents.js'
 import type { SubagentRoutingDocument } from './subagent-router.js'
 import { BUILTIN_SUBAGENT_PROFILES } from './builtin-profiles.js'
@@ -55,7 +54,6 @@ import { childResultOwnerIds } from './child-result-materializer.js'
 import {
   addChildUsage,
   abortChildForUser,
-  childPptWorkflowSnapshot,
   childActivityFromEvent,
   childContractError,
   childLifecycleMetadata,
@@ -69,7 +67,6 @@ import {
   isNotFound,
   normalizeInheritedReasoningEffort,
   notifyLifecycle,
-  persistedPptWorkflowIdentityError,
   resolveChildModelSelection,
   sameChildActivity,
   sameModelRoute
@@ -125,9 +122,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     /** Host-owned idempotency key for the resumed turn start. */
     clientRequestId?: string
     controlPrompt?: string
-    pptWorkflowScope?: PptWorkflowScope
     expectedProfile?: string
-    expectedWorkflowId?: string
     expectedResumeCount?: number
     expectedLaunchers?: readonly ChildRunLauncher[]
     requireResumable?: boolean
@@ -172,9 +167,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     source?: ChildSourceEnvelope
     clientRequestId?: string
     controlPrompt?: string
-    pptWorkflowScope?: PptWorkflowScope
     expectedProfile?: string
-    expectedWorkflowId?: string
     expectedResumeCount?: number
     expectedLaunchers?: readonly ChildRunLauncher[]
     requireResumable?: boolean
@@ -248,16 +241,6 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     if (input.expectedProfile && previous.profile !== input.expectedProfile) {
       throw new Error(`child run ${input.childId} is not a ${input.expectedProfile} child`)
     }
-    if (input.expectedWorkflowId) {
-      const workflowIdentityError = persistedPptWorkflowIdentityError(
-        previous.reviewBundle,
-        previous.directionBundle,
-        previous.id,
-        input.expectedWorkflowId,
-        previous.pptWorkflow?.workflowId
-      )
-      if (workflowIdentityError) throw new Error(workflowIdentityError)
-    }
     // ADE manager-worker runs persist no profile; an empty snapshot restores
     // the same effective settings (no persona prompt, inherit tool policy).
     const profileSnapshot = previous.profileSnapshot
@@ -289,9 +272,6 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       terminationReason: undefined,
       resumable: false,
       failure: undefined,
-      ...(input.pptWorkflowScope
-        ? { pptWorkflow: childPptWorkflowSnapshot(input.pptWorkflowScope) }
-        : {}),
       summary: undefined,
       summaryTruncated: undefined,
       resultRef: undefined,
@@ -362,7 +342,6 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       credentialMode: input.credentialMode,
       gatewayBinding: input.gatewayBinding,
       controlPrompt,
-      pptWorkflowScope: input.pptWorkflowScope,
       resumeChild: true,
       signal
     })

@@ -75,7 +75,6 @@ import {
   planningTeamContextBlocks,
   hasSuccessfulToolResult,
   knowledgeBaseContextBlocks,
-  pptWorkflowCompletionToolGate,
   kunContextBlock,
   modelHistoryRoutesByTurnId,
   outputTruncationRecoveryBlocks,
@@ -407,24 +406,17 @@ export abstract class ModelStepPreparationService {
       ? svgArtifactCompletionState(historyItems, turnId)
       : null
     const workflowGate = requiredWorkflowToolGate(
-      turn, toolContext.pptWorkflowScope, historyItems, turnId,
+      turn, historyItems, turnId,
       svgCompletion?.mutationSucceeded && !svgCompletion.validationAfterMutation
         ? DESIGN_SVG_VALIDATE_TOOL_NAME
         : undefined
     )
     const hardRequiredToolName = workflowGate.requiredToolName
-    const pptCompletionToolName = pptWorkflowCompletionToolGate(
-      toolContext.pptWorkflowScope,
-      historyItems,
-      turnId
-    ).expectedToolName
     // Plan-mode turns never require create_plan: the model decides whether a
     // request needs a saved plan, so a question answered in prose just ends
     // the turn instead of being written to .kunsdd/plan.
     const softRequiredToolName =
-      pptCompletionToolName && toolSpecs.some((tool) => tool.name === pptCompletionToolName)
-        ? pptCompletionToolName
-        : turn.orchestration === 'graph' &&
+      turn.orchestration === 'graph' &&
       !graphCreateSatisfied &&
       toolSpecs.some((tool) => tool.name === GRAPH_DEFINE_PLAN_TOOL_NAME)
         ? GRAPH_DEFINE_PLAN_TOOL_NAME

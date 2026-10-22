@@ -41,7 +41,7 @@ afterEach(() => {
 })
 
 describe('Write presentation action', () => {
-  it('routes a new request to ppt_agent', async () => {
+  it('routes a new request through the slides skill', async () => {
     useWriteWorkspaceStore.setState({
       workspaceRoot: '/workspace',
       activeFilePath: '/workspace/brief.md'
@@ -55,7 +55,7 @@ describe('Write presentation action', () => {
     expect(flushSave).toHaveBeenCalledOnce()
     expect(onSubmitPrompt).toHaveBeenCalledOnce()
     const prompt = onSubmitPrompt.mock.calls[0][0]
-    expect(prompt).toContain('`ppt_agent`（start）')
+    expect(prompt.startsWith('/slides ')).toBe(true)
     expect(prompt).toContain('唯一内容来源 Markdown：/workspace/brief.md')
   })
 })

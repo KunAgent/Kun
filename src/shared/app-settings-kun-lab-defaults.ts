@@ -4,9 +4,6 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
   return {
     pptAgent: {
       enabled: true,
-      model: '',
-      providerId: '',
-      fast: false,
       imageAssets: true
     },
     conversationVisualization: {
@@ -37,14 +34,17 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
 }
 
 /**
- * Stored PPT agent settings may predate `imageAssets` and still carry the
- * retired `imageFirst` preview switch; keep the user's other fields and drop it.
+ * Stored PPT settings may predate `imageAssets` and still carry fields of the
+ * retired PPT sub-agent (`imageFirst` and its model overrides); keep only the
+ * two switches the slides skill uses.
  */
 export function normalizeStoredPptAgentSettings(
-  stored: KunLabPptAgentSettingsV1 | undefined,
+  stored: Partial<KunLabPptAgentSettingsV1> | undefined,
   defaults: KunLabPptAgentSettingsV1
 ): KunLabPptAgentSettingsV1 {
   if (!stored) return defaults
-  const { imageFirst: _retired, ...rest } = stored as KunLabPptAgentSettingsV1 & { imageFirst?: unknown }
-  return { ...rest, imageAssets: rest.imageAssets !== false }
+  return {
+    enabled: typeof stored.enabled === 'boolean' ? stored.enabled : defaults.enabled,
+    imageAssets: stored.imageAssets !== false
+  }
 }

@@ -33,7 +33,6 @@ import {
 import type { EventBus } from '../ports/event-bus.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import {
   applyWorkspaceAgentSurfaceFallback,
   loadWorkspaceAgentProfiles
@@ -62,7 +61,6 @@ import {
 } from './delegation-runtime-base.js'
 import {
   addChildUsage,
-  childPptWorkflowSnapshot,
   childActivityFromEvent,
   childContractError,
   childLifecycleMetadata,
@@ -99,7 +97,6 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     clientRequestId?: string
     /** Trusted host workflow control kept outside the child user message. */
     controlPrompt?: string
-    pptWorkflowScope?: PptWorkflowScope
     workspace?: string
     model?: string
     providerId?: string
@@ -365,9 +362,6 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       ...(input.fastContextHintPaths?.length ? { fastContextHintPaths: [...input.fastContextHintPaths] } : {}),
       ...(input.detach ? { detached: true } : {}),
       ...(input.launcher ? { launcher: input.launcher } : {}),
-      ...(input.pptWorkflowScope
-        ? { pptWorkflow: childPptWorkflowSnapshot(input.pptWorkflowScope) }
-        : {}),
       status: 'queued',
       resumable: false,
       childSeq: this.nextChildSeq(id),
@@ -459,7 +453,6 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       gatewayBinding: input.gatewayBinding,
         executionUnit: input.executionUnit,
         controlPrompt,
-        pptWorkflowScope: input.pptWorkflowScope,
         signal: detachedController.signal
       }))
         .then((settled) => this.notifyDetachedChild(settled))
@@ -538,7 +531,6 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       gatewayBinding: input.gatewayBinding,
       executionUnit: input.executionUnit,
       controlPrompt,
-      pptWorkflowScope: input.pptWorkflowScope,
       signal: controller.signal
     })
     const first = await Promise.race([

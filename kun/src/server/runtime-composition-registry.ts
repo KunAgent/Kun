@@ -18,7 +18,6 @@ import {
   DEFAULT_APPROVAL_REVIEWER,
   mergeBuiltinSubagentProfiles,
   buildFastContextToolProvider,
-  buildPptAgentToolProvider,
   DelegationRuntime,
   FileDelegationStore,
   createChildAgentExecutor,
@@ -125,7 +124,6 @@ export function createRuntimeRegistry(
             ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
-            ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
             ...(child.blockedProviderIds ? { blockedProviderIds: child.blockedProviderIds } : {}),
             ...(child.blockedToolNames ? { blockedToolNames: child.blockedToolNames } : {}),
             ...(child.blockedSkillIds ? { blockedSkillIds: child.blockedSkillIds } : {})
@@ -225,7 +223,6 @@ export function createRuntimeRegistry(
             ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
-            ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
             ...(child.blockedProviderIds ? { blockedProviderIds: child.blockedProviderIds } : {}),
             ...(child.blockedToolNames ? { blockedToolNames: child.blockedToolNames } : {}),
             ...(child.blockedSkillIds ? { blockedSkillIds: child.blockedSkillIds } : {})
@@ -452,20 +449,6 @@ export function createRuntimeRegistry(
     ...buildFastContextToolProvider(
       delegationRuntime,
       () => core.activeOptions.fastContext
-    ),
-    ...buildPptAgentToolProvider(
-      delegationRuntime,
-      () => ({
-        ...core.activeOptions.lab?.pptAgent,
-        imageGenAvailable: services.imageGenProviders.available,
-        imageGenReason: services.imageGenProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason,
-        imageGenSupportsReferenceEdit: protocolSupportsImageEdit(core.activeOptions.capabilities?.imageGen?.protocol),
-        toolIncompatibleProviderIds: [
-          ...new Set([...antigravityProviderIds, ...cursorSdkProviderIds])
-        ],
-        defaultProviderLacksManagedTools: defaultIsAntigravity || defaultIsCursorSdk
-      }),
-      turnService
     ),
     ...buildComponentDesignToolProviders(delegationRuntime),
     ...buildDiagramVisualizationToolProvider(

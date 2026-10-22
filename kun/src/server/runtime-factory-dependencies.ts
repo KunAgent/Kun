@@ -81,10 +81,7 @@ export { buildDesignCanvasLocalTools } from '../adapters/tool/design-canvas-tool
 export { buildPptBoardLocalTools } from '../adapters/tool/ppt-board-tool.js'
 export { buildDesignMotionLocalTools } from '../adapters/tool/design-motion-tool.js'
 export { buildDesignSvgLocalTools } from '../adapters/tool/design-svg-tool.js'
-export {
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID
-} from '../adapters/tool/ppt-agent-local-tools.js'
+export { buildPptDeckTools, PPT_DECK_PROVIDER_ID } from '../adapters/tool/ppt-deck-tools.js'
 export { LocalToolHost, buildDefaultLocalTools } from '../adapters/tool/local-tool-host.js'
 export { ExtensionToolRegistry } from '../adapters/tool/extension-tool-provider.js'
 export { shutdownAllLspSessions } from '../adapters/tool/lsp-client.js'
@@ -169,7 +166,6 @@ export { buildApprovalReviewModelRouterInput } from '../services/approval-review
 export { buildBuiltinHooks } from '../hooks/builtins/index.js'
 export { mergeBuiltinSubagentProfiles } from '../delegation/builtin-profiles.js'
 export { buildFastContextToolProvider } from '../adapters/tool/fast-context-tool-provider.js'
-export { buildPptAgentToolProvider } from '../adapters/tool/ppt-agent-tool-provider.js'
 export { InflightTracker } from '../loop/inflight-tracker.js'
 export { ToolCancellationRegistry } from '../loop/tool-cancellation-registry.js'
 export { SteeringQueue } from '../loop/steering-queue.js'

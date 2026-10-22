@@ -39,7 +39,6 @@ import {
   buildBuiltinHooks,
   mergeBuiltinSubagentProfiles,
   buildFastContextToolProvider,
-  buildPptAgentToolProvider,
   type RuntimeConfigApplyRequest,
   type RuntimeConfigApplyResponse,
   type RuntimeConfigApplyRejectedSection,
@@ -53,7 +52,7 @@ import type { createRuntimeExtensionComposition } from './runtime-composition-ex
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { composeDelegatedTurnRuntimes } from '../runtime/delegated-turn-runtime.js'
 import {
-  buildPptAgentRuntimeProvider,
+  buildPptDeckRuntimeProvider,
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   llmDebugCaptureEnabled,
@@ -109,8 +108,6 @@ export function createRuntimeConfigController(
     modelClient,
     timedModelClient,
     subagentRouter,
-    antigravityProviderIds,
-    cursorSdkProviderIds,
     resolveCapabilityProviderCredential,
     gatewayCredentials,
     oauthEncryptor
@@ -121,9 +118,7 @@ export function createRuntimeConfigController(
     reviewService,
     pruneUnsentAttachments,
     designCanvasProvider,
-    childToolHost,
-    defaultIsAntigravity,
-    defaultIsCursorSdk
+    childToolHost
   } = services
   const { delegationRuntime } = registryComposition
   const {
@@ -342,7 +337,7 @@ export function createRuntimeConfigController(
 	    })
 	    const nextComputerUseProviders = await buildComputerUseToolProviders(nextOptions.capabilities?.computerUse)
 	    const nextBrowserUseProviders = buildBrowserUseToolProviders(nextOptions.capabilities?.browserUse)
-    const nextPptAgentProvider = buildPptAgentRuntimeProvider(nextOptions, turnService)
+    const nextPptDeckProvider = buildPptDeckRuntimeProvider(() => nextOptions, () => nextImageGenProviders.available)
 	    const nextResolvedHooks = [
 	      ...buildBuiltinHooks({ quality: nextOptions.quality ?? DEFAULT_QUALITY_CONFIG }),
 	      ...resolveConfiguredHooks(nextOptions.hooks)
@@ -381,7 +376,7 @@ export function createRuntimeConfigController(
 	      ...nextMusicGenProviders.providers,
 	      ...nextVideoGenProviders.providers,
 	      ...nextOfficeCliProviders,
-      nextPptAgentProvider,
+      nextPptDeckProvider,
 	      designCanvasProvider
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
@@ -397,20 +392,6 @@ export function createRuntimeConfigController(
 	      ...buildFastContextToolProvider(
 	        nextDelegationRuntime,
 	        () => activeOptions.fastContext
-	      ),
-	      ...buildPptAgentToolProvider(
-	        nextDelegationRuntime,
-	        () => ({
-	          ...nextOptions.lab?.pptAgent,
-	          imageGenAvailable: nextImageGenProviders.available,
-	          imageGenReason: nextImageGenProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason,
-	          imageGenSupportsReferenceEdit: protocolSupportsImageEdit(nextOptions.capabilities?.imageGen?.protocol),
-	          toolIncompatibleProviderIds: [
-	            ...new Set([...antigravityProviderIds, ...cursorSdkProviderIds])
-	          ],
-	          defaultProviderLacksManagedTools: defaultIsAntigravity || defaultIsCursorSdk
-	        }),
-	        turnService
 	      ),
 	      ...buildComponentDesignToolProviders(delegationRuntime),
 	      ...buildDiagramVisualizationToolProvider(

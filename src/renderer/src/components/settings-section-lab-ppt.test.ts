@@ -2,12 +2,12 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { defaultKunLabSettings, type KunLabSettingsV1 } from '@shared/app-settings'
-import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
+import { PptSkillSettingsPanel } from './settings-section-lab-ppt'
 
 const labels: Record<string, string> = {
-  labPptTitle: 'PPT Agent',
+  labPptTitle: 'PPT skill',
   labPptDescription: 'PPT description',
-  labPptEnabled: 'Enable ppt_agent',
+  labPptEnabled: 'Enable PPT tools',
   labPptEnabledDesc: 'Enable description',
   labPptImageAssets: 'Generated image assets',
   labPptImageAssetsDesc: 'Fill image slots with generated assets.',
@@ -16,49 +16,28 @@ const labels: Record<string, string> = {
   labPptImageAssetsOffHint: 'Image slots use your material only.',
   labPptPreviewRenderer: 'Preview rendering',
   labPptPreviewRendererDesc: 'Previews come from the editable deck.',
-  labPptPreviewRendererBuiltIn: 'Built in',
-  labPptModelMode: 'Model policy',
-  labPptModelModeDesc: 'Model policy description',
-  labPptModelModeInherit: 'Follow main model',
-  labPptModelModeFixed: 'Use fixed model',
-  labPptModel: 'PPT model',
-  labPptModelDesc: 'Model description',
-  labPptReasoningEffort: 'PPT reasoning effort',
-  labPptReasoningEffortDesc: 'Reasoning description',
-  graphSettingsReasoningAuto: 'Auto',
-  graphSettingsReasoningOff: 'Off',
-  graphSettingsReasoningLow: 'Low',
-  graphSettingsReasoningMedium: 'Medium',
-  graphSettingsReasoningHigh: 'High',
-  graphSettingsReasoningMax: 'Max',
-  labPptFast: 'Codex Fast mode',
-  labPptFastDesc: 'Fast description',
-  labPptFastUnsupportedHint: 'Fast unsupported'
+  labPptPreviewRendererBuiltIn: 'Built in'
 }
 const t = (key: string): string => labels[key] ?? key
 
 function settings(imageAssets: boolean): KunLabSettingsV1 {
   return {
     ...defaultKunLabSettings(),
-    pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageAssets },
-      conversationVisualization: { enabled: false }
+    pptAgent: { enabled: true, imageAssets },
+    conversationVisualization: { enabled: false }
   }
 }
 
 function render(value: KunLabSettingsV1, imageGen: { available: boolean; reason?: string; supportsReferenceEdit?: boolean }): string {
-  return renderToStaticMarkup(createElement(PptAgentSettingsPanel, {
+  return renderToStaticMarkup(createElement(PptSkillSettingsPanel, {
     t,
     value,
-    modelProviders: [],
-    leadProviderId: 'deepseek',
-    leadModel: 'deepseek-v4-pro',
     imageGen,
-    selectControlClass: 'select',
     onChange: () => undefined
   }))
 }
 
-describe('PptAgentSettingsPanel image assets', () => {
+describe('PptSkillSettingsPanel image assets', () => {
   it('defaults the asset toggle on and explains the capability state', () => {
     const ready = render(settings(true), { available: true, supportsReferenceEdit: true })
     expect(ready).toContain('Generated image assets')

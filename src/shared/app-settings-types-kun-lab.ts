@@ -1,19 +1,14 @@
 // Lab (experimental feature) settings of the Kun runtime section.
-import type { ModelReasoningEffort, ScheduleReasoningEffort } from './app-settings-types-provider'
+import type { ScheduleReasoningEffort } from './app-settings-types-provider'
 
-/** Experimental Lab feature settings for the first-class `ppt_agent` tool. */
+/**
+ * Lab settings for the slides skill's PPT tools. The stored key stays
+ * `pptAgent` so existing settings files keep their switches.
+ */
 export type KunLabPptAgentSettingsV1 = {
-  /** Master switch for the ppt_agent tool. Default true. */
+  /** Master switch for ppt_preview / ppt_export / ppt_import_asset. Default true. */
   enabled: boolean
-  /** Optional child model override. Empty = follow the main session model. */
-  model: string
-  /** Provider id paired with model. Empty = follow the main session provider. */
-  providerId: string
-  /** Optional reasoning depth for ppt_agent child requests. Empty = follow the main session. */
-  reasoningEffort?: ModelReasoningEffort
-  /** Codex fast mode (serviceTier = priority). Only effective for Codex models that advertise priority. */
-  fast: boolean
-  /** Let the PPT agent fill image slots with generated supplementary assets when an image model is available. Default true. */
+  /** Let image slots be filled with generated supplementary assets when an image model is available. Default true. */
   imageAssets: boolean
 }
 

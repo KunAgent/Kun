@@ -360,7 +360,7 @@ function fastContextConfigForRuntime(fastContext: KunFastContextSettingsV1 | und
 function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'] {
   return {
     pptAgent: {
-      ...labAgentConfigForRuntime(lab?.pptAgent),
+      enabled: lab?.pptAgent?.enabled !== false,
       imageAssets: lab?.pptAgent?.imageAssets !== false
     },
     conversationVisualization: {
@@ -377,7 +377,7 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
   }
 }
 
-/** Shared Lab agent runtime config (fastContext / pptAgent). */
+/** Lab agent runtime config with an optional model override (fastContext). */
 function labAgentConfigForRuntime(
   agent: { enabled: boolean; model: string; providerId: string; reasoningEffort?: string; fast: boolean } | undefined
 ): { enabled: boolean; fast: boolean; model?: string; providerId?: string; reasoningEffort?: ModelReasoningEffort } {

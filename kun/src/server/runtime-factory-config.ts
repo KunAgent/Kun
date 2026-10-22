@@ -6,9 +6,8 @@ import {
   type ToolOutputLimitsConfig,
   type RuntimeConfigApplyRequest,
   AtomicJsonFile,
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID,
-  type TurnService
+  buildPptDeckTools,
+  PPT_DECK_PROVIDER_ID
 } from './runtime-factory-dependencies.js'
 import { isDeepStrictEqual } from 'node:util'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
@@ -254,23 +253,27 @@ export function skillsConfigForRuntime(
   }
 }
 
-export function buildPptAgentRuntimeProvider(
-  options: Pick<KunServeRuntimeOptions, 'dataDir' | 'lab'>,
-  turnService: Pick<TurnService, 'getTurn'>
+/**
+ * Deck tools behind the bundled `slides` skill. Options are read lazily so a
+ * Lab toggle or image-model change applies without rebuilding the registry.
+ */
+export function buildPptDeckRuntimeProvider(
+  options: () => Pick<KunServeRuntimeOptions, 'lab'>,
+  imageGenAvailable: () => boolean
 ) {
   return {
-    id: PPT_AGENT_LOCAL_PROVIDER_ID,
+    id: PPT_DECK_PROVIDER_ID,
     kind: 'built-in' as const,
     enabled: true,
     available: true,
-    tools: [
-      ...buildPptAgentLocalTools({
-        enabled: () => options.lab?.pptAgent?.enabled !== false,
-        toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
-        governanceDirectory: () => join(options.dataDir, 'ppt-governance'),
-        resolveSourceRequest: async (context) =>
-          (await turnService.getTurn(context.threadId, context.turnId))?.prompt
-      })
-    ]
+    effects: { network: false, externalWrite: false, processExecution: true, guiAutomation: false },
+    tools: buildPptDeckTools({
+      enabled: () => options().lab?.pptAgent?.enabled !== false,
+      imageAssets: () => ({
+        enabled: options().lab?.pptAgent?.imageAssets !== false,
+        available: imageGenAvailable()
+      }),
+      toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR
+    })
   }
 }

@@ -377,7 +377,7 @@ function clawChannel(provider: ClawImProvider, label: string, name = label): Cla
 }
 
 describe('lab PPT settings', () => {
-  it('preserves explicit image-asset disablement across partial and configured patches', () => {
+  it('preserves explicit image-asset disablement across partial patches', () => {
     const disabled = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       lab: {
         pptAgent: {
@@ -386,50 +386,23 @@ describe('lab PPT settings', () => {
         }
       }
     })
-    expect(disabled.lab.pptAgent).toEqual({
-      enabled: false,
-      model: '',
-      providerId: '',
-      fast: false,
-      imageAssets: false
-    })
+    expect(disabled.lab.pptAgent).toEqual({ enabled: false, imageAssets: false })
 
-    const configured = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
-      lab: {
-        pptAgent: {
-          model: 'gpt-5.4',
-          providerId: 'codex-2',
-          reasoningEffort: 'high',
-          fast: true,
-          imageAssets: false
-        }
-      }
-    })
-    expect(configured.lab.pptAgent).toEqual({
-      enabled: true,
-      model: 'gpt-5.4',
-      providerId: 'codex-2',
-      reasoningEffort: 'high',
-      fast: true,
-      imageAssets: false
-    })
+    const partial = mergeKunRuntimeSettings(disabled, { lab: { pptAgent: { enabled: true } } })
+    expect(partial.lab.pptAgent).toEqual({ enabled: true, imageAssets: false })
   })
 
-  it('drops the retired image-first switch from stored settings', () => {
+  it('drops retired PPT sub-agent fields from stored settings', () => {
     const defaults = defaultKunRuntimeSettings()
     const stored = mergeKunRuntimeSettings({
       ...defaults,
       lab: {
         ...defaults.lab,
-        pptAgent: { enabled: true, model: '', providerId: '', fast: false, imageFirst: false } as never
+        pptAgent: {
+          enabled: true, model: 'gpt-5.4', providerId: 'codex-2', reasoningEffort: 'high', fast: true, imageFirst: false
+        } as never
       }
     }, undefined)
-    expect(stored.lab.pptAgent).toEqual({
-      enabled: true,
-      model: '',
-      providerId: '',
-      fast: false,
-      imageAssets: true
-    })
+    expect(stored.lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
   })
 })

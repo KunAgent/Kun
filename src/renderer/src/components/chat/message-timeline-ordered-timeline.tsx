@@ -11,6 +11,7 @@ import { TimelineRuntimeError } from './message-timeline-jump-preview'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
 import { GmailRequestedCards } from './gmail-tool-card'
 import { AgentDispatchGroup } from './AgentDispatchCard'
+import { PptDeckCards } from './PptDeckCard'
 
 export type OrderedTurnTimelineProps = {
   entries: readonly TurnTimelineEntry[]
@@ -149,6 +150,7 @@ export function OrderedTurnTimeline({
             {!isProcessing && !expanded ? <GmailRequestedCards blocks={segment.blocks} /> : null}
             {!isProcessing && !expanded
               ? <AgentDispatchGroup blocks={segment.blocks} readOnly={!allowThreadActions} /> : null}
+            {!isProcessing ? <PptDeckCards blocks={segment.blocks} readOnly={!allowThreadActions} /> : null}
             {runtimeErrors.map((item) => (
               <TimelineRuntimeError
                 key={item.block.id}

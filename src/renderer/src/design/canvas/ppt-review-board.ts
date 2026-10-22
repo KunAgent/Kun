@@ -114,6 +114,15 @@ export function pptReviewBoardOps(
       ((shape.name.includes(':qa:') && !expectedQaMarkers.has(shape.name)) ||
         (isPptReviewSlotShape(shape) && !expectedSlots.has(shape.name))))
     .map((shape) => ({ op: 'delete', id: shape.id }))
+  // A deck can drop pages between reviews: remove the cards of slides this
+  // bundle no longer has. Shape names are namespaced by workflow and slide.
+  const workflowPrefix = `ppt-review:${bundle.workflowId}:`
+  const slidePrefixes = bundle.slides.map((slide) => `${reviewKey(bundle.workflowId, slide.slideId)}:`)
+  const cleaned = new Set(qaCleanup.map((op) => op.id))
+  const removedSlides = shapes
+    .filter((shape) => shape.name.startsWith(workflowPrefix) && !cleaned.has(shape.id) &&
+      !slidePrefixes.some((prefix) => shape.name.startsWith(prefix)))
+    .map((shape) => ({ op: 'delete', id: shape.id }))
   const slideOps = bundle.slides.flatMap((slide): unknown[] => {
     const col = slide.index % COLUMNS
     const row = Math.floor(slide.index / COLUMNS)
@@ -211,7 +220,7 @@ export function pptReviewBoardOps(
       ...qaMarkerOps(bundle, slide, x + 8, y + 8, byName, parentThreadId)
     ]
   })
-  return [...qaCleanup, ...slideOps]
+  return [...qaCleanup, ...removedSlides, ...slideOps]
 }
 
 export type SerializedPptReviewContext = {

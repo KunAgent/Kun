@@ -30,7 +30,6 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { TurnService } from '../services/turn-service.js'
 import { isHostShutdownTurnSuspension } from '../services/turn-service.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { WorkspaceAgentCatalogProfile } from './workspace-agents.js'
 import type { SubagentRoutingDocument } from './subagent-router.js'
 import type { AgentRoster } from './agent-roster.js'
@@ -454,7 +453,6 @@ export abstract class DelegationRuntimeBase {
           ...(args.gatewayBinding ? { gatewayBinding: args.gatewayBinding } : {}),
           ...(args.executionUnit ? { executionUnit: args.executionUnit } : {}),
           ...(args.controlPrompt ? { controlPrompt: args.controlPrompt } : {}),
-          ...(args.pptWorkflowScope ? { pptWorkflowScope: args.pptWorkflowScope } : {}),
           workspace: args.workspace,
           model: args.resolvedModel,
           ...(args.resolvedProviderId ? { providerId: args.resolvedProviderId } : {}),
@@ -521,18 +519,6 @@ export abstract class DelegationRuntimeBase {
         summaryTruncated: result.summaryTruncated,
         resultRef: result.resultRef,
         resultUnavailableReason: result.resultUnavailableReason,
-        directionBundle: result.directionBundle ?? current.directionBundle,
-        directionBundleParentTurnId: result.directionBundle !== undefined
-          ? args.parentTurnId
-          : current.directionBundleParentTurnId,
-        reviewBundle: result.reviewBundle ?? current.reviewBundle,
-        reviewBundleParentTurnId: result.reviewBundle !== undefined
-          ? args.parentTurnId
-          : current.reviewBundleParentTurnId,
-        deckArtifact: result.deckArtifact ?? current.deckArtifact,
-        deckArtifactParentTurnId: result.deckArtifact !== undefined
-          ? args.parentTurnId
-          : current.deckArtifactParentTurnId,
         evidence: result.evidence,
         evidencePack: result.evidencePack,
         // ChildRunExecutor reports cumulative usage for the persistent side

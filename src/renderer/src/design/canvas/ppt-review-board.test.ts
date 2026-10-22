@@ -197,6 +197,24 @@ describe('PPT review board', () => {
       .toEqual(slots.map((item) => item.id).sort())
   })
 
+  it('removes the cards of pages a later review no longer has', () => {
+    const twoSlides: PptReviewBundle = {
+      ...bundle,
+      slides: [
+        bundle.slides[0],
+        { ...bundle.slides[0], slideId: 'slide-2', index: 1, title: 'Risks', previewPath: '.kun/images/risks.png' }
+      ]
+    }
+    const added = materializeAdds(pptReviewBoardOps(twoSlides, [], 'thread-a'))
+    const removed = added.filter((item) => item.name.startsWith('ppt-review:ppt_workflow:slide-2:'))
+    expect(removed.length).toBeGreaterThanOrEqual(4)
+
+    const ops = pptReviewBoardOps(bundle, added, 'thread-a') as Array<{ op: string; id?: string }>
+    for (const op of ops) expect(ShapeOpSchema.safeParse(op).success).toBe(true)
+    expect(ops.filter((op) => op.op === 'delete').map((op) => op.id).sort())
+      .toEqual(removed.map((item) => item.id).sort())
+  })
+
   it('rejects malformed or stale review bundles before they reach the canvas', () => {
     expect(isPptReviewBundle(bundle)).toBe(true)
     expect(isPptReviewBundle({ ...bundle, phase: 'completed' })).toBe(false)

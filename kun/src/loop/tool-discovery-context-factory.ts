@@ -1,4 +1,4 @@
-import type { PptWorkflowScope, ToolHostContext } from '../ports/tool-host.js'
+import type { ToolHostContext } from '../ports/tool-host.js'
 import type { ToolTurnContextInput } from './turn-execution-types.js'
 import type { InteractiveToolBridge } from './interactive-tool-bridge.js'
 import { KUN_GMAIL_LOCAL_PROVIDER_ID } from '../gmail/tool-policy.js'
@@ -11,7 +11,6 @@ export type ToolDiscoveryContextFactoryDeps = {
   allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
-  pptWorkflowScope?: PptWorkflowScope
   blockedProviderIds?: readonly string[]
   blockedToolNames?: readonly string[]
   blockedSkillIds?: readonly string[]
@@ -79,7 +78,6 @@ export function createToolDiscoveryContext(
     ...(deps.allowHostReads ? { allowHostReads: true } : {}),
     ...(deps.allowedWritePaths ? { allowedWritePaths: deps.allowedWritePaths } : {}),
     ...(deps.allowedArtifactIds ? { allowedArtifactIds: deps.allowedArtifactIds } : {}),
-    ...(deps.pptWorkflowScope ? { pptWorkflowScope: deps.pptWorkflowScope } : {}),
     ...(deps.blockedProviderIds ? { blockedProviderIds: deps.blockedProviderIds } : {}),
     ...(deps.blockedToolNames ? { blockedToolNames: deps.blockedToolNames } : {}),
     ...(deps.blockedSkillIds ? { blockedSkillIds: deps.blockedSkillIds } : {}),

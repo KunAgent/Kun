@@ -27,7 +27,7 @@ import { ConversationVisualizationSettingsPanel } from './settings-section-lab-c
 import { AppSurfacesSettingsPanels } from './settings-section-lab-app-surfaces'
 import { AssistantMailboxSettingsPanel } from './settings-section-lab-assistant-mailbox'
 import { ContextWindowSettingsPanel } from './settings-section-lab-context-window'
-import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
+import { PptSkillSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
 import { CodexReferenceBranchesSettingsPanel } from './settings-section-lab-codex-reference'
 import { ProjectBoardSettingsPanel } from './settings-section-lab-project-board'
@@ -143,12 +143,9 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ graph: patch })}
         />
-        <PptAgentSettingsPanel
+        <PptSkillSettingsPanel
           t={t}
           value={lab}
-          modelProviders={modelProviders}
-          leadProviderId={activeProviderId}
-          leadModel={kun.model}
           imageGen={runtimeInfo?.capabilities?.imageGen
             ? {
                 available: runtimeInfo.capabilities.imageGen.available === true,
@@ -156,7 +153,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
                 ...(runtimeInfo.capabilities.imageGen.reason ? { reason: runtimeInfo.capabilities.imageGen.reason } : {})
               }
             : undefined}
-          selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ lab: patch })}
         />
         <ProjectBoardSettingsPanel
