@@ -30,7 +30,13 @@ export class ItemsCache {
 
   set(threadId: string, items: TurnItem[]): void {
     this.remove(threadId)
-    const bytes = serializedBytes(items)
+    // Stop sizing once admission is impossible. Serializing an entire oversized
+    // history just to reject it creates another large string on every cold read.
+    let bytes = 2 // JSON array brackets
+    for (let index = 0; index < items.length; index += 1) {
+      bytes += serializedBytes(items[index]) + (index > 0 ? 1 : 0)
+      if (bytes > this.maxBytes / 2) return
+    }
     if (bytes > this.maxBytes / 2 || bytes > this.maxBytes) return
     this.items.set(threadId, items)
     this.bytes.set(threadId, bytes)

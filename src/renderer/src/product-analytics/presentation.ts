@@ -14,7 +14,7 @@ export function noteAnalyticsRoomMessage(id: string, createdAt: string) {
 export function clearAnalyticsPresentation() { liveTurns.clear(); liveRoomMessages.clear() }
 export function useResultPresented(block: ChatBlock) {
   useEffect(() => {
-    if (block.kind !== 'assistant' || block.id === 'live-assistant' || !block.turnId || !block.text.trim() || document.hidden) return
+    if (typeof document === 'undefined' || block.kind !== 'assistant' || block.id === 'live-assistant' || !block.turnId || !block.text.trim() || document.hidden) return
     const state = useChatStore.getState(), key = state.activeThreadId + ':' + block.turnId
     if (state.route !== 'chat' || !productCaptureEnabled() || !liveTurns.delete(key)) return
     const epochTime = captureSince
@@ -22,7 +22,7 @@ export function useResultPresented(block: ChatBlock) {
   }, [block])
 }
 export function noteAnalyticsRoomRendered(message: RoomMessage) {
-  if (!productCaptureEnabled() || document.hidden || message.authorKind !== 'member' ||
+  if (typeof document === 'undefined' || !productCaptureEnabled() || document.hidden || message.authorKind !== 'member' ||
     message.deliveryPhase !== 'final' || !message.body.trim() || !liveRoomMessages.delete(message.id)) return
   if (!message.originRunId) return
   const epochTime = captureSince

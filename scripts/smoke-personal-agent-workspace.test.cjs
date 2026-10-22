@@ -463,3 +463,12 @@ test('approval smoke asserts the personal default and deliberately changes it th
   assert(actions.includes('wait:[data-permission-mode="full-access"]'))
   assert(actions.includes('wait:[data-permission-mode="ask-for-approval"]'))
 })
+
+
+test('Code baseline selects the exact accessible tree item rather than a button or recent-file duplicate', () => {
+  const helper = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  assert(helper.includes("panel.getByRole('tree').getByRole('treeitem', { name: 'baseline.txt', exact: true })"))
+  assert.doesNotMatch(helper, /getByRole\('button', \{ name: \/\^baseline/)
+  const rows = readFileSync(join(__dirname, '../src/renderer/src/components/chat/ChatFileTreeRowViews.tsx'), 'utf8')
+  assert.match(rows, /<button\s+type="button"\s+role="treeitem"/)
+})
