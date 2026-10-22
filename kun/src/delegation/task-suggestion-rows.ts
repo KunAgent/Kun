@@ -51,7 +51,7 @@ export function tasksFromSuggestion(
     title: task.title,
     ...(task.area ? { area: task.area } : {}),
     brief: { goal: task.goal, scope: task.scope ?? [], done: task.done ?? [] },
-    route: { ...defaults.route },
+    route: { ...defaults.route, ...(task.profile ? { profileId: task.profile } : {}) },
     worktree: task.worktree ?? defaults.worktree,
     inheritContext: defaults.inheritContext,
     state: 'suggested',

@@ -176,6 +176,10 @@ export function createServerRuntimeComposition(
       memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
+      workspaceProfile: async (presetId, workspace) => {
+        const resolution = await agent.agentRoster.resolve(presetId, { lane: 'conversation', workspace, engineOverridden: true })
+        return resolution.ok ? resolution.profile : undefined
+      },
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
       activeBackgroundTurns: () => backgroundShellRuntime.listSessions().filter(item => item.status === 'running')
         .map(item => ({ threadId: item.threadId, turnId: item.turnId })),
@@ -206,7 +210,8 @@ export function createServerRuntimeComposition(
   events.addObserver({ record: (event) => {
     if (event.kind === 'agent_dispatch_intent' && event.dispatchIntent.kind === 'workbench') roomComposition.rooms.workbench.wake()
   } })
-  services.taskSuggestionService.attach(new TaskSuggestionLauncher({ threads: threadService, turns: turnService, taskWorkspaces }))
+  services.taskSuggestionService.attach(new TaskSuggestionLauncher({
+    threads: threadService, turns: turnService, taskWorkspaces, roster: agent.agentRoster }))
   events.addObserver({ record: (event) => services.taskSuggestionService.observe(event) })
   roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService, agentDispatch: services.agentDispatchService,
     harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector, readiness: services.harnesses.readiness,

@@ -142,6 +142,11 @@ export type RoomRuntimeDeps = {
   modelCapabilities?: (model: string, providerId?: string) => import('../contracts/capabilities.js').ModelCapabilityMetadata
   modelSnapshot?: () => Promise<import('../contracts/model-connections.js').ModelConnectionSnapshot>
   profiles: () => Record<string, SubagentProfileConfig>
+  /**
+   * Agent roster lookup that also sees a repository's `.kun/agents` roles;
+   * execution tasks resolve unsnapshotted member roles through it.
+   */
+  workspaceProfile?: (presetId: string, workspace: string) => Promise<SubagentProfileConfig | undefined>
   peerModels?: {
     client: import('../ports/model-client.js').ModelClient
     roles: () => import('../config/kun-config.js').RolesConfig | undefined

@@ -44,7 +44,8 @@ export function createTaskSuggestionToolProvider(service: TaskSuggestionService)
                 goal: { type: 'string', minLength: 1, maxLength: 8000 },
                 scope: { ...stringList, description: 'Concrete changes or files in scope.' },
                 done: { ...stringList, description: 'Checkable completion criteria.' },
-                worktree: { type: 'boolean', description: 'false only for tasks that must edit the current checkout directly.' }
+                worktree: { type: 'boolean', description: 'false only for tasks that must edit the current checkout directly.' },
+                profile: { type: 'string', maxLength: 128, description: 'Optional role id from list_subagent_profiles for this session; only roles usable as a primary session.' }
               },
               required: ['title', 'goal'],
               additionalProperties: false

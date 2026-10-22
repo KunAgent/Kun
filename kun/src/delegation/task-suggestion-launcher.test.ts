@@ -131,3 +131,34 @@ describe('TaskSuggestionLauncher', () => {
     expect(classifyTaskLaunchError(new Error('boom')).code).toBe('runtime')
   })
 })
+
+describe('TaskSuggestionLauncher roster roles', () => {
+  const role = { name: 'Release Lead', description: 'Owns releases.', systemPrompt: 'You lead releases.',
+    mode: 'all' as const, toolPolicy: 'inherit' as const }
+  const roster = (profile: typeof role | { name: string; mode: 'subagent'; toolPolicy: 'readOnly' }) => ({
+    resolve: async (id: string) => ({ ok: true as const, id, source: 'workspace' as const, profile,
+      engine: { kind: 'lane-default' as const } })
+  })
+
+  it('makes the role the created session persona and names it in the brief', async () => {
+    const { threads, turns } = harness()
+    const parent = await threads.create(CreateThreadRequest.parse({ title: 'Parent', workspace, model: 'm' }))
+    const launcher = new TaskSuggestionLauncher({ threads, turns, roster: roster(role) })
+    const intent = intentFor(parent.id, { route: { agentId: 'kun', model: 'deepseek-v4-pro', profileId: 'release-lead' } })
+    const outcome = await launcher.launch(intent, intent.tasks[0]!, async () => undefined)
+    const child = (await threads.get(outcome.threadId))!
+    expect(child).toMatchObject({ agentId: 'release-lead', systemPrompt: 'You lead releases.' })
+    expect(child.turns[0]!.prompt.startsWith('Role: Release Lead\n')).toBe(true)
+  })
+
+  it('refuses a delegation-only role with a recovery code', async () => {
+    const { threads, turns } = harness()
+    const parent = await threads.create(CreateThreadRequest.parse({ title: 'Parent', workspace, model: 'm' }))
+    const launcher = new TaskSuggestionLauncher({ threads, turns,
+      roster: roster({ name: 'Explorer', mode: 'subagent', toolPolicy: 'readOnly' }) })
+    const intent = intentFor(parent.id, { route: { agentId: 'kun', profileId: 'explore' } })
+    await expect(launcher.launch(intent, intent.tasks[0]!, async () => undefined)).rejects.toMatchObject({
+      failure: { code: 'agent_unavailable', message: expect.stringContaining('delegation-only role') }
+    })
+  })
+})

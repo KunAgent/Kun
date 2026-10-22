@@ -145,7 +145,9 @@ export const SuggestTasksInputSchema = z.object({
     goal: z.string().trim().min(1).max(8_000),
     scope: z.array(z.string().trim().min(1).max(2_000)).max(12).optional(),
     done: z.array(z.string().trim().min(1).max(2_000)).max(12).optional(),
-    worktree: z.boolean().optional()
+    worktree: z.boolean().optional(),
+    /** Agent roster id the session should play; it must allow primary sessions. */
+    profile: z.string().trim().min(1).max(128).optional()
   }).strict()).min(2).max(TASK_SUGGESTION_MAX_TASKS)
 }).strict()
 export type SuggestTasksInput = z.infer<typeof SuggestTasksInputSchema>

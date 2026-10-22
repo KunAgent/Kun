@@ -11,6 +11,8 @@ import type {
 import type { ThreadService } from '../services/thread-service.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import type { SubagentProfileConfig } from '../contracts/capabilities.js'
+import type { AgentRoster } from './agent-roster.js'
 
 const WORKTREE_POLL_MS = 400
 const WORKTREE_TIMEOUT_MS = 180_000
@@ -20,6 +22,8 @@ export type TaskSuggestionLauncherDeps = {
   threads: Pick<ThreadService, 'getMetadata' | 'get' | 'create' | 'update' | 'fork'>
   turns: Pick<TurnService, 'enqueueTurn'>
   taskWorkspaces?: Pick<TaskWorkspaceService, 'create' | 'get'>
+  /** Resolves a card route's `profileId` into the session's role. */
+  roster?: Pick<AgentRoster, 'resolve'>
   sleep?: (ms: number) => Promise<void>
   now?: () => number
 }
@@ -89,8 +93,25 @@ export function taskBriefDisplayText(task: TaskSuggestionTask, position: { index
   return lines.join('\n')
 }
 
-function taskPrompt(task: TaskSuggestionTask, position: { index: number; total: number }, parentTitle: string, branch?: string): string {
+/** A roster role the task session plays. */
+type TaskRole = { id: string; profile: SubagentProfileConfig }
+
+function taskPrompt(
+  task: TaskSuggestionTask,
+  position: { index: number; total: number },
+  parentTitle: string,
+  branch?: string,
+  role?: TaskRole
+): string {
+  // A created session carries the role as its persona; a forked one keeps the
+  // source conversation's thread, so its role travels in the brief instead.
+  const roleBrief = role
+    ? task.inheritContext && role.profile.systemPrompt?.trim()
+      ? ['### Role', `${role.profile.name ?? role.id}`, role.profile.systemPrompt.trim(), '']
+      : [`Role: ${role.profile.name ?? role.id}`, '']
+    : []
   return [
+    ...roleBrief,
     taskBriefText(task, position),
     '',
     `This task was split off from the conversation "${parentTitle}" and runs in its own session` +
@@ -118,7 +139,8 @@ export class TaskSuggestionLauncher {
     if (!parent) throw new TaskLaunchError({ code: 'runtime', message: 'The suggesting conversation no longer exists.' })
     const index = intent.tasks.findIndex((entry) => entry.id === task.id) + 1
     const position = { index, total: intent.tasks.length }
-    let thread = await this.ensureThread(intent, task, parent, position)
+    const role = await this.taskRole(task, parent.workspace)
+    let thread = await this.ensureThread(intent, task, parent, position, role)
     if (thread.id !== task.threadId) await persist({ threadId: thread.id })
     let branch = task.branch
     if (task.worktree && !thread.taskWorkspaceId) {
@@ -140,7 +162,7 @@ export class TaskSuggestionLauncher {
     if (existing) return outcome(existing.id)
     const route = task.route
     const admitted = await this.deps.turns.enqueueTurn({ threadId: thread.id, request: StartTurnRequest.parse({
-      prompt: taskPrompt(task, position, parent.title, branch),
+      prompt: taskPrompt(task, position, parent.title, branch, role),
       displayText: taskBriefDisplayText(task, position),
       clientRequestId,
       model: route.model || parent.model,
@@ -196,11 +218,34 @@ export class TaskSuggestionLauncher {
     } }
   }
 
+  /** The roster role a card row names; a delegation-only role cannot lead a session. */
+  private async taskRole(task: TaskSuggestionTask, workspace: string): Promise<TaskRole | undefined> {
+    const profileId = task.route.profileId?.trim()
+    if (!profileId) return undefined
+    if (!this.deps.roster) {
+      throw new TaskLaunchError({ code: 'agent_unavailable', message: 'The agent roster is unavailable; pick only an engine for this task.' })
+    }
+    const resolution = await this.deps.roster.resolve(profileId, {
+      lane: 'conversation',
+      workspace,
+      engineOverridden: true
+    })
+    if (!resolution.ok) throw new TaskLaunchError({ code: 'agent_unavailable', message: resolution.message })
+    if (resolution.profile.mode === 'subagent') {
+      throw new TaskLaunchError({
+        code: 'agent_unavailable',
+        message: `${resolution.profile.name ?? profileId} is a delegation-only role and cannot lead a task session.`
+      })
+    }
+    return { id: resolution.id, profile: resolution.profile }
+  }
+
   private async ensureThread(
     intent: TaskSuggestionIntent,
     task: TaskSuggestionTask,
     parent: ThreadRecord,
-    position: { index: number; total: number }
+    position: { index: number; total: number },
+    role?: TaskRole
   ): Promise<ThreadRecord> {
     const { threads } = this.deps
     const taskOrigin = { intentId: intent.intentId, taskId: task.id, ...position }
@@ -224,6 +269,8 @@ export class TaskSuggestionLauncher {
       ...(route.providerId ? { providerId: route.providerId } : {}),
       ...(harnessId ? { harnessId } : {}),
       ...(route.credentialMode ? { credentialMode: route.credentialMode } : {}),
+      ...(role ? { agentId: role.id } : {}),
+      ...(role?.profile.systemPrompt?.trim() ? { systemPrompt: role.profile.systemPrompt.trim() } : {}),
       agentSurface: 'code', mode: 'agent',
       approvalPolicy: parent.approvalPolicy, sandboxMode: parent.sandboxMode, approvalReviewer: parent.approvalReviewer
     }), { id, title: task.title, relation: 'task', parentThreadId: parent.id, taskOrigin })
