@@ -46,7 +46,7 @@ import {
   InstructionRuntime,
   resolveConfiguredHooks,
   BackgroundShellRuntime,
-  stopBashSessionById,
+  stopBashSessionById, writeBashSessionStdin,
   createBashLocalTool,
   createBackgroundShellTool,
   type LocalTool,
@@ -284,6 +284,7 @@ export async function createRuntimeServices(
   )
   const supplyChainTrust = new InMemoryPublisherTrustStore()
   backgroundShellRuntime.bindStopHandler(stopBashSessionById)
+  backgroundShellRuntime.bindStdinHandler(async (id, input) => (await writeBashSessionStdin(id, input, 1)) !== null)
   const backgroundShellTool = createBackgroundShellTool({
     listBackgroundSessions: (threadId) => backgroundShellRuntime.listSessions(threadId)
   })

@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { terminalOutputFromComposerContext } from '../../lib/terminal-output-attachment'
 import { workspaceRootScopeKey } from '../../lib/workspace-path'
 import { resolveActiveExtensionWorkspaceRoot } from '../../extensions/active-extension-workspace'
 import {
@@ -97,6 +98,12 @@ export function composerContextChip(
         truncated: messageQuote.truncated
       }
     }
+  }
+  const terminalOutput = 'source' in attachment.provenance && attachment.provenance.source === 'workspace-selection'
+    ? terminalOutputFromComposerContext(attachment)
+    : null
+  if (terminalOutput) {
+    return { id: attachment.attachmentId, kind: 'terminal-output', label: attachment.title, removable: true, terminalOutput }
   }
   if (
     'source' in attachment.provenance &&

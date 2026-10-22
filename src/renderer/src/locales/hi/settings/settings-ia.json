@@ -34,7 +34,7 @@
   "settingsIaHarnessesDesc": "Codex, Claude Code, OpenCode और अन्य एजेंट को अपनी बातचीत में जोड़ें।",
   "settingsIaCollaborationDesc": "उन कामों के डिफ़ॉल्ट जिनमें कई एजेंट मिलकर काम करते हैं।",
   "settingsIaCodeDesc": "Code कहाँ काम करता है, ब्रांच कैसे अलग रखता है और किन स्नैपशॉट पर लौट सकता है।",
-  "settingsIaTerminalDesc": "टर्मिनल के रंग, SSH सर्वर और kun कमांड।",
+  "settingsIaTerminalDesc": "टर्मिनल का रूप और व्यवहार, नया-सत्र मेनू से शुरू होने वाले एजेंट, SSH सर्वर और kun कमांड।",
   "settingsIaPaperDesc": "शोध पत्र पढ़ना, खोज स्रोत और अनुवाद।",
   "settingsIaLabsDesc": "अभी बेहतर की जा रही क्षमताएँ। किसी को चालू करें तो उसकी सेटिंग्स दिखेंगी।",
   "settingsIaRuntimeDesc": "लोकल सेवा, कॉन्टेक्स्ट सीमाएँ और रनटाइम सुरक्षा। ज़्यादातर लोगों को इन्हें बदलने की ज़रूरत नहीं।",

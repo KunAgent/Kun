@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { TerminalAttentionBadge, useTerminalButtonTooltip } from '../terminal/TerminalAttentionBadge'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
 import { WorkbenchSideRailDivider, WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
@@ -120,6 +121,7 @@ export function WorkbenchTopActions({
   onOpenMobileRail
 }: WorkbenchTopActionsProps): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
+  const terminalTooltip = useTerminalButtonTooltip(t('rightPanelTerminal'), terminalOpen)
   const remoteMobile = useRemoteMobileLayout()
   const [editors, setEditors] = useState<EditorInfo[]>([])
   const [selectedEditorId, setSelectedEditorId] = useState(() => readPreferredEditorId() ?? '')
@@ -292,12 +294,13 @@ export function WorkbenchTopActions({
         <button
           type="button"
           onClick={onToggleTerminal}
-          className={topbarActionButtonClass(terminalOpen)}
-          data-tooltip={t('rightPanelTerminal')}
+          className={topbarActionButtonClass(terminalOpen, 'relative')}
+          data-tooltip={terminalTooltip}
           aria-label={t('rightPanelTerminal')}
           aria-pressed={terminalOpen}
         >
           <Terminal className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+          <TerminalAttentionBadge dockOpen={terminalOpen} />
         </button>
       ) : null}
 

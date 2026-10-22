@@ -34,7 +34,7 @@
   "settingsIaHarnessesDesc": "Bring Codex, Claude Code, OpenCode and other Agents into your conversations.",
   "settingsIaCollaborationDesc": "Defaults for team tasks where several Agents work together.",
   "settingsIaCodeDesc": "Where Code works, how it isolates branches, and the snapshots it can roll back to.",
-  "settingsIaTerminalDesc": "Terminal colors, SSH servers and the kun shell command.",
+  "settingsIaTerminalDesc": "Terminal look and behavior, Agents you can start from the new-session menu, SSH servers and the kun command.",
   "settingsIaPaperDesc": "Paper reading, search sources and translation.",
   "settingsIaLabsDesc": "Capabilities that are still being polished. Switch one on and its settings appear.",
   "settingsIaRuntimeDesc": "The local service, context limits and runtime safeguards. Most people never need to change these.",

@@ -559,6 +559,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_BACKGROUND_SHELLS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_BACKGROUND_SHELL_TEMPLATE, ['GET']),
   compileEndpoint(`${KUN_BACKGROUND_SHELL_TEMPLATE}/stop`, ['POST']),
+  compileEndpoint(`${KUN_BACKGROUND_SHELL_TEMPLATE}/stdin`, ['POST']),
   compileEndpoint(KUN_DELEGATION_DIAGNOSTICS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_DELEGATION_ABORT_TEMPLATE, ['POST']),
   compileEndpoint(KUN_DELEGATION_PROFILES_TEMPLATE, ['GET']),

@@ -284,9 +284,16 @@ export const terminalCreatePayloadSchema = z
         task: z.string().max(8_192).optional(),
         taskWorkspaceId: trimmedString(256).optional(),
         parentThreadId: trimmedString(256).optional(),
-        workspaceKind: z.enum(['worktree', 'local', 'directory']).optional()
+        workspaceKind: z.enum(['worktree', 'local', 'directory']).optional(),
+        report: z.boolean().optional()
       })
       .strict()
+      .optional(),
+    shell: optionalTrimmedString(1_024),
+    shellIntegration: z.boolean().optional(),
+    env: z
+      .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/), z.string().max(4_096))
+      .refine((value) => Object.keys(value).length <= 16, 'Too many environment entries')
       .optional()
   })
   .strict()

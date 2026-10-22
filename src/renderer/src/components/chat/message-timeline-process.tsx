@@ -1,4 +1,5 @@
 import { AgentDispatchGroup, isOutcomeCardBlock } from './AgentDispatchCard'
+import { ToolTerminalButton } from './message-timeline-terminal-action'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement, RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -375,7 +376,9 @@ function ProcessStackRows({
                   )}
                 </button>
               ) : null}
-              <ToolCancelButton block={block} processing={processing} onCancelToolCall={onCancelToolCall} />
+              <ToolTerminalButton block={block} />
+              <ToolTerminalButton block={block} />
+        <ToolCancelButton block={block} processing={processing} onCancelToolCall={onCancelToolCall} />
             </div>
             {open ? (
               detail.kind === 'assistant' ? (

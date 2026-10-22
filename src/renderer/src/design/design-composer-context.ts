@@ -10,7 +10,7 @@ import type { DesignArtifact } from './design-types'
 
 export type DesignComposerContext = {
   id: string
-  kind: 'design-target' | 'html-artifact' | 'html-screen-frame' | 'html-element' | 'svg-artifact' | 'svg-artifact-frame' | 'canvas-selection' | 'extension-context' | 'dev-preview-element' | 'dev-preview-issue' | 'document-quote' | 'message-quote'
+  kind: 'design-target' | 'html-artifact' | 'html-screen-frame' | 'html-element' | 'svg-artifact' | 'svg-artifact-frame' | 'canvas-selection' | 'extension-context' | 'dev-preview-element' | 'dev-preview-issue' | 'document-quote' | 'message-quote' | 'terminal-output'
   label: string
   detail?: string
   removable?: boolean
@@ -26,6 +26,8 @@ export type DesignComposerContext = {
     role: 'assistant' | 'user'
     truncated: boolean
   }
+  /** Terminal output sent from the dock ("send to Kun"). */
+  terminalOutput?: import('../lib/terminal-output-attachment').TerminalOutputDisplay
 }
 
 export type DesignHtmlElementContext = {

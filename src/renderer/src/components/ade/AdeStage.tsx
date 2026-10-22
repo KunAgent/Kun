@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactElement } from 'react'
+import { useTerminalDockStore } from '../terminal/terminal-dock-store'
 import {
   WorkbenchConversationStage,
   type WorkbenchConversationStageProps
@@ -29,6 +30,7 @@ export type AdeStageProps = {
  * here, outside any conversation.
  */
 export function AdeStage({ conversation, activeThreadId, adeDraftOpen }: AdeStageProps): ReactElement {
+  const terminalMaximized = useTerminalDockStore((state) => state.layout.maximized)
   if (!activeThreadId && !adeDraftOpen) {
     const {
       terminalOpen,
@@ -42,7 +44,7 @@ export function AdeStage({ conversation, activeThreadId, adeDraftOpen }: AdeStag
         className="ds-chat-stage ds-drag relative isolate flex min-h-0 min-w-0 flex-1 flex-col"
         data-terminal-open={terminalOpen ? 'true' : 'false'}
       >
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className={`min-h-0 min-w-0 flex-1 flex-col ${terminalOpen && terminalMaximized ? 'hidden' : 'flex'}`}>
           <Suspense fallback={<div className="h-full min-h-0 w-full bg-ds-main" aria-hidden />}>
             <AdeMissionControl />
           </Suspense>

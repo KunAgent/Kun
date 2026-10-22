@@ -13,8 +13,11 @@ import type {
 } from '@shared/terminal'
 
 export type TerminalTarget =
-  /** `cwd` overrides the workspace root (e.g. a task worktree opened for review). */
-  | { kind: 'local'; cwd?: string }
+  /**
+   * `cwd` overrides the workspace root (e.g. a task worktree opened for
+   * review); `shell` overrides the default shell for this session.
+   */
+  | { kind: 'local'; cwd?: string; shell?: string }
   | { kind: 'ssh'; hostId: string; hostName: string }
   /**
    * ADE terminal agent: a harness CLI registered with kun
@@ -29,14 +32,24 @@ export type TerminalTarget =
       taskWorkspaceId?: string
       parentThreadId?: string
       workspaceKind?: 'worktree' | 'local' | 'directory'
+      /** Append the `kun worker` reporting notes to the task (default on). */
+      report?: boolean
     }
+  /** Read-only view of a background shell Kun started from a conversation. */
+  | { kind: 'kun-process'; processId: string; command: string; threadId: string }
+
+export type TerminalPtyTarget = Exclude<TerminalTarget, { kind: 'kun-process' }>
+
+export function isPtyTarget(target: TerminalTarget): target is TerminalPtyTarget {
+  return target.kind !== 'kun-process'
+}
 
 /**
  * Extra `terminal:create` fields a target contributes. Agent targets carry
  * the execution-unit request; SSH keeps its own create surface.
  */
 export function terminalTargetCreateExtras(
-  target: TerminalTarget,
+  target: TerminalPtyTarget,
   workspaceRoot?: string
 ): Pick<TerminalCreatePayload, 'cwd' | 'agent'> {
   if (target.kind === 'agent') {
@@ -48,7 +61,8 @@ export function terminalTargetCreateExtras(
         ...(target.task ? { task: target.task } : {}),
         ...(target.taskWorkspaceId ? { taskWorkspaceId: target.taskWorkspaceId } : {}),
         ...(target.parentThreadId ? { parentThreadId: target.parentThreadId } : {}),
-        ...(target.workspaceKind ? { workspaceKind: target.workspaceKind } : {})
+        ...(target.workspaceKind ? { workspaceKind: target.workspaceKind } : {}),
+        ...(target.report === false ? { report: false } : {})
       }
     }
   }
@@ -65,7 +79,7 @@ export type TerminalBackend = {
   onExit: (handler: (payload: TerminalExitPayload) => void) => () => void
 }
 
-export function terminalBackend(target: TerminalTarget): TerminalBackend {
+export function terminalBackend(target: TerminalPtyTarget): TerminalBackend {
   if (target.kind === 'local' || target.kind === 'agent') {
     return {
       create: window.kunGui.createTerminal,

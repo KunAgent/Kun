@@ -129,6 +129,8 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'terminal:write',
   'terminal:resize',
   'terminal:dispose',
+  'terminal:shells',
+  'terminal:process-info',
   'remote-ssh:hosts:list',
   'remote-ssh:hosts:create',
   'remote-ssh:hosts:update',

@@ -43,6 +43,7 @@ import changesCommit from './common/changes-commit.json'
 import turnUndo from './common/turn-undo.json'
 import taskSuggestion from './common/task-suggestion.json'
 import assistantMailbox from './common/assistant-mailbox.json'
+import terminalDock from './common/terminal-dock.json'
 
 const common = {
   ...taskSuggestion,
@@ -89,6 +90,7 @@ const common = {
   ...changesCommit,
   ...turnUndo,
   ...assistantMailbox,
+  ...terminalDock
 }
 
 export default common

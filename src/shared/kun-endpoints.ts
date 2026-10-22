@@ -591,6 +591,9 @@ export function kunBackgroundShellPath(sessionId: string): string {
 export function kunBackgroundShellStopPath(sessionId: string): string {
   return `${kunBackgroundShellPath(sessionId)}/stop`
 }
+export function kunBackgroundShellStdinPath(sessionId: string): string {
+  return `${kunBackgroundShellPath(sessionId)}/stdin`
+}
 
 /** Thread mode shared with the Kun contract. */
 export type KunThreadMode = 'agent' | 'plan'

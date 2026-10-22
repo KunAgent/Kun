@@ -280,7 +280,7 @@ export {
 } from '../delegation/child-agent-executor.js'
 export { SubagentRouter } from '../delegation/subagent-router.js'
 export { BackgroundShellRuntime } from '../services/background-shell-runtime.js'
-export { stopBashSessionById, createBashLocalTool } from '../adapters/tool/builtin-bash-tool.js'
+export { stopBashSessionById, writeBashSessionStdin, createBashLocalTool } from '../adapters/tool/builtin-bash-tool.js'
 export { createBackgroundShellTool } from '../adapters/tool/background-shell-tool.js'
 export {
   createSecretEncryptor,
