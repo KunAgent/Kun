@@ -65,4 +65,3 @@ export function useAgentRoster(workspace?: string, enabled = true): RosterSlot {
   }, [key, enabled])
   return useAgentRosterStore((state) => state.slots[key]) ?? EMPTY_SLOT
 }
-
