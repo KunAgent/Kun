@@ -11,17 +11,22 @@ import { AgentIcon } from '../agent-icon'
 import { FloatingComposerHarnessPicker } from './FloatingComposerHarnessPicker'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
 import { selectWorkbenchAgent, selectWorkbenchModel, workbenchDisplayModel, workbenchModelGroup } from '../rooms/workbench-agent-selection'
-import { routeFromWorkbenchModel, workbenchModelFromRoute } from './agent-dispatch-card-model'
+import { routeForRole, routeFromWorkbenchModel, withRouteRole, workbenchModelFromRoute } from './agent-dispatch-card-model'
+import { rosterRolesFor } from '@shared/agent-roster'
+import { useAgentRoster } from '../../store/agent-roster-store'
 
 /** Read-only route: Agent icon, name and the model as the user knows it. */
 export function AgentDispatchRouteLabel({ route, agentName }: { route: AgentDispatchAssignmentRoute; agentName?: string }) {
   const rowName = useHarnessStore((state) => state.rows.find((row) => row.definition.id === route.agentId)?.definition.displayName)
+  const roster = useAgentRoster(undefined, Boolean(route.profileId))
   const name = agentName || rowName || (route.agentId === 'kun' ? 'Kun' : route.agentId)
   const model = workbenchDisplayModel(workbenchModelFromRoute(route))
+  const role = route.profileId ? roster.entries.find((entry) => entry.id === route.profileId)?.name ?? route.profileId : undefined
   return <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-[12px] text-ds-muted" data-dispatch-route={route.agentId}>
     <AgentIcon harnessId={route.agentId} size={14} />
     <span className="shrink-0 font-medium text-ds-ink">{name}</span>
     {model ? <span className="min-w-0 truncate" title={model}>· {model}</span> : null}
+    {role ? <span className="shrink-0 rounded-md bg-ds-hover px-1.5 text-[11px] text-ds-ink" data-dispatch-route-role={route.profileId}>{role}</span> : null}
   </span>
 }
 
@@ -30,12 +35,17 @@ export function AgentDispatchRouteLabel({ route, agentName }: { route: AgentDisp
  * reuses the composer caches; the choice stays local to the card and reaches
  * Kun only through `onChange` (a dispatch `update`).
  */
-export function AgentDispatchRoutePicker({ route, disabled, onChange }: {
+export function AgentDispatchRoutePicker({ route, disabled, onChange, roleUse, workspace }: {
   route: AgentDispatchAssignmentRoute
   disabled: boolean
   onChange: (route: AgentDispatchAssignmentRoute) => void
+  /** Offer agent roster roles: worker roles for dispatch cards, session roles for task cards. */
+  roleUse?: 'worker' | 'session'
+  workspace?: string
 }) {
   const { t } = useTranslation('common')
+  const roster = useAgentRoster(workspace, Boolean(roleUse))
+  const roles = roleUse ? rosterRolesFor(roster.entries, roleUse) : []
   const baseGroups = useChatStore((state) => state.composerModelGroups)
   const rows = useHarnessStore((state) => state.rows)
   const loading = useHarnessStore((state) => state.rowsLoading)
@@ -70,8 +80,8 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange }: {
       providerGroups: providers?.groups ?? [] })
     if (!next.model) return
     pendingAgent.current = null
-    onChangeRef.current(routeFromWorkbenchModel(next))
-  }, [id, row, native, providers])
+    onChangeRef.current(withRouteRole(routeFromWorkbenchModel(next), route))
+  }, [id, row, native, providers, route])
 
   const refresh = (): void => {
     void loadHarnesses(true, { waitMs: 3_000 })
@@ -87,7 +97,7 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange }: {
       nativeDefault: state.models[nextId]?.modelInfo?.find((entry) => entry.isDefault)?.id,
       providerGroups: nextId === 'kun' ? kunGroups.map((group) => ({ providerId: group.providerId, label: group.label,
         models: group.modelIds })) : state.providerGroups[nextId]?.groups ?? [] })
-    if (model.model) { pendingAgent.current = null; onChange(routeFromWorkbenchModel(model)); return }
+    if (model.model) { pendingAgent.current = null; onChange(withRouteRole(routeFromWorkbenchModel(model), route)); return }
     // Wait for the catalog instead of sending a route Kun would reject for a missing model.
     pendingAgent.current = nextId
     if (next.definition.credentialModes.includes('native-login')) void loadHarnessModels(nextId)
@@ -98,7 +108,12 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange }: {
     const group = groups.find((entry) => entry.providerId === groupId)
     if (!group?.modelIds.includes(model)) return
     const { accountId: _account, ...next } = selectWorkbenchModel(current, model, groupId, group.accountId)
-    onChange(routeFromWorkbenchModel(next))
+    onChange(withRouteRole(routeFromWorkbenchModel(next), route))
+  }
+  const selectRole = (profileId: string): void => {
+    const next = routeForRole(route, roles.find((entry) => entry.id === profileId))
+    if (next.agentId !== route.agentId) pendingAgent.current = null
+    onChange(next)
   }
   const displayModel = workbenchDisplayModel(current)
   return <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1" data-dispatch-route-picker={id}>
@@ -110,5 +125,19 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange }: {
       composerPickList={groups.flatMap((group) => group.modelIds)} composerModelGroups={groups}
       emptyModelState={external && (native?.loading || providers?.loading) ? 'loading' : undefined}
       canChangeModel={!disabled} onComposerModelChange={selectModel} />
+    {roleUse && (roles.length || route.profileId) ? <select value={route.profileId ?? ''} disabled={disabled}
+      aria-label={t('dispatchIntent.roleLabel')} title={t('dispatchIntent.roleHint')} data-dispatch-role-picker={id}
+      onChange={(event) => selectRole(event.target.value)}
+      className="h-[26px] max-w-[11rem] truncate rounded-lg border border-ds-border bg-ds-card px-1.5 text-[12px] text-ds-ink disabled:opacity-50">
+      <option value="">{t('dispatchIntent.roleNone')}</option>
+      {route.profileId && !roles.some((entry) => entry.id === route.profileId)
+        ? <option value={route.profileId}>{route.profileId}</option> : null}
+      {roles.map((entry) => {
+        const lane = entry.lanes.worker
+        const blocked = roleUse === 'worker' && lane.state === 'blocked'
+        return <option key={entry.id} value={entry.id} disabled={blocked}
+          title={lane.state === 'blocked' ? lane.message : entry.description}>{entry.name}</option>
+      })}
+    </select> : null}
   </div>
 }

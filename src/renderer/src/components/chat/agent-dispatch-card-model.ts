@@ -45,7 +45,8 @@ export function dispatchAssignments(intent: AgentDispatchIntentView): AgentDispa
 }
 
 export function assignmentRoute(assignment: AgentDispatchAssignmentRoute): AgentDispatchAssignmentRoute {
-  return { agentId: assignment.agentId, ...(assignment.model ? { model: assignment.model } : {}),
+  return { agentId: assignment.agentId, ...(assignment.profileId ? { profileId: assignment.profileId } : {}),
+    ...(assignment.model ? { model: assignment.model } : {}),
     ...(assignment.providerId ? { providerId: assignment.providerId } : {}),
     ...(assignment.credentialMode ? { credentialMode: assignment.credentialMode } : {}) }
 }
@@ -57,7 +58,8 @@ export function replaceAssignmentRoute(assignments: readonly AgentDispatchAssign
 }
 
 export function sameAssignmentRoute(left: AgentDispatchAssignmentRoute, right: AgentDispatchAssignmentRoute): boolean {
-  return left.agentId === right.agentId && (left.model ?? '') === (right.model ?? '') &&
+  return left.agentId === right.agentId && (left.profileId ?? '') === (right.profileId ?? '') &&
+    (left.model ?? '') === (right.model ?? '') &&
     (left.providerId ?? '') === (right.providerId ?? '') && (left.credentialMode ?? '') === (right.credentialMode ?? '')
 }
 
@@ -66,6 +68,25 @@ export function workbenchModelFromRoute(route: AgentDispatchAssignmentRoute): Wo
   return { harnessId: route.agentId as WorkbenchModel['harnessId'], model: route.model ?? '',
     ...(route.providerId ? { providerId: route.providerId } : {}),
     ...(route.credentialMode ? { credentialMode: route.credentialMode } : {}) }
+}
+
+/** A route switch keeps the role the user (or the Agent) picked for this worker. */
+export function withRouteRole(next: AgentDispatchAssignmentRoute, current: AgentDispatchAssignmentRoute): AgentDispatchAssignmentRoute {
+  return current.profileId ? { ...next, profileId: current.profileId } : next
+}
+
+/** Pick a roster role: a role bound to an engine also moves the route onto that engine. */
+export function routeForRole(current: AgentDispatchAssignmentRoute, role: {
+  id: string
+  engine: { kind: 'lane-default' } | { kind: 'bound'; harnessId: string; credentialMode: AgentDispatchAssignmentRoute['credentialMode']; model?: string; providerId?: string }
+} | undefined): AgentDispatchAssignmentRoute {
+  const { profileId: _previous, ...base } = current
+  if (!role) return base
+  if (role.engine.kind !== 'bound') return { ...base, profileId: role.id }
+  return { agentId: role.engine.harnessId, profileId: role.id,
+    ...(role.engine.model ? { model: role.engine.model } : {}),
+    ...(role.engine.providerId ? { providerId: role.engine.providerId } : {}),
+    ...(role.engine.credentialMode ? { credentialMode: role.engine.credentialMode } : {}) }
 }
 
 export function routeFromWorkbenchModel(model: WorkbenchModel): AgentDispatchAssignmentRoute {

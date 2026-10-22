@@ -48,7 +48,8 @@ export type TaskSuggestionView = {
   updatedAt: string
 }
 
-const route = z.object({ agentId: z.string().min(1).max(512), model: z.string().max(512).optional(),
+const route = z.object({ agentId: z.string().min(1).max(512), profileId: z.string().min(1).max(128).optional(),
+  model: z.string().max(512).optional(),
   providerId: z.string().min(1).max(128).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional() }).strict()
 const brief = z.object({ goal: z.string().min(1).max(8_000), scope: z.array(z.string().max(2_000)).max(12).default([]),

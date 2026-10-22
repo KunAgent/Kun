@@ -3,7 +3,8 @@ import type { ActivityRow } from '@shared/activity-row'
 import { AgentDispatchIntentPublicSchema, type AgentDispatchIntentView } from '@shared/agent-dispatch'
 import {
   dispatchAssignments, dispatchCountdown, dispatchPhase, dispatchRoutesEditable, formatDispatchClock,
-  replaceAssignmentRoute, routeFromWorkbenchModel, workbenchModelFromRoute, workerProgress
+  replaceAssignmentRoute, routeForRole, routeFromWorkbenchModel, sameAssignmentRoute, withRouteRole,
+  workbenchModelFromRoute, workerProgress
 } from './agent-dispatch-card-model'
 
 function intent(overrides: Partial<AgentDispatchIntentView> = {},
@@ -84,5 +85,23 @@ describe('dispatch card view model', () => {
     expect(workerProgress(running, 3, rows)).toEqual({ state: 'pending' })
     expect(workerProgress(intent({ state: 'running', deadline: undefined, target: { workerIds: ['w9'] } }), 0, {}))
       .toEqual({ workerId: 'w9', state: 'working' })
+  })
+})
+
+describe('dispatch card roster roles', () => {
+  const kun = { agentId: 'kun', model: 'deepseek-flash' }
+  const bound = { id: 'reviewer', engine: { kind: 'bound' as const, harnessId: 'codex', credentialMode: 'native-login' as const, model: 'gpt-5.5-codex' } }
+
+  it('moves a worker onto the engine a chosen role is bound to', () => {
+    expect(routeForRole(kun, bound)).toEqual({ agentId: 'codex', profileId: 'reviewer', model: 'gpt-5.5-codex', credentialMode: 'native-login' })
+    expect(routeForRole(kun, { id: 'explore', engine: { kind: 'lane-default' } })).toEqual({ ...kun, profileId: 'explore' })
+    expect(routeForRole({ ...kun, profileId: 'explore' }, undefined)).toEqual(kun)
+  })
+
+  it('keeps the role across engine and model switches and counts it as a route change', () => {
+    expect(withRouteRole({ agentId: 'claude-code', model: 'claude-sonnet-5' }, { ...kun, profileId: 'reviewer' }))
+      .toEqual({ agentId: 'claude-code', model: 'claude-sonnet-5', profileId: 'reviewer' })
+    expect(sameAssignmentRoute(kun, { ...kun, profileId: 'reviewer' })).toBe(false)
+    expect(replaceAssignmentRoute([kun], 0, { ...kun, profileId: 'reviewer' })).toEqual([{ ...kun, profileId: 'reviewer' }])
   })
 })

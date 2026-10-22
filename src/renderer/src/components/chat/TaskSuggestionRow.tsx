@@ -123,7 +123,7 @@ export function TaskSuggestionRow({ card, task, index, phase, locked, busy, act 
           title={subtitle.text}>{subtitle.text}</span> : null}
       </button>
       {task.state === 'suggested' && editable
-        ? <AgentDispatchRoutePicker route={task.route} disabled={busy}
+        ? <AgentDispatchRoutePicker route={task.route} disabled={busy} roleUse="session" workspace={card.workspace}
           onChange={(route) => void act('update', { taskId: task.id, changes: { route } })} />
         : task.state === 'suggested' ? <AgentDispatchRouteLabel route={task.route} /> : null}
       {task.state === 'suggested' && editable && !countdown ? <>

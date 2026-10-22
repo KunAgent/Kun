@@ -6,6 +6,7 @@ import { Bot, Check, Plug, Search, Sparkles, Wrench, X } from 'lucide-react'
 import type { KunSubagentProfileV1 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ModelSelect, ReasoningEffortPicker } from './SubagentProfileControls'
+import { SubagentRosterStatus } from './SubagentRosterStatus'
 import { harnessRowAvailable, harnessRowRunsTurns, loadHarnesses, loadHarnessProviderGroups, useHarnessStore } from '../../store/harness-store'
 import {
   BUILTIN_TOOL_NAMES,
@@ -32,6 +33,7 @@ export function ProfileDialog({
   onCancel: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
+  const { t: tSettings } = useTranslation('settings')
   const [d, setD] = useState<KunSubagentProfileV1>(initial)
   const [tab, setTab] = useState<'basic' | 'permissions'>('basic')
   const [catalog, setCatalog] = useState<CapabilityCatalog | null>(null)
@@ -102,6 +104,7 @@ export function ProfileDialog({
               className="w-full rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
             />
           </Field>
+          {!isNew ? <SubagentRosterStatus profileId={initial.id} /> : null}
           <Field label={t('agentsView.fColor', 'Color')}>
             <div className="flex gap-2.5">
               {PRESET_COLORS.map((c) => {
@@ -220,6 +223,16 @@ export function ProfileDialog({
               />
             </Field>
           ) : null}
+          <Field label={tSettings('adeSettings.profileOwns')} hint={tSettings('adeSettings.profileOwnsHint')}>
+            <textarea
+              value={d.owns ?? ''}
+              rows={2}
+              maxLength={300}
+              data-subagent-owns
+              onChange={(e) => set('owns', e.target.value || undefined)}
+              className="w-full resize-none rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
+            />
+          </Field>
           <Field label={t('subagentsPanel.reasoning', 'Reasoning')}>
             <ReasoningEffortPicker
               value={normalizeStoredReasoning(d.reasoningEffort)}

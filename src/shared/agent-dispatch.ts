@@ -6,6 +6,8 @@ export type AgentDispatchCredentialMode = 'native-login' | 'provider' | 'kun-gat
 /** Which Agent runs one dispatched worker, on which model. */
 export type AgentDispatchAssignmentRoute = {
   agentId: string; model?: string; providerId?: string; credentialMode?: AgentDispatchCredentialMode
+  /** Agent roster role the worker plays; absent = the engine alone. */
+  profileId?: string
 }
 export type AgentDispatchAssignmentView = AgentDispatchAssignmentRoute & { label: string; agentName?: string }
 export type AgentDispatchIntentView = {
@@ -52,6 +54,7 @@ export type AgentDispatchTargetView = {
 
 const permission = z.enum(['ask-for-approval', 'approve-for-me', 'full-access'])
 const assignment = z.object({ label: z.string().min(1).max(64), agentId: z.string().min(1).max(512),
+  profileId: z.string().min(1).max(128).optional(),
   agentName: z.string().max(512).optional(), model: z.string().max(512).optional(),
   providerId: z.string().min(1).max(128).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional() }).strict()

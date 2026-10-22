@@ -97,6 +97,18 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
             </div>
             <div className="sm:col-span-2">
               <CompactPolicySetting
+                title={tSettings('subagentsHonorEngineBinding')}
+                description={tSettings('subagentsHonorEngineBindingDesc')}
+              >
+                <Toggle
+                  checked={subagents.honorEngineBinding !== false}
+                  onChange={(honorEngineBinding) => patchSubagents({ honorEngineBinding })}
+                  ariaLabel={tSettings('subagentsHonorEngineBinding')}
+                />
+              </CompactPolicySetting>
+            </div>
+            <div className="sm:col-span-2">
+              <CompactPolicySetting
                 title={tSettings('subagentsMaxParallel')}
                 description={tSettings('subagentsMaxParallelDesc')}
               >

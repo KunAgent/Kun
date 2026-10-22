@@ -326,6 +326,7 @@ const subagentProfilePatchSchema = z
     credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
     gatewayBinding: HarnessGatewayBindingSchema.optional(),
     delegationNotes: z.string().max(1_000).optional(),
+    owns: z.string().max(300).optional(),
     builtin: z.boolean().optional()
   })
   .passthrough()
@@ -334,6 +335,7 @@ const subagentsPatchSchema = z
   .object({
     enabled: z.boolean().optional(),
     useExistingAgents: z.boolean().optional(),
+    honorEngineBinding: z.boolean().optional(),
     maxParallel: z.number().int().positive().max(256).optional(),
     proactiveRetry: z.object({
       enabled: z.boolean().optional(),

@@ -53,7 +53,8 @@ export function AgentDispatchAssignmentList({ intent, assignments, editable, bus
             {batch ? assignment.label : t('dispatchIntent.executor')}
           </span>
           {editable
-            ? <AgentDispatchRoutePicker route={assignment} disabled={busy}
+            ? <AgentDispatchRoutePicker route={assignment} disabled={busy} roleUse="worker"
+              workspace={intent.recommendation.workspace}
               onChange={(route) => onRouteChange(index, route)} />
             : <AgentDispatchRouteLabel route={assignment} agentName={assignment.agentName} />}
         </div>

@@ -10,7 +10,7 @@ describe('Agent dispatch HTTP contract mirror', () => {
       policySnapshot: { approvalPolicy: 'auto', sandboxMode: 'danger-full-access', approvalReviewer: 'user' },
       recommendation: { title: 'Task', task: 'Assignment', agentId: 'codex', agentName: 'Codex', model: 'model', workspace: '/workspace',
         acceptanceCriteria: ['Tests pass'], permissionMode: 'full-access', effectivePermissionMode: 'approve-for-me', agentSelection: 'auto',
-        assignments: [{ label: 'Task', agentId: 'codex', agentName: 'Codex', model: 'model', providerId: 'provider', credentialMode: 'native-login' }] },
+        assignments: [{ label: 'Task', agentId: 'codex', profileId: 'reviewer', agentName: 'Codex', model: 'model', providerId: 'provider', credentialMode: 'native-login' }] },
       payload: { private: true }, requestLedger: { call: 'hash' }, startRequestId: 'start', batchId: 'batch',
       deadline: '2026-10-07T02:01:00.000Z', decision: { decision: 'allow', reason: 'Reviewed', decidedAt: '2026-10-07T02:00:00.000Z' },
       target: { taskId: 'task', threadId: 'child', turnId: 'child-turn', workerIds: ['child'], dispatchIds: ['dispatch'] },

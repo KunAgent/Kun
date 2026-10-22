@@ -27,6 +27,8 @@
   "subagentsRuntimePolicyDesc": "위임 동시 실행 수를 설정합니다. 한도를 넘는 작업은 대기열에서 기다립니다.",
   "subagentsUseExistingAgents": "기존 에이전트 사용",
   "subagentsUseExistingAgentsDesc": "켜면 delegate_task가 구성된 프로필을 선택합니다. 끄면 메인 에이전트가 작업마다 일회성 역할을 정의합니다.",
+  "subagentsHonorEngineBinding": "역할을 묶인 엔진에서 실행",
+  "subagentsHonorEngineBindingDesc": "켜짐: Claude Code, Codex 등 엔진에 묶인 역할은 delegate_task에서도 그 엔진으로 실행하고, 엔진을 쓸 수 없으면 거절합니다. 꺼짐: delegate_task 하위 작업은 모두 메인 경로로 실행합니다.",
   "subagentsMaxParallel": "최대 병렬 하위 에이전트",
   "subagentsMaxParallelDesc": "이만큼의 하위 에이전트가 동시에 실행되면 새 작업이 대기열에서 대기합니다.",
   "subagentsProactiveRetry": "메인 에이전트의 실패한 하위 에이전트 재시도",
