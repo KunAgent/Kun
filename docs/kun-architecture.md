@@ -392,6 +392,9 @@ model/provider/reasoning 选择。升级前已经持久化的 `custom:*` child r
 custom agent 都禁用 Skills 自动激活。child record 持久化 route method、Top 5、
 选择理由、置信度及临时角色快照；router usage 计入父 thread。
 
+所有派活入口（`delegate_task`、`worker_create`、Graph 任务的 `profile`、`suggest_tasks`、对话成员）共用一份Agent 名册（`kun/src/delegation/agent-roster.ts`，只读接口 `GET /v1/agent-roster`）：角色 + 引擎绑定 + 各档准入状态。
+角色绑定的引擎在每一档都兑现（`capabilities.subagents.honorEngineBinding` 可关闭 `delegate_task` 的兑现），跑不了就在选人时按统一原因码拒绝，不静默退回原生 loop。名册只出现在工具结果和动态上下文里，设计与实现记录见 [agent-roster-dispatch-ladder.zh-CN.md](./agent-roster-dispatch-ladder.zh-CN.md)。
+
 下一阶段仍值得推进的缓存能力：
 
 - 工具集合 mutation gate：新增工具允许 append，编辑、重排、删除工具时要求

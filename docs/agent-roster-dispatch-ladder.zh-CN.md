@@ -1,7 +1,7 @@
 # Agent 名册与派活阶梯：设计稿
 
-- 状态：设计稿，待评审
-- 日期：2026-10-22
+- 状态：已实现（2026-10-23，分支 `kun/agent-roster`）。实现与本稿的差异和最终决定见第 10 节
+- 日期：2026-10-22（设计）、2026-10-23（实现）
 - 基线：本地 `develop` @ `b9f6e26f5`
 - 范围：`kun/src/contracts`、`kun/src/delegation`、`kun/src/ade`、`kun/src/graph`、
   `kun/src/harness`、`kun/src/rooms`、`kun/src/adapters/tool`、`kun/src/server`、
@@ -113,11 +113,12 @@
 - **E2：Graph 用不了现成的角色。** 45 个内置角色、用户配置的角色、`.kun/agents/*.md`，
   Graph 节点都选不到。intent 里没有角色字段；路由只查学习表，查不到就合成
   "You are a task executor specialized for: <title>" 这样的临时角色。
-- **E3：三个入口三种发现方式，Graph 没有。**
+- **E3：三个入口三种发现方式，Graph 只看得到引擎。**
   - `delegate_task` 用 `list_subagent_profiles`，只能看到角色，看不到引擎；
   - worker 用 `harness_list`，看到的是引擎；
-  - Graph 规划时，`list_subagent_profiles` 在 `GRAPH_INCOMPATIBLE_TOOL_NAMES` 里被屏蔽，
-    但 `harnessId` 又允许写，Lead 只能靠猜，等 `checkGraphPlanHarnesses` 报错后再改。
+  - Graph 规划回合的动态上下文里有一份引擎菜单（`graphHarnessSummary`），可以写 `harnessId`；
+    但 `list_subagent_profiles` 在 `GRAPH_INCOMPATIBLE_TOOL_NAMES` 里被屏蔽，Lead 看不到任何角色。
+    （初稿写成"Lead 只能猜引擎 id"，实现时核实有误，已更正。）
 - **E4：同一个词，用户看到三种意思。** 派活卡片和 `suggest_tasks` 的 "Agent" 指引擎；
   Code 对话的 "Agent" 指成员；设置页的"子代理"指角色。
 - **E5：成员看不到工作区角色。** 绑定了仓库的对话，成员的 `presetId` 不能指向该仓库
@@ -166,7 +167,7 @@
 
 ```ts
 export const AgentRosterSourceSchema = z.enum([
-  'builtin', 'configured', 'workspace', 'extension', 'learned'
+  'builtin', 'configured', 'workspace', 'learned'
 ])
 
 /** 档：一次派活的粒度。键值与 HarnessUsage 一一对应。 */
@@ -251,9 +252,10 @@ export type AgentRosterResolution =
   | { ok: false; code: AgentRosterLaneFailure; message: string }
 ```
 
-- **数据来源**，从弱到强：`extension` < `builtin` < `configured` < `workspace`。
-  前三层沿用 `mergeBuiltinSubagentProfiles` 的逐个 id 深合并语义，最后叠上
-  `loadWorkspaceAgentProfiles`。`learned` 在阶段 3 加入，只读。
+- **数据来源**，从弱到强：`builtin` < `configured` < `workspace`。
+  前两层沿用 `mergeBuiltinSubagentProfiles` 的逐个 id 深合并语义，最后叠上
+  `loadWorkspaceAgentProfiles`。`learned` 在阶段 3 加入，只读，且不遮盖同名条目。
+  extension 通过 `agents.register` 注册的是引擎而不是角色，所以不是名册来源。
 - **引擎的选择优先级**：调用方显式指定 > 成员的 `executor` > 条目绑定的引擎 > 这一档的默认值。
   无论最终选了谁，都必须通过这一档的准入检查。
 - **用途映射**：`delegate` → 新增 `delegate-child`，`worker` → `manager-worker`，
@@ -336,7 +338,7 @@ export type AgentRosterResolution =
 |---|---|---|---|
 | `delegate_task` | 无（已有 `profile`） | `roster.resolve(id, {lane: 'delegate'})`，把 `route` 传进 `runChild` | `custom_agent` 仍然只继承主会话路由，不能绑定引擎 |
 | `worker_create` | `profile?: string` | `roster.resolve(id, {lane: 'worker', engineOverride: input.agent})` | `agent.harnessId` 和条目绑定的引擎不一致时，显式指定的赢，但必须通过准入 |
-| `graph_define_plan` | 任务上加 `profile?: string` | 编译时解析成 `ephemeral` 引用，同时写入 `rosterProfileId` 溯源字段 | `profile` 和 `harnessId` 同时出现且不一致，就报 schema issue |
+| `graph_define_plan` | 任务上加 `profile?: string` | 编译时解析成 `ephemeral` 引用，同时写入 `rosterProfileId` 溯源字段 | 任务显式写的 `harnessId` 优先（与 worker 一致），只借用角色 |
 | `graph_create_run`（兼容） | 同上 | 同上 | 同上 |
 | `suggest_tasks` | `route.profileId?` | 只接受 `mode` 为 `primary` 或 `all` 的条目，用作子会话的线程角色 | `subagent-only` 的条目返回 `mode_mismatch` |
 | Code 对话成员 | 无（`presetId` 已有） | `presetId` 改为经名册解析；绑定仓库时带上工作区角色 | `executor` 覆盖条目的引擎 |
@@ -431,7 +433,7 @@ export type AgentRosterResolution =
 
 | 测试 | 覆盖 |
 |---|---|
-| 新增 `kun/src/delegation/agent-roster.test.ts` | 四层来源的优先级；`.kun/agents` 覆盖内置角色；extension 来源；引擎优先级；每个原因码 |
+| 新增 `kun/src/delegation/agent-roster.test.ts` | 三层来源的优先级；`.kun/agents` 覆盖内置角色；learned 来源；引擎优先级；每个原因码 |
 | 新增 `kun/src/delegation/agent-roster-lanes.test.ts` | 四档 × {原生 loop、Claude Code、Codex、ACP 无 kunTools} 的准入矩阵 |
 | `adapters/tool/delegation-tool-provider*.test.ts` | `delegate_task(profile)` 把引擎带到 `runChild`；引擎未就绪时报错，不静默降级 |
 | `ade/worker-selector.test.ts` | 黄金对照：名册候选和旧候选在同一组输入下排序一致 |
@@ -559,7 +561,7 @@ node scripts/smoke-development-ade.cjs --roster-only
 - 长程多轮编排：按轮推进，用 journal 和 backlog 交接，事后回滚越权写入。
 - 对外协议：Kun 作为 ACP server；A2A 只放在宿主这一层。
 
-### 9.2 待决问题（需要拍板）
+### 9.2 待决问题（实现时的处理见 10.3）
 
 1. **UI 用词。** "Agent" 指名册条目（推荐，见 4.6），还是继续指引擎？
    这会影响 Agent Center、派活卡片和设置页的标题。
@@ -568,3 +570,56 @@ node scripts/smoke-development-ade.cjs --roster-only
    "引擎权限档位映射到只读"这个条件？还是要求引擎必须自带沙箱？
 4. **`custom_agent` 能否绑定引擎。** 推荐不能，保持"一次性角色只继承主会话路由"。
 5. **学习表并入的时机。** 推荐等完成判定上线、有了可靠的证据之后再做阶段 3。
+
+---
+
+## 10. 实现记录（2026-10-23）
+
+阶段 0 到阶段 3 已全部实现，分支 `kun/agent-roster`。下面只记和第 4–6 节不一样的地方。
+
+### 10.1 实际契约
+
+- **档的状态是三态**：`ok`、`unchecked`、`blocked`。`unchecked` 表示引擎就绪状态还没被探测过。
+  列表只读 detector 缓存、不触发探测；真正派活时（`resolve`）才会等待探测结果。
+- **原因码**：`not_found`、`surface_mismatch`、`mode_mismatch`、`engine_unavailable`、
+  `engine_not_ready`、`capability_missing`、`sandbox_insufficient`。
+  各入口统一使用同一句措辞：`<id> cannot run as <lane> (<code>): <reason>`（`rosterRefusal`）。
+- **`facts` 去掉了 `readsLocalFiles`**：Kun 的引擎都是本地进程，这个标签永远为真，没有信息量。
+  给模型的标签是正反成对的：`writes / read-only`、`resumable`、`live-progress`、`kun-tools`、`asks-user`。
+- **`honorEngineBinding` 是可选字段，缺省视为开启。** 这样旧配置和测试里的配置字面量都不用改。
+- **`resolve(id, { engineOverridden })`**：调用方显式指定了引擎（worker 的 `agent.harnessId`、
+  Graph 任务的 `harnessId`、任务卡的引擎）时，只检查角色的模式和 surface，
+  不检查、也不使用角色自己绑定的引擎。
+- **探测型引擎**（Codex、OpenCode 等没有静态模型表的引擎）：如果角色没写 `model`，
+  就用该引擎最近一次探测到的默认模型，和手动 pin worker 的行为一致。
+
+### 10.2 各入口的落地
+
+| 入口 | 落地方式 |
+|---|---|
+| `delegate_task` | 显式 `profile` 走 `roster.resolve(lane: delegate)`；自动路由只在该档能跑的角色里选，被排除的角色写进路由说明；被选中的角色如果探测失败，回退到默认角色并写明原因。绑定外部引擎的只读角色（或只读任务）在该引擎上以 `sandboxMode: read-only` 运行 |
+| `worker_create(_batch)` | `profile` 字段；卡片的 `assignments[].profileId` 从提议、审核、卡片编辑一直带到启动；顺带修复了原有缺口：显式角色在没有选择器理由时不会传给子代理 |
+| `graph_define_plan` / `graph_create_run` | 任务 `profile` 在编译前解析，问题以结构化 issue 返回（`tasks[i].profile`），包括"只读角色却声明了 writeScopes"；编译成带 `rosterProfileId` 的 `ephemeral` 引用 |
+| Graph Lead 回合 | 只放开只读的 `list_subagent_profiles`（`GRAPH_LEAD_ROSTER_TOOL_NAME`），执行者仍拿不到；Lead 合约改为"只用列出的 id"；引擎菜单提示可写 `profile` |
+| `suggest_tasks` | 模型可为每条任务建议 `profile`；新建的子会话把角色写成线程人设（`agentId` + `systemPrompt`），fork 出的子会话把角色放进首条简报；只能委派的角色以 `agent_unavailable` 拒绝 |
+| Code 对话成员 | 只在执行任务（`prepareTask`）这一处，经名册按绑定仓库解析没有快照的成员角色；其余同步读取保持原样，它们读的本来就是同一份内置加配置目录 |
+| 委派上下文块 | `delegation` 动态块：派活阶梯 + 声明了 `owns` 且至少有一档能跑的角色，最多 12 条；只在原生 loop 的顶层会话里出现 |
+| 渲染层 | 共享 schema 接受 `profileId`（原 schema 是 strict，不改会让卡片解析失败）；派活卡片和任务卡的路由选择器可以选角色，选中绑定了引擎的角色会同时切换引擎；设置页加"负责的工作"、"按绑定引擎运行"开关和角色状态卡 |
+| 学习表 | `trusted` 的 learned 档案以只读 `learned` 来源进入名册，按工作区缓存 30 秒（项目识别需要跑 git） |
+
+### 10.3 待决问题的处理
+
+1. **UI 用词**：没有改动现有的 "Agent / 子代理" 叫法。名册条目在卡片上叫"角色"，在设置页沿用"子代理"。
+   全局改名涉及 Agent Center 等多处标题，应作为单独的产品决定。
+2. **引擎绑定默认开启**，可在设置页关闭。
+3. **只读放行**：只读角色在 `delegate_task` 上视为隔离；实际运行时强制使用引擎的只读沙箱档位。
+4. **`custom_agent` 不能绑定引擎**，保持原样。
+5. **学习表并入**：只做了只读接入（trusted learned 角色可被点名），没有把学习表改成以名册 id 为键。
+   后者要等完成判定上线、证据可靠之后再做。
+
+### 10.4 刻意没做的
+
+- **Graph 在学习表没命中时自动去名册召回角色**（原 PR 2.3）。Lead 现在可以显式写 `profile`，
+  自动召回只会在 Lead 没表达意图时替它选角色，而 BM25 误选会把节点交给不相干的角色。
+  因此保留现有行为：学习表没命中就生成临时执行者。
+- **名册进工具 schema 或稳定前缀**：始终只出现在工具结果和动态上下文里。
