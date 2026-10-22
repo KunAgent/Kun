@@ -1,3 +1,4 @@
+const { prepareGitHubAppResource } = require('./prepare-github-app-resource.cjs')
 const { execFileSync } = require('node:child_process')
 const { existsSync } = require('node:fs')
 const { join } = require('node:path')
@@ -20,6 +21,8 @@ function normalizeArch(arch) {
 async function beforePack(context) {
   const platform = normalizePlatform(context.electronPlatformName)
   const arch = normalizeArch(context.arch)
+  await prepareGitHubAppResource({ projectDir: context.packager?.projectDir ?? join(__dirname, '..'),
+    enabled: process.env.KUN_GITHUB_APP_RELEASE_ENABLED, sourcePath: process.env.KUN_GITHUB_APP_CLIENT_CONFIG_FILE })
   await prepareGmailNativeResource({ projectDir: context.packager?.projectDir ?? join(__dirname, '..'), platform,
     enabled: process.env.KUN_GMAIL_RELEASE_ENABLED, sourcePath: process.env.KUN_GMAIL_CLIENT_CONFIG_FILE })
   if (process.env.KUN_SKIP_WHISPER_RUNNER === '1') {

@@ -201,7 +201,8 @@ export function createServerRuntimeComposition(
   bindRoomAppAccess(core.threadStore, async (scopeId) => ({
     servers: (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp.servers,
     statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status])),
-    gmail: await services.gmail.status(scopeId)
+    gmail: await services.gmail.status(scopeId),
+    github: await model.githubApp?.service.status(scopeId)
   }))
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
@@ -222,6 +223,7 @@ export function createServerRuntimeComposition(
   return {
     threadService,
     gmail: services.gmail,
+    githubApp: model.githubApp?.service,
     gmailDataPolicy: model.gmailDataPolicy,
     gmailLocalModel: model.gmailLocalModel,
     agentDispatchService: services.agentDispatchService,
@@ -606,6 +608,7 @@ export function createServerRuntimeComposition(
         () => shutdownAllLspSessions(),
         () => services.mcpProviders.close(),
         () => services.gmail.dispose(),
+        () => model.githubApp?.service.dispose(),
         () => model.gmailLocalModel?.dispose(),
         () => migrationService.shutdown(),
         () => migrationImportService.shutdown(),

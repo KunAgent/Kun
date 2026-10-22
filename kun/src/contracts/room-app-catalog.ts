@@ -2,9 +2,10 @@
 export const ROOM_APP_CATALOG: Readonly<Record<string, {
   name: string
   url?: string
-  connectionKind?: 'native_gmail'
+  connectionKind?: 'native_gmail' | 'native_github'
 }>> = {
-  google_gmail: { name: 'Gmail', connectionKind: 'native_gmail' }
+  google_gmail: { name: 'Gmail', connectionKind: 'native_gmail' },
+  github: { name: 'GitHub', connectionKind: 'native_github' }
 }
 
 /** Previously suggested Google Workspace servers are unavailable to private Rooms. */
