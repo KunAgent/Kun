@@ -3,6 +3,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  buildClawScheduleMcpArgs,
   buildSyncedClawScheduleMcpJson,
   clawScheduleMcpSettingsChanged,
   removeLegacyClawScheduleTomlConfig,
@@ -27,7 +28,10 @@ import {
   type AppSettingsV1
 } from '../shared/app-settings'
 
-function createSettings(patch: Partial<AppSettingsV1['schedule']['internal']> = {}): AppSettingsV1 {
+function createSettings(
+  patch: Partial<AppSettingsV1['schedule']['internal']> = {},
+  workflow: Partial<AppSettingsV1['workflow']> = {}
+): AppSettingsV1 {
   const claw = defaultClawSettings()
   const schedule = defaultScheduleSettings()
   return {
@@ -61,7 +65,7 @@ function createSettings(patch: Partial<AppSettingsV1['schedule']['internal']> = 
         ...patch
       }
     },
-    workflow: defaultWorkflowSettings(),
+    workflow: { ...defaultWorkflowSettings(), ...workflow },
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
     remote: defaultRemoteAccessSettings(),
@@ -99,7 +103,7 @@ describe('claw schedule MCP config', () => {
   })
 
   it('writes the gui_schedule server to the Kun MCP JSON config shape', () => {
-    const settings = createSettings({ port: 19787, secret: 'top-secret' })
+    const settings = createSettings({ port: 19787, secret: 'top-secret' }, { enabled: true })
     const synced = buildSyncedClawScheduleMcpJson(
       {
         timeouts: { connect_timeout: 1 },
@@ -230,7 +234,7 @@ describe('claw schedule MCP config', () => {
       'utf8'
     )
 
-    await syncClawScheduleMcpConfig(createSettings(), launch, { configTomlPath, mcpJsonPath })
+    await syncClawScheduleMcpConfig(createSettings({}, { enabled: true }), launch, { configTomlPath, mcpJsonPath })
 
     const toml = await readFile(configTomlPath, 'utf8')
     const json = JSON.parse(await readFile(mcpJsonPath, 'utf8')) as Record<string, unknown>
@@ -288,5 +292,36 @@ describe('claw schedule MCP config', () => {
     expect(clawScheduleMcpSettingsChanged(createSettings(), createSettings())).toBe(false)
     expect(clawScheduleMcpSettingsChanged(createSettings(), createSettings({ port: 19876 }))).toBe(true)
     expect(clawScheduleMcpSettingsChanged(createSettings(), createSettings({ secret: 'abc' }))).toBe(true)
+    expect(clawScheduleMcpSettingsChanged(createSettings(), createSettings({}, { enabled: true }))).toBe(true)
+  })
+
+  it('omits the workflow bridge while Workflow is disabled', () => {
+    const args = buildClawScheduleMcpArgs(
+      createSettings({ port: 19787, secret: 'top-secret' }, { enabled: false }),
+      launch
+    )
+
+    expect(args).toEqual([
+      resolveClawScheduleMcpNodeEntryPath(launch),
+      '--gui-schedule-mcp-server',
+      '--base-url',
+      'http://127.0.0.1:19787',
+      '--secret',
+      'top-secret'
+    ])
+  })
+
+  it('advertises the workflow bridge once Workflow is enabled', () => {
+    const args = buildClawScheduleMcpArgs(
+      createSettings({}, { enabled: true, webhookPort: 18899, webhookSecret: 'wf-secret' }),
+      launch
+    )
+
+    expect(args.slice(-4)).toEqual([
+      '--workflow-base-url',
+      'http://127.0.0.1:18899',
+      '--workflow-secret',
+      'wf-secret'
+    ])
   })
 })

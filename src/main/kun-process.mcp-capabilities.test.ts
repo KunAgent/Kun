@@ -571,10 +571,12 @@ describe('syncGuiManagedKunConfig', () => {
       }
     }), 'utf8')
     const module = await import('./kun-process')
+    const enabledWorkflowSettings = createSettings('/tmp/fake-kun-child.js')
+    enabledWorkflowSettings.workflow = { ...enabledWorkflowSettings.workflow, enabled: true }
 
     await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), {
       scheduleMcp: {
-        settings: createSettings('/tmp/fake-kun-child.js'),
+        settings: enabledWorkflowSettings,
         launch: {
           appPath: '/tmp/deepseek-gui-test-app',
           execPath: '/tmp/electron',
