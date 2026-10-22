@@ -19,6 +19,7 @@ import {
   type SubagentProfileSurface
 } from './subagent-profile-catalog.js'
 import type { SubagentRoutingDocument } from './subagent-router.js'
+import { BUILTIN_AGENT_CATALOG_BY_ID } from './builtin-agent-catalog.js'
 
 const LANE_LABEL: Record<AgentRosterLane, string> = {
   delegate: 'a delegate_task child',
@@ -181,7 +182,11 @@ export class AgentRoster {
     workspace: string | undefined,
     surface: SubagentProfileSurface
   ): Promise<RosterSnapshot[]> {
-    const catalog: RosterSnapshot[] = await listCatalogSubagentProfiles(this.deps.profiles(), workspace, surface)
+    // A user override of a built-in role is still that built-in role on the roster.
+    const catalog: RosterSnapshot[] = (await listCatalogSubagentProfiles(this.deps.profiles(), workspace, surface))
+      .map((entry) => entry.source === 'configured' && BUILTIN_AGENT_CATALOG_BY_ID[entry.id]
+        ? { ...entry, source: 'builtin' as const }
+        : entry)
     if (!workspace || !this.deps.learned) return catalog
     const taken = new Set(catalog.map((entry) => entry.id))
     const learned = await this.deps.learned(workspace).catch(() => [])

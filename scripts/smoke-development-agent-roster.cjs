@@ -73,6 +73,10 @@ async function runAgentRosterFlow({ page, capture, poll, runtimeRequest, workspa
   await page.locator('[data-workbench-left-sidebar]').getByRole('button', { name: /Settings|设置/u }).click()
   await page.locator('[data-settings-category="subagents"]').click()
   await page.getByText(/Run roles on their bound engine|按角色绑定的引擎运行/u).first().waitFor()
+  await capture('roster-0-settings-policy')
+  await page.getByRole('tab', { name: /^(Subagent profiles|子代理配置)$/u }).or(
+    page.getByRole('button', { name: /^(Subagent profiles|子代理配置)$/u })).first().click()
+  await page.getByPlaceholder(/Search names, capabilities, or scenarios|搜索/u).first().fill('Repository Explorer')
   const explore = page.locator('[data-agent-id="explore"]').first()
   await explore.waitFor()
   await explore.locator('button').first().click()

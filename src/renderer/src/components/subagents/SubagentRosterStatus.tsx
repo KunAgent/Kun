@@ -32,11 +32,11 @@ export function SubagentRosterStatus({ profileId }: { profileId: string }): Reac
     : t('adeSettings.rosterEngineInherit')
   return (
     <div className="rounded-lg border border-ds-border bg-ds-card px-3 py-2" data-roster-status={profileId}>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2">
         <span className="text-xs font-medium text-ds-muted">{t('adeSettings.rosterStatusTitle')}</span>
         <span className="min-w-0 truncate text-[11.5px] text-ds-ink" title={engine}>{engine}</span>
       </div>
-      <ul className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+      <ul className="mt-1.5 grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-x-3 gap-y-1">
         {LANES.map(({ lane, key }) => {
           const status = entry.lanes[lane]
           const label = status.state === 'ok'

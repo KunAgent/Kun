@@ -99,6 +99,12 @@ describe('AgentRoster', () => {
     expect(entries.map((entry) => entry.id)).toEqual([...entries.map((entry) => entry.id)].sort())
   })
 
+  it('keeps a user-overridden built-in role labelled built-in', async () => {
+    const overridden = { ...BUILTIN_SUBAGENT_PROFILES, explore: { ...BUILTIN_SUBAGENT_PROFILES.explore!, model: 'custom-model', providerId: 'custom' } }
+    const entries = await roster(overridden).list()
+    expect(entries.find((entry) => entry.id === 'explore')?.source).toBe('builtin')
+  })
+
   it('reports a bound engine and admits it on every lane it can run', async () => {
     const [entry] = await roster({ reviewer }).list()
     expect(entry!.engine).toMatchObject({ kind: 'bound', harnessId: 'codex', model: 'gpt-5.5-codex' })
