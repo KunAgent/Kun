@@ -39,6 +39,7 @@ const { writeOpenCodeAgentStub, writeOpenCodeCredentialFixture, runOpenCodeAgent
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
 const { runWorkersOnlyFlow } = require('./smoke-development-ade-workers.cjs')
 const { runTaskSuggestionFlow } = require('./smoke-development-task-suggestions.cjs')
+const { runAgentRosterFlow, writeRosterWorkspaceRoles } = require('./smoke-development-agent-roster.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
 const { runTerminalDockFlow } = require('./smoke-development-terminal-dock.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
@@ -61,6 +62,7 @@ async function main() {
   const terminalOnly = process.argv.includes('--terminal-only')
   const workersOnly = process.argv.includes('--workers-only')
   const taskSuggestionsOnly = process.argv.includes('--task-suggestions-only')
+  const rosterOnly = process.argv.includes('--roster-only')
   const agentModeOnly = process.argv.includes('--agent-mode-only')
   const nativeModelOnly = process.argv.includes('--native-model-only')
   const installOnly = process.argv.includes('--install-only')
@@ -151,6 +153,7 @@ async function main() {
     await writeFile(join(workspaceRoot, 'baseline.txt'), 'baseline\n')
     await git(['add', 'baseline.txt'])
     await git(['commit', '-m', 'test: seed isolated ade workspace'])
+    if (rosterOnly) await writeRosterWorkspaceRoles(workspaceRoot)
 
     // Stub harness binaries inside the disposable root: `claude` answers a
     // version probe, `smoke-acp` answers the ACP initialize handshake.
@@ -294,6 +297,8 @@ async function main() {
       assertions = await runAgentModeFlow({ page, capture, poll, runtimeRequest })
     } else if (taskSuggestionsOnly) {
       assertions = await runTaskSuggestionFlow({ page, capture, poll, runtimeRequest })
+    } else if (rosterOnly) {
+      assertions = await runAgentRosterFlow({ page, capture, poll, runtimeRequest, workspaceRoot, modelFixture })
     } else if (terminalOnly) {
       assertions = await runTerminalDockFlow({ page, capture, poll })
     } else if (workersOnly) {

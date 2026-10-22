@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { SubagentRosterStatus } from './SubagentRosterStatus'
 import type { TFunction } from 'i18next'
 import { ChevronDown, ChevronRight, Pencil, Power, Search, Trash2 } from 'lucide-react'
 import type { KunSubagentSurfaceV1, ModelReasoningEffort } from '@shared/app-settings'
@@ -330,6 +331,9 @@ export function AgentDetailsPanel({
         </div>
       </div>
 
+      <div className="mt-4">
+        <SubagentRosterStatus profileId={profile.id} />
+      </div>
       <div className="mt-5 flex items-center gap-2 border-t border-ds-border-muted pt-4">
         {!builtin && source !== 'workspace' ? (
           <button data-settings-action="ghost" data-settings-size="icon" aria-label={profile.enabled ? t('disable', 'Disable') : t('enable', 'Enable')}

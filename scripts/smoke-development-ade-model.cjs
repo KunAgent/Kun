@@ -56,6 +56,19 @@ async function startModelFixture(model, options = {}) {
         { title: 'Cache session scans', area: 'backend', goal: '[task-smoke-session] Narrow signature invalidation.', worktree: false },
         { title: 'Trim first-paint requests', area: 'frontend', goal: '[task-smoke-session] One request on first paint.', worktree: false }
       ] })
+    } else if (text.includes('[roster-smoke-child]')) {
+      observation.rosterChild = true
+      observation.rolePrompt = JSON.stringify(messages).includes('ROSTER-SMOKE-ROLE-PROMPT')
+      message.content = 'Review finished: baseline.txt is fine.'
+    } else if (text.includes('[roster-smoke-delegate]') && supports('delegate_task') && !completed('roster-smoke-delegate')) {
+      observation.rosterDelegate = true
+      observation.delegationBlock = JSON.stringify(messages).includes('Hand the work these roles own')
+      message = call('roster-smoke-delegate', 'delegate_task', {
+        label: 'Repo review', profile: 'repo-reviewer', prompt: '[roster-smoke-child] Review baseline.txt and report.'
+      })
+    } else if (text.includes('[roster-smoke-delegate]')) {
+      observation.rosterParentFinal = true
+      message.content = 'The repo reviewer finished the review.'
     } else if (text.includes('[task-smoke-session]')) {
       counters.taskSessions = (counters.taskSessions ?? 0) + 1
       message.content = 'Task finished: the change is in place and verified with the smoke fixture.'
