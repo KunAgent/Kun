@@ -1,4 +1,3 @@
-import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import {
   HARNESS_CAPABILITY_KEYS,
   unsupported,
@@ -308,7 +307,6 @@ export function registerAdeManagerTooling(input: {
       checks: input.managerRuntime.checkRunnerDeps
     })
   input.registry.registerProvider(provider)
-  input.registry.registerProvider(createAgentDispatchToolProvider(input.services.agentDispatchService))
   wireTaskWorkspaceChange(
     input.core.taskWorkspaces,
     input.managerRuntime,
