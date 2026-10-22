@@ -212,6 +212,8 @@ export type AgentLoopOptions = {
   adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
   /** Suggestion-card state for the owning thread, resolved per turn after the stable prefix. */
   taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>
+  /** Dispatch ladder + role ownership block (agent roster `owns`). */
+  delegationContext?: (input: { threadId: string; workspace?: string; surface?: 'code' | 'write' | 'design' }) => Promise<string | undefined>
   /** Accepted per-turn context-window mode snapshots (frozen at admission). */
   contextWindowModes?: ContextWindowTurnModes
   /** Window transition coordinator backing the new_context tool. */

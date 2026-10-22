@@ -15,6 +15,7 @@ import {
 import { legacyProviderKindFor } from '../harness/harness-provider-kind.js'
 import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime.js'
 import type { WorkerCreateInput } from './manager-worker-inputs.js'
+import { rosterRefusal } from '../delegation/agent-roster.js'
 import {
   NoEligibleWorkerError,
   selectWorkerRoute,
@@ -256,7 +257,7 @@ async function resolveRosterWorkerRoute(
     parent: manager,
     engineOverridden: Boolean(input.agent?.harnessId)
   })
-  if (!resolution.ok) return { error: `${resolution.code}: ${resolution.message}` }
+  if (!resolution.ok) return { error: rosterRefusal(profileId, 'worker', resolution) }
   const engine = input.agent?.harnessId ? input.agent : resolution.route && {
     harnessId: resolution.route.harnessId,
     model: resolution.route.model,

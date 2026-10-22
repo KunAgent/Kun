@@ -46,6 +46,7 @@ import { createAdeManagerContext } from '../ade/manager-context.js'
 import { createTaskSuggestionContext } from '../delegation/task-suggestion-context.js'
 import { createTaskSuggestionToolProvider } from '../adapters/tool/task-suggestion-tool-provider.js'
 import { createRuntimeAgentRoster } from './runtime-composition-roster.js'
+import { createDelegationContext } from '../delegation/delegation-context.js'
 import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { providerModelIds } from './routes/model-gateway-core.js'
@@ -397,6 +398,10 @@ export async function createRuntimeAgentComposition(
     harnessRouter,
     graphHarnessSummary, adeManagerContext,
     taskSuggestionContext: createTaskSuggestionContext(services.taskSuggestionService),
+    delegationContext: createDelegationContext({
+      roster: agentRoster,
+      enabled: () => core.activeOptions.capabilities?.subagents?.enabled !== false
+    }),
     usage: usageService,
     events,
     turns: turnService,

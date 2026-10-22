@@ -1,5 +1,5 @@
 import type { GraphPlanningIssueV1 } from '../../contracts/graph.js'
-import type { AgentRoster } from '../../delegation/agent-roster.js'
+import { rosterRefusal, type AgentRoster } from '../../delegation/agent-roster.js'
 import type { GraphRosterRole } from '../../graph/index.js'
 
 export type GraphPlanRoster = Pick<AgentRoster, 'resolve'>
@@ -41,7 +41,7 @@ export async function resolveGraphPlanRoles(input: {
       issues.push({
         code: `profile_${resolution.code}`,
         path,
-        message: `profile ${id} cannot run as a Graph executor: ${resolution.message}`.slice(0, 2_048),
+        message: rosterRefusal(id, 'graph', resolution).slice(0, 2_048),
         repairHint: REPAIR_HINT
       })
       continue

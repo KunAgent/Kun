@@ -20,6 +20,22 @@ import {
 } from './subagent-profile-catalog.js'
 import type { SubagentRoutingDocument } from './subagent-router.js'
 
+const LANE_LABEL: Record<AgentRosterLane, string> = {
+  delegate: 'a delegate_task child',
+  worker: 'a worker',
+  graph: 'a Graph executor',
+  conversation: 'a conversation member'
+}
+
+/** One wording for a roster refusal on every lane, code included. */
+export function rosterRefusal(
+  id: string,
+  lane: AgentRosterLane,
+  failure: { code: AgentRosterFailureCode; message: string }
+): string {
+  return `${id} cannot run as ${LANE_LABEL[lane]} (${failure.code}): ${failure.message}`
+}
+
 /** The generic fallback role claims no territory, whatever a config says. */
 const GENERIC_PROFILE_ID = 'general'
 const SURFACES: readonly SubagentProfileSurface[] = ['code', 'write', 'design']

@@ -273,6 +273,7 @@ export abstract class AgentLoopBase {
       get graphHarnessSummary() { return opts.graphHarnessSummary },
       get adeManagerContext() { return opts.adeManagerContext },
       get taskSuggestionContext() { return opts.taskSuggestionContext },
+      get delegationContext() { return opts.delegationContext },
       modelRouting: this.modelRouting,
       budgetGate: this.budgetGate,
       goalTurns: this.goalTurns,

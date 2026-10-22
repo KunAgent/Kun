@@ -1,5 +1,5 @@
 import type { HarnessRoute } from '../../contracts/harness.js'
-import type { AgentRosterExclusion } from '../../delegation/agent-roster.js'
+import { rosterRefusal, type AgentRosterExclusion } from '../../delegation/agent-roster.js'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import type { SubagentRoutingDocument } from '../../delegation/subagent-router.js'
 import type { InlineProfile } from './delegation-tool-results.js'
@@ -27,7 +27,7 @@ export async function explicitDelegateProfile(
   const resolution = await roster.resolve(requested, { lane: 'delegate', ...input })
   if (!resolution.ok) {
     return {
-      error: `profile ${requested} cannot run as a delegate_task child (${resolution.code}): ${resolution.message}. ` +
+      error: `${rosterRefusal(requested, 'delegate', resolution)}. ` +
         'Choose another profile from list_subagent_profiles, or omit profile for automatic routing.'
     }
   }

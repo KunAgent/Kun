@@ -515,7 +515,7 @@ export abstract class ModelStepPreparationService {
         ? [kunContextBlock('runtime-context', 'runtime', runtimeContextInstruction)]
         : []),
       ...await planningTeamContextBlocks(turn, graphCreateSatisfied,
-        thread, threadId, this.deps.graphHarnessSummary, this.deps.adeManagerContext, this.deps.taskSuggestionContext),
+        thread, threadId, this.deps.graphHarnessSummary, this.deps.adeManagerContext, this.deps.taskSuggestionContext, this.deps.delegationContext),
       ...turnDynamicContext.blocks.filter((block) => block.authority === 'runtime'),
       ...(workflowGate.subagentResumeInstruction
         ? [kunContextBlock(

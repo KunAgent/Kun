@@ -12,7 +12,7 @@ import type { ThreadService } from '../services/thread-service.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import type { SubagentProfileConfig } from '../contracts/capabilities.js'
-import type { AgentRoster } from './agent-roster.js'
+import { rosterRefusal, type AgentRoster } from './agent-roster.js'
 
 const WORKTREE_POLL_MS = 400
 const WORKTREE_TIMEOUT_MS = 180_000
@@ -230,7 +230,9 @@ export class TaskSuggestionLauncher {
       workspace,
       engineOverridden: true
     })
-    if (!resolution.ok) throw new TaskLaunchError({ code: 'agent_unavailable', message: resolution.message })
+    if (!resolution.ok) {
+      throw new TaskLaunchError({ code: 'agent_unavailable', message: rosterRefusal(profileId, 'conversation', resolution) })
+    }
     if (resolution.profile.mode === 'subagent') {
       throw new TaskLaunchError({
         code: 'agent_unavailable',

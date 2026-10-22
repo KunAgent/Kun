@@ -82,6 +82,8 @@ export type ModelStepServiceDeps = {
   adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
   /** Suggestion cards owned by the thread: bounded per-turn block, never prefix. */
   taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>
+  /** Dispatch ladder + role ownership block for top-level native conversations. */
+  delegationContext?: (input: { threadId: string; workspace?: string; surface?: 'code' | 'write' | 'design' }) => Promise<string | undefined>
   awaitWorkspaceCheckpoint?: (
     checkpointRequestId: string,
     signal: AbortSignal

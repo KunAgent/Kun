@@ -71,7 +71,7 @@ describe('resolveManagerWorkerRoute with a roster profile', () => {
   it('refuses with the roster reason instead of re-homing the role', async () => {
     const { deps: d } = deps({ ok: false, code: 'engine_not_ready', message: 'harness codex is signed out' })
     expect(await resolveManagerWorkerRoute(d, ctx, input(), true, async () => 0))
-      .toEqual({ error: 'engine_not_ready: harness codex is signed out' })
+      .toEqual({ error: 'reviewer cannot run as a worker (engine_not_ready): harness codex is signed out' })
   })
 
   it('needs a roster to resolve a profile', async () => {
