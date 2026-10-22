@@ -14,7 +14,8 @@ const provider = {
   getQueuedTurns: vi.fn(),
   getTeamWorker: vi.fn(),
   controlTeamWorker: vi.fn(),
-  answerTeamQuestion: vi.fn()
+  answerTeamQuestion: vi.fn(),
+  interruptTurn: vi.fn()
 }
 
 vi.mock('../../agent/registry', () => ({
@@ -395,6 +396,29 @@ describe('WorkersPanel', () => {
     expect(JSON.stringify(renderer.toJSON())).not.toContain('Loading team')
     expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(1)
     expect(renderer.root.findAll((n) => n.props['data-workers-error'] !== undefined)).toHaveLength(0)
+  })
+
+  it('lists child agents outside a team, which the Workers pill counts', async () => {
+    // A PPT child (or a delegated subagent) registers as a worker activity row
+    // without any team; the panel used to say the team has no workers.
+    provider.getTeamOverview.mockResolvedValue(null)
+    provider.interruptTurn.mockResolvedValue(undefined)
+    useActivityStore.setState({ rows: {
+      child_ppt: workerRow({ unitId: 'child_ppt', threadId: 'thr_ppt_child', title: 'Kun 产品介绍', turnId: 'turn_ppt' })
+    } })
+    const renderer = await render(createElement(WorkersPanel))
+    expect(JSON.stringify(renderer.toJSON())).toContain('Kun 产品介绍')
+    expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(0)
+    expect(buttons(renderer).some((button) => buttonText(button).includes('Detach'))).toBe(false)
+
+    const open = buttons(renderer).find((button) => buttonText(button).includes('Open'))!
+    await act(async () => open.props.onClick())
+    expect(useChatStore.getState().selectThread).toHaveBeenCalledWith('thr_ppt_child')
+
+    const stop = buttons(renderer).find((button) => buttonText(button).includes('Stop'))!
+    await act(async () => stop.props.onClick())
+    expect(provider.interruptTurn).toHaveBeenCalledWith('thr_ppt_child', 'turn_ppt')
+    expect(provider.controlTeamWorker).not.toHaveBeenCalled()
   })
 
   it('picks up a team created after the first lookup found none', async () => {

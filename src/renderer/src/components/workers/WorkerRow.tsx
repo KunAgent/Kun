@@ -172,7 +172,7 @@ export function WorkerRow({
             {t('workersStop')}
           </button>
         ) : null}
-        {!inactive ? (
+        {!inactive && !row.child ? (
           confirmDetach ? (
             <span className="inline-flex items-center gap-1">
               <button

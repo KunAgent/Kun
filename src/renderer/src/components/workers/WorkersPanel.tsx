@@ -6,16 +6,17 @@ import { useActivityStore } from '../../store/activity-store'
 import { useChatStore } from '../../store/chat-store'
 import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 import { getProvider } from '../../agent/registry'
-import { mergeWorkerRows, summarizeWorkerRows } from './worker-row-data'
+import { childAgentRows, mergeWorkerRows, summarizeWorkerRows } from './worker-row-data'
 import { WorkerRow } from './WorkerRow'
 import { ensureWorkerView, selectWorkerPreview, updateWorkerViewDraft, useWorkerViewStore } from './worker-view-store'
 import { EMPTY_WORKER_DRAFT, WorkerInspector, type WorkerDraft } from './WorkerInspector'
 
 /**
  * Right-panel Workers surface: team summary on top, one WorkerRow
- * per team worker. Data = `GET /v1/teams/by-manager/:threadId` merged with
- * live ActivityStore rows; the overview refetches (debounced) whenever a
- * worker row's `updatedAt` advances so the panel tracks ongoing work.
+ * per team worker, then the thread's other child agents. Data =
+ * `GET /v1/teams/by-manager/:threadId` merged with live ActivityStore rows;
+ * the overview refetches (debounced) whenever a worker row's `updatedAt`
+ * advances so the panel tracks ongoing work.
  */
 export function WorkersPanel({
   className,
@@ -92,10 +93,13 @@ export function WorkersPanel({
     }
   }, [rowStamp, managerThreadId, loaded, active, reload])
 
-  const rows = useMemo(
-    () => (overview ? mergeWorkerRows(overview, workerRows) : []),
-    [overview, workerRows]
-  )
+  // The composer's Workers pill counts every worker activity row, so child
+  // agents outside a team (subagents, a PPT child) are listed after the team.
+  const rows = useMemo(() => {
+    const team = overview ? mergeWorkerRows(overview, workerRows) : []
+    const teamIds = new Set(overview?.team.workers.map((worker) => worker.workerId) ?? [])
+    return [...team, ...childAgentRows(workerRows, teamIds)]
+  }, [overview, workerRows])
   const summary = useMemo(() => summarizeWorkerRows(rows), [rows])
   const selectedRow = rows.find((row) => row.workerId === selectedWorkerId)
 
@@ -110,26 +114,35 @@ export function WorkersPanel({
     [managerThreadId, reload]
   )
 
-  const onOpen = useCallback(
-    (workerId: string) => {
-      if (managerThreadId) selectWorkerPreview(managerThreadId, workerId)
-    },
-    [managerThreadId]
-  )
   const onFullOpen = useCallback((workerId: string): void => {
     void selectThread(workerId).catch(() => undefined)
   }, [selectThread])
+  const onOpen = useCallback(
+    (workerId: string) => {
+      const child = rows.find((row) => row.workerId === workerId)?.child
+      // A child agent has no team inspector; it opens as its own conversation.
+      if (child) onFullOpen(child.threadId)
+      else if (managerThreadId) selectWorkerPreview(managerThreadId, workerId)
+    },
+    [managerThreadId, onFullOpen, rows]
+  )
   const updateWorkerDraft = useCallback((workerId: string, update: (current: WorkerDraft) => WorkerDraft): void => {
     if (managerThreadId) updateWorkerViewDraft(managerThreadId, workerId, update)
   }, [managerThreadId])
   const onStop = useCallback(
-    (workerId: string) =>
+    (workerId: string) => {
+      const child = rows.find((row) => row.workerId === workerId)?.child
       runAction(workerId, 'stop', async () => {
         const provider = getProvider()
+        if (child) {
+          if (child.turnId) await provider.interruptTurn(child.threadId, child.turnId)
+          return
+        }
         if (!provider.controlTeamWorker) return
         await provider.controlTeamWorker(workerId, 'stop')
-      }),
-    [runAction]
+      })
+    },
+    [rows, runAction]
   )
   const onDetach = useCallback(
     (workerId: string) =>
@@ -162,7 +175,7 @@ export function WorkersPanel({
         <h2 className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ds-ink">
           {t('workersPanelTitle')}
         </h2>
-        {overview ? (
+        {overview || rows.length > 0 ? (
           <span className="shrink-0 text-[11px] text-ds-faint" data-workers-summary>
             {t('workersSummary', {
               running: summary.running,
@@ -170,7 +183,7 @@ export function WorkersPanel({
               done: summary.done,
               failed: summary.failed
             })}
-            {overview.usage ? (
+            {overview?.usage ? (
               <span
                 data-workers-usage
                 data-budget-exceeded={

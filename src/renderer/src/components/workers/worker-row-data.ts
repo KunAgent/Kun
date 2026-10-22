@@ -34,6 +34,11 @@ export type WorkerRowData = {
   verdict?: AdeDispatchRecord['verdict']
   /** Latest still-open question this worker is waiting on. */
   openQuestion?: AdeQuestionRecord
+  /**
+   * A child agent of the thread that is not a team member (a delegated
+   * subagent, a PPT child): no team controls; open and stop act on its thread.
+   */
+  child?: { threadId: string; turnId?: string }
 }
 
 function latestDispatchPerWorker(
@@ -117,6 +122,38 @@ export function mergeWorkerRows(
       ...(questions.has(worker.workerId) ? { openQuestion: questions.get(worker.workerId) } : {})
     }
   })
+}
+
+/**
+ * Worker activity rows the team overview does not cover: child agents the
+ * thread delegated to without a team. The composer's Workers pill counts
+ * them, so the panel lists them too. Without a team, every row is one.
+ */
+export function childAgentRows(
+  activityRows: ActivityRow[],
+  teamWorkerIds: ReadonlySet<string>,
+  now: number = Date.now()
+): WorkerRowData[] {
+  return activityRows
+    .filter((row) => row.visibility !== 'archived' && !teamWorkerIds.has(row.unitId))
+    .map((row) => {
+      const bucket = displayBucket(row, now)
+      const running = bucket === 'working' || bucket === 'needs-you' || bucket === 'review'
+      return {
+        workerId: row.unitId,
+        label: row.title.trim() || row.unitId,
+        ...(row.harnessId && row.harnessId !== 'kun' ? { harnessId: row.harnessId } : {}),
+        state: running ? 'active' as const : 'released' as const,
+        control: 'manager' as const,
+        reviewer: false,
+        bucket,
+        activityRow: row,
+        ...(row.waitingReason ? { waitingReason: row.waitingReason } : {}),
+        ...(row.progressNote ? { progressNote: row.progressNote } : {}),
+        ...(row.lastMessagePreview ? { lastMessagePreview: row.lastMessagePreview } : {}),
+        child: { threadId: row.threadId, ...(row.turnId ? { turnId: row.turnId } : {}) }
+      }
+    })
 }
 
 /** Panel header summary: running / waiting / done / failed. */
