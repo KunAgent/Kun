@@ -199,7 +199,7 @@ export function WorkbenchStageRouter({
           </Suspense>
         ) : normalizedRoute === 'artifacts' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            <ArtifactsPage leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} />
+            <ArtifactsPage leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={conversation.chat} />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

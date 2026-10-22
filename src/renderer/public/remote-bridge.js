@@ -343,6 +343,10 @@
     readWorkspaceOfficeSemantic: invokePayload('file:read-workspace-office-semantic'),
     saveWorkspaceSpreadsheet: invokePayload('file:save-workspace-spreadsheet'),
     convertWorkspaceSpreadsheet: invokePayload('file:convert-workspace-spreadsheet'),
+    recordOfficeVersion: invokePayload('file:office-version-record'),
+    listOfficeVersions: invokePayload('file:office-version-list'),
+    readOfficeVersion: invokePayload('file:office-version-read'),
+    restoreOfficeVersion: invokePayload('file:office-version-restore'),
     openExtensionArtifact: invokePayload('extension:artifact:open'),
     lintProjectDesignMd: function (content) { return invoke('design:lint-project-design-md', [{ content: content }]) },
 

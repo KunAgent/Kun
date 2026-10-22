@@ -43,7 +43,7 @@ export function PillButton({ label, onClick, children, active = false }: {
   )
 }
 
-function StageMessage({ children }: { children: ReactNode }): ReactElement {
+export function StageMessage({ children }: { children: ReactNode }): ReactElement {
   return <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-[13.5px] text-ds-muted">{children}</div>
 }
 

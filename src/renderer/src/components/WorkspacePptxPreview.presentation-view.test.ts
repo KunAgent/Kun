@@ -118,16 +118,31 @@ describe('WorkspacePptxPreview presentation view reporting', () => {
       path: sourceA.path,
       sourceSha256: sourceA.sourceSha256
     })
+    // A reload of the same deck (an edit landed) keeps the slide on screen.
     expect(lastReportedView(onPresentationViewChange)).toEqual(expect.objectContaining({
       sourceSha256: sourceB.sourceSha256,
+      slide: 4
+    }))
+
+    const otherDeck = preview('other.pptx', 'c'.repeat(64))
+    await act(async () => {
+      renderer?.update(createElement(WorkspacePptxPreview, {
+        result: otherDeck,
+        loading: false,
+        onPresentationViewChange
+      }))
+      await flushPromises()
+    })
+    expect(lastReportedView(onPresentationViewChange)).toEqual(expect.objectContaining({
+      path: '/repo/other.pptx',
       slide: 1
     }))
 
     await act(async () => renderer?.unmount())
     renderer = undefined
     expect(onPresentationViewChange).toHaveBeenCalledWith(null, {
-      path: sourceB.path,
-      sourceSha256: sourceB.sourceSha256
+      path: otherDeck.path,
+      sourceSha256: otherDeck.sourceSha256
     })
   })
 

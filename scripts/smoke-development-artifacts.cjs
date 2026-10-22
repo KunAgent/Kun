@@ -22,6 +22,10 @@ const { availablePort, argumentValue, positiveIntegerArgument, terminateProcessT
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 const { buildSmokeDocx, buildSmokePptx } = require('./smoke-artifacts-office-fixtures.cjs')
 const { checkDocScrolling, checkSheetScrolling, checkSlideRailScrolling } = require('./smoke-artifacts-office-checks.cjs')
+const { checkArtifactChatTurn } = require('./smoke-artifacts-chat-checks.cjs')
+const { startArtifactChatModel } = require('./smoke-artifacts-chat-model.cjs')
+
+const DECK_TITLES = Array.from({ length: 9 }, (_, index) => `Roadmap slide ${index + 1}`)
 
 const diagnostics = {}
 const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -67,7 +71,7 @@ async function seedWorkspace(root) {
   await mkdir(join(root, 'reports'), { recursive: true })
   XLSX.writeFile(book, join(root, 'reports', 'agent-usage.xlsx'))
   await write('reports/handbook.docx', await buildSmokeDocx(Array.from({ length: 6 }, (_, index) => `Handbook page ${index + 1}`)))
-  await write('presentations/roadmap.pptx', await buildSmokePptx(Array.from({ length: 9 }, (_, index) => `Roadmap slide ${index + 1}`)))
+  await write('presentations/roadmap.pptx', await buildSmokePptx(DECK_TITLES))
 }
 
 function minimalPdf(text) {
@@ -103,7 +107,7 @@ async function poll(check, timeoutMs, description) {
   throw new Error(`Timed out waiting for ${description}${last ? `: ${last.message}` : ''}`)
 }
 
-async function runFlow({ page, capture, timeoutMs }) {
+async function runFlow({ page, capture, timeoutMs, model, workspaceRoot }) {
   const checks = []
   const office = { page, capture, poll, diagnostics, timeoutMs }
   await page.locator('nav.sidebar-code-nav').getByText('Artifacts', { exact: true }).click()
@@ -137,6 +141,12 @@ async function runFlow({ page, capture, timeoutMs }) {
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
   await page.locator('[data-artifact-card="slides"]').click()
   checks.push(await checkSlideRailScrolling(office))
+  checks.push(await checkArtifactChatTurn({
+    ...office,
+    model,
+    deckPath: join(workspaceRoot, 'presentations', 'roadmap.pptx'),
+    buildChangedDeck: () => buildSmokePptx(DECK_TITLES.map((title, index) => index === 2 ? `${title} with wider bars` : title))
+  }))
 
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
   await page.locator('[data-artifact-card="design"]').click()
@@ -195,6 +205,7 @@ async function main() {
   const screenshots = []
   const pageErrors = []
   let application, electronProcess, page, result, primaryError, realProfile = profile, electronOutput = ''
+  const model = await startArtifactChatModel()
   const capture = async (name) => {
     const path = join(evidenceRoot, `${name}.png`)
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
@@ -215,6 +226,7 @@ async function main() {
     delete environment.ELECTRON_RENDERER_URL
     environment.NODE_ENV = 'development'
     const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, realProfile), locale: 'en', initialSetupCompleted: true }
+    settings.agents.kun.baseUrl = model.baseUrl
     settings.schedule = { internal: { port: await availablePort() } }
     const serialized = `${JSON.stringify(settings, null, 2)}\n`
     await Promise.all(desktopUserDataCandidates({ platform: process.platform, home, appData, explicitUserData: userData })
@@ -240,7 +252,7 @@ async function main() {
     page.on('pageerror', (error) => pageErrors.push(error.message))
     await page.waitForLoadState('domcontentloaded', { timeout: 120_000 })
     await page.locator('.ds-composer-textarea').waitFor({ timeout: timeoutMs })
-    const assertions = await runFlow({ page, capture, timeoutMs })
+    const assertions = await runFlow({ page, capture, timeoutMs, model, workspaceRoot })
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
     result = { ok: true, status: 'passed', completedAt: new Date().toISOString(), screenshots, assertions, diagnostics,
       ...(keepDirs ? { temporaryRoot, workspaceRoot } : {}) }
@@ -252,7 +264,9 @@ async function main() {
     primaryError = new Error(`${error.stack ?? error}\nElectron:\n${electronOutput}`)
     result = { ok: false, status: 'failed', failure: primaryError.message, screenshots, pageErrors, diagnostics }
   } finally {
+    model.release()
     if (application) await withTimeout(application.close(), 3_000, 'closing Electron').catch(() => undefined)
+    await model.close().catch(() => undefined)
     if (electronProcess) await terminateProcessTree(electronProcess, process.platform,
       { timeoutMs: 15_000, detached: process.platform !== 'win32' }).catch(() => undefined)
     await withTimeout(stopIsolatedSharedRuntime(repositoryRoot, realProfile), 20_000, 'runtime').catch(() => undefined)

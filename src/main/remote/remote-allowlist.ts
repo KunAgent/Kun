@@ -85,6 +85,10 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'file:read-workspace-office-semantic',
   'file:save-workspace-spreadsheet',
   'file:convert-workspace-spreadsheet',
+  'file:office-version-record',
+  'file:office-version-list',
+  'file:office-version-read',
+  'file:office-version-restore',
   'file:read-local-pdf-text',
   'clipboard:read-image',
   // Git and worktrees.

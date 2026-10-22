@@ -16,6 +16,7 @@ import {
 } from './artifact-view-model'
 import { ARTIFACT_KIND_ICONS, ArtifactCard, ArtifactListRow } from './ArtifactCard'
 import { ArtifactViewer } from './ArtifactViewer'
+import type { ArtifactChatHost } from './chat/use-artifact-office-session'
 
 const RESCAN_THROTTLE_MS = 4_000
 
@@ -28,9 +29,11 @@ const NEW_PROMPT_KEYS: Record<LibraryArtifactKind, string> = {
   board: 'artifactsNewBoardPrompt', sheet: 'artifactsNewDocPrompt', image: 'artifactsNewDesignPrompt'
 }
 
-export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar }: {
+export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar, chat }: {
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
+  /** The Code conversation, for the Office artifact chat panel. */
+  chat?: ArtifactChatHost
 }): ReactElement {
   const { t } = useTranslation('common')
   const items = useArtifactLibraryStore((state) => state.items)
@@ -74,7 +77,7 @@ export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar }: {
   const openItem = openId ? items.find((item) => item.id === openId) ?? null : null
 
   if (openItem) {
-    return <ArtifactViewer artifact={openItem} leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} />
+    return <ArtifactViewer artifact={openItem} leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={chat} />
   }
 
   const tabs: ArtifactKindFilter[] = ['all', ...LIBRARY_ARTIFACT_KINDS]

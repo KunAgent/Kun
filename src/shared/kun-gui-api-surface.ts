@@ -254,7 +254,7 @@ import type { KunGuiMarketApi } from './market/kun-gui-api-market'
 export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
   import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi & import('./terminal-dock').KunGuiTerminalDockApi &
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
-  import('./git-turn-undo').KunGuiGitTurnUndoApi &
+  import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi &
   import('./ade-collaboration-settings').AdeCollaborationSettingsBridge & import('./ade-project-defaults').AdeProjectDefaultsBridge & {
   productAnalytics?: import('./product-analytics').ProductAnalyticsApi
   platform: string

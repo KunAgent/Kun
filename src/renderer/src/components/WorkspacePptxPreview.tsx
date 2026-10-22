@@ -52,7 +52,8 @@ export function WorkspacePptxPreview({
   refreshError,
   onSelectionChange,
   onPresentationViewChange,
-  keyboardActive = true
+  keyboardActive = true,
+  changedSlides
 }: {
   result: WorkspaceOfficePreviewSuccess
   loading: boolean
@@ -63,6 +64,7 @@ export function WorkspacePptxPreview({
     source: WorkspacePresentationViewSource
   ) => void
   keyboardActive?: boolean
+  changedSlides?: readonly number[]
 }): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
@@ -77,6 +79,10 @@ export function WorkspacePptxPreview({
   presentationViewChangeRef.current = onPresentationViewChange
   const [thumbnailSession, setThumbnailSession] = useState<PptxThumbnailSession | null>(null)
   const [slide, setSlide] = useState(1)
+  // A reload of the same deck (Kun or another app saved it) keeps the slide on screen.
+  const slideRef = useRef(1)
+  slideRef.current = slide
+  const loadedPathRef = useRef<string | null>(null)
   const [slideCount, setSlideCount] = useState(1)
   const [zoom, setZoom] = useState(1)
   const [renderError, setRenderError] = useState<string | null>(null)
@@ -163,6 +169,17 @@ export function WorkspacePptxPreview({
         secureWorkspaceOfficeLinks(staging)
         secureWorkspaceOfficeLinks(thumbnailStaging)
         removeOtherChildren(host, staging)
+        const count = Math.max(1, stagedPreviewer.slideCount)
+        let keptSlide = loadedPathRef.current === result.path ? Math.min(slideRef.current, count) : 1
+        if (keptSlide > 1) {
+          try {
+            stagedPreviewer.renderSingleSlide(keptSlide - 1)
+          } catch {
+            keptSlide = 1
+            stagedPreviewer.renderSingleSlide(0)
+          }
+        }
+        loadedPathRef.current = result.path
         removeOtherChildren(thumbnailHost, thumbnailStaging)
         staging.style.visibility = 'visible'
         previewerRef.current = stagedPreviewer
@@ -173,10 +190,9 @@ export function WorkspacePptxPreview({
         }
         thumbnailSessionRef.current = nextThumbnailSession
         setThumbnailSession(nextThumbnailSession)
-        const count = Math.max(1, stagedPreviewer.slideCount)
         setSlideCount(count)
-        setSlide(1)
-        emitPresentationView(1, count)
+        setSlide(keptSlide)
+        emitPresentationView(keptSlide, count)
         setRenderError(null)
         fitToViewport()
       })
@@ -198,7 +214,7 @@ export function WorkspacePptxPreview({
         disposeStagedPreview(stagedThumbnailPreviewer, thumbnailStaging)
       }
     }
-  }, [clearPresentationView, emitPresentationView, fitToViewport, result.data, result.sourceSha256])
+  }, [clearPresentationView, emitPresentationView, fitToViewport, result.data, result.path, result.sourceSha256])
 
   useEffect(() => {
     fitToViewportRef.current = true
@@ -407,6 +423,7 @@ export function WorkspacePptxPreview({
             session={thumbnailSession}
             slideCount={slideCount}
             currentSlide={slide}
+            changedSlides={changedSlides}
             onSelectSlide={goToSlide}
           />
         ) : null}

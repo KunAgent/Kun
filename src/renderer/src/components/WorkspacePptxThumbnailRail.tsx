@@ -22,11 +22,13 @@ export function WorkspacePptxThumbnailRail({
   session,
   slideCount,
   currentSlide,
+  changedSlides,
   onSelectSlide
 }: {
   session: PptxThumbnailSession | null
   slideCount: number
   currentSlide: number
+  changedSlides?: readonly number[]
   onSelectSlide: (slide: number) => void
 }): ReactElement {
   const railRef = useRef<HTMLDivElement>(null)
@@ -123,6 +125,7 @@ export function WorkspacePptxThumbnailRail({
           const slide = index + 1
           const thumbnail = thumbnails.get(slide)
           const active = slide === currentSlide
+          const changed = changedSlides?.includes(slide) === true
           return (
             <button
               key={slide}
@@ -135,6 +138,7 @@ export function WorkspacePptxThumbnailRail({
               aria-current={active ? 'page' : undefined}
               data-pptx-thumbnail-index={index}
               data-thumbnail-state={thumbnail ? 'ready' : 'placeholder'}
+              data-slide-changed={changed ? 'true' : undefined}
               className={`rounded-lg border p-1.5 text-left transition ${
                 active
                   ? 'border-ds-accent bg-ds-hover shadow-sm ring-1 ring-ds-accent/20'
@@ -142,10 +146,15 @@ export function WorkspacePptxThumbnailRail({
               }`}
               onClick={() => onSelectSlide(slide)}
             >
-              <div className="aspect-video w-full overflow-hidden rounded-sm bg-black/10">
+              <div className="relative aspect-video w-full overflow-hidden rounded-sm bg-black/10">
                 {thumbnail ? <StaticPptxThumbnail content={thumbnail} /> : (
                   <div className="h-full w-full animate-pulse bg-ds-surface-subtle" aria-hidden="true" />
                 )}
+                {changed ? (
+                  <span className="absolute right-1 top-1 rounded bg-accent px-1 text-[9px] font-semibold leading-[14px] text-white">
+                    {i18n.t('officeSlideChanged')}
+                  </span>
+                ) : null}
               </div>
               <span className={`mt-1 block text-center text-[10px] ${active ? 'text-ds-ink' : 'text-ds-muted'}`}>
                 {slide}

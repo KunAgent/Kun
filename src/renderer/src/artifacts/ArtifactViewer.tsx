@@ -6,9 +6,12 @@ import { useChatStore } from '../store/chat-store'
 import { useArtifactLibraryStore } from './artifact-library-store'
 import { askKunToRevise, openDesignCanvas, openSourceConversation, openWhiteboard, revealArtifact, sourceThreadFor } from './artifact-actions'
 import type { LibraryArtifact } from './artifact-types'
-import { fileTypeLabel, formatArtifactSize, formatArtifactTime } from './artifact-view-model'
+import { fileTypeLabel, formatArtifactSize } from './artifact-view-model'
 import { ArtifactKindChip } from './ArtifactCard'
+import { ArtifactDetails } from './ArtifactDetails'
 import { BoardStage, DesignStage, ImageStage, OfficeStage, PdfStage, useDesignScreens, type DesignScreen } from './ArtifactViewerStages'
+import { ArtifactOfficeWorkspace, artifactHasOfficeChat } from './chat/ArtifactOfficeWorkspace'
+import type { ArtifactChatHost } from './chat/use-artifact-office-session'
 
 function TopBarButton({ label, onClick, children, iconOnly = false }: {
   label: string
@@ -31,9 +34,7 @@ function ArtifactPanel({ artifact, versions, focus }: {
   versions: PanelVersion[]
   focus: string
 }): ReactElement {
-  const { t, i18n } = useTranslation('common')
-  const threads = useChatStore((state) => state.threads)
-  const source = sourceThreadFor(artifact, threads)
+  const { t } = useTranslation('common')
   const [tab, setTab] = useState<'info' | 'versions'>('info')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -44,18 +45,6 @@ function ArtifactPanel({ artifact, versions, focus }: {
     setSending(false)
     if (sent) setDraft('')
   }
-  const rows: Array<{ label: string; value: ReactElement | string }> = [
-    { label: t('artifactsFieldProject'), value: artifact.projectName },
-    {
-      label: t('artifactsFieldSource'),
-      value: source
-        ? <button type="button" onClick={() => void openSourceConversation(artifact)} className="truncate text-left text-accent hover:underline">{source.title}</button>
-        : t('artifactsFieldUnknownSource')
-    },
-    { label: t('artifactsFieldUpdated'), value: formatArtifactTime(artifact.updatedAt, i18n.language) },
-    { label: t('artifactsFieldFile'), value: <span className="break-all font-mono text-[12px]">{artifact.path}</span> },
-    ...(artifact.size !== undefined ? [{ label: t('artifactsFieldSize'), value: formatArtifactSize(artifact.size) }] : [])
-  ]
   return (
     <aside aria-label={t('artifactsDetails')} className="ds-no-drag flex min-h-0 w-full shrink-0 flex-col gap-5 overflow-y-auto border-ds-border bg-ds-card p-5 lg:w-[320px] lg:border-l">
       <div role="tablist" className="grid grid-cols-2 gap-0.5 rounded-xl bg-ds-hover p-[3px]">
@@ -67,14 +56,7 @@ function ArtifactPanel({ artifact, versions, focus }: {
         ))}
       </div>
       {tab === 'info' ? (
-        <dl className="grid grid-cols-[84px_minmax(0,1fr)] gap-x-3 gap-y-3.5 text-[13px]">
-          {rows.map((row) => (
-            <div key={row.label} className="contents">
-              <dt className="text-ds-muted">{row.label}</dt>
-              <dd className="min-w-0 text-ds-ink">{row.value}</dd>
-            </div>
-          ))}
-        </dl>
+        <ArtifactDetails artifact={artifact} />
       ) : versions.length === 0 ? (
         <p className="text-[13px] text-ds-muted">{t('artifactsNoVersions')}</p>
       ) : (
@@ -119,10 +101,12 @@ function designVersions(screens: DesignScreen[], t: (key: string, options?: Reco
   }))
 }
 
-export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSidebar }: {
+export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSidebar, chat }: {
   artifact: LibraryArtifact
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
+  /** The Code conversation the Office chat panel runs on; without it the classic panel shows. */
+  chat?: ArtifactChatHost
 }): ReactElement {
   const { t } = useTranslation('common')
   const closeArtifact = useArtifactLibraryStore((state) => state.closeArtifact)
@@ -132,6 +116,8 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
   const design = useDesignScreens(artifact, isDesign)
   const [selectedScreen, setSelectedScreen] = useState<string | null>(null)
   const focusScreen = isDesign ? design.screens.find((screen) => screen.id === selectedScreen) : undefined
+  const officeChat = chat && artifactHasOfficeChat(artifact) ? chat : null
+  const [chatOpen, setChatOpen] = useState(false)
   const meta = [fileTypeLabel(artifact), artifact.size !== undefined ? formatArtifactSize(artifact.size) : ''].filter(Boolean).join(' · ')
 
   const stage = isDesign
@@ -178,7 +164,12 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
             <TopBarButton label={t('artifactsReveal')} onClick={() => void revealArtifact(artifact)} iconOnly>
               <FolderOpen className="h-4 w-4" aria-hidden />
             </TopBarButton>
-            {source ? (
+            {officeChat ? (
+              <button type="button" onClick={() => setChatOpen((open) => !open)} aria-expanded={chatOpen}
+                className="ml-1 flex h-[34px] items-center gap-1.5 rounded-full bg-ds-ink px-3.5 text-[13px] font-semibold text-ds-main lg:hidden">
+                <MessageSquare className="h-3.5 w-3.5" aria-hidden />{t('artifactChatToggle')}
+              </button>
+            ) : source ? (
               <>
                 <span aria-hidden className="mx-2 h-5 w-px bg-ds-border" />
                 <button type="button" onClick={() => void openSourceConversation(artifact)}
@@ -190,6 +181,9 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
           </div>
         </header>
       </div>
+      {officeChat ? (
+        <ArtifactOfficeWorkspace artifact={artifact} host={officeChat} chatOpen={chatOpen} onCloseChat={() => setChatOpen(false)} />
+      ) : (
       <div className="ds-no-drag mt-3 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-ds-border lg:flex-row">
         <section aria-label={artifact.title} className="relative min-h-[420px] min-w-0 flex-1">{stage}</section>
         <ArtifactPanel
@@ -198,6 +192,7 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
           focus={focusScreen?.title ?? ''}
         />
       </div>
+      )}
     </div>
   )
 }
