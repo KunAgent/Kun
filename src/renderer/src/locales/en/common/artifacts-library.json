@@ -63,5 +63,14 @@
   "artifactsNoScreens": "This design has no HTML screens yet. Open the canvas to see the board.",
   "artifactsWhiteboardHint": "Whiteboards open in Work, where you can edit them.",
   "artifactsScreenVersions_one": "{{count}} version",
-  "artifactsScreenVersions_other": "{{count}} versions"
+  "artifactsScreenVersions_other": "{{count}} versions",
+  "artifactsWorkTitle": "Artifacts",
+  "artifactsWorkSubtitle": "Whiteboards and files in this space, loaded when you open them.",
+  "artifactsWorkNew": "New whiteboard",
+  "artifactsWorkNewWhiteboard": "New whiteboard",
+  "artifactsWorkScope": "This space: {{name}}",
+  "artifactsWorkNoSpace": "Choose a space to see its artifacts.",
+  "artifactsWorkEmptyTitle": "No artifacts in this space yet",
+  "artifactsWorkEmptyBody": "Create a whiteboard, or ask Kun to produce one in a conversation.",
+  "artifactsMoreActions": "More actions"
 }

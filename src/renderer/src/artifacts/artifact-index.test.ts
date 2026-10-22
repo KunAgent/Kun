@@ -81,4 +81,27 @@ describe('artifact library scan', () => {
     expect(projectNameForRoot('/Users/me/DeepSeek-GUI/')).toBe('DeepSeek-GUI')
     expect(projectNameForRoot('C:\\work\\kun')).toBe('kun')
   })
+
+  it('scans one space at a time when only that root is passed', async () => {
+    const workRoot = '/work/space-a'
+    const otherRoot = '/work/space-b'
+    const boardIndex = (id: string): string => JSON.stringify({
+      version: 1,
+      whiteboards: [{
+        id, title: 'Same title', threadId: null, phase: 'blank', revision: 0,
+        createdAt: '2026-10-18T00:00:00.000Z', updatedAt: '2026-10-19T00:00:00.000Z'
+      }]
+    })
+    const api = fakeApi({
+      [workRoot]: { '.kun-whiteboards': { files: { 'index.json': { content: boardIndex('wb_a') } } } },
+      [otherRoot]: { '.kun-whiteboards': { files: { 'index.json': { content: boardIndex('wb_b') } } } }
+    })
+
+    const scoped = await scanArtifactLibrary(api, [workRoot])
+    const all = await scanArtifactLibrary(api, [workRoot, otherRoot])
+
+    expect(scoped.map((item) => item.whiteboardId)).toEqual(['wb_a'])
+    // Identity is workspace + path, so equal titles never merge across spaces.
+    expect(all.map((item) => item.whiteboardId).sort()).toEqual(['wb_a', 'wb_b'])
+  })
 })

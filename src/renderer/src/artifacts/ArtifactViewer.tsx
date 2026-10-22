@@ -29,10 +29,11 @@ function TopBarButton({ label, onClick, children, iconOnly = false }: {
 
 type PanelVersion = { name: string; note: string; current: boolean }
 
-function ArtifactPanel({ artifact, versions, focus }: {
+function ArtifactPanel({ artifact, versions, focus, showRevise = true }: {
   artifact: LibraryArtifact
   versions: PanelVersion[]
   focus: string
+  showRevise?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   const [tab, setTab] = useState<'info' | 'versions'>('info')
@@ -74,6 +75,7 @@ function ArtifactPanel({ artifact, versions, focus }: {
       )}
       <div className="mt-auto flex flex-col gap-2">
         <span className="text-[12.5px] font-semibold text-ds-ink">{t('artifactsReviseTitle')}</span>
+        {showRevise ? (
         <label className="flex flex-col gap-2.5 rounded-2xl border border-ds-border bg-ds-card p-3 shadow-sm">
           <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={3} aria-label={t('artifactsReviseTitle')}
             placeholder={t('artifactsRevisePlaceholder')}
@@ -87,6 +89,7 @@ function ArtifactPanel({ artifact, versions, focus }: {
             </button>
           </span>
         </label>
+        ) : null}
         <span className="text-[12px] text-ds-muted">{t('artifactsReviseHint')}</span>
       </div>
     </aside>
@@ -101,14 +104,17 @@ function designVersions(screens: DesignScreen[], t: (key: string, options?: Reco
   }))
 }
 
-export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSidebar, chat }: {
+export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSidebar, chat, mode = 'code' }: {
   artifact: LibraryArtifact
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
   /** The Code conversation the Office chat panel runs on; without it the classic panel shows. */
   chat?: ArtifactChatHost
+  /** Work keeps the viewer read-only: revisions belong to the Work conversation. */
+  mode?: 'code' | 'work'
 }): ReactElement {
   const { t } = useTranslation('common')
+  const isWork = mode === 'work'
   const closeArtifact = useArtifactLibraryStore((state) => state.closeArtifact)
   const threads = useChatStore((state) => state.threads)
   const source = sourceThreadFor(artifact, threads)
@@ -169,7 +175,7 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
                 className="ml-1 flex h-[34px] items-center gap-1.5 rounded-full bg-ds-ink px-3.5 text-[13px] font-semibold text-ds-main lg:hidden">
                 <MessageSquare className="h-3.5 w-3.5" aria-hidden />{t('artifactChatToggle')}
               </button>
-            ) : source ? (
+            ) : source && !isWork ? (
               <>
                 <span aria-hidden className="mx-2 h-5 w-px bg-ds-border" />
                 <button type="button" onClick={() => void openSourceConversation(artifact)}
@@ -190,6 +196,7 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
           artifact={artifact}
           versions={isDesign ? designVersions(design.screens, t) : []}
           focus={focusScreen?.title ?? ''}
+          showRevise={!isWork}
         />
       </div>
       )}

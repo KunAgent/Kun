@@ -52,7 +52,10 @@ async function openSessionAnchor(root: string, session: WorkSessionEntry): Promi
   const write = useWriteWorkspaceStore.getState()
   const anchor = session.anchor
   if (anchor.kind === 'whiteboard') {
-    if (write.whiteboards[anchor.boardId]) write.openWhiteboard(anchor.boardId)
+    // The board index is loaded on demand, so it may not be in memory yet.
+    if (await write.ensureWhiteboards(root) && useWriteWorkspaceStore.getState().whiteboards[anchor.boardId]) {
+      useWriteWorkspaceStore.getState().openWhiteboard(anchor.boardId)
+    }
   } else if (anchor.kind === 'file') {
     await write.openFile(root, anchor.path)
   } else if (anchor.kind === 'paper') {
@@ -104,8 +107,9 @@ async function restoreSessionTabs(root: string, threadId: string): Promise<boole
     const latest = useWriteWorkspaceStore.getState()
     if (normalizePath(latest.workspaceRoot) !== normalizePath(root)) return false
     if (target?.kind === 'whiteboard') {
-      if (!latest.whiteboards[target.boardId]) return false
-      latest.openWhiteboard(target.boardId)
+      if (!(await latest.ensureWhiteboards(root))) return false
+      if (!useWriteWorkspaceStore.getState().whiteboards[target.boardId]) return false
+      useWriteWorkspaceStore.getState().openWhiteboard(target.boardId)
     } else if (target?.kind === 'paper-view') {
       latest.openPaperViewTab(target.view)
     } else if (target?.kind === 'file') {
