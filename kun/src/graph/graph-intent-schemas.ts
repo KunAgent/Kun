@@ -31,6 +31,8 @@ const GraphPlanIntentV2TaskBaseShape = {
   ).min(1).max(128),
   readScopes: z.array(GraphRelativePathSchema).max(1_000),
   writeScopes: z.array(GraphRelativePathSchema).max(1_000),
+  /** Agent roster id (list_subagent_profiles): the role this task's executor plays. */
+  profile: z.string().trim().min(1).max(128).optional(),
   harnessId: HarnessIdSchema.optional(),
   credentialMode: HarnessCredentialModeSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional()
@@ -160,6 +162,8 @@ export const GraphIntentTaskSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   model: z.string().trim().min(1).max(256).optional(),
   providerId: z.string().trim().min(1).max(128).optional(),
+  /** Agent roster id (list_subagent_profiles): the role this task's executor plays. */
+  profile: z.string().trim().min(1).max(128).optional(),
   harnessId: HarnessIdSchema.optional(),
   credentialMode: HarnessCredentialModeSchema.optional(),
     gatewayBinding: HarnessGatewayBindingSchema.optional(),

@@ -1,4 +1,6 @@
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
+import type { SubagentProfileConfig } from '../contracts/capabilities.js'
+import type { HarnessRoute } from '../contracts/harness.js'
 import {
   GRAPH_CONTRACT_VERSION,
   GraphPlanV1Schema,
@@ -14,6 +16,14 @@ import {
 
 export * from './graph-intent-schemas.js'
 
+/** A roster role resolved for the graph lane before compilation. */
+export type GraphRosterRole = {
+  id: string
+  profile: SubagentProfileConfig
+  /** The role's bound engine route; absent runs on Graph's worker default. */
+  route?: HarnessRoute
+}
+
 export function compileGraphPlanIntentV2(input: {
   intent: GraphPlanIntentV2
   goal: string
@@ -21,6 +31,7 @@ export function compileGraphPlanIntentV2(input: {
   nowIso: string
   budgetDefaults: GraphPlanV1['budget']
   config: GraphRuntimeConfig
+  roles?: ReadonlyMap<string, GraphRosterRole>
 }): GraphPlanV1 {
   const intent = GraphIntentSchema.parse({
     title: input.intent.title ?? input.goal.slice(0, 256),
@@ -40,6 +51,7 @@ export function compileGraphPlanIntentV2(input: {
       checks: task.writeScopes.length ? ['git diff --check'] : [],
       readScopes: task.readScopes,
       writeScopes: task.writeScopes,
+      ...(task.profile ? { profile: task.profile } : {}),
       ...(task.harnessId ? { harnessId: task.harnessId } : {}),
       ...(task.credentialMode ? { credentialMode: task.credentialMode } : {}),
       ...(task.gatewayBinding ? { gatewayBinding: task.gatewayBinding } : {}),
@@ -68,7 +80,8 @@ export function compileGraphPlanIntentV2(input: {
     start: true,
     nowIso: input.nowIso,
     budgetDefaults: input.budgetDefaults,
-    config: input.config
+    config: input.config,
+    ...(input.roles ? { roles: input.roles } : {})
   })
 }
 
@@ -79,6 +92,7 @@ export function compileGraphIntent(input: {
   nowIso: string
   budgetDefaults: GraphPlanV1['budget']
   config: GraphRuntimeConfig
+  roles?: ReadonlyMap<string, GraphRosterRole>
 }): GraphPlanV1 {
   const strategy = resolveGraphIntentStrategy(input.intent)
   const phaseIds = new Map<string, string>()
@@ -107,7 +121,9 @@ export function compileGraphIntent(input: {
     // normal terminal `skipped` state prevent GraphRun completion.
     required: task.kind === 'loop_gate' ? false : task.required,
     riskClass: task.riskClass,
-    ...(task.model || task.providerId || task.harnessId || task.credentialMode || task.gatewayBinding ||
+    ...(task.profile
+      ? { assignment: rosterRoleAssignment(task, requireRole(input.roles, task.profile)) }
+      : task.model || task.providerId || task.harnessId || task.credentialMode || task.gatewayBinding ||
         task.reasoningEffort
       ? {
           assignment: {
@@ -321,6 +337,65 @@ function sinkNodeIds(
     .filter((task) => task.kind !== 'loop_gate' && !outgoing.has(task.id))
     .map((task) => task.id)
   return sinks.length ? sinks : [tasks.at(-1)!.id]
+}
+
+function requireRole(
+  roles: ReadonlyMap<string, GraphRosterRole> | undefined,
+  id: string
+): GraphRosterRole {
+  const role = roles?.get(id)
+  if (!role) throw new Error(`graph task profile ${id} was not resolved through the agent roster`)
+  return role
+}
+
+/**
+ * An executor playing a roster role: the role's own prompt, deny-lists and
+ * reasoning, its bound engine unless the task pins another, and Graph's own
+ * least-authority tool policy from the task's write scopes.
+ */
+function rosterRoleAssignment(task: GraphIntentTask, role: GraphRosterRole) {
+  const { profile, route } = role
+  const name = (profile.name?.trim() || role.id).slice(0, 128)
+  const engine = task.harnessId
+    ? {
+        harnessId: task.harnessId,
+        ...(task.credentialMode ? { credentialMode: task.credentialMode } : {}),
+        ...(task.gatewayBinding ? { gatewayBinding: task.gatewayBinding } : {})
+      }
+    : route
+      ? {
+          harnessId: route.harnessId,
+          credentialMode: route.credentialMode,
+          ...(route.gatewayBinding ? { gatewayBinding: route.gatewayBinding } : {}),
+          ...(route.model && route.model !== '-' ? { model: route.model } : {}),
+          ...(route.providerId ? { providerId: route.providerId } : {})
+        }
+      : profile.model
+        ? { model: profile.model, ...(profile.providerId ? { providerId: profile.providerId } : {}) }
+        : {}
+  return {
+    kind: 'ephemeral' as const,
+    name,
+    ...(profile.description?.trim() ? { description: profile.description.trim().slice(0, 1_024) } : {}),
+    systemPrompt: [
+      profile.systemPrompt?.trim() || `You are ${name}.`,
+      `Assignment: ${task.title}`,
+      task.objective,
+      'Complete only this assignment and proactively report material findings to the Lead.'
+    ].join('\n\n').slice(0, 32_768),
+    ...engine,
+    ...(task.model ? { model: task.model } : {}),
+    ...(task.providerId ? { providerId: task.providerId } : {}),
+    ...(task.reasoningEffort ?? profile.reasoningEffort
+      ? { reasoningEffort: task.reasoningEffort ?? profile.reasoningEffort }
+      : {}),
+    toolPolicy: task.writeScopes.length ? 'inherit' as const : 'readOnly' as const,
+    ...(profile.allowedTools ? { allowedTools: [...profile.allowedTools] } : {}),
+    blockedTools: [...(profile.blockedTools ?? [])],
+    blockedSkills: [...(profile.blockedSkills ?? [])],
+    blockedMcpServers: [...(profile.blockedMcpServers ?? [])],
+    rosterProfileId: role.id
+  }
 }
 
 function defaultStage(strategy: GraphExecutionStrategyKind): string {

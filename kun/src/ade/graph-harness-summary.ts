@@ -78,7 +78,8 @@ export function createGraphHarnessSummary(
     if (!lines.length) return undefined
     return [
       'Graph worker harnesses: set a task\'s harnessId to pin its worker ' +
-        'runtime; omit it for the default Kun loop.',
+        'runtime; omit it for the default Kun loop. A task\'s profile (an id ' +
+        'from list_subagent_profiles) adds a reusable role and its bound engine.',
       ...lines
     ].join('\n')
   }

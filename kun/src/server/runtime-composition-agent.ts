@@ -460,7 +460,8 @@ export async function createRuntimeAgentComposition(
 	    detector: services.harnesses.detector,
 	    capabilitiesForRoute: createCapabilitiesForRoute(services.harnesses.catalog, harnessRuntimeMap),
 	    allowUnattendedFullAccess: () =>
-	      core.activeOptions.ade?.allowUnattendedFullAccess === true
+	      core.activeOptions.ade?.allowUnattendedFullAccess === true,
+	    roster: agentRoster
 	  }
 	  await graphRuntime.start(createGraphRuntimeStartOptions({
 	    delegation: () => delegationRuntime,

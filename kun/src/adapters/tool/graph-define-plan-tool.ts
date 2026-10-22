@@ -14,6 +14,7 @@ import {
 } from '../../domain/tool-argument-envelope.js'
 import { graphCreateBudgetDefaults } from './graph-create-run-tool.js'
 import { checkGraphPlanHarnesses } from './graph-plan-admission.js'
+import { resolveGraphPlanRoles } from './graph-plan-roles.js'
 import { restoreMissingTaskTitles } from './graph-plan-candidate-repair.js'
 import {
   MINIMAL_VALID_PLAN_EXAMPLE,
@@ -171,6 +172,16 @@ export function buildGraphDefinePlanTool(options: GraphDefinePlanToolOptions): L
 
         const identity = await options.registry.identify(context.workspace)
         const config = options.config?.() ?? DEFAULT_GRAPH_RUNTIME_CONFIG
+        const roles = await resolveGraphPlanRoles({
+          tasks: parsed.data.plan.tasks,
+          roster: options.harnesses?.()?.roster,
+          workspace: context.workspace,
+          ...(context.agentSurface ? { surface: context.agentSurface } : {}),
+          tasksPath: ['plan', 'tasks']
+        })
+        if (roles.issues.length > 0) {
+          return recordInvalidPlanningIssues(options, draft, candidateHash, roles.issues)
+        }
         let plan
         try {
           plan = compileGraphPlanIntentV2({
@@ -179,7 +190,8 @@ export function buildGraphDefinePlanTool(options: GraphDefinePlanToolOptions): L
             workspaceRoot: identity.canonicalWorkspaceRoot,
             nowIso: options.nowIso(),
             budgetDefaults: graphCreateBudgetDefaults(config),
-            config
+            config,
+            roles: roles.roles
           })
         } catch (error) {
           if (error instanceof z.ZodError) {
