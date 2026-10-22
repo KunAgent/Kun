@@ -4,6 +4,7 @@
 // Unified Code + ADE desktop smoke on an isolated profile. Real Electron,
 // preload, main, and Kun runtime are exercised with offline model/Agent stubs.
 //   node scripts/smoke-development-ade.cjs [--compiled-renderer] [--timeout-ms 120000]
+//   --workers-only runs just the Collaboration list + worker tab flow.
 // Screenshots and report.json land under dist/ade-desktop-smoke.
 // The worker fixture exercises cancel and allow in the real protected
 // application window; no gate, bridge confirmation, or consent token is mocked.
@@ -36,6 +37,7 @@ const { writeDevinModelStub, runDevinModelFlow } = require('./smoke-development-
 const { runProtectedApprovalFlow } = require('./smoke-development-protected-approval.cjs')
 const { writeOpenCodeAgentStub, writeOpenCodeCredentialFixture, runOpenCodeAgentFlow } = require('./smoke-development-opencode-agents.cjs')
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
+const { runWorkersOnlyFlow } = require('./smoke-development-ade-workers.cjs')
 const { runTaskSuggestionFlow } = require('./smoke-development-task-suggestions.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
 const { runTerminalDockFlow } = require('./smoke-development-terminal-dock.cjs')
@@ -57,6 +59,7 @@ async function main() {
   const codingAgentOnly = process.argv.includes('--coding-agent-only')
   const visualOnly = process.argv.includes('--visual-only')
   const terminalOnly = process.argv.includes('--terminal-only')
+  const workersOnly = process.argv.includes('--workers-only')
   const taskSuggestionsOnly = process.argv.includes('--task-suggestions-only')
   const agentModeOnly = process.argv.includes('--agent-mode-only')
   const nativeModelOnly = process.argv.includes('--native-model-only')
@@ -293,6 +296,9 @@ async function main() {
       assertions = await runTaskSuggestionFlow({ page, capture, poll, runtimeRequest })
     } else if (terminalOnly) {
       assertions = await runTerminalDockFlow({ page, capture, poll })
+    } else if (workersOnly) {
+      assertions = await runWorkersOnlyFlow({ page, capture, poll, runtimeRequest,
+        application: electronApplication, nativeApprovalTimeoutMs })
     } else if (visualOnly) {
       assertions = await runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest,
         resize: (width, height) => resize(electronApplication, width, height) })

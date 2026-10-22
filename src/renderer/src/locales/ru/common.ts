@@ -46,6 +46,7 @@ import taskSuggestion from './common/task-suggestion.json'
 import assistantMailbox from './common/assistant-mailbox.json'
 import terminalDock from './common/terminal-dock.json'
 import pptAgentProgress from './common/ppt-agent-progress.json'
+import workersPanel from './common/workers-panel.json'
 
 const common = {
   ...taskSuggestion,
@@ -94,7 +95,8 @@ const common = {
   ...turnUndo,
   ...assistantMailbox,
   ...terminalDock,
-  ...pptAgentProgress
+  ...pptAgentProgress,
+  ...workersPanel
 }
 
 export default common

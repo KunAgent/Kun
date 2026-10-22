@@ -19,7 +19,7 @@ vi.mock('../../store/chat-store', () => {
 })
 vi.mock('./use-agent-dispatch-intent', () => ({ useAgentDispatchIntent: () => ({ intent: undefined }) }))
 vi.mock('../../store/activity-store', () => ({ useActivityStore: (select: (value: unknown) => unknown) => select({ rows: {} }) }))
-vi.mock('../workers/worker-view-store', () => ({ selectWorkerPreview: vi.fn() }))
+vi.mock('../workers/worker-view-store', () => ({ openWorkerSession: vi.fn() }))
 vi.mock('./FloatingComposerWorkersPill', () => ({ OPEN_WORKERS_PANEL_EVENT: 'open-workers-panel' }))
 vi.mock('./AgentDispatchIntentControls', () => ({ AgentDispatchIntentControls: () => null }))
 vi.mock('./AgentDispatchRoutePicker', () => ({

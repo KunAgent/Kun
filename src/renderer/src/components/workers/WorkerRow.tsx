@@ -1,208 +1,159 @@
-import { useState, type ReactElement } from 'react'
+import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  CheckCircle2,
-  Circle,
-  ExternalLink,
-  GitCompare,
-  Loader2,
-  ShieldQuestion,
-  Square,
-  Unplug
-} from 'lucide-react'
+import { Clock3, ExternalLink, Square, Unplug } from 'lucide-react'
 import type { WorkerRowData } from './worker-row-data'
-import { StatusDot } from '../activity/StatusDot'
-import { AgentIcon } from '../agent-icon'
+import {
+  workerActivityText,
+  workerIsLive,
+  workerMetaParts,
+  workerStatus,
+  workerTimeLabel
+} from './worker-presentation'
+import { WorkerAvatar, WorkerQuestionCard, WorkerStatusGlyph } from './WorkerParts'
+import { WorkerMoreMenu, type WorkerMenuItem } from './WorkerMoreMenu'
 
 /**
- * One row in the Workers panel: label + agent/model + status +
- * progress + diff stats + verdict badge, with open / inline-answer / stop /
- * release (confirm) actions. `worker_update` cards reuse the same pieces.
+ * One Collaboration list row: who, what it is doing now, how long, and
+ * what it cost. Clicking opens the worker in its own tab; Stop and the
+ * "⋯" menu appear on hover. An open question is answered in place.
  */
 export function WorkerRow({
   row,
-  selected = false,
+  now,
   busyAction,
   onOpen,
+  onFullOpen,
   onAnswer,
   onStop,
   onDetach
 }: {
   row: WorkerRowData
-  selected?: boolean
+  now: number
   busyAction: 'stop' | 'detach' | 'answer' | null
-  onOpen: (workerId: string) => void
+  onOpen: (row: WorkerRowData) => void
+  onFullOpen: (row: WorkerRowData) => void
   onAnswer: (questionId: string, answer: string) => void
-  onStop: (workerId: string) => void
-  onDetach: (workerId: string) => void
+  onStop: (row: WorkerRowData) => void
+  onDetach: (row: WorkerRowData) => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const [answer, setAnswer] = useState('')
-  const [confirmDetach, setConfirmDetach] = useState(false)
-  const inactive = row.state !== 'active'
+  const status = workerStatus(row)
+  const time = workerTimeLabel(row, now, t)
+  const meta = workerMetaParts(row)
   const diff = row.diffStats
-  const question = row.openQuestion
-  const verdict = row.verdict
+  const verdict = status.kind === 'done' ? row.verdict : undefined
+  const canStop = workerIsLive(row) && (row.child ? Boolean(row.child.turnId) : row.state === 'active')
+  const menuItems: WorkerMenuItem[] = [
+    {
+      id: 'full-open',
+      label: t('workersAction.openInMain'),
+      icon: <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.9} />,
+      onSelect: () => onFullOpen(row)
+    },
+    ...(row.state === 'active' && !row.child ? [{
+      id: 'detach',
+      label: t('workersDetach'),
+      confirmLabel: t('workersDetachConfirm'),
+      disabled: busyAction === 'detach',
+      icon: <Unplug className="h-3.5 w-3.5" strokeWidth={1.9} />,
+      onSelect: () => onDetach(row)
+    }] : [])
+  ]
 
   return (
-    <div
-      data-worker-row={row.workerId}
-      data-selected={selected || undefined}
-      className={`rounded-xl border bg-ds-card px-3 py-2.5 ${selected ? 'border-accent/50' : 'border-ds-border'}`}
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        {row.activityRow ? (
-          <StatusDot row={row.activityRow} />
-        ) : (
-          <span
-            className={inactive ? 'text-ds-faint' : 'text-ds-status-running'}
-            role="img"
-            aria-label={inactive ? t('workersStatusInactive') : t('adeStatusWorking')}
-          >
-            {inactive ? (
-              <Circle className="h-3.5 w-3.5" strokeWidth={0} fill="currentColor" aria-hidden />
-            ) : (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} aria-hidden />
-            )}
-          </span>
-        )}
+    <div data-worker-row={row.workerId} data-worker-status={status.kind} className="group">
+      <div className="flex items-start gap-1.5 rounded-xl py-2.5 pl-2.5 pr-1.5 transition hover:bg-ds-hover">
         <button
           type="button"
-          onClick={() => onOpen(row.workerId)}
-          className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-ds-ink transition hover:text-accent"
-          title={row.label}
+          onClick={() => onOpen(row)}
+          data-worker-open={row.workerId}
+          className="flex min-w-0 flex-1 gap-[11px] text-left outline-none"
         >
-          {row.label}
-        </button>
-        {row.reviewer ? (
-          <span className="shrink-0 rounded-full border border-accent/30 bg-accent/8 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-            {t('workersReviewerBadge')}
-          </span>
-        ) : null}
-        {verdict ? (
-          <span
-            className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
-              verdict.status === 'passed'
-                ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
-                : verdict.status === 'rejected' || verdict.status === 'needs_changes'
-                  ? 'border-ds-status-danger/30 bg-ds-status-danger/8 text-ds-status-danger'
-                  : 'border-ds-border bg-ds-card text-ds-muted'
-            }`}
-          >
-            {verdict.status === 'passed' ? (
-              <CheckCircle2 className="mr-0.5 inline h-3 w-3" strokeWidth={2} aria-hidden />
-            ) : null}
-            {t(`workersVerdict.${verdict.status}`)}
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-1 flex min-w-0 items-center gap-2 text-[11.5px] text-ds-faint">
-        {row.harnessId ? (
-          <span className="inline-flex min-w-0 items-center gap-1 truncate">
-            <AgentIcon harnessId={row.harnessId} size={12} />
-            <span className="truncate">{row.harnessId}{row.model ? ` · ${row.model}` : ''}</span>
-          </span>
-        ) : null}
-        {diff ? (
-          <span className="inline-flex shrink-0 items-center gap-1" title={t('workersDiffStats')}>
-            <GitCompare className="h-3 w-3" strokeWidth={1.9} aria-hidden />
-            <span className="font-mono">+{diff.insertions} −{diff.deletions}</span>
-          </span>
-        ) : null}
-      </div>
-
-      {row.progressNote || row.lastMessagePreview ? (
-        <p className="mt-1.5 line-clamp-2 break-words text-[12px] leading-5 text-ds-muted">
-          {row.progressNote || row.lastMessagePreview}
-        </p>
-      ) : null}
-
-      {question ? (
-        <div
-          data-worker-question={question.questionId}
-          className="mt-2 rounded-lg border border-ds-status-warning/30 bg-ds-status-warning/8 px-2.5 py-2"
-        >
-          <div className="flex items-start gap-1.5 text-[12px] text-ds-ink">
-            <ShieldQuestion className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ds-status-warning" strokeWidth={2} aria-hidden />
-            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words leading-5">
-              {question.question}
-            </p>
-          </div>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <input
-              value={answer}
-              onChange={(event) => setAnswer(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && answer.trim()) onAnswer(question.questionId, answer.trim())
-              }}
-              placeholder={t('workersAnswerPlaceholder')}
-              className="min-w-0 flex-1 rounded-md border border-ds-border bg-ds-main px-2 py-1 text-[12px] text-ds-ink placeholder:text-ds-faint focus:border-accent/50 focus:outline-none"
-            />
-            <button
-              type="button"
-              disabled={!answer.trim() || busyAction === 'answer'}
-              onClick={() => onAnswer(question.questionId, answer.trim())}
-              className="shrink-0 rounded-md bg-accent px-2 py-1 text-[11.5px] font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+          <WorkerAvatar workerId={row.workerId} harnessId={row.harnessId ?? row.activityRow?.harnessId} />
+          <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[13.5px] font-semibold leading-[18px] text-ds-ink" title={row.label}>
+                {row.label}
+              </span>
+              {row.reviewer ? (
+                <span className="inline-flex h-[18px] shrink-0 items-center rounded-[5px] bg-accent-soft px-1.5 text-[10.5px] font-semibold text-accent">
+                  {t('workersReviewerBadge')}
+                </span>
+              ) : null}
+              {verdict ? (
+                <span
+                  className="ds-worker-tone ds-worker-tone-pill inline-flex h-[18px] shrink-0 items-center rounded-[5px] px-1.5 text-[10.5px] font-semibold"
+                  data-tone={verdict.status === 'passed' || verdict.status === 'waived' ? 'success'
+                    : verdict.status === 'pending' ? 'running' : 'danger'}
+                  data-worker-verdict={verdict.status}
+                >
+                  {t(`workersVerdict.${verdict.status}`)}
+                </span>
+              ) : null}
+            </span>
+            <span
+              className={`ds-worker-tone flex min-w-0 items-center gap-[5px] text-[12.5px] ${
+                status.tone === 'warning' || status.tone === 'danger' ? 'ds-worker-tone-text' : 'text-ds-muted'
+              }`}
+              data-tone={status.tone}
             >
-              {t('workersAnswerSend')}
-            </button>
-          </div>
+              <WorkerStatusGlyph kind={status.kind} size={status.kind === 'working' ? 12 : 13} />
+              <span className="truncate" data-worker-activity>{workerActivityText(row, t)}</span>
+            </span>
+            {meta.length || diff || row.activityRow?.stalled ? (
+              <span className="flex min-w-0 items-center gap-1.5 text-[11.5px] text-ds-faint">
+                {meta.length ? <span className="truncate">{meta.join(' · ')}</span> : null}
+                {diff ? (
+                  <span className="shrink-0 font-mono tabular-nums" title={t('workersDiffStats')}>
+                    <span className="text-ds-diff-added">+{diff.insertions}</span>{' '}
+                    <span className="text-ds-diff-removed">−{diff.deletions}</span>
+                  </span>
+                ) : null}
+                {diff ? <span className="shrink-0">{t('workersRow.files', { n: diff.changedFiles })}</span> : null}
+                {row.activityRow?.stalled && workerIsLive(row) ? (
+                  <span className="ds-worker-tone ds-worker-tone-text inline-flex shrink-0 items-center gap-[3px]" data-tone="warning">
+                    <Clock3 className="h-[11px] w-[11px]" strokeWidth={2.2} aria-hidden />
+                    {t('adeStatusStalled')}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+          </span>
+        </button>
+        <div className="relative flex shrink-0 items-start">
+          {time ? (
+            <span className="pr-1 text-[11.5px] leading-[18px] tabular-nums text-ds-faint group-focus-within:hidden group-hover:hidden">
+              {time}
+            </span>
+          ) : null}
+          <span className={`-mt-1 items-center ${time ? 'hidden group-focus-within:flex group-hover:flex' : 'flex'}`}>
+            {canStop ? (
+              <button
+                type="button"
+                disabled={busyAction === 'stop'}
+                onClick={() => onStop(row)}
+                aria-label={t('workersStop')}
+                title={t('workersStop')}
+                data-worker-row-stop={row.workerId}
+                className="grid h-7 w-7 place-items-center rounded-lg text-ds-muted transition hover:bg-ds-card hover:text-ds-ink disabled:opacity-40"
+              >
+                <Square className="h-[13px] w-[13px]" strokeWidth={2} aria-hidden />
+              </button>
+            ) : null}
+            <WorkerMoreMenu items={menuItems} label={t('workersAction.more')} />
+          </span>
+        </div>
+      </div>
+      {row.openQuestion ? (
+        <div className="mb-1.5 ml-[53px] mr-2.5 mt-[-2px]">
+          <WorkerQuestionCard
+            question={row.openQuestion}
+            busy={busyAction === 'answer'}
+            onAnswer={onAnswer}
+            variant="inline"
+          />
         </div>
       ) : null}
-
-      <div className="mt-2 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onOpen(row.workerId)}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-        >
-          <ExternalLink className="h-3 w-3" strokeWidth={1.9} aria-hidden />
-          {t('workersOpen')}
-        </button>
-        <span className="flex-1" />
-        {!inactive ? (
-          <button
-            type="button"
-            disabled={busyAction === 'stop'}
-            onClick={() => onStop(row.workerId)}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
-          >
-            <Square className="h-3 w-3" strokeWidth={1.9} aria-hidden />
-            {t('workersStop')}
-          </button>
-        ) : null}
-        {!inactive && !row.child ? (
-          confirmDetach ? (
-            <span className="inline-flex items-center gap-1">
-              <button
-                type="button"
-                disabled={busyAction === 'detach'}
-                onClick={() => onDetach(row.workerId)}
-                className="rounded-md border border-ds-status-danger/40 px-1.5 py-1 text-[11.5px] font-semibold text-ds-status-danger transition hover:bg-ds-status-danger/10 disabled:opacity-40"
-              >
-                {t('workersDetachConfirm')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDetach(false)}
-                className="rounded-md px-1.5 py-1 text-[11.5px] text-ds-muted transition hover:bg-ds-hover"
-              >
-                {t('workersDetachCancel')}
-              </button>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmDetach(true)}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-            >
-              <Unplug className="h-3 w-3" strokeWidth={1.9} aria-hidden />
-              {t('workersDetach')}
-            </button>
-          )
-        ) : null}
-      </div>
     </div>
   )
 }

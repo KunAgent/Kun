@@ -6,6 +6,7 @@ import type {
   AdeTeamOverview,
   AdeTeamWorker
 } from '@shared/ade-teams'
+import { workerStatus } from './worker-presentation'
 
 /**
  * One Workers-panel row: the durable team worker merged with its
@@ -34,6 +35,8 @@ export type WorkerRowData = {
   verdict?: AdeDispatchRecord['verdict']
   /** Latest still-open question this worker is waiting on. */
   openQuestion?: AdeQuestionRecord
+  /** Tokens this worker's thread used, from the team usage rollup. */
+  totalTokens?: number
   /**
    * A child agent of the thread that is not a team member (a delegated
    * subagent, a PPT child): no team controls; open and stop act on its thread.
@@ -81,6 +84,7 @@ export function mergeWorkerRows(
   const dispatches = latestDispatchPerWorker(overview.dispatches)
   const questions = latestOpenQuestionPerWorker(overview.questions)
   const activityByUnit = new Map(activityRows.map((row) => [row.unitId, row]))
+  const tokensByWorker = new Map(overview.usage?.perWorker.map((entry) => [entry.workerId, entry.totalTokens]) ?? [])
   return overview.team.workers.map((worker) => {
     const row = activityByUnit.get(worker.workerId)
     const dispatch = dispatches.get(worker.workerId)
@@ -119,7 +123,8 @@ export function mergeWorkerRows(
           }
         : {}),
       ...(dispatch?.verdict ? { verdict: dispatch.verdict } : {}),
-      ...(questions.has(worker.workerId) ? { openQuestion: questions.get(worker.workerId) } : {})
+      ...(questions.has(worker.workerId) ? { openQuestion: questions.get(worker.workerId) } : {}),
+      ...(tokensByWorker.has(worker.workerId) ? { totalTokens: tokensByWorker.get(worker.workerId) } : {})
     }
   })
 }
@@ -156,7 +161,10 @@ export function childAgentRows(
     })
 }
 
-/** Panel header summary: running / waiting / done / failed. */
+/**
+ * Panel header summary: running / waiting / done / failed, counted with the
+ * same status rule the rows display, so the bar always matches the list.
+ */
 export function summarizeWorkerRows(rows: WorkerRowData[]): {
   running: number
   waiting: number
@@ -166,13 +174,11 @@ export function summarizeWorkerRows(rows: WorkerRowData[]): {
 } {
   const summary = { running: 0, waiting: 0, done: 0, failed: 0, total: rows.length }
   for (const row of rows) {
-    if (row.bucket === 'working') summary.running += 1
-    else if (row.bucket === 'needs-you') {
-      if (row.dispatchState === 'failed' || row.state !== 'active') summary.failed += 1
-      else summary.waiting += 1
-    } else if (row.bucket === 'done' || row.bucket === 'review' || row.bucket === 'idle') {
-      summary.done += 1
-    }
+    const { tone } = workerStatus(row)
+    if (tone === 'running') summary.running += 1
+    else if (tone === 'warning') summary.waiting += 1
+    else if (tone === 'danger') summary.failed += 1
+    else summary.done += 1
   }
   return summary
 }

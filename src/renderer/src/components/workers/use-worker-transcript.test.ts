@@ -6,6 +6,7 @@ import type { ThreadEventSink } from '../../agent/provider-types'
 const provider = vi.hoisted(() => ({ getThreadDetail: vi.fn(), subscribeThreadEvents: vi.fn(), interrupt: vi.fn() }))
 vi.mock('../../agent/registry', () => ({ getProvider: () => provider }))
 import { useWorkerTranscript } from './use-worker-transcript'
+import { resetThreadLiveActivityForTests, threadLiveActivityAt } from '../../store/thread-live-activity'
 
 let current: ReturnType<typeof useWorkerTranscript>
 let renderer: ReactTestRenderer
@@ -80,6 +81,14 @@ describe('visible worker transcript subscription', () => {
     expect(current.detail?.historyCursor).toBeUndefined()
     await act(async () => { await vi.advanceTimersByTimeAsync(600) })
     expect(current.detail?.blocks.map((block) => block.id)).toEqual(['fresh'])
+  })
+
+  it('records worker events so the live row does not report silence while it streams', async () => {
+    resetThreadLiveActivityForTests()
+    await mount()
+    expect(threadLiveActivityAt('worker')).toBeUndefined()
+    await act(async () => { sink.onSeq(8) })
+    expect(threadLiveActivityAt('worker')).toBe(Date.now())
   })
 
   it('discards a late response after the preview changes thread', async () => {

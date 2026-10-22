@@ -14,8 +14,7 @@ import { AgentDispatchStatusBadge } from './AgentDispatchStatusBadge'
 import { AgentDispatchAssignmentList } from './AgentDispatchAssignmentList'
 import { assignmentRoute, dispatchAssignments, dispatchRoutesEditable, replaceAssignmentRoute,
   sameAssignmentRoute } from './agent-dispatch-card-model'
-import { selectWorkerPreview } from '../workers/worker-view-store'
-import { OPEN_WORKERS_PANEL_EVENT } from './FloatingComposerWorkersPill'
+import { openWorkerSession } from '../workers/worker-view-store'
 import { TaskSuggestionCard } from './TaskSuggestionCard'
 import { isTaskSuggestionBlock } from './task-suggestion-card-model'
 
@@ -69,10 +68,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
     ...(draft.routes[index].agentId === assignment.agentId && assignment.agentName ? { agentName: assignment.agentName } : {}) }))
     : assignments
   const workerIds = intent.target?.workerIds ?? (intent.target?.threadId ? [intent.target.threadId] : [])
-  const openWorker = (workerId: string) => {
-    selectWorkerPreview(intent.source.threadId, workerId)
-    window.dispatchEvent(new CustomEvent(OPEN_WORKERS_PANEL_EVENT))
-  }
+  const openWorker = (workerId: string, label?: string) => openWorkerSession(workerId, label)
   const changeRoute = (index: number, route: AgentDispatchAssignmentRoute) => {
     if (draft) { setDraft({ ...draft, routes: replaceAssignmentRoute(draft.routes, index, route) }); return }
     if (sameAssignmentRoute(assignments[index], route)) return

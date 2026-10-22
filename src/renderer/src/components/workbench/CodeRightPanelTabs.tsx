@@ -38,9 +38,12 @@ import {
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   isExtensionContributionId,
+  workerIdFromSessionTab,
   type RightPanelContributionId
 } from '../../extensions/contribution-ids'
 import { boundedPlainText } from '../../extensions/safe-text'
+import { useWorkerViewStore } from '../workers/worker-view-store'
+import { WorkerSessionTabDot } from '../workers/WorkerSessionTabDot'
 import type { CodeRightTabsState } from './code-right-tabs-state'
 
 type Props = {
@@ -82,6 +85,7 @@ export function CodeRightPanelTabs({
   const idPrefix = safeDomId(domIdPrefix)
   const tabRefs = useRef(new Map<RightPanelContributionId, HTMLButtonElement>())
   const tabListRef = useRef<HTMLDivElement>(null)
+  const workerLabels = useWorkerViewStore((s) => s.labels)
   const tabOrder = state.tabs.join('\n')
   const activeTitle = state.activeId ? titles[state.activeId] : undefined
   useLayoutEffect(() => {
@@ -147,8 +151,13 @@ export function CodeRightPanelTabs({
     label: string
     icon: LucideIcon | null
     iconUrl?: string
+    workerId?: string
   } => {
     const dynamicTitle = titles[id]?.trim()
+    const workerId = workerIdFromSessionTab(id)
+    if (workerId) {
+      return { label: workerLabels[workerId] || dynamicTitle || t('workerTab.fallbackTitle'), icon: null, workerId }
+    }
     if (id === BUILTIN_RIGHT_PANEL_IDS.file) {
       return { label: dynamicTitle || t('filePreviewTitle'), icon: FileEdit }
     }
@@ -236,7 +245,9 @@ export function CodeRightPanelTabs({
                 onKeyDown={(event) => handleTabKeyDown(event, id, index)}
                 className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] font-semibold outline-none"
               >
-                {meta.iconUrl ? (
+                {meta.workerId ? (
+                  <WorkerSessionTabDot workerId={meta.workerId} active={active} />
+                ) : meta.iconUrl ? (
                   <img src={meta.iconUrl} alt="" aria-hidden className="h-3.5 w-3.5 shrink-0 object-contain" />
                 ) : Icon ? (
                   <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />

@@ -16,7 +16,7 @@ vi.mock('../../store/chat-store', () => ({ useChatStore: (select: (value: unknow
   select({ activeThreadId: state.activeThreadId }) }))
 vi.mock('../../store/activity-store', () => ({ useActivityStore: (select: (value: unknown) => unknown) =>
   select({ rows: state.rows }) }))
-vi.mock('../workers/worker-view-store', () => ({ selectWorkerPreview: preview }))
+vi.mock('../workers/worker-view-store', () => ({ openWorkerSession: preview }))
 vi.mock('./FloatingComposerWorkersPill', () => ({ OPEN_WORKERS_PANEL_EVENT: 'open-workers-panel' }))
 vi.mock('./AgentDispatchIntentControls', () => ({ AgentDispatchIntentControls: (props: { readOnly: boolean }) =>
   createElement('div', { 'data-controls': props.readOnly ? 'read-only' : 'interactive' }) }))
@@ -93,13 +93,9 @@ describe('Agent dispatch card', () => {
     expect(text).toContain('read_file')
     const view = renderer!.root.findAll((node) => node.type === 'button' &&
       node.props['aria-label'] === 'dispatchIntent.viewProcess 1')[0]
-    const target = new EventTarget()
-    const opened = vi.fn()
-    target.addEventListener('open-workers-panel', opened)
-    vi.stubGlobal('window', target)
-    try { await act(async () => { view.props.onClick() }) } finally { vi.unstubAllGlobals() }
-    expect(preview).toHaveBeenCalledWith('parent', 'w1')
-    expect(opened).toHaveBeenCalledTimes(1)
+    await act(async () => { view.props.onClick() })
+    // The worker opens in its own right-panel tab, labelled like its card row.
+    expect(preview).toHaveBeenCalledWith('w1', expect.any(String))
   })
 
   it('keeps another conversation\'s card read-only', async () => {

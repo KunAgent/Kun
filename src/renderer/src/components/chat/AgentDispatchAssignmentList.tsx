@@ -33,7 +33,7 @@ export function AgentDispatchAssignmentList({ intent, assignments, editable, bus
   editable: boolean
   busy: boolean
   onRouteChange: (index: number, route: AgentDispatchAssignmentRoute) => void
-  onOpenWorker: (workerId: string) => void
+  onOpenWorker: (workerId: string, label?: string) => void
 }) {
   const { t } = useTranslation('common')
   const rows = useActivityStore((state) => state.rows)
@@ -58,7 +58,7 @@ export function AgentDispatchAssignmentList({ intent, assignments, editable, bus
             : <AgentDispatchRouteLabel route={assignment} agentName={assignment.agentName} />}
         </div>
         {progress ? <ProgressChip progress={progress} /> : null}
-        {progress?.workerId ? <button type="button" onClick={() => onOpenWorker(progress.workerId!)}
+        {progress?.workerId ? <button type="button" onClick={() => onOpenWorker(progress.workerId!, assignment.label)}
           className="inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[12px] font-medium text-accent hover:bg-ds-hover"
           aria-label={`${t('dispatchIntent.viewProcess')} ${batch ? index + 1 : ''}`.trim()}>
           {t('dispatchIntent.view')}<ChevronRight size={13} aria-hidden />

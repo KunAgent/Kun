@@ -21,6 +21,7 @@ import { ExtensionViewOutlet } from '../../extensions/ControlledContributionSurf
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   isExtensionContributionId,
+  workerIdFromSessionTab,
   type RightPanelContributionId
 } from '../../extensions/contribution-ids'
 import type { CodeRightTabsState } from './code-right-tabs-state'
@@ -44,6 +45,9 @@ const CodeChangesPanel = lazy(() =>
 )
 const WorkersPanel = lazy(() =>
   import('../workers/WorkersPanel').then((module) => ({ default: module.WorkersPanel }))
+)
+const WorkerSessionPanel = lazy(() =>
+  import('../workers/WorkerSessionPanel').then((module) => ({ default: module.WorkerSessionPanel }))
 )
 const DevBrowserPanel = lazy(() =>
   import('../DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
@@ -314,6 +318,10 @@ function CodeRightPanelWorkspace({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.workers) {
       return <WorkersPanel active={visible && code.state.activeId === id} className="h-full max-h-full w-full" />
+    }
+    const workerId = workerIdFromSessionTab(id)
+    if (workerId) {
+      return <WorkerSessionPanel workerId={workerId} active={visible && code.state.activeId === id} className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (

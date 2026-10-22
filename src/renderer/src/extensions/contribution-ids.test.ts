@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   isRightPanelContributionId,
-  normalizeStoredRightPanelId
+  legacyRightPanelId,
+  normalizeStoredRightPanelId,
+  workerIdFromSessionTab,
+  workerSessionTabId
 } from './contribution-ids'
 
 describe('right panel contribution identity migration', () => {
@@ -27,5 +30,15 @@ describe('right panel contribution identity migration', () => {
     expect(normalizeStoredRightPanelId('todo')).toBeNull()
     expect(normalizeStoredRightPanelId('builtin:right-panel-todo')).toBeNull()
     expect(normalizeStoredRightPanelId('removed-panel')).toBeNull()
+  })
+
+  it('addresses one tab per worker conversation and rejects malformed worker ids', () => {
+    const id = workerSessionTabId('thr_worker-1')
+    expect(isRightPanelContributionId(id)).toBe(true)
+    expect(workerIdFromSessionTab(id)).toBe('thr_worker-1')
+    expect(legacyRightPanelId(id)).toBeNull()
+    expect(isRightPanelContributionId('builtin:right-panel-worker:')).toBe(false)
+    expect(isRightPanelContributionId('builtin:right-panel-worker:../escape')).toBe(false)
+    expect(workerIdFromSessionTab(BUILTIN_RIGHT_PANEL_IDS.workers)).toBeNull()
   })
 })

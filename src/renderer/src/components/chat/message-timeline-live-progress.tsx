@@ -113,12 +113,12 @@ function LiveTurnActivityRow({
           <AnimatedWorkLogo active ikunVariant={ikunVariant} mode={swimMode} phase="trail" size="sm" />
         </span>
       )}
-      <span className={awaitingUserInput ? 'font-medium text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}>
+      <span className={`min-w-0 [overflow-wrap:anywhere] ${awaitingUserInput ? 'font-medium text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}`}>
         {label}
       </span>
       {typeof liveStartedAtMs === 'number' ? (
         <span
-          className={`tabular-nums ${awaitingUserInput ? 'text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}`}
+          className={`whitespace-nowrap tabular-nums ${awaitingUserInput ? 'text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}`}
         >
           {' · '}
           <LiveElapsedText sinceMs={liveStartedAtMs} />

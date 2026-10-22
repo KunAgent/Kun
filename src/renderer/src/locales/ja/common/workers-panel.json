@@ -1,0 +1,80 @@
+{
+  "workersEmptyTitle": "まだメンバーがいません",
+  "workersUnavailableTitle": "チーム情報を読み込めません",
+  "workersRetry": "再試行",
+  "workersHeader": {
+    "members": "メンバー {{n}} 人",
+    "usageTitle": "チーム全体のトークン使用量",
+    "success": "完了",
+    "running": "実行中",
+    "warning": "対応待ち",
+    "danger": "失敗"
+  },
+  "workersSection": {
+    "needs-you": "対応が必要",
+    "working": "実行中",
+    "done": "終了"
+  },
+  "workersStatus": {
+    "question": "回答待ち",
+    "approval": "承認待ち",
+    "waiting": "待機中",
+    "failed": "失敗",
+    "working": "実行中",
+    "done": "完了",
+    "released": "解放済み",
+    "idle": "アイドル"
+  },
+  "workersTool": {
+    "read": "ファイルを読み込み中",
+    "edit": "ファイルを編集中",
+    "search": "コードを検索中",
+    "command": "コマンドを実行中",
+    "web": "Web を調べています",
+    "delegate": "サブタスクを割り当て中",
+    "other": "{{tool}} を呼び出し中"
+  },
+  "workersPhase": {
+    "investigating": "調査中",
+    "implementing": "実装中",
+    "verifying": "検証中",
+    "blocked": "ブロック中",
+    "compacting": "コンテキストを圧縮中"
+  },
+  "workersTime": {
+    "justNow": "たった今",
+    "minutes": "{{n}} 分前",
+    "hours": "{{n}} 時間前",
+    "days": "{{n}} 日前"
+  },
+  "workersRow": {
+    "files": "{{n}} ファイル"
+  },
+  "workersAction": {
+    "openInMain": "メイン画面で開く",
+    "more": "その他の操作"
+  },
+  "workersQuestion": {
+    "waitingOn": "{{name}} があなたの回答を待っています",
+    "otherAnswer": "または別の回答を入力…",
+    "answer": "回答",
+    "answerPlaceholder": "または回答を入力…",
+    "answerHint": "回答しても引き継ぎにはなりません"
+  },
+  "workerTab": {
+    "fallbackTitle": "メンバー",
+    "loadingConversation": "会話を読み込み中…",
+    "noConversation": "まだ会話がありません。",
+    "missing": "このメンバーはもうチームにいません。",
+    "childReadOnly": "このエージェントはマネージャーが実行しています。ここでは会話は読み取り専用です。",
+    "releasedReadOnly": "このメンバーは解放されました。会話は読み取り専用です。"
+  },
+  "workerComposer": {
+    "managed": "マネージャー管理中",
+    "handBack": "引き継ぎ中 · マネージャーに戻す",
+    "takeOverTitle": "マネージャーからこのメンバーを引き継ぐ",
+    "handBackTitle": "マネージャーに制御を戻す",
+    "takeOverHint": "送信すると引き継ぎます。いつでもマネージャーに戻せます。"
+  },
+  "assignmentCardTask": "タスク"
+}

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { useAppSurfaceStore } from '../../app-surfaces/app-surface-store'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
+  workerIdFromSessionTab,
+  workerSessionTabId,
   type RightPanelContributionId,
   type RightPanelMode
 } from '../../extensions/contribution-ids'
@@ -10,6 +12,7 @@ import { takePlanBuildReview } from '../../store/plan-build-watch'
 import { useActivityStore } from '../../store/activity-store'
 import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
+import { OPEN_WORKER_SESSION_EVENT } from '../workers/worker-view-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
@@ -188,8 +191,11 @@ export function useWorkbenchRightTools({
   const reviewEnabled = useReviewStore((s) =>
     Boolean(activeThreadId && s.bindings[activeThreadId]))
   // Collaboration appears only once this task actually has execution units.
-  const workersEnabled = useActivityStore((s) =>
-    Boolean(activeThreadId && selectWorkerRowsForParent(s.rows, activeThreadId).length > 0))
+  // Newline-joined so the selector result stays referentially stable.
+  const workerUnitKey = useActivityStore((s) => activeThreadId
+    ? selectWorkerRowsForParent(s.rows, activeThreadId).map((row) => row.unitId).join('\n')
+    : '')
+  const workersEnabled = workerUnitKey !== ''
 
   // A finished build never replaces the user's current tool panel. Clear
   // its pending flag when the user explicitly visits the combined changes tab.
@@ -207,6 +213,20 @@ export function useWorkbenchRightTools({
     return () => window.removeEventListener(OPEN_WORKERS_PANEL_EVENT, open)
   }, [openRightPanelTab])
 
+  // A worker opens as its own tab beside Collaboration (focused if open).
+  // One this thread does not list yet falls back to the Collaboration list.
+  useEffect(() => {
+    const open = (event: Event): void => {
+      const workerId = (event as CustomEvent<{ workerId?: unknown }>).detail?.workerId
+      if (typeof workerId !== 'string' || !workerId) return
+      const known = Boolean(activeThreadId) && selectWorkerRowsForParent(useActivityStore.getState().rows, activeThreadId!)
+        .some((row) => row.unitId === workerId)
+      openRightPanelTab(known ? workerSessionTabId(workerId) : BUILTIN_RIGHT_PANEL_IDS.workers)
+    }
+    window.addEventListener(OPEN_WORKER_SESSION_EVENT, open)
+    return () => window.removeEventListener(OPEN_WORKER_SESSION_EVENT, open)
+  }, [activeThreadId, openRightPanelTab])
+
   useEffect(() => {
     const unavailable: RightPanelContributionId[] = []
     unavailable.push(BUILTIN_RIGHT_PANEL_IDS.agentPerspective)
@@ -215,6 +235,12 @@ export function useWorkbenchRightTools({
     if (!filePreviewTarget) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.file)
     if (!reviewEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.review)
     if (!workersEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.workers)
+    // Worker tabs only belong to the thread whose team they are part of.
+    const workerUnits = new Set(workerUnitKey.split('\n'))
+    for (const id of codeRightTabs.tabs) {
+      const workerId = workerIdFromSessionTab(id)
+      if (workerId && !workerUnits.has(workerId)) unavailable.push(id)
+    }
     if (!activeThreadId) {
       unavailable.push(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
     }
@@ -229,6 +255,7 @@ export function useWorkbenchRightTools({
     filePreviewTarget,
     fileTreeWorkspaceRoot,
     reviewEnabled,
+    workerUnitKey,
     workersEnabled
   ])
 
