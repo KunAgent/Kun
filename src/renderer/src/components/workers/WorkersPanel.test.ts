@@ -198,42 +198,108 @@ describe('WorkersPanel', () => {
 })
 
 describe('FloatingComposerWorkersPill', () => {
-  it('counts in-flight workers and shows the amber waiting variant', async () => {
+  it('keeps unfinished background work visible after the reply ends', async () => {
     useActivityStore.setState({
+      status: 'live',
       rows: {
-        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'working' }),
-        w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'working' }),
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', title: 'repair-check', state: 'working' }),
+        w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'initializing' }),
         other: workerRow({ unitId: 'other', threadId: 'other', parentThreadId: 'thr_other' })
       }
     })
-    let renderer = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: true })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
     )
-    expect(JSON.stringify(renderer.toJSON())).toContain('Workers 2')
-    useActivityStore.setState({
-      rows: { w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'waiting', waitingReason: 'question' }) }
-    })
-    renderer = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: true })
-    )
-    const pill = byData(renderer, 'data-workers-pill')[0]
-    expect(pill!.props.className).toContain('warning')
-    expect(JSON.stringify(renderer.toJSON())).toContain('1')
+    const strip = byData(renderer, 'data-background-task-strip')[0]
+    expect(strip!.props['data-background-task-strip']).toBe('running')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Working in background')
+    expect(JSON.stringify(renderer.toJSON())).toContain('1 running · 1 starting')
+    expect(byLabel(renderer, 'Background tasks: Working in background, 2 unfinished')).toBeTruthy()
+    // The unrelated thread's worker never reaches this strip.
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('other')
   })
 
-  it('hides for non-ade threads and teams without in-flight workers', async () => {
+  it('separates running, waiting, and finished counts and surfaces the waiting action', async () => {
     useActivityStore.setState({
+      status: 'live',
+      rows: {
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'working' }),
+        w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'waiting', waitingReason: 'question' }),
+        w3: workerRow({ unitId: 'w3', threadId: 'w3', state: 'done', reviewStatus: 'passed' })
+      }
+    })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
+    )
+    const strip = byData(renderer, 'data-background-task-strip')[0]!
+    // A waiting child outranks a running sibling; only two children are unfinished.
+    expect(strip.props['data-background-task-strip']).toBe('waiting-user')
+    expect(strip.props['data-background-task-unfinished']).toBe(2)
+    const html = JSON.stringify(renderer.toJSON())
+    expect(html).toContain('Needs your input')
+    expect(html).toContain('1 running · 1 waiting · 1 done')
+    expect(buttons(renderer).some((button) => textOf(button) === 'Review')).toBe(true)
+  })
+
+  it('treats an open review verdict as unfinished instead of success', async () => {
+    useActivityStore.setState({
+      status: 'live',
+      rows: {
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'done', reviewRequired: true })
+      }
+    })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
+    )
+    const strip = byData(renderer, 'data-background-task-strip')[0]!
+    expect(strip.props['data-background-task-strip']).toBe('review')
+    expect(strip.props['data-background-task-unfinished']).toBe(1)
+  })
+
+  it('keeps working after every child returned while the main turn continues', async () => {
+    useActivityStore.setState({
+      status: 'live',
+      rows: {
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'done', reviewStatus: 'passed' })
+      }
+    })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR, mainRunning: true })
+    )
+    expect(byData(renderer, 'data-background-task-strip')[0]!.props['data-background-task-strip'])
+      .toBe('continuing')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Still working')
+  })
+
+  it('reports an unconfirmed state instead of live progress when the feed is down', async () => {
+    useActivityStore.setState({
+      status: 'error',
       rows: { w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'working' }) }
     })
-    const disabled = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: false })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
     )
-    expect(disabled.toJSON()).toBeNull()
-    useActivityStore.setState({ rows: {} })
+    expect(byData(renderer, 'data-background-task-strip')[0]!.props['data-background-task-strip'])
+      .toBe('unknown')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Task status unconfirmed')
+  })
+
+  it('hides for threads without background work', async () => {
+    useActivityStore.setState({ status: 'live', rows: {} })
     const empty = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: true })
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
     )
     expect(empty.toJSON()).toBeNull()
+    useActivityStore.setState({
+      status: 'live',
+      rows: { other: workerRow({ unitId: 'other', threadId: 'other', parentThreadId: 'thr_other' }) }
+    })
+    const unrelated = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
+    )
+    expect(unrelated.toJSON()).toBeNull()
+    const noThread = await render(createElement(FloatingComposerWorkersPill, { threadId: null }))
+    expect(noThread.toJSON()).toBeNull()
   })
 })
 

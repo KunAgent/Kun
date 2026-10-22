@@ -411,9 +411,13 @@ export function WorkMetaRow({
 }): ReactElement {
   const { t } = useTranslation('common')
 
+  // The row describes this turn's process log, not the whole task: a finished
+  // reply can still leave background work running.
   const mainLabel = processing
     ? `${t('processing')}${typeof durationMs === 'number' ? ` · ${formatDuration(durationMs)}` : ''}`
-    : `${t('processed')}${typeof durationMs === 'number' ? ` ${formatDuration(durationMs)}` : ''}`
+    : typeof durationMs === 'number'
+      ? t('turnRecordDuration', { duration: formatDuration(durationMs) })
+      : t('turnRecord')
 
   const content = (
     <>

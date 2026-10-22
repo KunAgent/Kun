@@ -18,6 +18,7 @@ import type { NormalizedThread } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
+import { useSidebarBackgroundActivity } from './useSidebarBackgroundActivity'
 import { rememberCodeWorkspaceRoots } from '../../store/chat-store-helpers'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { removedWorkspaceIdentityKeys } from '../../lib/removed-code-workspaces'
@@ -313,13 +314,15 @@ export function SidebarProjectsSection({
 
   useRemovedWorkspaceDiscoveredAliases(discoveredThreadWorktrees, removedCodeWorkspaces)
 
+  const backgroundActivityByThread = useSidebarBackgroundActivity()
   const sidebarThreadActivityContext = {
     activeThreadId,
     busy,
     watchTurnCompletion,
     unreadThreadIds,
     scheduledThreadActivities,
-    awaitingUserInputThreadIds
+    awaitingUserInputThreadIds,
+    backgroundActivityByThread
   }
 
   const removedProjectKeys = useMemo(

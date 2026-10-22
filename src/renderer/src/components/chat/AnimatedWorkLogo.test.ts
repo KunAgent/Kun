@@ -263,7 +263,7 @@ describe('AnimatedWorkLogo', () => {
       })
     )
 
-    expect(html).toMatch(/Processed 1m 41s|已处理 1m 41s/)
+    expect(html).toMatch(/This turn · 1m 41s|本轮记录 · 1m 41s/)
     expect(html).not.toMatch(/steps|步|Work process|工作过程/)
     expect(html).toContain('aria-expanded="false"')
   })

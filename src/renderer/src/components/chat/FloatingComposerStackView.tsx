@@ -55,7 +55,7 @@ export function FloatingComposerStackView({
           <>
             <FloatingComposerWorkersPill
               threadId={activeThreadId}
-              enabled={adeComposerEnabled === true}
+              mainRunning={busy === true}
             />
             <FloatingComposerDispatchableAgents
               thread={activeThread ?? null}
