@@ -8,6 +8,10 @@ import {
   type ClawScheduleMcpLaunchConfig
 } from '../claw-schedule-mcp-config'
 import {
+  GUI_SCHEDULE_MCP_CALL_TIMEOUT_MS,
+  GUI_SCHEDULE_MCP_CONNECT_TIMEOUT_MS
+} from '../claw-schedule-mcp-timeouts'
+import {
   comparableSkillRootPath,
   guiSkillManagedComparablePaths,
   guiSkillWorkspaceRootsForRuntime,
@@ -15,8 +19,6 @@ import {
   isCodexPluginCacheRoot,
   normalizeSkillRootPath
 } from '../services/skill-service'
-
-const GUI_SCHEDULE_MCP_TIMEOUT_MS = 5_000
 
 export { GUI_SCHEDULE_MCP_SERVER_NAME }
 
@@ -31,7 +33,11 @@ export function buildGuiScheduleKunMcpServer(
     args: buildClawScheduleMcpArgs(settings, launch),
     env: { ELECTRON_RUN_AS_NODE: '1' },
     trustScope: 'user',
-    timeoutMs: GUI_SCHEDULE_MCP_TIMEOUT_MS
+    // Connect and tool listing stay short; the per-call budget must outlive the
+    // bridge's own wait for a workflow run, or a long run is cut off mid-flight
+    // and reported as a transport failure with an unknown outcome.
+    timeoutMs: GUI_SCHEDULE_MCP_CONNECT_TIMEOUT_MS,
+    callTimeoutMs: GUI_SCHEDULE_MCP_CALL_TIMEOUT_MS
   }
 }
 

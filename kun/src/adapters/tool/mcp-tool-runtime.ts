@@ -11,6 +11,7 @@ import { projectMcpSchemaForModel } from './mcp-schema-projection.js'
 import type { McpClientLike, McpServerDiagnostic, McpToolDescriptor } from './mcp-types.js'
 import type { McpSearchCatalogRecord } from './mcp-tool-search.js'
 import type { McpBackgroundReconnectOptions, McpConnectionState } from './mcp-tool-provider.js'
+import { mcpCallTimeoutMs } from './mcp-call-budget.js'
 
 const DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS = 5
 const DEFAULT_MCP_RECONNECT_BASE_DELAY_MS = 4_000
@@ -134,7 +135,7 @@ export function createMcpLocalTool(
         state,
         { name: descriptor.name, arguments: args },
         context,
-        state.server.timeoutMs,
+        mcpCallTimeoutMs(state.server),
         isMcpReplaySafe(descriptor.annotations)
       )
       const mcpApp = mcpAppToolOutputMeta(state.serverId, descriptor)
@@ -273,7 +274,7 @@ export async function callMcpToolWithReconnect(
   state: McpConnectionState,
   input: { name: string; arguments: Record<string, unknown> },
   context: ToolHostContext | undefined,
-  timeout = state.server.timeoutMs,
+  timeout = mcpCallTimeoutMs(state.server),
   /** Whether this call is locally known to be replay-safe after a drop. */
   replaySafe = false
 ): Promise<unknown> {

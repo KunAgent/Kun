@@ -255,7 +255,13 @@ export const McpServerConfig = z
     trustedWorkspaceRoots: z.array(z.string().min(1)).default([]),
     /** MCP tool names explicitly trusted by the host as read-only in Plan mode. */
     planModeReadOnlyTools: z.array(z.string().min(1)).default([]),
-    timeoutMs: z.number().int().positive().default(30_000)
+    timeoutMs: z.number().int().positive().default(30_000),
+    /**
+     * Per-call budget when it differs from the connect/list budget. A tool whose
+     * server waits on long-running work needs this to outlive `timeoutMs`;
+     * unset keeps the historical single-budget behaviour.
+     */
+    callTimeoutMs: z.number().int().positive().optional()
   })
   .strict()
   .superRefine((server, ctx) => {
