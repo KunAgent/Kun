@@ -226,6 +226,7 @@ export async function runCursorSdkTurnOwned(
           }),
           workspace: thread.workspace,
           model,
+          modelScope: 'session',
           capabilityFingerprint: delegatedCapabilityFingerprint({
             systemPrompt: deps.systemPrompt?.trim() || '',
             threadPersona: thread.systemPrompt?.trim() || '',
@@ -485,6 +486,7 @@ export async function runCursorSdkTurnOwned(
           harnessTurnTiming(threadId, turnId).requestStarted()
           run = await Promise.race([
             agent.send(attemptMessage, {
+              model: options.model,
               mode: options.mode,
               local: {
                 ...(forceRecoveryRun ? { force: true } : {}),

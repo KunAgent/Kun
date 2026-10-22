@@ -214,31 +214,45 @@ export class PiAgent implements HarnessAgent {
     input: HarnessSessionStartInput
   ): Promise<PiSession> {
     // The wire model is applied per session. `kun/<provider>/<model>` (gateway)
-    // and `provider/model` probe results split on the first slash; a bare id
-    // resolves against the kun provider under gateway, or is left to pi's
-    // current model under native login (provider is unknowable here).
-    if (input.model) {
-      const slash = input.model.indexOf('/')
-      const provider = this.gatewayProviderId ?? (
-        slash > 0
-          ? input.model.slice(0, slash)
-          : undefined)
-      const modelId = this.gatewayProviderId ? input.model : slash > 0 ? input.model.slice(slash + 1) : input.model
-      if (provider) {
-        try {
-          await this.client.setModel(provider, modelId)
-        } catch (error) {
-          throw new HarnessTransportError(
-            'agent_error',
-            `pi set_model ${input.model} failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            error
-          )
-        }
+    // and `provider/model` probe results split on the first slash; a bare id is
+    // resolved against pi's advertised catalog so it can never be dropped.
+    const requested = input.model
+    let modelId = requested
+    if (requested) {
+      const slash = requested.indexOf('/')
+      modelId = this.gatewayProviderId
+        ? requested
+        : slash > 0 ? requested.slice(slash + 1) : requested
+      const provider = this.gatewayProviderId ??
+        (slash > 0 ? requested.slice(0, slash) : undefined) ??
+        await this.resolveProviderForModel(modelId)
+      if (!provider) {
+        throw new HarnessTransportError(
+          'agent_error',
+          `pi cannot resolve a provider for '${requested}'. Pick the provider-qualified model or refresh the Agent's model list; no prompt was sent.`
+        )
+      }
+      try {
+        await this.client.setModel(provider, modelId)
+      } catch (error) {
+        throw new HarnessTransportError(
+          'agent_error',
+          `pi set_model ${requested} failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          error
+        )
       }
     }
     const state = await this.client.getState()
+    // The durable route must not claim a model the live session never adopted.
+    const effective = state.model?.id
+    if (!this.gatewayProviderId && modelId && effective && effective !== modelId) {
+      throw new HarnessTransportError(
+        'agent_error',
+        `pi kept model '${effective}' instead of '${modelId}'. Refresh its model list or pick Agent default; no prompt was sent.`
+      )
+    }
     this.sessionOwner = input.threadId
     this.sessionPath = state.sessionFile ?? input.preparation.nativeSessionId
     return new PiSession(
@@ -247,6 +261,16 @@ export class PiAgent implements HarnessAgent {
       input,
       (mode) => this.writePermissionMode(mode)
     )
+  }
+
+  /** Unique provider advertising a bare model id; ambiguous ids stay unresolved. */
+  private async resolveProviderForModel(modelId: string): Promise<string | undefined> {
+    const providers = new Set<string>()
+    for (const entry of await this.client.getAvailableModels()) {
+      if (entry.id !== modelId || typeof entry.provider !== 'string') continue
+      providers.add(entry.provider)
+    }
+    return providers.size === 1 ? [...providers][0] : undefined
   }
 
   /**

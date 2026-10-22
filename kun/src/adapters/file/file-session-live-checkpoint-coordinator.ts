@@ -1,5 +1,6 @@
 import type { TurnItem } from '../../contracts/items.js'
 import { mkdir } from 'node:fs/promises'
+import type { ItemCacheWrite } from './file-session-items-cache.js'
 import {
   FileSessionLiveItems,
   LIVE_ITEM_CHECKPOINT_STEP_BYTES
@@ -44,7 +45,7 @@ export type FileSessionLiveCheckpointHost = {
   threadDir(threadId: string): string
   liveItemsPath(threadId: string): string
   bumpItemsVersion(threadId: string): void
-  applyItemToCache(threadId: string, item: TurnItem): void
+  applyItemToCache(threadId: string, item: TurnItem, write?: ItemCacheWrite): void
   bumpItemHistoryRevision(threadId: string): number
 }
 
@@ -227,7 +228,7 @@ export class FileSessionLiveCheckpointCoordinator {
   private writeCheckpoint(threadId: string, item: TurnItem, representedSeq: number): Promise<void> {
     return this.host.withThreadWrite(threadId, async () => {
       await mkdir(this.host.threadDir(threadId), { recursive: true, mode: 0o700 })
-      await this.host.liveItems.checkpoint(
+      const written = await this.host.liveItems.checkpoint(
         this.host.liveItemsPath(threadId),
         threadId,
         item,
@@ -235,7 +236,7 @@ export class FileSessionLiveCheckpointCoordinator {
         { force: true }
       )
       this.host.bumpItemsVersion(threadId)
-      this.host.applyItemToCache(threadId, item)
+      this.host.applyItemToCache(threadId, item, written ? 'live-tail' : 'live-content')
       this.host.bumpItemHistoryRevision(threadId)
     })
   }

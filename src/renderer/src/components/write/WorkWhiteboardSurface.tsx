@@ -118,7 +118,7 @@ function InactiveWorkWhiteboard({
   const { t } = useTranslation('common')
   return (
     <div
-      className="flex h-full min-h-0 w-full items-center justify-center bg-[#f8fafc] p-6 dark:bg-[#111318]"
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 items-center justify-center bg-[#f8fafc] p-6 dark:bg-[#111318]"
       data-work-whiteboard-placeholder="true"
     >
       <div className="flex max-w-sm flex-col items-center text-center">
@@ -288,7 +288,7 @@ function ExcalidrawWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactEleme
     surface: 'write'
   })
   return (
-    <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="excalidraw">
+    <div className="relative h-full min-h-0 w-full min-w-0 flex-1" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="excalidraw">
       <ExcalidrawSurface
         workspaceRoot={identity.workspaceRoot}
         identityId={identity.artifactId}
@@ -385,7 +385,7 @@ function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement 
   )
 
   return (
-    <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="kun">
+    <div className="relative h-full min-h-0 w-full min-w-0 flex-1" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="kun">
       <CanvasViewport
         workspaceRoot={identity.workspaceRoot}
         artifactId={identity.artifactId}

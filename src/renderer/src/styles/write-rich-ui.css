@@ -363,6 +363,13 @@
 /* outline rail */
 .write-rich-scroll-wrap {
   position: relative;
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   container-type: inline-size;
   container-name: write-rich;
 }

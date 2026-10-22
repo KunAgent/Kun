@@ -158,7 +158,7 @@ export function WriteEditorGroupContent({
 
   if (whiteboard) {
     return (
-      <div className="min-h-0 min-w-0 flex-1" onPointerDown={onFocus}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
         <WorkWhiteboardSurface
           workspaceRoot={whiteboard.workspaceRoot || workspaceRoot}
           boardId={whiteboard.id}
@@ -181,7 +181,7 @@ export function WriteEditorGroupContent({
   }
 
   return (
-    <div className="min-h-0 min-w-0 flex-1" onPointerDown={onFocus}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
       <WriteWorkspaceDocumentPane
         activeFilePath={path}
         documentEpoch={document?.documentEpoch ?? 0}

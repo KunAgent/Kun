@@ -589,7 +589,7 @@ export function WriteMarkdownEditor({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full min-w-0">
+    <div className="relative flex h-full min-h-0 w-full min-w-0 flex-1">
       <div ref={hostRef} className="write-codemirror-host flex h-full min-h-0 w-full min-w-0" />
       <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-xl border border-ds-border-muted bg-ds-card/92 p-1 opacity-55 shadow-[0_10px_24px_rgba(20,47,95,0.1)] backdrop-blur-xl transition hover:opacity-100 focus-within:opacity-100">
         <button

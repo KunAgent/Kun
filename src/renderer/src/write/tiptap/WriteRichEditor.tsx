@@ -649,7 +649,7 @@ export function WriteRichEditor({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
       {reviewUi.active ? (
         <WriteDocumentReviewBar
           total={reviewUi.total}
@@ -674,7 +674,7 @@ export function WriteRichEditor({
         withReplace={findBar.withReplace}
         onClose={() => setFindBar({ open: false, withReplace: false })}
       />
-      <div className="write-rich-scroll-wrap relative flex min-h-0 w-full min-w-0 flex-1">
+      <div className="write-rich-scroll-wrap relative flex h-0 min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <div
           ref={scrollHostRef}
           className="write-rich-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto"

@@ -62,6 +62,85 @@ describe('FileSessionStore item ordering', () => {
     await restarted.close()
   })
 
+  it('keeps warm and cold order when an open stream is finalized through updateItem', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-update-order-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_update_order'
+    const turnId = 'turn_update_order'
+    await store.appendItem(threadId, makeUserItem({ id: 'user', threadId, turnId, text: 'hi' }))
+    await store.loadItems(threadId)
+    const reasoning = makeAssistantReasoningItem({
+      id: 'reasoning', threadId, turnId, text: 'thinking', status: 'running'
+    })
+    await store.checkpointLiveItem(threadId, reasoning, 1)
+    await store.appendItem(threadId, makeToolCallItem({
+      id: 'call', threadId, turnId, callId: 'tc', toolName: 'acp:fs.write', arguments: {}
+    }))
+    // finishTurn finalizes items still open in the stream through updateItem.
+    await store.updateItem(threadId, 'reasoning', { status: 'aborted' })
+    const warm = await store.loadItems(threadId)
+    store.clearThreadMemory(threadId)
+    expect(await store.loadItems(threadId)).toEqual(warm)
+    expect(warm.map((item) => item.id)).toEqual(['user', 'call', 'reasoning'])
+
+    // Updating an already durable item must keep its canonical slot.
+    await store.updateItem(threadId, 'call', { status: 'failed' })
+    store.clearThreadMemory(threadId)
+    expect((await store.loadItems(threadId)).map((item) => item.id))
+      .toEqual(['user', 'call', 'reasoning'])
+    await store.close()
+  })
+
+  it('orders interleaved live checkpoints like the live sidecar', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-multi-live-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_multi_live'
+    const turnId = 'turn_multi_live'
+    await store.appendItem(threadId, makeUserItem({ id: 'user', threadId, turnId, text: 'hi' }))
+    await store.loadItems(threadId)
+    const text = makeAssistantTextItem({ id: 'text', threadId, turnId, text: 'a', status: 'running' })
+    const reasoning = makeAssistantReasoningItem({
+      id: 'reasoning', threadId, turnId, text: 'b', status: 'running'
+    })
+    await store.checkpointLiveItem(threadId, text, 1)
+    await store.checkpointLiveItem(threadId, reasoning, 2)
+    // A throttled checkpoint updates content without reordering the sidecar.
+    await store.checkpointLiveItem(threadId, { ...text, text: 'aa' } as typeof text, 3)
+    let warm = await store.loadItems(threadId)
+    store.clearThreadMemory(threadId)
+    expect(await store.loadItems(threadId)).toEqual(warm)
+    expect(warm.map((item) => item.id)).toEqual(['user', 'text', 'reasoning'])
+
+    // A persisted checkpoint moves the stream to the live tail on disk too.
+    await store.checkpointLiveItem(threadId, { ...text, text: 'a'.repeat(70 * 1024) } as typeof text, 4)
+    warm = await store.loadItems(threadId)
+    store.clearThreadMemory(threadId)
+    expect(await store.loadItems(threadId)).toEqual(warm)
+    expect(warm.map((item) => item.id)).toEqual(['user', 'reasoning', 'text'])
+    await store.close()
+  })
+
+  it('keeps live items cached when history compaction rewrites the log', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-session-compact-live-'))
+    roots.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const threadId = 'thread_compact_live'
+    const turnId = 'turn_compact_live'
+    await store.appendItem(threadId, makeUserItem({ id: 'user', threadId, turnId, text: 'hi' }))
+    await store.loadItems(threadId)
+    await store.checkpointLiveItem(threadId, makeAssistantTextItem({
+      id: 'live', threadId, turnId, text: 'streaming', status: 'running'
+    }), 1)
+    await store.compactItems(threadId, { force: true })
+    const warm = await store.loadItems(threadId)
+    store.clearThreadMemory(threadId)
+    expect(await store.loadItems(threadId)).toEqual(warm)
+    expect(warm.map((item) => item.id)).toEqual(['user', 'live'])
+    await store.close()
+  })
+
   it('does not retain live ordering if cleanup fails after the final append', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-session-live-order-retry-'))
     roots.push(root)
