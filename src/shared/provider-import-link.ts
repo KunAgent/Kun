@@ -1,6 +1,7 @@
 import { isLocalModelProviderBaseUrl } from './app-settings-provider-failover'
 import {
   isMagpieProviderImportLink,
+  MAGPIE_IMPORT_INVALID,
   MAGPIE_PROVIDER_ID,
   MAGPIE_TOKEN,
   magpieConnection,
@@ -87,7 +88,7 @@ export function parseProviderImportLink(raw: string): ProviderImportLinkResult {
         warnings: []
       }
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : 'Invalid Magpie import' }
+      return { ok: false, message: error instanceof Error ? error.message : MAGPIE_IMPORT_INVALID }
     }
   }
   if (!isProviderImportLink(trimmed)) {

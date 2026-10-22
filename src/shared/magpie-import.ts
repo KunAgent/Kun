@@ -7,6 +7,12 @@ export const MAGPIE_TOKEN = 'magpie-kun'
 export const MAGPIE_PROVIDER_ID = 'magpie'
 export const MAGPIE_USER_AGENT = 'Kun'
 export const MAGPIE_IMPORT_MAX_LENGTH = 8192
+/**
+ * Never end a main-bundle string with the word "import" before its quote:
+ * electron-vite's ESM shim regex reads it as an import statement and splices
+ * its CommonJS shim into the next string literal, breaking the main build.
+ */
+export const MAGPIE_IMPORT_INVALID = 'Invalid Magpie import link'
 
 const MAGPIE_PROTOCOLS = ['openai-chat', 'openai-responses', 'anthropic-messages'] as const
 export type MagpieProtocol = (typeof MAGPIE_PROTOCOLS)[number]
@@ -59,7 +65,7 @@ function decodeBase64Url(data: string): string {
 export function parseMagpieImportLink(value: string): MagpieImport {
   const trimmed = value.trim()
   if (trimmed.length > MAGPIE_IMPORT_MAX_LENGTH || !isMagpieProviderImportLink(trimmed)) {
-    throw new Error('Invalid Magpie import')
+    throw new Error(MAGPIE_IMPORT_INVALID)
   }
   const url = new URL(trimmed)
   if (
@@ -72,17 +78,17 @@ export function parseMagpieImportLink(value: string): MagpieImport {
     url.searchParams.get('v') !== '1' ||
     url.searchParams.getAll('data').length !== 1
   ) {
-    throw new Error('Invalid Magpie import')
+    throw new Error(MAGPIE_IMPORT_INVALID)
   }
   const data = url.searchParams.get('data') ?? ''
-  if (!/^[A-Za-z0-9_-]+$/.test(data)) throw new Error('Invalid Magpie import')
+  if (!/^[A-Za-z0-9_-]+$/.test(data)) throw new Error(MAGPIE_IMPORT_INVALID)
   let raw: unknown
   try {
     raw = JSON.parse(decodeBase64Url(data))
   } catch {
-    throw new Error('Invalid Magpie import')
+    throw new Error(MAGPIE_IMPORT_INVALID)
   }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Invalid Magpie import')
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(MAGPIE_IMPORT_INVALID)
   const payload = raw as Record<string, unknown>
   if (
     Object.keys(payload).some((key) => !['kind', 'id', 'name', 'auth', 'endpoints'].includes(key)) ||
