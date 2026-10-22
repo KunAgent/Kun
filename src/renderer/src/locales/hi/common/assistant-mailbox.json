@@ -7,6 +7,7 @@
   "assistantMailboxKeyMissing": "दूसरे कंप्यूटर से जोड़ा गया है; काम केवल वहीं से भेजे जा सकते हैं।",
   "assistantMailboxRemoveConfirm": "{{name}} को हटाएँ? इसे Kun से काम मिलने बंद हो जाएँगे।",
   "assistantMailboxCancelTask": "काम रद्द करें",
+  "assistantMailboxStatusQueued": "भेजने की प्रतीक्षा में",
   "assistantMailboxStatusSent": "भेजा गया",
   "assistantMailboxStatusReceived": "मिल गया",
   "assistantMailboxStatusWorking": "जारी है",

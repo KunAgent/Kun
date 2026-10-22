@@ -7,6 +7,7 @@
   "assistantMailboxKeyMissing": "다른 컴퓨터에서 등록되어 해당 컴퓨터에서만 작업을 보낼 수 있습니다.",
   "assistantMailboxRemoveConfirm": "{{name}}을(를) 제거할까요? 더 이상 Kun의 작업을 받지 않습니다.",
   "assistantMailboxCancelTask": "작업 취소",
+  "assistantMailboxStatusQueued": "전송 대기 중",
   "assistantMailboxStatusSent": "보냄",
   "assistantMailboxStatusReceived": "받음",
   "assistantMailboxStatusWorking": "진행 중",

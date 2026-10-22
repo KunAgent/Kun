@@ -42,14 +42,23 @@ export class ItemsCache {
     this.versions.set(threadId, this.versionOf(threadId) + 1)
   }
 
-  set(threadId: string, items: TurnItem[], canonicalCount = items.length): void {
+  set(threadId: string, items: TurnItem[], canonicalCount?: number): void {
+    // Touching a cached overlay must not promote its live suffix to durable.
+    const count = canonicalCount ?? (this.items.get(threadId) === items
+      ? this.canonicalCount(threadId) : items.length)
     this.remove(threadId)
     const bytes = serializedArrayBytesUpTo(items, this.maxBytes / 2)
     if (bytes > this.maxBytes / 2 || bytes > this.maxBytes) return
     this.items.set(threadId, items)
     this.bytes.set(threadId, bytes)
-    this.canonicalCounts.set(threadId, Math.max(0, Math.min(canonicalCount, items.length)))
+    this.canonicalCounts.set(threadId, Math.max(0, Math.min(count, items.length)))
     this.evictOverflow()
+  }
+
+  /** Invalidate before promotion, including an append that succeeds but cleanup fails. */
+  beforeDurableWrite(threadId: string, itemId: string): void {
+    const index = this.items.get(threadId)?.findIndex((item) => item.id === itemId) ?? -1
+    if (index >= 0 && index >= this.canonicalCount(threadId)) this.remove(threadId)
   }
 
   /**
@@ -69,9 +78,11 @@ export class ItemsCache {
     if (index < 0) {
       // Canonical items stay a prefix: insert before any live suffix.
       const at = this.canonicalCount(threadId)
+      this.replaceOrAppend(threadId, cached, -1, item)
+      if (this.items.get(threadId) !== cached) return
+      cached.splice(cached.length - 1, 1)
       cached.splice(at, 0, item)
       this.canonicalCounts.set(threadId, at + 1)
-      this.recount(threadId, cached)
       return
     }
     this.replaceOrAppend(threadId, cached, index, item)
@@ -101,9 +112,10 @@ export class ItemsCache {
       return
     }
     // A persisted checkpoint rewrites the sidecar with filter-then-push.
+    this.replaceOrAppend(threadId, cached, index, item)
+    if (this.items.get(threadId) !== cached) return
     cached.splice(index, 1)
     cached.push(item)
-    this.recount(threadId, cached)
   }
 
   remove(threadId: string): void {
@@ -141,7 +153,7 @@ export class ItemsCache {
     const previousBytes = this.bytes.get(threadId) ?? 0
     const nextBytes = index >= 0
       ? previousBytes - serializedBytes(cached[index]) + serializedBytes(item)
-      : previousBytes + serializedBytes(item)
+      : previousBytes + serializedBytes(item) + (cached.length > 0 ? 1 : 0)
     if (nextBytes > this.maxBytes / 2 || nextBytes > this.maxBytes) {
       this.remove(threadId)
       return
@@ -153,14 +165,6 @@ export class ItemsCache {
     this.items.set(threadId, cached)
     this.bytes.delete(threadId)
     this.bytes.set(threadId, nextBytes)
-    this.evictOverflow()
-  }
-
-  private recount(threadId: string, cached: TurnItem[]): void {
-    this.bytes.delete(threadId)
-    this.bytes.set(threadId, serializedBytes(cached))
-    this.items.delete(threadId)
-    this.items.set(threadId, cached)
     this.evictOverflow()
   }
 

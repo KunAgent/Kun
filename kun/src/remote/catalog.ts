@@ -1,4 +1,4 @@
-import { VERSION as REMOTE_PROTOCOL_VERSION, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
+import { VERSION as REMOTE_PROTOCOL_VERSION, DIRECTORY_LIVE_CAPABILITY, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
 import { KUN_VERSION, KUN_RELEASE_CHANNEL } from '../version.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Envelope } from './contracts.js'
@@ -76,12 +76,14 @@ export async function remoteCapabilityDescriptors(
 }
 
 /**
- * Phones re-read the catalog on every reconnect and screen; projects and models scan every Code
- * thread. Within this window concurrent and repeated catalog reads share one scan. Task creation
- * and other mutations keep reading the directory directly.
+ * Catalog refreshes scan Code threads for projects and model choices. Concurrent and repeated
+ * reads share one scan until a directory invalidation or this TTL. Task creation and other
+ * mutations keep reading the directory directly.
  */
 export const CATALOG_SCAN_TTL_MS = 10000
 const scans = new WeakMap<object, Map<string, { at: number; value: Promise<unknown> }>>()
+/** A push must never be followed by the old directory snapshot from the scan cache. */
+export function invalidateRemoteCatalog(runtime: object): void { scans.delete(runtime) }
 function scanned<T>(runtime: object, key: string, read: () => Promise<T>): Promise<T> {
   let entries = scans.get(runtime)
   if (!entries) scans.set(runtime, entries = new Map())
@@ -101,7 +103,8 @@ export async function remoteCatalog(runtime: ServerRuntime, scope: Envelope, mod
     projects: list.map(({ id, name }) => ({ id, name })), models: availableModels,
     defaultModel: runtime.defaultModel,
     agents: await codeAgents(runtime, availableModels),
-    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, 'approvals', 'attachments'],
+    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, 'approvals', 'attachments',
+      ...(runtime.threadActivity ? [DIRECTORY_LIVE_CAPABILITY] : [])],
     scopes: scope.scopes, capabilityDescriptors: await descriptors(), attachmentMaxBytes: 10 * 1024 * 1024
   }
 }

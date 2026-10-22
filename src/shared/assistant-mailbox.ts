@@ -9,8 +9,8 @@ export type AssistantPresetKind = (typeof ASSISTANT_PRESET_KINDS)[number]
 export type AssistantKind = string
 export type AssistantPromptLocale = 'zh' | 'en'
 
-/** `sent` until the assistant acknowledges; `cancelled` is set by Kun and stays. */
-export type AssistantTaskStatus = 'sent' | 'received' | 'working' | 'done' | 'blocked' | 'failed' | 'cancelled'
+/** `queued` until accepted by the server, then `sent` until acknowledged; `cancelled` stays. */
+export type AssistantTaskStatus = 'queued' | 'sent' | 'received' | 'working' | 'done' | 'blocked' | 'failed' | 'cancelled'
 
 /** `unavailable` means the server has not enabled the mailbox (it answers 404). */
 export type AssistantMailboxAvailability = 'unknown' | 'available' | 'unavailable' | 'login_required' | 'disabled'
@@ -55,7 +55,7 @@ export type AssistantEnrollmentView = {
 }
 
 export type AssistantTaskUpdate = {
-  status: Exclude<AssistantTaskStatus, 'sent' | 'cancelled'>
+  status: Exclude<AssistantTaskStatus, 'queued' | 'sent' | 'cancelled'>
   body: string
   at: string
 }
@@ -112,7 +112,7 @@ export type AssistantMailboxApi = {
   status(): Promise<AssistantMailboxStatus>
   refresh(): Promise<AssistantMailboxStatus>
   createEnrollment(request: AssistantEnrollmentRequest): Promise<AssistantEnrollmentResult>
-  approve(enrollmentId: string, requestId: string): Promise<AssistantMailboxStatus>
+  approve(enrollmentId: string, requestId: string, verificationCode: string): Promise<AssistantMailboxStatus>
   reject(enrollmentId: string, requestId: string): Promise<AssistantMailboxStatus>
   cancelEnrollment(enrollmentId: string): Promise<AssistantMailboxStatus>
   revoke(assistantId: string): Promise<AssistantMailboxStatus>

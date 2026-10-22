@@ -29,6 +29,7 @@ Modules follow business capabilities, not delivery milestones. Keep each maintai
 | `schedules/` | Schedule projections and desktop schedule audit records |
 | `sharing/` | Independent shared-task authorization, requests, projections and attachments |
 | `notifications/` | Metadata-only notification events and feeds |
+| `directory/` | Coalesced Agent, Code, project and permitted group list invalidations |
 | `authorization/` | Operation scopes and readable-thread boundaries |
 | `resources/` | Resource access shared by reads across capabilities |
 | `requests/` | Durable receipts, request lookup and definitive rejection types |
@@ -37,3 +38,11 @@ Modules follow business capabilities, not delivery milestones. Keep each maintai
 Feature schemas, services and tests stay with the feature they cover. `testing/` contains the runtime fixture shared by integration tests; `integration/` contains tests of cross-feature invariants. These are test responsibilities, not delivery phases.
 
 The desktop Service Manager remains the physical business-data writer. The phone still uses the fixed operation vocabulary and API surface. A source reorganization must not change operation names, persisted receipt keys, fingerprints, history versions, scope checks, or recovery semantics. Adding a capability requires both its feature schema and an explicit dispatch owner; registration rejects missing or duplicate operations.
+
+## App directory synchronization
+
+Hosts advertise `directory.live.v1` only when the Runtime has the compact thread activity source. A phone opts in with `subscribe` payload `{ "kind": "directory", "id": "all", "active": true }` and unsubscribes with `active: false`. Existing hosts and clients keep their previous behavior.
+
+Electron Main opens authenticated `/v1/remote/directory-events` with the phone's current authority. Runtime observers attach before the `synchronized` barrier; Main turns it into a `subscribed` event so the phone can refresh its shared lists without a snapshot/subscription gap. Subsequent `directory_changed` events contain only `resources` (`agent`, `code`, `project`, and `group` with `groups.read`). There are no task IDs, messages, paths or per-task history streams. A reconnect requires another initial refresh rather than business-request replay.
+
+Thread create/update/delete and turn-state events, committed room/Agent changes, and desktop project-root edits wake this feed. Notifications merge over 300 ms and retain only a bounded resource set under backpressure. Receipt/history bookkeeping is excluded, preventing reads from triggering another read. Project changes invalidate the short-lived catalog scan before notifying clients. Each phone can cancel independently; the final cancellation removes the shared source listeners and timers. Grant or transport fencing cancels the Main stream immediately.

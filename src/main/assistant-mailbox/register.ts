@@ -73,10 +73,11 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
     if (!values.every((value) => typeof value === 'string' && /^[0-9a-f-]{36}$/.test(value))) throw new Error('INVALID_REQUEST')
     return values as string[]
   }
-  ipcMain.handle(channels.approve, (event, enrollmentId: unknown, requestId: unknown) => {
+  ipcMain.handle(channels.approve, (event, enrollmentId: unknown, requestId: unknown, verificationCode: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     const [enrollment, request] = ids(enrollmentId, requestId)
-    return service.approve(enrollment, request)
+    if (typeof verificationCode !== 'string' || !/^[0-9A-Z]{5}-[0-9A-Z]{5}$/.test(verificationCode)) throw new Error('INVALID_REQUEST')
+    return service.approve(enrollment, request, verificationCode)
   })
   ipcMain.handle(channels.reject, (event, enrollmentId: unknown, requestId: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

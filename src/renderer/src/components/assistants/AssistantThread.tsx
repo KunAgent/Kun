@@ -30,7 +30,7 @@ export function assistantTimeline(assistantId: string, tasks: AssistantTaskView[
 }
 
 const FINAL: AssistantTaskStatus[] = ['done', 'blocked', 'failed', 'cancelled']
-const ORDER: Record<AssistantTaskStatus, number> = { sent: 0, received: 1, working: 2, done: 3, blocked: 3, failed: 3, cancelled: 3 }
+const ORDER: Record<AssistantTaskStatus, number> = { queued: 0, sent: 0, received: 1, working: 2, done: 3, blocked: 3, failed: 3, cancelled: 3 }
 
 function TaskProgress({ task }: { task: AssistantTaskView }): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -38,7 +38,7 @@ function TaskProgress({ task }: { task: AssistantTaskView }): ReactElement {
   const first = (status: AssistantTaskStatus) => task.updates.find((update) => update.status === status)?.at
   const final = FINAL.includes(task.status) ? task.status : null
   const steps: Array<{ key: string; label: string; at?: string; status: AssistantTaskStatus }> = [
-    { key: 'sent', label: t('assistantMailboxStatusSent'), at: task.createdAt, status: 'sent' },
+    { key: 'sent', label: t(task.status === 'queued' ? 'assistantMailboxStatusQueued' : 'assistantMailboxStatusSent'), at: task.createdAt, status: task.status === 'queued' ? 'queued' : 'sent' },
     { key: 'received', label: t('assistantMailboxStatusReceived'), at: first('received') ?? task.updates[0]?.at, status: 'received' },
     { key: 'working', label: t('assistantMailboxStatusWorking'), at: first('working'), status: 'working' },
     { key: 'final', label: final ? t(assistantStatusKey(final)) : t('assistantStepFinal'), at: final ? task.updatedAt : undefined, status: final ?? 'done' }

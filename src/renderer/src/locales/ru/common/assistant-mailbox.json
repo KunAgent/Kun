@@ -7,6 +7,7 @@
   "assistantMailboxKeyMissing": "Подключён с другого компьютера; задачи можно отправлять только оттуда.",
   "assistantMailboxRemoveConfirm": "Удалить {{name}}? Ассистент перестанет получать задачи от Kun.",
   "assistantMailboxCancelTask": "Отменить задачу",
+  "assistantMailboxStatusQueued": "Ожидает отправки",
   "assistantMailboxStatusSent": "Отправлено",
   "assistantMailboxStatusReceived": "Получено",
   "assistantMailboxStatusWorking": "В работе",

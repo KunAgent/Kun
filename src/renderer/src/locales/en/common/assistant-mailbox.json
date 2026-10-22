@@ -7,6 +7,7 @@
   "assistantMailboxKeyMissing": "Enrolled from another computer; tasks can only be sent from there.",
   "assistantMailboxRemoveConfirm": "Remove {{name}}? It will stop receiving tasks from Kun.",
   "assistantMailboxCancelTask": "Cancel task",
+  "assistantMailboxStatusQueued": "Queued for sending",
   "assistantMailboxStatusSent": "Sent",
   "assistantMailboxStatusReceived": "Received",
   "assistantMailboxStatusWorking": "In progress",

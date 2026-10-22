@@ -3,6 +3,7 @@ import type { AssistantTaskStatus } from '@shared/assistant-mailbox'
 type RowStatus = AssistantTaskStatus | 'enrolling'
 
 const STATUS_KEYS: Record<RowStatus, string> = {
+  queued: 'assistantMailboxStatusQueued',
   sent: 'assistantMailboxStatusSent',
   received: 'assistantMailboxStatusReceived',
   working: 'assistantMailboxStatusWorking',

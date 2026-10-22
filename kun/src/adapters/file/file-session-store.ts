@@ -226,6 +226,7 @@ export class FileSessionStore implements SessionStore {
     const path = this.messagesPath(threadId)
     const record = serializeItemRecord(item)
     await this.withThreadWrite(threadId, () => this.fileAccess.withRead(path, async () => {
+      this.itemsCache.beforeDurableWrite(threadId, item.id)
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
       await this.itemIndex.append({
         sourcePath: path,
@@ -336,6 +337,7 @@ export class FileSessionStore implements SessionStore {
       if (!current) return null
       const updated = { ...current, ...patch } as TurnItem
       const record = serializeItemRecord(updated)
+      this.itemsCache.beforeDurableWrite(threadId, itemId)
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
       await this.itemIndex.append({
         sourcePath: this.messagesPath(threadId),
@@ -371,7 +373,7 @@ export class FileSessionStore implements SessionStore {
       readRevision: () => this.itemHistoryRevision(threadId),
       bumpRevision: () => { this.bumpItemHistoryRevision(threadId) },
       bumpItemsVersion: () => this.bumpItemsVersion(threadId),
-      cacheItems: (items, canonicalCount) => this.itemsCache.set(threadId, items, canonicalCount),
+      cacheItems: () => this.itemsCache.remove(threadId), // Cold reload also recovers newer durable deltas.
       liveItemsPath: this.liveItemsPath(threadId),
       refreshIndex: (items) => this.refreshItemIndex(threadId, items),
       scheduleRetry: () => this.scheduleItemHistoryCompaction(threadId),

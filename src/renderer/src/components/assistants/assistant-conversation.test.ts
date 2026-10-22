@@ -83,6 +83,15 @@ describe('assistant conversation', () => {
     expect(html).toContain('you says n-2')
   })
 
+  it('shows a durable pending task as queued until the server accepts it', () => {
+    const html = renderToStaticMarkup(createElement(AssistantThread, {
+      assistant, tasks: [task('pending', 'queued', [])], notes: [], busy: false, onReply: () => {}, onCancel: () => {}
+    }))
+    expect(html).toContain(text('assistantMailboxStatusQueued'))
+    expect(html).not.toContain(text('assistantMailboxStatusSent'))
+    expect(isOpenAssistantTask('queued')).toBe(true)
+  })
+
   it('shows the thread, the welcome or a read-only composer depending on the assistant', async () => {
     const thread = await stage({ kind: 'assistant', id: 'as-1' }, status())
     expect(thread.text).toContain(text('assistantThreadIntro', { name: 'My Cue' }))

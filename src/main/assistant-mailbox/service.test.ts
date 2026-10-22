@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -6,7 +6,7 @@ import { fakeMailbox } from '@kun/assistant-agent/testing'
 import { main as agent } from '@kun/assistant-agent/cli'
 import type { AssistantMailboxStatus } from '../../shared/assistant-mailbox'
 import type { KunAccountState } from '../../shared/kun-account'
-import { AssistantMailboxService } from './service'
+import { AssistantMailboxService, type AssistantMailboxDeps } from './service'
 import { assistantToolHandler } from './tool-routes'
 
 const ORIGIN = 'https://kun.test'
@@ -21,6 +21,8 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
   const dir = await mkdtemp(join(tmpdir(), 'kun-assistant-service-'))
   cleanup.push(dir)
   const registrations: unknown[] = []
+  let delivery: 'normal' | 'drop' | 'offline' | 'reject' = 'normal'
+  const sends: Array<{ messageId: string; envelope: string }> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(String(input))
     if (options.serverEnabled === false && url.pathname.startsWith('/api/assistants/')) return Response.json({ error: 'not_found' }, { status: 404 })
@@ -28,12 +30,20 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
       registrations.push({ device: new Headers(init?.headers).get('X-Kun-Device'), body: JSON.parse(String(init?.body)) })
       return Response.json({ deviceId: host.deviceId, enabled: false })
     }
-    return server.fetch(input, init)
+    const sending = init?.method === 'POST' && url.pathname.endsWith('/messages')
+    if (sending) {
+      sends.push(JSON.parse(String(init?.body)))
+      if (delivery === 'offline') throw new TypeError('offline before sending')
+      if (delivery === 'reject') return Response.json({ error: 'invalid_request' }, { status: 400 })
+    }
+    const response = await server.fetch(input, init)
+    if (sending && delivery === 'drop') throw new TypeError('response lost after commit')
+    return response
   }
   const state: KunAccountState = { status: 'authenticated', user: { id: 'user-1' } as KunAccountState['user'], error: null }
   const emitted: AssistantMailboxStatus[] = []
   const timers: Array<{ ms: number }> = []
-  const service = new AssistantMailboxService({
+  const dependencies: AssistantMailboxDeps = {
     origin: ORIGIN,
     account: { getState: async () => state, accessToken: async () => host.accessToken, onState: () => () => {} },
     identity: async () => ({ id: host.deviceId, credential: host.deviceCredential }),
@@ -47,7 +57,8 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
     log: () => {},
     timers: { set: (_callback, ms) => { timers.push({ ms }); return timers.length }, clear: () => {} },
     ...(options.fetchIcon ? { fetchIcon: options.fetchIcon } : {})
-  })
+  }
+  let service = new AssistantMailboxService(dependencies)
   const run = async (args: string[]) => {
     let stdout = '', stderr = ''
     const code = await agent(args, {
@@ -64,12 +75,15 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
     const status = await service.refresh()
     const enrollment = status.enrollments.find((item) => code.includes(item.enrollmentId.replaceAll('-', '')))!
     expect(enrollment.requests.map((request) => request.verificationCode)).toEqual([shown])
-    await service.approve(enrollment.enrollmentId, enrollment.requests[0].requestId)
+    await service.approve(enrollment.enrollmentId, enrollment.requests[0].requestId, enrollment.requests[0].verificationCode!)
     const done = await run(['login'])
     expect(done.code).toBe(0)
     return { shown, enrollmentId: enrollment.enrollmentId, requestId: enrollment.requests[0].requestId }
   }
-  return { server, service, run, connect, emitted, timers, registrations }
+  return { server, get service() { return service }, run, connect, emitted, timers, registrations, sends,
+    setDelivery: (mode: typeof delivery) => { delivery = mode },
+    persisted: async () => JSON.parse(await readFile(join(dir, 'desktop', 'user-1', 'tasks.json'), 'utf8')),
+    restart: () => { service.dispose(); service = new AssistantMailboxService(dependencies) } }
 }
 
 describe('assistant mailbox service', () => {
@@ -160,7 +174,7 @@ describe('assistant join requests', () => {
     // A fresh request from the same code can still be approved: the pairing key was kept.
     expect((await t.run(['login', code, '--wait', '0'])).code).toBe(5)
     status = await t.service.refresh()
-    await t.service.approve(enrollmentId, status.enrollments[0].requests[0].requestId)
+    await t.service.approve(enrollmentId, status.enrollments[0].requests[0].requestId, status.enrollments[0].requests[0].verificationCode!)
     expect((await t.run(['login'])).code).toBe(0)
 
     const other = await t.service.createEnrollment({ name: 'Dots', kind: 'dots', locale: 'en' })
@@ -209,5 +223,74 @@ describe('custom assistants and replies', () => {
     const status = await t.service.reply(task.id, 'Saturday morning')
     expect(status.notes).toMatchObject([{ from: 'you', body: 'Saturday morning', inReplyTo: task.id, assistantName: 'Today' }])
     expect((await t.run(['inbox'])).stdout).toContain('Saturday morning')
+  })
+})
+
+
+describe('durable task delivery', () => {
+  for (const mode of ['drop', 'offline'] as const) {
+    it(`recovers the same task and sealed envelope after restart (${mode})`, async () => {
+      const t = await setup()
+      const { code } = await t.service.createEnrollment({ name: 'Cue', kind: 'cue', locale: 'en' })
+      await t.connect(code)
+      const assistantId = (await t.service.snapshot()).assistants[0].id
+      t.setDelivery(mode)
+      const task = await t.service.assign({ assistantId, body: 'Perform this operation once' })
+      expect(task.status).toBe('queued')
+      const saved = await t.persisted()
+      expect(saved.tasks.map((item: { id: string }) => item.id)).toEqual([task.id])
+      expect(saved.pending).toHaveLength(1)
+      expect(saved.pending[0].message.id).toBe(task.id)
+      if (mode === 'drop') {
+        expect((await t.run(['inbox'])).stdout).toContain('Perform this operation once')
+        expect((await t.run(['reply', task.id, '--status', 'done', 'Completed once'])).code).toBe(0)
+      }
+      t.setDelivery('normal')
+      t.restart()
+      let status = await t.service.refresh()
+      expect(status.tasks).toHaveLength(1)
+      expect(status.tasks[0].id).toBe(task.id)
+      expect((await t.persisted()).pending).toEqual([])
+      expect(new Set(t.sends.map((item) => JSON.stringify(item))).size).toBe(1)
+      if (mode === 'offline') {
+        expect((await t.run(['inbox'])).stdout).toContain('Perform this operation once')
+        await t.run(['reply', task.id, '--status', 'done', 'Completed once'])
+        status = await t.service.refresh()
+      } else {
+        expect((await t.run(['inbox'])).stdout).not.toContain('Perform this operation once')
+      }
+      expect(status.tasks[0].status).toBe('done')
+      expect(status.tasks[0].updates.filter((update) => update.status === 'done')).toHaveLength(1)
+      expect(status.notes).toEqual([])
+    })
+  }
+
+  it('records permanent delivery failures instead of silently dropping a task or retrying forever', async () => {
+    const t = await setup()
+    const { code } = await t.service.createEnrollment({ name: 'Cue', kind: 'cue', locale: 'en' })
+    await t.connect(code)
+    t.setDelivery('reject')
+    const assistantId = (await t.service.snapshot()).assistants[0].id
+    const task = await t.service.assign({ assistantId, body: 'Rejected delivery' })
+    expect(task.status).toBe('failed')
+    expect(task.updates.at(-1)?.body).toContain('invalid_request')
+    expect((await t.persisted()).pending).toEqual([])
+    await t.service.refresh()
+    expect(t.sends).toHaveLength(1)
+  })
+
+  it('delivers a queued task before its cancellation and never reopens it', async () => {
+    const t = await setup()
+    const { code } = await t.service.createEnrollment({ name: 'Cue', kind: 'cue', locale: 'en' })
+    await t.connect(code)
+    const assistantId = (await t.service.snapshot()).assistants[0].id
+    t.setDelivery('offline')
+    const task = await t.service.assign({ assistantId, body: 'Cancel while pending' })
+    t.setDelivery('normal')
+    expect((await t.service.cancel(task.id)).status).toBe('cancelled')
+    const inbox = await t.run(['inbox'])
+    expect(inbox.stdout).not.toContain('Cancel while pending')
+    expect(inbox.stdout).toContain('Kun cancelled')
+    expect((await t.persisted()).pending).toEqual([])
   })
 })

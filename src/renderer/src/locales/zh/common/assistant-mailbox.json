@@ -7,6 +7,7 @@
   "assistantMailboxKeyMissing": "在另一台电脑上绑定，只能从那台电脑派任务。",
   "assistantMailboxRemoveConfirm": "移除「{{name}}」？它将不再收到 Kun 的任务。",
   "assistantMailboxCancelTask": "取消任务",
+  "assistantMailboxStatusQueued": "待发送",
   "assistantMailboxStatusSent": "已发送",
   "assistantMailboxStatusReceived": "已收到",
   "assistantMailboxStatusWorking": "进行中",

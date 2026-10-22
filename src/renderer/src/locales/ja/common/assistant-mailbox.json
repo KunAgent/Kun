@@ -7,6 +7,7 @@
   "assistantMailboxKeyMissing": "別のコンピューターで登録されたため、タスクはそのコンピューターからのみ送信できます。",
   "assistantMailboxRemoveConfirm": "{{name}} を削除しますか？Kun からタスクを受け取らなくなります。",
   "assistantMailboxCancelTask": "タスクをキャンセル",
+  "assistantMailboxStatusQueued": "送信待ち",
   "assistantMailboxStatusSent": "送信済み",
   "assistantMailboxStatusReceived": "受信済み",
   "assistantMailboxStatusWorking": "進行中",

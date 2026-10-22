@@ -98,4 +98,15 @@ describe('coordinator pass room reads', () => {
     stop()
     expect(wake).toHaveBeenCalled()
   })
+
+  it('signals replayed commits using kinds only, recovering a response lost before Runtime observed it', async () => {
+    const { store } = await manager(), input = create('retry', 'Sensitive room name', null)
+    await store.commit(input)
+    const wake = vi.fn(), stop = onRoomStoreCommit(wake)
+    try {
+      expect((await store.commit(input)).duplicate).toBe(true)
+      expect(wake).toHaveBeenCalledWith({ documents: ['room'], events: ['room_updated'] })
+      expect(JSON.stringify(wake.mock.calls)).not.toContain('Sensitive room name')
+    } finally { stop() }
+  })
 })

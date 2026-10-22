@@ -73,7 +73,7 @@ export function AssistantEnrollmentFlow({ enrollment, busy }: { enrollment: Assi
       </div>
     </article> : <>
       {requests.map((request) => <JoinRequestCard key={request.requestId} name={product} request={request} busy={busy}
-        onApprove={() => void assistantMailbox.approve(enrollment.enrollmentId, request.requestId)}
+        onApprove={() => void assistantMailbox.approve(enrollment.enrollmentId, request.requestId, request.verificationCode!)}
         onReject={() => void assistantMailbox.reject(enrollment.enrollmentId, request.requestId)} />)}
       <p className="flex items-start gap-2 text-[12.5px] leading-5 text-ds-muted">
         <Info size={14} className="mt-[3px] shrink-0" aria-hidden="true" />{t('assistantApproveInfo', { product })}</p>

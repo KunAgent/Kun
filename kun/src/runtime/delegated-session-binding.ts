@@ -5,39 +5,16 @@ import { effectiveHistoryAfterLatestCompaction } from '../loop/compaction-histor
 import {
   DEFAULT_DELEGATED_MODEL,
   delegatedRouteKey,
+  delegatedProviderStateKey,
   sha256,
   stableStringify
 } from './delegated-session-binding-keys.js'
 
 export { FileDelegatedSessionBindingStore } from './delegated-session-binding-store.js'
-export { delegatedRouteKey } from './delegated-session-binding-keys.js'
+export { delegatedRouteKey, delegatedProviderStateKey } from './delegated-session-binding-keys.js'
 
-export type DelegatedProviderKind =
-  | 'agent-sdk'
-  | 'cursor-sdk'
-  | 'antigravity-cli'
-  | 'acp'
-  | 'codex-app-server'
-  | 'pi-rpc'
-export type DelegatedContinuationMode = 'native' | 'portable'
-
-export type DelegatedSessionRoute = {
-  providerKind: DelegatedProviderKind
-  providerId: string
-  credentialIdentity: string
-  workspace: string
-  model: string
-  /**
-   * `session`: the Agent applies the turn's model to its live native session
-   * on every turn (Codex `turn/start`, an ACP model selector, Pi `set_model`),
-   * so changing the model continues the same conversation instead of starting
-   * a new native session with a handoff brief. Unset (`pinned`): the model is
-   * part of the session identity. Everything else in the route still is.
-   */
-  modelScope?: 'pinned' | 'session'
-  capabilityFingerprint: string
-  continuationMode: DelegatedContinuationMode
-}
+import type { DelegatedProviderKind, DelegatedSessionRoute } from './delegated-session-route.js'
+export type { DelegatedProviderKind, DelegatedContinuationMode, DelegatedSessionRoute } from './delegated-session-route.js'
 
 /**
  * A delegated session displaced by a harness switch. The
@@ -186,7 +163,7 @@ export class DelegatedSessionCoordinator {
       return {
         threadId: input.threadId,
         generation: binding.generation,
-        route: input.route,
+        route: { ...input.route, providerStateKey: delegatedProviderStateKey(binding) },
         priorHistoryDigest,
         nativeSessionId: binding.nativeSessionId,
         synchronizedInstructionDigest: binding.synchronizedInstructionDigest,
@@ -214,7 +191,7 @@ export class DelegatedSessionCoordinator {
         await this.store.removeProviderState(
           evicted.providerKind,
           input.threadId,
-          evicted.key
+          evicted.providerStateKey ?? evicted.key
         )
       }
       const key = delegatedRouteKey(input.route)
@@ -237,7 +214,7 @@ export class DelegatedSessionCoordinator {
         return {
           threadId: input.threadId,
           generation: binding.generation + 1,
-          route: input.route,
+          route: { ...input.route, providerStateKey: candidate.providerStateKey ?? candidate.key },
           priorHistoryDigest,
           nativeSessionId: candidate.nativeSessionId,
           synchronizedInstructionDigest: candidate.synchronizedInstructionDigest,
@@ -261,7 +238,7 @@ export class DelegatedSessionCoordinator {
         await this.store.clearProviderState(
           input.route.providerKind,
           input.threadId,
-          key
+          candidate.providerStateKey ?? key
         )
         retained = pruned.kept.filter((entry) => entry.key !== key)
       }
@@ -292,7 +269,7 @@ export class DelegatedSessionCoordinator {
       await this.store.clearProviderState(
         input.route.providerKind,
         input.threadId,
-        delegatedRouteKey(input.route)
+        delegatedProviderStateKey(binding)
       )
     }
     return {
@@ -392,7 +369,7 @@ export class DelegatedSessionCoordinator {
     await this.store.clearProviderState(
       preparation.route.providerKind,
       preparation.threadId,
-      delegatedRouteKey(preparation.route)
+      delegatedProviderStateKey(preparation.route)
     )
     return {
       ...preparation,
@@ -429,7 +406,7 @@ export class DelegatedSessionCoordinator {
       await this.store.removeProviderState(
         entry.providerKind,
         input.threadId,
-        entry.key
+        entry.providerStateKey ?? entry.key
       )
     }
     const keptParked = parked.filter((entry) => !onConnection(entry))
@@ -560,6 +537,8 @@ function toParkedSession(
     credentialIdentity: binding.credentialIdentity,
     workspace: binding.workspace,
     model: binding.model,
+    modelScope: binding.modelScope,
+    providerStateKey: delegatedProviderStateKey(binding),
     capabilityFingerprint: binding.capabilityFingerprint,
     continuationMode: binding.continuationMode,
     ...(binding.nativeSessionId ? { nativeSessionId: binding.nativeSessionId } : {}),

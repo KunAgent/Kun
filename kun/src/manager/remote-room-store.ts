@@ -55,7 +55,8 @@ export class RemoteRoomStore implements RoomStore {
       await this.options.ready?.()
       const fence = this.fence()
       const result = RoomStoreCommitResultSchema.parse(await this.call('commit', { input, ...(fence ? { fence } : {}) }))
-      notifyRoomStoreCommit()
+      // A replay may be the first response after an ambiguous Manager connection loss.
+      notifyRoomStoreCommit(input)
       return result
     } finally {
       invalidateTickReads()

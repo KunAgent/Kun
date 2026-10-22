@@ -7,6 +7,7 @@
   "assistantMailboxKeyMissing": "ลงทะเบียนจากคอมพิวเตอร์เครื่องอื่น ส่งงานได้จากเครื่องนั้นเท่านั้น",
   "assistantMailboxRemoveConfirm": "นำ {{name}} ออกหรือไม่ ผู้ช่วยจะไม่ได้รับงานจาก Kun อีก",
   "assistantMailboxCancelTask": "ยกเลิกงาน",
+  "assistantMailboxStatusQueued": "รอส่ง",
   "assistantMailboxStatusSent": "ส่งแล้ว",
   "assistantMailboxStatusReceived": "ได้รับแล้ว",
   "assistantMailboxStatusWorking": "กำลังดำเนินการ",

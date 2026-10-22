@@ -13,9 +13,11 @@ Personal assistants are rows of the Code sidebar's conversation list, beside Age
 1. The conversation list's + menu > Connect a personal assistant opens the picker (step 1): a preset, or "Other assistant" with a product name and an optional website. Main creates an enrollment, generates an X25519 key pair for it, keeps the private key in the secret store as `pairing:<enrollmentId>`, and puts only the public key in the prompt's `KUN2-` code. The prompt holds no secret.
 2. The new enrollment opens as a conversation showing the prompt (step 2). The prompt can be shown again or switched between Chinese and English at any time, because Main rebuilds it from the kept pairing key.
 3. The assistant runs `kun-agent login <code>`, which sends its own public key and prints a 10-character verification code for the user. The conversation polls every 5 seconds while it waits, and the request appears there with the code Main computes (step 3). The user allows it only if the codes match; Kun tools cannot approve.
-4. On approval Main derives the mailbox secret by X25519 and stores it under the enrollment id before telling the server, then the assistant's `login` finishes on its side and the conversation switches to the connected assistant.
+4. The approval IPC carries the verification code actually shown to the user. Main refuses approval if the current peer key produces a different code. On approval Main derives the mailbox secret by X25519 and stores it under the enrollment id before telling the server, then the assistant's `login` finishes on its side and the conversation switches to the connected assistant.
 
 A custom assistant reaches the server only as a slug of its product name (`zo_computer`, or `other` when the name has no ASCII letters or digits). Its product name, website and icon stay on this desktop in `profiles.json`. The icon is fetched once over HTTPS from the website's icon links or conventional paths, limited to 256 KB of image data, and stored as a data URL.
+
+Tasks are persisted with their exact sealed envelope before sending. A lost response or network outage leaves a visible queued task; synchronization after restart retries the same ID and ciphertext. Permanent rejection marks the task failed. The task and its pending envelope share one atomic file update, so a reply can always be associated with its original task.
 
 ## Desktop pieces
 
@@ -30,6 +32,6 @@ A custom assistant reaches the server only as a slug of its product name (`zo_co
 | State | `assistant-mailbox-store.ts`, `assistant-navigation.ts` | One renderer store for the mailbox snapshot and its actions; which assistant the stage shows and per-assistant read marks |
 | Contracts | `src/shared/assistant-mailbox.ts`, `src/preload/assistant-mailbox.ts` | IPC channels and projections; secrets and tokens never cross IPC |
 
-The package is consumed from `vendor/kun-assistant/kun-assistant-agent-<version>.tgz` (currently 0.3.0); change it in kunserve, bump its version, pack it and update the dependency.
+The package is consumed from `vendor/kun-assistant/kun-assistant-agent-<version>.tgz` (currently 0.4.0); change it in kunserve, bump its version, pack it and update the dependency.
 
 Tests: `npx vitest run src/main/assistant-mailbox src/renderer/src/components/assistants`. The Main tests drive the real service, the real `kun-agent` CLI and the package's in-memory mailbox server end to end; the renderer tests cover the timeline, the list merge, the conversation states and the picker.

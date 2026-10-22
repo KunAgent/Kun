@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { DelegatedSessionRoute } from './delegated-session-binding.js'
+import type { DelegatedSessionRoute } from './delegated-session-route.js'
 
 /** Route model when the turn names none (the Agent's own default). */
 export const DEFAULT_DELEGATED_MODEL = 'default'
@@ -24,6 +24,11 @@ export function delegatedRouteKey(route: DelegatedSessionRoute): string {
     capabilityFingerprint: route.capabilityFingerprint,
     continuationMode: route.continuationMode
   }))
+}
+
+/** Keep a resumed session in its existing directory without moving or merging user state. */
+export function delegatedProviderStateKey(route: DelegatedSessionRoute): string {
+  return route.providerStateKey ?? delegatedRouteKey(route)
 }
 
 export function sha256(value: string): string {

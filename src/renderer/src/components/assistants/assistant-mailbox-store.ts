@@ -65,7 +65,7 @@ export const assistantMailbox = {
   createEnrollment: (request: AssistantEnrollmentRequest): Promise<AssistantEnrollmentResult | undefined> =>
     run(async () => api()!.createEnrollment(request)),
   promptFor: (enrollmentId: string, locale: AssistantPromptLocale) => run(async () => api()!.promptFor(enrollmentId, locale)),
-  approve: (enrollmentId: string, requestId: string) => withStatus(() => api()?.approve(enrollmentId, requestId)),
+  approve: (enrollmentId: string, requestId: string, verificationCode: string) => withStatus(() => api()?.approve(enrollmentId, requestId, verificationCode)),
   reject: (enrollmentId: string, requestId: string) => withStatus(() => api()?.reject(enrollmentId, requestId)),
   cancelEnrollment: (enrollmentId: string) => withStatus(() => api()?.cancelEnrollment(enrollmentId)),
   revoke: (assistantId: string) => withStatus(() => api()?.revoke(assistantId)),
