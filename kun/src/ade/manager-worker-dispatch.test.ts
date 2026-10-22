@@ -23,7 +23,8 @@ const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0)) await close() })
 
 async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorkers = 8,
-  harnessDefaults?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['harnessDefaults']) {
+  harnessDefaults?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['harnessDefaults'],
+  roster?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['roster']) {
   const root = await mkdtemp(join(tmpdir(), 'kun-worker-dispatch-'))
   const clock = { now: Date.parse('2026-10-07T00:00:00.000Z') }
   const nowIso = () => new Date(clock.now).toISOString()
@@ -67,7 +68,7 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
     capabilitiesForRoute: async () => KUN_NATIVE_CAPABILITIES,
     taskWorkspaces: taskWorkspaces as never, delegation, deliverer, nowIso,
     ids: { next: (prefix) => `${prefix}_unused` }, teamLimits: () => ({ hardWorkers, softWorkers: Math.min(4, hardWorkers) }),
-    harnessDefaults,
+    harnessDefaults, ...(roster ? { roster } : {}),
     providerPool: async () => ({ models: ['main-model', 'other-model'] }), allowUnattendedFullAccess: () => true
   })
   await service.start()
@@ -214,6 +215,30 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
     const harnesses = f.runChild.mock.calls.map(([input]) => (input as { harnessId?: string }).harnessId).sort()
     expect(harnesses).toEqual(['claude-code', 'kun'])
+  })
+
+  it('carries a roster role from the proposal through card switches to the started worker', async () => {
+    const roster = { resolve: vi.fn(async (id: string) => ({
+      ok: true as const, id, source: 'workspace' as const,
+      profile: { name: id, mode: 'subagent' as const, toolPolicy: 'readOnly' as const },
+      engine: { kind: 'bound' as const, harnessId: 'claude-code', displayName: 'Claude Code', credentialMode: 'native-login' as const },
+      route: { harnessId: 'claude-code', model: 'other-model', credentialMode: 'native-login' as const }
+    })) }
+    const f = await setup('full-access', 'kun', 8, undefined, roster)
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [
+      { ...f.assignment, profile: 'reviewer' }, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent.recommendation.assignments).toEqual([
+      expect.objectContaining({ agentId: 'claude-code', model: 'other-model', profileId: 'reviewer' }),
+      expect.not.objectContaining({ profileId: expect.anything() })])
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, ...route }) => route)
+    await f.service.act(intent.intentId, { action: 'update', requestId: 'role', expectedRevision: intent.revision,
+      recommendation: { assignments: [routes[0], { ...routes[1], profileId: 'explore' }] } })
+    f.clock.now += 60_000; await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
+    const started = f.runChild.mock.calls.map(([input]) => input as { harnessId?: string; profile?: string })
+      .map((input) => [input.harnessId, input.profile]).sort()
+    expect(started).toEqual([['claude-code', 'reviewer'], ['kun', 'explore']])
   })
 
   it('rejects an unavailable model choice without changing the card', async () => {

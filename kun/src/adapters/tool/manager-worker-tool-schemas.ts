@@ -19,6 +19,11 @@ export const WORKER_CREATE_JSON_SCHEMA = {
   properties: {
     label: { type: 'string', maxLength: 64 },
     role: { type: 'string', maxLength: 64 },
+    profile: {
+      type: 'string',
+      maxLength: 128,
+      description: 'Agent roster id from list_subagent_profiles: the role and its bound engine. An explicit agent.harnessId still wins for the engine.'
+    },
     task: { type: 'string', maxLength: 32_000 },
     context: {
       type: 'object',

@@ -30,6 +30,8 @@ export type AgentDispatchSource = z.infer<typeof AgentDispatchSourceSchema>
 /** The execution route of one dispatched worker: which Agent runs it, on which model. */
 export const AgentDispatchAssignmentRouteSchema = z.object({
   agentId: z.string().min(1).max(512),
+  /** Agent roster role the worker plays; absent = the engine alone. */
+  profileId: z.string().min(1).max(128).optional(),
   model: z.string().max(512).optional(),
   providerId: z.string().min(1).max(128).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional()

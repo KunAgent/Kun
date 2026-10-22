@@ -304,6 +304,7 @@ export async function createRuntimeAgentComposition(
     core,
     delegationRuntime,
     harnessRuntimeMap,
+    agentRoster,
     listQuota: () => model.providerQuotaService.list(),
     notices: workerNoticeCoordinator,
     providerPool: providerPool.poolEntry,

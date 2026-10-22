@@ -13,7 +13,7 @@ import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
  */
 export function createRuntimeAgentRoster(input: {
   options: () => KunServeRuntimeOptions
-  harnesses: Pick<AgentRosterEngineAccess, 'catalog' | 'detector'> & {
+  harnesses: Pick<AgentRosterEngineAccess, 'catalog' | 'detector' | 'probedModels'> & {
     catalog: Parameters<typeof createCapabilitiesForRoute>[0]
   }
   harnessRuntimeMap: HarnessRuntimeMap
@@ -33,6 +33,9 @@ export function createRuntimeAgentRoster(input: {
       catalog: input.harnesses.catalog,
       detector: input.harnesses.detector,
       capabilitiesForRoute: createCapabilitiesForRoute(input.harnesses.catalog, input.harnessRuntimeMap),
+      ...(input.harnesses.probedModels
+        ? { probedModels: (definition) => input.harnesses.probedModels?.(definition) }
+        : {}),
       configuredModel: (_harnessId, providerId) => providerId
         ? options().providers?.[providerId]?.selectedModel ?? options().providers?.[providerId]?.models?.[0]
         : undefined,

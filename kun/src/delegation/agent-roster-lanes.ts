@@ -43,6 +43,8 @@ export type AgentRosterEngineAccess = HarnessRouteResolutionDeps & {
     status(id: HarnessId): Promise<HarnessStatus>
   }
   capabilitiesForRoute(route: HarnessRoute): Promise<HarnessCapabilities>
+  /** Last cached model-probe result (spawn-free) for engines that probe models. */
+  probedModels?(definition: HarnessDefinition): string[] | undefined
 }
 
 export type AgentRosterEvaluation = {
@@ -87,10 +89,15 @@ export async function evaluateRosterProfile(input: {
     }
   }
   const definition = engines.catalog.get(engineId)
+  // Probing engines publish no static model table: an unpinned role runs on
+  // the engine's last probed default, exactly as a manual worker pin would.
+  const probedDefault = !profile.model?.trim() && definition?.modelSource === 'probe'
+    ? engines.probedModels?.(definition)?.[0]
+    : undefined
   const resolved = resolveHarnessRoute({
     harnessId: engineId,
     definition,
-    pin: profile,
+    pin: probedDefault ? { ...profile, model: probedDefault } : profile,
     deps: engines,
     parent: input.parent
   })

@@ -124,6 +124,8 @@ export type ManagerRuntimeDeps = {
    * Worker-route selector inputs; `isolated`/`unattended` come from
    * the create call. Absent → the manager's own provider/model on `kun`.
    */
+  /** The agent roster; `worker_create.profile` resolves through it. */
+  roster?: Pick<import('../delegation/agent-roster.js').AgentRoster, 'resolve'>
   selector?: Omit<
     WorkerSelectorDeps,
     'catalog' | 'detector' | 'capabilitiesForRoute' | 'isolated' | 'unattended' | 'allowUnattendedFullAccess' | 'recentFailures' | 'managerRoute' | 'language'

@@ -46,12 +46,14 @@ export function mergeAssignmentRoutes(
 }
 
 function routeOf(route: AssignmentRouteEdits[number]): AssignmentRouteEdits[number] {
-  return { agentId: route.agentId, ...(route.model ? { model: route.model } : {}),
+  return { agentId: route.agentId, ...(route.profileId ? { profileId: route.profileId } : {}),
+    ...(route.model ? { model: route.model } : {}),
     ...(route.providerId ? { providerId: route.providerId } : {}),
     ...(route.credentialMode ? { credentialMode: route.credentialMode } : {}) }
 }
 
 function sameRoute(left: AssignmentRouteEdits[number], right: AssignmentRouteEdits[number]): boolean {
-  return left.agentId === right.agentId && (left.model ?? '') === (right.model ?? '') &&
+  return left.agentId === right.agentId && (left.profileId ?? '') === (right.profileId ?? '') &&
+    (left.model ?? '') === (right.model ?? '') &&
     (left.providerId ?? '') === (right.providerId ?? '') && (left.credentialMode ?? '') === (right.credentialMode ?? '')
 }

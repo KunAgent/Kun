@@ -17,6 +17,7 @@ import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import type { HarnessRoute } from '../contracts/harness.js'
 import type { HarnessRuntimeMap } from '../harness/harness-router.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
+import type { AgentRoster } from '../delegation/agent-roster.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import type { FileReviewStore } from '../ade/review-store.js'
 import { reanchorWorkspaceComments } from '../ade/review-reanchor.js'
@@ -132,19 +133,21 @@ export function createManagerRuntime(input: {
   >
   delegationRuntime: DelegationRuntime | undefined
   harnessRuntimeMap: HarnessRuntimeMap
+  agentRoster: AgentRoster
   listQuota(): ReturnType<RuntimeServices['model']['providerQuotaService']['list']>
 } & Omit<
   ManagerRuntimeDeps,
   | 'teams' | 'dispatches' | 'questions' | 'taskWorkspaces' | 'activity' | 'catalog'
   | 'detector' | 'capabilitiesForRoute' | 'delegation' | 'selector'
   | 'allowUnattendedFullAccess' | 'teamLimits' | 'managerMayApprove'
-  | 'workerCallbacks' | 'language'
+  | 'workerCallbacks' | 'language' | 'roster'
 >): ManagerRuntime {
   const {
     services,
     core,
     delegationRuntime,
     harnessRuntimeMap,
+    agentRoster,
     listQuota,
     ...runtimeDeps
   } = input
@@ -156,6 +159,7 @@ export function createManagerRuntime(input: {
     taskWorkspaces: core.taskWorkspaces,
     activity: core.activityStore,
     delegation: delegationRuntime,
+    roster: agentRoster,
     catalog: services.harnesses.catalog,
     detector: services.harnesses.detector,
     capabilitiesForRoute: createCapabilitiesForRoute(
@@ -184,8 +188,8 @@ export function createManagerRuntime(input: {
     selector: {
       configuredModel: (_harnessId, providerId) => providerId ? core.activeOptions.providers?.[providerId]?.selectedModel ?? core.activeOptions.providers?.[providerId]?.models?.[0] : undefined,
       gatewayAliasModel: (binding) => core.activeOptions.routePools?.find((pool) => pool.id === binding.main.routeId && pool.enabled)?.modelId,
-      profiles: (workspace) =>
-        delegationRuntime?.listRoutingProfiles(workspace) ?? Promise.resolve([]),
+      // The worker selector scores the same roster catalog every lane reads.
+      profiles: (workspace) => agentRoster.catalogDocuments({ workspace }),
       quota: createQuotaSnapshot({ list: listQuota }),
       agentOrder: () => core.activeOptions.harnesses?.agentOrder ?? [],
       modelCostTier: (route) =>

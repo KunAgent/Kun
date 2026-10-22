@@ -111,8 +111,9 @@ export class ManagerWorkerDispatch {
           selection: resolved.selection, profileId: resolved.profileId, definition: resolved.definition })
       }
       const first = saved[0]
-      const assignments: AgentDispatchAssignment[] = saved.map(({ input, definition }) => ({
+      const assignments: AgentDispatchAssignment[] = saved.map(({ input, definition, profileId }) => ({
         label: input.label, agentId: input.agent.harnessId, agentName: definition.displayName,
+        ...(profileId ? { profileId } : {}),
         ...(input.agent.model ? { model: input.agent.model } : {}),
         ...(input.agent.providerId ? { providerId: input.agent.providerId } : {}),
         credentialMode: input.agent.credentialMode
@@ -190,7 +191,7 @@ export class ManagerWorkerDispatch {
         throw new Error('Batch Agent routes are fixed; propose a new batch to change the execution Agents.')
       }
       return payload.items.map(({ input }, index) => ({ ...input,
-        ...(assignments ? { agent: assignmentAgent(input.agent, assignments[index]) } : {}),
+        ...(assignments ? { agent: assignmentAgent(input.agent, assignments[index]), ...assignmentProfile(input, assignments[index]) } : {}),
         ...(intent.recommendation.title !== payload.originalTitle ? { label: `${intent.recommendation.title} ${index + 1}`.slice(0, 64) } : {}),
         ...(intent.recommendation.task !== payload.originalTask
           ? { task: `${input.task}\n\nUser adjustment for this dispatch batch:\n${intent.recommendation.task}`.slice(0, 32_000) } : {})
@@ -199,7 +200,7 @@ export class ManagerWorkerDispatch {
     const saved = payload.items[0].input
     if (assignments) {
       return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
-        agent: assignmentAgent(saved.agent, assignments[0]) }]
+        agent: assignmentAgent(saved.agent, assignments[0]), ...assignmentProfile(saved, assignments[0]) }]
     }
     const changedAgent = intent.recommendation.agentId !== payload.originalAgentId
     return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
@@ -236,6 +237,7 @@ export class ManagerWorkerDispatch {
         // Show the resolved route on the card (defaults filled, gateway addresses normalized).
         intent.recommendation.assignments![index] = { label: assignment.label, agentId: resolved.route.harnessId,
           agentName: resolved.definition.displayName,
+          ...(assignment.profileId ? { profileId: assignment.profileId } : {}),
           ...(resolved.route.model ? { model: resolved.route.model } : {}),
           ...(resolved.route.providerId ? { providerId: resolved.route.providerId } : {}),
           credentialMode: resolved.route.credentialMode }
@@ -259,11 +261,13 @@ export class ManagerWorkerDispatch {
       // A route the user switched on the card has no selector rationale or credential profile.
       const savedRoute = !intent.recommendation.assignments ||
         sameAssignmentRoute(payload.items[index]?.input.agent, intent.recommendation.assignments[index])
+      // A role picked on the card replaces the saved one; the saved one survives an unchanged route.
+      const cardProfileId = intent.recommendation.assignments?.[index]?.profileId
       const allocation = { ...workerDispatchIds(intent, index), intentId: intent.intentId,
         ...(savedRoute ? {
           selection: payload.items[index]?.selection as import('../contracts/ade.js').WorkerRecord['selection'],
-          profileId: payload.items[index]?.profileId
-        } : {}) }
+          profileId: cardProfileId ?? payload.items[index]?.profileId
+        } : cardProfileId ? { profileId: cardProfileId } : {}) }
       const current = await this.deps.agentDispatchService?.get(intent.intentId)
       if (current?.cancellationRequested || current?.takenOver || signal.aborted) break
       const result = await this.runtime.createWorkerNow(ctx, inputs[index], context, allocation)
@@ -417,6 +421,12 @@ function assignmentAgent(saved: SavedAgent, assignment: AgentDispatchAssignment)
   return { harnessId: assignment.agentId, ...(assignment.model ? { model: assignment.model } : {}),
     ...(assignment.providerId ? { providerId: assignment.providerId } : {}),
     ...(assignment.credentialMode ? { credentialMode: assignment.credentialMode } : {}) }
+}
+
+/** The roster role a card assignment names, replacing the proposed one when the user switched it. */
+function assignmentProfile(saved: WorkerCreateInput, assignment: AgentDispatchAssignment | undefined): { profile?: string } {
+  const profile = assignment?.profileId ?? (sameAssignmentRoute(saved.agent, assignment) ? saved.profile : undefined)
+  return profile ? { profile } : {}
 }
 
 function countdownReport(intent: AgentDispatchIntent, now: number): string {

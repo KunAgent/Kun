@@ -21,7 +21,7 @@ import {
   type WorkerRouteSelection
 } from './worker-selector.js'
 
-/** Route resolved for a new worker: explicit pin, selection, or fallback. */
+/** Route resolved for a new worker: explicit pin, roster role, selection, or fallback. */
 export type ResolvedWorkerRoute = {
   route: HarnessRoute
   profileId?: string
@@ -175,6 +175,7 @@ export async function resolveManagerWorkerRoute(
     | 'providerPool' | 'probedModels' | 'allowUnattendedFullAccess' | 'language'
     | 'harnessDefaults'
     | 'resolveGatewayAliases'
+    | 'roster'
   >,
   ctx: ManagerToolContext,
   input: WorkerCreateInput,
@@ -182,6 +183,12 @@ export async function resolveManagerWorkerRoute(
   recentFailures: (teamId: string, harnessId: HarnessId) => Promise<number>
 ): Promise<ResolvedWorkerRoute | { error: string }> {
   const managerThread = await deps.threads.get(ctx.threadId).catch(() => null)
+  if (input.profile?.trim()) {
+    return resolveRosterWorkerRoute(deps, ctx, input, input.profile.trim(), {
+      model: managerThread?.model?.trim() || undefined,
+      providerId: managerThread?.providerId?.trim() || undefined
+    })
+  }
   const selector = deps.selector
   return resolveWorkerRoute({
     catalog: deps.catalog,
@@ -228,6 +235,63 @@ export async function resolveManagerWorkerRoute(
         }
       : {})
   })
+}
+
+/**
+ * `worker_create.profile`: the roster decides whether the role may run as a
+ * worker and which engine it is bound to. An explicit `agent.harnessId` still
+ * wins for the engine; every engine route is validated like a manual pin.
+ */
+async function resolveRosterWorkerRoute(
+  deps: Parameters<typeof resolveManagerWorkerRoute>[0],
+  ctx: ManagerToolContext,
+  input: WorkerCreateInput,
+  profileId: string,
+  manager: { model?: string; providerId?: string }
+): Promise<ResolvedWorkerRoute | { error: string }> {
+  if (!deps.roster) return { error: 'The agent roster is unavailable; omit profile or pin agent.harnessId.' }
+  const resolution = await deps.roster.resolve(profileId, {
+    lane: 'worker',
+    workspace: ctx.workspace,
+    parent: manager,
+    engineOverridden: Boolean(input.agent?.harnessId)
+  })
+  if (!resolution.ok) return { error: `${resolution.code}: ${resolution.message}` }
+  const engine = input.agent?.harnessId ? input.agent : resolution.route && {
+    harnessId: resolution.route.harnessId,
+    model: resolution.route.model,
+    ...(resolution.route.providerId ? { providerId: resolution.route.providerId } : {}),
+    credentialMode: resolution.route.credentialMode,
+    ...(resolution.route.gatewayBinding ? { gatewayBinding: resolution.route.gatewayBinding } : {})
+  }
+  if (!engine) {
+    // A role without an engine binding runs on the native loop with its own
+    // model override, else the manager's route.
+    const model = resolution.profile.model?.trim() || manager.model || ''
+    const providerId = resolution.profile.model?.trim()
+      ? resolution.profile.providerId?.trim() || manager.providerId
+      : manager.providerId
+    return {
+      route: {
+        harnessId: 'kun' as HarnessRoute['harnessId'],
+        model,
+        ...(providerId ? { providerId } : {}),
+        credentialMode: 'provider'
+      },
+      profileId: resolution.id
+    }
+  }
+  const pinned = await resolveWorkerRoute({
+    catalog: deps.catalog,
+    managerModel: manager.model,
+    managerProviderId: manager.providerId,
+    agent: engine,
+    providerPool: deps.providerPool,
+    probedModels: deps.probedModels,
+    harnessDefaults: deps.harnessDefaults,
+    resolveGatewayAliases: deps.resolveGatewayAliases
+  })
+  return 'error' in pinned ? pinned : { ...pinned, profileId: resolution.id }
 }
 
 /**

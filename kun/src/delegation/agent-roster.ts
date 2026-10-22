@@ -76,18 +76,31 @@ export class AgentRoster {
       rosterEntry(snapshot, await this.evaluate(snapshot.profile, input.parent, 'cached'))))
   }
 
-  /** One role for one lane, with readiness probed the way a dispatch needs. */
+  /**
+   * One role for one lane, with readiness probed the way a dispatch needs.
+   * `engineOverridden`: the caller pins its own engine, so only the role's
+   * mode and surface decide; its bound engine is neither checked nor used.
+   */
   async resolve(id: string, input: {
     lane: AgentRosterLane
     workspace?: string
     surface?: SubagentProfileSurface
     parent?: AgentRosterParentRoute
+    engineOverridden?: boolean
   }): Promise<AgentRosterResolution> {
     const surface = input.surface ?? 'code'
     const wanted = id.trim()
     const snapshot = (await this.snapshots(input.workspace, surface)).find((entry) => entry.id === wanted)
     if (!snapshot) return this.missing(wanted, input.workspace, surface)
-    const evaluation = await this.evaluate(snapshot.profile, input.parent, 'probe')
+    const evaluation = input.engineOverridden
+      ? await evaluateRosterProfile({
+          profile: snapshot.profile,
+          engines: undefined,
+          honorEngineBinding: false,
+          parent: input.parent ?? this.deps.defaultParent(),
+          mode: 'probe'
+        })
+      : await this.evaluate(snapshot.profile, input.parent, 'probe')
     const failure = laneFailure(evaluation, input.lane)
     if (failure) return { ok: false, ...failure }
     const honorsEngine = input.lane !== 'delegate' || this.deps.honorEngineBinding()
@@ -99,6 +112,16 @@ export class AgentRoster {
       engine: evaluation.engine,
       ...(honorsEngine && evaluation.route ? { route: evaluation.route } : {})
     }
+  }
+
+  /** Every dispatchable catalog role on a surface, unfiltered by engine state. */
+  async catalogDocuments(input: {
+    workspace?: string
+    surface?: SubagentProfileSurface
+  } = {}): Promise<SubagentRoutingDocument[]> {
+    return (await listCatalogSubagentProfiles(this.deps.profiles(), input.workspace, input.surface ?? 'code'))
+      .filter((snapshot) => snapshot.profile.mode !== 'primary')
+      .map(routingDocument)
   }
 
   /**
