@@ -18,7 +18,7 @@ import type { DesignArtifact } from '../design-types'
 import { currentDesignArtifactVersion } from '../design-types'
 import type { DesignWorkspaceState } from '../design-workspace-store-types'
 import type { DerivedTokens } from '../design-token-extract'
-import { buildHtmlSiblingManifest } from '../design-pages'
+import { buildHtmlSiblingManifest, isPlaceholderDesignArtifact } from '../design-pages'
 import { mergeDesignContextWithTokens } from '../design-context'
 import { buildDesignTurnPrompt } from './entry'
 import type { DesignFrameContext, DesignTurnTarget, ScreenManifestEntry } from './shared'
@@ -85,14 +85,17 @@ function buildScreenManifest(options: BuildDesignTurnPromptPayloadOptions): Scre
     if (!shape || !isHtmlFrame(shape) || shape.id === options.selectedFrame?.id) continue
     const linked = options.promptState.artifacts.find((artifact) => artifact.id === shape.htmlArtifactId)
     if (!linked) continue
-    const summary = currentDesignArtifactVersion(linked)?.summary?.trim()
+    // A placeholder's summary is its generation brief — keep it out of the prompt.
+    const planned = isPlaceholderDesignArtifact(linked)
+    const summary = planned ? '' : currentDesignArtifactVersion(linked)?.summary?.trim()
     screenManifest.push({
       name: shape.name,
       width: shape.width,
       height: shape.height,
       htmlPath: linked.relativePath,
+      ...(planned ? { planned: true } : {}),
       ...(summary ? { summary } : {}),
-      ...siblingTokenFields(options.tokensByArtifact, linked.relativePath)
+      ...(planned ? {} : siblingTokenFields(options.tokensByArtifact, linked.relativePath))
     })
   }
   return screenManifest

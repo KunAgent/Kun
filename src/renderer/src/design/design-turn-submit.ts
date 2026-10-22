@@ -19,6 +19,7 @@ import { designDocumentResolvedEngine } from './design-types'
 import { resolveExcalidrawSceneForPrompt, excalidrawScenePath } from '../whiteboard/excalidraw-persistence'
 import {
   buildDesignTurnSendOverrides,
+  reservedHtmlArtifactContext,
   type DesignTurnPromptState
 } from './design-turn-dispatch'
 import {
@@ -356,7 +357,12 @@ export async function submitDesignTurn(
             artifactId: resolvedTarget.svgArtifactId,
             relativePath: resolvedTarget.artifactRelativePath
           }
-        } : {})
+        } : resolvedTarget.target === 'screen' || resolvedTarget.target === 'html'
+          ? (() => {
+              const reserved = reservedHtmlArtifactContext(resolvedTarget)
+              return reserved ? { guiDesignArtifact: reserved } : {}
+            })()
+          : {})
       })
     )
   } catch (error) {

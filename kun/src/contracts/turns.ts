@@ -97,17 +97,35 @@ export const GuiPlanContextSchema = z.object({
 })
 export type GuiPlanContextJson = z.infer<typeof GuiPlanContextSchema>
 
-export const GuiDesignArtifactContextSchema = z.object({
-  kind: z.literal('svg'),
-  artifactId: z.string().min(1),
-  relativePath: z.string().min(1).refine((value) => {
+const GuiDesignArtifactPathSchema = (extension: string, message: string) =>
+  z.string().min(1).refine((value) => {
     const normalized = value.replaceAll('\\', '/')
     return normalized === value &&
       normalized.startsWith('.kun-design/') &&
       !normalized.split('/').includes('..') &&
-      /\/v\d+\.svg$/i.test(normalized)
-  }, { message: 'relativePath must be a versioned SVG file under .kun-design' })
-})
+      new RegExp(`\\/v\\d+\\.${extension}$`, 'i').test(normalized)
+  }, { message })
+
+export const GuiDesignArtifactContextSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('svg'),
+    artifactId: z.string().min(1),
+    relativePath: GuiDesignArtifactPathSchema('svg', 'relativePath must be a versioned SVG file under .kun-design')
+  }),
+  // A screen-generation turn: the model may write only this page and its design notes.
+  z.object({
+    kind: z.literal('html'),
+    artifactId: z.string().min(1),
+    relativePath: GuiDesignArtifactPathSchema('html', 'relativePath must be a versioned HTML file under .kun-design'),
+    designMdPath: z.string().min(1).refine((value) => {
+      const normalized = value.replaceAll('\\', '/')
+      return normalized === value &&
+        normalized.startsWith('.kun-design/') &&
+        !normalized.split('/').includes('..') &&
+        normalized.endsWith('/DESIGN.md')
+    }, { message: 'designMdPath must be a DESIGN.md file under .kun-design' }).optional()
+  })
+])
 export type GuiDesignArtifactContextJson = z.infer<typeof GuiDesignArtifactContextSchema>
 
 export const TurnStatus = z.enum([

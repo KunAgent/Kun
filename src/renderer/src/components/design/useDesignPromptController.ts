@@ -635,7 +635,11 @@ export function useDesignPromptController({
         imageEditReferencePath: options.imageEditReferencePath,
         ...(options.messageSource ? { messageSource: options.messageSource } : {}),
         clearAutoRepairScope: clearDesignAutoRepairScope,
-        ...(drawing.created ? { waitForRuntimeAdmission: true } : {}),
+        // Screen/SVG follow-ups are drained one at a time; resolving only once
+        // the runtime has admitted the turn keeps that serialization honest.
+        ...(drawing.created || options.screenShapeId || options.svgArtifactId
+          ? { waitForRuntimeAdmission: true }
+          : {}),
         ...(authoritativeProfile || selection
           ? {
               designTaskProfileForTarget: (target: DesignDocumentTarget) =>

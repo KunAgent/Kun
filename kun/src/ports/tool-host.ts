@@ -75,11 +75,9 @@ export type GuiPlanContext = {
   turnId?: string
 }
 
-export type GuiDesignArtifactContext = {
-  kind: 'svg'
-  artifactId: string
-  relativePath: string
-}
+export type GuiDesignArtifactContext =
+  | { kind: 'svg'; artifactId: string; relativePath: string }
+  | { kind: 'html'; artifactId: string; relativePath: string; designMdPath?: string }
 
 export type ApprovedExternalWriteTarget = {
   /** Physical path shown in the approval prompt. */

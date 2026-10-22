@@ -149,6 +149,14 @@ export function extractAgentDesignSummary(assistantText: string): string {
 }
 
 /**
+ * A screen whose only version is its initial placeholder: some turn is still
+ * going to generate it, and its recorded summary is that turn's brief.
+ */
+export function isPlaceholderDesignArtifact(artifact: DesignArtifact): boolean {
+  return artifact.previewStatus === 'pending' && artifact.versions.length <= 1
+}
+
+/**
  * Sibling-page manifest for the design turn prompt: every OTHER HTML page on the
  * project canvas, so a generated/iterated page can keep one cohesive design
  * system (the cohesion half of the Stitch-style multi-page model).
@@ -161,10 +169,12 @@ export function buildHtmlSiblingManifest(
   const siblings: ScreenManifestEntry[] = []
   for (const artifact of artifacts) {
     if (artifact.kind !== 'html' || artifact.id === excludeId) continue
-    const summary = currentDesignArtifactVersion(artifact)?.summary?.trim()
+    const planned = isPlaceholderDesignArtifact(artifact)
+    const summary = planned ? '' : currentDesignArtifactVersion(artifact)?.summary?.trim()
     siblings.push({
       name: artifact.title,
       htmlPath: artifact.relativePath,
+      ...(planned ? { planned: true } : {}),
       ...(artifact.node
         ? { width: artifact.node.width, height: artifact.node.height }
         : {}),

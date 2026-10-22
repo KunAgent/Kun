@@ -1,3 +1,4 @@
+import type { GuiDesignArtifactMessageContext } from '../store/chat-store-message-types'
 import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
 import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import type {
@@ -459,11 +460,7 @@ export interface AgentProvider {
       designProfile?: DesignTaskProfileInput
       designDocumentTarget?: DesignDocumentTarget
       designImagePlacementTarget?: DesignImagePlacementTarget
-      guiDesignArtifact?: {
-        kind: 'svg'
-        artifactId: string
-        relativePath: string
-      }
+      guiDesignArtifact?: GuiDesignArtifactMessageContext
       attachmentIds?: string[]
       workspaceCheckpointId?: string
       workspaceCheckpointRequestId?: string

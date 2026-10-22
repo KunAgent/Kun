@@ -181,6 +181,12 @@ export type ScreenManifestEntry = {
   fontFamily?: string
   /** Foundation role, so a page knows which sibling is the canonical style guide. */
   role?: 'design-system' | 'logo'
+  /**
+   * The page exists only as a placeholder: a sibling turn in the same batch is
+   * still going to build it. It is listed as a link target only — never with
+   * its generation brief, which reads like an instruction for the current turn.
+   */
+  planned?: boolean
 }
 
 export function normalizePrototypePath(path: string): string {
@@ -287,31 +293,52 @@ export function formatScreenManifestLines(
   currentHtmlPath?: string
 ): string[] {
   if (!manifest || manifest.length === 0) return []
-  return [
-    'Other pages already in this project (keep ONE cohesive design system across them — shared palette, typography, spacing, components, and prototype navigation):',
-    ...manifest.map((s) => {
-      const dims = typeof s.width === 'number' && typeof s.height === 'number'
-        ? ` (${Math.round(s.width)}x${Math.round(s.height)})`
-        : ''
-      const tokenParts = [
-        s.accent ? `accent ${s.accent}` : '',
-        s.fontFamily ? `font ${s.fontFamily}` : ''
-      ].filter(Boolean)
-      const tokens = tokenParts.length > 0 ? ` [${tokenParts.join(', ')}]` : ''
-      const roleTag =
-        s.role === 'design-system'
-          ? ' [design system — the canonical style guide; follow it]'
-          : s.role === 'logo'
-            ? ' [logo]'
-            : ''
-      const summary = s.summary?.trim() ? ` — ${s.summary.trim().slice(0, 160)}` : ''
-      const prototypeHref = currentHtmlPath ? ` (prototype href: ${buildPrototypeHref(currentHtmlPath, s.htmlPath)})` : ''
-      return `- "${s.name}"${dims}${tokens}${roleTag} → ${s.htmlPath}${prototypeHref}${summary}`
-    }),
+  const built = manifest.filter((s) => !s.planned)
+  const planned = manifest.filter((s) => s.planned)
+  const hrefFor = (s: ScreenManifestEntry): string =>
+    currentHtmlPath ? ` (prototype href: ${buildPrototypeHref(currentHtmlPath, s.htmlPath)})` : ''
+  const lines: string[] = []
+  if (built.length > 0) {
+    lines.push(
+      'Other pages already in this project (keep ONE cohesive design system across them — shared palette, typography, spacing, components, and prototype navigation):',
+      ...built.map((s) => {
+        const dims = typeof s.width === 'number' && typeof s.height === 'number'
+          ? ` (${Math.round(s.width)}x${Math.round(s.height)})`
+          : ''
+        const tokenParts = [
+          s.accent ? `accent ${s.accent}` : '',
+          s.fontFamily ? `font ${s.fontFamily}` : ''
+        ].filter(Boolean)
+        const tokens = tokenParts.length > 0 ? ` [${tokenParts.join(', ')}]` : ''
+        const roleTag =
+          s.role === 'design-system'
+            ? ' [design system — the canonical style guide; follow it]'
+            : s.role === 'logo'
+              ? ' [logo]'
+              : ''
+        const summary = s.summary?.trim() ? ` — ${s.summary.trim().slice(0, 160)}` : ''
+        return `- "${s.name}"${dims}${tokens}${roleTag} → ${s.htmlPath}${hrefFor(s)}${summary}`
+      })
+    )
+  }
+  if (planned.length > 0) {
+    lines.push(
+      'Planned in this batch — another turn builds each of these pages, so do NOT read, write, or design them in this turn. They are listed only so prototype navigation can link to them:',
+      ...planned.map((s) => `- "${s.name}" → ${s.htmlPath}${hrefFor(s)}`)
+    )
+  }
+  lines.push(
     'Prototype navigation: turn relevant nav items, cards, tabs, and primary/secondary actions into clickable routes using the listed prototype hrefs; keep same-page controls as buttons and avoid dead `#` links.',
-    ...PROTOTYPE_NAVIGATION_MARKUP_LINES,
-    'Read a relevant sibling page if you need to match its exact styling. Do NOT modify sibling files — only the reserved file for this turn.'
-  ]
+    ...PROTOTYPE_NAVIGATION_MARKUP_LINES
+  )
+  if (built.length > 0) {
+    lines.push(
+      'Read a relevant sibling page if you need to match its exact styling. Do NOT modify sibling files — only the reserved file for this turn.'
+    )
+  } else {
+    lines.push('Do NOT modify sibling files — only the reserved file for this turn.')
+  }
+  return lines
 }
 
 export type ScreenTurnOptions = DesignTurnOptions & {

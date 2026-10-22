@@ -531,6 +531,11 @@ export function kunThreadEventsPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/events`
 }
 
+export const KUN_THREAD_CANVAS_RECEIPTS_TEMPLATE = '/v1/threads/{id}/canvas-receipts'
+export function kunThreadCanvasReceiptsPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/canvas-receipts`
+}
+
 export const KUN_THREAD_MODEL_REQUESTS_TEMPLATE = '/v1/threads/{id}/model-requests'
 export function kunThreadModelRequestsPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/model-requests`

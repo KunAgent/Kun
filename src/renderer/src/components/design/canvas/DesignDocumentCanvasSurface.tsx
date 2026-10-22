@@ -17,6 +17,7 @@ import { setScreenCreationFactory } from '../../../design/canvas/screen-artifact
 import { createLinkedHtmlScreen } from '../../../design/canvas/screen-lifecycle'
 import { createLinkedSvgArtifact } from '../../../design/canvas/svg-artifact-lifecycle'
 import { useApplyShapeOpsLive } from '../../../design/canvas/use-apply-shape-ops-live'
+import { useScreenGenerationRecovery } from '../../../design/canvas/screen-generation-recovery'
 import { useApplyExcalidrawLive } from '../../../whiteboard/use-apply-excalidraw-live'
 import { canvasOpErrorKey } from '../../../design/canvas/apply-shape-ops'
 import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
@@ -185,6 +186,7 @@ export function DesignDocumentCanvasSurface({
     [boardArtifact, expectedCanvasDocumentKey, workspaceRoot]
   )
 
+  useScreenGenerationRecovery(onScreenCreated)
   useApplyShapeOpsLive(
     Boolean(
       !excalidraw &&

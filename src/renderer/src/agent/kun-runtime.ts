@@ -1,3 +1,4 @@
+import type { GuiDesignArtifactMessageContext } from '../store/chat-store-message-types'
 import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
 import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { getKunThreadDetail } from './kun-runtime-thread-detail'
@@ -472,11 +473,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       designProfile?: DesignTaskProfileInput
       designDocumentTarget?: DesignDocumentTarget
       designImagePlacementTarget?: DesignImagePlacementTarget
-      guiDesignArtifact?: {
-        kind: 'svg'
-        artifactId: string
-        relativePath: string
-      }
+      guiDesignArtifact?: GuiDesignArtifactMessageContext
       attachmentIds?: string[]
       /** Queue this turn durably when the thread already has an active turn. */
       enqueueIfBusy?: boolean

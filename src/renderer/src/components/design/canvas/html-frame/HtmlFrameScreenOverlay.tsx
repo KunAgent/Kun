@@ -16,7 +16,11 @@ import { useDesignHtmlPreview } from '../../DesignHtmlPreviewHost'
 import { HtmlFrameAiCursorOverlay } from './HtmlFrameAiCursorOverlay'
 import { HtmlFrameChrome } from './HtmlFrameChrome'
 import { HtmlFrameGeneratingCanvas } from './HtmlFrameGeneratingCanvas'
-import { HtmlFramePlaceholder } from './HtmlFramePlaceholder'
+import { GenerationFailedNotice, HtmlFramePlaceholder } from './HtmlFramePlaceholder'
+import {
+  chatBusyForArtifact,
+  requestScreenGenerationRetry
+} from '../../../../design/canvas/screen-generation-recovery'
 import {
   htmlFrameDrawingActive,
   htmlFrameOverlayPointerEvents,
@@ -97,7 +101,8 @@ function ScreenOverlayInner({
   // A design turn is in flight: the agent is still streaming HTML into the file.
   // Keep the frame in its transparent "generating" surface until the turn settles
   // so a half-written page never shows the opaque white frame band beneath it.
-  const chatBusy = useChatStore((s) => s.busy)
+  const chatBusy = useChatStore((s) => chatBusyForArtifact(s, artifactRelativePath))
+  const threadBusy = useChatStore((s) => s.busy)
   const canvasWidth = Math.max(1, shape.width)
   const canvasHeight = Math.max(1, shape.height)
   const foundationRole = renderedArtifact ? inferDesignArtifactFoundationRole(renderedArtifact) : undefined
@@ -352,6 +357,10 @@ function ScreenOverlayInner({
   const showChrome = screenWidth > 92 && screenHeight > 42
   const placeholderPreview = !preview.hasRenderableContent && preview.renderState !== 'renderable'
   const transparentGeneratingSurface = placeholderPreview || drawingActive
+  const generationFailed =
+    !isHistoricalVersion && !drawingActive && !previewError && !failedMessage &&
+    artifact?.kind === 'html' && artifact.previewStatus === 'error' && placeholderPreview
+  const retryGeneration = artifact?.id ? () => { requestScreenGenerationRetry(artifact.id) } : undefined
   const elementTextChanged = selectedElementContext ? elementTextDraft !== selectedElementContext.text : false
   const elementTextSaving = elementTextStatus.kind === 'saving'
   const elementEditorStyle = selectedElementRect
@@ -464,6 +473,9 @@ function ScreenOverlayInner({
               hasArtifact={Boolean(artifact)}
               drawingLabel={drawingLabel}
               screenWidth={screenWidth}
+              generationFailed={generationFailed}
+              onRetry={retryGeneration}
+              retryDisabled={threadBusy}
             />
           )}
           {preview.webviewUrl && drawingActive && !aiCursor ? (
@@ -472,6 +484,11 @@ function ScreenOverlayInner({
                 <Brush className="h-3.5 w-3.5 animate-pulse" strokeWidth={1.8} aria-hidden="true" />
                 <span className="min-w-0 truncate">{drawingLabel}</span>
               </div>
+            </div>
+          ) : null}
+          {preview.webviewUrl && generationFailed ? (
+            <div className="absolute inset-x-3 top-3 flex justify-center rounded-md bg-white/92 py-2 shadow-sm dark:bg-[#20252e]/92">
+              <GenerationFailedNotice onRetry={retryGeneration} retryDisabled={threadBusy} />
             </div>
           ) : null}
           {preview.webviewUrl && failedMessage ? (
