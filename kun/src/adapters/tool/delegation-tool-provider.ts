@@ -16,6 +16,13 @@ import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
 import { buildListSubagentProfilesTool } from './delegation-profile-list-tool.js'
 import {
+  delegateEngineFor,
+  delegateRoutingCandidates,
+  exclusionNote,
+  explicitDelegateProfile
+} from './delegation-roster-selection.js'
+import type { HarnessRoute } from '../../contracts/harness.js'
+import {
   childToolResult,
   existingFallbackMetadata,
   existingRouteMetadata,
@@ -91,6 +98,7 @@ export function buildDelegationToolProviders(
           const customAgentSupplied = args.custom_agent !== undefined && args.custom_agent !== null
           let inlineProfile: InlineProfile | undefined
           let routing: ChildRoutingMetadata | undefined
+          let engineRoute: HarnessRoute | undefined
           const agentSurface = context.agentSurface ?? 'code'
 
           if (useExistingAgents && customAgentSupplied) {
@@ -116,12 +124,16 @@ export function buildDelegationToolProviders(
             routing = explicitCustomMetadata(inlineProfile, agentSurface)
           }
 
+          const rosterInput = {
+            workspace: common.workspace,
+            surface: agentSurface,
+            parent: { model: common.inheritedModel, providerId: common.inheritedProviderId }
+          }
           if (useExistingAgents && requestedProfile) {
-            const snapshot = await runtime.resolveProfileSnapshot(requestedProfile, common.workspace, agentSurface)
-            if (!snapshot) {
-              return toolError(`unknown or unavailable ${agentSurface} subagent profile: ${requestedProfile}`)
-            }
-            inlineProfile = { id: snapshot.id, profile: snapshot.profile, source: snapshot.source }
+            const selected = await explicitDelegateProfile(runtime, requestedProfile, rosterInput)
+            if ('error' in selected) return toolError(selected.error)
+            inlineProfile = selected.inlineProfile
+            engineRoute = selected.route
             routing = {
               method: 'explicit-profile',
               selectedKind: 'profile',
@@ -131,7 +143,7 @@ export function buildDelegationToolProviders(
               candidates: []
             }
           } else if (useExistingAgents && !inlineProfile) {
-            const documents = await runtime.listRoutingProfiles(common.workspace, agentSurface)
+            const { documents, excluded } = await delegateRoutingCandidates(runtime, rosterInput)
             const route = router
               ? await router.route({
                 threadId: context.threadId,
@@ -147,24 +159,39 @@ export function buildDelegationToolProviders(
             const routedSnapshot = route?.profileId
               ? documents.find((document) => document.id === route.profileId)
               : undefined
-            if (route && routedSnapshot && !route.generate) {
+            const routedEngine = route && routedSnapshot && !route.generate
+              ? await delegateEngineFor(runtime, routedSnapshot.id, rosterInput)
+              : undefined
+            if (route && routedSnapshot && routedEngine && !('error' in routedEngine)) {
               inlineProfile = {
                 id: routedSnapshot.id,
                 profile: routedSnapshot.profile,
                 source: routedSnapshot.source
               }
+              engineRoute = routedEngine.route
               routing = existingRouteMetadata(route, agentSurface)
             } else {
-              const snapshot = selectExistingFallback(runtime, documents)
+              const lostEngine = routedEngine && 'error' in routedEngine ? routedEngine.error : undefined
+              const snapshot = selectExistingFallback(runtime, documents.filter((document) =>
+                !lostEngine || document.id !== routedSnapshot?.id))
               if (!snapshot) return toolError('no existing subagent profile is available for delegation')
+              const fallbackEngine = await delegateEngineFor(runtime, snapshot.id, rosterInput)
+              if ('error' in fallbackEngine) {
+                return toolError(`no existing subagent profile can run as a delegate_task child: ${fallbackEngine.error}`)
+              }
               inlineProfile = { id: snapshot.id, profile: snapshot.profile, source: snapshot.source }
+              engineRoute = fallbackEngine.route
               routing = existingFallbackMetadata(route, snapshot.id, agentSurface)
+              if (lostEngine) routing.reason = `${routing.reason ?? ''} The routed role's engine is unavailable: ${lostEngine}.`.trim()
             }
+            const note = exclusionNote(excluded)
+            if (note) routing.reason = `${routing.reason ?? ''}${note}`.trim().slice(0, 2_000)
           }
 
           return await runChild(runtime, common, context, onUpdate, {
             ...(inlineProfile ? { inlineProfile } : {}),
-            ...(routing ? { routing } : {})
+            ...(routing ? { routing } : {}),
+            ...(engineRoute ? { engineRoute } : {})
           })
         }
       }),
@@ -230,8 +257,24 @@ async function runChild(
   common: Exclude<ReturnType<typeof parseCommonArgs>, Error>,
   context: ToolHostContext,
   onUpdate: ((update: ToolExecutionUpdate) => Promise<void> | void) | undefined,
-  selection: { profile?: string; inlineProfile?: InlineProfile; routing?: ChildRoutingMetadata }
+  selection: { profile?: string; inlineProfile?: InlineProfile; routing?: ChildRoutingMetadata; engineRoute?: HarnessRoute }
 ): Promise<{ output: Record<string, unknown>; isError: boolean }> {
+  const readOnlyTask = subagentTaskRequiresReadOnly(common.prompt)
+  const engine = selection.engineRoute
+  // A role bound to another engine runs there; a read-only role (or task) runs
+  // that engine in its read-only sandbox, since Kun's tool filter cannot reach it.
+  const engineFields = engine
+    ? {
+        harnessId: engine.harnessId,
+        credentialMode: engine.credentialMode,
+        ...(engine.gatewayBinding ? { gatewayBinding: engine.gatewayBinding } : {}),
+        ...(engine.model ? { model: engine.model } : {}),
+        ...(engine.providerId ? { providerId: engine.providerId } : {}),
+        ...(readOnlyTask || selection.inlineProfile?.profile.toolPolicy === 'readOnly'
+          ? { sandboxMode: 'read-only' as const }
+          : {})
+      }
+    : {}
   const record = await runtime.runChild({
     parentThreadId: context.threadId,
     parentTurnId: context.turnId,
@@ -243,7 +286,7 @@ async function runChild(
     ...(selection.inlineProfile ? { inlineProfile: selection.inlineProfile } : {}),
     ...(selection.routing ? { routing: selection.routing } : {}),
     agentSurface: context.agentSurface ?? 'code',
-    ...(subagentTaskRequiresReadOnly(common.prompt) ? { toolPolicyCeiling: 'readOnly' as const } : {}),
+    ...(readOnlyTask ? { toolPolicyCeiling: 'readOnly' as const } : {}),
     security: childSecurity(context),
     ...(context.serviceTier ? { inheritedServiceTier: context.serviceTier } : {}),
     ...(common.inheritedModel ? { inheritedModel: common.inheritedModel } : {}),
@@ -258,6 +301,7 @@ async function runChild(
     ...(context.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(common.detach ? { detach: true } : {}),
     ...(common.returnFormat ? { returnFormat: common.returnFormat } : {}),
+    ...engineFields,
     onQueued: async (childId, profile, metadata) => {
       await onUpdate?.({
         output: {
