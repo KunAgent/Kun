@@ -47,6 +47,10 @@ function packagedFixture(t, platform) {
     writeFileSync(
       join(root, 'bin', 'kun.cmd'),
       '@echo off\r\n' +
+      'if "%~1"=="tui" (\r\n' +
+      '  echo kun [tui options]\r\n' +
+      '  goto :eof\r\n' +
+      ')\r\n' +
       'if "%~1"=="--version" (\r\n' +
       '  echo kun 1.2.3\r\n' +
       ') else (\r\n' +
@@ -60,7 +64,10 @@ function packagedFixture(t, platform) {
 function writeHelpExecutable(path) {
   writeFileSync(
     path,
-    `#!/usr/bin/env node\nprocess.stdout.write(process.argv.includes('--version') ? 'kun 1.2.3\\n' : ${JSON.stringify(`${CLI_HELP_SENTINEL}\n`)})\n`
+    `#!/usr/bin/env node\n` +
+      `const tui = process.argv.includes('tui')\n` +
+      `process.stdout.write(tui ? 'kun [tui options]\\n' : ` +
+      `process.argv.includes('--version') ? 'kun 1.2.3\\n' : ${JSON.stringify(`${CLI_HELP_SENTINEL}\n`)})`
   )
   chmodSync(path, 0o755)
 }
@@ -142,7 +149,9 @@ test('extracts a deb and executes its packaged product launcher in CLI mode', {
       }
       return {
         status: 0,
-        stdout: args.includes('--version') ? 'kun 1.2.3\n' : `${CLI_HELP_SENTINEL}\n`,
+        stdout: args.includes('tui')
+          ? 'kun [tui options]\n'
+          : args.includes('--version') ? 'kun 1.2.3\n' : `${CLI_HELP_SENTINEL}\n`,
         stderr: ''
       }
     }
@@ -152,7 +161,8 @@ test('extracts a deb and executes its packaged product launcher in CLI mode', {
   assert.equal(calls[0].command, 'dpkg-deb')
   assert.equal(calls[1].options.env.KUN_CLI_ENTRY, '1')
   assert.equal(calls[1].options.shell, false)
-  assert.deepEqual(calls[2].args, ['--version'])
+  assert.deepEqual(calls[2].args, ['tui', '--help'])
+  assert.deepEqual(calls[3].args, ['--version'])
 })
 
 test('requires explicit resources and rejects unknown arguments', () => {
