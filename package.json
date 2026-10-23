@@ -125,7 +125,7 @@
     "@kun/assistant-agent": "file:vendor/kun-assistant/kun-assistant-agent-0.4.0.tgz",
     "@kun/extension-api": "1.5.0",
     "@kun/provider-catalog": "0.1.0",
-    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.20.1.tgz",
+    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.21.2.tgz",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@napi-rs/canvas": "^0.1.100",

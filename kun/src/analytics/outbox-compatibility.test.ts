@@ -77,7 +77,7 @@ describe('analytics Runtime storage rollback compatibility', () => {
     await appendAnalytics(f.store, f.epoch, code); await appendAnalytics(f.store, f.epoch, work)
     await f.legacyWrite(state => ({ ...state, leaseUntil: Date.now() + 45_000 }))
     expect((await readAnalytics(f.store)).value).toMatchObject({ workAnalyticsVersion: 0, events: [code] })
-    await f.legacyWrite(state => ({ ...state, events: [...state.events, room] }))
+    await f.legacyWrite(state => ({ ...state, events: [...state.events, LegacyEvent.parse(room)] }))
     await leaseAnalytics(f.store, f.epoch, undefined, 1)
     const next = f.event('work'); await appendAnalytics(f.store, f.epoch, next)
     expect((await readAnalytics(f.store)).value.events).toEqual([code, room, next])

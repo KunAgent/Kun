@@ -85,10 +85,10 @@ describe('background queued message delivery', () => {
     noteWorkVisibleFeedback('thread-b', 'work-turn', 'text', true)
     noteWorkTurnCompleted('thread-a', 'work-turn')
     noteWorkVisibleFeedback('thread-a', 'work-turn', 'text', true)
-    await vi.waitFor(() => expect(track).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => expect(track).toHaveBeenCalledTimes(4))
     expect(sendUserMessage).toHaveBeenCalledWith('thread-a', 'Private prompt', expect.objectContaining({ clientRequestId: submission.clientRequestId }))
     expect(h.get().activeThreadId).toBe('thread-b')
-    expect(track.mock.calls.map(([event]) => (event as { name: string }).name)).toEqual(['work_task_submitted', 'work_feedback_presented', 'result_presented'])
+    expect(track.mock.calls.map(([event]) => (event as { name: string }).name)).toEqual(['work_task_submitted', 'work_submission_finished', 'work_feedback_presented', 'result_presented'])
     expect(JSON.stringify(track.mock.calls)).not.toContain('Private prompt')
   })
 

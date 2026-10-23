@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setProductCapture } from './client'
 import {
   beginWorkSubmission, bindWorkAnalyticsTurn, captureWorkDocumentAction, captureWorkResultAction,
-  clearWorkAnalytics, noteWorkTurnCompleted, noteWorkVisibleFeedback, observeWorkSubmission, saveWorkDocumentExplicitly
+  clearWorkAnalytics, noteWorkSubmissionOutcome, noteWorkTurnCompleted, noteWorkVisibleFeedback, observeWorkSubmission, saveWorkDocumentExplicitly
 } from './work'
 
 const EPOCH = '0a937dda-cee5-462d-9fca-5abc6f514efd'
@@ -47,7 +47,7 @@ describe('Work explicit task and consent attribution', () => {
     await observeWorkSubmission(beginWorkSubmission(), async () => undefined)
     await expect(observeWorkSubmission(beginWorkSubmission(), async () => { throw new Error('private prompt path') })).rejects.toThrow('private prompt path')
     await vi.waitFor(() => expect(events().filter(event => event.name === 'work_submission_finished')).toHaveLength(2))
-    expect(events().filter(event => event.name === 'work_submission_finished').map(event => event.properties.requestOutcome)).toEqual(['failed', 'unknown'])
+    expect(events().filter(event => event.name === 'work_submission_finished').map(event => event.properties.requestOutcome).sort()).toEqual(['failed', 'unknown'])
     expect(JSON.stringify(events())).not.toContain('private prompt path')
   })
 
@@ -112,5 +112,34 @@ describe('Work explicit task and consent attribution', () => {
     expect(beginWorkSubmission()).toBeUndefined()
     captureWorkDocumentAction('export')()
     expect(track).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('Work admission receipts', () => {
+  it('does not turn an unknown receipt into failure when the legacy send returns false', async () => {
+    const submission = beginWorkSubmission()!
+    await observeWorkSubmission(submission, async () => {
+      noteWorkSubmissionOutcome(submission.clientRequestId, 'unknown')
+      return 'failed'
+    })
+    await drain()
+    expect(events().filter(event => event.name === 'work_submission_finished').map(event => event.properties.requestOutcome)).toEqual(['unknown'])
+    noteWorkSubmissionOutcome(submission.clientRequestId, 'accepted')
+    noteWorkSubmissionOutcome(submission.clientRequestId, 'accepted')
+    noteWorkSubmissionOutcome(submission.clientRequestId, 'failed')
+    await vi.waitFor(() => expect(events().filter(event => event.name === 'work_submission_finished')).toHaveLength(2))
+    expect(events().filter(event => event.name === 'work_submission_finished').map(event => event.properties.requestOutcome)).toEqual(['unknown', 'accepted'])
+  })
+
+  it('keeps confirmed admission accepted if later UI work fails, and fences receipts after account changes', async () => {
+    const submission = beginWorkSubmission()!
+    noteWorkSubmissionOutcome(submission.clientRequestId, 'accepted')
+    submission.finish('failed')
+    await drain()
+    expect(events()[1].properties.requestOutcome).toBe('accepted')
+    setProductCapture(false)
+    noteWorkSubmissionOutcome(submission.clientRequestId, 'unknown')
+    expect(events()).toHaveLength(2)
   })
 })

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import type { KunAccountState } from '@shared/kun-account'
 import { useChatStore } from '../store/chat-store'
 import { subscribeRoomEvents } from '../components/rooms/room-event-listeners'
 import { clearAnalyticsPresentation, noteAnalyticsRoomMessage, noteAnalyticsTurn } from './presentation'
@@ -13,11 +14,41 @@ export function useProductAnalyticsLifecycle() {
         workEntered = true; trackProduct({ name: 'work_entered', properties: { mode: 'work' } })
       }
     }
-    const refresh = () => { void window.kunGui?.productAnalytics?.getState().then(s => {
-      if (live) { setProductCapture(s.enabled, s.epoch); clearAnalyticsPresentation(); clearWorkAnalytics(); lastSession = 0; workEntered = false; lastInteraction = 0 }
-    }).catch(() => {}) }
+    const account = window.kunGui?.kunAccount
+    let refreshVersion = 0
+    let actor: string | null | undefined
+    let applied: { enabled: boolean; epoch?: string } | undefined
+    const reset = () => {
+      clearAnalyticsPresentation(); clearWorkAnalytics()
+      lastSession = 0; workEntered = false; lastInteraction = 0
+    }
+    const refresh = () => {
+      const version = ++refreshVersion
+      void window.kunGui?.productAnalytics?.getState().then(async s => {
+        if (!live || version !== refreshVersion) return
+        // An opted-out installation must not initialize account/network work.
+        if (s.enabled && actor === undefined && account?.getState) {
+          const state = await account.getState()
+          if (!live || version !== refreshVersion) return
+          actor = state.user?.id ?? null
+        }
+        if (applied?.enabled === s.enabled && applied.epoch === s.epoch) return
+        reset(); setProductCapture(s.enabled, s.epoch)
+        applied = { enabled: s.enabled, epoch: s.epoch }
+      }).catch(() => {})
+    }
+    const accountChanged = (state: KunAccountState) => {
+      const nextActor = state.user?.id ?? null
+      if (actor !== nextActor) {
+        // Fence immediately on an actual identity transition. Token/profile
+        // refreshes for the same actor keep in-flight Work attribution intact.
+        actor = nextActor; applied = undefined
+        setProductCapture(false); reset()
+      }
+      refresh()
+    }
+    const stopAccount = account?.onState?.(accountChanged)
     refresh()
-    const stopAccount = window.kunGui?.kunAccount?.onState?.(() => { setProductCapture(false); clearAnalyticsPresentation(); clearWorkAnalytics(); refresh() })
     const stopTurns = useChatStore.subscribe((state, previous) => {
       if (state.route !== previous.route) workEntered = false
       if (state.route === 'write' && state.route !== previous.route && Date.now() - lastInteraction < 5_000) enterWork()

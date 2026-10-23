@@ -1,5 +1,5 @@
 import type { AgentProvider } from '../agent/types'
-import { bindWorkAnalyticsTurn } from '../product-analytics/work'
+import { bindWorkAnalyticsTurn, noteWorkSubmissionOutcome } from '../product-analytics/work'
 import { confirmQueueAdmission } from './queue-admission-recovery'
 import { queueAdmissionPending } from './queue-admission-fence'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -228,6 +228,7 @@ export async function drainBackgroundQueuedMessage(
           claw: Boolean(channel)
         }), enqueueIfBusy: true }
       ) })
+      noteWorkSubmissionOutcome(clientRequestId, 'accepted')
       bindWorkAnalyticsTurn(clientRequestId, threadId, accepted.turnId)
       if (accepted.retired) {
         saveQueuedMessagesForThread(threadId, queuedMessagesForThread(threadId).filter((row) => row.id !== submission.id))
@@ -284,6 +285,7 @@ export async function drainBackgroundQueuedMessage(
         }
         return { status: 'busy' }
       }
+      noteWorkSubmissionOutcome(clientRequestId, turnAdmissionOutcomeMayBeUnknown(error) ? 'unknown' : 'failed')
       if (turnAdmissionOutcomeMayBeUnknown(error) && scheduleRetry(input, next)) {
         return { status: 'none' }
       }
