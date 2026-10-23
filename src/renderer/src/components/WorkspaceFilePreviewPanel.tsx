@@ -63,6 +63,10 @@ import {
   type PreviewStatusItem
 } from './WorkspaceFilePreviewStatusBar'
 import type { ImageDimensions, ImageViewerZoom } from './WorkspaceImageViewer'
+import {
+  buildFilePreviewHostTabs,
+  filePreviewHostTabsSignature
+} from './workspace-file-preview-host-tabs'
 
 const CODE_ROW_HEIGHT = 22
 
@@ -94,7 +98,8 @@ export function WorkspaceFilePreviewPanel({
   onTogglePinnedTarget,
   onCloseOtherTargets,
   onTogglePreserveAcrossThreads,
-  onClose
+  onClose,
+  hostTabs
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const [markdownRendered, setMarkdownRendered] = useState(true)
@@ -403,6 +408,30 @@ export function WorkspaceFilePreviewPanel({
     onCloseTarget(item)
   }
 
+  const hostTabsModel = hostTabs ? buildFilePreviewHostTabs({
+    targets: visibleTargets,
+    activeKey: activeTargetKey,
+    dirtyKeys: dirtyTargetKeys,
+    activeDirty: textDirty,
+    pinnedKeys: pinnedTargetKeySet,
+    workspaceRoot
+  }) : null
+  const hostTabsSignature = hostTabsModel ? filePreviewHostTabsSignature(hostTabsModel) : ''
+  const hostTabsModelRef = useRef(hostTabsModel)
+  hostTabsModelRef.current = hostTabsModel
+  if (hostTabs) {
+    hostTabs.actionsRef.current = {
+      select: (item) => onSelectTarget?.(item),
+      requestClose: requestCloseTarget,
+      ...(tabActionsEnabled ? { openMenu: openTabMenu } : {}),
+      openInEditor: openTargetInEditor
+    }
+  }
+  useEffect(() => {
+    if (hostTabs) hostTabs.publish(hostTabsModelRef.current)
+  }, [hostTabs, hostTabsSignature])
+  useEffect(() => () => hostTabs?.publish(null), [hostTabs])
+
   const renderedMode = (label: string, rendered: boolean, setRendered: (value: boolean) => void, disabled: boolean): PreviewViewMode => ({
     renderedLabel: label, rendered, disabled, onShowRendered: () => setRendered(true), onShowSource: () => setRendered(false)
   })
@@ -483,6 +512,7 @@ export function WorkspaceFilePreviewPanel({
       >
         <WorkspaceFilePreviewChrome
           t={t}
+          hostTabs={Boolean(hostTabs)}
           tabsScrollRef={tabsScrollRef}
           handleTabWheel={handleTabWheel}
           visibleTargets={visibleTargets}

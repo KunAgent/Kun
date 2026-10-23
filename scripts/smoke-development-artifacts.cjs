@@ -25,7 +25,7 @@ const { checkDocScrolling, checkSheetScrolling, checkSlideRailScrolling } = requ
 const { checkArtifactChatTurn } = require('./smoke-artifacts-chat-checks.cjs')
 const { startArtifactChatModel } = require('./smoke-artifacts-chat-model.cjs')
 
-const DECK_TITLES = Array.from({ length: 9 }, (_, index) => `Roadmap slide ${index + 1}`)
+const DECK_TITLES = Array.from({ length: 16 }, (_, index) => `Roadmap slide ${index + 1}`)
 
 const diagnostics = {}
 const PNG_1PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='

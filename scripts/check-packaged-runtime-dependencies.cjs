@@ -23,7 +23,7 @@ const KNOWN_DYNAMIC_RUNTIME_SPECIFIERS = [
 const RENDERER_BUNDLED_ONLY_PACKAGES = [
   '@univerjs/presets',
   '@univerjs/preset-sheets-core',
-  'pptx-preview',
+  '@extend-ai/react-pptx',
   'docx-preview',
   '@tanstack/react-virtual'
 ]
