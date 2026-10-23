@@ -20,6 +20,7 @@
   "canvasViewControls": "보기 컨트롤",
   "canvasZoomMenu": "확대/축소 및 보기 옵션",
   "canvasMinimapToggle": "미니맵",
+  "canvasFlowsToggle": "프로토타입 흐름",
   "canvasCodeEmpty": "화면이나 레이어를 선택하면 코드를 볼 수 있습니다.",
   "canvasCodeLayerData": "레이어 데이터(JSON)",
   "canvasCodeCopy": "복사",

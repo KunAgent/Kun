@@ -20,6 +20,7 @@
   "canvasViewControls": "ตัวควบคุมมุมมอง",
   "canvasZoomMenu": "ตัวเลือกการซูมและมุมมอง",
   "canvasMinimapToggle": "แผนที่ย่อ",
+  "canvasFlowsToggle": "เส้นโฟลว์ต้นแบบ",
   "canvasCodeEmpty": "เลือกหน้าจอหรือเลเยอร์เพื่อดูโค้ด",
   "canvasCodeLayerData": "ข้อมูลเลเยอร์ (JSON)",
   "canvasCodeCopy": "คัดลอก",

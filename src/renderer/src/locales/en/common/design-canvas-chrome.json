@@ -20,6 +20,7 @@
   "canvasViewControls": "View controls",
   "canvasZoomMenu": "Zoom and view options",
   "canvasMinimapToggle": "Minimap",
+  "canvasFlowsToggle": "Prototype flows",
   "canvasCodeEmpty": "Select a screen or layer to view its code.",
   "canvasCodeLayerData": "Layer data (JSON)",
   "canvasCodeCopy": "Copy",

@@ -9,6 +9,7 @@ import {
   PanelBottom,
   Play,
   ScanSearch,
+  Workflow,
   ZoomIn,
   ZoomOut
 } from 'lucide-react'
@@ -69,6 +70,8 @@ function CanvasViewControlsInner({
   const inspectorOpen = useCanvasInspectorStore((s) => s.open)
   const minimapVisible = useCanvasInspectorStore((s) => s.minimapVisible)
   const setMinimapVisible = useCanvasInspectorStore((s) => s.setMinimapVisible)
+  const flowsVisible = useCanvasInspectorStore((s) => s.flowsVisible)
+  const setFlowsVisible = useCanvasInspectorStore((s) => s.setFlowsVisible)
   const [menuOpen, setMenuOpen] = useState(false)
   const compact = useCanvasChromeCompact()
   const closeMenu = useCallback(() => setMenuOpen(false), [])
@@ -175,6 +178,15 @@ function CanvasViewControlsInner({
             label={t('canvasSnap')}
             onSelect={() => useCanvasViewportStore.getState().toggleSnap()}
           />
+          {showPrototypePlay ? (
+            <CanvasChromeMenuItem
+              role="menuitemcheckbox"
+              checked={flowsVisible}
+              icon={<Workflow className="h-3.5 w-3.5" strokeWidth={1.8} />}
+              label={t('canvasFlowsToggle')}
+              onSelect={() => setFlowsVisible(!flowsVisible)}
+            />
+          ) : null}
           {minimapAvailable ? (
             <CanvasChromeMenuItem
               role="menuitemcheckbox"

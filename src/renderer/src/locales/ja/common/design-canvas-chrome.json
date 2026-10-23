@@ -20,6 +20,7 @@
   "canvasViewControls": "表示コントロール",
   "canvasZoomMenu": "ズームと表示オプション",
   "canvasMinimapToggle": "ミニマップ",
+  "canvasFlowsToggle": "プロトタイプの遷移",
   "canvasCodeEmpty": "画面またはレイヤーを選択するとコードを表示します。",
   "canvasCodeLayerData": "レイヤーデータ（JSON）",
   "canvasCodeCopy": "コピー",
