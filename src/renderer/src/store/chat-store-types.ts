@@ -516,8 +516,13 @@ export type ChatState = {
   reindexThreadKnowledgeBase: (threadId: string, knowledgeBaseId: string) => Promise<boolean>
   setThreadSearch: (query: string) => void
   setShowArchivedThreads: (show: boolean) => void
-  /** Clears a non-empty conversation so New task can show its blank page before the thread exists. */
-  leaveThreadForNewTask: () => boolean
+  /**
+   * Clears a non-empty conversation so New task can show its blank page before
+   * the thread exists. A project row's New session passes its `workspaceRoot`:
+   * when that differs from the project in view, the blank page switches to it
+   * renderer-locally. Returns true when the selection was cleared.
+   */
+  leaveThreadForNewTask: (options?: { workspaceRoot?: string }) => boolean
   createThread: (options?: {
     workspaceRoot?: string
     forceNew?: boolean
