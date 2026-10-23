@@ -1,6 +1,9 @@
 {
   "subagentsPanel": {
     "configModel": "configure model",
+    "tab": { "run": "This chat", "roles": "Roles" },
+    "mode": { "library": "Pick from roles", "libraryDesc": "Use the configured roles and models below", "adhoc": "Define on the fly", "adhocDesc": "The main agent writes a one-off role per task" },
+    "runEmpty": "No subagents have run in this chat yet. Pick which roles the main agent may delegate to under Roles.",
     "delegatable": "Delegatable · usable in chat",
     "system": "System · internal",
     "global": "Global · shared",

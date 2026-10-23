@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
 import type { KunSubagentProfileV1, ModelReasoningEffort } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { AgentKun } from './AgentKun'
@@ -14,10 +14,8 @@ export function SubagentPanelHeader({
 }): ReactElement {
   const { t } = useTranslation('common')
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-ds-border px-4 py-3.5">
-      <Bot className="h-[17px] w-[17px] text-accent" strokeWidth={2} />
-      <b className="text-[14px] font-semibold text-ds-ink">{t('subagents', 'Subagents')}</b>
-      <span className="text-[11px] text-ds-faint">· {t('subagentsPanel.configModel', 'configure model')}</span>
+    <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3.5">
+      <b className="text-[15px] font-semibold text-ds-ink">{t('subagents', 'Subagents')}</b>
       <button data-settings-action="ghost" data-settings-size="icon"
         type="button"
         onClick={onCollapse}

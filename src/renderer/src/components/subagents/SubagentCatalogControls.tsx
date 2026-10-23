@@ -328,18 +328,18 @@ export function ExtensionAgentsControl({
   const toggleTarget = !enabled
 
   return (
-    <section className="mb-3 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5 shadow-sm shadow-black/5">
+    <section className="mb-3 rounded-[11px] border border-ds-border bg-ds-card px-3 py-2">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-ds-ink">
+          <div className="text-[12.5px] font-semibold text-ds-ink">
             {t('subagentsPanel.extensionAgents.title', 'Extension agents')}
           </div>
-          <div className="mt-0.5 text-[10.5px] text-ds-muted">
+          <div className="mt-0.5 text-[11px] text-ds-muted">
             {t('subagentsPanel.extensionAgents.description', 'Work and Design specialists · {{count}}', { count })}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className={`text-[10.5px] font-semibold ${status !== 'disabled' ? 'text-accent' : 'text-ds-faint'}`}>
+          <span className={`text-[11px] font-semibold ${status !== 'disabled' ? 'text-accent' : 'text-ds-muted'}`}>
             {statusLabel}
           </span>
           <button
@@ -360,14 +360,14 @@ export function ExtensionAgentsControl({
           </button>
         </div>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-3 border-t border-ds-border-muted pt-2">
-        <span className="text-[10px] text-ds-faint">
+      <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-ds-border-muted pt-1.5">
+        <span className="text-[10.5px] text-ds-muted">
           {t('subagentsPanel.extensionAgents.baseAlwaysAvailable', 'Base agents are always available')}
         </span>
         <button data-settings-action="secondary" data-settings-size="compact"
           type="button"
           onClick={() => onToggle(toggleTarget)}
-          className="shrink-0 rounded-md px-1.5 py-1 text-[10px] font-semibold text-accent transition hover:bg-accent-soft"
+          className="shrink-0 rounded-md px-1.5 py-1 text-[10.5px] font-semibold text-accent transition hover:bg-accent-soft"
         >
           <span>{enabled
             ? t('subagentsPanel.extensionAgents.keepBaseOnly', 'Keep base agents only')
