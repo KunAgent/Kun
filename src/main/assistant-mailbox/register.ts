@@ -97,6 +97,10 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return service.promptFor(ids(enrollmentId)[0], locale === 'en' ? 'en' : 'zh')
   })
+  ipcMain.handle(channels.updatePrompt, (event, id: unknown, locale: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.updatePrompt(ids(id)[0], locale === 'en' ? 'en' : 'zh')
+  })
   ipcMain.handle(channels.revoke, (event, id: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     if (typeof id !== 'string') throw new Error('INVALID_REQUEST')

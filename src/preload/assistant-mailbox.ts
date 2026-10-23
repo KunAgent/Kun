@@ -8,6 +8,7 @@ import {
 export const assistantMailboxApi: AssistantMailboxApi = {
   status: () => ipcRenderer.invoke(channels.status),
   refresh: () => ipcRenderer.invoke(channels.refresh),
+  updatePrompt: (id, locale) => ipcRenderer.invoke(channels.updatePrompt, id, locale),
   createEnrollment: (request) => ipcRenderer.invoke(channels.enroll, request),
   approve: (enrollmentId, requestId, verificationCode) => ipcRenderer.invoke(channels.approve, enrollmentId, requestId, verificationCode),
   reject: (enrollmentId, requestId) => ipcRenderer.invoke(channels.reject, enrollmentId, requestId),

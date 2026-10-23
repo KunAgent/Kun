@@ -110,5 +110,11 @@
   "assistantWaitPolling": "Ожидание · проверка каждые 5 секунд",
   "assistantApproveInfo": "После разрешения Kun и {{product}} независимо получат один и тот же ключ почтового ящика. Ключ не проходит через сервер и не попадает ни в одну переписку.",
   "assistantPromptToEnglish": "Показать на английском",
-  "assistantPromptToChinese": "Показать на китайском"
+  "assistantPromptToChinese": "Показать на китайском",
+  "assistantCopyUpdate": "Copy update instructions",
+  "assistantProgramVersion": "Program {{version}}",
+  "assistantProgramLegacy": "Legacy {{version}} · migration needed",
+  "assistantProgramUpdateAvailable": "Update available",
+  "assistantProgramUpdateFailed": "Last update failed",
+  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet."
 }

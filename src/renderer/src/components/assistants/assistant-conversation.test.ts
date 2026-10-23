@@ -183,3 +183,12 @@ describe('assistant conversation', () => {
     expect(['sent', 'blocked', 'done', 'cancelled'].map((value) => isOpenAssistantTask(value as AssistantTaskView['status']))).toEqual([true, true, false, false])
   })
 })
+
+describe('assistant program version', () => {
+  it('shows an actual runtime report and update failure instead of registration version', async () => {
+    const result = await stage({ kind: 'assistant', id: assistant.id }, status({ assistants: [{ ...assistant, reportedVersion: '0.5.0', reportedAt: '2026-10-24T00:00:00Z', updateError: 'update_check_failed' }] }))
+    expect(result.text).toContain(text('assistantProgramVersion', { version: '0.5.0' }))
+    expect(result.text).toContain(text('assistantProgramUpdateFailed'))
+    expect(result.text).not.toContain(text('assistantProgramLegacy', { version: assistant.agentVersion }))
+  })
+})

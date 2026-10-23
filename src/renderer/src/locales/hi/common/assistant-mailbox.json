@@ -110,5 +110,11 @@
   "assistantWaitPolling": "इंतज़ार · हर 5 सेकंड में जाँच",
   "assistantApproveInfo": "अनुमति देने पर Kun और {{product}} दोनों अलग-अलग एक ही इनबॉक्स कुंजी बनाते हैं। कुंजी सर्वर से नहीं गुज़रती और किसी चैट में नहीं दिखती।",
   "assistantPromptToEnglish": "अंग्रेज़ी में बदलें",
-  "assistantPromptToChinese": "चीनी में बदलें"
+  "assistantPromptToChinese": "चीनी में बदलें",
+  "assistantCopyUpdate": "Copy update instructions",
+  "assistantProgramVersion": "Program {{version}}",
+  "assistantProgramLegacy": "Legacy {{version}} · migration needed",
+  "assistantProgramUpdateAvailable": "Update available",
+  "assistantProgramUpdateFailed": "Last update failed",
+  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet."
 }

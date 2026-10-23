@@ -110,5 +110,11 @@
   "assistantWaitPolling": "待機中 · 5 秒ごとに確認",
   "assistantApproveInfo": "許可すると、Kun と {{product}} がそれぞれ同じ受信箱の鍵を導き出します。鍵はサーバーを通らず、どのチャット履歴にも残りません。",
   "assistantPromptToEnglish": "英語に切り替え",
-  "assistantPromptToChinese": "中国語に切り替え"
+  "assistantPromptToChinese": "中国語に切り替え",
+  "assistantCopyUpdate": "Copy update instructions",
+  "assistantProgramVersion": "Program {{version}}",
+  "assistantProgramLegacy": "Legacy {{version}} · migration needed",
+  "assistantProgramUpdateAvailable": "Update available",
+  "assistantProgramUpdateFailed": "Last update failed",
+  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet."
 }

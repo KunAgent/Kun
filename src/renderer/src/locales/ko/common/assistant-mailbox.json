@@ -110,5 +110,11 @@
   "assistantWaitPolling": "기다리는 중 · 5초마다 확인",
   "assistantApproveInfo": "허용하면 Kun과 {{product}}가 각자 같은 받은편지함 키를 만듭니다. 키는 서버를 거치지 않고 어떤 채팅 기록에도 남지 않습니다.",
   "assistantPromptToEnglish": "영어로 바꾸기",
-  "assistantPromptToChinese": "중국어로 바꾸기"
+  "assistantPromptToChinese": "중국어로 바꾸기",
+  "assistantCopyUpdate": "Copy update instructions",
+  "assistantProgramVersion": "Program {{version}}",
+  "assistantProgramLegacy": "Legacy {{version}} · migration needed",
+  "assistantProgramUpdateAvailable": "Update available",
+  "assistantProgramUpdateFailed": "Last update failed",
+  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet."
 }

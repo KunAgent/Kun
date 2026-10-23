@@ -110,5 +110,11 @@
   "assistantWaitPolling": "正在等待 · 每 5 秒检查一次",
   "assistantApproveInfo": "允许后，Kun 和 {{product}} 各自算出同一把信箱密钥，它不会经过服务器，也不会出现在任何聊天记录里。",
   "assistantPromptToEnglish": "换成英文",
-  "assistantPromptToChinese": "换成中文"
+  "assistantPromptToChinese": "换成中文",
+  "assistantCopyUpdate": "复制升级指令",
+  "assistantProgramVersion": "程序 {{version}}",
+  "assistantProgramLegacy": "旧程序 {{version}} · 待迁移",
+  "assistantProgramUpdateAvailable": "有可用更新",
+  "assistantProgramUpdateFailed": "上次更新失败",
+  "assistantUpdatesNotConfigured": "更新发行尚未配置，请先完成签名发行配置。"
 }

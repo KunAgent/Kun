@@ -110,5 +110,11 @@
   "assistantWaitPolling": "กำลังรอ · ตรวจทุก 5 วินาที",
   "assistantApproveInfo": "เมื่ออนุญาต Kun และ {{product}} จะสร้างกุญแจกล่องข้อความเดียวกันแยกกัน กุญแจไม่ผ่านเซิร์ฟเวอร์และไม่ปรากฏในแชตใด",
   "assistantPromptToEnglish": "เปลี่ยนเป็นภาษาอังกฤษ",
-  "assistantPromptToChinese": "เปลี่ยนเป็นภาษาจีน"
+  "assistantPromptToChinese": "เปลี่ยนเป็นภาษาจีน",
+  "assistantCopyUpdate": "Copy update instructions",
+  "assistantProgramVersion": "Program {{version}}",
+  "assistantProgramLegacy": "Legacy {{version}} · migration needed",
+  "assistantProgramUpdateAvailable": "Update available",
+  "assistantProgramUpdateFailed": "Last update failed",
+  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet."
 }

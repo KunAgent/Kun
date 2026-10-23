@@ -2,7 +2,7 @@
 // and collects replies on a timer. It acts as this desktop's remote host device (the same
 // identity the phone link uses) with the signed-in Kun account's access token.
 import { join } from 'node:path'
-import { AssistantHost, MailboxRequestError, type AssistantSummary } from '@kun/assistant-agent'
+import { AssistantHost, BlockedStore, MailboxRequestError, type AssistantSummary } from '@kun/assistant-agent'
 import { RemoteApi } from '@kun/remote-protocol'
 import type { DeviceIdentity } from '@kun/remote-protocol'
 import { hasKunAccountSession, type KunAccountState } from '../../shared/kun-account'
@@ -126,6 +126,8 @@ export class AssistantMailboxService {
       server: this.deps.origin,
       fetch: this.deps.fetch,
       now: this.now,
+      updateCache: join(this.deps.storageDir, 'update-cache'),
+      blocked: new BlockedStore(join(dir, 'blocked')),
       secrets: { get: (id) => secrets.get(id), set: (id, secret) => secrets.set(id, secret, this.now()) },
       credentials: async () => {
         const force = this.forceToken
@@ -288,6 +290,7 @@ export class AssistantMailboxService {
     const assistants: AssistantView[] = await Promise.all(session.assistants.map(async (assistant) => ({
       id: assistant.id, enrollmentId: assistant.enrollmentId, name: assistant.name,
       kind: isAssistantKind(assistant.kind) ? assistant.kind : 'other', ...profile(assistant.enrollmentId),
+      ...(assistant.runtime ? { reportedVersion: assistant.runtime.agentVersion, reportedAt: assistant.runtime.reportedAt, updateError: assistant.runtime.lastError ?? undefined } : {}),
       platform: assistant.platform, agentVersion: assistant.agentVersion, createdAt: assistant.createdAt,
       lastSeenAt: assistant.lastSeenAt, pendingToAssistant: assistant.pendingToAssistant, pendingToHost: assistant.pendingToHost,
       keyAvailable: Boolean(await session.secrets.get(assistant.enrollmentId))
@@ -374,6 +377,13 @@ export class AssistantMailboxService {
   async cancelEnrollment(enrollmentId: string): Promise<AssistantMailboxStatus> {
     await this.serial(() => this.withHost((session) => session.host.cancelEnrollment(enrollmentId)))
     return this.refresh()
+  }
+
+  async updatePrompt(assistantId: string, locale: 'zh' | 'en'): Promise<{ version: string; releaseId: string; prompt: string }> {
+    return this.serial(() => this.withHost(async (session) => {
+      const assistant = await this.findAssistant(session, assistantId)
+      return session.host.updatePrompt({ home: join(this.deps.storageDir, 'update-cache'), kind: assistant.kind, locale })
+    }))
   }
 
   async revoke(assistantId: string): Promise<AssistantMailboxStatus> {

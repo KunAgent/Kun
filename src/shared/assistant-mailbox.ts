@@ -26,6 +26,9 @@ export type AssistantView = {
   icon?: string
   platform: string
   agentVersion: string
+  reportedVersion?: string
+  reportedAt?: string
+  updateError?: string
   createdAt: string
   lastSeenAt: string | null
   pendingToAssistant: number
@@ -111,6 +114,7 @@ export type AssistantAssignRequest = { assistantId: string; title?: string; body
 export type AssistantMailboxApi = {
   status(): Promise<AssistantMailboxStatus>
   refresh(): Promise<AssistantMailboxStatus>
+  updatePrompt(assistantId: string, locale: AssistantPromptLocale): Promise<{ version: string; releaseId: string; prompt: string }>
   createEnrollment(request: AssistantEnrollmentRequest): Promise<AssistantEnrollmentResult>
   approve(enrollmentId: string, requestId: string, verificationCode: string): Promise<AssistantMailboxStatus>
   reject(enrollmentId: string, requestId: string): Promise<AssistantMailboxStatus>
@@ -128,6 +132,7 @@ export type AssistantMailboxApi = {
 export const ASSISTANT_MAILBOX_CHANNELS = {
   status: 'assistant-mailbox:status',
   refresh: 'assistant-mailbox:refresh',
+  updatePrompt: 'assistant-mailbox:update-prompt',
   enroll: 'assistant-mailbox:enroll',
   approve: 'assistant-mailbox:approve',
   reject: 'assistant-mailbox:reject',

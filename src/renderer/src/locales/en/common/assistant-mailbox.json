@@ -110,5 +110,11 @@
   "assistantWaitPolling": "Waiting · checking every 5 seconds",
   "assistantApproveInfo": "Once you allow it, Kun and {{product}} each derive the same mailbox key. The key never passes through the server or appears in any chat.",
   "assistantPromptToEnglish": "Switch to English",
-  "assistantPromptToChinese": "Switch to Chinese"
+  "assistantPromptToChinese": "Switch to Chinese",
+  "assistantCopyUpdate": "Copy update instructions",
+  "assistantProgramVersion": "Program {{version}}",
+  "assistantProgramLegacy": "Legacy {{version}} · migration needed",
+  "assistantProgramUpdateAvailable": "Update available",
+  "assistantProgramUpdateFailed": "Last update failed",
+  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet."
 }

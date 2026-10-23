@@ -85,7 +85,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
   const expired = enrollment ? Date.parse(enrollment.expiresAt) <= Date.now() : false
   const tag = assistant ? t('assistantTag') : enrollment?.requests.length ? t('assistantTagApprove') : t('assistantTagEnrolling')
   const subtitle = assistant
-    ? [product, assistant.lastSeenAt ? t('assistantMailboxLastSeen', { time: relativeTime(assistant.lastSeenAt, language) }) : t('assistantMailboxNeverSeen'), t('assistantE2E')]
+    ? [product, assistant.lastSeenAt ? t('assistantMailboxLastSeen', { time: relativeTime(assistant.lastSeenAt, language) }) : t('assistantMailboxNeverSeen'), t('assistantE2E'), t(assistant.reportedVersion ? 'assistantProgramVersion' : 'assistantProgramLegacy', { version: assistant.reportedVersion ?? assistant.agentVersion }), assistant.updateError ? t(assistant.updateError === 'update_available' ? 'assistantProgramUpdateAvailable' : 'assistantProgramUpdateFailed') : '']
     : enrollment ? [product, expired ? t('assistantCodeExpiredShort') : t('assistantCodeExpires', { time: relativeTime(enrollment.expiresAt, language) })] : []
 
   const remove = (): void => {
@@ -138,6 +138,8 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
           {(close) => <div className="rooms-menu-list conversation-menu">
             <button type="button" onClick={() => { close(); void navigator.clipboard.writeText(wakeMessage({ kind: assistant.kind, locale: language.startsWith('zh') ? 'zh' : 'en' })) }}>
               <BellRing size={15} aria-hidden="true" /><span>{t('assistantCopyWake')}</span></button>
+            <button type="button" disabled={busy} onClick={() => { close(); void assistantMailbox.updatePrompt(assistant.id, language.startsWith('zh') ? 'zh' : 'en').then((result) => { if (result) void navigator.clipboard.writeText(result.prompt) }) }}>
+              <span>{t('assistantCopyUpdate')}</span></button>
             <hr />
             <button type="button" className="is-danger" onClick={() => { close(); remove() }}><Trash2 size={15} aria-hidden="true" /><span>{t('assistantRemove')}</span></button>
           </div>}

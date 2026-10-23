@@ -1,6 +1,7 @@
 // Renderer-wide assistant mailbox state. Main owns the data and pushes a snapshot after every
 // sync; the sidebar and the conversation stage read the same store and share its actions.
 import { create } from 'zustand'
+import i18n from '../../i18n'
 import type {
   AssistantAssignRequest, AssistantEnrollmentRequest, AssistantEnrollmentResult, AssistantMailboxStatus,
   AssistantPromptLocale, AssistantTaskView
@@ -14,6 +15,7 @@ const api = () => (typeof window === 'undefined' ? undefined : window.kunGui?.as
 
 function message(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error)
+  if (text.includes('updates_not_configured')) return i18n.t('assistantUpdatesNotConfigured', { ns: 'common' })
   return text.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 }
 
@@ -62,6 +64,7 @@ const withStatus = (work: () => Promise<AssistantMailboxStatus> | undefined) => 
 export const assistantMailbox = {
   clearError: () => useAssistantMailboxStore.setState({ error: '' }),
   refresh: () => withStatus(() => api()?.refresh()),
+  updatePrompt: (id: string, locale: AssistantPromptLocale) => run(async () => api()!.updatePrompt(id, locale)),
   createEnrollment: (request: AssistantEnrollmentRequest): Promise<AssistantEnrollmentResult | undefined> =>
     run(async () => api()!.createEnrollment(request)),
   promptFor: (enrollmentId: string, locale: AssistantPromptLocale) => run(async () => api()!.promptFor(enrollmentId, locale)),

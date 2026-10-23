@@ -294,3 +294,15 @@ describe('durable task delivery', () => {
     expect((await t.persisted()).pending).toEqual([])
   })
 })
+
+describe('assistant program migration', () => {
+  it('requires a configured release trust root before producing executable update instructions', async () => {
+    const t = await setup()
+    const enrollment = await t.service.createEnrollment({ name: 'Existing', kind: 'cue', locale: 'en' })
+    await t.connect(enrollment.code)
+    const status = await t.service.refresh()
+    expect(status.assistants[0].reportedVersion).toBe('0.5.0')
+    await expect(t.service.updatePrompt(status.assistants[0].id, 'en')).rejects.toThrow('updates_not_configured')
+    expect((await t.service.snapshot()).assistants[0].id).toBe(status.assistants[0].id)
+  })
+})
