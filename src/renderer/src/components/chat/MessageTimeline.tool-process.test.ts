@@ -535,7 +535,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('ds-work-stack')
     expect(html).toContain('What should we eat tonight?')
     expect(html).not.toContain('Noodles')
-    expect(html).toContain('Complete this above the input box')
+    expect(html).toContain('Answer below')
     expect(html).not.toContain('read detail should stay tucked away')
   })
 

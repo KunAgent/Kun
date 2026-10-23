@@ -1,0 +1,27 @@
+{
+  "composerTrayTodo": {
+    "title": "कार्य सूची",
+    "segmentAria": "कार्य सूची: {{step}} · चरण {{current}} / {{total}}",
+    "fromPlan": "स्रोत",
+    "outlineLabel": "योजना की रूपरेखा",
+    "outlineSteps_one": "{{count}} चरण",
+    "outlineSteps_other": "{{count}} चरण",
+    "outlineNote": "Graph ऑर्केस्ट्रेशन चल रहा है — यह योजना की रूपरेखा है, लाइव निष्पादन की प्रगति नहीं।",
+    "inProgress": "चल रहा है",
+    "inProgressFor": "चल रहा है · {{duration}}",
+    "upNext": "अगला",
+    "foldDone_one": "{{count}} पूरा",
+    "foldDone_other": "{{count}} पूरे",
+    "foldEarlier_one": "{{count}} पहले",
+    "foldEarlier_other": "{{count}} पहले",
+    "foldRemaining_one": "{{count}} बाकी",
+    "foldRemaining_other": "{{count}} बाकी",
+    "foldLater_one": "{{count}} और",
+    "foldLater_other": "{{count}} और",
+    "blockedCount_one": "{{count}} अवरुद्ध",
+    "blockedCount_other": "{{count}} अवरुद्ध",
+    "failedCount_one": "{{count}} विफल",
+    "failedCount_other": "{{count}} विफल",
+    "ownerTitle": "ज़िम्मेदार: {{name}}"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "composerTrayGoal": {
+    "label": "目标",
+    "segmentAria": "目标（{{status}}）：{{objective}}",
+    "status": {
+      "active": "进行中",
+      "paused": "已暂停",
+      "blocked": "已阻塞",
+      "usageLimited": "用量受限",
+      "budgetLimited": "预算受限",
+      "complete": "已完成"
+    },
+    "edit": "编辑",
+    "elapsed": "已进行",
+    "tokens": "tokens",
+    "tokensOfBudget": "tokens / 预算",
+    "panelHintEmpty": "在下方输入框写下目标，再点“设为目标”。",
+    "panelHintReplace": "在下方输入框写下新目标，即可替换当前目标。"
+  }
+}

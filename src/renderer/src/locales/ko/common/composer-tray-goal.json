@@ -1,0 +1,20 @@
+{
+  "composerTrayGoal": {
+    "label": "목표",
+    "segmentAria": "목표 ({{status}}): {{objective}}",
+    "status": {
+      "active": "진행 중",
+      "paused": "일시 중지됨",
+      "blocked": "차단됨",
+      "usageLimited": "사용량 제한됨",
+      "budgetLimited": "예산 제한됨",
+      "complete": "완료"
+    },
+    "edit": "편집",
+    "elapsed": "경과 시간",
+    "tokens": "tokens",
+    "tokensOfBudget": "tokens / 예산",
+    "panelHintEmpty": "아래 입력창에 목표를 입력한 다음 '목표로 설정'을 선택하세요.",
+    "panelHintReplace": "아래 입력창에 새 목표를 입력하면 현재 목표를 바꿉니다."
+  }
+}

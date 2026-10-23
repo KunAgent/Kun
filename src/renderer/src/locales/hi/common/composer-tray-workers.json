@@ -1,0 +1,48 @@
+{
+  "composerTrayWorkers": {
+    "title": "सहयोगी",
+    "ariaLabel": "सहयोगी: {{status}}",
+    "ariaLabelUnfinished": "सहयोगी: {{status}}, {{remaining}} अधूरे",
+    "segment": {
+      "waiting_one": "{{count}} सहयोगी को आपकी ज़रूरत है",
+      "waiting_other": "{{count}} सहयोगियों को आपकी ज़रूरत है",
+      "failed_one": "{{count}} विफल",
+      "failed_other": "{{count}} विफल",
+      "review_one": "{{count}} समीक्षा बाकी",
+      "review_other": "{{count}} समीक्षा बाकी",
+      "working_one": "{{count}} सहयोगी काम कर रहा है",
+      "working_other": "{{count}} सहयोगी काम कर रहे हैं",
+      "done": "सहयोग पूरा हुआ",
+      "unknown": "स्थिति की पुष्टि नहीं हुई"
+    },
+    "summary": {
+      "inBackground_one": "{{count}} बैकग्राउंड में",
+      "inBackground_other": "{{count}} बैकग्राउंड में",
+      "done_one": "{{count}} पूरा",
+      "done_other": "{{count}} पूरे",
+      "unconfirmed_one": "{{count}} अपुष्ट",
+      "unconfirmed_other": "{{count}} अपुष्ट"
+    },
+    "openPanel": "पैनल में खोलें",
+    "openWorker": "{{title}} खोलें",
+    "runningFor": "{{duration}} से चल रहा है",
+    "starting": "शुरू हो रहा है…",
+    "reviewPending": "समीक्षा का इंतज़ार",
+    "status": {
+      "waiting": "आपकी ज़रूरत",
+      "failed": "विफल",
+      "review": "समीक्षा बाकी",
+      "done": "पूरा हुआ",
+      "cancelled": "रद्द",
+      "unconfirmed": "अपुष्ट"
+    },
+    "answer": "जवाब दें",
+    "resolve": "हल करें",
+    "stopWorker": "{{title}} रोकें",
+    "dispatchFooter": "इन्हें भी सौंपा जा सकता है: {{names}}",
+    "manageAgents": "Agent प्रबंधित करें",
+    "dispatchable_one": "सौंपने योग्य {{count}} Agent",
+    "dispatchable_other": "सौंपने योग्य {{count}} Agent",
+    "dispatchableAria": "{{label}}: {{names}}"
+  }
+}

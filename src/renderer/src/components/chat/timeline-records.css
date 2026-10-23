@@ -1,0 +1,328 @@
+/*
+ * Timeline records: an ask-user question or an approval that is already
+ * settled (or is being handled by the card in the composer's place) stays in
+ * the transcript as one quiet 13px line. Several answered questions become a
+ * small borderless card with a Q -> A grid. A guided message waiting to join
+ * the running turn fades its bubble and adds a shimmering status line.
+ */
+
+.ds-timeline-record {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ds-timeline-record-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--ds-text-faint);
+}
+
+.ds-timeline-record-icon[data-tone='success'] {
+  color: var(--ds-status-success);
+}
+
+.ds-timeline-record-icon[data-tone='danger'] {
+  color: var(--ds-status-danger);
+}
+
+.ds-timeline-record-icon[data-tone='warning'] {
+  color: var(--ds-status-warning);
+}
+
+.ds-timeline-record-icon[data-tone='accent'] {
+  color: var(--ds-accent);
+}
+
+.ds-timeline-record-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.ds-timeline-record-dash {
+  width: 10px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.ds-timeline-record-label {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.ds-timeline-record[data-tone='danger'] .ds-timeline-record-label {
+  color: var(--ds-status-danger);
+}
+
+/* Free-flowing text (a lone error) wraps, then clamps. */
+.ds-timeline-record-body {
+  flex: 1 1 auto;
+}
+
+/*
+ * Two texts sharing the line (question + answer, error + your answer). Each
+ * has its own budget: free width is split evenly and a part that fits hands
+ * what it does not need to the other, so a long question can no longer push
+ * the answer out of view. The lead stays on one line; the tail wraps, then
+ * clamps at two lines.
+ */
+.ds-timeline-record-pair {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+  column-gap: 8px;
+  align-items: start;
+}
+
+.ds-timeline-record-lead {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-timeline-record-body,
+.ds-timeline-record-tail {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.ds-timeline-record-tail[data-empty='true'] {
+  color: var(--ds-text-faint);
+}
+
+.ds-timeline-record-faint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-timeline-record-faint[data-grow='true'] {
+  flex: 1 1 auto;
+}
+
+/* A trailing hint only takes what is left, so the chip before it is cut last. */
+.ds-timeline-record-faint[data-yield='true'] {
+  flex: 1 1 0;
+}
+
+.ds-timeline-record-muted {
+  color: var(--ds-text-muted);
+}
+
+.ds-timeline-record-ink {
+  color: var(--ds-text);
+  font-weight: 500;
+}
+
+.ds-timeline-record-danger {
+  color: var(--ds-status-danger);
+}
+
+.ds-timeline-record-chip {
+  min-width: 0;
+  max-width: min(100%, 420px);
+  flex: 0 1 auto;
+  overflow: hidden;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--ds-inline-code-bg);
+  color: var(--ds-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A path is cut from the start (its <bdi> keeps it left-to-right). */
+.ds-timeline-record-chip[data-truncate='start'] {
+  direction: rtl;
+  text-align: left;
+}
+
+/* Settled approvals open their evidence (summary, diff, email) on demand. */
+.ds-timeline-record-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ds-timeline-record-toggle {
+  max-width: calc(100% + 12px);
+  margin: -2px -6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.ds-timeline-record-toggle:hover,
+.ds-timeline-record-toggle[aria-expanded='true'] {
+  background: var(--ds-surface-hover);
+}
+
+.ds-timeline-record-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+.ds-timeline-record-chevron {
+  display: inline-flex;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--ds-text-faint);
+  opacity: 0;
+  transition: opacity 120ms ease-out, transform 160ms ease-out;
+}
+
+.ds-timeline-record-toggle:hover .ds-timeline-record-chevron,
+.ds-timeline-record-toggle:focus-visible .ds-timeline-record-chevron,
+.ds-timeline-record-toggle[aria-expanded='true'] .ds-timeline-record-chevron {
+  opacity: 1;
+}
+
+.ds-timeline-record-toggle[aria-expanded='true'] .ds-timeline-record-chevron {
+  transform: rotate(90deg);
+}
+
+.ds-timeline-record-detail {
+  align-self: stretch;
+  margin: 6px 0 2px 22px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ds-composer-tray-bg, var(--ds-surface-subtle));
+  color: var(--ds-text);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* Several answered questions: a small grey card, no border. */
+.ds-timeline-record-card {
+  min-width: 0;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background: var(--ds-composer-tray-bg, var(--ds-surface-subtle));
+}
+
+.ds-timeline-record-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 5px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ds-timeline-record-grid dt {
+  min-width: 80px;
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-timeline-record-grid dd {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ds-text);
+  font-weight: 500;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.ds-timeline-record-grid dd[data-empty='true'] {
+  color: var(--ds-text-faint);
+  font-weight: 400;
+}
+
+@container (max-width: 480px) {
+  .ds-timeline-record-grid dt {
+    min-width: 64px;
+    max-width: 112px;
+  }
+}
+
+/* A guided message waiting to join the running turn. */
+.ds-user-message[data-pending-steer='true'] > .ds-user-message-bubble {
+  opacity: 0.72;
+}
+
+.ds-pending-steer-status {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 0 0;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.ds-pending-steer-status-text {
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    var(--ds-text-faint) 0%,
+    color-mix(in srgb, var(--ds-text-faint) 35%, transparent) 50%,
+    var(--ds-text-faint) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: ds-pending-steer-shimmer 3s linear infinite;
+}
+
+@keyframes ds-pending-steer-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-pending-steer-status-text {
+    background: none;
+    color: var(--ds-text-faint);
+    animation: none;
+  }
+
+  .ds-timeline-record-toggle,
+  .ds-timeline-record-chevron {
+    transition: none;
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "composerTrayWorkers": {
+    "title": "ワーカー",
+    "ariaLabel": "ワーカー：{{status}}",
+    "ariaLabelUnfinished": "ワーカー：{{status}}、未完了 {{remaining}} 件",
+    "segment": {
+      "waiting_one": "{{count}} 件が対応待ち",
+      "waiting_other": "{{count}} 件が対応待ち",
+      "failed_one": "{{count}} 件が失敗",
+      "failed_other": "{{count}} 件が失敗",
+      "review_one": "{{count}} 件が確認待ち",
+      "review_other": "{{count}} 件が確認待ち",
+      "working_one": "{{count}} 件のワーカーが作業中",
+      "working_other": "{{count}} 件のワーカーが作業中",
+      "done": "ワーカーの作業が完了しました",
+      "unknown": "状態は未確認です"
+    },
+    "summary": {
+      "inBackground_one": "バックグラウンドで {{count}} 件",
+      "inBackground_other": "バックグラウンドで {{count}} 件",
+      "done_one": "{{count}} 件完了",
+      "done_other": "{{count}} 件完了",
+      "unconfirmed_one": "{{count}} 件が未確認",
+      "unconfirmed_other": "{{count}} 件が未確認"
+    },
+    "openPanel": "パネルで開く",
+    "openWorker": "{{title}} を開く",
+    "runningFor": "{{duration}} 実行中",
+    "starting": "開始しています…",
+    "reviewPending": "確認待ち",
+    "status": {
+      "waiting": "対応待ち",
+      "failed": "失敗",
+      "review": "確認待ち",
+      "done": "完了",
+      "cancelled": "キャンセル済み",
+      "unconfirmed": "未確認"
+    },
+    "answer": "回答する",
+    "resolve": "対応する",
+    "stopWorker": "{{title}} を停止",
+    "dispatchFooter": "引き継ぎ可能：{{names}}",
+    "manageAgents": "エージェントを管理",
+    "dispatchable_one": "引き継ぎ可能なエージェント {{count}} 件",
+    "dispatchable_other": "引き継ぎ可能なエージェント {{count}} 件",
+    "dispatchableAria": "{{label}}：{{names}}"
+  }
+}

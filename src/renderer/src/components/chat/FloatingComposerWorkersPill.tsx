@@ -55,6 +55,11 @@ function countLabel(
 }
 
 /**
+ * Superseded: the composer now shows background work as the Workers segment
+ * of its activity tray (composer-tray/workers-tray-kind.tsx). This strip is
+ * no longer rendered; it stays only while WorkersPanel.test.ts still covers
+ * it, and the open-panel event above stays the shared entry point.
+ *
  * Composer status strip: the thread's background work stays visible after the
  * turn's reply finishes and its process log collapses.
  *
@@ -123,7 +128,7 @@ export function FloatingComposerWorkersPill({
     <div
       data-background-task-strip={summary.kind}
       data-background-task-unfinished={remaining}
-      className="ds-composer-status-glass pointer-events-auto flex w-full max-w-[46rem] items-center gap-2.5 self-start rounded-xl border border-ds-border-muted/80 py-2 pl-3 pr-2"
+      className="ds-composer-status-glass pointer-events-auto flex w-full max-w-[46rem] items-center gap-2.5 self-start rounded-xl border border-ds-border-muted py-2 pl-3 pr-2"
     >
       <Icon
         className={`h-3.5 w-3.5 shrink-0 ${iconClass} ${spinning ? 'motion-safe:animate-spin motion-reduce:animate-none' : ''}`}
@@ -149,7 +154,7 @@ export function FloatingComposerWorkersPill({
       <button
         type="button"
         onClick={requestOpenWorkersPanel}
-        className="shrink-0 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11.5px] font-medium text-ds-ink transition hover:border-accent/40 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        className="shrink-0 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11.5px] font-medium text-ds-ink transition hover:border-ds-border hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/45"
         aria-label={t('backgroundTaskWorkersLabel', { status: label, remaining })}
       >
         {action}

@@ -1,0 +1,32 @@
+{
+  "composerTrayShells": {
+    "title": "Background commands",
+    "ariaLabel": "Background commands: {{detail}}",
+    "segmentCount_one": "{{count}} background command",
+    "segmentCount_other": "{{count}} background commands",
+    "inBackground_one": "{{count}} in background",
+    "inBackground_other": "{{count}} in background",
+    "failedCount_one": "{{count}} failed",
+    "failedCount_other": "{{count}} failed",
+    "runningFor": "Running for {{duration}}",
+    "exitCode": "Exit code {{code}}",
+    "stopped": "Stopped",
+    "endedBySignal": "Ended by a signal",
+    "failed": "Failed",
+    "copyOutput": "Copy output",
+    "copied": "Copied",
+    "sendToKun": "Send to Kun",
+    "sendToKunTitle": "Attach this output to the message box",
+    "sendCopiedInstead": "Copied instead",
+    "sendUnavailable": "Can't attach",
+    "sendUnavailableTitle": "Couldn't attach this output to the message box",
+    "dismiss": "Dismiss",
+    "showOutput": "Show output of {{command}}",
+    "hideOutput": "Hide output of {{command}}",
+    "outputLabel": "Output of {{command}}",
+    "outputFile": "Full output: {{path}}",
+    "outputTruncated": "preview truncated",
+    "noOutput": "(no output yet)",
+    "empty": "No background commands."
+  }
+}

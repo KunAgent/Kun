@@ -1,0 +1,46 @@
+{
+  "composerApproval": {
+    "header": "승인이 필요합니다",
+    "kind": {
+      "command": "명령 실행",
+      "edit": "파일 편집",
+      "email": "이메일 보내기",
+      "tool": "{{name}} 사용",
+      "toolUnnamed": "도구 사용"
+    },
+    "question": {
+      "edit": "{{file}}을(를) 편집할까요?",
+      "editFiles_one": "이 파일 {{count}}개를 편집할까요?",
+      "editFiles_other": "이 파일 {{count}}개를 편집할까요?"
+    },
+    "preview": {
+      "terminal": "터미널",
+      "email": "이메일",
+      "awaiting": "승인 대기 중",
+      "files_one": "파일 {{count}}개",
+      "files_other": "파일 {{count}}개",
+      "diffStats": "{{added}}줄 추가, {{removed}}줄 삭제",
+      "clipped": "변경 내용이 길어 나머지는 표시되지 않습니다",
+      "truncated": "인자가 길어 이 미리보기에는 일부만 표시됩니다",
+      "moreInput_one": "인자 {{count}}개 더",
+      "moreInput_other": "인자 {{count}}개 더"
+    },
+    "option": {
+      "allow": "허용",
+      "allowAlways": "항상 허용",
+      "deny": "거부",
+      "denyAlways": "항상 거부",
+      "once": "이번만 허용",
+      "denyOnce": "이번만 거부",
+      "alwaysSession": "이번 세션에서 다시 묻지 않음",
+      "alwaysScoped": "이번 세션 동안 {{scope}}에 대해 다시 묻지 않음",
+      "alwaysScopedEdit": "이번 세션 동안 {{scope}}의 편집에 대해 다시 묻지 않음",
+      "denyAlwaysSession": "이번 세션이 끝날 때까지 이런 종류의 작업을 거부"
+    },
+    "feedbackPlaceholder": "Kun에게 대신 할 일을 알려 주세요 — 거부와 함께 전송됩니다…",
+    "feedbackEmailPlaceholder": "Kun에게 바꿀 내용을 알려 주세요 — 거부와 함께 전송됩니다…",
+    "feedbackLabel": "거부와 함께 보낼 메모",
+    "hint": "1–{{last}} 키로 선택하거나, ↑↓로 이동한 뒤 Enter를 누르세요",
+    "confirm": "확인"
+  }
+}
