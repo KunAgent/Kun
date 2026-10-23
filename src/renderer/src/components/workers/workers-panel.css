@@ -42,6 +42,19 @@
 .ds-worker-avatar[data-ring='warning']::before { border-color: var(--ds-status-warning); }
 .ds-worker-avatar[data-status='released'],
 .ds-worker-avatar[data-status='idle'] { opacity: 0.55; }
+.ds-worker-avatar-harness {
+  position: absolute;
+  left: -4px;
+  bottom: -4px;
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 2px solid var(--ds-surface-card);
+  border-radius: 999px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
+}
 .ds-worker-avatar-badge {
   position: absolute;
   right: -3px;
