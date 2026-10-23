@@ -1,0 +1,21 @@
+{
+  "composerQueue": {
+    "caption_one": "{{count}}개 대기 중 · 이번 턴이 끝난 뒤 전송됩니다",
+    "caption_other": "{{count}}개 대기 중 · 이번 턴이 끝난 뒤 순서대로 전송됩니다",
+    "dragHint": "끌어서 순서 변경",
+    "showMore_one": "{{count}}개 더 보기",
+    "showMore_other": "{{count}}개 더 보기",
+    "showLess": "접기",
+    "now": "지금",
+    "nowLabel": "지금 삽입",
+    "pausedTitle": "답변을 중지해 대기열이 일시 중지되었습니다",
+    "pausedCount_one": "메시지 {{count}}개",
+    "pausedCount_other": "메시지 {{count}}개",
+    "resume": "계속",
+    "resumeHint": "대기 중인 메시지를 순서대로 보냅니다",
+    "images_one": "이미지 {{count}}개",
+    "images_other": "이미지 {{count}}개",
+    "files_one": "파일 {{count}}개",
+    "files_other": "파일 {{count}}개"
+  }
+}

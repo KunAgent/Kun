@@ -1,0 +1,21 @@
+{
+  "composerQueue": {
+    "caption_one": "{{count}} queued · sent after this turn",
+    "caption_other": "{{count}} queued · sent in order after this turn",
+    "dragHint": "Drag to reorder",
+    "showMore_one": "{{count}} more",
+    "showMore_other": "{{count}} more",
+    "showLess": "Show less",
+    "now": "Now",
+    "nowLabel": "Insert now",
+    "pausedTitle": "Queue paused because you stopped the reply",
+    "pausedCount_one": "{{count}} message",
+    "pausedCount_other": "{{count}} messages",
+    "resume": "Continue",
+    "resumeHint": "Send the queued messages in order",
+    "images_one": "{{count}} image",
+    "images_other": "{{count}} images",
+    "files_one": "{{count}} file",
+    "files_other": "{{count}} files"
+  }
+}

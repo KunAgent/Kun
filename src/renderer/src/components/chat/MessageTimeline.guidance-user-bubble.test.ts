@@ -1,12 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { createElement } from 'react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { act, createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { create, type ReactTestRenderer } from 'react-test-renderer'
 import type { ChatBlock, NormalizedThread, ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { ConversationTurn, MessageTimeline } from './MessageTimeline'
 import { deriveTurnSections } from './derive-turn-sections'
 import { OrderedTurnTimeline } from './message-timeline-ordered-timeline'
 import type { Turn } from './message-timeline-turns'
+import { UserMessageBubble } from './message-timeline-user-bubbles'
+import { isPendingSteerUserBlock, PendingSteerStatus } from './timeline-pending-steer-record'
 
 const activeThread: NormalizedThread = {
   id: 'thr_1',
@@ -238,5 +241,58 @@ describe('guided user bubble inside a running turn', () => {
     expect(html.indexOf('GUIDANCETOKEN')).toBeLessThan(html.indexOf('RUNTIMEERRORTOKEN'))
     expect(html.indexOf('RUNTIMEERRORTOKEN')).toBeLessThan(html.indexOf('FINALANSWERTOKEN'))
     expect(html).not.toContain('PREFACETOKEN')
+  })
+})
+
+describe('guided message waiting to join the running turn', () => {
+  const guided = { kind: 'user' as const, id: 'q-guide-1', turnId: 'turn_1', text: 'GUIDANCETOKEN' }
+  let renderer: ReactTestRenderer | null = null
+
+  beforeEach(() => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+    useChatStore.setState({
+      route: 'chat',
+      activeThreadId: 'thr_1',
+      threads: [activeThread],
+      busy: true,
+      currentTurnId: 'turn_1',
+      currentTurnUserId: 'user_1'
+    })
+  })
+
+  afterEach(async () => {
+    if (renderer) await act(async () => renderer!.unmount())
+    renderer = null
+  })
+
+  it('only marks a guidance placeholder inside the turn that is running now', () => {
+    const running = { busy: true, currentTurnId: 'turn_1', currentTurnUserId: 'user_1' }
+    expect(isPendingSteerUserBlock(guided, running)).toBe(true)
+    expect(isPendingSteerUserBlock({ ...guided, id: 'graph-steering-1783728000000' }, running)).toBe(true)
+    expect(isPendingSteerUserBlock({ ...guided, turnId: undefined, meta: { turnId: 'turn_1' } }, running)).toBe(true)
+    // The runtime's own user item replaced the placeholder: it has joined.
+    expect(isPendingSteerUserBlock({ ...guided, id: 'item_steered' }, running)).toBe(false)
+    // A queued message that opened its own turn is that turn's prompt, not guidance.
+    expect(isPendingSteerUserBlock(guided, { ...running, currentTurnUserId: 'q-guide-1' })).toBe(false)
+    expect(isPendingSteerUserBlock(guided, { ...running, currentTurnId: 'turn_2' })).toBe(false)
+    expect(isPendingSteerUserBlock(guided, { ...running, busy: false })).toBe(false)
+  })
+
+  it('renders the waiting status as a polite live region', () => {
+    const html = renderToStaticMarkup(createElement(PendingSteerStatus))
+    expect(html).toContain('role="status"')
+    expect(html).toContain('data-pending-steer-status')
+    expect(html).toMatch(/Waiting to join the current turn…|等待插入当前回合…/)
+  })
+
+  it('fades the pending guided bubble and drops the status once the turn settles', async () => {
+    await act(async () => { renderer = create(createElement(UserMessageBubble, { block: guided })) })
+    const root = renderer!.root
+    expect(root.findAll((node) => node.props['data-pending-steer'] === 'true')).toHaveLength(1)
+    expect(root.findAllByType(PendingSteerStatus)).toHaveLength(1)
+
+    await act(async () => { useChatStore.setState({ busy: false, currentTurnId: null, currentTurnUserId: null }) })
+    expect(root.findAll((node) => node.props['data-pending-steer'] === 'true')).toHaveLength(0)
+    expect(root.findAllByType(PendingSteerStatus)).toHaveLength(0)
   })
 })

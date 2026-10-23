@@ -1,0 +1,29 @@
+{
+  "composerTrayGraph": {
+    "segmentLabel": "Graph · {{titles}}",
+    "segmentLabelStatus": "Graph · {{status}}",
+    "titleSeparator": ", ",
+    "segmentAria": "Запуск Graph. Узлов принято: {{accepted}} из {{total}}, выполняется: {{running}}",
+    "segmentAriaQuiet": "Запуск Graph. Узлов принято: {{accepted}} из {{total}}. Выполняющийся узел давно молчит",
+    "segmentAriaAsking": "Запуск Graph. Узлов принято: {{accepted}} из {{total}}. Узел ждёт вашего ответа",
+    "segmentAriaAwaiting": "Запуск Graph. Узлов принято: {{accepted}} из {{total}}. Запуск ждёт вас",
+    "segmentAriaFlagged": "Запуск Graph. Узлов принято: {{accepted}} из {{total}}. Узлу нужно внимание",
+    "sheetTitle": "Запуск Graph",
+    "acceptedSummary": "Узлов принято: {{accepted}} из {{total}}",
+    "runningSummary_one": "{{count}} узел выполняется",
+    "runningSummary_few": "{{count}} узла выполняются",
+    "runningSummary_many": "{{count}} узлов выполняются",
+    "runningSummary_other": "{{count}} узла выполняются",
+    "nodeRetry": "Повтор {{number}}",
+    "lastActivitySeconds": "Последняя активность: {{seconds}} с назад",
+    "lastActivityAgo": "Последняя активность: {{ago}}",
+    "stillWaiting": "Всё ещё ждём ответа от модели или инструмента",
+    "elapsedTitle": "Работает {{duration}}",
+    "correctionAria": "Планирование Graph приостановлено: плану нужны ваши уточнения",
+    "correctionNote": "Черновик сохранён. Добавьте указания в беседе и продолжите планирование.",
+    "correctionMore_one": "Ещё {{count}} проблема",
+    "correctionMore_few": "Ещё {{count}} проблемы",
+    "correctionMore_many": "Ещё {{count}} проблем",
+    "correctionMore_other": "Ещё {{count}} проблемы"
+  }
+}

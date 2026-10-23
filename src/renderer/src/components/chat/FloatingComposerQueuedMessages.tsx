@@ -1,37 +1,22 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type DragEvent as ReactDragEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type ReactElement
-} from 'react'
-import {
-  ChevronDown,
-  ChevronUp,
-  CircleAlert,
-  CornerDownRight,
-  GripVertical,
-  ImageIcon,
-  ListEnd,
-  Loader2,
-  RotateCw,
-  Trash2
-} from 'lucide-react'
+import { useEffect, useId, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
-import { queuedMessageGuidancePayload } from '../../store/queued-message-guidance'
-import { QueuedMessageSnapshotBadges } from './FloatingComposerQueuedMessageBadges'
-import { QueuePausedBanner, QueueRowMoreMenu, type QueueRowMenuItem } from './FloatingComposerQueueParts'
-import { parseWritePromptForDisplay } from '../../write/quoted-selection'
+import { QueueCaption, QueueExpander, QueuePausedCaption } from './FloatingComposerQueueParts'
+import { QueuedMessageRow, type QueueRowActionKind } from './composer-queue-row'
+import {
+  queuedMessageRowState,
+  visibleQueuedMessages,
+  type QueueGuidanceTarget
+} from './composer-queue-row-state'
+import { useQueuedMessageReorder, type QueueDropPosition } from './composer-queue-reorder'
 import {
   calculateComposerPopoverPlacement,
   type ComposerPopoverAnchorRect,
   type ComposerPopoverPlacement
 } from './floating-composer-popover-placement'
 import css from './FloatingComposerQueuedMessages.module.css'
+
+export { canGuideQueuedComposerMessage } from './composer-queue-row-state'
 
 const LEGACY_MENU_WIDTH = 176
 const LEGACY_MENU_HEIGHT = 48
@@ -41,6 +26,9 @@ const LEGACY_POPOVER_WIDTH = 640
 const LEGACY_POPOVER_MAX_HEIGHT = 360
 const LEGACY_POPOVER_MARGIN = 12
 const LEGACY_POPOVER_GAP = 8
+
+/** Rows shown before the "n more" disclosure folds the rest away. */
+export const QUEUE_COLLAPSED_ROW_LIMIT = 3
 
 export type QueuedComposerMessage = {
   id: string
@@ -80,68 +68,24 @@ export type QueuedComposerMessage = {
   composerRestoreEligible?: boolean
 }
 
-type QueueActionKind = 'edit' | 'remove' | 'guide'
-type QueueDropPosition = 'before' | 'after'
-
-type QueueDragState = {
-  sourceId: string
-  targetId?: string
-  position?: QueueDropPosition
-}
-
 type Props = {
   messages: QueuedComposerMessage[]
   running?: boolean
   /** turn/graph: guidance joins the run; deferred: after its current step; unsupported: next turn only. */
-  guidanceTarget?: 'turn' | 'graph' | 'deferred' | 'unsupported'
+  guidanceTarget?: QueueGuidanceTarget
   onRemove: (id: string) => void
   onGuide?: (id: string) => void | Promise<unknown>
   onRestoreToComposer?: (id: string) => boolean | void | Promise<boolean | void>
   onReorder?: (id: string, targetId: string, position: QueueDropPosition) => void
-  /** Resume a queue parked by an interrupt; shown on the paused banner. */
+  /** Resume a queue parked by an interrupt; shown on the paused caption. */
   onResume?: () => void | Promise<unknown>
 }
 
-/** True when the steer contract can preserve the whole queued payload. */
-export function canGuideQueuedComposerMessage(message: QueuedComposerMessage): boolean {
-  return queuedMessageGuidancePayload(message) !== null
-}
-
-const QUEUED_MESSAGE_LABEL_SUMMARY_LIMIT = 24
-
-function queuedComposerMessageDisplayText(message: QueuedComposerMessage): string {
-  const displayText = message.displayText?.trim()
-  if (displayText) return displayText
-  if (message.writeContext) {
-    const userInput = parseWritePromptForDisplay(message.text)?.userInput.trim()
-    if (userInput) return userInput
-  }
-  return message.text
-}
-
-function queuedMessageSummary(message: QueuedComposerMessage): string {
-  const text = queuedComposerMessageDisplayText(message).replace(/\s+/g, ' ').trim()
-  return text.length > QUEUED_MESSAGE_LABEL_SUMMARY_LIMIT
-    ? `${text.slice(0, QUEUED_MESSAGE_LABEL_SUMMARY_LIMIT)}...`
-    : text
-}
-
-function visibleQueue(messages: QueuedComposerMessage[]): QueuedComposerMessage[] {
-  return messages.filter((message) => (
-    !message.deliveryState ||
-    message.deliveryState === 'pending' ||
-    message.deliveryState === 'paused' ||
-    message.deliveryState === 'failed' ||
-    message.deliveryState === 'starting' ||
-    // Admitted to the durable runtime queue: visible so the user can still
-    // edit, remove, or reorder it while it waits for the running turn.
-    message.deliveryState === 'in_flight'
-  ))
-}
-
 /**
- * The DSH-style composer queue dock: one row is direct, while multiple rows
- * start behind a compact count header and expand in place for interaction.
+ * The queue section at the bottom of the composer activity tray, right above
+ * the input. The tray owns the surface and the hairline above; this renders
+ * the caption (or the paused notice), the rows, and an "n more" disclosure
+ * once more than three messages wait.
  */
 export function FloatingComposerQueuedMessages({
   messages,
@@ -154,127 +98,51 @@ export function FloatingComposerQueuedMessages({
   onResume
 }: Props): ReactElement | null {
   const { t } = useTranslation('common')
-  const queue = useMemo(() => visibleQueue(messages), [messages])
-  const queueTitle = t(queue.some((message) => message.deliveryState === 'starting')
-    ? 'queuedMessagesConfirming' : 'queuedMessagesTitle', { count: queue.length })
+  const queue = useMemo(() => visibleQueuedMessages(messages), [messages])
   const [collapsed, setCollapsed] = useState(true)
-  const [busy, setBusy] = useState<{ id: string; kind: QueueActionKind } | null>(null)
-  const [dragState, setDragState] = useState<QueueDragState | null>(null)
-  const [moveAnnouncement, setMoveAnnouncement] = useState('')
+  const [busy, setBusy] = useState<{ id: string; kind: QueueRowActionKind } | null>(null)
   const [resuming, setResuming] = useState(false)
-  const reorderHandleRefs = useRef(new Map<string, HTMLButtonElement>())
   const listId = useId()
   const reorderHintId = useId()
-  const queueRevision = useMemo(() => JSON.stringify(queue.map((message) => [
-    message.id,
-    message.deliveryState,
-    message.text
-  ])), [queue])
+  const interactionActive = busy !== null
+  const reorderEnabled = Boolean(onReorder && queue.length > 1 && !interactionActive &&
+    !queue.some((message) => message.editIntent || message.deliveryState === 'starting'))
+  const reorder = useQueuedMessageReorder({
+    queue,
+    enabled: reorderEnabled,
+    busy: interactionActive,
+    onReorder,
+    onRevealIndex: (index) => {
+      if (index >= QUEUE_COLLAPSED_ROW_LIMIT) setCollapsed(false)
+    },
+    t
+  })
 
   useEffect(() => {
     if (queue.length === 0) setCollapsed(true)
   }, [queue])
 
-  useEffect(() => {
-    setDragState(null)
-  }, [queueRevision])
-
-  useEffect(() => {
-    if (busy) setDragState(null)
-  }, [busy])
-
   if (queue.length === 0) return null
 
-  const interactionActive = busy !== null
   const pausedCount = queue.filter((message) => message.deliveryState === 'paused' && !message.editIntent).length
-  const showPausedBanner = pausedCount > 0
-  const expanded = queue.length === 1 || !collapsed || interactionActive || showPausedBanner
-  const reorderEnabled = Boolean(onReorder && expanded && queue.length > 1 && !interactionActive &&
-    !queue.some((message) => message.editIntent || message.deliveryState === 'starting'))
+  const showPausedCaption = pausedCount > 0
+  const foldable = queue.length > QUEUE_COLLAPSED_ROW_LIMIT
+  const expanded = !foldable || !collapsed
+  const rows = expanded ? queue : queue.slice(0, QUEUE_COLLAPSED_ROW_LIMIT)
+  const queueTitle = t('queuedMessagesTitle', { count: queue.length })
 
-  const focusReorderHandle = (id: string): void => {
-    queueMicrotask(() => reorderHandleRefs.current.get(id)?.focus())
-  }
-
-  const reorderWithKeyboard = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-    id: string
-  ): void => {
-    if (!reorderEnabled || !onReorder || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) {
-      return
-    }
-    const sourceIndex = queue.findIndex((message) => message.id === id)
-    const targetIndex = event.key === 'ArrowUp' ? sourceIndex - 1 : sourceIndex + 1
-    const target = queue[targetIndex]
-    if (sourceIndex < 0 || !target) return
-    event.preventDefault()
-    event.stopPropagation()
-    onReorder(id, target.id, event.key === 'ArrowUp' ? 'before' : 'after')
-    setMoveAnnouncement(t('queuedMessageMovedToPosition', { position: targetIndex + 1 }))
-    focusReorderHandle(id)
-  }
-
-  const startDragging = (event: ReactDragEvent<HTMLButtonElement>, id: string): void => {
-    if (!reorderEnabled) {
-      event.preventDefault()
-      return
-    }
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', id)
-    setDragState({ sourceId: id })
-  }
-
-  const updateDropTarget = (
-    event: ReactDragEvent<HTMLLIElement>,
-    targetId: string
-  ): void => {
-    if (!reorderEnabled || !dragState || dragState.sourceId === targetId) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    const bounds = event.currentTarget.getBoundingClientRect()
-    const position: QueueDropPosition = event.clientY < bounds.top + bounds.height / 2
-      ? 'before'
-      : 'after'
-    setDragState((current) => current
-      ? { sourceId: current.sourceId, targetId, position }
-      : null)
-  }
-
-  const dropQueuedMessage = (
-    event: ReactDragEvent<HTMLLIElement>,
-    targetId: string
-  ): void => {
-    event.preventDefault()
-    const sourceId = dragState?.sourceId || event.dataTransfer.getData('text/plain')
-    const position = dragState?.targetId === targetId ? dragState.position : undefined
-    const ids = new Set(queue.map((message) => message.id))
-    if (
-      reorderEnabled &&
-      onReorder &&
-      sourceId &&
-      sourceId !== targetId &&
-      position &&
-      ids.has(sourceId) &&
-      ids.has(targetId)
-    ) {
-      onReorder(sourceId, targetId, position)
-    }
-    setDragState(null)
-  }
-  const applyAction = async (
-    id: string,
-    kind: QueueActionKind,
-    action: () => unknown | Promise<unknown>
-  ): Promise<boolean> => {
-    if (busy) return false
+  const runAction = (id: string, kind: QueueRowActionKind): void => {
+    if (busy) return
+    const action = kind === 'guide'
+      ? () => onGuide?.(id)
+      : kind === 'edit'
+        ? () => onRestoreToComposer?.(id)
+        : () => onRemove(id)
     setBusy({ id, kind })
-    try {
-      return (await action()) !== false
-    } catch {
-      return false
-    } finally {
-      setBusy(null)
-    }
+    void Promise.resolve()
+      .then(action)
+      .catch(() => undefined)
+      .finally(() => setBusy(null))
   }
 
   const resume = (): void => {
@@ -294,303 +162,80 @@ export function FloatingComposerQueuedMessages({
       data-queue-dock
       data-queued-message-count={queue.length}
       data-busy-message-id={busy?.id}
-      data-queue-paused={showPausedBanner || undefined}
+      data-queue-paused={showPausedCaption || undefined}
       data-queue-reorder-enabled={reorderEnabled || undefined}
     >
-      <div className={css.panel}>
-        {showPausedBanner ? (
-          <QueuePausedBanner
-            count={pausedCount}
-            running={running}
-            busy={resuming || interactionActive}
-            onResume={onResume ? resume : undefined}
+      {showPausedCaption ? (
+        <QueuePausedCaption
+          count={pausedCount}
+          running={running}
+          busy={resuming || interactionActive}
+          onResume={onResume ? resume : undefined}
+        />
+      ) : (
+        <QueueCaption
+          count={queue.length}
+          running={running}
+          confirming={queue.some((message) => message.deliveryState === 'starting')}
+          showDragHint={reorderEnabled}
+        />
+      )}
+
+      <span id={reorderHintId} className={css.assistiveText}>
+        {t('queuedMessageReorder')}
+      </span>
+      <span className={css.assistiveText} role="status" aria-live="polite" aria-atomic="true">
+        {reorder.announcement}
+      </span>
+
+      <ul
+        id={listId}
+        className={css.list}
+        aria-label={queueTitle}
+        data-queue-expanded={expanded || undefined}
+      >
+        {rows.map((message, index) => (
+          <QueuedMessageRow
+            key={message.id}
+            message={message}
+            index={index}
+            count={queue.length}
+            first={index === 0}
+            state={queuedMessageRowState(message, {
+              running,
+              guidanceTarget,
+              pausedCaptionShown: showPausedCaption,
+              hasGuide: Boolean(onGuide),
+              hasRestore: Boolean(onRestoreToComposer)
+            }, t)}
+            pausedCaptionShown={showPausedCaption}
+            reorderEnabled={reorderEnabled}
+            reorderHintId={reorderHintId}
+            reorder={reorder}
+            busy={busy}
+            hasGuide={Boolean(onGuide)}
+            hasRestore={Boolean(onRestoreToComposer)}
+            onAction={runAction}
+            t={t}
           />
-        ) : queue.length > 1 ? (
-          <button
-            type="button"
-            className={css.header}
-            data-queued-message-header
-            aria-controls={listId}
-            aria-expanded={expanded}
-            disabled={interactionActive}
-            onClick={() => setCollapsed((value) => !value)}
-          >
-            <span className={css.lead} aria-hidden="true">
-              <ListEnd size={15} strokeWidth={1.8} />
-            </span>
-            <span className={css.count}>{queueTitle}</span>
-            <span className={css.headerHint}>
-              {expanded
-                ? t('queuedMessagesHint')
-                : t('queuedMessagesNextHint', { summary: queuedComposerMessageDisplayText(queue[0]!) })}
-            </span>
-            <span className={css.chevron} aria-hidden="true">
-              {expanded
-                ? <ChevronUp size={14} strokeWidth={1.7} />
-                : <ChevronDown size={14} strokeWidth={1.7} />}
-            </span>
-          </button>
-        ) : null}
+        ))}
+      </ul>
 
-        <span id={reorderHintId} className={css.assistiveText}>
-          {t('queuedMessageReorder')}
-        </span>
-        <span
-          className={css.assistiveText}
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {moveAnnouncement}
-        </span>
-
-        <ul
-          id={listId}
-          className={css.list}
-          aria-label={queueTitle}
-          hidden={!expanded}
-        >
-          {expanded ? queue.map((message, index) => {
-            const isBusy = busy?.id === message.id
-            const paused = message.deliveryState === 'paused'
-            const failed = message.deliveryState === 'failed'
-            const inFlight = message.deliveryState === 'in_flight'
-            const recoverable = paused || failed
-            const imageCount = attachmentImageCount(message)
-            const imageNames = imageCount > 0 ? attachmentImageNames(message) : ''
-            const canRestore = Boolean(onRestoreToComposer && message.composerRestoreEligible && !message.steeringRequest && message.deliveryState !== 'starting')
-            const canGuide = Boolean(onGuide && !message.editIntent && message.deliveryState !== 'starting' && (message.steeringRequest || (recoverable
-              ? !running && !message.waitForRuntimeAdmission
-              : (
-                running &&
-                guidanceTarget !== 'unsupported' &&
-                message.guidanceEligible !== false &&
-                canGuideQueuedComposerMessage(message)
-              ))))
-            const guideLabel = recoverable
-              ? t('queuedMessageRetry')
-              : t('guideQueuedMessage')
-            const reorderLabel = t('queuedMessageReorderHandle', {
-              index: index + 1,
-              count: queue.length,
-              summary: queuedMessageSummary(message)
-            })
-            const guideTitle = failed
-              ? message.waitForRuntimeAdmission
-                ? t('queuedMessageRetryUnavailable')
-                : message.errorMessage || message.errorCode || guideLabel
-              : paused
-                ? message.waitForRuntimeAdmission
-                  ? t('queuedMessageRetryUnavailable')
-                  : t('queuedMessageRetry')
-                : !running
-                  ? t('guideQueuedMessageNoActiveTurn')
-                  : guidanceTarget === 'unsupported'
-                    ? t('guideQueuedMessageUnsupported')
-                  : message.guidanceEligible === false || !canGuideQueuedComposerMessage(message)
-                    ? t('guideQueuedMessageTextOnly')
-                : guidanceTarget === 'graph'
-                  ? t('guideQueuedMessageGraphHint')
-                  : guidanceTarget === 'deferred'
-                    ? t('guideQueuedMessageDeferredHint')
-                    : t('guideQueuedMessageHint')
-            // The paused banner owns resuming; idle rows have nothing to steer.
-            const guideHidden = (paused && showPausedBanner) || (!failed && !paused && !running && !message.steeringRequest)
-            const restoreLabel = canRestore
-              ? t('queuedMessageEditInComposer')
-              : t(message.composerRestoreBlockReason ?? 'queuedMessageEditUnsupported')
-            const menuItems: QueueRowMenuItem[] = [
-              ...(onRestoreToComposer ? [{
-                key: 'edit' as const,
-                label: t('queuedMessageEditInComposer'),
-                title: restoreLabel,
-                disabled: !canRestore,
-                onSelect: () => void applyAction(message.id, 'edit', () => onRestoreToComposer(message.id))
-              }] : []),
-              ...(reorderEnabled && onReorder && index > 0 ? [{
-                key: 'move-top' as const,
-                label: t('queuedMessageMoveToTop'),
-                onSelect: () => {
-                  onReorder(message.id, queue[0]!.id, 'before')
-                  setMoveAnnouncement(t('queuedMessageMovedToPosition', { position: 1 }))
-                }
-              }] : []),
-              {
-                key: 'copy' as const,
-                label: t('queuedMessageCopy'),
-                onSelect: () => void navigator.clipboard?.writeText(queuedComposerMessageDisplayText(message)).catch(() => undefined)
-              }
-            ]
-
-            return (
-              <li
-                key={message.id}
-                className={css.row}
-                data-queued-message-id={message.id}
-                data-delivery-state={message.deliveryState ?? 'pending'}
-                data-queue-dragging={dragState?.sourceId === message.id || undefined}
-                data-drop-position={dragState?.targetId === message.id
-                  ? dragState.position
-                  : undefined}
-                onDragOver={(event) => updateDropTarget(event, message.id)}
-                onDragLeave={(event) => {
-                  if (
-                    event.currentTarget.contains(event.relatedTarget as Node | null) ||
-                    dragState?.targetId !== message.id
-                  ) return
-                  setDragState((current) => current ? { sourceId: current.sourceId } : null)
-                }}
-                onDrop={(event) => dropQueuedMessage(event, message.id)}
-              >
-                {reorderEnabled ? (
-                  <button
-                    type="button"
-                    className={css.dragHandle}
-                    data-queued-message-drag-handle
-                    data-queued-message-drag-id={message.id}
-                    draggable={reorderEnabled}
-                    aria-label={reorderLabel}
-                    aria-describedby={reorderHintId}
-                    title={reorderLabel}
-                    ref={(node) => {
-                      if (node) reorderHandleRefs.current.set(message.id, node)
-                      else reorderHandleRefs.current.delete(message.id)
-                    }}
-                    onKeyDown={(event) => reorderWithKeyboard(event, message.id)}
-                    onDragStart={(event) => startDragging(event, message.id)}
-                    onDragEnd={() => setDragState(null)}
-                  >
-                    <span className={css.index} aria-hidden="true">{index + 1}</span>
-                    <GripVertical className={css.grip} size={14} strokeWidth={1.8} aria-hidden="true" />
-                  </button>
-                ) : failed ? (
-                  <span className={`${css.lead} ${css.failed}`} aria-hidden="true">
-                    <CircleAlert size={15} strokeWidth={2} />
-                  </span>
-                ) : queue.length === 1 ? (
-                  <span className={css.lead} aria-hidden="true">
-                    <ListEnd size={15} strokeWidth={1.8} />
-                  </span>
-                ) : (
-                  <span className={css.index} aria-hidden="true">{index + 1}</span>
-                )}
-
-                <span
-                  className={css.preview}
-                  title={queuedComposerMessageDisplayText(message)}
-                >
-                  {queuedComposerMessageDisplayText(message)}
-                </span>
-
-                {imageCount > 0 ? (
-                  <span
-                    className={css.imageMeta}
-                    data-queued-message-images={imageCount}
-                    title={imageNames || undefined}
-                  >
-                    <ImageIcon size={12} strokeWidth={1.8} aria-hidden="true" />
-                    {imageCount}
-                  </span>
-                ) : null}
-
-                <QueuedMessageSnapshotBadges message={message} />
-
-                {message.deliveryState === 'starting' ? (
-                  <span className={css.status}>{t('queuedMessageConfirming')}</span>
-                ) : null}
-                {paused && (message.editIntent || !showPausedBanner) ? (
-                  <span className={`${css.status} ${css.paused}`}>
-                    {t(message.editIntent === 'restoring' ? 'queuedMessageRestorePending'
-                      : message.editIntent === 'cancelling' ? 'queuedMessageCancelPending' : 'queuedMessagePaused')}
-                  </span>
-                ) : null}
-                {inFlight ? (
-                  <span className={`${css.status} ${css.queued}`}>
-                    {t('queuedMessageInFlight')}
-                  </span>
-                ) : null}
-                {failed ? (
-                  <span
-                    className={`${css.status} ${css.failed}`}
-                    title={message.errorMessage || message.errorCode}
-                  >
-                    {message.errorMessage || message.errorCode || t('queuedMessageFailed')}
-                  </span>
-                ) : null}
-
-                <div className={css.actions}>
-                  {onGuide ? (
-                    <button
-                      type="button"
-                      className={css.textAction}
-                      data-queued-message-action="guide"
-                      aria-label={canGuide ? guideLabel : guideTitle}
-                      title={guideTitle}
-                      hidden={guideHidden}
-                      disabled={busy !== null || !canGuide}
-                      onClick={() => void applyAction(
-                        message.id,
-                        'guide',
-                        () => onGuide(message.id)
-                      )}
-                    >
-                      {isBusy && busy?.kind === 'guide'
-                        ? <Loader2 className={css.spinner} size={14} aria-hidden="true" />
-                        : recoverable
-                          ? <RotateCw size={13} strokeWidth={1.9} aria-hidden="true" />
-                          : <CornerDownRight size={14} strokeWidth={1.9} aria-hidden="true" />}
-                      <span>{recoverable ? t('queuedMessageRetryShort') : t('guideQueuedMessage')}</span>
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={css.action}
-                    data-queued-message-action="remove"
-                    aria-label={t('queuedMessageRemove')}
-                    title={t('queuedMessageRemove')}
-                    disabled={busy !== null || message.deliveryState === 'starting' || Boolean(message.steeringRequest)}
-                    onClick={() => void applyAction(
-                      message.id,
-                      'remove',
-                      () => onRemove(message.id)
-                    )}
-                  >
-                    {isBusy && busy?.kind === 'remove'
-                      ? <Loader2 className={css.spinner} size={14} aria-hidden="true" />
-                      : <Trash2 size={14} strokeWidth={1.8} aria-hidden="true" />}
-                  </button>
-                  <QueueRowMoreMenu
-                    label={t('queuedMessageMoreActions')}
-                    disabled={busy !== null}
-                    items={menuItems}
-                  />
-                </div>
-              </li>
-            )
-          }) : null}
-        </ul>
-      </div>
+      {foldable ? (
+        <QueueExpander
+          hiddenCount={queue.length - QUEUE_COLLAPSED_ROW_LIMIT}
+          expanded={expanded}
+          disabled={interactionActive}
+          controls={listId}
+          onToggle={() => setCollapsed((value) => !value)}
+        />
+      ) : null}
     </div>
   )
 }
 
-function attachmentImageCount(message: QueuedComposerMessage): number {
-  const images = message.attachments?.filter((attachment) => attachment.kind !== 'document')
-  if (images?.length) return images.length
-  if (message.attachments?.length) return 0
-  return message.attachmentIds?.length ?? 0
-}
-
-function attachmentImageNames(message: QueuedComposerMessage): string {
-  return message.attachments
-    ?.filter((attachment) => attachment.kind !== 'document')
-    .map((attachment) => attachment.name?.trim())
-    .filter((name): name is string => Boolean(name))
-    .join(', ') ?? ''
-}
-
 /* Retained pure exports keep downstream placement callers source-compatible;
-   the dock itself is now inline and never creates a body portal. */
+   the queue itself is inline in the tray and never creates a body portal. */
 export type QueuedMessagesPopoverPlacement = ComposerPopoverPlacement
 
 export function calculateQueuedMessagesPopoverPlacement({

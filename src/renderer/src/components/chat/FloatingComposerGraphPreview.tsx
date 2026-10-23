@@ -1,453 +1,417 @@
-import { useId, useState, type KeyboardEvent, type ReactElement } from 'react'
-import { useTranslation } from 'react-i18next'
-import { graphNodeLiveness } from '../../graph/graph-liveness'
-import type { GraphChildRuntime, GraphNodeStatus, GraphRun } from '../../graph/graph-types'
-import { formatSubagentElapsed, SubagentLiveAvatar } from '../subagents/SubagentLiveness'
 import {
-  fitComposerGraphLabel,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactElement
+} from 'react'
+import { Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { graphNodeLiveness, type GraphNodeLiveness } from '../../graph/graph-liveness'
+import type { GraphChildRuntime, GraphRun } from '../../graph/graph-types'
+import { TrayAvatar, TrayButton } from './composer-tray/tray-primitives'
+import {
+  formatTrayAgo,
+  formatTrayDuration,
+  useTrayNow,
+  type TrayTranslate
+} from './composer-tray/tray-elapsed'
+import {
+  COMPOSER_GRAPH_MIN_SCALE,
+  composerGraphLivenessNeedsAttention,
+  composerGraphNavigationTarget,
+  composerGraphNodeState,
+  graphAgentAvatarColor,
+  graphAgentInitials,
+  isComposerGraphRunTerminal,
   layoutComposerGraph,
-  type ComposerGraphLayout,
-  type ComposerGraphLayoutNode
+  type ComposerGraphLayoutNode,
+  type ComposerGraphNodeState
 } from './composer-graph-preview'
+import './composer-tray/graph-tray.css'
 
-const GRAPH_POPOVER_WIDTH = 680
-const GRAPH_POPOVER_MAX_HEIGHT = 420
-const GRAPH_POPOVER_ESTIMATED_HEIGHT = 390
-const NODE_TEXT_LEFT_PADDING = 13
-const NODE_TEXT_RIGHT_PADDING = 8
-const NODE_TITLE_RIGHT_PADDING = 21
-const NODE_STATUS_WIDTH = 44
-const NODE_METADATA_GAP = 7
-const TERMINAL_GRAPH_RUN_STATUSES = new Set<GraphRun['status']>([
-  'completed',
+export type GraphOpenChildHandler = (
+  runId: string,
+  nodeId: string,
+  attemptId: string,
+  childThreadId: string
+) => void
+
+const CLOSED_NODE_STATUSES = new Set<ComposerGraphLayoutNode['status']>([
+  'accepted',
   'failed',
-  'cancelled'
+  'cancelled',
+  'skipped',
+  'superseded'
 ])
 
-const nodeTone: Record<GraphNodeStatus, { fill: string; stroke: string; accent: string }> = {
-  pending: { fill: 'var(--ds-surface-card)', stroke: 'var(--ds-border)', accent: '#94a3b8' },
-  blocked: { fill: 'var(--ds-surface-card)', stroke: '#94a3b8', accent: '#94a3b8' },
-  ready: { fill: 'var(--ds-surface-card)', stroke: '#60a5fa', accent: '#60a5fa' },
-  queued: { fill: 'var(--ds-surface-card)', stroke: '#38bdf8', accent: '#38bdf8' },
-  running: { fill: 'var(--ds-surface-card)', stroke: '#3b82f6', accent: '#3b82f6' },
-  submitted: { fill: 'var(--ds-surface-card)', stroke: '#8b5cf6', accent: '#8b5cf6' },
-  reviewing: { fill: 'var(--ds-surface-card)', stroke: '#8b5cf6', accent: '#8b5cf6' },
-  accepted: { fill: 'var(--ds-surface-card)', stroke: '#10b981', accent: '#10b981' },
-  repair_required: { fill: 'var(--ds-surface-card)', stroke: '#f59e0b', accent: '#f59e0b' },
-  failed: { fill: 'var(--ds-surface-card)', stroke: '#ef4444', accent: '#ef4444' },
-  cancelled: { fill: 'var(--ds-surface-card)', stroke: '#ef4444', accent: '#ef4444' },
-  skipped: { fill: 'var(--ds-surface-card)', stroke: '#94a3b8', accent: '#94a3b8' },
-  superseded: { fill: 'var(--ds-surface-card)', stroke: '#94a3b8', accent: '#94a3b8' }
+// Non-breaking on both sides: a leading space of a flex item would collapse.
+const SEPARATOR = '\u00a0·\u00a0'
+
+function percentOf(value: number, total: number): string {
+  return `${total > 0 ? (value / total) * 100 : 0}%`
 }
 
-function useSvgFragmentId(prefix: string): string {
-  const reactId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  return `${prefix}-${reactId}`
-}
-
-export function AgentStack({ names }: { names: string[] }): ReactElement {
-  const { t } = useTranslation('common')
-  if (names.length === 0) {
-    return <span className="text-[11px] text-ds-faint">{t('graphComposerNoActiveAgents')}</span>
+/** Second line of a node card: "Claude Code · 重试 1", "Kun · 已验收", "等待上游节点". */
+export function graphNodeMetaLabel(
+  node: ComposerGraphLayoutNode,
+  runTerminal: boolean,
+  t: TrayTranslate
+): string {
+  if (!runTerminal && (node.status === 'pending' || node.status === 'blocked')) {
+    return t('graphLiveness_waiting_dependency')
   }
-  return (
-    <div
-      className="flex items-center"
-      aria-label={t('graphComposerActiveAgents', { count: names.length })}
-    >
-      {names.slice(0, 3).map((name, index) => (
-        <span
-          key={name}
-          title={name}
-          className="-ml-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-accent/10 text-[9px] font-bold text-accent first:ml-0 dark:border-ds-card"
-          style={{ zIndex: 3 - index }}
-        >
-          {name.trim().slice(0, 1).toUpperCase() || 'K'}
-        </span>
-      ))}
-      {names.length > 3 ? (
-        <span className="ml-1 text-[10px] font-semibold text-ds-faint">+{names.length - 3}</span>
-      ) : null}
-    </div>
-  )
+  const statusLabel = (): string => t(`graphStatus_${node.status}`, { defaultValue: node.status })
+  let detail: string
+  if (runTerminal || CLOSED_NODE_STATUSES.has(node.status)) {
+    detail = statusLabel()
+  } else if (node.processing && (node.attemptNumber ?? 1) > 1) {
+    detail = t('composerTrayGraph.nodeRetry', { number: (node.attemptNumber ?? 1) - 1 })
+  } else {
+    detail = t(`graphLiveness_${node.livenessKind}`, { defaultValue: statusLabel() })
+  }
+  return `${node.agentName} · ${detail}`
 }
 
-function GraphPreviewPhase({
-  phase
-}: {
-  phase: ComposerGraphLayout['phases'][number]
-}): ReactElement {
-  const clipId = useSvgFragmentId('graph-preview-phase')
-  const label = fitComposerGraphLabel(phase.title, phase.width - 20, 10, 8)
-  return (
-    <g>
-      <title>{phase.title}</title>
-      <defs>
-        <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
-          <rect x={phase.x} y={12} width={phase.width - 20} height={15} />
-        </clipPath>
-      </defs>
-      <text
-        x={phase.x}
-        y={24}
-        fill="var(--ds-text-muted)"
-        fontSize={label.fontSize}
-        fontWeight={650}
-        clipPath={`url(#${clipId})`}
-        data-graph-preview-phase-label
-        data-label-truncated={label.truncated || undefined}
-      >
-        {label.text}
-      </text>
-      <line
-        x1={phase.x}
-        x2={phase.x + phase.width - 20}
-        y1={34}
-        y2={34}
-        stroke="var(--ds-border)"
-        strokeDasharray="3 4"
-      />
-    </g>
-  )
+/** "最后活动 4 秒前" / "最后活动 2 分钟前". */
+export function graphLastActivityLabel(ageMs: number, t: TrayTranslate): string {
+  const seconds = Math.max(0, Math.floor(ageMs / 1_000))
+  return seconds < 60
+    ? t('composerTrayGraph.lastActivitySeconds', { seconds })
+    : t('composerTrayGraph.lastActivityAgo', { ago: formatTrayAgo(seconds, t) })
 }
 
-function GraphPreviewNode({
+/** Live status after the objective in the inspector strip. */
+export function graphInspectorLivenessLabel({
+  run,
   node,
-  terminal,
-  onInspect,
+  liveness,
+  t
+}: {
+  run: Pick<GraphRun, 'status'>
+  node: Pick<ComposerGraphLayoutNode, 'status'>
+  liveness: GraphNodeLiveness | null
+  t: TrayTranslate
+}): string {
+  if (isComposerGraphRunTerminal(run)) return t(`graphStatus_${run.status}`, { defaultValue: run.status })
+  if (CLOSED_NODE_STATUSES.has(node.status)) {
+    return t(`graphStatus_${node.status}`, { defaultValue: node.status })
+  }
+  if (!liveness) return ''
+  if (liveness.kind === 'waiting_dependency') return t('graphLiveness_waiting_dependency')
+  const lastActivity = liveness.lastActivityAgeMs !== undefined
+    ? graphLastActivityLabel(liveness.lastActivityAgeMs, t)
+    : null
+  if (liveness.quiet) {
+    return [t('composerTrayGraph.stillWaiting'), lastActivity].filter(Boolean).join(' · ')
+  }
+  // A working child reads as "最后活动 4 秒前"; any other phase (Lead review,
+  // retry, queue) names itself first.
+  const phase = liveness.kind === 'working' && lastActivity
+    ? null
+    : t(`graphLiveness_${liveness.kind}`, { defaultValue: liveness.kind })
+  const activity = liveness.activityLabel ?? liveness.activityToolName ?? phase
+  return [activity, lastActivity].filter(Boolean).join(' · ')
+}
+
+function GraphMapNode({
+  node,
+  state,
+  meta,
+  inspected,
+  tabStop,
+  layoutWidth,
+  onHover,
+  onHoverEnd,
+  onFocusNode,
   onOpen
 }: {
   node: ComposerGraphLayoutNode
-  terminal: boolean
-  onInspect: (node: ComposerGraphLayoutNode) => void
+  state: ComposerGraphNodeState
+  meta: string
+  inspected: boolean
+  /** The map's single Tab stop (roving tabindex); arrows move between nodes. */
+  tabStop: boolean
+  layoutWidth: number
+  onHover: (nodeId: string) => void
+  onHoverEnd: () => void
+  onFocusNode: (nodeId: string) => void
   onOpen: (nodeId: string) => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const tone = nodeTone[node.status]
-  const clipId = useSvgFragmentId('graph-preview-node')
-  const titleWidth = node.width - NODE_TEXT_LEFT_PADDING - NODE_TITLE_RIGHT_PADDING
-  const agentWidth = node.width
-    - NODE_TEXT_LEFT_PADDING
-    - NODE_TEXT_RIGHT_PADDING
-    - NODE_STATUS_WIDTH
-    - NODE_METADATA_GAP
-  const statusLabel = t(`graphStatus_${node.status}`, { defaultValue: node.status })
-  const title = fitComposerGraphLabel(node.title, titleWidth, 11, 8)
-  const agent = fitComposerGraphLabel(
-    node.attemptNumber
-      ? `${node.agentName} · #${node.attemptNumber}`
-      : node.agentName,
-    agentWidth,
-    9,
-    7
-  )
-  const status = fitComposerGraphLabel(statusLabel, NODE_STATUS_WIDTH, 8, 7)
-  const statusX = node.x + node.width - NODE_TEXT_RIGHT_PADDING
-  const statusClipX = statusX - NODE_STATUS_WIDTH
-  const openFromKeyboard = (event: KeyboardEvent<SVGGElement>): void => {
-    if (event.key !== 'Enter' && event.key !== ' ') return
-    event.preventDefault()
-    onOpen(node.id)
+  const style: CSSProperties = {
+    left: percentOf(node.x, layoutWidth),
+    top: node.y,
+    width: percentOf(node.width, layoutWidth)
   }
   return (
-    <g
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
+      className="ds-graph-tray-node ds-no-drag"
+      style={style}
+      data-graph-preview-node={node.id}
+      data-state={state}
+      data-inspected={inspected ? 'true' : undefined}
+      tabIndex={tabStop ? 0 : -1}
       aria-label={t('graphComposerNodeAria', {
         title: node.title,
         status: t(`graphStatus_${node.status}`, { defaultValue: node.status }),
         agent: node.agentName
       })}
-      className="cursor-pointer outline-none"
-      data-graph-preview-node={node.id}
+      title={node.phaseTitle ? `${node.title} · ${node.phaseTitle}` : node.title}
       onClick={() => onOpen(node.id)}
-      onKeyDown={openFromKeyboard}
-      onPointerEnter={() => onInspect(node)}
-      onFocus={() => onInspect(node)}
+      onPointerEnter={() => onHover(node.id)}
+      onPointerLeave={onHoverEnd}
+      onFocus={() => onFocusNode(node.id)}
     >
-      <title>{`${node.title} · ${node.agentName} · ${node.status}`}</title>
-      <defs>
-        <clipPath id={`${clipId}-title`} clipPathUnits="userSpaceOnUse">
-          <rect
-            x={node.x + NODE_TEXT_LEFT_PADDING}
-            y={node.y + 8}
-            width={titleWidth}
-            height={16}
-          />
-        </clipPath>
-        <clipPath id={`${clipId}-agent`} clipPathUnits="userSpaceOnUse">
-          <rect
-            x={node.x + NODE_TEXT_LEFT_PADDING}
-            y={node.y + 29}
-            width={agentWidth}
-            height={14}
-          />
-        </clipPath>
-        <clipPath id={`${clipId}-status`} clipPathUnits="userSpaceOnUse">
-          <rect
-            x={statusClipX}
-            y={node.y + 29}
-            width={NODE_STATUS_WIDTH}
-            height={14}
-          />
-        </clipPath>
-      </defs>
-      <rect
-        x={node.x}
-        y={node.y}
-        width={node.width}
-        height={node.height}
-        rx={11}
-        fill={tone.fill}
-        stroke={tone.stroke}
-        strokeWidth={node.processing ? 2 : 1.25}
-      />
-      {node.processing && !terminal ? (
-        <circle
-          cx={node.x + node.width - 10}
-          cy={node.y + 11}
-          r={3}
-          className="ds-subagent-dot-pulse fill-accent"
-        />
-      ) : null}
-      <rect
-        x={node.x}
-        y={node.y}
-        width={4}
-        height={node.height}
-        rx={2}
-        fill={tone.accent}
-      />
-      <text
-        x={node.x + NODE_TEXT_LEFT_PADDING}
-        y={node.y + 21}
-        fill="var(--ds-text)"
-        fontSize={title.fontSize}
-        fontWeight={650}
-        clipPath={`url(#${clipId}-title)`}
-        data-graph-preview-node-title
-        data-label-truncated={title.truncated || undefined}
-      >
-        {title.text}
-      </text>
-      <text
-        x={node.x + NODE_TEXT_LEFT_PADDING}
-        y={node.y + 39}
-        fill="var(--ds-text-muted)"
-        fontSize={agent.fontSize}
-        clipPath={`url(#${clipId}-agent)`}
-        data-graph-preview-node-agent
-        data-label-truncated={agent.truncated || undefined}
-      >
-        {agent.text}
-      </text>
-      <text
-        x={statusX}
-        y={node.y + 39}
-        fill={tone.accent}
-        fontSize={status.fontSize}
-        textAnchor="end"
-        clipPath={`url(#${clipId}-status)`}
-        data-graph-preview-node-status
-        data-label-truncated={status.truncated || undefined}
-      >
-        {status.text}
-      </text>
-    </g>
+      <span className="ds-graph-tray-node-title">
+        {state === 'done' ? (
+          <Check className="ds-graph-tray-node-check" size={12} strokeWidth={3} aria-hidden="true" />
+        ) : (
+          <span className="ds-graph-tray-node-dot" aria-hidden="true" />
+        )}
+        <span className="ds-graph-tray-node-title-text" data-graph-preview-node-title>{node.title}</span>
+      </span>
+      <span className="ds-graph-tray-node-meta" data-graph-preview-node-meta>{meta}</span>
+    </button>
   )
 }
 
+function GraphPreviewInspector({
+  run,
+  node,
+  childRuns,
+  onOpenChild
+}: {
+  run: GraphRun
+  node: ComposerGraphLayoutNode
+  childRuns: Readonly<Record<string, GraphChildRuntime>>
+  onOpenChild?: GraphOpenChildHandler
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const terminal = isComposerGraphRunTerminal(run)
+  const projection = run.nodes[node.id]
+  const attempt = projection?.attempts.at(-1)
+  // "最后活动 4 秒前" ticks only while this node can still change.
+  const nowMs = useTrayNow(!terminal && !CLOSED_NODE_STATUSES.has(node.status))
+  const liveness = projection ? graphNodeLiveness(projection, childRuns, nowMs, run.supervision) : null
+  const livenessLabel = graphInspectorLivenessLabel({ run, node, liveness, t })
+  const attention = !terminal && composerGraphLivenessNeedsAttention(liveness)
+  const elapsedTitle = liveness?.elapsedMs
+    ? t('composerTrayGraph.elapsedTitle', { duration: formatTrayDuration(liveness.elapsedMs / 1_000, t) })
+    : undefined
+  const childThreadId = node.childThreadId
+  return (
+    <div className="ds-graph-tray-inspector" data-graph-preview-inspector={node.id}>
+      <TrayAvatar size="lg" label={graphAgentInitials(node.agentName)} color={graphAgentAvatarColor(node.agentName)} />
+      <span className="ds-graph-tray-inspector-body">
+        <span className="ds-graph-tray-inspector-title">
+          <span className="ds-graph-tray-inspector-name">{node.title}</span>
+          <span className="ds-graph-tray-inspector-agent">
+            {`${SEPARATOR}${t('graphComposerAssignedAgent', { agent: node.agentName })}`}
+          </span>
+        </span>
+        <span className="ds-graph-tray-inspector-line" title={node.objective || undefined}>
+          {node.objective ? <span className="ds-graph-tray-inspector-objective">{node.objective}</span> : null}
+          {livenessLabel ? (
+            <span
+              className="ds-graph-tray-inspector-liveness"
+              data-tone={attention ? 'waiting' : undefined}
+              title={elapsedTitle}
+            >
+              {node.objective ? `${SEPARATOR}${livenessLabel}` : livenessLabel}
+            </span>
+          ) : null}
+        </span>
+      </span>
+      {childThreadId && attempt && onOpenChild ? (
+        <TrayButton
+          variant="outline"
+          data-graph-view-live-work
+          onClick={() => onOpenChild(run.id, node.id, attempt.id, childThreadId)}
+        >
+          {t('graphViewLiveWork')}
+        </TrayButton>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * How long the pointer must rest on a card before the inspector follows it.
+ * Crossing another card on the way down to 查看实时工作 keeps the node that
+ * was inspected; the inspector stays on the last node rested on.
+ */
+export const GRAPH_INSPECT_HOVER_DELAY_MS = 160
+
+const NAVIGATION_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'])
+
+/**
+ * Node map for the Graph tray sheet: phase columns of node cards over neutral
+ * edges, then an inspector strip for the inspected node (by default the
+ * current one). Clicking a node opens the full Graph at that node.
+ *
+ * Keyboard: the map is one Tab stop (roving tabindex); arrows and Home/End
+ * move between nodes and inspect the focused one, so Tab leaves the map
+ * straight to that node's 查看实时工作. Pointer: a short hover intent
+ * (GRAPH_INSPECT_HOVER_DELAY_MS) picks the inspected node.
+ *
+ * The canvas is at most its natural width and shrinks with the sheet down to
+ * COMPOSER_GRAPH_MIN_SCALE (node positions and widths are percentages, edges
+ * stretch with a non-scaling stroke); below that the card scrolls sideways.
+ */
 export function FloatingComposerGraphPreview({
   run,
   childRuns = {},
-  now = Date.now(),
-  reducedMotion = false,
+  now,
+  initialNodeId = null,
   onOpenGraph,
   onOpenChild
 }: {
   run: GraphRun
   childRuns?: Readonly<Record<string, GraphChildRuntime>>
   now?: number
-  reducedMotion?: boolean
+  /** Node shown in the inspector until another is hovered (the current node). */
+  initialNodeId?: string | null
   onOpenGraph: (runId: string, nodeId?: string) => void
-  onOpenChild?: (
-    runId: string,
-    nodeId: string,
-    attemptId: string,
-    childThreadId: string
-  ) => void
+  onOpenChild?: GraphOpenChildHandler
 }): ReactElement {
   const { t } = useTranslation('common')
-  const terminal = TERMINAL_GRAPH_RUN_STATUSES.has(run.status)
-  const layout = layoutComposerGraph(run, childRuns)
-  const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(
-    layout.nodes.find((node) => node.status === 'running')?.id ?? layout.nodes[0]?.id ?? null
-  )
+  const mapRef = useRef<HTMLDivElement | null>(null)
+  const canvasRef = useRef<HTMLDivElement | null>(null)
+  const terminal = isComposerGraphRunTerminal(run)
+  const layout = layoutComposerGraph(run, childRuns, now)
+  const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(initialNodeId)
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null)
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inspectedNode = layout.nodes.find((node) => node.id === inspectedNodeId)
-    ?? layout.nodes.find((node) => node.status === 'running')
+    ?? layout.nodes.find((node) => node.processing)
+    ?? layout.nodes.find((node) => !CLOSED_NODE_STATUSES.has(node.status))
     ?? layout.nodes[0]
     ?? null
-  const inspectedProjection = inspectedNode ? run.nodes[inspectedNode.id] : undefined
-  const inspectedAttempt = inspectedProjection?.attempts.at(-1)
-  const inspectedLiveness = inspectedProjection
-    ? graphNodeLiveness(inspectedProjection, childRuns, now, run.supervision)
-    : null
+  const inspectedId = inspectedNode?.id ?? null
+  // The Tab stop is the last focused node, else the inspected one.
+  const tabStopId = focusNodeId && layout.nodes.some((node) => node.id === focusNodeId)
+    ? focusNodeId
+    : inspectedId
+
+  const cancelHover = (): void => {
+    if (hoverTimerRef.current == null) return
+    clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = null
+  }
+  useEffect(() => () => {
+    if (hoverTimerRef.current != null) clearTimeout(hoverTimerRef.current)
+  }, [])
+  const hoverNode = (nodeId: string): void => {
+    cancelHover()
+    hoverTimerRef.current = setTimeout(() => {
+      hoverTimerRef.current = null
+      setInspectedNodeId(nodeId)
+    }, GRAPH_INSPECT_HOVER_DELAY_MS)
+  }
+  const focusNode = (nodeId: string): void => {
+    cancelHover()
+    setFocusNodeId(nodeId)
+    setInspectedNodeId(nodeId)
+  }
+  const onMapKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
+    if (!NAVIGATION_KEYS.has(event.key)) return
+    const from = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLElement>('[data-graph-preview-node]')
+      : null
+    if (!from) return
+    // Arrows never scroll the card: focusing the target brings it into view.
+    event.preventDefault()
+    const targetId = composerGraphNavigationTarget(layout.nodes, from.dataset.graphPreviewNode ?? null, event.key)
+    if (!targetId) return
+    const target = Array.from(mapRef.current?.querySelectorAll<HTMLElement>('[data-graph-preview-node]') ?? [])
+      .find((element) => element.dataset.graphPreviewNode === targetId)
+    target?.focus()
+  }
+
+  // When the map scrolls sideways, start with the inspected node in view.
+  useEffect(() => {
+    const map = mapRef.current
+    const canvas = canvasRef.current
+    if (!map || !canvas || !inspectedId || map.scrollWidth <= map.clientWidth) return
+    const node = layout.nodes.find((candidate) => candidate.id === inspectedId)
+    if (!node) return
+    const scale = canvas.clientWidth / layout.width
+    map.scrollLeft = Math.max(0, node.x * scale - 24)
+    // Only on mount: later hovers must not scroll the map under the pointer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const canvasStyle: CSSProperties = {
+    width: '100%',
+    maxWidth: layout.width,
+    minWidth: Math.ceil(layout.width * COMPOSER_GRAPH_MIN_SCALE),
+    height: layout.height
+  }
 
   return (
-    <div className="min-h-0 overflow-auto rounded-2xl border border-ds-border-muted bg-ds-subtle/55">
-      <svg
-        role="img"
+    <>
+      <div
+        ref={mapRef}
+        className="ds-graph-tray-map"
+        role="group"
         aria-label={t('graphComposerPreviewSummary', {
           phases: layout.phases.length,
           nodes: layout.nodes.length
         })}
-        className="block min-h-[210px] w-full"
-        viewBox={`0 0 ${layout.width} ${layout.height}`}
-        preserveAspectRatio="xMidYMid meet"
-        data-graph-composer-preview
+        data-graph-composer-preview={run.id}
+        onKeyDown={onMapKeyDown}
       >
-        <defs>
-          <marker
-            id={`graph-composer-arrow-${run.id}`}
-            viewBox="0 0 10 10"
-            refX="9"
-            refY="5"
-            markerWidth="5"
-            markerHeight="5"
-            orient="auto-start-reverse"
+        <div ref={canvasRef} className="ds-graph-tray-canvas" style={canvasStyle}>
+          <svg
+            className="ds-graph-tray-edges"
+            viewBox={`0 0 ${layout.width} ${layout.height}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ds-text-faint)" />
-          </marker>
-          <marker
-            id={`graph-composer-active-arrow-${run.id}`}
-            viewBox="0 0 10 10"
-            refX="9"
-            refY="5"
-            markerWidth="5.5"
-            markerHeight="5.5"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ds-accent)" />
-          </marker>
-        </defs>
-        {layout.phases.map((phase) => (
-          <GraphPreviewPhase key={phase.id} phase={phase} />
-        ))}
-        {layout.edges.map((edge) => (
-          <g key={edge.id}>
-            <path
-              d={edge.path}
-              fill="none"
-              stroke="var(--ds-text-faint)"
-              strokeWidth={edge.kind === 'control' ? 1.35 : 1}
-              strokeDasharray={edge.kind === 'message' ? '4 4' : undefined}
-              markerEnd={`url(#graph-composer-arrow-${run.id})`}
-              opacity={0.75}
-              data-graph-preview-edge={edge.id}
-            />
-            {edge.flowing ? (
+            {layout.edges.map((edge) => (
               <path
+                key={edge.id}
                 d={edge.path}
-                fill="none"
-                stroke="var(--ds-accent)"
-                strokeWidth={edge.kind === 'control' ? 1.8 : 1.5}
-                strokeDasharray={reducedMotion ? undefined : '7 9'}
-                markerEnd={`url(#graph-composer-active-arrow-${run.id})`}
-                opacity={reducedMotion ? 0.72 : 0.92}
-                className={`graph-composer-edge-flow${reducedMotion ? ' is-static' : ''}`}
-                aria-hidden
-                data-graph-preview-edge-flow={edge.id}
+                className="ds-graph-tray-edge"
+                vectorEffect="non-scaling-stroke"
+                data-kind={edge.kind}
+                data-flowing={edge.flowing ? 'true' : undefined}
+                data-graph-preview-edge={edge.id}
               />
-            ) : null}
-          </g>
-        ))}
-        {layout.nodes.map((node) => (
-          <GraphPreviewNode
-            key={node.id}
-            node={node}
-            terminal={terminal}
-            onInspect={(next) => setInspectedNodeId(next.id)}
-            onOpen={(nodeId) => onOpenGraph(run.id, nodeId)}
-          />
-        ))}
-      </svg>
-      {inspectedNode ? (
-        <div
-          className="border-t border-ds-border-muted bg-white/70 px-3 py-2 dark:bg-ds-card/70"
-          data-graph-preview-inspector
-        >
-          <div className="flex items-center gap-2">
-            <SubagentLiveAvatar
-              poseId={inspectedLiveness?.child?.profile ?? inspectedNode.agentName}
-              status={
-                terminal
-                  ? run.status === 'completed' ? 'done' : 'failed'
-                  : inspectedNode.status === 'failed' || inspectedNode.status === 'cancelled'
-                  ? 'failed'
-                  : inspectedNode.status === 'accepted'
-                    ? 'done'
-                  : inspectedNode.status === 'blocked'
-                      ? 'queued'
-                      : inspectedLiveness && [
-                          'active_review',
-                          'waiting_lead',
-                          'retry_scheduled',
-                          'needs_attention',
-                          'waiting_human',
-                          'retrying'
-                        ].includes(inspectedLiveness.kind)
-                        ? 'awaiting-permission'
-                        : 'running'
-              }
-              compact
-              animate={!terminal && inspectedLiveness?.kind === 'working'}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="min-w-0 truncate font-semibold text-ds-ink">
-                  {inspectedNode.title}
-                </span>
-                <span className="shrink-0 text-ds-faint">
-                  {t('graphComposerAssignedAgent', { agent: inspectedNode.agentName })}
-                </span>
-              </div>
-              <div className="mt-0.5 truncate text-[10px] text-ds-muted">
-                {terminal
-                  ? t(`graphStatus_${run.status}`, { defaultValue: run.status })
-                  : inspectedLiveness?.quiet
-                  ? t('graphStillWaiting', {
-                      seconds: Math.floor((inspectedLiveness.lastActivityAgeMs ?? 0) / 1_000)
-                    })
-                  : inspectedLiveness?.activityLabel ??
-                    t(`graphLiveness_${inspectedLiveness?.kind ?? 'idle'}`)}
-                {inspectedLiveness?.activityToolName
-                  ? ` · ${inspectedLiveness.activityToolName}`
-                  : ''}
-                {inspectedLiveness?.elapsedMs
-                  ? ` · ${formatSubagentElapsed(inspectedLiveness.elapsedMs)}`
-                  : ''}
-              </div>
-            </div>
-            {inspectedNode.childThreadId && inspectedAttempt && onOpenChild ? (
-              <button
-                type="button"
-                className="shrink-0 rounded-lg border border-accent/25 bg-accent/8 px-2 py-1 text-[10px] font-semibold text-accent hover:bg-accent/12"
-                onClick={() => onOpenChild(
-                  run.id,
-                  inspectedNode.id,
-                  inspectedAttempt.id,
-                  inspectedNode.childThreadId!
-                )}
-              >
-                {t('graphViewLiveWork')}
-              </button>
-            ) : null}
-          </div>
-          <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-ds-muted">
-            {inspectedNode.objective}
-          </p>
+            ))}
+          </svg>
+          {layout.nodes.map((node) => {
+            const state = composerGraphNodeState(node, terminal)
+            return (
+              <GraphMapNode
+                key={node.id}
+                node={node}
+                state={state}
+                meta={graphNodeMetaLabel(node, terminal, t)}
+                inspected={node.id === inspectedId}
+                tabStop={node.id === tabStopId}
+                layoutWidth={layout.width}
+                onHover={hoverNode}
+                onHoverEnd={cancelHover}
+                onFocusNode={focusNode}
+                onOpen={(nodeId) => onOpenGraph(run.id, nodeId)}
+              />
+            )
+          })}
         </div>
+      </div>
+      {inspectedNode ? (
+        <GraphPreviewInspector
+          run={run}
+          node={inspectedNode}
+          childRuns={childRuns}
+          onOpenChild={onOpenChild}
+        />
       ) : null}
-    </div>
+    </>
   )
 }

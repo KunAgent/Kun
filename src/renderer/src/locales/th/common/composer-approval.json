@@ -1,0 +1,46 @@
+{
+  "composerApproval": {
+    "header": "ต้องได้รับการอนุมัติจากคุณ",
+    "kind": {
+      "command": "รันคำสั่ง",
+      "edit": "แก้ไขไฟล์",
+      "email": "ส่งอีเมล",
+      "tool": "ใช้ {{name}}",
+      "toolUnnamed": "ใช้เครื่องมือ"
+    },
+    "question": {
+      "edit": "แก้ไข {{file}} ไหม?",
+      "editFiles_one": "จะแก้ไขไฟล์นี้ {{count}} ไฟล์ไหม?",
+      "editFiles_other": "จะแก้ไขไฟล์เหล่านี้ {{count}} ไฟล์ไหม?"
+    },
+    "preview": {
+      "terminal": "เทอร์มินัล",
+      "email": "อีเมล",
+      "awaiting": "รอการอนุมัติ",
+      "files_one": "{{count}} ไฟล์",
+      "files_other": "{{count}} ไฟล์",
+      "diffStats": "เพิ่ม {{added}} บรรทัด ลบ {{removed}} บรรทัด",
+      "clipped": "การเปลี่ยนแปลงยาว ส่วนที่เหลือไม่ได้แสดง",
+      "truncated": "อาร์กิวเมนต์ยาว ตัวอย่างนี้แสดงเพียงบางส่วน",
+      "moreInput_one": "อาร์กิวเมนต์อีก {{count}} รายการ",
+      "moreInput_other": "อาร์กิวเมนต์อีก {{count}} รายการ"
+    },
+    "option": {
+      "allow": "อนุญาต",
+      "allowAlways": "อนุญาตเสมอ",
+      "deny": "ปฏิเสธ",
+      "denyAlways": "ปฏิเสธเสมอ",
+      "once": "เฉพาะครั้งนี้",
+      "denyOnce": "ปฏิเสธครั้งนี้",
+      "alwaysSession": "ไม่ต้องถามอีกในเซสชันนี้",
+      "alwaysScoped": "ไม่ต้องถามอีกสำหรับ {{scope}} ในเซสชันนี้",
+      "alwaysScopedEdit": "ไม่ต้องถามอีกสำหรับการแก้ไขใน {{scope}} ในเซสชันนี้",
+      "denyAlwaysSession": "ปฏิเสธการกระทำประเภทนี้ตลอดส่วนที่เหลือของเซสชัน"
+    },
+    "feedbackPlaceholder": "บอก Kun ให้ทำแบบอื่นแทน ข้อความจะถูกส่งพร้อมการปฏิเสธ…",
+    "feedbackEmailPlaceholder": "บอก Kun ว่าต้องแก้อะไร ข้อความจะถูกส่งพร้อมการปฏิเสธ…",
+    "feedbackLabel": "ข้อความที่ส่งพร้อมการปฏิเสธ",
+    "hint": "กด 1–{{last}} เพื่อเลือก หรือ ↑↓ แล้วกด Enter",
+    "confirm": "ยืนยัน"
+  }
+}

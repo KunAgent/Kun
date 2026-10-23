@@ -9,9 +9,12 @@ import {
   answerFromOptions,
   answerFromTypedText,
   answersByQuestionId,
+  combineAnswerDraft,
+  draftSelectionCount,
   isMultipleChoiceQuestion,
   isLivePendingUserInput,
   isQuestionAnswered,
+  multiSelectRule,
   nextUnansweredIndex,
   optionsNeedRows,
   orderedAnswers,
@@ -20,6 +23,7 @@ import {
   selectLivePendingUserInput,
   selectedOptionValues,
   shouldShowQuestionHeader,
+  splitAnswerDraft,
   toggleOptionAnswer
 } from './user-input-panel-logic'
 
@@ -229,5 +233,92 @@ describe('presentation helpers', () => {
     expect(shouldShowQuestionHeader({ ...freeformQuestion, header: 'input' }, 2)).toBe(true)
     expect(shouldShowQuestionHeader(optionQuestion, 1)).toBe(true)
     expect(shouldShowQuestionHeader(freeformQuestion, 1)).toBe(false)
+  })
+})
+
+describe('answer drafts (option pick + free-text row)', () => {
+  const openMulti: UserInputQuestion = {
+    ...multiQuestion,
+    minSelections: 1,
+    maxSelections: 3
+  }
+
+  it('lets a single-choice pick win and uses the text only without one', () => {
+    const pick = answerFromOption(optionQuestion, optionQuestion.options[1])
+    expect(combineAnswerDraft(optionQuestion, pick, 'Turso')).toBe(pick)
+    expect(combineAnswerDraft(optionQuestion, undefined, ' Turso ')).toEqual({
+      id: 'db', label: USER_INPUT_OTHER_LABEL, value: 'Turso'
+    })
+    expect(combineAnswerDraft(optionQuestion, undefined, '   ')).toBeUndefined()
+    expect(combineAnswerDraft(freeformQuestion, undefined, 'svc')).toEqual({
+      id: 'name', label: USER_INPUT_FREEFORM_LABEL, value: 'svc'
+    })
+  })
+
+  it('adds typed text as one more multiple-choice item', () => {
+    const checked = answerFromOptions(openMulti, openMulti.options.slice(0, 2))
+    const combined = combineAnswerDraft(openMulti, checked, ' Dark mode ')
+    expect(combined).toEqual({
+      id: 'requirements',
+      label: USER_INPUT_OTHER_LABEL,
+      value: 'Keep ratio, App icon, Dark mode',
+      labels: ['Keep ratio', 'App icon'],
+      values: ['Keep ratio', 'App icon', 'Dark mode']
+    })
+    expect(isQuestionAnswered(openMulti, combined)).toBe(true)
+    expect(answerDisplayValues(combined)).toEqual(['Keep ratio', 'App icon', 'Dark mode'])
+    expect(combineAnswerDraft(openMulti, undefined, 'Dark mode')).toEqual({
+      id: 'requirements', label: USER_INPUT_OTHER_LABEL, value: 'Dark mode'
+    })
+  })
+
+  it('treats typed text naming an option as checking it', () => {
+    const checked = answerFromOptions(openMulti, [openMulti.options[2]])
+    expect(combineAnswerDraft(openMulti, checked, 'keep ratio')).toEqual(
+      answerFromOptions(openMulti, [openMulti.options[0], openMulti.options[2]])
+    )
+  })
+
+  it('splits stored answers back into the pick and the draft', () => {
+    const checked = answerFromOptions(openMulti, openMulti.options.slice(0, 2))
+    const combined = combineAnswerDraft(openMulti, checked, 'Dark mode')
+    expect(splitAnswerDraft(combined)).toEqual({ selection: checked, text: 'Dark mode' })
+    expect(splitAnswerDraft(checked)).toEqual({ selection: checked, text: '' })
+    expect(splitAnswerDraft({ id: 'db', label: USER_INPUT_OTHER_LABEL, value: 'Turso' }))
+      .toEqual({ selection: undefined, text: 'Turso' })
+    expect(splitAnswerDraft({ id: 'name', label: USER_INPUT_FREEFORM_LABEL, value: 'svc' }))
+      .toEqual({ selection: undefined, text: 'svc' })
+    expect(splitAnswerDraft(undefined)).toEqual({ selection: undefined, text: '' })
+  })
+
+  it('counts typed text against the selection limit', () => {
+    const checked = answerFromOptions(openMulti, openMulti.options.slice(0, 2))
+    expect(draftSelectionCount(checked, '')).toBe(2)
+    expect(draftSelectionCount(checked, 'Dark mode')).toBe(3)
+    expect(draftSelectionCount(undefined, '  ')).toBe(0)
+  })
+})
+
+describe('multiSelectRule', () => {
+  const base: UserInputQuestion = {
+    id: 'pipelines',
+    header: 'Scope',
+    question: 'Which pipelines?',
+    selectionMode: 'multiple',
+    options: ['Build', 'Test', 'Sign', 'Publish'].map((label) => ({ label, description: '' }))
+  }
+
+  it('describes the selection limits of a multiple-choice question', () => {
+    expect(multiSelectRule(base)).toEqual({ kind: 'any' })
+    expect(multiSelectRule({ ...base, maxSelections: 3 })).toEqual({ kind: 'max', count: 3 })
+    expect(multiSelectRule({ ...base, maxSelections: 4 })).toEqual({ kind: 'any' })
+    expect(multiSelectRule({ ...base, minSelections: 2 })).toEqual({ kind: 'min', count: 2 })
+    expect(multiSelectRule({ ...base, minSelections: 2, maxSelections: 2 })).toEqual({ kind: 'exact', count: 2 })
+    expect(multiSelectRule({ ...base, minSelections: 2, maxSelections: 3 })).toEqual({ kind: 'range', min: 2, max: 3 })
+  })
+
+  it('has no rule for single-choice or free-form questions', () => {
+    expect(multiSelectRule(optionQuestion)).toBeNull()
+    expect(multiSelectRule(freeformQuestion)).toBeNull()
   })
 })

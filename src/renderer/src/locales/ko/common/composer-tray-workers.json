@@ -1,0 +1,48 @@
+{
+  "composerTrayWorkers": {
+    "title": "협업",
+    "ariaLabel": "협업: {{status}}",
+    "ariaLabelUnfinished": "협업: {{status}}, 미완료 {{remaining}}개",
+    "segment": {
+      "waiting_one": "{{count}}개 응답 필요",
+      "waiting_other": "{{count}}개 응답 필요",
+      "failed_one": "{{count}}개 실패",
+      "failed_other": "{{count}}개 실패",
+      "review_one": "{{count}}개 검토 대기",
+      "review_other": "{{count}}개 검토 대기",
+      "working_one": "협업자 {{count}}명 작업 중",
+      "working_other": "협업자 {{count}}명 작업 중",
+      "done": "협업 완료",
+      "unknown": "상태 확인 안 됨"
+    },
+    "summary": {
+      "inBackground_one": "백그라운드 {{count}}개",
+      "inBackground_other": "백그라운드 {{count}}개",
+      "done_one": "{{count}}개 완료",
+      "done_other": "{{count}}개 완료",
+      "unconfirmed_one": "{{count}}개 확인 안 됨",
+      "unconfirmed_other": "{{count}}개 확인 안 됨"
+    },
+    "openPanel": "패널에서 열기",
+    "openWorker": "{{title}} 열기",
+    "runningFor": "{{duration}} 동안 실행 중",
+    "starting": "시작하는 중…",
+    "reviewPending": "검토 대기 중",
+    "status": {
+      "waiting": "응답 필요",
+      "failed": "실패",
+      "review": "검토 필요",
+      "done": "완료",
+      "cancelled": "취소됨",
+      "unconfirmed": "확인 안 됨"
+    },
+    "answer": "답변",
+    "resolve": "처리",
+    "stopWorker": "{{title}} 중지",
+    "dispatchFooter": "추가로 위임할 수 있음: {{names}}",
+    "manageAgents": "Agent 관리",
+    "dispatchable_one": "위임할 수 있는 Agent {{count}}개",
+    "dispatchable_other": "위임할 수 있는 Agent {{count}}개",
+    "dispatchableAria": "{{label}}: {{names}}"
+  }
+}

@@ -1,76 +1,33 @@
 import { readFile } from 'node:fs/promises'
-import { Fragment, createElement } from 'react'
+import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
-import {
-  COMPOSER_FLOATING_STATUS_HEIGHT_PROPERTY,
-  FloatingComposerAboveInputStack,
-  publishComposerFloatingStatusHeight
-} from './FloatingComposerAboveInputStack'
+import { describe, expect, it } from 'vitest'
+import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 
 describe('FloatingComposerAboveInputStack', () => {
-  it('floats ordered summaries while keeping large panels in normal flow', () => {
+  it('keeps flow panels and the tray in normal flow, tray last', () => {
     const html = renderToStaticMarkup(createElement(FloatingComposerAboveInputStack, {
-      floatingStatuses: createElement(Fragment, null,
-        createElement('div', { 'data-composer-stack-item': 'todo' }),
-        createElement('div', { 'data-composer-stack-item': 'graph' }),
-        createElement('div', { 'data-composer-stack-item': 'goal' }),
-        createElement('div', { 'data-composer-stack-item': 'background-shell' })
-      ),
-      flowPanels: createElement(Fragment, null,
-        createElement('div', { 'data-composer-queue': true }),
-        createElement('div', { 'data-composer-stack-item': 'user-input' })
-      )
+      flowPanels: createElement('div', { 'data-flow-panel': true }),
+      tray: createElement('div', { 'data-composer-tray': true })
     }))
 
-    const floatingIndex = html.indexOf('data-composer-floating-status-stack')
-    const todoIndex = html.indexOf('data-composer-stack-item="todo"')
-    const graphIndex = html.indexOf('data-composer-stack-item="graph"')
-    const goalIndex = html.indexOf('data-composer-stack-item="goal"')
-    const shellIndex = html.indexOf('data-composer-stack-item="background-shell"')
     const flowIndex = html.indexOf('data-composer-flow-panel-stack')
-    const queueIndex = html.indexOf('data-composer-queue')
-    const userInputIndex = html.indexOf('data-composer-stack-item="user-input"')
-
-    expect(floatingIndex).toBeGreaterThanOrEqual(0)
-    expect(todoIndex).toBeGreaterThan(floatingIndex)
-    expect(graphIndex).toBeGreaterThan(todoIndex)
-    expect(goalIndex).toBeGreaterThan(graphIndex)
-    expect(shellIndex).toBeGreaterThan(goalIndex)
-    expect(flowIndex).toBeGreaterThan(shellIndex)
-    expect(queueIndex).toBeGreaterThan(flowIndex)
-    expect(userInputIndex).toBeGreaterThan(queueIndex)
-    expect(html).toContain('pointer-events-none absolute inset-x-0 bottom-full')
-    expect(html).toContain('data-composer-flow-panel-stack')
+    const panelIndex = html.indexOf('data-flow-panel=')
+    const trayIndex = html.indexOf('data-composer-tray')
+    expect(flowIndex).toBeGreaterThanOrEqual(0)
+    expect(panelIndex).toBeGreaterThan(flowIndex)
+    expect(trayIndex).toBeGreaterThan(panelIndex)
+    expect(html).not.toContain('absolute')
+    expect(html).not.toContain('data-composer-floating-status-stack')
   })
 
-  it('publishes a finite rounded reserve and ignores missing chat stacks', () => {
-    const style = {
-      setProperty: vi.fn(),
-      removeProperty: vi.fn()
-    }
-    const chatStack = { style }
-    const floatingStack = {
-      closest: vi.fn(() => chatStack)
-    } as unknown as HTMLElement
-
-    expect(publishComposerFloatingStatusHeight(floatingStack, 43.2)).toBe(chatStack)
-    expect(style.setProperty).toHaveBeenLastCalledWith(
-      COMPOSER_FLOATING_STATUS_HEIGHT_PROPERTY,
-      '44px'
-    )
-
-    publishComposerFloatingStatusHeight(floatingStack, Number.NaN)
-    expect(style.setProperty).toHaveBeenLastCalledWith(
-      COMPOSER_FLOATING_STATUS_HEIGHT_PROPERTY,
-      '0px'
-    )
-
-    const detachedStack = { closest: vi.fn(() => null) } as unknown as HTMLElement
-    expect(publishComposerFloatingStatusHeight(detachedStack, 20)).toBeNull()
+  it('collapses the flow-panel stack when there is nothing to show', () => {
+    const html = renderToStaticMarkup(createElement(FloatingComposerAboveInputStack, {}))
+    expect(html).toContain('empty:hidden')
+    expect(html).not.toContain('data-composer-tray')
   })
 
-  it('defines a theme-aware 40px frost with dynamic scroll reserve', async () => {
+  it('reserves only the dock transition, since the tray now lives in flow', async () => {
     const [css, baseShell] = await Promise.all([
       readFile(new URL('../../styles/base-shell/composer-status-overlay.css', import.meta.url), 'utf8'),
       readFile(new URL('../../styles/base-shell.css', import.meta.url), 'utf8')
@@ -81,11 +38,12 @@ describe('FloatingComposerAboveInputStack', () => {
     expect(css).not.toContain('--ds-composer-transition-height: 4rem')
     expect(css).toMatch(/\.ds-composer-dock::before\s*\{[^}]*top:\s*0;/s)
     expect(css).not.toContain('top: calc(0px - var(--ds-composer-transition-height))')
-    expect(css).toContain('var(--ds-composer-floating-status-height)')
+    expect(css).not.toContain('--ds-composer-floating-status-height')
+    expect(css).toMatch(/\.ds-message-timeline-content\s*\{\s*padding-bottom:\s*var\(--ds-composer-transition-height\);/s)
     expect(css).toContain('var(--bg-canvas)')
     expect(css).toContain('backdrop-filter: blur(12px)')
     expect(css).toContain('mask-image: linear-gradient')
     expect(css).toContain('pointer-events: none')
-    expect(css).toContain('.ds-composer-status-glass')
+    expect(css).toMatch(/\.ds-composer-input-slot\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;/s)
   })
 })

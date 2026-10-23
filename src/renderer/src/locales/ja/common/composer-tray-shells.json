@@ -1,0 +1,32 @@
+{
+  "composerTrayShells": {
+    "title": "バックグラウンドコマンド",
+    "ariaLabel": "バックグラウンドコマンド：{{detail}}",
+    "segmentCount_one": "{{count}} 件のバックグラウンドコマンド",
+    "segmentCount_other": "{{count}} 件のバックグラウンドコマンド",
+    "inBackground_one": "バックグラウンドで {{count}} 件",
+    "inBackground_other": "バックグラウンドで {{count}} 件",
+    "failedCount_one": "{{count}} 件が失敗",
+    "failedCount_other": "{{count}} 件が失敗",
+    "runningFor": "{{duration}} 実行中",
+    "exitCode": "終了コード {{code}}",
+    "stopped": "停止しました",
+    "endedBySignal": "シグナルにより終了",
+    "failed": "失敗",
+    "copyOutput": "出力をコピー",
+    "copied": "コピーしました",
+    "sendToKun": "Kun に送る",
+    "sendToKunTitle": "この出力を入力欄に添付します",
+    "sendCopiedInstead": "代わりにコピーしました",
+    "sendUnavailable": "添付できません",
+    "sendUnavailableTitle": "この出力を入力欄に添付できませんでした",
+    "dismiss": "閉じる",
+    "showOutput": "{{command}} の出力を表示",
+    "hideOutput": "{{command}} の出力を隠す",
+    "outputLabel": "{{command}} の出力",
+    "outputFile": "完全な出力：{{path}}",
+    "outputTruncated": "プレビューは省略されています",
+    "noOutput": "（まだ出力はありません）",
+    "empty": "バックグラウンドコマンドはありません。"
+  }
+}

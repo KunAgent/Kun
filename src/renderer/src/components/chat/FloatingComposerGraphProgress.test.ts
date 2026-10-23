@@ -1,154 +1,42 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
-import { useGraphStore } from '../../graph/graph-store'
-import type {
-  GraphPlanNode,
-  GraphPlanningDraftView,
-  GraphRun
-} from '../../graph/graph-types'
 import {
   FloatingComposerGraphPreview,
-  FloatingComposerGraphProgress
+  GraphPlanningCorrectionSheet,
+  GraphProgressSegment,
+  GraphProgressSheet
 } from './FloatingComposerGraphProgress'
+import { GRAPH_INSPECT_HOVER_DELAY_MS, graphInspectorLivenessLabel } from './FloatingComposerGraphPreview'
 import {
+  COMPOSER_GRAPH_MIN_SCALE,
   getComposerGraphProgress,
   layoutComposerGraph,
   selectComposerGraphRun
 } from './composer-graph-preview'
-import { calculateComposerPopoverPlacement } from './floating-composer-popover-placement'
+import {
+  graphTestCorrection,
+  graphTestRun,
+  graphTestRunWithChild
+} from './composer-tray/graph-tray-test-fixtures'
 
-function graphNode(
-  id: string,
-  phaseId: string,
-  assignmentName?: string
-): GraphPlanNode {
-  return {
-    id,
-    phaseId,
-    kind: 'work',
-    title: `Node ${id}`,
-    objective: `Complete the detailed objective for ${id}.`,
-    priority: 1,
-    required: true,
-    riskClass: 'low',
-    assignment: assignmentName
-      ? {
-          kind: 'ephemeral',
-          name: assignmentName,
-          systemPrompt: `Own ${id}.`
-        }
-      : undefined,
-    readScopes: [],
-    writeScopes: []
-  }
+function nodeButton(renderer: ReactTestRenderer, nodeId: string): ReactTestInstance {
+  return renderer.root.find((instance) =>
+    instance.type === 'button' && instance.props['data-graph-preview-node'] === nodeId)
 }
 
-function graphRun({
-  id = 'run_1',
-  status = 'running'
-}: {
-  id?: string
-  status?: GraphRun['status']
-} = {}): GraphRun {
-  const nodes = [
-    graphNode('audit', 'discover', 'Explorer'),
-    graphNode('implement', 'build', 'Builder'),
-    graphNode('review', 'verify', 'Reviewer')
-  ]
-  return {
-    version: 1,
-    id,
-    projectId: 'project_1',
-    threadId: 'thread_1',
-    sourceTurnId: 'turn_1',
-    status,
-    currentRevision: 1,
-    plans: [{
-      version: 1,
-      revision: 1,
-      title: 'Ship a usable Graph experience',
-      goal: 'Plan, implement, and verify the feature.',
-      workspaceRoot: '/repo',
-      phases: [
-        { id: 'verify', title: 'Verify', order: 3 },
-        { id: 'discover', title: 'Discover', order: 1 },
-        { id: 'build', title: 'Build', order: 2 }
-      ],
-      nodes,
-      edges: [
-        { id: 'edge_audit_build', kind: 'control', from: 'audit', to: 'implement' },
-        { id: 'edge_build_review', kind: 'control', from: 'implement', to: 'review' }
-      ],
-      completionNodeIds: ['review'],
-      createdAt: '2026-07-27T00:00:00.000Z'
-    }],
-    nodes: {
-      audit: { node: nodes[0]!, status: 'accepted', attempts: [], loopIteration: 0 },
-      implement: { node: nodes[1]!, status: 'running', attempts: [], loopIteration: 0 },
-      review: { node: nodes[2]!, status: 'pending', attempts: [], loopIteration: 0 }
-    },
-    reviews: [],
-    messages: [],
-    artifacts: [],
-    cleanup: [],
-    steering: [],
-    budget: {
-      limits: {
-        maxWallTimeMs: 60_000,
-        maxAttemptsPerNode: 3
-      },
-      attempts: 1,
-      revisions: 0,
-      loopIterations: 0,
-      elapsedMs: 1_000,
-      totalTokens: 500,
-      messages: 0,
-      artifactBytes: 0,
-      warningKinds: [],
-      closed: false
-    },
-    lastEventSeq: 5,
-    createdAt: '2026-07-27T00:00:00.000Z',
-    updatedAt: '2026-07-27T00:01:00.000Z'
-  }
+function textOf(instance: ReactTestInstance): string {
+  return instance.children
+    .map((child) => (typeof child === 'string' ? child : textOf(child)))
+    .join('')
 }
 
-const originalRefreshThread = useGraphStore.getState().refreshThread
-
-describe('FloatingComposerGraphProgress', () => {
-  beforeAll(async () => {
-    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    await i18n.changeLanguage('en')
-  })
-
-  afterAll(() => {
-    act(() => {
-      useGraphStore.setState({ refreshThread: originalRefreshThread })
-    })
-    delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT
-  })
-
-  beforeEach(() => {
-    act(() => {
-      useGraphStore.setState({
-        threadId: 'thread_1',
-        runs: [graphRun()],
-        drafts: [],
-        childRuns: {},
-        childReturnTarget: null,
-        selectedRunId: 'run_1',
-        selectedNodeId: null,
-        refreshThread: vi.fn().mockResolvedValue(undefined)
-      })
-    })
-  })
-
+describe('composer Graph progress projection', () => {
   it('selects only active runs for the composer progress surface', () => {
-    const failed = graphRun({ id: 'failed', status: 'failed' })
-    const active = graphRun({ id: 'active' })
+    const failed = graphTestRun({ id: 'failed', status: 'failed' })
+    const active = graphTestRun({ id: 'active' })
 
     expect(selectComposerGraphRun([failed, active], 'failed')?.id).toBe('active')
     expect(selectComposerGraphRun([failed], 'failed')).toBeNull()
@@ -156,13 +44,15 @@ describe('FloatingComposerGraphProgress', () => {
   })
 
   it('projects progress, ordered phases, assigned subagents, and directed edges', () => {
-    const run = graphRun()
+    const run = graphTestRun()
     expect(getComposerGraphProgress(run)).toEqual({
       completed: 1,
       total: 3,
       fraction: 1 / 3,
       activeAgents: ['Builder'],
       activeCount: 1,
+      activeNodeIds: ['implement'],
+      activeNodeTitles: ['Node implement'],
       currentNodeTitle: 'Node implement',
       currentNodeId: 'implement',
       currentStatus: 'running',
@@ -187,7 +77,7 @@ describe('FloatingComposerGraphProgress', () => {
   it.each(['submitted', 'reviewing'] as const)(
     'keeps edges into a %s node static while no Lead lease exists',
     (status) => {
-      const run = graphRun()
+      const run = graphTestRun()
       run.nodes.implement!.status = status
 
       expect(layoutComposerGraph(run).edges.map((edge) => [edge.id, edge.flowing])).toEqual([
@@ -199,7 +89,7 @@ describe('FloatingComposerGraphProgress', () => {
   )
 
   it('flows into a review node only while the Lead holds active review work', () => {
-    const run = graphRun()
+    const run = graphTestRun()
     run.nodes.implement!.status = 'reviewing'
     run.supervision = {
       version: 1,
@@ -228,18 +118,17 @@ describe('FloatingComposerGraphProgress', () => {
   })
 
   it('continues showing retry preparation as processing work', () => {
-    const run = graphRun()
+    const run = graphTestRun()
     run.nodes.implement!.status = 'repair_required'
 
     expect(layoutComposerGraph(run).edges[0]?.flowing).toBe(true)
   })
 
   it('separates zero accepted completion from an actively running node', () => {
-    const run = graphRun()
+    const run = graphTestRun()
     run.nodes.audit!.status = 'blocked'
-    const progress = getComposerGraphProgress(run)
 
-    expect(progress).toMatchObject({
+    expect(getComposerGraphProgress(run)).toMatchObject({
       completed: 0,
       total: 3,
       fraction: 0,
@@ -251,8 +140,7 @@ describe('FloatingComposerGraphProgress', () => {
   })
 
   it('does not count skipped or superseded nodes as accepted progress', () => {
-    const run = graphRun({ status: 'failed' })
-    run.nodes.audit!.status = 'accepted'
+    const run = graphTestRun({ status: 'failed' })
     run.nodes.implement!.status = 'skipped'
     run.nodes.review!.status = 'superseded'
 
@@ -263,205 +151,277 @@ describe('FloatingComposerGraphProgress', () => {
       activeCount: 0
     })
   })
+})
 
-  it('does not animate or surface stale child activity for a terminal run', () => {
-    const run = graphRun({ status: 'cancelled' })
+describe('Graph tray node map and sheet', () => {
+  beforeAll(async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    await i18n.changeLanguage('en')
+  })
+
+  afterAll(() => {
+    delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('draws node cards with board states, neutral edges and a bounded canvas', () => {
+    const html = renderToStaticMarkup(createElement(FloatingComposerGraphPreview, {
+      run: graphTestRun(),
+      onOpenGraph: vi.fn()
+    }))
+    const layout = layoutComposerGraph(graphTestRun())
+
+    expect(html).toContain('Directed Graph preview with 3 phases and 3 nodes')
+    expect(html).toMatch(/data-graph-preview-node="audit" data-state="done"/)
+    expect(html).toMatch(/data-graph-preview-node="implement" data-state="running"/)
+    expect(html).toMatch(/data-graph-preview-node="review" data-state="pending"/)
+    expect(html).toContain('Explorer · accepted')
+    expect(html).toContain('Builder · Working')
+    expect(html).toContain('Waiting for upstream node')
+    expect(html).toContain('data-graph-preview-edge="edge_audit_build"')
+    expect(html).toContain('data-flowing="true"')
+    expect(html).toContain('vector-effect="non-scaling-stroke"')
+    expect(html).not.toContain('marker-end')
+    expect(html).toContain(`max-width:${layout.width}px`)
+    expect(html).toContain(`min-width:${Math.ceil(layout.width * COMPOSER_GRAPH_MIN_SCALE)}px`)
+    // Inspector starts on the running node, which is the map's only Tab stop.
+    expect(html).toContain('data-graph-preview-inspector="implement"')
+    expect(html.match(/tabindex="0"/g)).toHaveLength(1)
+    expect(html).toMatch(/data-graph-preview-node="implement"[^>]*tabindex="0"/)
+    expect(html).toMatch(/data-graph-preview-node="audit"[^>]*tabindex="-1"/)
+    expect(html).toContain('Assigned to Builder')
+  })
+
+  it('does not surface stale child activity for a terminal run', () => {
+    const { run, childRuns } = graphTestRunWithChild(new Date().toISOString())
+    run.status = 'cancelled'
+    childRuns.child_implement = {
+      ...childRuns.child_implement!,
+      activity: {
+        phase: 'responding',
+        label: 'Writing response',
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    }
     const html = renderToStaticMarkup(createElement(FloatingComposerGraphPreview, {
       run,
+      childRuns,
       onOpenGraph: vi.fn()
     }))
 
-    expect(getComposerGraphProgress(run)).toMatchObject({ activeCount: 0 })
-    expect(html).not.toContain('ds-subagent-dot-pulse')
-    expect(html).not.toContain('data-graph-preview-edge-flow')
+    expect(getComposerGraphProgress(run, childRuns)).toMatchObject({ activeCount: 0 })
+    expect(html).not.toContain('data-state="running"')
+    expect(html).not.toContain('data-flowing')
     expect(html).not.toContain('Writing response')
     expect(html).toContain('cancelled')
   })
 
-  it('places the bounded Graph preview above the composer when room is available', () => {
-    const placement = calculateComposerPopoverPlacement({
-      anchorRect: { left: 430, right: 1130, top: 720, bottom: 764 },
-      popoverHeight: 390,
-      viewportHeight: 900,
-      viewportWidth: 1560,
-      preferredWidth: 680,
-      maximumHeight: 420
-    })
-
-    expect(placement).toEqual({
-      left: 440,
-      top: 322,
-      width: 680,
-      maxHeight: 420
-    })
-  })
-
-  it('renders the full preview and opens a selected node in the Graph workbench', async () => {
+  it('opens a clicked node in the full Graph and inspects hovered nodes', async () => {
+    vi.useFakeTimers()
     const onOpenGraph = vi.fn()
     let renderer: ReactTestRenderer
     await act(async () => {
-      renderer = create(createElement(FloatingComposerGraphPreview, {
-        run: graphRun(),
-        onOpenGraph
-      }))
+      renderer = create(createElement(FloatingComposerGraphPreview, { run: graphTestRun(), onOpenGraph }))
     })
+    const inspected = (): unknown => renderer!.root.find((instance) =>
+      instance.type === 'div' && instance.props['data-graph-preview-inspector'] !== undefined
+    ).props['data-graph-preview-inspector']
 
-    const node = renderer!.root.find((instance) =>
-      instance.props['data-graph-preview-node'] === 'implement')
-    act(() => node.props.onClick())
+    act(() => nodeButton(renderer!, 'implement').props.onClick())
     expect(onOpenGraph).toHaveBeenCalledWith('run_1', 'implement')
-
-    const html = renderToStaticMarkup(createElement(FloatingComposerGraphPreview, {
-      run: graphRun(),
-      onOpenGraph
-    }))
-    expect(html).toContain('Directed Graph preview with 3 phases and 3 nodes')
-    expect(html).toContain('data-graph-preview-edge="edge_audit_build"')
-    expect(html).toContain('data-graph-preview-edge-flow="edge_audit_build"')
-    expect(html).not.toContain('data-graph-preview-edge-flow="edge_build_review"')
-    expect(html).toContain('marker-end="url(#graph-composer-arrow-run_1)"')
-    expect(html).toContain('marker-end="url(#graph-composer-active-arrow-run_1)"')
-    expect(html).toContain('Builder')
+    // Crossing a card on the way to the inspector does not switch it.
+    act(() => nodeButton(renderer!, 'review').props.onPointerEnter())
+    act(() => { vi.advanceTimersByTime(GRAPH_INSPECT_HOVER_DELAY_MS - 60) })
+    act(() => nodeButton(renderer!, 'review').props.onPointerLeave())
+    act(() => { vi.advanceTimersByTime(GRAPH_INSPECT_HOVER_DELAY_MS) })
+    expect(inspected()).toBe('implement')
+    // Resting on a card inspects it, and it stays after the pointer leaves.
+    act(() => nodeButton(renderer!, 'audit').props.onPointerEnter())
+    act(() => { vi.advanceTimersByTime(GRAPH_INSPECT_HOVER_DELAY_MS) })
+    act(() => nodeButton(renderer!, 'audit').props.onPointerLeave())
+    expect(inspected()).toBe('audit')
+    const inspector = renderer!.root.find((instance) => instance.props['data-graph-preview-inspector'] === 'audit')
+    expect(textOf(inspector)).toContain('Node audit')
+    expect(textOf(inspector)).toContain('accepted')
+    expect(nodeButton(renderer!, 'audit').props['data-inspected']).toBe('true')
+    expect(nodeButton(renderer!, 'audit').props['aria-label'])
+      .toBe('Node audit, accepted, assigned to Explorer. Open node details.')
     act(() => renderer!.unmount())
   })
 
-  it('fits and clips long node copy while preserving full accessible text', () => {
-    const run = graphRun()
-    const longTitle = '摸清文档顶部页与官网设计语言'
-    const longAgent = 'work-inspect-document-header-and-official-site-language'
-    run.plans[0]!.phases[0]!.title = '现状与设计语言摸底及完整证据检查'
-    run.plans[0]!.nodes[0]!.title = longTitle
-    run.plans[0]!.nodes[0]!.assignment = {
-      kind: 'ephemeral',
-      name: longAgent,
-      systemPrompt: 'Inspect.'
-    }
+  it('shows liveness, retries and the live-work action for the inspected child', async () => {
+    const now = Date.now()
+    const { run, childRuns } = graphTestRunWithChild(new Date(now - 4_000).toISOString(), { attemptNumber: 3 })
+    const onOpenChild = vi.fn()
+    let renderer: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(FloatingComposerGraphPreview, {
+        run,
+        childRuns,
+        initialNodeId: 'implement',
+        onOpenGraph: vi.fn(),
+        onOpenChild
+      }))
+    })
 
+    expect(textOf(nodeButton(renderer!, 'implement'))).toContain('Builder · Retry 2')
+    const inspector = renderer!.root.find((instance) => instance.props['data-graph-preview-inspector'] === 'implement')
+    expect(textOf(inspector)).toMatch(/Last activity [45]s ago/)
+    const liveWork = renderer!.root.find((instance) =>
+      instance.type === 'button' && instance.props['data-graph-view-live-work'] === true)
+    act(() => liveWork.props.onClick())
+    expect(onOpenChild).toHaveBeenCalledWith('run_1', 'implement', 'attempt_implement', 'child_implement')
+    act(() => renderer!.unmount())
+  })
+
+  it('marks a silent running node and its inspector line as waiting', () => {
+    const { run, childRuns } = graphTestRunWithChild(new Date(Date.now() - 95_000).toISOString())
     const html = renderToStaticMarkup(createElement(FloatingComposerGraphPreview, {
       run,
+      childRuns,
       onOpenGraph: vi.fn()
     }))
 
-    expect(html).toContain(longTitle)
-    expect(html).toContain(longAgent)
-    expect(html).toContain('data-graph-preview-node-title')
-    expect(html).toContain('data-graph-preview-node-agent')
-    expect(html).toContain('data-graph-preview-node-status')
-    expect(html).toContain('data-label-truncated="true"')
-    expect(html).toMatch(/clip-path="url\(#graph-preview-node-[^"]+-title\)"/)
-    expect(html).toMatch(/clip-path="url\(#graph-preview-node-[^"]+-agent\)"/)
-    expect(html).toMatch(/clip-path="url\(#graph-preview-node-[^"]+-status\)"/)
+    expect(html).toMatch(/data-graph-preview-node="implement" data-state="attention"/)
+    expect(html).toContain('Still waiting for a model or tool response')
+    expect(html).toContain('Last activity 1 min ago')
+    expect(html).toMatch(/class="ds-graph-tray-inspector-liveness" data-tone="waiting"/)
   })
 
-  it('replaces flowing motion with a static highlighted incoming edge', () => {
-    const html = renderToStaticMarkup(createElement(FloatingComposerGraphPreview, {
-      run: graphRun(),
-      reducedMotion: true,
-      onOpenGraph: vi.fn()
-    }))
-
-    expect(html).toContain('data-graph-preview-edge-flow="edge_audit_build"')
-    expect(html).toContain('class="graph-composer-edge-flow is-static"')
-    expect(html).toContain('opacity="0.72"')
-    expect(html).not.toContain('stroke-dasharray="7 9"')
-  })
-
-  it('refreshes durable truth and opens the preview on hover', async () => {
-    let renderer: ReactTestRenderer
-    await act(async () => {
-      renderer = create(createElement(FloatingComposerGraphProgress, {
-        threadId: 'thread_1',
-        enabled: true,
-        onOpenGraph: vi.fn()
-      }))
-    })
-
-    expect(useGraphStore.getState().refreshThread).toHaveBeenCalledWith('thread_1')
-    const trigger = renderer!.root.find((instance) => instance.props['aria-haspopup'] === 'dialog')
-    expect(trigger.props['aria-expanded']).toBe(false)
-    await act(async () => trigger.props.onPointerEnter())
-    expect(renderer!.root.find((instance) =>
-      instance.props['aria-haspopup'] === 'dialog').props['aria-expanded']).toBe(true)
-    act(() => renderer!.unmount())
-  })
-
-  it('replaces the running surface with correction actions when planning pauses', async () => {
-    const resumeDraft = vi.fn().mockResolvedValue(undefined)
-    const cancelDraft = vi.fn().mockResolvedValue(undefined)
-    const correction: GraphPlanningDraftView = {
-      draft: {
-        version: 1,
-        id: 'draft_correction',
-        reservedRunId: 'run_reserved',
-        threadId: 'thread_1',
-        sourceTurnId: 'turn_1',
-        projectId: 'project_1',
-        goal: 'Implement and verify TimeKV.',
-        revision: 3,
-        status: 'needs_correction',
-        issues: [{
-          code: 'invalid_type',
-          path: ['plan', 'tasks', 0, 'title'],
-          message: 'Expected string, received undefined',
-          repairHint: 'Restore the task title.'
-        }],
-        repairCount: 1,
-        createdAt: '2026-07-31T00:00:00.000Z',
-        updatedAt: '2026-07-31T00:00:01.000Z'
-      },
-      tasks: []
-    }
-    act(() => {
-      useGraphStore.setState({
-        runs: [],
-        drafts: [correction],
-        selectedRunId: null,
-        resumeDraft,
-        cancelDraft
+  it('names a non-working phase before the last activity in the inspector', () => {
+    const t = i18n.getFixedT('en', 'common')
+    const live = { elapsedMs: 0, quiet: false, lastActivityAgeMs: 12_000 }
+    const label = (kind: 'working' | 'active_review', extra: Record<string, string> = {}): string =>
+      graphInspectorLivenessLabel({
+        run: { status: 'running' },
+        node: { status: 'running' },
+        liveness: { kind, ...live, ...extra },
+        t
       })
-    })
 
+    expect(label('working')).toBe('Last activity 12s ago')
+    expect(label('working', { activityLabel: 'Running npm test' })).toBe('Running npm test · Last activity 12s ago')
+    expect(label('active_review')).toBe('Lead reviewing · Last activity 12s ago')
+    expect(graphInspectorLivenessLabel({
+      run: { status: 'completed' },
+      node: { status: 'running' },
+      liveness: null,
+      t
+    })).toBe('completed')
+  })
+
+  it('renders the segment with an accepted-work track and a tabular count', () => {
+    const html = renderToStaticMarkup(createElement(GraphProgressSegment, {
+      label: 'Graph · Node implement',
+      accepted: 1,
+      total: 3,
+      fraction: 1 / 3
+    }))
+
+    expect(html).toContain('Graph · Node implement')
+    expect(html).toContain('style="width:33%"')
+    expect(html).toContain('>1/3<')
+    const compact = renderToStaticMarkup(createElement(GraphProgressSegment, {
+      label: 'Graph · Node implement',
+      accepted: 1,
+      total: 3,
+      fraction: 1 / 3,
+      waiting: true,
+      compact: true
+    }))
+    expect(compact).not.toContain('Node implement')
+    expect(compact).not.toContain('ds-graph-tray-track')
+    expect(compact).toContain('>1/3<')
+  })
+
+  it('folds the sheet before leaving for the full Graph or a child session', async () => {
+    const run = graphTestRun()
+    const onOpenGraph = vi.fn()
+    const onClose = vi.fn()
     let renderer: ReactTestRenderer
     await act(async () => {
-      renderer = create(createElement(FloatingComposerGraphProgress, {
-        threadId: 'thread_1',
-        enabled: true
+      renderer = create(createElement(GraphProgressSheet, {
+        run,
+        progress: getComposerGraphProgress(run),
+        childRuns: {},
+        onOpenGraph,
+        onClose
       }))
     })
 
-    expect(renderer!.root.findByProps({ 'data-graph-planning-correction': true })).toBeDefined()
-    await act(async () => {
-      renderer!.root.findByProps({ 'data-graph-planning-resume': true }).props.onClick()
-      renderer!.root.findByProps({ 'data-graph-planning-cancel': true }).props.onClick()
-    })
-    expect(resumeDraft).toHaveBeenCalledWith('draft_correction')
-    expect(cancelDraft).toHaveBeenCalledWith('draft_correction')
+    const header = textOf(renderer!.root.find((instance) => instance.props['data-graph-tray-sheet'] === 'run_1'))
+    expect(header).toContain('Graph run')
+    expect(header).toContain('1 of 3 nodes accepted · 1 running')
+    act(() => renderer!.root.find((instance) =>
+      instance.type === 'button' && instance.props['data-graph-open-full'] === true).props.onClick())
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onOpenGraph).toHaveBeenCalledWith('run_1', undefined)
+    act(() => nodeButton(renderer!, 'review').props.onClick())
+    expect(onOpenGraph).toHaveBeenLastCalledWith('run_1', 'review')
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Collapse' }).props.onClick())
+    expect(onClose).toHaveBeenCalledTimes(3)
     act(() => renderer!.unmount())
   })
 
-  it('occupies no composer space when only another thread has a Graph run', async () => {
+  it('lists correction issues and runs one correction action at a time', async () => {
+    let resolveResume: () => void = () => undefined
+    const onResume = vi.fn(() => new Promise<void>((resolve) => { resolveResume = resolve }))
+    const onCancel = vi.fn()
     let renderer: ReactTestRenderer
     await act(async () => {
-      renderer = create(createElement(FloatingComposerGraphProgress, {
-        threadId: 'thread_2',
-        enabled: true
+      renderer = create(createElement(GraphPlanningCorrectionSheet, {
+        correction: graphTestCorrection(5),
+        onResume,
+        onCancel,
+        onClose: vi.fn()
       }))
     })
-    expect(renderer!.toJSON()).toBeNull()
+
+    const sheet = renderer!.root.find((instance) =>
+      instance.props['data-graph-planning-correction-sheet'] === 'draft_correction')
+    expect(textOf(sheet)).toContain('Expected string, received undefined')
+    expect(textOf(sheet)).toContain('plan.tasks.0.title')
+    expect(textOf(sheet)).toContain('Restore the task title.')
+    expect(textOf(sheet)).toContain('2 more issues')
+    // The note sits under the issues, so it must not point "below".
+    expect(textOf(sheet)).toContain('The draft is saved. Add guidance in chat, then continue planning.')
+    expect(textOf(sheet)).not.toContain('below')
+    const resume = (): ReactTestInstance => renderer!.root.find((instance) =>
+      instance.type === 'button' && instance.props['data-graph-planning-resume'] === true)
+    const cancel = (): ReactTestInstance => renderer!.root.find((instance) =>
+      instance.type === 'button' && instance.props['data-graph-planning-cancel'] === true)
+    await act(async () => resume().props.onClick())
+    expect(onResume).toHaveBeenCalledWith('draft_correction')
+    expect(resume().props.disabled).toBe(true)
+    expect(cancel().props.disabled).toBe(true)
+    await act(async () => resolveResume())
+    expect(cancel().props.disabled).toBe(false)
+    await act(async () => cancel().props.onClick())
+    expect(onCancel).toHaveBeenCalledWith('draft_correction')
     act(() => renderer!.unmount())
   })
 
-  it('occupies no composer space and does not refresh while Graph is disabled', async () => {
-    let renderer: ReactTestRenderer
-    await act(async () => {
-      renderer = create(createElement(FloatingComposerGraphProgress, {
-        threadId: 'thread_1',
-        enabled: false
-      }))
-    })
+  it('speaks Chinese on the sheet header and node map', async () => {
+    await i18n.loadLanguages('zh')
+    await i18n.changeLanguage('zh')
+    const run = graphTestRun()
+    const html = renderToStaticMarkup(createElement(GraphProgressSheet, {
+      run,
+      progress: getComposerGraphProgress(run),
+      childRuns: {},
+      onOpenGraph: vi.fn(),
+      onClose: vi.fn()
+    }))
+    await i18n.changeLanguage('en')
 
-    expect(renderer!.toJSON()).toBeNull()
-    expect(useGraphStore.getState().refreshThread).not.toHaveBeenCalled()
-    act(() => renderer!.unmount())
+    expect(html).toContain('Graph 编排')
+    expect(html).toContain('已验收 1 / 3 个节点 · 1 个运行中')
+    expect(html).toContain('打开完整 Graph')
+    expect(html).toContain('等待上游节点')
+    expect(html).toContain('派发给 Builder')
   })
 })

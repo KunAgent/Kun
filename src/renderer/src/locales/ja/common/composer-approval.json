@@ -1,0 +1,46 @@
+{
+  "composerApproval": {
+    "header": "承認が必要です",
+    "kind": {
+      "command": "コマンドを実行",
+      "edit": "ファイルを編集",
+      "email": "メールを送信",
+      "tool": "{{name}} を使用",
+      "toolUnnamed": "ツールを使用"
+    },
+    "question": {
+      "edit": "{{file}} を編集しますか？",
+      "editFiles_one": "この {{count}} 件のファイルを編集しますか？",
+      "editFiles_other": "この {{count}} 件のファイルを編集しますか？"
+    },
+    "preview": {
+      "terminal": "ターミナル",
+      "email": "メール",
+      "awaiting": "承認待ち",
+      "files_one": "{{count}} 件のファイル",
+      "files_other": "{{count}} 件のファイル",
+      "diffStats": "{{added}} 行追加、{{removed}} 行削除",
+      "clipped": "変更量が多いため、残りは表示していません",
+      "truncated": "引数が長いため、このプレビューは一部のみ表示しています",
+      "moreInput_one": "さらに {{count}} 件の引数",
+      "moreInput_other": "さらに {{count}} 件の引数"
+    },
+    "option": {
+      "allow": "許可",
+      "allowAlways": "常に許可",
+      "deny": "拒否",
+      "denyAlways": "常に拒否",
+      "once": "今回だけ",
+      "denyOnce": "今回だけ拒否",
+      "alwaysSession": "このセッション中は再確認しない",
+      "alwaysScoped": "このセッション中は {{scope}} について再確認しない",
+      "alwaysScopedEdit": "このセッション中は {{scope}} 内の編集について再確認しない",
+      "denyAlwaysSession": "このセッション中は同種の操作をすべて拒否"
+    },
+    "feedbackPlaceholder": "Kun に代わりの方法を伝えてください。拒否と一緒に送信されます…",
+    "feedbackEmailPlaceholder": "Kun に変更内容を伝えてください。拒否と一緒に送信されます…",
+    "feedbackLabel": "拒否と一緒に送るメモ",
+    "hint": "1〜{{last}} で選択、または ↑↓ で移動してから Enter",
+    "confirm": "確定"
+  }
+}
