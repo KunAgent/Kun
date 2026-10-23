@@ -31,6 +31,8 @@ import {
 
 import { FileAttachmentStore } from '../../src/attachments/attachment-store.js'
 
+import { codexModelCatalogResponse, isCodexModelCatalogRequest } from './image-gen-codex-catalog.fixture.js'
+
 import {
   buildRuntimeCapabilityManifest,
   KunCapabilitiesConfig
@@ -452,6 +454,7 @@ it('posts Codex subscription image requests through responses image_generation S
     const requests: Array<{ url: string; headers: Record<string, string>; body: string }> = []
     const resultBase64 = png(8, 8).toString('base64')
     vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push({
         url: String(url),
         headers: init?.headers as Record<string, string>,
@@ -588,7 +591,8 @@ it('posts Grok subscription image requests with native ratios and 1K/2K resoluti
 it('posts Codex subscription image edits with input images and edit action', async () => {
     const requests: Array<{ body: string }> = []
     const resultBase64 = png(8, 8).toString('base64')
-    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push({ body: String(init?.body) })
       return new Response([
         `data: ${JSON.stringify({

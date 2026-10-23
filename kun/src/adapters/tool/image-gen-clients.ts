@@ -2,7 +2,6 @@ import type { ImageGenClient, ImageGenEditRequest, ImageGenRequest, GeneratedIma
 import { createProxyFetch } from '../model/proxy-fetch.js'
 import {
   CODEX_IMAGE_INSTRUCTIONS,
-  CODEX_IMAGE_RESPONSES_MODEL,
   ImageGenHttpError,
   MAX_CODEX_IMAGE_SSE_BYTES,
   SIZE_TIERS,
@@ -23,6 +22,13 @@ import {
   type MiniMaxImagePayload,
   type VolcengineArkImagesPayload
 } from './image-gen-client-codecs.js'
+import {
+  CodexOuterModelRejectedError,
+  codexImageGenerationStarted,
+  codexProviderDetail,
+  isCodexOuterModelRejection,
+  resolveCodexImageOuterModels
+} from './codex-image-outer-models.js'
 
 export function createImageGenClient(config: {
   protocol?: string
@@ -311,12 +317,15 @@ function grokImagineResolution(size: string | undefined): '1k' | '2k' {
   return longEdge && longEdge >= SIZE_TIERS['2K'] ? '2k' : '1k'
 }
 
+/** Upper bound on image POSTs for one call, across outer-model and tool-choice retries. */
+const MAX_CODEX_IMAGE_POSTS = 6
+
 export class CodexResponsesImageClient implements ImageGenClient {
   readonly id = 'codex-responses-image'
   private readonly endpointUrl: string
 
   constructor(
-    baseUrl: string,
+    private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly headers: Record<string, string> = {},
     private readonly fetchImpl: typeof fetch = fetch
@@ -332,18 +341,66 @@ export class CodexResponsesImageClient implements ImageGenClient {
     return this.requestImage(request, request.images)
   }
 
+  /**
+   * The Responses `model` and the `image_generation` tool model are different
+   * choices. The outer model must be one this ChatGPT account may call, so it
+   * comes from the account catalog and never from the image model setting.
+   */
   private async requestImage(
     request: ImageGenRequest,
     inputImages: { name: string; mimeType: string; data: Buffer }[]
   ): Promise<GeneratedImage> {
     const signal = withTimeout(request.signal, request.timeoutMs)
+    const plan = await resolveCodexImageOuterModels({
+      baseUrl: this.baseUrl,
+      apiKey: this.apiKey,
+      headers: this.headers,
+      fetchImpl: this.fetchImpl,
+      signal
+    })
+    const rejections: { outerModel: string; detail: string }[] = []
+    // One shared request budget keeps the compatibility ladder from multiplying
+    // by the number of candidate outer models on a broken connection.
+    const budget = { remaining: MAX_CODEX_IMAGE_POSTS }
+    for (const outerModel of plan.models) {
+      try {
+        return await this.requestImageWithOuterModel(
+          outerModel, request, inputImages, signal, budget, plan.accountCatalog
+        )
+      } catch (error) {
+        if (!(error instanceof CodexOuterModelRejectedError)) throw error
+        rejections.push({ outerModel, detail: error.detail })
+        if (budget.remaining <= 0) break
+      }
+    }
+    const tried = rejections.map((entry) => entry.outerModel).join(', ')
+    const reason = rejections[0]?.detail ?? 'no outer model was attempted'
+    if (rejections.length <= 1) {
+      // Nothing was swapped away from, so keep the provider's own error shape
+      // and wording instead of inventing a multi-model failure message.
+      throw new Error(reason)
+    }
+    throw new Error(
+      `Codex image generation rejected every outer model it could try on this connection ` +
+      `(tried ${tried}; image model ${request.model} was kept). Provider said: ${reason}`
+    )
+  }
+
+  private async requestImageWithOuterModel(
+    outerModel: string,
+    request: ImageGenRequest,
+    inputImages: { name: string; mimeType: string; data: Buffer }[],
+    signal: AbortSignal,
+    budget: { remaining: number },
+    allowOuterModelRejection: boolean
+  ): Promise<GeneratedImage> {
     const shouldRequestInputFidelity = inputImages.length > 0 &&
       codexImageModelSupportsInputFidelity(request.model)
     const buildBody = (
       toolChoiceMode: CodexImageToolChoiceMode,
       includeInputFidelity: boolean
     ) => JSON.stringify({
-      model: CODEX_IMAGE_RESPONSES_MODEL,
+      model: outerModel,
       input: [
         {
           type: 'message',
@@ -395,6 +452,13 @@ export class CodexResponsesImageClient implements ImageGenClient {
       mode: CodexImageToolChoiceMode,
       withInputFidelity: boolean
     ): Promise<{ response: Response; text: string }> => {
+      if (budget.remaining <= 0) {
+        throw new CodexOuterModelRejectedError(
+          outerModel,
+          'this call already used its image request budget on earlier outer models'
+        )
+      }
+      budget.remaining -= 1
       let response: Response
       try {
         response = await this.fetchImpl(this.endpointUrl, {
@@ -433,19 +497,44 @@ export class CodexResponsesImageClient implements ImageGenClient {
         ;({ response, text } = await post(mode, false))
       }
       if (!response.ok) {
+        if (allowOuterModelRejection && isCodexOuterModelRejection({
+          status: response.status, text, outerModel, imageModel: request.model
+        })) {
+          throw new CodexOuterModelRejectedError(outerModel, codexProviderDetail(text))
+        }
         const error = new ImageGenHttpError(response.status, text)
         lastHttpError = error
         if (isCodexToolChoiceError(response.status, text)) continue
         throw error
       }
-      const image = extractCodexResponsesImage(text)
+      let image: GeneratedImage | null
+      try {
+        image = extractCodexResponsesImage(text)
+      } catch (error) {
+        // A failed stream is still about this outer model, but only a clear
+        // rejection before any image data may move on to the next candidate.
+        if (
+          allowOuterModelRejection &&
+          !codexImageGenerationStarted(text) &&
+          isCodexOuterModelRejection({ text, outerModel, imageModel: request.model })
+        ) {
+          throw new CodexOuterModelRejectedError(outerModel, codexProviderDetail(text))
+        }
+        throw error
+      }
       if (image) return image
       lastEmptyResponse = `Codex image provider returned no image data${summarizeCodexResponsesImage(text)}`
       if (mode !== 'none') continue
     }
-    if (lastEmptyResponse) throw new Error(lastEmptyResponse)
+    if (lastEmptyResponse) {
+      if (!allowOuterModelRejection) throw new Error(lastEmptyResponse)
+      // The model answered without calling image_generation: real capability
+      // evidence that this outer model cannot host the tool.
+      throw new CodexOuterModelRejectedError(outerModel, lastEmptyResponse)
+    }
     if (lastHttpError) throw lastHttpError
-    throw new Error('Codex image provider returned no image data')
+    if (!allowOuterModelRejection) throw new Error('Codex image provider returned no image data')
+    throw new CodexOuterModelRejectedError(outerModel, 'Codex image provider returned no image data')
   }
 }
 
