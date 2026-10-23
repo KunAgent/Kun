@@ -4,6 +4,7 @@ import { displayBucket } from '@shared/activity-display'
 import type { SessionExecutionSummary } from '../../../store/session-execution-summary'
 import type { WorkerRowData } from '../../workers/worker-row-data'
 import { previewLine, workerHue, workerToolActivity } from '../../workers/worker-presentation'
+import { workerSeatMap } from '../../workers/worker-seat'
 import type { TrayTone } from './tray-kind'
 import type { TrayTranslate } from './tray-elapsed'
 
@@ -32,7 +33,8 @@ export type WorkersTrayRow = {
   /** Worker id (the activity unit id, which is also its thread id). */
   id: string
   title: string
-  glyph: string
+  /** Seat in the team's Collaboration shape set (see workerSeatMap). */
+  seat: number
   color: string
   status: WorkersTrayRowStatus
   /** Start of the current state; the running clock counts from it. */
@@ -54,7 +56,7 @@ const STATUS_ORDER: Readonly<Record<WorkersTrayRowStatus, number>> = {
 
 /**
  * Solid avatar fills, indexed by `workerHue` so a worker keeps the hue its
- * Collaboration panel tile uses. Dark enough for white initials in both themes.
+ * Collaboration panel tile uses. Dark enough for a white seat glyph in both themes.
  */
 export const WORKER_AVATAR_COLORS: readonly string[] = [
   '#4561e0',
@@ -64,16 +66,6 @@ export const WORKER_AVATAR_COLORS: readonly string[] = [
   '#8a6a1f',
   '#0369a1'
 ]
-
-const GLYPH_SKIP = /[\s\p{P}\p{S}]/u
-
-/** First letter of the worker title ("补 auth-store 单元测试" → "补", "docs" → "D"). */
-export function workerAvatarGlyph(title: string, fallback = ''): string {
-  for (const char of Array.from(`${title} ${fallback}`)) {
-    if (!GLYPH_SKIP.test(char)) return char.toLocaleUpperCase()
-  }
-  return '?'
-}
 
 /**
  * The worker's own hue, exactly as its Collaboration panel tile picks it, so
@@ -145,6 +137,7 @@ export function buildWorkersTrayRows(
   options: { now: number; feedError: boolean }
 ): WorkersTrayRow[] {
   const built: WorkersTrayRow[] = []
+  const seats = workerSeatMap(rows.map((row) => row.unitId))
   for (const row of rows) {
     const status = workerTrayRowStatus(row, options)
     if (!status) continue
@@ -152,7 +145,7 @@ export function buildWorkersTrayRows(
     built.push({
       id: row.unitId,
       title,
-      glyph: workerAvatarGlyph(row.title, row.harnessId),
+      seat: seats.get(row.unitId) ?? 0,
       color: workerAvatarColor(row.unitId),
       status,
       since: row.stateSince,

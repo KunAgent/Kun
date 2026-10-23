@@ -236,7 +236,7 @@ describe('todo tray kind', () => {
     }
     for (const row of workersRows) {
       expect(avatar(row.id).style.background).toBe(normalized(row.color))
-      expect(avatar(row.id).textContent).toBe(row.glyph)
+      expect(avatar(row.id).querySelector('svg')).not.toBeNull()
     }
   })
 })

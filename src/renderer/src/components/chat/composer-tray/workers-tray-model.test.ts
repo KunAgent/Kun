@@ -3,13 +3,13 @@ import i18n from '../../../i18n'
 import { selectSessionExecutionSummary } from '../../../store/session-execution-summary'
 import { workerRow } from '../../workers/worker-test-fixtures'
 import { workerHue } from '../../workers/worker-presentation'
+import { WORKER_SEAT_COUNT, workerSeatMap } from '../../workers/worker-seat'
 import {
   assignWorkerAvatarColors,
   buildWorkersTrayRows,
   longestRunningSince,
   WORKER_AVATAR_COLORS,
   workerAvatarColor,
-  workerAvatarGlyph,
   workerRowNote,
   workerRunningActivity,
   workersCountDetail,
@@ -29,12 +29,17 @@ beforeAll(async () => {
 })
 
 describe('worker avatars', () => {
-  it('uses the first letter of the title, skipping punctuation and symbols', () => {
-    expect(workerAvatarGlyph('补 auth-store 单元测试')).toBe('补')
-    expect(workerAvatarGlyph('docs')).toBe('D')
-    expect(workerAvatarGlyph('「记住我」说明')).toBe('记')
-    expect(workerAvatarGlyph('  ', 'kun')).toBe('K')
-    expect(workerAvatarGlyph('')).toBe('?')
+  it('gives each team member its own seat, in worker-id order, without shape repeats up to six', () => {
+    const seats = workerSeatMap(['w_tests', 'w_forms', 'w_docs'])
+    expect([...seats.entries()]).toEqual([['w_docs', 0], ['w_forms', 1], ['w_tests', 2]])
+    const crowd = workerSeatMap(Array.from({ length: WORKER_SEAT_COUNT + 2 }, (_, index) => `w${index}`))
+    expect(new Set(crowd.values()).size).toBe(WORKER_SEAT_COUNT)
+    expect(crowd.get(`w${WORKER_SEAT_COUNT}`)).toBe(0)
+  })
+
+  it('puts the seat on every tray row, so the segment and the sheet agree', () => {
+    const rows = buildWorkersTrayRows([workerRow({ unitId: 'b' }), workerRow({ unitId: 'a' })], { now: NOW, feedError: false })
+    expect(Object.fromEntries(rows.map((row) => [row.id, row.seat]))).toEqual({ a: 0, b: 1 })
   })
 
   it('keeps one stable color per worker id', () => {

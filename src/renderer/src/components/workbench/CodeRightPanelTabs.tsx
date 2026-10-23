@@ -27,7 +27,6 @@ import {
   ScanSearch,
   Shapes,
   Shirt,
-  Users,
   X,
   type LucideIcon,
   AppWindow
@@ -48,6 +47,7 @@ import { useWorkerViewStore } from '../workers/worker-view-store'
 import { WorkerSessionTabDot } from '../workers/WorkerSessionTabDot'
 import type { CodeRightTabsState } from './code-right-tabs-state'
 import { FileTypeIcon } from '../FileTypeIcon'
+import { CollaborationIcon } from '../workers/CollaborationIcon'
 import type {
   FilePreviewHostTab,
   FilePreviewHostTabActions,
@@ -154,7 +154,7 @@ export function CodeRightPanelTabs({
     {
       id: BUILTIN_RIGHT_PANEL_IDS.workers,
       label: t('rightPanelWorkers', { defaultValue: 'Workers' }),
-      icon: Users
+      icon: CollaborationIcon
     },
     { id: BUILTIN_RIGHT_PANEL_IDS.conversationInfo, label: t('conversationInfoTab'), icon: IdCard },
     { id: BUILTIN_RIGHT_PANEL_IDS.wardrobe, label: t('rightPanelWardrobe'), icon: Shirt },

@@ -1,45 +1,52 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, ArrowUp, Check, Circle, Clock3, HelpCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, ArrowUp, Check, HelpCircle, Loader2 } from 'lucide-react'
 import type { AdeQuestionRecord } from '@shared/ade-teams'
-import { AgentIcon } from '../agent-icon'
 import { workerHue, type WorkerStatusKind } from './worker-presentation'
+import { WorkerSeatGlyph } from './worker-seat'
 
-/** Tinted tile with the worker's agent mark; the tint tells teammates apart. */
+const AVATAR_CLASS = { 24: 'h-6 w-6', 32: 'h-8 w-8', 36: 'h-9 w-9' } as const
+const AVATAR_GLYPH = { 24: 12, 32: 15, 36: 17 } as const
+
+/**
+ * A member's seat: a solid hue tile with the seat glyph. Status sits on the
+ * tile instead of a text line: a spinning accent ring while it works, an
+ * amber ring while it waits on you, a green or red badge once it settles.
+ */
 export function WorkerAvatar({
   workerId,
-  harnessId,
+  seat,
+  status,
   size = 32
 }: {
   workerId: string
-  harnessId?: string
-  size?: 24 | 32
+  seat: number
+  status?: WorkerStatusKind
+  size?: 24 | 32 | 36
 }): ReactElement {
+  const ring = status === 'working' ? 'running'
+    : status === 'question' || status === 'approval' || status === 'waiting' ? 'warning'
+      : undefined
+  const badge = status === 'done' ? 'success' : status === 'failed' ? 'danger' : undefined
   return (
     <span
-      className={`ds-worker-avatar ${size === 24 ? 'h-6 w-6 rounded-[7px]' : 'h-8 w-8 rounded-[10px]'}`}
+      className={`ds-worker-avatar ${AVATAR_CLASS[size]}`}
       data-hue={workerHue(workerId)}
+      data-seat={seat}
+      data-ring={ring}
+      data-status={status}
       aria-hidden
     >
-      <AgentIcon harnessId={harnessId ?? 'kun'} size={size === 24 ? 13 : 16} />
+      <WorkerSeatGlyph seat={seat} size={AVATAR_GLYPH[size]} />
+      {badge ? (
+        <span className="ds-worker-avatar-badge" data-tone={badge}>
+          {badge === 'success'
+            ? <Check strokeWidth={3.2} aria-hidden />
+            : <AlertCircle strokeWidth={3} aria-hidden />}
+        </span>
+      ) : null}
     </span>
   )
-}
-
-export function WorkerStatusGlyph({
-  kind,
-  size = 13
-}: {
-  kind: WorkerStatusKind
-  size?: number
-}): ReactElement {
-  const style = { width: size, height: size }
-  if (kind === 'working') return <Loader2 style={style} className="shrink-0 animate-spin text-ds-status-running" strokeWidth={2.4} aria-hidden />
-  if (kind === 'question' || kind === 'approval') return <HelpCircle style={style} className="shrink-0" strokeWidth={2.2} aria-hidden />
-  if (kind === 'waiting') return <Clock3 style={style} className="shrink-0" strokeWidth={2.2} aria-hidden />
-  if (kind === 'failed') return <AlertCircle style={style} className="shrink-0" strokeWidth={2.2} aria-hidden />
-  if (kind === 'done') return <Check style={style} className="shrink-0 text-ds-status-success" strokeWidth={2.6} aria-hidden />
-  return <Circle style={style} className="shrink-0 text-ds-faint" strokeWidth={0} fill="currentColor" aria-hidden />
 }
 
 /**

@@ -513,6 +513,10 @@
   font-size: 13px;
 }
 
+.ds-composer-tray-avatar[data-round] {
+  border-radius: 999px;
+}
+
 .ds-composer-tray-avatar-stack {
   display: inline-flex;
   flex-shrink: 0;

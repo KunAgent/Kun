@@ -29,7 +29,6 @@ import {
   Shirt,
   Smartphone,
   Terminal,
-  Users,
   type LucideIcon
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -49,6 +48,7 @@ import { boundedPlainText } from '../../extensions/safe-text'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { useMobilePairings } from '../remote/mobile-pairing-store'
 import { switchRemoteSurface } from '../../mobile/use-remote-surface'
+import { CollaborationIcon } from '../workers/CollaborationIcon'
 
 export type { RightPanelMode } from '../../extensions/contribution-ids'
 
@@ -412,7 +412,7 @@ export function WorkbenchSideRail({
         workersUnfinished > 0
           ? t('backgroundTaskWorkersRailLabel', { value: workersUnfinished })
           : t('rightPanelWorkers', { defaultValue: 'Workers' }),
-        Users
+        CollaborationIcon
       ),
       running: workersRunning,
       ...(workersUnfinished > 0 ? { count: workersUnfinished } : {})

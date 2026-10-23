@@ -1,16 +1,22 @@
 import { useCallback, useMemo, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, RefreshCw, Users } from 'lucide-react'
+import { AlertCircle, RefreshCw } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
 import { summarizeWorkerRows, type WorkerRowData } from './worker-row-data'
 import { formatWorkerTokens, groupWorkerRows, workerIsLive, type WorkerTone } from './worker-presentation'
 import { WorkerRow } from './WorkerRow'
+import { WorkerAvatar } from './WorkerParts'
+import { workerSeatMap } from './worker-seat'
+import { CollaborationIcon } from './CollaborationIcon'
 import { openWorkerSession } from './worker-view-store'
 import { useTeamWorkers } from './use-team-workers'
 import { busyActionFor, useWorkerActions } from './use-worker-actions'
 import { useWorkerClock } from './use-worker-clock'
 import { WorkerActionError } from './WorkerActionError'
 import './workers-panel.css'
+
+/** Overlapping seats shown in the summary before the rest are only counted. */
+const SEAT_STACK_MAX = 5
 
 /**
  * Right-panel Collaboration tab: team progress on top, then the members
@@ -35,6 +41,7 @@ export function WorkersPanel({
   const { busy, error, dismissError, stop, detach, answer } = useWorkerActions(reload)
   const summary = useMemo(() => summarizeWorkerRows(rows), [rows])
   const groups = useMemo(() => groupWorkerRows(rows), [rows])
+  const seats = useMemo(() => workerSeatMap(rows.map((row) => row.workerId)), [rows])
   const now = useWorkerClock(active && rows.some(workerIsLive))
 
   const onOpen = useCallback((row: WorkerRowData): void => openWorkerSession(row.workerId, row.label), [])
@@ -55,16 +62,26 @@ export function WorkersPanel({
   return (
     <div className={`ds-no-drag flex h-full min-h-0 min-w-0 flex-col ${className ?? ''}`} data-workers-panel>
       {rows.length > 0 ? (
-        <div className="flex shrink-0 flex-col gap-2.5 border-b border-ds-border-muted px-4 pb-3.5 pt-4" data-workers-summary>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[14px] font-semibold text-ds-ink">{t('workersHeader.members', { n: rows.length })}</span>
-            <span className="flex-1" />
+        <div className="flex shrink-0 flex-col gap-3 border-b border-ds-border-muted px-4 pb-3.5 pt-4" data-workers-summary>
+          <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center" aria-hidden>
+              {rows.slice(0, SEAT_STACK_MAX).map((row, index) => (
+                <span
+                  key={row.workerId}
+                  className={index ? '-ml-1.5' : ''}
+                  style={{ borderRadius: 999, boxShadow: '0 0 0 2px var(--ds-surface-card)' }}
+                >
+                  <WorkerAvatar workerId={row.workerId} seat={seats.get(row.workerId) ?? 0} size={24} />
+                </span>
+              ))}
+            </div>
+            <span className="min-w-0 flex-1 text-[14px] font-semibold text-ds-ink">{t('workersHeader.members', { n: rows.length })}</span>
             {usage && usage.totalTokens > 0 ? (
               <span
                 data-workers-usage
                 data-budget-exceeded={usage.hardExceeded ? 'hard' : usage.softExceeded ? 'soft' : undefined}
                 title={t('workersHeader.usageTitle')}
-                className={`font-mono text-[11.5px] tabular-nums ${
+                className={`shrink-0 font-mono text-[11.5px] tabular-nums ${
                   usage.hardExceeded ? 'text-ds-status-danger' : usage.softExceeded ? 'text-ds-status-warning' : 'text-ds-faint'
                 }`}
               >
@@ -73,23 +90,9 @@ export function WorkersPanel({
               </span>
             ) : null}
           </div>
-          <div
-            role="img"
-            aria-label={t('workersSummary', summary)}
-            className="flex h-1.5 gap-[3px]"
-          >
+          <div className="flex flex-wrap gap-1.5 text-[11.5px] text-ds-muted">
             {segments.filter((segment) => segment.count > 0).map((segment) => (
-              <span
-                key={segment.tone}
-                className="ds-worker-tone ds-worker-tone-dot rounded-[3px]"
-                data-tone={segment.tone}
-                style={{ flex: segment.count }}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[11.5px] text-ds-muted">
-            {segments.filter((segment) => segment.count > 0).map((segment) => (
-              <span key={segment.tone} className="inline-flex items-center gap-[5px]">
+              <span key={segment.tone} className="inline-flex h-6 items-center gap-1.5 rounded-full bg-ds-subtle px-2.5">
                 <span className="ds-worker-tone ds-worker-tone-dot h-1.5 w-1.5 rounded-full" data-tone={segment.tone} />
                 <b className="font-semibold text-ds-ink">{segment.count}</b>
                 {t(`workersHeader.${segment.tone}`)}
@@ -102,7 +105,11 @@ export function WorkersPanel({
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-0.5" data-workers-scroll>
         {error ? <div className="px-0.5 pt-2"><WorkerActionError message={error} onDismiss={dismissError} /></div> : null}
         {groups.map((group) => (
-          <section key={group.section} data-workers-section={group.section}>
+          <section
+            key={group.section}
+            data-workers-section={group.section}
+            className={group.section === 'needs-you' ? 'ds-worker-section-alert mx-1 mb-1.5 rounded-2xl px-1 pb-1' : undefined}
+          >
             <h3 className="px-2.5 pb-1.5 pt-3.5 text-[11.5px] font-semibold text-ds-faint">
               {t(`workersSection.${group.section}`)} · {group.rows.length}
             </h3>
@@ -110,6 +117,7 @@ export function WorkersPanel({
               <WorkerRow
                 key={row.workerId}
                 row={row}
+                seat={seats.get(row.workerId) ?? 0}
                 now={now}
                 busyAction={busyActionFor(busy, row)}
                 onOpen={onOpen}
@@ -122,7 +130,7 @@ export function WorkersPanel({
           </section>
         ))}
         {loaded && rows.length === 0 && !loadFailed ? (
-          <PanelNotice icon={<Users className="h-5 w-5" strokeWidth={1.8} />} title={t('workersEmptyTitle')} body={t('workersEmpty')} data-workers-empty />
+          <PanelNotice icon={<CollaborationIcon className="h-5 w-5" strokeWidth={1.8} />} title={t('workersEmptyTitle')} body={t('workersEmpty')} data-workers-empty />
         ) : null}
         {!loaded && !loadFailed ? <WorkersSkeleton label={t('workersLoading')} /> : null}
         {loadFailed && rows.length === 0 ? (
