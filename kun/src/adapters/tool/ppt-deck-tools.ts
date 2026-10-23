@@ -13,8 +13,7 @@ export const PPT_DECK_PROVIDER_ID = 'ppt-deck' as const
  * The three deterministic tools behind the `slides` skill. Agents author the
  * PPTD deck with their ordinary file tools; these only render previews, copy
  * image bytes, and export plus verify the PPTX. They are keyed by deck path,
- * hold no workflow state, and stay advertised while the Lab switch is on so
- * the tool list (and the prompt cache) stays stable.
+ * hold no workflow state, and remain available without an experimental switch.
  */
 export function buildPptDeckTools(options: PptDeckToolOptions = {}): LocalTool[] {
   return [

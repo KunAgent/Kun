@@ -11,8 +11,6 @@ import { assertCanWritePath } from './sandbox-policy.js'
 export type PptImageAssetAvailability = { enabled: boolean; available: boolean; reason?: string }
 
 export type PptDeckToolOptions = PptToolchainOptions & {
-  /** Lab switch for the PPT tools and the slides skill. */
-  enabled?: () => boolean
   /** Whether image slots may be filled with generated images right now. */
   imageAssets?: () => PptImageAssetAvailability
 }
@@ -41,12 +39,6 @@ export function pptImageAssetState(options: PptDeckToolOptions): 'enabled' | 'di
   const state = options.imageAssets?.()
   if (!state || state.enabled === false) return state ? 'disabled' : 'unavailable'
   return state.available ? 'enabled' : 'unavailable'
-}
-
-export function pptToolsDisabled(options: PptDeckToolOptions): { output: { error: string }; isError: true } | undefined {
-  return options.enabled?.() === false
-    ? { output: { error: 'PPT tools are turned off in Lab settings' }, isError: true }
-    : undefined
 }
 
 /**

@@ -35,7 +35,7 @@ import {
   modelProvidersSettingsPatch
 } from './settings-section-agents'
 import { FastContextSettingsPanel } from './settings-section-assistant-fast-context'
-import { PptSkillSettingsPanel } from './settings-section-lab-ppt'
+import { PptSkillSettingsPanel } from './settings-section-agents-ppt'
 import { laboratoryTestLabels } from './settings-section-agents.test-labels'
 import { ProviderModelsManager } from './settings-section-provider-models'
 import { providerProxyTestLabels } from './provider-proxy-test-labels'

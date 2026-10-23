@@ -34,9 +34,8 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
 }
 
 /**
- * Stored PPT settings may predate `imageAssets` and still carry fields of the
- * retired PPT sub-agent (`imageFirst` and its model overrides); keep only the
- * two switches the slides skill uses.
+ * Stored PPT preferences may still carry settings of the retired PPT
+ * sub-agent and the former Lab master switch. Only `imageAssets` remains active.
  */
 export function normalizeStoredPptAgentSettings(
   stored: Partial<KunLabPptAgentSettingsV1> | undefined,
@@ -44,7 +43,7 @@ export function normalizeStoredPptAgentSettings(
 ): KunLabPptAgentSettingsV1 {
   if (!stored) return defaults
   return {
-    enabled: typeof stored.enabled === 'boolean' ? stored.enabled : defaults.enabled,
+    enabled: true,
     imageAssets: stored.imageAssets !== false
   }
 }

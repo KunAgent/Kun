@@ -6,11 +6,7 @@ import { SettingsFeatureCard } from './settings-feature-card'
 
 type Translate = (key: string) => string
 
-/**
- * Lab → PPT 技能 panel. The slides skill runs in the main conversation, so
- * there is no separate model to configure: this only switches the PPT tools
- * (ppt_preview / ppt_export / ppt_import_asset) and generated image assets.
- */
+/* The slides skill runs in the main conversation. Only its image asset preference is configurable here. */
 export function PptSkillSettingsPanel({
   t,
   value,
@@ -31,9 +27,7 @@ export function PptSkillSettingsPanel({
       tone="orange"
       title={t('labPptTitle')}
       description={t('labPptDescription')}
-      enabled={ppt.enabled}
-      onEnabledChange={(enabled) => onChange({ pptAgent: { enabled } })}
-      toggleLabel={t('labPptEnabled')}
+      enabled
       enabledLabel={t('settingsIaFeatureOn')}
     >
       <SettingRow

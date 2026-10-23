@@ -339,12 +339,12 @@ export const FastContextConfigSchema = z
 export type FastContextConfig = z.infer<typeof FastContextConfigSchema>
 
 /**
- * Lab switches for the slides skill's PPT tools. They run in the main
- * conversation, so there is no child model route to configure.
+ * Historical `lab.pptAgent` config is retained for the PPT image asset
+ * preference. The former master switch is parsed but no longer gates tools.
  */
 export const LabPptAgentConfigSchema = z.preprocess(withoutRetiredPptAgentKeys, z
   .object({
-    /** Advertise the slides skill's PPT tools (ppt_preview / ppt_export / ppt_import_asset). */
+    /** Retired master switch; accepted for compatibility but ignored by the PPT tools. */
     enabled: z.boolean().default(true),
     /** Fill PPT image slots with generated supplementary assets when an image model is available. */
     imageAssets: z.boolean().default(true)

@@ -239,8 +239,8 @@ export function builtinToolOptionsForOptions(options: KunServeRuntimeOptions) {
 }
 
 /**
- * PPT Master was a host-managed Skill. Keep an old package on disk inert after
- * the first-class PPT agent replaced it, without deleting user data.
+ * PPT Master was a host-managed Skill. Keep an old package on disk inert now
+ * that the bundled `slides` skill runs in the main conversation.
  */
 export function skillsConfigForRuntime(
   options: Pick<KunServeRuntimeOptions, 'capabilities'>
@@ -254,8 +254,8 @@ export function skillsConfigForRuntime(
 }
 
 /**
- * Deck tools behind the bundled `slides` skill. Options are read lazily so a
- * Lab toggle or image-model change applies without rebuilding the registry.
+ * Deck tools behind the bundled `slides` skill. The image preference and
+ * model availability are read lazily without rebuilding the registry.
  */
 export function buildPptDeckRuntimeProvider(
   options: () => Pick<KunServeRuntimeOptions, 'lab'>,
@@ -268,7 +268,6 @@ export function buildPptDeckRuntimeProvider(
     available: true,
     effects: { network: false, externalWrite: false, processExecution: true, guiAutomation: false },
     tools: buildPptDeckTools({
-      enabled: () => options().lab?.pptAgent?.enabled !== false,
       imageAssets: () => ({
         enabled: options().lab?.pptAgent?.imageAssets !== false,
         available: imageGenAvailable()

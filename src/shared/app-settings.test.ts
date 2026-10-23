@@ -376,7 +376,7 @@ function clawChannel(provider: ClawImProvider, label: string, name = label): Cla
   }
 }
 
-describe('lab PPT settings', () => {
+describe('PPT skill settings', () => {
   it('preserves explicit image-asset disablement across partial patches', () => {
     const disabled = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       lab: {
@@ -386,10 +386,16 @@ describe('lab PPT settings', () => {
         }
       }
     })
-    expect(disabled.lab.pptAgent).toEqual({ enabled: false, imageAssets: false })
+    expect(disabled.lab.pptAgent).toEqual({ enabled: true, imageAssets: false })
 
-    const partial = mergeKunRuntimeSettings(disabled, { lab: { pptAgent: { enabled: true } } })
+    const partial = mergeKunRuntimeSettings(disabled, { lab: { pptAgent: { enabled: false } } })
     expect(partial.lab.pptAgent).toEqual({ enabled: true, imageAssets: false })
+
+    const stored = mergeKunRuntimeSettings({
+      ...disabled,
+      lab: { ...disabled.lab, pptAgent: { enabled: false, imageAssets: false } }
+    }, undefined)
+    expect(stored.lab.pptAgent).toEqual({ enabled: true, imageAssets: false })
   })
 
   it('drops retired PPT sub-agent fields from stored settings', () => {

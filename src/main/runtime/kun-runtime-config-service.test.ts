@@ -389,6 +389,24 @@ describe('Kun runtime config service', () => {
     }
   })
 
+  it('projects PPT tools on despite a retired Lab switch and keeps image preference', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-ppt-default-'))
+    const defaults = defaultKunRuntimeSettings()
+    const runtime = {
+      ...defaults,
+      lab: { ...defaults.lab, pptAgent: { enabled: false, imageAssets: false } }
+    }
+    try {
+      const config = await syncGuiManagedKunConfig(dataDir, runtime)
+      expect(config.lab?.pptAgent).toEqual({ enabled: true, imageAssets: false })
+      const settings = normalizeAppSettings({ ...normalizeAppSettings({} as AppSettingsV1), agents: { kun: runtime } })
+      expect(buildManagedRuntimeHotApplyBody(settings, config).lab?.pptAgent)
+        .toEqual({ enabled: true, imageAssets: false })
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('persists only provider ids for Registry-backed media capabilities', () => {
     const defaults = defaultKunRuntimeSettings()
     const capabilities = {

@@ -2,13 +2,11 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { defaultKunLabSettings, type KunLabSettingsV1 } from '@shared/app-settings'
-import { PptSkillSettingsPanel } from './settings-section-lab-ppt'
+import { PptSkillSettingsPanel } from './settings-section-agents-ppt'
 
 const labels: Record<string, string> = {
   labPptTitle: 'PPT skill',
   labPptDescription: 'PPT description',
-  labPptEnabled: 'Enable PPT tools',
-  labPptEnabledDesc: 'Enable description',
   labPptImageAssets: 'Generated image assets',
   labPptImageAssetsDesc: 'Fill image slots with generated assets.',
   labPptImageAssetsReadyHint: 'Image generation is available.',
@@ -52,6 +50,16 @@ describe('PptSkillSettingsPanel image assets', () => {
     const off = render(settings(false), { available: true })
     expect(off).toContain('Image slots use your material only.')
     expect(off).not.toContain('Image generation is available.')
+  })
+
+  it('does not hide image controls when a legacy master switch is off', () => {
+    const legacy = settings(false)
+    legacy.pptAgent.enabled = false
+    const html = render(legacy, { available: true })
+    expect(html).toContain('Generated image assets')
+    expect(html).toContain('Image slots use your material only.')
+    expect(html).not.toContain('data-open="false"')
+    expect(html).not.toContain('Enable PPT tools')
   })
 
   it('always shows the built-in preview renderer', () => {

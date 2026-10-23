@@ -14,7 +14,6 @@ import { assertPptScopedExistingPath, assertPptScopedMutationPath } from './ppt-
 import {
   portableRelative,
   pptImageAssetState,
-  pptToolsDisabled,
   resolvePptDeck,
   stringArg,
   type PptDeckToolOptions
@@ -41,7 +40,6 @@ export function createPptImportAssetTool(options: PptDeckToolOptions): LocalTool
     policy: 'auto',
     sideEffect: 'unknown',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
-    shouldAdvertise: () => options.enabled?.() !== false,
     inputSchema: {
       type: 'object',
       properties: {
@@ -53,8 +51,6 @@ export function createPptImportAssetTool(options: PptDeckToolOptions): LocalTool
       additionalProperties: false
     },
     execute: async (args, context) => withToolBoundary(async () => {
-      const disabled = pptToolsDisabled(options)
-      if (disabled) return disabled
       const deck = await resolvePptDeck(stringArg(args.deck), context, { requireManifest: false })
       const sourceArg = stringArg(args.source).replaceAll('\\', '/')
       const generated = sourceArg.startsWith('.kun/images/')
@@ -66,7 +62,7 @@ export function createPptImportAssetTool(options: PptDeckToolOptions): LocalTool
         return { output: { error: 'source must be user material in the workspace or a generate_image result under .kun/images' }, isError: true }
       }
       if (generated && pptImageAssetState(options) === 'disabled') {
-        return { output: { error: 'generated image assets are turned off in Lab settings; use the user\'s material or native shapes' }, isError: true }
+        return { output: { error: 'generated image assets are turned off in PPT skill settings; use the user\'s material or native shapes' }, isError: true }
       }
       const source = await resolveWorkspacePath(sourceArg, context, { enforceWorkspaceBoundary: true })
       const requestedName = stringArg(args.name) || basename(source.relativePath)

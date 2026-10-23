@@ -27,7 +27,6 @@ import { ConversationVisualizationSettingsPanel } from './settings-section-lab-c
 import { AppSurfacesSettingsPanels } from './settings-section-lab-app-surfaces'
 import { AssistantMailboxSettingsPanel } from './settings-section-lab-assistant-mailbox'
 import { ContextWindowSettingsPanel } from './settings-section-lab-context-window'
-import { PptSkillSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
 import { CodexReferenceBranchesSettingsPanel } from './settings-section-lab-codex-reference'
 import { ProjectBoardSettingsPanel } from './settings-section-lab-project-board'
@@ -84,7 +83,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
       || lab.opencodeReferenceBranches?.enabled === true,
     lab.autoPlanBuild.enabled,
     graph.enabled,
-    lab.pptAgent.enabled,
     lab.projectBoard.enabled,
     lab.assistantMailbox?.enabled === true,
     computerUse.enabled,
@@ -94,7 +92,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
   return (
     <>
       <p className="ds-settings-lab-summary" role="status">
-        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 12 })}
+        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 11 })}
       </p>
       <LabFeatureGroup label={t('settingsIaLabsGroupConversation')}>
         <ContextWindowSettingsPanel
@@ -142,18 +140,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           leadModel={kun.model}
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ graph: patch })}
-        />
-        <PptSkillSettingsPanel
-          t={t}
-          value={lab}
-          imageGen={runtimeInfo?.capabilities?.imageGen
-            ? {
-                available: runtimeInfo.capabilities.imageGen.available === true,
-                supportsReferenceEdit: runtimeInfo.capabilities.imageGen.supportsReferenceEdit === true,
-                ...(runtimeInfo.capabilities.imageGen.reason ? { reason: runtimeInfo.capabilities.imageGen.reason } : {})
-              }
-            : undefined}
-          onChange={(patch) => updateKun({ lab: patch })}
         />
         <ProjectBoardSettingsPanel
           t={t}

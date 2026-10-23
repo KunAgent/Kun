@@ -158,7 +158,7 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
         category: 'permissions', labelKey: 'settingsIaPermissions', icon: ShieldCheck, tone: 'green',
         searchKeys: ['toolPermissionMode', 'approvalReviewModelTitle', 'designQualityTitle']
       },
-      { category: 'skills', labelKey: 'settingsIaSkills', icon: WandSparkles, tone: 'violet', searchKeys: ['skillsDetectedDirs', 'skillsScanDirs'] },
+      { category: 'skills', labelKey: 'settingsIaSkills', icon: WandSparkles, tone: 'violet', searchKeys: ['skillsDetectedDirs', 'skillsScanDirs', 'labPptTitle', 'labPptImageAssets'] },
       { category: 'mcp', labelKey: 'settingsIaMcp', icon: Wrench, tone: 'orange', searchKeys: ['mcpSearchEnabled', 'mcpEditor'] },
       { category: 'memory', labelKey: 'memory', icon: BrainCircuit, tone: 'pink' },
       { category: 'subagents', labelKey: 'subagents', icon: UsersRound, tone: 'violet' },
@@ -210,7 +210,7 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
     items: [
       {
         category: 'laboratory', labelKey: 'settingsIaLabs', icon: FlaskConical, tone: 'green',
-        searchKeys: ['computerUseTitle', 'browserUseSettingsTitle', 'graphSettingsTitle', 'labPptTitle', 'labProjectBoardTitle', 'labContextCompressionTitle', 'labAutoPlanBuildTitle']
+        searchKeys: ['computerUseTitle', 'browserUseSettingsTitle', 'graphSettingsTitle', 'labProjectBoardTitle', 'labContextCompressionTitle', 'labAutoPlanBuildTitle']
       },
       {
         category: 'agentRuntime', labelKey: 'settingsIaRuntime', icon: SlidersHorizontal, tone: 'slate',

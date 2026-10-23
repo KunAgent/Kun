@@ -170,6 +170,11 @@ describe('LabPptAgentConfigSchema', () => {
     expect(lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
   })
 
+  it('accepts the retired master switch for compatibility without dropping image preference', () => {
+    expect(LabConfigSchema.parse({ pptAgent: { enabled: false, imageAssets: false } }).pptAgent)
+      .toEqual({ enabled: false, imageAssets: false })
+  })
+
   it('defaults Fast Context at the config root', () => {
     expect(FastContextConfigSchema.parse({})).toEqual({ enabled: true, fast: false })
   })
