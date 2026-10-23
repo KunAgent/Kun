@@ -31,6 +31,7 @@
   "canvasTweaksDeviceMobile": "모바일",
   "canvasTweaksDeviceTablet": "태블릿",
   "canvasTweaksDeviceDesktop": "데스크톱",
+  "canvasTweaksSelectScreen": "캔버스에서 화면을 선택하면 기기를 바꾸거나 AI에게 수정을 요청할 수 있습니다.",
   "canvasBoardEdit": "텍스트 바로 편집",
   "canvasBoardEditDone": "편집 완료",
   "canvasBoardEditHint": "텍스트를 클릭해 편집",
