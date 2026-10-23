@@ -52,7 +52,7 @@ describe('CodeCanvasNativeSurface', () => {
     expect(html).toContain('data-canvas-engine="kun"')
     expect(html).toContain('data-surface="code"')
     expect(html).toContain('canvas-viewport-stub')
-    expect(html).toContain('properties-stub')
+    expect(html).not.toContain('properties-stub')
     expect(html).toContain('data-canvas-engine-switcher="true"')
     expect(html).not.toContain('data-mock-excalidraw')
   })

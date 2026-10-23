@@ -6,7 +6,6 @@ import {
   codeCanvasPanelDesignHostClass,
   codeCanvasPanelShellClass,
   codeCanvasPanelTitlebarClass,
-  codeCanvasPanelTitlebarStyle,
   resolveCodeCanvasDesignSurface,
   shouldRehydrateCodeCanvasDesignDocument
 } from './CodeCanvasPanel'
@@ -36,21 +35,12 @@ describe('CodeCanvasPanel', () => {
     )
 
     expect(codeCanvasPanelShellClass('h-full')).toContain('overflow-hidden')
-    expect(codeCanvasPanelShellClass('h-full')).toContain('bg-[#f8fafc]')
+    expect(codeCanvasPanelShellClass('h-full')).toContain('bg-[#f4f4f2]')
     expect(codeCanvasPanelShellClass('h-full', 'focused')).not.toContain('border-l')
     expect(codeCanvasPanelTitlebarClass()).toContain('rounded-full')
     expect(codeCanvasPanelTitlebarClass()).toContain('backdrop-blur-2xl')
     expect(html).toContain('data-code-canvas-titlebar="true"')
     expect(html).not.toContain('border-b border-ds-border-muted bg-white/92')
-  })
-
-  it('reserves Electron window-control space in focused presentation', () => {
-    expect(codeCanvasPanelTitlebarStyle('focused')).toEqual({
-      left: 'calc(0.75rem + var(--ds-window-controls-safe-inset))',
-      right: 'auto',
-      top: 'calc(0.75rem + var(--ds-window-controls-safe-block))'
-    })
-    expect(codeCanvasPanelTitlebarStyle('docked')).toBeUndefined()
   })
 
   it('gives the direct Design whiteboard a flex sizing context', () => {

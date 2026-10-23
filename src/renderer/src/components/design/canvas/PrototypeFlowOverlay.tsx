@@ -4,6 +4,8 @@ import { computePrototypeFlowEdges } from '../../../design/canvas/prototype-flow
 import type { DesignArtifact } from '../../../design/design-types'
 
 const FLOW_COLOR = '#14b8a6'
+/** Screen pixels kept clear above boards for their label row. */
+const BOARD_LABEL_CLEARANCE_PX = 40
 
 type Props = {
   artifacts: readonly DesignArtifact[]
@@ -12,7 +14,10 @@ type Props = {
 }
 
 function PrototypeFlowOverlayInner({ artifacts, objects, zoom }: Props) {
-  const edges = useMemo(() => computePrototypeFlowEdges(artifacts, objects), [artifacts, objects])
+  const edges = useMemo(
+    () => computePrototypeFlowEdges(artifacts, objects, { topClearance: BOARD_LABEL_CLEARANCE_PX / Math.max(zoom, 0.01) }),
+    [artifacts, objects, zoom]
+  )
   if (edges.length === 0) return null
 
   const strokeWidth = Math.max(1.5, 2 / zoom)

@@ -562,8 +562,6 @@
   "canvasInspectorRemoveFill": "Удалить заливку",
   "canvasInspectorRemoveStroke": "Удалить обводку",
   "canvasInspectorTextColor": "Цвет",
-  "canvasInspectorPin": "Инспектор контактов",
-  "canvasInspectorUnpin": "Открепить инспектор",
   "canvasInspectorEmpty": "Выберите объект на холсте, чтобы изменить положение, заливку, обводку и другие свойства.",
   "canvasInspectorAiHolder": "AI-изображение",
   "canvasInspectorAiHolderMark": "Отметить как слот изображения AI",

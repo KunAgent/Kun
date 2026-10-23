@@ -10,7 +10,6 @@ import {
   ASSISTANT_MODEL_KEY,
   ASSISTANT_PROVIDER_KEY,
   CANVAS_ASSISTANT_OPEN_KEY,
-  CANVAS_INSPECTOR_PINNED_KEY,
   CANVAS_VIEW_KEY,
   DESIGN_TARGET_KEY,
   MULTI_PAGE_MODE_KEY,
@@ -20,7 +19,6 @@ import {
   readPersistedAssistantModel,
   readPersistedAssistantProvider,
   readPersistedCanvasAssistantOpen,
-  readPersistedCanvasInspectorPinned,
   readPersistedCanvasView,
   readPersistedDesignTarget,
   readPersistedMultiPageMode,
@@ -107,7 +105,6 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
     implementTitle: '',
     aiRailCollapsed: readPersistedAiRailCollapsed(),
     canvasAssistantOpen: readPersistedCanvasAssistantOpen(),
-    canvasInspectorPinned: readPersistedCanvasInspectorPinned(),
     designIntentMode: 'generate',
     multiPageMode: readPersistedMultiPageMode(),
     pagesRun: null,
@@ -225,11 +222,6 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
 
     toggleCanvasAssistantOpen: () => {
       get().setCanvasAssistantOpen(!get().canvasAssistantOpen)
-    },
-
-    setCanvasInspectorPinned: (pinned) => {
-      writeBrowserStorageItem(CANVAS_INSPECTOR_PINNED_KEY, pinned ? '1' : '0')
-      set({ canvasInspectorPinned: pinned })
     },
 
     setAssistantModel: (model, providerId) => {

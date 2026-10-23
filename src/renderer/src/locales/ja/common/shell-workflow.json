@@ -562,8 +562,6 @@
   "canvasInspectorRemoveFill": "塗りつぶしを削除",
   "canvasInspectorRemoveStroke": "ストロークの削除",
   "canvasInspectorTextColor": "色",
-  "canvasInspectorPin": "ピンインスペクタ",
-  "canvasInspectorUnpin": "インスペクタの固定を解除する",
   "canvasInspectorEmpty": "キャンバス上のオブジェクトを選択して、位置、塗りつぶし、ストローク、その他のプロパティを編集します。",
   "canvasInspectorAiHolder": "AI画像",
   "canvasInspectorAiHolderMark": "AI イメージ スロットとしてマークする",

@@ -20,6 +20,7 @@ import {
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasUndoStore } from '../../../design/canvas/canvas-undo-store'
+import { CANVAS_CHROME_PILL } from './chrome/canvas-chrome-primitives'
 
 type AlignButton = {
   axis: AlignAxis
@@ -102,7 +103,7 @@ function AlignmentToolbarInner() {
   const divider = 'mx-1 h-5 w-px bg-[var(--ds-sidebar-row-ring)]'
 
   return (
-    <div className="ds-no-drag pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-0.5 rounded-xl border border-[var(--ds-sidebar-row-ring)] bg-white px-1 py-1 shadow-[0_4px_18px_rgba(20,47,95,0.08)] dark:bg-[#1f242c] dark:shadow-[0_4px_18px_rgba(0,0,0,0.3)]">
+    <div className={`ds-no-drag pointer-events-auto absolute left-1/2 top-[60px] z-20 -translate-x-1/2 ${CANVAS_CHROME_PILL}`}>
       {ALIGN_BUTTONS.map(({ axis, Icon, labelKey }) => (
         <button
           key={axis}

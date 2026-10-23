@@ -92,8 +92,6 @@ export function FocusedCanvasWorkspace({
         onExitFocus={onExitFocus}
         leftSidebarCollapsed={leftSidebarCollapsed}
         onToggleLeftSidebar={onToggleLeftSidebar}
-        sidebarExpandLabel={t('sidebarExpand')}
-        sidebarCollapseLabel={t('sidebarCollapse')}
         className="h-full max-h-full w-full flex-1 border-l-0"
       />
       <DesignCanvasConversationOverlay

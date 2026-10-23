@@ -562,8 +562,6 @@
   "canvasInspectorRemoveFill": "ลบการเติม",
   "canvasInspectorRemoveStroke": "ลบจังหวะ",
   "canvasInspectorTextColor": "สี",
-  "canvasInspectorPin": "ตัวตรวจสอบพิน",
-  "canvasInspectorUnpin": "เลิกปักหมุดผู้ตรวจสอบ",
   "canvasInspectorEmpty": "เลือกวัตถุบนผืนผ้าใบเพื่อแก้ไขตำแหน่ง การเติม เส้นขีด และคุณสมบัติอื่นๆ",
   "canvasInspectorAiHolder": "ภาพเอไอ",
   "canvasInspectorAiHolderMark": "ทำเครื่องหมายเป็นช่องรูปภาพ AI",
