@@ -51,7 +51,7 @@ async function checkArtifactChatTurn({ page, capture, poll, diagnostics, timeout
   await writeFile(deckPath, await buildChangedDeck())
   await rail.locator('[data-slide-changed="true"]').first().waitFor({ timeout: timeoutMs })
   // The reloaded deck stays on the slide the user was talking about.
-  await page.locator('[data-artifact-stage="office"] .kun-pptx-toolbar').getByLabel('Slide 3 of 16', { exact: true }).waitFor({ timeout: timeoutMs })
+  await page.locator('[data-artifact-stage="office"] .kun-office-toolbar').getByLabel('Slide 3 of 16', { exact: true }).waitFor({ timeout: timeoutMs })
   await panel.getByText('Looking at: slide 3').waitFor({ timeout: timeoutMs })
   model.release()
 

@@ -1,6 +1,7 @@
 @import './markdown-code/prose-and-code-blocks.css';
 @import './markdown-code/file-preview-and-tables.css';
 @import './markdown-code/file-tree-and-viewers.css';
+@import './markdown-code/office-viewer.css';
 @import './markdown-code/pptx-viewer.css';
 @import './markdown-code/passive-assistant.css';
 @import './markdown-code/message-quote.css';

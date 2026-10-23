@@ -25,7 +25,8 @@ export function openWorkspaceOfficeExternalLink(
     : null
   if (!anchor) return
   event.preventDefault()
-  const href = anchor.getAttribute(CONTROLLED_HREF_ATTRIBUTE)?.trim() ?? ''
+  // Viewers that mount pages lazily cannot pre-secure every link, so fall back to the live href.
+  const href = (anchor.getAttribute(CONTROLLED_HREF_ATTRIBUTE) ?? anchor.getAttribute('href') ?? '').trim()
   if (!/^(https?:|mailto:)/i.test(href)) return
   void window.kunGui?.openExternal?.(href)?.catch(() => undefined)
 }

@@ -67,7 +67,8 @@ export function WorkspaceDocxSelectionToolbar({
     const position = documentSelectionToolbarPosition(rect, viewportRect, {
       scrollLeft: viewport.scrollLeft,
       scrollTop: viewport.scrollTop,
-      viewportWidth: viewport.clientWidth
+      viewportWidth: viewport.clientWidth,
+      scale: viewport.offsetHeight > 0 && viewportRect.height > 0 ? viewportRect.height / viewport.offsetHeight : 1
     })
     setCopied(false)
     setToolbar({
@@ -120,7 +121,7 @@ export function WorkspaceDocxSelectionToolbar({
     <div
       role="toolbar"
       aria-label={t('filePreviewSelectionActions')}
-      className="ds-no-drag absolute z-30 flex h-9 items-center rounded-lg border border-ds-border bg-ds-card px-1 shadow-lg"
+      className="ds-no-drag absolute z-30 flex h-9 select-none items-center rounded-lg border border-ds-border bg-ds-card px-1 shadow-lg"
       style={{ left: toolbar.left, top: toolbar.top, transform }}
       onPointerDown={preserveSelection}
     >
@@ -153,10 +154,11 @@ export function selectedDocxPageRange(
   range: Range,
   body: HTMLElement
 ): { pageStart: number; pageEnd: number } | null {
-  const pages = Array.from(body.querySelectorAll<HTMLElement>('section.docx'))
-  const selected = pages.flatMap((page, index) => {
+  const pages = Array.from(body.querySelectorAll<HTMLElement>('[data-docx-page-wrapper]'))
+  const selected = pages.flatMap((page) => {
     try {
-      return range.intersectsNode(page) ? [index + 1] : []
+      const index = Number(page.dataset.docxPageIndex)
+      return range.intersectsNode(page) && Number.isInteger(index) ? [index + 1] : []
     } catch {
       return []
     }
@@ -165,18 +167,24 @@ export function selectedDocxPageRange(
   return { pageStart: selected[0]!, pageEnd: selected[selected.length - 1]! }
 }
 
+/**
+ * Rects are in screen pixels, which the app's body zoom scales, while the pane's
+ * scroll offsets and the toolbar's own position are in layout pixels; `scale` is
+ * the ratio between the two.
+ */
 export function documentSelectionToolbarPosition(
   rangeRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width'>,
   viewportRect: Pick<DOMRect, 'left' | 'top'>,
-  viewport: { scrollLeft: number; scrollTop: number; viewportWidth: number }
+  viewport: { scrollLeft: number; scrollTop: number; viewportWidth: number; scale?: number }
 ): { left: number; top: number; placement: 'above' | 'below' } {
-  const visibleCenter = rangeRect.left - viewportRect.left + viewport.scrollLeft + rangeRect.width / 2
+  const scale = viewport.scale && viewport.scale > 0 ? viewport.scale : 1
+  const visibleCenter = (rangeRect.left - viewportRect.left + rangeRect.width / 2) / scale + viewport.scrollLeft
   const minCenter = viewport.scrollLeft + 104
   const maxCenter = viewport.scrollLeft + Math.max(104, viewport.viewportWidth - 104)
-  const placement = rangeRect.top - viewportRect.top >= 48 ? 'above' : 'below'
+  const placement = (rangeRect.top - viewportRect.top) / scale >= 48 ? 'above' : 'below'
   return {
     left: Math.min(maxCenter, Math.max(minCenter, visibleCenter)),
-    top: (placement === 'above' ? rangeRect.top : rangeRect.bottom) - viewportRect.top + viewport.scrollTop,
+    top: ((placement === 'above' ? rangeRect.top : rangeRect.bottom) - viewportRect.top) / scale + viewport.scrollTop,
     placement
   }
 }

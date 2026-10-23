@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Minimize2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
 import type { ViewerZoomLevel, ViewerZoomState } from '@extend-ai/react-pptx'
 import i18n from '../i18n'
 import {
@@ -17,7 +17,13 @@ import type {
   WorkspacePresentationViewReference,
   WorkspacePresentationViewSource
 } from '@shared/office-document'
-import { WorkspacePptxToolbar } from './WorkspacePptxToolbar'
+import {
+  OFFICE_ICON_BUTTON,
+  OfficePageNav,
+  OfficeToolbarStatus,
+  OfficeZoomLevelControls,
+  WorkspaceOfficeToolbar
+} from './WorkspaceOfficeToolbar'
 import { openWorkspaceOfficeExternalLink } from './workspace-office-external-link'
 import {
   emptyWorkspaceOfficeSelection,
@@ -274,17 +280,42 @@ export function WorkspacePptxPreview({
       className={`kun-pptx relative flex min-h-0 flex-1 flex-col ${isFullscreen ? 'bg-black' : ''}`}
     >
       {!isFullscreen ? (
-        <WorkspacePptxToolbar
-          result={result}
-          slide={slide}
-          slideCount={slideCount}
-          zoom={zoom}
-          resolvedZoom={resolvedZoom}
-          loading={loading}
-          status={status}
-          onSelectSlide={goToSlide}
-          onZoomChange={setZoom}
-          onEnterFullscreen={() => void toggleFullscreen()}
+        <WorkspaceOfficeToolbar
+          leading={(
+            <>
+              <OfficePageNav
+                summary={i18n.t('officeSlideSummary', { slide, count: slideCount })}
+                prevLabel={i18n.t('officePreviousSlide')}
+                nextLabel={i18n.t('officeNextSlide')}
+                canPrev={slide > 1}
+                canNext={slide < slideCount}
+                onPrev={() => goToSlide(slide - 1)}
+                onNext={() => goToSlide(slide + 1)}
+              />
+              {result.convertedFromLegacy ? (
+                <span className="ml-1 shrink-0 rounded border border-ds-border-muted px-1.5 py-0.5 text-[10.5px] font-semibold uppercase text-ds-faint">
+                  {result.sourceFormat} → {result.renderFormat}
+                </span>
+              ) : null}
+            </>
+          )}
+          status={<OfficeToolbarStatus loading={loading} message={status} />}
+          trailing={(
+            <>
+              <OfficeZoomLevelControls zoom={zoom} resolvedZoom={resolvedZoom} onChange={setZoom} />
+              <span aria-hidden className="mx-1 h-4 w-px bg-ds-border-muted" />
+              <button
+                type="button"
+                aria-label={i18n.t('officeEnterFullscreen')}
+                title={i18n.t('officeEnterFullscreen')}
+                disabled={slideCount === 0}
+                className={OFFICE_ICON_BUTTON}
+                onClick={() => void toggleFullscreen()}
+              >
+                <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </button>
+            </>
+          )}
         />
       ) : null}
       <div
