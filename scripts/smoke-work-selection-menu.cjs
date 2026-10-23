@@ -49,6 +49,7 @@ async function exerciseWorkSelectionMenu({ page, poll, capture, recordDiagnostic
   const zoom = await page.evaluate(() => Number.parseFloat(getComputedStyle(document.body).zoom) || 1)
   await poll(async () => Math.abs((await menu.boundingBox()).width / zoom - 280) < 1, 5000, 'menu animation and width')
   assert.equal(await menu.locator('.write-selection-menu-format').count(), 6)
+  assert.equal(await menu.locator('.write-selection-menu-row.is-skill').count(), 3)
   await capture('selection-menu-light')
   await menu.locator('[aria-haspopup="menu"]').first().click()
   await page.locator('.write-selection-menu-flyout').waitFor()
@@ -103,6 +104,7 @@ async function exerciseWorkSelectionMenu({ page, poll, capture, recordDiagnostic
     }, { theme, palette, ikun, scale })
     await selectPassage(page)
     await capture('selection-menu-' + name)
+    if (name === 'warm-dark') await capture('selection-menu-simplified', menu)
   }
   await page.evaluate(() => {
     document.documentElement.dataset.theme = 'light'; document.documentElement.dataset.ikunMode = 'off'

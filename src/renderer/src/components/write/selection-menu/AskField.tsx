@@ -1,4 +1,4 @@
-import { ArrowUp, Sparkles } from 'lucide-react'
+import { ArrowUp, Sparkle } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { resolveAskKey } from './ask-keys'
@@ -11,7 +11,7 @@ export function AskField({ value, onChange, onSubmit, readOnly, onFreeze, onRele
   const { t } = useTranslation('common')
   return <div className="write-selection-menu-ask" onPointerDownCapture={onFreeze} onFocusCapture={onFreeze}
     onBlurCapture={(event) => { if (!event.currentTarget.closest('.write-selection-menu')?.contains(event.relatedTarget as Node)) onRelease?.() }}>
-    <Sparkles aria-hidden="true" />
+    <Sparkle aria-hidden="true" />
     <input value={value} aria-label={t(readOnly ? 'writeSelectionAskReadOnlyPlaceholder' : 'writeSelectionAskPlaceholder')}
       placeholder={t(readOnly ? 'writeSelectionAskReadOnlyPlaceholder' : 'writeSelectionAskPlaceholder')}
       onChange={(event) => onChange(event.target.value)}

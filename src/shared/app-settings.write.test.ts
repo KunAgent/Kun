@@ -183,11 +183,7 @@ describe('write selection assist settings', () => {
     expect(write.selectionAssist.quickActions).toEqual([
       { id: 'polish', label: '', prompt: '', mode: 'edit' },
       { id: 'explain', label: '', prompt: '', mode: 'chat' },
-      { id: 'reformat', label: '', prompt: '', mode: 'edit' },
-      { id: 'distill', label: '', prompt: '', mode: 'chat' },
-      { id: 'bolder', label: '', prompt: '', mode: 'chat' },
-      { id: 'quieter', label: '', prompt: '', mode: 'chat' },
-      { id: 'critique', label: '', prompt: '', mode: 'chat' }
+      { id: 'reformat', label: '', prompt: '', mode: 'edit' }
     ])
   })
 
@@ -294,6 +290,7 @@ describe('write selection assist settings', () => {
         quickActions: [
           { id: 'polish', label: '', prompt: '', mode: 'chat' },
           { id: 'proofread', label: '', prompt: '', mode: 'edit' },
+          ...['distill', 'bolder', 'quieter', 'critique'].map((id) => ({ id, label: '', prompt: '', mode: 'chat' as const })),
           { id: 'explain', label: '', prompt: '', mode: 'chat' }
         ]
       }
@@ -309,13 +306,17 @@ describe('write selection assist settings', () => {
       selectionAssist: {
         quickActions: [
           { id: 'proofread', label: '校对', prompt: '修正错别字', mode: 'edit' },
-          { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' }
+          { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' },
+          { id: 'distill', label: '我的精简', prompt: '', mode: 'chat' },
+          { id: 'critique', label: '', prompt: '检查论证逻辑', mode: 'edit' }
         ]
       }
     })
     expect(write.selectionAssist.quickActions).toEqual([
       { id: 'proofread', label: '校对', prompt: '修正错别字', mode: 'edit' },
-      { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' }
+      { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' },
+      { id: 'distill', label: '我的精简', prompt: '', mode: 'chat' },
+      { id: 'critique', label: '', prompt: '检查论证逻辑', mode: 'edit' }
     ])
   })
 })
