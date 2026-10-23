@@ -1,6 +1,7 @@
 import { recoverStartupManager } from './runtime/kun-startup-manager-recovery'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
+import { AppSessionConflictError } from '../../kun/src/manager/app-session-reservation.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   defaultKunRuntimeSettings,
@@ -84,6 +85,7 @@ const harness = vi.hoisted(() => {
   }
 
   const retireVerifiablyIdleLegacyManager = vi.fn(async () => 'retired' as const)
+  const retireOrphanedAppSessionManager = vi.fn(async () => undefined)
 
   return {
     clearHistoricalKunServeProcesses,
@@ -108,7 +110,8 @@ const harness = vi.hoisted(() => {
     waitForHealthy,
     waitForKunStartupSettled,
     waitForRuntimeTurnsIdle,
-    retireVerifiablyIdleLegacyManager
+    retireVerifiablyIdleLegacyManager,
+    retireOrphanedAppSessionManager
   }
 })
 
@@ -156,6 +159,9 @@ vi.mock('./runtime/kun-handoff-logging', () => ({
 }))
 vi.mock('../../kun/src/manager/legacy-manager-retire.js', () => ({
   retireVerifiablyIdleLegacyManager: harness.retireVerifiablyIdleLegacyManager
+}))
+vi.mock('../../kun/src/manager/app-session-recovery.js', () => ({
+  retireOrphanedAppSessionManager: harness.retireOrphanedAppSessionManager
 }))
 vi.mock('../../kun/src/manager/manager-discovery.js', () => ({
   defaultKunControlDir: () => '/tmp/kun-control'
@@ -209,6 +215,8 @@ function settings(): AppSettingsV1 {
 }
 
 beforeEach(() => {
+  harness.retireVerifiablyIdleLegacyManager.mockReset().mockResolvedValue('retired')
+  harness.retireOrphanedAppSessionManager.mockReset().mockResolvedValue(undefined)
   vi.mocked(desktopProcessStack.stopManager).mockReset()
   vi.mocked(desktopProcessStack.stopManager).mockResolvedValue(undefined)
   harness.setLatest(undefined)
@@ -323,6 +331,32 @@ describe('GUI Runtime startup preparation', () => {
       dataDir: '/tmp/kun-data',
       settingsPath: '/tmp/kun-settings.json'
     })
+  })
+
+  it('recovers recorded orphan participants before probing the unresponsive Manager HTTP endpoint', async () => {
+    const signal = new AbortController().signal
+    await prepareGuiRuntimeForStartupRetry(new AppSessionConflictError('/tmp/kun-data'), signal)
+    expect(harness.retireOrphanedAppSessionManager).toHaveBeenCalledWith({
+      controlDir: '/tmp/kun-control', dataDir: '/tmp/kun-data', settingsPath: '/tmp/kun-settings.json', signal
+    })
+    expect(harness.retireOrphanedAppSessionManager.mock.invocationCallOrder[0])
+      .toBeLessThan(harness.retireVerifiablyIdleLegacyManager.mock.invocationCallOrder[0]!)
+  })
+
+  it('preserves a live or unverifiable owner without attempting legacy retirement', async () => {
+    harness.retireOrphanedAppSessionManager.mockRejectedValueOnce(new Error('application is still running'))
+    await expect(prepareGuiRuntimeForStartupRetry(new AppSessionConflictError('/tmp/kun-data')))
+      .rejects.toThrow('still running')
+    expect(harness.retireVerifiablyIdleLegacyManager).not.toHaveBeenCalled()
+  })
+
+  it('stops retry preparation after cancellation without launching later cleanup', async () => {
+    const controller = new AbortController()
+    harness.stopAndWait.mockImplementationOnce(async () => { controller.abort(new Error('recovery timed out')) })
+    await expect(prepareGuiRuntimeForStartupRetry(new AppSessionConflictError('/tmp/kun-data'), controller.signal))
+      .rejects.toThrow('recovery timed out')
+    expect(desktopProcessStack.stopManager).not.toHaveBeenCalled()
+    expect(harness.retireOrphanedAppSessionManager).not.toHaveBeenCalled()
   })
 
   it('drains verifiably-stale owners before relaunch after an owner-busy conflict', async () => {

@@ -13,7 +13,6 @@ import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { installLiveProcessLog } from '../cli/live-process-log.js'
 import { appSessionOwnerFromEnvironment, KUN_APP_SESSION_RESERVATION_ENV } from '../contracts/app-session-owner.js'
 import {
-  armOwnerLossExitDeadline,
   drainManagerAfterOwnerLoss,
   monitorManagerOwner,
   stopManagerAfterOwnerLoss
@@ -72,12 +71,7 @@ export async function main(): Promise<number> {
       stopping = true
       void (async () => {
         if (ownerLost) {
-          const cancelDeadline = armOwnerLossExitDeadline((code) => process.exit(code))
-          try {
-            await stopManagerAfterOwnerLoss(handle)
-          } finally {
-            cancelDeadline()
-          }
+          await stopManagerAfterOwnerLoss(handle)
           return
         }
         handle.beginDrain()

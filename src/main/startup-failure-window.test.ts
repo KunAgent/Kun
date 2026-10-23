@@ -9,6 +9,7 @@ import {
   ClientRuntimeOwnerBusyError,
   KunHandoffError
 } from './runtime/kun-installed-build-handoff'
+import { OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
 
 const electron = vi.hoisted(() => {
   const webHandlers = new Map<string, (...args: unknown[]) => void>()
@@ -61,7 +62,7 @@ vi.mock('./logger', () => ({
   logWarn: vi.fn()
 }))
 
-import { showStartupFailureWindow } from './startup-failure-window'
+import { showStartupFailureWindow, STARTUP_RECOVERY_TIMEOUT_MS } from './startup-failure-window'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -195,6 +196,66 @@ it('presents a typed handoff failure with safe owner details and task continuity
 })
 
 describe('showStartupFailureWindow', () => {
+  it('presents orphan recovery as leftover data-service cleanup', async () => {
+    const recoverRetry = vi.fn(async () => undefined)
+    showStartupFailureWindow(new OrphanedAppSessionError('/tmp/profile', 'owner exited'), '/tmp/logs', { recoverRetry })
+    expect(lastRenderedHtml()).toContain('Recover Kun')
+    expect(lastRenderedHtml()).toContain('Saved conversations and settings are preserved')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    expect(lastRenderedHtml()).toContain('Recovering the leftover Kun data service')
+    await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledOnce())
+  })
+
+  it('ends a stalled retry and never relaunches on its late success', async () => {
+    vi.useFakeTimers()
+    try {
+      let finish!: () => void
+      const recoverRetry = vi.fn((_signal: AbortSignal) => new Promise<void>((resolve) => { finish = resolve }))
+      showStartupFailureWindow(new Error('failed'), '/tmp/logs', { recoverRetry })
+      const navigate = electron.webHandlers.get('will-navigate')!
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      expect(recoverRetry).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(STARTUP_RECOVERY_TIMEOUT_MS)
+      expect(lastRenderedHtml()).toContain('Recovery timed out')
+      expect(lastRenderedHtml()).toContain('Retry Kun')
+      expect(recoverRetry.mock.calls[0]![0].aborted).toBe(true)
+      finish()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(electron.app.relaunch).not.toHaveBeenCalled()
+      recoverRetry.mockResolvedValueOnce(undefined)
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(electron.app.relaunch).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores the retry action when cleanup throws synchronously', () => {
+    showStartupFailureWindow(new Error('failed'), '/tmp/logs', {
+      recoverRetry: () => { throw new Error('synchronous cleanup failure') }
+    })
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    expect(lastRenderedHtml()).toContain('Retry failed: synchronous cleanup failure')
+    expect(lastRenderedHtml()).toContain('Retry Kun')
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('cancels recovery when the user quits and does not relaunch on completion', async () => {
+    let finish!: () => void
+    showStartupFailureWindow(new Error('failed'), '/tmp/logs', {
+      recoverRetry: () => new Promise<void>((resolve) => { finish = resolve })
+    })
+    const navigate = electron.webHandlers.get('will-navigate')!
+    navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    navigate({ preventDefault: vi.fn() }, 'kun-startup-action:quit')
+    finish()
+    await vi.waitFor(() => expect(lastRenderedHtml()).toContain('Recovery cancelled by Quit'))
+    expect(electron.app.quit).toHaveBeenCalledOnce()
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+
   it('keeps a real recovery window alive without automatically quitting', () => {
     const window = showStartupFailureWindow(new Error('manager failed'), 'C:\\Kun\\logs')
 
@@ -366,7 +427,7 @@ describe('showStartupFailureWindow', () => {
     expect(electron.app.quit).not.toHaveBeenCalled()
   })
 
-  it('finishes a successful handoff even if the recovery window was closed', async () => {
+  it('does not relaunch after the user closes the recovery window', async () => {
     let finishRecovery!: () => void
     const recoverHandoff = vi.fn(() => new Promise<void>((resolve) => {
       finishRecovery = resolve
@@ -377,10 +438,12 @@ describe('showStartupFailureWindow', () => {
       'kun-startup-action:retry'
     )
     electron.window.isDestroyed.mockReturnValue(true)
+    electron.windowHandlers.get('closed')?.()
 
     finishRecovery()
-    await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledOnce())
-    expect(electron.app.quit).toHaveBeenCalledOnce()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+    expect(electron.app.quit).not.toHaveBeenCalled()
   })
 
   it('keeps the recovery page without any privileged preload', () => {

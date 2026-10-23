@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
 import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
+import { OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
 import { KunHandoffError } from './runtime/kun-installed-build-handoff'
 
 const STARTUP_ACTION_PROTOCOL = 'kun-startup-action:'
@@ -12,6 +13,7 @@ export type StartupFailurePresentation = {
   handoff: boolean
   retryable: boolean
   recheck?: boolean
+  orphaned?: boolean
 }
 
 function escapeHtml(value: string): string {
@@ -35,6 +37,12 @@ export function sanitizeStartupFailureMessage(error: unknown): string {
 }
 
 export function startupFailurePresentation(error: unknown): StartupFailurePresentation {
+  if (error instanceof OrphanedAppSessionError) {
+    return {
+      message: sanitizeStartupFailureMessage(`${error.message}\n\nRecover Kun verifies the previous application has exited and stops its recorded leftover data service. Live Runtime processes block recovery. Saved conversations and settings are preserved.`),
+      handoff: false, retryable: true, orphaned: true
+    }
+  }
   if (error instanceof ServiceManagerUnavailableError) {
     const leftover = error.kind === 'capability_incompatible' || error.kind === 'protocol_incompatible'
     const lines = leftover
@@ -130,6 +138,7 @@ export function startupFailureHtml(
     retryable?: boolean
     busy?: boolean
     recheck?: boolean
+    orphaned?: boolean
     appVersion?: string
     execPath?: string
   } = {}
@@ -146,9 +155,9 @@ export function startupFailureHtml(
       : 'Kun could not safely verify the previous local owner, so it left the process, active work, and saved data untouched.'
     : 'The application is still running so you can inspect the failure or retry. The diagnostic detail is:'
   const primaryAction = busy
-    ? `<span class="working">${options.recheck ? 'Checking Service Manager ownership…' : handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
+    ? `<span class="working">${options.orphaned ? 'Recovering the leftover Kun data service…' : options.recheck ? 'Checking Service Manager ownership…' : handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
     : retryable
-      ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${options.recheck ? 'Recheck Kun' : handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
+      ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${options.orphaned ? 'Recover Kun' : options.recheck ? 'Recheck Kun' : handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
       : ''
   const launchLines = [
     options.appVersion ? `This app version: ${options.appVersion}` : '',

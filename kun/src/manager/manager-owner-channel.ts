@@ -9,20 +9,33 @@ export type ManagerOwnerLossHandle = {
   state: { snapshot(): Array<{ registration: RuntimeRegistration }> }
 }
 
-export function monitorManagerOwner(owner: AppSessionOwner): {
+export function monitorManagerOwner(owner: AppSessionOwner, options: {
+  channel?: Pick<NodeJS.Process, 'connected' | 'send' | 'once' | 'on' | 'removeListener'>
+  exit?: (code: number) => void
+  deadlineMs?: number
+} = {}): {
   startGranted: Promise<boolean>
   disconnected: Promise<void>
   stopRequested: Promise<void>
   dispose(): void
 } {
-  if (!process.connected || !process.send) throw new Error('Owned Manager requires its live parent IPC channel')
+  const channel = options.channel ?? process
+  if (!channel.connected || !channel.send) throw new Error('Owned Manager requires its live parent IPC channel')
   let grant!: (value: boolean) => void
   let disconnect!: () => void
   let stop!: () => void
   const startGranted = new Promise<boolean>((resolve) => { grant = resolve })
   const disconnected = new Promise<void>((resolve) => { disconnect = resolve })
   const stopRequested = new Promise<void>((resolve) => { stop = resolve })
-  const onDisconnect = () => { grant(false); disconnect() }
+  let cancelDeadline: (() => void) | undefined
+  const onDisconnect = () => {
+    // Arm at IPC loss, even before startup finishes or while an earlier
+    // graceful stop is stuck. The stop handler's single-flight guard must
+    // never suppress the final owner-loss exit deadline.
+    cancelDeadline ??= armOwnerLossExitDeadline(options.exit ?? ((code) => process.exit(code)), options)
+    grant(false)
+    disconnect()
+  }
   const onMessage = (value: unknown) => {
     if (!value || typeof value !== 'object') return
     const message = value as { type?: string; owner?: AppSessionOwner }
@@ -30,14 +43,15 @@ export function monitorManagerOwner(owner: AppSessionOwner): {
     if (message.type === 'kun-manager-start') grant(true)
     if (message.type === 'kun-manager-stop') { grant(false); stop() }
   }
-  process.once('disconnect', onDisconnect)
-  process.on('message', onMessage)
-  process.send({ type: 'kun-manager-owner-ready', owner }, () => undefined)
+  channel.once('disconnect', onDisconnect)
+  channel.on('message', onMessage)
+  channel.send({ type: 'kun-manager-owner-ready', owner }, () => undefined)
   return {
     startGranted, disconnected, stopRequested,
     dispose: () => {
-      process.removeListener('disconnect', onDisconnect)
-      process.removeListener('message', onMessage)
+      cancelDeadline?.()
+      channel.removeListener('disconnect', onDisconnect)
+      channel.removeListener('message', onMessage)
     }
   }
 }
