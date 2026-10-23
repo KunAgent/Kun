@@ -1,4 +1,5 @@
 import type { AgentProvider, NormalizedThread } from '../agent/types'
+import { loadThreadStates } from '../agent/thread-state-loader'
 import { codexReferenceRevision } from '../history-reference/codex-reference-state'
 import { getRuntimeErrorCode } from '../lib/format-runtime-error'
 import type { ChatState } from './chat-store-types'
@@ -17,7 +18,14 @@ import {
 } from './thread-snapshot-cache'
 
 export const BACKGROUND_THREAD_SYNC_INTERVAL_MS = 2_000
+/** A quiet running owner whose page is due is probed with a cheap state read this often. */
 export const BACKGROUND_THREAD_SYNC_HEARTBEAT_MS = 15_000
+/**
+ * A running owner's full timeline page is re-read at most this often. One
+ * page of a long running conversation costs the runtime seconds, and reopening
+ * re-hydrates from the server anyway; the turn's completion still re-reads at once.
+ */
+export const BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS = 60_000
 export const BACKGROUND_THREAD_SYNC_CONCURRENCY = 2
 const RETRY_MS = 15_000
 
@@ -28,15 +36,23 @@ type Entry = {
   running: boolean
   requestedAt: number
   retryAt: number
+  /** Highest sequence the committed page is known to cover. */
+  lastSeq: number
+  probedAt: number
+  /** A state probe saw progress or completion: the next pump reads the page. */
+  advanced: boolean
   controller?: AbortController
   token?: ThreadSnapshotCacheToken
   unavailable?: string
 }
 
+export type BackgroundThreadSyncProvider = Pick<AgentProvider, 'getThreadDetail'> &
+  Partial<Pick<AgentProvider, 'getThreadState' | 'getThreadStates'>>
+
 export type BackgroundThreadSyncDependencies = {
   getState: () => SyncState
   subscribe: (changed: () => void) => () => void
-  getProvider: () => Pick<AgentProvider, 'getThreadDetail'>
+  getProvider: () => BackgroundThreadSyncProvider
   canRequest?: () => boolean
 }
 
@@ -65,6 +81,28 @@ export function createBackgroundThreadSync(deps: BackgroundThreadSyncDependencie
     if (queued || stopped) return
     queued = true
     queueMicrotask(() => { queued = false; if (!stopped) pump() })
+  }
+
+  // A batched state read says whether quiet running owners moved at all, so
+  // their pages are only re-read when something happened.
+  const probe = (targets: Entry[], provider: BackgroundThreadSyncProvider): void => {
+    const now = Date.now()
+    const requestGeneration = generation
+    for (const entry of targets) entry.probedAt = now
+    void loadThreadStates(provider as Pick<AgentProvider, 'getThreadState' | 'getThreadStates'>,
+      targets.map((entry) => entry.thread.id)).then((results) => {
+      if (stopped || generation !== requestGeneration) return
+      let moved = false
+      for (const result of results) {
+        const entry = entries.get(result.id)
+        if (!entry || !result.ok) continue
+        if (result.state.latestSeq > entry.lastSeq || !threadLooksRunning(result.state)) {
+          entry.advanced = true
+          moved = true
+        }
+      }
+      if (moved) schedule()
+    }).catch(() => undefined)
   }
 
   const pump = (): void => {
@@ -128,11 +166,16 @@ export function createBackgroundThreadSync(deps: BackgroundThreadSyncDependencie
       if (!threads.has(id) || threads.get(id)?.archived) invalidateThreadSnapshot(id)
     }
     for (const [id, thread] of wanted) {
-      if (!entries.has(id)) entries.set(id, { thread, running: threadLooksRunning(thread), requestedAt: -Infinity, retryAt: 0 })
-      else entries.get(id)!.thread = thread
+      if (!entries.has(id)) {
+        entries.set(id, { thread, running: threadLooksRunning(thread), requestedAt: -Infinity, retryAt: 0,
+          lastSeq: -1, probedAt: -Infinity, advanced: false })
+      } else entries.get(id)!.thread = thread
     }
     if (deps.canRequest?.() === false) return
     const now = Date.now()
+    const provider = deps.getProvider()
+    const probing = typeof provider.getThreadStates === 'function' || typeof provider.getThreadState === 'function'
+    const probes: Entry[] = []
     // Oldest request first prevents a noisy conversation starving other owners.
     const candidates = [...wanted.values()].sort((a, b) => entries.get(a.id)!.requestedAt - entries.get(b.id)!.requestedAt)
     for (const thread of candidates) {
@@ -145,17 +188,26 @@ export function createBackgroundThreadSync(deps: BackgroundThreadSyncDependencie
       const dirty = entry.fingerprint !== fingerprint || Boolean(entry.token && !threadSnapshotCacheGenerationIsCurrent(thread.id, entry.token))
       const completing = entry.running && !running
       const elapsed = now - entry.requestedAt
-      if (Number.isFinite(entry.requestedAt) && !completing &&
-        ((!dirty && (!running || elapsed < BACKGROUND_THREAD_SYNC_HEARTBEAT_MS)) ||
-          (dirty && elapsed < BACKGROUND_THREAD_SYNC_INTERVAL_MS))) continue
+      if (Number.isFinite(entry.requestedAt) && !completing && !entry.advanced) {
+        if (running) {
+          // One page per refresh window. Between windows a quiet owner is only
+          // probed; without a state API the window alone paces the re-read.
+          if (elapsed < BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS) continue
+          if (!dirty && probing) {
+            if (now - entry.probedAt >= BACKGROUND_THREAD_SYNC_HEARTBEAT_MS) probes.push(entry)
+            continue
+          }
+        } else if (!dirty || elapsed < BACKGROUND_THREAD_SYNC_INTERVAL_MS) continue
+      }
       const controller = new AbortController()
       const token = captureThreadSnapshotCacheToken(thread.id)
       const requestGeneration = generation
       entry.controller = controller
       entry.token = token
       entry.requestedAt = now
+      entry.advanced = false
       inFlight += 1
-      void Promise.resolve().then(() => deps.getProvider().getThreadDetail(thread.id, {
+      void Promise.resolve().then(() => provider.getThreadDetail(thread.id, {
         signal: controller.signal, priority: 'background'
       })).then((detail) => {
         const current = deps.getState()
@@ -182,6 +234,7 @@ export function createBackgroundThreadSync(deps: BackgroundThreadSyncDependencie
         entry.fingerprint = fingerprint
         entry.token = captureThreadSnapshotCacheToken(thread.id)
         entry.running = running
+        entry.lastSeq = Math.max(detail.latestSeq, thread.latestSeq ?? 0)
         entry.retryAt = 0
       }).catch((error) => {
         if (controller.signal.aborted) return
@@ -197,6 +250,7 @@ export function createBackgroundThreadSync(deps: BackgroundThreadSyncDependencie
         schedule()
       })
     }
+    if (probes.length > 0) probe(probes, provider)
   }
 
   const unsubscribe = deps.subscribe(() => {
