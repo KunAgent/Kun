@@ -468,6 +468,8 @@ export type CoreRuntimeEventJson = {
   /** UTF-16 offset of this incremental assistant delta within its item text. */
   deltaOffset?: number
   timestamp?: string
+  /** Execution start of a queued user item published when its turn is promoted. */
+  turnStartedAt?: string
   threadId?: string
   turnId?: string
   itemId?: string

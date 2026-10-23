@@ -132,7 +132,10 @@ export function reduceChatProjection(
         : currentOptimisticUserId
           ? event.itemId
           : optimisticUserId ?? event.itemId
-      const startedAt = runtimeEventStartedAt(event.createdAt, context.now)
+      const executionStartedAt = Date.parse(event.startedAt ?? '')
+      const startedAt = Number.isFinite(executionStartedAt) && executionStartedAt <= context.now + 5_000
+        ? executionStartedAt
+        : runtimeEventStartedAt(event.createdAt, context.now)
       const statusThreads = !backgroundNotice && event.turnId && state.activeThreadId
         ? updateProjectedThreadStatus(
             state.threads,

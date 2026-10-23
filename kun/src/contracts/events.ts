@@ -154,6 +154,8 @@ export const ItemEvent = RuntimeEventBase.extend({
    * events omit the field and retain append-once semantics.
    */
   deltaOffset: z.number().int().nonnegative().optional(),
+  /** Execution start for a promoted queued user item; its createdAt stays unchanged. */
+  turnStartedAt: z.string().optional(),
   item: TurnItem
 })
 export type ItemEvent = z.infer<typeof ItemEvent>

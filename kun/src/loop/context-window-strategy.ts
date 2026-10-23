@@ -5,6 +5,8 @@ import type { ContextWindowBudget, WindowBudgetState } from './context-window-bu
 import { effectiveHistoryAfterLatestCompaction } from './compaction-history.js'
 import { repairModelHistoryItemsForModel } from '../domain/model-history-repair.js'
 import type { SessionStore } from '../ports/session-store.js'
+import type { ThreadStore } from '../ports/thread-store.js'
+import { executableHistory } from './executable-history.js'
 import {
   HistoryCompactionService,
   type CompactIfNeededInput,
@@ -31,6 +33,7 @@ export type ContextWindowStrategyDeps = {
   /** Establishes the active window identity (modes registry) for persistence. */
   establishWindow?: (threadId: string, window: { windowId: string; windowSeq: number }) => void
   sessionStore?: SessionStore
+  threadStore?: Pick<ThreadStore, 'get' | 'getMetadata'>
   stateRestore?: ContextWindowStateRestore
   ids?: { next(prefix: string): string }
 }
@@ -60,6 +63,22 @@ export class ContextWindowStrategyCoordinator implements CompactionDispatch {
   private capacityFor(input: CompactIfNeededInput): number {
     const capacity = this.deps.capacityTokens?.(input.model, input.providerId)
     return capacity !== undefined && capacity > 0 ? Math.floor(capacity) : DEFAULT_CAPACITY
+  }
+
+  private async loadExecutableHistory(input: CompactIfNeededInput) {
+    const items = this.deps.sessionStore
+      ? await this.deps.sessionStore.loadItems(input.threadId)
+      : input.items
+    const store = this.deps.threadStore
+    const thread = store
+      ? await (store.getMetadata?.(input.threadId) ?? store.get(input.threadId))
+      : null
+    if (store && !thread) throw new Error(`thread not found during context window preparation: ${input.threadId}`)
+    // Reloading canonical history also reloads unexecuted queue inputs. Apply
+    // the current ownership projection before slicing or repairing history.
+    return repairModelHistoryItemsForModel(
+      effectiveHistoryAfterLatestCompaction(executableHistory(items, thread))
+    )
   }
 
   private budgetState(
@@ -127,12 +146,7 @@ export class ContextWindowStrategyCoordinator implements CompactionDispatch {
     // capacity and persisted threshold marks are hydrated, then refresh the
     // history snapshot that this call returns to ModelStepService.
     await this.deps.stateRestore?.ensureRestoredInitialization(input.threadId)
-    const currentItems = this.deps.sessionStore
-      ? await this.deps.sessionStore.loadItems(input.threadId)
-      : input.items
-    const currentHistory = repairModelHistoryItemsForModel(
-      effectiveHistoryAfterLatestCompaction(currentItems)
-    )
+    const currentHistory = await this.loadExecutableHistory(input)
 
     // Unrecoverable: the fresh window's initial context (everything that is
     // not conversation history) plus the output reservation already exceeds
@@ -208,11 +222,8 @@ export class ContextWindowStrategyCoordinator implements CompactionDispatch {
       signal: input.signal
     })
     if (result.status !== 'committed') return null
-    const latest = this.deps.sessionStore
-      ? await this.deps.sessionStore.loadItems(input.threadId)
-      : input.items
     return {
-      history: repairModelHistoryItemsForModel(effectiveHistoryAfterLatestCompaction(latest)),
+      history: await this.loadExecutableHistory(input),
       triggered: true,
       compacted: true,
       replacedTokens: 0,

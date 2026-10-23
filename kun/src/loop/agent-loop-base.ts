@@ -119,6 +119,7 @@ export abstract class AgentLoopBase {
     // accepted turn mode picks the strategy exactly once.
     this.historyCompaction = new ContextWindowStrategyCoordinator({
       summary: summaryCompaction,
+      threadStore: opts.threadStore,
       ...(opts.contextWindowModes
         ? { mode: (threadId: string, turnId: string | undefined) => opts.contextWindowModes!.modeFor(threadId, turnId) }
         : {}),
