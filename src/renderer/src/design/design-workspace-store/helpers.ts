@@ -31,7 +31,6 @@ export const CANVAS_VIEW_KEY = 'kun.design.canvasView.v1'
 export const VIEWPORT_KEY = 'kun.design.viewport.v1'
 export const AI_RAIL_COLLAPSED_KEY = 'kun.design.aiRailCollapsed.v1'
 export const CANVAS_ASSISTANT_OPEN_KEY = 'kun.design.canvasAssistantOpen.v1'
-export const CANVAS_INSPECTOR_PINNED_KEY = 'kun.design.canvasInspectorPinned.v1'
 export const ASSISTANT_MODEL_KEY = 'kun.design.assistantModel.v1'
 export const ASSISTANT_PROVIDER_KEY = 'kun.design.assistantProvider.v1'
 export const MULTI_PAGE_MODE_KEY = 'kun.design.multiPageMode.v1'
@@ -287,10 +286,6 @@ export function readPersistedCanvasAssistantOpen(): boolean {
   if (value === '1') return true
   if (value === '0') return false
   return true
-}
-
-export function readPersistedCanvasInspectorPinned(): boolean {
-  return readBrowserStorageItem(CANVAS_INSPECTOR_PINNED_KEY) === '1'
 }
 
 export function readPersistedAssistantModel(): string {

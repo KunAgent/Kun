@@ -37,6 +37,7 @@ import codeTour from './common/code-tour.json'
 import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
 import designAgent from './common/design-agent.json'
+import designCanvasChrome from './common/design-canvas-chrome.json'
 import artifactsLibrary from './common/artifacts-library.json'
 import artifactsChat from './common/artifacts-chat.json'
 import workspaceFiles from './common/workspace-files.json'
@@ -88,6 +89,7 @@ const common = {
   ...messageQuote,
   ...appSurfaces,
   ...designAgent,
+  ...designCanvasChrome,
   ...artifactsLibrary,
   ...artifactsChat,
   ...workspaceFiles,

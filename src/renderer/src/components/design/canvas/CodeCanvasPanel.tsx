@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Maximize2, Minimize2, PanelLeft, PanelRightClose, Shapes } from 'lucide-react'
+import { Loader2, Maximize2, Minimize2, PanelRightClose, Shapes } from 'lucide-react'
 import {
   useCanvasImageGenerationProgress,
   failedImageGenerationEntries,
@@ -12,6 +12,7 @@ import {
   type DesignDocumentCanvasSurfaceProps
 } from './DesignDocumentCanvasSurface'
 import { CodeCanvasNativeSurface } from './code-canvas-native-surface'
+import { CANVAS_CHROME_PILL, canvasChromeButtonClass, useCanvasChromeCompact } from './chrome/canvas-chrome-primitives'
 import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 import {
   useCodeCanvasDesignSurface,
@@ -61,14 +62,12 @@ type Props = Pick<
   /** Left-sidebar toggle shown in the focused titlebar so it stays reachable. */
   leftSidebarCollapsed?: boolean
   onToggleLeftSidebar?: () => void
-  sidebarExpandLabel?: string
-  sidebarCollapseLabel?: string
   className?: string
 }
 
 export function codeCanvasPanelShellClass(className?: string, presentation: 'docked' | 'focused' = 'docked'): string {
   return cx(
-    'ds-no-drag relative flex min-h-0 flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#111318]',
+    'ds-no-drag relative flex min-h-0 flex-col overflow-hidden bg-[#f4f4f2] dark:bg-[#121315]',
     presentation === 'docked' ? 'border-l border-ds-border-muted' : '',
     className
   )
@@ -76,18 +75,6 @@ export function codeCanvasPanelShellClass(className?: string, presentation: 'doc
 
 export function codeCanvasPanelTitlebarClass(): string {
   return 'pointer-events-auto inline-flex h-10 max-w-[calc(100%-72px)] min-w-0 items-center gap-1.5 rounded-full border border-ds-border bg-white/82 px-1.5 shadow-[0_16px_42px_rgba(20,47,95,0.13)] backdrop-blur-2xl dark:bg-ds-card/84 dark:shadow-none'
-}
-
-export function codeCanvasPanelTitlebarStyle(
-  presentation: 'docked' | 'focused'
-): CSSProperties | undefined {
-  return presentation === 'focused'
-    ? {
-        left: 'calc(0.75rem + var(--ds-window-controls-safe-inset))',
-        right: 'auto',
-        top: 'calc(0.75rem + var(--ds-window-controls-safe-block))'
-      }
-    : undefined
 }
 
 export function codeCanvasPanelDesignHostClass(): string {
@@ -170,8 +157,6 @@ export function CodeCanvasPanel({
   onCollapse,
   leftSidebarCollapsed = false,
   onToggleLeftSidebar,
-  sidebarExpandLabel,
-  sidebarCollapseLabel,
   className,
   busy,
   onOpenAgentSettings,
@@ -186,6 +171,7 @@ export function CodeCanvasPanel({
   const surface = useCodeCanvasDesignSurface((s) => s.surface)
   const designDocuments = useDesignWorkspaceStore((s) => s.documents)
   const [continuingHistorical, setContinuingHistorical] = useState(false)
+  const chromeCompact = useCanvasChromeCompact()
   const activationGenerationRef = useRef(0)
   const activeThreadIdRef = useRef(activeThreadId)
   activeThreadIdRef.current = activeThreadId
@@ -356,91 +342,75 @@ export function CodeCanvasPanel({
   if (designMode) {
     const focusedPresentation = presentation === 'focused'
     const onToggleFocus = focusedPresentation && onExitFocus ? onExitFocus : requestCodeCanvasPanelFocus
+    const focusLabel = t(focusedPresentation ? 'designWhiteboardExitFocus' : 'designWhiteboardFocus', {
+      defaultValue: focusedPresentation ? 'Exit focused whiteboard' : 'Focus whiteboard'
+    })
+    const title = designDocTitle || t('rightPanelWhiteboard')
+    // The docked panel's tab strip already owns collapse; the canvas only adds focus.
+    const hostActions = (
+      <button
+        type="button"
+        onClick={onToggleFocus}
+        className={canvasChromeButtonClass(false, chromeCompact)}
+        aria-label={focusLabel}
+        title={focusLabel}
+      >
+        {focusedPresentation
+          ? <Minimize2 className="h-4 w-4" strokeWidth={1.85} />
+          : <Maximize2 className="h-4 w-4" strokeWidth={1.85} />}
+      </button>
+    )
+    const titlePill = (
+      <div className={`${CANVAS_CHROME_PILL} min-w-0 max-w-full pl-2.5`} data-code-canvas-titlebar="true">
+        <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
+        <span className="min-w-0 truncate px-1 text-[12.5px] font-medium text-ds-ink">{title}</span>
+        {activeDesignSurface?.readOnly ? (
+          <span className="shrink-0 rounded-full bg-ds-hover px-2 py-0.5 text-[10.5px] text-ds-muted">
+            {t('designViewPreview')}
+          </span>
+        ) : null}
+        {activeDesignSurface?.readOnly && activeDesignSurface.canonicalDocumentId ? (
+          <button
+            type="button"
+            onClick={returnToCanonicalDocument}
+            className="shrink-0 rounded-[8px] px-2 py-1.5 text-[11.5px] font-medium text-accent hover:bg-ds-hover"
+          >
+            {t('designReturnToTaskWhiteboard', { defaultValue: 'Return to task whiteboard' })}
+          </button>
+        ) : activeDesignSurface?.readOnly ? (
+          <button
+            type="button"
+            disabled={continuingHistorical}
+            onClick={continueHistoricalDocument}
+            className="inline-flex shrink-0 items-center gap-1 rounded-[8px] px-2 py-1.5 text-[11.5px] font-medium text-accent hover:bg-ds-hover disabled:opacity-50"
+          >
+            {continuingHistorical ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {t('designContinueInTask', { defaultValue: 'Continue in this task' })}
+          </button>
+        ) : null}
+      </div>
+    )
     return (
       <aside className={codeCanvasPanelShellClass(className, presentation)}>
-        <div
-          className={cx(
-            'pointer-events-none absolute right-3 z-50 flex min-w-0 items-start',
-            focusedPresentation ? '' : 'left-3 top-3'
-          )}
-          style={codeCanvasPanelTitlebarStyle(presentation)}
-        >
-          <div className={codeCanvasPanelTitlebarClass()} data-code-canvas-titlebar="true">
-            {focusedPresentation && onToggleLeftSidebar ? (
-              <button
-                type="button"
-                onClick={onToggleLeftSidebar}
-                className="ds-sidebar-toggle-button shrink-0"
-                aria-label={leftSidebarCollapsed
-                  ? (sidebarExpandLabel ?? t('sidebarExpand'))
-                  : (sidebarCollapseLabel ?? t('sidebarCollapse'))}
-                title={leftSidebarCollapsed
-                  ? (sidebarExpandLabel ?? t('sidebarExpand'))
-                  : (sidebarCollapseLabel ?? t('sidebarCollapse'))}
-              >
-                <PanelLeft className="h-4 w-4" strokeWidth={1.85} />
-              </button>
-            ) : null}
-            {!focusedPresentation ? (
-              <button
-                type="button"
-                onClick={onCollapse}
-                className="ds-sidebar-toggle-button shrink-0"
-                aria-label={t('rightPanelCollapse')}
-                title={t('rightPanelCollapse')}
-              >
-                <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={onToggleFocus}
-              className="ds-sidebar-toggle-button shrink-0"
-              aria-label={t(focusedPresentation ? 'designWhiteboardExitFocus' : 'designWhiteboardFocus', {
-                defaultValue: focusedPresentation ? 'Exit focused whiteboard' : 'Focus whiteboard'
-              })}
-              title={t(focusedPresentation ? 'designWhiteboardExitFocus' : 'designWhiteboardFocus', {
-                defaultValue: focusedPresentation ? 'Exit focused whiteboard' : 'Focus whiteboard'
-              })}
-            >
-              {focusedPresentation ? (
-                <Minimize2 className="h-4 w-4" strokeWidth={1.85} />
-              ) : (
-                <Maximize2 className="h-4 w-4" strokeWidth={1.85} />
-              )}
-            </button>
-            <div className="flex min-w-0 items-center gap-1.5 pl-1 pr-2">
-              <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
-              <span className="min-w-0 truncate text-[12.5px] font-medium text-ds-ink">
-                {designDocTitle || t('rightPanelWhiteboard')}
-              </span>
-              {activeDesignSurface?.readOnly ? (
-                <span className="shrink-0 rounded-full bg-ds-surface-subtle px-2 py-0.5 text-[10.5px] text-ds-muted">
-                  {t('designViewPreview')}
-                </span>
-              ) : null}
-              {activeDesignSurface?.readOnly && activeDesignSurface.canonicalDocumentId ? (
+        {!designDoc ? (
+          <div className="pointer-events-none absolute inset-x-3 top-3 z-50 flex items-start justify-between gap-2">
+            <div className="pointer-events-auto min-w-0">{titlePill}</div>
+            <div className={`pointer-events-auto ${CANVAS_CHROME_PILL}`}>
+              {hostActions}
+              {!focusedPresentation ? (
                 <button
                   type="button"
-                  onClick={returnToCanonicalDocument}
-                  className="pointer-events-auto shrink-0 rounded-full px-2 py-1 text-[11px] font-medium text-accent hover:bg-ds-hover"
+                  onClick={onCollapse}
+                  className={canvasChromeButtonClass(false)}
+                  aria-label={t('rightPanelCollapse')}
+                  title={t('rightPanelCollapse')}
                 >
-                  {t('designReturnToTaskWhiteboard', { defaultValue: 'Return to task whiteboard' })}
-                </button>
-              ) : activeDesignSurface?.readOnly ? (
-                <button
-                  type="button"
-                  disabled={continuingHistorical}
-                  onClick={continueHistoricalDocument}
-                  className="pointer-events-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-accent hover:bg-ds-hover disabled:opacity-50"
-                >
-                  {continuingHistorical ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                  {t('designContinueInTask', { defaultValue: 'Continue in this task' })}
+                  <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
                 </button>
               ) : null}
             </div>
           </div>
-        </div>
+        ) : null}
 
         <div className={codeCanvasPanelDesignHostClass()}>
           {designDoc ? (
@@ -458,6 +428,9 @@ export function CodeCanvasPanel({
               onUseElementAsContext={onUseElementAsContext}
               onRuntimeQualityFindings={onRuntimeQualityFindings}
               onRequestQualityRepair={onRequestQualityRepair}
+              leftSidebarCollapsed={focusedPresentation ? leftSidebarCollapsed : undefined}
+              onToggleLeftSidebar={focusedPresentation ? onToggleLeftSidebar : undefined}
+              chrome={{ title, notice: titlePill, actions: hostActions }}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
@@ -509,33 +482,40 @@ export function CodeCanvasPanel({
     )
   }
 
+  const collapseButton = (
+    <button
+      type="button"
+      onClick={onCollapse}
+      className={canvasChromeButtonClass(false)}
+      aria-label={t('rightPanelCollapse')}
+      title={t('rightPanelCollapse')}
+    >
+      <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
+    </button>
+  )
+  const nativeReady = Boolean(ready && activeThreadId)
   return (
     <aside className={codeCanvasPanelShellClass(className, presentation)}>
-      <div className="pointer-events-none absolute left-3 right-3 top-3 z-50 flex min-w-0 items-start">
-        <div className={codeCanvasPanelTitlebarClass()} data-code-canvas-titlebar="true">
-          <button
-            type="button"
-            onClick={onCollapse}
-            className="ds-sidebar-toggle-button shrink-0"
-            aria-label={t('rightPanelCollapse')}
-            title={t('rightPanelCollapse')}
-          >
-            <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
-          </button>
-          <div className="flex min-w-0 items-center gap-1.5 pl-1 pr-2">
-            <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
-            <span className="min-w-0 truncate text-[12.5px] font-medium text-ds-ink">
-              {t('rightPanelWhiteboard')}
-            </span>
+      {!nativeReady ? (
+        <div className="pointer-events-none absolute left-3 right-3 top-3 z-50 flex min-w-0 items-start">
+          <div className={codeCanvasPanelTitlebarClass()} data-code-canvas-titlebar="true">
+            {collapseButton}
+            <div className="flex min-w-0 items-center gap-1.5 pl-1 pr-2">
+              <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
+              <span className="min-w-0 truncate text-[12.5px] font-medium text-ds-ink">
+                {t('rightPanelWhiteboard')}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        {ready && activeThreadId ? (
+        {nativeReady && activeThreadId ? (
           <CodeCanvasNativeSurface
             workspaceRoot={workspaceRoot}
             threadId={activeThreadId}
+            chrome={{ title: t('rightPanelWhiteboard') }}
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">

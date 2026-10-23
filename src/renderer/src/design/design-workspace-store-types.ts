@@ -91,7 +91,6 @@ export type DesignWorkspaceState = {
   /** User preference for the floating canvas assistant on desktop. Persisted. */
   canvasAssistantOpen: boolean
   /** User preference for keeping the floating inspector visible without a selection. Persisted. */
-  canvasInspectorPinned: boolean
   /** Stitch-style design intent for the floating composer and command pill. */
   designIntentMode: DesignIntentMode
   /** When ON, a "generate" brief is decomposed into multiple cohesive pages. */
@@ -222,7 +221,6 @@ export type DesignWorkspaceState = {
   setAiRailCollapsed: (collapsed: boolean) => void
   setCanvasAssistantOpen: (open: boolean) => void
   toggleCanvasAssistantOpen: () => void
-  setCanvasInspectorPinned: (pinned: boolean) => void
   setAssistantModel: (model: string, providerId?: string) => void
   updateDesignContext: (patch: Partial<DesignContext>) => void
   /** Hydrate workspace root + design context defaults from persisted settings. */
