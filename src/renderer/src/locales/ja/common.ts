@@ -48,6 +48,7 @@ import assistantMailbox from './common/assistant-mailbox.json'
 import terminalDock from './common/terminal-dock.json'
 import pptDeck from './common/ppt-deck.json'
 import workersPanel from './common/workers-panel.json'
+import officeViewer from './common/office-viewer.json'
 
 const common = {
   ...taskSuggestion,
@@ -98,7 +99,8 @@ const common = {
   ...assistantMailbox,
   ...terminalDock,
   ...pptDeck,
-  ...workersPanel
+  ...workersPanel,
+  ...officeViewer
 }
 
 export default common

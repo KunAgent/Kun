@@ -1,7 +1,7 @@
 'use strict'
 
 // Minimal Office packages for the artifacts library smoke. The PPTX has one
-// theme, master and layout plus N title slides, enough for pptx-preview to
+// theme, master and layout plus N title slides, enough for the deck viewer to
 // render a deck whose thumbnail rail is taller than the viewer. The DOCX has
 // one paragraph block per page separated by hard page breaks.
 

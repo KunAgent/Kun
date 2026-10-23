@@ -16,7 +16,9 @@ async function checkArtifactChatTurn({ page, capture, poll, diagnostics, timeout
   await panel.locator('[data-artifact-chat-empty]').waitFor({ timeout: timeoutMs })
   assert.equal(await panel.locator('[data-artifact-chat-binding="draft"]').count(), 1, 'A deck without a source conversation starts a new one')
 
-  const rail = page.getByRole('complementary', { name: 'Slide thumbnails' })
+  const rail = page.getByRole('navigation', { name: 'Slide thumbnails' })
+  // The rail is virtualized and the previous check left it at the last slide.
+  await rail.evaluate((node) => { node.scrollTop = 0 })
   await rail.getByRole('button', { name: 'Go to slide 3' }).click()
   await panel.getByText('Looking at: slide 3').waitFor({ timeout: timeoutMs })
   await capture('artifacts-15-chat-empty')
@@ -39,7 +41,7 @@ async function checkArtifactChatTurn({ page, capture, poll, diagnostics, timeout
   const sent = chatTurn()
   diagnostics.chatPrompt = sent.slice(0, 2_000)
   assert(sent.includes('Target file: `presentations/roadmap.pptx`'), 'The message names the artifact file')
-  assert(sent.includes('The user is looking at slide 3 of 9'), 'The message carries the slide on screen')
+  assert(sent.includes('The user is looking at slide 3 of 16'), 'The message carries the slide on screen')
   assert(sent.includes('"work-reference-resource"') && sent.includes('"read-write"'), 'The file travels as a writable resource')
   assert(sent.includes('"office-view-position"'), 'The slide travels as the view position')
 
@@ -49,7 +51,7 @@ async function checkArtifactChatTurn({ page, capture, poll, diagnostics, timeout
   await writeFile(deckPath, await buildChangedDeck())
   await rail.locator('[data-slide-changed="true"]').first().waitFor({ timeout: timeoutMs })
   // The reloaded deck stays on the slide the user was talking about.
-  await page.locator('[data-artifact-stage="office"]').getByLabel('Slide 3 of 9', { exact: true }).waitFor({ timeout: timeoutMs })
+  await page.locator('[data-artifact-stage="office"] .kun-pptx-toolbar').getByLabel('Slide 3 of 16', { exact: true }).waitFor({ timeout: timeoutMs })
   await panel.getByText('Looking at: slide 3').waitFor({ timeout: timeoutMs })
   model.release()
 

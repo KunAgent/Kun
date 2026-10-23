@@ -4,6 +4,8 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type PointerEventHandler,
@@ -36,6 +38,11 @@ import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { X } from 'lucide-react'
 import type { WriteRightPanelContentProps } from '../write/WriteRightPanelContent'
+import type {
+  FilePreviewHostTabActions,
+  FilePreviewHostTabs,
+  FilePreviewHostTabsBridge
+} from '../workspace-file-preview-host-tabs'
 
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
@@ -283,6 +290,12 @@ function CodeRightPanelWorkspace({
   const [visited, setVisited] = useState<Set<RightPanelContributionId>>(() =>
     new Set(code.state.activeId ? [code.state.activeId] : []))
   const [dynamicTitles, setDynamicTitles] = useState<Record<string, string>>({})
+  const [fileTabs, setFileTabs] = useState<FilePreviewHostTabs | null>(null)
+  const fileTabActionsRef = useRef<FilePreviewHostTabActions | null>(null)
+  const fileTabsBridge = useMemo<FilePreviewHostTabsBridge>(
+    () => ({ publish: setFileTabs, actionsRef: fileTabActionsRef }),
+    []
+  )
 
   useEffect(() => {
     setDynamicTitles({})
@@ -359,6 +372,7 @@ function CodeRightPanelWorkspace({
           ) : null}
           <WorkspaceFilePreviewPanel
             {...file}
+            hostTabs={fileTabsBridge}
             fileTreeOpen={code.files.open}
             onToggleFileTree={code.onToggleFiles}
             className="h-full max-h-full min-w-0 flex-1 border-l-0"
@@ -433,6 +447,8 @@ function CodeRightPanelWorkspace({
         onClose={code.onClose}
         onNewSideConversation={code.onNewSideConversation}
         onCollapse={onCollapse}
+        fileTabs={code.state.tabs.includes(BUILTIN_RIGHT_PANEL_IDS.file) ? fileTabs : null}
+        fileTabActions={fileTabActionsRef}
       />}>
       <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
         {code.state.tabs.map((id) => {
