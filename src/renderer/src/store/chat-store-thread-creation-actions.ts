@@ -1,5 +1,6 @@
 import { markThreadWorkspacePreparing } from './task-workspace-store'
 import { startNewTaskTiming } from './new-task-timing'
+import { seedEmptyThreadSnapshot } from './new-thread-snapshot'
 import { codeThreadWorkspaceIntent } from './code-thread-workspace-intent'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
@@ -262,8 +263,9 @@ export function createThreadCreationActions(
           threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
         }))
         if (activate) {
+          seedEmptyThreadSnapshot(t)
           await get().selectThread(t.id)
-          await get().refreshThreads()
+          void get().refreshThreads()
         }
         return t.id
       }
@@ -402,15 +404,17 @@ export function createThreadCreationActions(
             })
       }))
       if (workspaceIntent?.isolation === 'worktree') markThreadWorkspacePreparing(t.id, '')
+      // The thread has no history yet: an empty seeded page lets selectThread
+      // skip its timeline round trips and enable the composer at once.
+      if (activate) seedEmptyThreadSnapshot(t)
       if (activate) await get().selectThread(t.id)
       timing.step('select')
       if (workspaceIntent?.isolation === 'worktree') {
         await get().requestAdeThreadWorkspace(t.id, workspaceIntent.startFrom)
       }
-      if (activate) {
-        await (isAdeThread ? get().refreshAdeThreads() : get().refreshThreads())
-      }
-      timing.step('refresh-list')
+      // The sidebar already lists the thread optimistically; the inventory
+      // refresh must not hold the new conversation or callers awaiting its id.
+      if (activate) void (isAdeThread ? get().refreshAdeThreads() : get().refreshThreads())
       timing.finish('created a thread')
       return t.id
     } catch (e) {
