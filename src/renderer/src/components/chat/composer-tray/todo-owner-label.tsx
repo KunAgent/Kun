@@ -6,12 +6,13 @@ import { selectWorkerRowsForParent } from '../../../store/activity-selectors'
 import { useActivityStore } from '../../../store/activity-store'
 import { useChatStore } from '../../../store/chat-store'
 import { TrayAvatar } from './tray-primitives'
-import { buildWorkersTrayRows, workerAvatarColor, workerAvatarGlyph } from './workers-tray-model'
+import { buildWorkersTrayRows, workerAvatarColor } from './workers-tray-model'
+import { WorkerSeatGlyph } from '../../workers/worker-seat'
 
 /*
  * Owner label at the end of a todo row: avatar + worker / thread name, with
  * the raw thread id (and a neutral person avatar) as the fallback. A worker
- * owner keeps the glyph and color its Workers segment and sheet use. The
+ * owner keeps the seat and color its Workers segment and sheet use. The
  * label gives up its width before the step text does: the name truncates
  * down to the avatar alone (the tooltip keeps the full name).
  */
@@ -24,19 +25,24 @@ function findOwnerRow(rows: Record<string, ActivityRow>, ownerThreadId: string):
 }
 
 /**
- * The avatar color the Workers segment and sheet paint for this owner, read
- * from the Workers row model itself with the owner's team, so both trays
- * follow one color rule (team-wide assignment included). Owners the Workers
- * tray does not list keep their own hue.
+ * The Workers row model's entry for this owner, read with the owner's team so
+ * the todo label and the Workers segment and sheet share one seat and color
+ * rule. Owners the Workers tray does not list return null.
  */
+function todoOwnerMember(rows: Record<string, ActivityRow>, row: ActivityRow | null) {
+  if (row?.kind !== 'worker' || !row.parentThreadId) return null
+  const team = selectWorkerRowsForParent(rows, row.parentThreadId)
+  // Colors and seats never depend on the clock; a fixed one keeps this store selector pure.
+  return buildWorkersTrayRows(team, { now: 0, feedError: false }).find((entry) => entry.id === row.unitId) ?? null
+}
+
+/** Owners the Workers tray does not list keep their own hue and the first seat. */
 function todoOwnerAvatarColor(rows: Record<string, ActivityRow>, row: ActivityRow | null, ownerThreadId: string): string {
-  if (row?.kind === 'worker' && row.parentThreadId) {
-    const team = selectWorkerRowsForParent(rows, row.parentThreadId)
-    // Colors never depend on the clock; a fixed one keeps this store selector pure.
-    const member = buildWorkersTrayRows(team, { now: 0, feedError: false }).find((entry) => entry.id === row.unitId)
-    if (member) return member.color
-  }
-  return workerAvatarColor(row?.unitId || ownerThreadId)
+  return todoOwnerMember(rows, row)?.color ?? workerAvatarColor(row?.unitId || ownerThreadId)
+}
+
+function todoOwnerAvatarSeat(rows: Record<string, ActivityRow>, row: ActivityRow | null): number {
+  return todoOwnerMember(rows, row)?.seat ?? 0
 }
 
 export function TodoOwnerLabel({
@@ -53,6 +59,7 @@ export function TodoOwnerLabel({
   const workerRow = useActivityStore((state) => findOwnerRow(state.rows, ownerThreadId))
   const color = useActivityStore((state) =>
     todoOwnerAvatarColor(state.rows, findOwnerRow(state.rows, ownerThreadId), ownerThreadId))
+  const seat = useActivityStore((state) => todoOwnerAvatarSeat(state.rows, findOwnerRow(state.rows, ownerThreadId)))
   const threadTitle = useChatStore((state) => state.threads.find((thread) => thread.id === ownerThreadId)?.title ?? null)
   const name = (workerRow?.title ?? threadTitle ?? '').trim()
   const text = name || ownerThreadId
@@ -65,7 +72,7 @@ export function TodoOwnerLabel({
       data-todo-owner={ownerThreadId}
     >
       {name ? (
-        <TrayAvatar label={workerAvatarGlyph(name, workerRow?.harnessId)} color={color} />
+        <TrayAvatar round icon={<WorkerSeatGlyph seat={seat} size={11} />} color={color} />
       ) : (
         <TrayAvatar icon={<UserRound className="h-3 w-3" strokeWidth={2.2} />} />
       )}

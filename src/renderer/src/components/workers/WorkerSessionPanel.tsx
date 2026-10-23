@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Loader2, RefreshCw, Square, Unplug } from 'lucide-react'
 import { useActivityStore } from '../../store/activity-store'
@@ -10,7 +10,8 @@ import {
   workerStatus,
   workerTimeLabel
 } from './worker-presentation'
-import { WorkerAvatar, WorkerStatusGlyph } from './WorkerParts'
+import { WorkerAvatar } from './WorkerParts'
+import { workerSeatMap } from './worker-seat'
 import { WorkerMoreMenu } from './WorkerMoreMenu'
 import { WorkerTranscript } from './WorkerTranscript'
 import { WorkerComposer } from './WorkerComposer'
@@ -41,6 +42,10 @@ export function WorkerSessionPanel({
   const managerThreadId = useActivityStore((s) => s.rows[workerId]?.parentThreadId) ?? activeThreadId
   const { rows, loaded, reload } = useTeamWorkers(managerThreadId, active)
   const row = rows.find((entry) => entry.workerId === workerId)
+  const seat = useMemo(
+    () => workerSeatMap(rows.map((entry) => entry.workerId)).get(workerId) ?? 0,
+    [rows, workerId]
+  )
 
   useEffect(() => {
     if (row) rememberWorkerLabel(workerId, row.label)
@@ -54,15 +59,17 @@ export function WorkerSessionPanel({
       </div>
     )
   }
-  return <WorkerSession key={workerId} row={row} reload={reload} className={className} />
+  return <WorkerSession key={workerId} row={row} seat={seat} reload={reload} className={className} />
 }
 
 function WorkerSession({
   row,
+  seat,
   reload,
   className
 }: {
   row: WorkerRowData
+  seat: number
   reload: () => Promise<void>
   className?: string
 }): ReactElement {
@@ -87,27 +94,27 @@ function WorkerSession({
 
   return (
     <section className={`ds-no-drag flex h-full min-h-0 flex-col ${className ?? ''}`} data-worker-inspector={workerId}>
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-ds-border-muted pl-3.5 pr-2">
-        <WorkerAvatar workerId={workerId} harnessId={row.harnessId ?? row.activityRow?.harnessId} size={24} />
-        <span
-          className="ds-worker-tone ds-worker-tone-pill inline-flex h-[22px] shrink-0 items-center gap-[5px] rounded-md px-2 text-[11.5px] font-semibold"
-          data-tone={status.tone}
-          data-worker-status={status.kind}
-        >
-          <WorkerStatusGlyph kind={status.kind} size={11} />
-          {t(`workersStatus.${status.kind}`)}
-          {time ? <span className="font-medium tabular-nums">{time}</span> : null}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-[11.5px] text-ds-faint" title={meta.join(' · ')}>
-          {meta.join(' · ')}
-          {row.diffStats ? (
-            <span className="font-mono tabular-nums" data-worker-preview-diff>
-              {meta.length ? ' · ' : ''}
-              <span className="text-ds-diff-added">+{row.diffStats.insertions}</span>{' '}
-              <span className="text-ds-diff-removed">−{row.diffStats.deletions}</span>
+      <div className="flex shrink-0 items-center gap-3 border-b border-ds-border-muted py-3 pl-4 pr-2.5">
+        <WorkerAvatar workerId={workerId} seat={seat} status={status.kind} size={36} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[14.5px] font-semibold leading-5 text-ds-ink" title={row.label}>{row.label}</div>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-ds-muted">
+            <span className="ds-worker-tone ds-worker-tone-text shrink-0 font-semibold" data-tone={status.tone} data-worker-status={status.kind}>
+              {t(`workersStatus.${status.kind}`)}
             </span>
-          ) : null}
-        </span>
+            {time ? <span className="shrink-0 font-medium tabular-nums">· {time}</span> : null}
+            <span className="min-w-0 truncate" title={meta.join(' · ')}>
+              {meta.length ? `· ${meta.join(' · ')}` : ''}
+              {row.diffStats ? (
+                <span className="font-mono tabular-nums" data-worker-preview-diff>
+                  {meta.length ? ' · ' : ''}
+                  <span className="text-ds-diff-added">+{row.diffStats.insertions}</span>{' '}
+                  <span className="text-ds-diff-removed">−{row.diffStats.deletions}</span>
+                </span>
+              ) : null}
+            </span>
+          </div>
+        </div>
         {canStop ? (
           <button
             type="button"
@@ -116,9 +123,10 @@ function WorkerSession({
             aria-label={t('workersStop')}
             title={t('workersStop')}
             data-worker-stop-action
-            className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
+            className="inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-lg border border-ds-border px-2.5 text-[12px] font-semibold text-ds-ink transition hover:bg-ds-hover disabled:opacity-40"
           >
-            <Square className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            <Square className="h-3 w-3" strokeWidth={2.2} aria-hidden />
+            {t('workersStop')}
           </button>
         ) : null}
         <button

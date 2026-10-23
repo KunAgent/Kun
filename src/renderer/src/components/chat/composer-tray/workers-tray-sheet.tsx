@@ -9,6 +9,7 @@ import {
   useDispatchableAgentNames
 } from '../FloatingComposerDispatchableAgents'
 import { requestOpenWorkersPanel } from '../FloatingComposerWorkersPill'
+import { WorkerSeatGlyph } from '../../workers/worker-seat'
 import { formatTrayDuration, useTrayNow, type TrayTranslate } from './tray-elapsed'
 import {
   TrayAvatar,
@@ -221,7 +222,7 @@ function WorkerTrayRowView({
     <TrayRow
       data-worker-tray-row={row.id}
       data-worker-tray-status={row.status}
-      leading={<TrayAvatar size="lg" label={row.glyph} color={row.color} />}
+      leading={<TrayAvatar size="lg" round icon={<WorkerSeatGlyph seat={row.seat} size={15} />} color={row.color} />}
       title={row.title}
       subtitle={subtitle || ' '}
       highlighted={row.status === 'waiting'}

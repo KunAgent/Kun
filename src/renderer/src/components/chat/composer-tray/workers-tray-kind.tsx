@@ -9,6 +9,7 @@ import { isDispatchManagerThread } from '../FloatingComposerDispatchableAgents'
 import type { FloatingComposerRenderContext } from '../floating-composer-view-context'
 import type { TrayKind, TrayTone } from './tray-kind'
 import { TrayAvatar, TrayDot } from './tray-primitives'
+import { WorkerSeatGlyph } from '../../workers/worker-seat'
 import {
   buildWorkersTrayRows,
   workersAccessibleStatus,
@@ -52,7 +53,12 @@ function WorkersTraySegment({
       {/* Side by side, not stacked: each initial stays readable at 18px. */}
       <span className={`ds-composer-tray-segment-icon ${compact ? 'gap-[3px]' : 'gap-[5px]'}`} aria-hidden="true">
         {rows.slice(0, SEGMENT_AVATARS).map((row) => (
-          <TrayAvatar key={row.id} label={row.glyph} color={row.color} />
+          <TrayAvatar
+            key={row.id}
+            round
+            icon={<WorkerSeatGlyph seat={row.seat} size={10} />}
+            color={row.color}
+          />
         ))}
       </span>
       {compact ? <TrayDot tone={tone} /> : null}
