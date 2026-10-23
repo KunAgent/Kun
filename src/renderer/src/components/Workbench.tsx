@@ -487,7 +487,7 @@ export function Workbench(): ReactElement {
     clearDesignHistory,
     ensureDesignThreadForWorkspace: ensureDesignThread,
     rollbackProvisionalThread,
-    designTaskProfileSelection: taskSurface === 'design' ? designTaskProfile : undefined, agentDesignTaskProfile: designTaskProfile,
+    designTaskProfileSelection: taskSurface === 'design' ? designTaskProfile : undefined,
     lockedDesignProfile,
     expectedThreadId: activeThreadId,
     imageGenerationAvailable: runtimeInfo?.capabilities.imageGen?.available === true,

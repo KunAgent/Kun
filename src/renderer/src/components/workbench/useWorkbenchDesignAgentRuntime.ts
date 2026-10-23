@@ -14,9 +14,8 @@ import {
   useCodeCanvasPromptController,
   type CodeCanvasPromptControllerOptions
 } from '../design/canvas/useCodeCanvasPromptController'
-import { useAgentDesignRequestDispatch } from './useAgentDesignRequestDispatch'
+import { useAgentDesignAutoOpen } from './useAgentDesignAutoOpen'
 import { useComposerPrefillEvent } from './useComposerPrefillEvent'
-import type { DesignTaskComposerProfile } from '../chat/FloatingComposerTaskProfile'
 
 type WorkbenchDesignAgentRuntimeOptions = {
   activeCodeCanvasWorkspace: CodeCanvasPromptControllerOptions['activeCodeCanvasWorkspace']
@@ -38,8 +37,6 @@ type WorkbenchDesignAgentRuntimeOptions = {
   clearDesignHistory: DesignPromptControllerOptions['clearDesignHistory']
   rollbackProvisionalThread?: DesignPromptControllerOptions['rollbackProvisionalThread']
   designTaskProfileSelection?: DesignPromptControllerOptions['designTaskProfileSelection']
-  /** Draft profile used when the Code agent starts a Design pass with `design_open`. */
-  agentDesignTaskProfile?: DesignTaskComposerProfile
   lockedDesignProfile?: DesignPromptControllerOptions['lockedDesignProfile']
   expectedThreadId?: DesignPromptControllerOptions['expectedThreadId']
   imageGenerationAvailable?: DesignPromptControllerOptions['imageGenerationAvailable']
@@ -85,7 +82,6 @@ export function useWorkbenchDesignAgentRuntime({
   clearDesignHistory,
   rollbackProvisionalThread,
   designTaskProfileSelection,
-  agentDesignTaskProfile,
   lockedDesignProfile,
   expectedThreadId,
   imageGenerationAvailable,
@@ -172,16 +168,7 @@ export function useWorkbenchDesignAgentRuntime({
     clearHtmlElementContext
   })
   useComposerPrefillEvent(setInput)
-  useAgentDesignRequestDispatch({
-    activeThreadId,
-    busy,
-    runtimeConnection,
-    threads,
-    workspaceRoot,
-    profile: agentDesignTaskProfile,
-    imageGenerationAvailable,
-    sendDesignPrompt: designPrompt.sendDesignPrompt
-  })
+  useAgentDesignAutoOpen({ activeThreadId, threads, workspaceRoot })
 
   return {
     ...designCodeRoundtrip,

@@ -21,7 +21,11 @@ function callItem(overrides: Partial<CoreTurnItemJson> = {}): CoreTurnItemJson {
     kind: 'tool_call',
     toolName: 'design_open',
     callId: 'call_design',
-    arguments: { title: 'Update entry', brief: 'Move it to the footer.', target: 'web' },
+    arguments: {
+      title: 'Update entry',
+      target: 'web',
+      screens: [{ name: 'Footer', html: '<p>footer</p>' }, { name: 'Pill', html: '<p>pill</p>' }]
+    },
     ...overrides
   } as CoreTurnItemJson
 }
@@ -42,49 +46,82 @@ function resultItem(output: Record<string, unknown>, isError = false): CoreTurnI
   } as CoreTurnItemJson
 }
 
-const queuedOutput = {
+const DOCUMENT_ID = '0a1b2c3d'
+const SCREEN_ID = '9f8e7d6c'
+
+const readyOutput = {
   ok: true,
-  status: 'queued',
+  status: 'ready',
   designRequest: {
-    version: 1,
+    version: 2,
     requestId: REQUEST_ID,
-    status: 'queued',
+    status: 'ready',
     title: 'Update entry',
-    brief: 'Move it to the footer.',
+    documentId: DOCUMENT_ID,
     target: 'web',
-    medium: 'html'
+    screens: [{
+      artifactId: SCREEN_ID,
+      name: 'Footer',
+      relativePath: `.kun-design/${DOCUMENT_ID}/${SCREEN_ID}/v1.html`,
+      width: 1280,
+      height: 800
+    }]
   }
 }
 
+const legacyOutput = {
+  ok: true,
+  status: 'queued',
+  designRequest: { version: 1, requestId: REQUEST_ID, status: 'queued', title: 'Update entry', brief: 'Move it.' }
+}
+
 describe('design_open request mapping', () => {
-  it('reads the streamed call as a pending request without an id', () => {
-    expect(extractDesignOpenRequest(callItem())).toEqual({
-      status: 'pending',
-      title: 'Update entry',
-      brief: 'Move it to the footer.',
-      target: 'web'
-    })
+  it('reads the streamed call as pending, counting screens without carrying their html', () => {
+    const request = extractDesignOpenRequest(callItem())
+    expect(request).toEqual({ status: 'pending', title: 'Update entry', screenCount: 2, screens: [], target: 'web' })
+    expect(JSON.stringify(request)).not.toContain('<p>')
   })
 
-  it('reads a queued result with its durable request id', () => {
-    expect(extractDesignOpenRequest(resultItem(queuedOutput))).toEqual({
-      status: 'queued',
+  it('reads a ready result with the screens written into its document folder', () => {
+    expect(extractDesignOpenRequest(resultItem(readyOutput))).toEqual({
+      status: 'ready',
       title: 'Update entry',
-      brief: 'Move it to the footer.',
       requestId: REQUEST_ID,
+      documentId: DOCUMENT_ID,
       target: 'web',
-      medium: 'html'
+      screenCount: 1,
+      screens: [{
+        artifactId: SCREEN_ID,
+        name: 'Footer',
+        relativePath: `.kun-design/${DOCUMENT_ID}/${SCREEN_ID}/v1.html`,
+        width: 1280,
+        height: 800
+      }]
     })
   })
 
-  it('rejects a queued result whose id is not a Kun design request id', () => {
-    const output = { ...queuedOutput, designRequest: { ...queuedOutput.designRequest, requestId: '../x' } }
-    expect(extractDesignOpenRequest(resultItem(output))).toBeUndefined()
+  it('drops screens whose path leaves their design document folder', () => {
+    const escaped = {
+      ...readyOutput,
+      designRequest: {
+        ...readyOutput.designRequest,
+        screens: [{ ...readyOutput.designRequest.screens[0], relativePath: '../../etc/passwd' }]
+      }
+    }
+    expect(extractDesignOpenRequest(resultItem(escaped))).toMatchObject({ status: 'failed' })
+  })
+
+  it('keeps old queued requests readable as legacy', () => {
+    expect(extractDesignOpenRequest(resultItem(legacyOutput))).toMatchObject({
+      status: 'legacy',
+      title: 'Update entry',
+      requestId: REQUEST_ID
+    })
   })
 
   it('maps a tool error to a failed request', () => {
-    expect(extractDesignOpenRequest(resultItem({ ok: false, error: 'design_open requires a non-empty title and brief' }, true)))
-      .toMatchObject({ status: 'failed', error: 'design_open requires a non-empty title and brief' })
+    expect(extractDesignOpenRequest(resultItem({ ok: false, error: 'design_open requires at least one screen' }, true)))
+      .toMatchObject({ status: 'failed', error: 'design_open requires at least one screen' })
   })
 
   it('ignores other tools', () => {
@@ -92,11 +129,11 @@ describe('design_open request mapping', () => {
   })
 
   it('attaches validated metadata and a success status to the tool block', () => {
-    const block = chatBlockFromItem(resultItem(queuedOutput)) as ChatBlock
+    const block = chatBlockFromItem(resultItem(readyOutput)) as ChatBlock
     expect(block.kind).toBe('tool')
     expect((block as ToolBlock).status).toBe('success')
     expect(isDesignOpenBlock(block)).toBe(true)
-    expect(readDesignOpenRequest(block)?.requestId).toBe(REQUEST_ID)
+    expect(readDesignOpenRequest(block)).toMatchObject({ status: 'ready', documentId: DOCUMENT_ID })
   })
 
   it('does not trust malformed block metadata', () => {
@@ -106,7 +143,7 @@ describe('design_open request mapping', () => {
       summary: 'design_open',
       status: 'success',
       toolKind: 'tool_call',
-      meta: { toolName: 'design_open', designOpenRequest: { status: 'queued', title: 'X', brief: 'Y' } }
+      meta: { toolName: 'design_open', designOpenRequest: { status: 'ready', title: 'X', documentId: 'nope' } }
     } as unknown as ChatBlock
     expect(readDesignOpenRequest(block)).toBeUndefined()
     expect(isDesignOpenBlock(block)).toBe(false)
