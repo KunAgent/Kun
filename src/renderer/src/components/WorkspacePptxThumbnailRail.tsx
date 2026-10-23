@@ -17,6 +17,12 @@ export type PptxThumbnailSession = {
 }
 
 export const MAX_MOUNTED_PPTX_THUMBNAILS = 16
+// pptx-preview resolves its slide masters in the background, so the first
+// single-slide render can land before a slide is parsable. Each slide gets a
+// few attempts; a slide that still cannot render stops pulsing instead of
+// pretending to load forever.
+const MAX_THUMBNAIL_ATTEMPTS = 3
+const THUMBNAIL_RETRY_DELAY_MS = 24
 
 export function WorkspacePptxThumbnailRail({
   session,
@@ -33,14 +39,34 @@ export function WorkspacePptxThumbnailRail({
 }): ReactElement {
   const railRef = useRef<HTMLDivElement>(null)
   const slideButtonRefs = useRef(new Map<number, HTMLButtonElement>())
-  const generatedSlidesRef = useRef(new Set<number>())
   const [requestedSlides, setRequestedSlides] = useState<Set<number>>(() => initialSlides(slideCount))
   const [thumbnails, setThumbnails] = useState<Map<number, HTMLElement>>(new Map())
+  const [failedSlides, setFailedSlides] = useState<Set<number>>(new Set())
+  // Bumped by navigation so a thumbnail that gave up gets one fresh attempt.
+  const [retryTick, setRetryTick] = useState(0)
+  const thumbnailsRef = useRef(thumbnails)
+  thumbnailsRef.current = thumbnails
+  const attemptsRef = useRef(new Map<number, number>())
+  // Bumped whenever the rendered deck changes so stale loops cannot commit.
+  const sessionRunRef = useRef(0)
+  // Only one generation loop may drive the shared previewer. A second loop
+  // would remove the slide wrapper the first one is still copying, and the
+  // skipped slide would stay blank because its effect never re-runs.
+  const activeRunRef = useRef(0)
+  // The initial state already matches the first deck, so the reset below only
+  // runs when the deck really changes; resetting on mount would cancel the
+  // first generation pass and re-render every slide.
+  const resetKeyRef = useRef(`${session?.sourceKey ?? ''}:${slideCount}`)
 
   useEffect(() => {
-    generatedSlidesRef.current.clear()
+    const resetKey = `${session?.sourceKey ?? ''}:${slideCount}`
+    if (resetKeyRef.current === resetKey) return
+    resetKeyRef.current = resetKey
+    sessionRunRef.current += 1
+    attemptsRef.current.clear()
     setRequestedSlides(initialSlides(slideCount))
     setThumbnails(new Map())
+    setFailedSlides(new Set())
   }, [session?.sourceKey, slideCount])
 
   useEffect(() => {
@@ -48,6 +74,17 @@ export function WorkspacePptxThumbnailRail({
     const button = slideButtonRefs.current.get(currentSlide)
     if (rail && button) revealRailItem(rail, button)
     setRequestedSlides((current) => includeRequestedSlide(current, currentSlide))
+    // Navigating to a slide whose thumbnail gave up retries it once more.
+    if (attemptsRef.current.get(currentSlide)) {
+      attemptsRef.current.delete(currentSlide)
+      setRetryTick((tick) => tick + 1)
+    }
+    setFailedSlides((current) => {
+      if (!current.has(currentSlide)) return current
+      const next = new Set(current)
+      next.delete(currentSlide)
+      return next
+    })
   }, [currentSlide])
 
   useEffect(() => {
@@ -73,37 +110,52 @@ export function WorkspacePptxThumbnailRail({
 
   useEffect(() => {
     const allowed = new Set(requested)
-    generatedSlidesRef.current = new Set(
-      Array.from(generatedSlidesRef.current).filter((slide) => allowed.has(slide))
-    )
     setThumbnails((current) => pruneThumbnails(current, allowed))
+    for (const slide of Array.from(attemptsRef.current.keys())) {
+      if (!allowed.has(slide)) attemptsRef.current.delete(slide)
+    }
+    setFailedSlides((current) => {
+      const next = new Set(Array.from(current).filter((slide) => allowed.has(slide)))
+      return next.size === current.size ? current : next
+    })
     if (!session) return
+    const sessionRun = sessionRunRef.current
+    const runToken = ++activeRunRef.current
+    const isStale = (): boolean => (
+      runToken !== activeRunRef.current || sessionRun !== sessionRunRef.current
+    )
     let cancelled = false
 
     const generate = async (): Promise<void> => {
       for (const slide of requested) {
-        if (cancelled) return
-        if (generatedSlidesRef.current.has(slide)) continue
-        try {
-          session.previewer.renderSingleSlide(slide - 1)
-          secureWorkspaceOfficeLinks(session.host)
-          const rendered = session.host.querySelector<HTMLElement>(
-            `.pptx-preview-slide-wrapper-${slide - 1}`
-          )
-          if (!rendered || cancelled) continue
-          const clone = cloneStaticSlide(rendered)
-          clone.setAttribute('aria-hidden', 'true')
-          secureWorkspaceOfficeLinks(clone)
-          generatedSlidesRef.current.add(slide)
-          setThumbnails((current) => {
-            if (cancelled || !allowed.has(slide) || current.has(slide)) return current
-            const next = new Map(current)
-            next.set(slide, clone)
-            return capThumbnails(next, allowed)
-          })
-        } catch {
-          // A failed thumbnail must not replace an otherwise usable main preview.
+        if (cancelled || isStale()) return
+        if (thumbnailsRef.current.has(slide)) continue
+        const rendered = await renderSlideThumbnail(
+          session,
+          slide,
+          () => cancelled || isStale(),
+          attemptsRef.current
+        )
+        if (cancelled || isStale()) return
+        if (!rendered) {
+          setFailedSlides((current) => current.has(slide) ? current : new Set(current).add(slide))
+          continue
         }
+        setFailedSlides((current) => {
+          if (!current.has(slide)) return current
+          const next = new Set(current)
+          next.delete(slide)
+          return next
+        })
+        // Cancel only stops the loop. A slide that already rendered keeps its
+        // thumbnail, so a window or session change cannot leave a blank slot
+        // behind while the slide stays requested.
+        setThumbnails((current) => {
+          if (current.has(slide)) return current
+          const next = new Map(current)
+          next.set(slide, rendered)
+          return capThumbnails(next, allowed)
+        })
         await Promise.resolve()
       }
     }
@@ -112,7 +164,7 @@ export function WorkspacePptxThumbnailRail({
     return () => {
       cancelled = true
     }
-  }, [requested, session])
+  }, [requested, retryTick, session])
 
   return (
     <aside
@@ -126,6 +178,7 @@ export function WorkspacePptxThumbnailRail({
           const thumbnail = thumbnails.get(slide)
           const active = slide === currentSlide
           const changed = changedSlides?.includes(slide) === true
+          const failed = !thumbnail && failedSlides.has(slide)
           return (
             <button
               key={slide}
@@ -137,7 +190,7 @@ export function WorkspacePptxThumbnailRail({
               aria-label={i18n.t('officeGoToSlide', { slide })}
               aria-current={active ? 'page' : undefined}
               data-pptx-thumbnail-index={index}
-              data-thumbnail-state={thumbnail ? 'ready' : 'placeholder'}
+              data-thumbnail-state={thumbnail ? 'ready' : failed ? 'failed' : 'placeholder'}
               data-slide-changed={changed ? 'true' : undefined}
               className={`rounded-lg border p-1.5 text-left transition ${
                 active
@@ -148,7 +201,10 @@ export function WorkspacePptxThumbnailRail({
             >
               <div className="relative aspect-video w-full overflow-hidden rounded-sm bg-black/10">
                 {thumbnail ? <StaticPptxThumbnail content={thumbnail} /> : (
-                  <div className="h-full w-full animate-pulse bg-ds-surface-subtle" aria-hidden="true" />
+                  <div
+                    className={`h-full w-full bg-ds-surface-subtle ${failed ? '' : 'animate-pulse'}`}
+                    aria-hidden="true"
+                  />
                 )}
                 {changed ? (
                   <span className="absolute right-1 top-1 rounded bg-accent px-1 text-[9px] font-semibold leading-[14px] text-white">
@@ -203,6 +259,46 @@ function StaticPptxThumbnail({ content }: { content: HTMLElement }): ReactElemen
     }
   }, [content])
   return <div ref={hostRef} className="relative h-full w-full overflow-hidden [&_.pptx-preview-slide-wrapper]:!m-0" />
+}
+
+// Renders one slide in the shared offscreen thumbnail previewer and freezes a
+// static copy. A missing wrapper or a throw usually means pptx-preview has not
+// finished parsing that slide yet, so attempts are spaced and capped.
+async function renderSlideThumbnail(
+  session: PptxThumbnailSession,
+  slide: number,
+  isStopped: () => boolean,
+  attempts: Map<number, number>
+): Promise<HTMLElement | null> {
+  for (let attempt = 0; attempt < MAX_THUMBNAIL_ATTEMPTS; attempt += 1) {
+    const used = attempts.get(slide) ?? 0
+    if (used >= MAX_THUMBNAIL_ATTEMPTS) return null
+    attempts.set(slide, used + 1)
+    try {
+      session.previewer.renderSingleSlide(slide - 1)
+      secureWorkspaceOfficeLinks(session.host)
+      const rendered = session.host.querySelector<HTMLElement>(
+        `.pptx-preview-slide-wrapper-${slide - 1}`
+      )
+      if (rendered) {
+        const clone = cloneStaticSlide(rendered)
+        clone.setAttribute('aria-hidden', 'true')
+        secureWorkspaceOfficeLinks(clone)
+        return clone
+      }
+    } catch {
+      // A failed thumbnail must not replace an otherwise usable main preview.
+    }
+    if (isStopped()) return null
+    await delay(THUMBNAIL_RETRY_DELAY_MS * (attempt + 1))
+  }
+  return null
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds)
+  })
 }
 
 // Scrolls only the rail. scrollIntoView would also scroll every clipped
