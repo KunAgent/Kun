@@ -16,6 +16,7 @@ import { useDesignHtmlPreview } from '../../DesignHtmlPreviewHost'
 import { HtmlFrameAiCursorOverlay } from './HtmlFrameAiCursorOverlay'
 import { HtmlFrameChrome, htmlFrameChromeOffset } from './HtmlFrameChrome'
 import { HtmlFrameGeneratingCanvas } from './HtmlFrameGeneratingCanvas'
+import { useKunPresenceStore } from '../../../../design/canvas/kun-presence-store'
 import { GenerationFailedNotice, HtmlFramePlaceholder } from './HtmlFramePlaceholder'
 import {
   chatBusyForArtifact,
@@ -347,6 +348,14 @@ function ScreenOverlayInner({
     preview.renderState,
     setArtifactPreviewStatus
   ])
+
+  const presenceState = drawingActive ? (parallelState?.status === 'queued' ? 'queued' : 'generating') : null
+  const presenceName = shape.name
+  useEffect(() => {
+    const { report } = useKunPresenceStore.getState()
+    report(shape.id, presenceState ? { state: presenceState, name: presenceName } : null)
+    return () => report(shape.id, null)
+  }, [shape.id, presenceState, presenceName])
 
   const motionStyle = useCanvasMotionPortalStyle(shape, zoom)
   if (screenWidth < 20 || screenHeight < 20) return <></>

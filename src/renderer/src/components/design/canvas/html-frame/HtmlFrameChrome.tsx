@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Maximize2, PenLine, SlidersHorizontal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { DesignRuntimeQualityPayload } from '../../../../design/design-html-quality'
@@ -81,6 +82,11 @@ export function HtmlFrameChrome({
 }: HtmlFrameChromeProps): React.JSX.Element {
   const { t } = useTranslation('common')
   const ready = Boolean(previewWebviewUrl) && !drawingActive && !failedMessage
+  const [hovered, setHovered] = useState(false)
+  // Icons stay out of the way until the board is hovered, selected, edited or
+  // has its quality details open; the name strip is otherwise just the name.
+  const actionsVisible = hovered || active || editing || qualityDetailsOpen
+  const statusDot = drawingActive ? 'generating' : failedMessage ? 'failed' : null
   const level = interactive ? 'none' : htmlFrameChromeActionLevel({ screenWidth, active })
   const showActions = level !== 'none'
   const selectBoard = (): void => useCanvasSelectionStore.getState().select([shapeId])
@@ -98,9 +104,20 @@ export function HtmlFrameChrome({
         fontSize: screenWidth > 220 ? 12.5 : 11
       }}
     >
+      {statusDot ? (
+        <span
+          aria-hidden="true"
+          data-canvas-board-status={statusDot}
+          className={`pointer-events-none h-1.5 w-1.5 shrink-0 rounded-full ${
+            statusDot === 'generating' ? 'animate-pulse bg-[#6a4df4]' : 'bg-[#c2410c]'
+          }`}
+        />
+      ) : null}
       <button
         type="button"
-        className={`pointer-events-auto min-w-0 truncate rounded-[4px] text-left leading-none transition-colors ${
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        className={`pointer-events-auto min-w-0 flex-1 truncate rounded-[4px] text-left leading-none transition-colors ${
           active ? 'font-semibold text-accent' : 'font-medium text-ds-muted hover:text-ds-ink'
         }`}
         onPointerDown={stop}
@@ -118,7 +135,14 @@ export function HtmlFrameChrome({
         {shapeName}
       </button>
       {showActions ? (
-        <div className="flex shrink-0 items-center gap-0.5" onDoubleClick={stop}>
+        <div
+          className={`pointer-events-auto flex h-full shrink-0 items-center gap-0.5 transition-opacity ${
+            actionsVisible ? 'opacity-100' : 'opacity-0 [&_*]:!pointer-events-none'
+          }`}
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
+          onDoubleClick={stop}
+        >
           {active && ready && level === 'full' ? (
             <HtmlFrameQualityControl
               available={screenWidth > 220}

@@ -5,6 +5,7 @@ import { createTextTool } from '../../../../design/canvas/tools/text-tool'
 import { createFrameTool } from '../../../../design/canvas/tools/frame-tool'
 import { createHandTool } from '../../../../design/canvas/tools/hand-tool'
 import { createScreenTool } from '../../../../design/canvas/tools/screen-tool'
+import { createStickyTool } from '../../../../design/canvas/tools/sticky-tool'
 import { createAiImageTool } from '../../../../design/canvas/tools/ai-image-tool'
 import { createArrowTool, createLineTool } from '../../../../design/canvas/tools/linear-tool'
 import { createDrawTool } from '../../../../design/canvas/tools/draw-tool'
@@ -423,6 +424,7 @@ const toolFactories: Record<CanvasTool, () => CanvasToolHandler> = {
   text: createTextTool,
   frame: createFrameTool,
   screen: createScreenTool,
+  sticky: createStickyTool,
   image: createAiImageTool,
   arrow: createArrowTool,
   line: createLineTool,

@@ -14,12 +14,14 @@ import { PropertiesPanel } from './PropertiesPanel'
 import { CanvasLayersPanel } from './CanvasLayersPanel'
 import { CanvasCodePanel } from './CanvasCodePanel'
 import { CanvasTweaksPanel } from './CanvasTweaksPanel'
+import { CanvasStickyNotesPanel } from './CanvasStickyNotesPanel'
 
 const TAB_LABEL_KEYS: Record<CanvasInspectorTab, string> = {
   properties: 'canvasInspectorTabProperties',
   outline: 'canvasInspectorTabOutline',
   code: 'canvasInspectorTabCode',
-  tweaks: 'canvasInspectorTabTweaks'
+  tweaks: 'canvasInspectorTabTweaks',
+  notes: 'canvasInspectorTabNotes'
 }
 
 /** Drawer visibility and height for a canvas host; hidden while the motion dock is open. */
@@ -153,6 +155,7 @@ function CanvasInspectorDrawerInner({
         {tab === 'properties' ? <PropertiesPanel surface={surface} /> : null}
         {tab === 'outline' ? <CanvasLayersPanel /> : null}
         {tab === 'code' ? <CanvasCodePanel workspaceRoot={workspaceRoot} /> : null}
+        {tab === 'notes' ? <CanvasStickyNotesPanel /> : null}
         {tab === 'tweaks' ? (
           <CanvasTweaksPanel
             onImplementDesign={onImplementDesign}

@@ -26,7 +26,7 @@ describe('canvas inspector store', () => {
   })
 
   it('offers Tweaks only on the Design canvas', () => {
-    expect(canvasInspectorTabsForSurface(true)).toEqual(['properties', 'outline', 'code', 'tweaks'])
+    expect(canvasInspectorTabsForSurface(true)).toEqual(['properties', 'outline', 'code', 'tweaks', 'notes'])
     expect(canvasInspectorTabsForSurface(false)).toEqual(['properties', 'outline', 'code'])
   })
 

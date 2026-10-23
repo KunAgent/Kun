@@ -14,6 +14,7 @@ import {
   useCodeCanvasPromptController,
   type CodeCanvasPromptControllerOptions
 } from '../design/canvas/useCodeCanvasPromptController'
+import { useStickyKunRequests } from '../design/useStickyKunRequests'
 import { useAgentDesignAutoOpen } from './useAgentDesignAutoOpen'
 import { useComposerPrefillEvent } from './useComposerPrefillEvent'
 
@@ -168,6 +169,7 @@ export function useWorkbenchDesignAgentRuntime({
     clearHtmlElementContext
   })
   useComposerPrefillEvent(setInput)
+  useStickyKunRequests(designPrompt.sendDesignPrompt)
   useAgentDesignAutoOpen({ activeThreadId, threads, workspaceRoot })
 
   return {

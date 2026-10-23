@@ -16,7 +16,7 @@ function menuItemLabels(renderer: ReactTestRenderer, role: string): string[] {
 describe('CanvasToolbar', () => {
   it('lays tools out in one top row with grouped pen, shape and image tools', () => {
     expect(canvasToolbarSlots(true).map((slot) => slot.kind === 'tool' ? slot.tool.id : slot.id)).toEqual([
-      'select', 'hand', 'text', 'frame', 'screen', 'pen', 'shape', 'image'
+      'select', 'hand', 'text', 'board', 'sticky', 'pen', 'shape', 'image'
     ])
     expect(canvasToolbarSlots(false).map((slot) => slot.kind === 'tool' ? slot.tool.id : slot.id)).toEqual([
       'select', 'hand', 'text', 'frame', 'pen', 'shape', 'image'
@@ -42,11 +42,14 @@ describe('CanvasToolbar', () => {
     expect(html).not.toContain('aria-label="Play prototype"')
   })
 
-  it('shows the screen tool and agent actions on the design canvas', () => {
+  it('shows pages, the board group, stickies and agent actions on the design canvas', () => {
     const html = renderToStaticMarkup(createElement(CanvasToolbar, { workspaceRoot: '/workspace' }))
 
-    expect(html).toContain('aria-label="Screen"')
+    expect(html).toContain('aria-label="Pages"')
+    expect(html).toContain('aria-label="Board tools"')
+    expect(html).toContain('aria-label="Sticky note"')
     expect(html).toContain('aria-label="Agent actions"')
+    expect(html).toContain('aria-label="Canvas menu"')
     expect(html).toContain('aria-label="Pen tools"')
     expect(html).toContain('aria-label="Shape tools"')
     expect(html).toContain('aria-label="AI image slot"')
