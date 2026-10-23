@@ -95,7 +95,7 @@ function WorkerSession({
   return (
     <section className={`ds-no-drag flex h-full min-h-0 flex-col ${className ?? ''}`} data-worker-inspector={workerId}>
       <div className="flex shrink-0 items-center gap-3 border-b border-ds-border-muted py-3 pl-4 pr-2.5">
-        <WorkerAvatar workerId={workerId} seat={seat} status={status.kind} size={36} />
+        <WorkerAvatar workerId={workerId} seat={seat} status={status.kind} harnessId={row.harnessId ?? row.activityRow?.harnessId} size={36} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[14.5px] font-semibold leading-5 text-ds-ink" title={row.label}>{row.label}</div>
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-ds-muted">
