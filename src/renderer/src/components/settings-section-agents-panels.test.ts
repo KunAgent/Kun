@@ -152,11 +152,39 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       'Codex history branches',
       'Automatic plan and build',
       'Graph mode',
-      'PPT skill',
       'Project board',
+      'labAssistantMailboxTitle',
       'Computer control',
       'Browser'
     ])
+  })
+
+  it('shows the PPT skill on the regular Skills page without an experimental master switch', () => {
+    const settings = defaultKunRuntimeSettings()
+    settings.lab.pptAgent = { enabled: false, imageAssets: false }
+    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, {
+      ctx: { ...baseCtx(), kun: settings }, panel: 'skills'
+    }))
+    expect(html).toContain('PPT skill')
+    expect(html).toContain('labPptImageAssetsOffHint')
+    expect(html).not.toContain('Enable PPT tools')
+  })
+
+  it('excludes legacy PPT enabled state from the Laboratory count', () => {
+    const renderCount = (enabled: boolean): string => {
+      const settings = defaultKunRuntimeSettings()
+      settings.lab.pptAgent.enabled = enabled
+      return renderToStaticMarkup(createElement(LaboratorySettingsSection, {
+        ctx: {
+          ...baseCtx(),
+          kun: settings,
+          t: (key: string, params?: { count: number; total: number }) =>
+            key === 'settingsIaLabsEnabledCount' ? `${params?.count}/${params?.total}` : t(key)
+        }
+      }))
+    }
+    expect(renderCount(false)).toContain('1/11')
+    expect(renderCount(true)).toContain('1/11')
   })
 
   it('passes the runtime Browser Use capability into its settings panel', () => {
@@ -281,28 +309,20 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(disabled).not.toContain('Follow main model')
   })
 
-  it('renders the PPT skill lab panel with its master switch and no model policy', () => {
+  it('renders the PPT skill without a master switch even when old settings disabled it', () => {
     const renderPanel = (value: KunLabSettingsV1) => renderToStaticMarkup(createElement(
       PptSkillSettingsPanel,
       { t, value, onChange: () => undefined }
     ))
-
-    const enabled = renderPanel({
+    const oldDisabled = renderPanel({
       ...defaultKunLabSettings(),
-      pptAgent: { enabled: true, imageAssets: true },
-      conversationVisualization: { enabled: false }
+      pptAgent: { enabled: false, imageAssets: false }
     })
-    expect(enabled).toContain('Enable PPT tools')
-    expect(enabled).not.toContain('Follow main model')
-    expect(enabled).not.toContain('Codex Fast mode')
-
-    const disabled = renderPanel({
-      ...defaultKunLabSettings(),
-      pptAgent: { enabled: false, imageAssets: true },
-      conversationVisualization: { enabled: false }
-    })
-    // Switched off, the image-asset controls stay folded away and inert.
-    expect(disabled).toContain('data-open="false" aria-hidden="true" inert=""')
+    expect(oldDisabled).toContain('PPT skill')
+    expect(oldDisabled).toContain('labPptImageAssetsOffHint')
+    expect(oldDisabled).not.toContain('Enable PPT tools')
+    expect(oldDisabled).not.toContain('data-open="false"')
+    expect(oldDisabled).not.toContain('Follow main model')
   })
 
   it('enables the fast toggle only when the selected model advertises Codex priority', async () => {

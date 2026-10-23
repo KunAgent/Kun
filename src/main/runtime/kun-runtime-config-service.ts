@@ -360,7 +360,7 @@ function fastContextConfigForRuntime(fastContext: KunFastContextSettingsV1 | und
 function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'] {
   return {
     pptAgent: {
-      enabled: lab?.pptAgent?.enabled !== false,
+      enabled: true,
       imageAssets: lab?.pptAgent?.imageAssets !== false
     },
     conversationVisualization: {

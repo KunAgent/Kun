@@ -116,7 +116,7 @@ describe('ppt_import_asset', () => {
     expect(await tool.execute({ source: 'assets/line.png', deck: 'deck', name: 'line.jpg' }, pptToolContext(root))).toMatchObject({ isError: true })
   })
 
-  it(`caps generated images at ${PPT_GENERATED_ASSET_LIMIT} per deck and honors the Lab switch`, async () => {
+  it(`caps generated images at ${PPT_GENERATED_ASSET_LIMIT} per deck and honors the image preference`, async () => {
     const root = await pptWorkspace('kun-ppt-asset-cap-')
     await writePptDeck(join(root, 'deck'), [{ file: 'pages/01.page', title: 'Cap' }])
     await mkdir(join(root, '.kun', 'images'), { recursive: true })

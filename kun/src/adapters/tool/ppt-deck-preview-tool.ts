@@ -23,7 +23,6 @@ import { previewPptDirections, type PptDirectionInput } from './ppt-deck-directi
 import {
   portableRelative,
   pptImageAssetState,
-  pptToolsDisabled,
   resolvePptDeck,
   stringArg,
   writePptReviewFile,
@@ -147,7 +146,6 @@ export function createPptPreviewTool(options: PptDeckToolOptions): LocalTool {
     policy: 'auto',
     sideEffect: 'unknown',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
-    shouldAdvertise: () => options.enabled?.() !== false,
     inputSchema: {
       type: 'object',
       properties: {
@@ -176,8 +174,6 @@ export function createPptPreviewTool(options: PptDeckToolOptions): LocalTool {
       additionalProperties: false
     },
     execute: async (args, context) => withToolBoundary(async () => {
-      const disabled = pptToolsDisabled(options)
-      if (disabled) return disabled
       const directions = directionInputs(args.directions)
       if (directions) {
         const main = await resolvePptDeck(stringArg(args.deck), context, { requireManifest: false, create: true })

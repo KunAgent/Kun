@@ -14,7 +14,6 @@ import { assertPptScopedExistingPath, assertPptScopedMutationPath } from './ppt-
 import { refreshPptDeckPreview } from './ppt-deck-preview-tool.js'
 import {
   portableRelative,
-  pptToolsDisabled,
   resolvePptDeck,
   stringArg,
   type PptDeckToolOptions
@@ -40,7 +39,6 @@ export function createPptExportTool(options: PptDeckToolOptions): LocalTool {
     policy: 'auto',
     sideEffect: 'unknown',
     effects: { network: false, externalWrite: false, processExecution: true, guiAutomation: false },
-    shouldAdvertise: () => options.enabled?.() !== false,
     inputSchema: {
       type: 'object',
       properties: {
@@ -54,8 +52,6 @@ export function createPptExportTool(options: PptDeckToolOptions): LocalTool {
       additionalProperties: false
     },
     execute: async (args, context) => withToolBoundary(async () => {
-      const disabled = pptToolsDisabled(options)
-      if (disabled) return disabled
       const outputArg = stringArg(args.output)
       if (extname(outputArg).toLowerCase() !== '.pptx') {
         return { output: { error: 'output must be a workspace-relative path ending in .pptx' }, isError: true }

@@ -535,7 +535,7 @@ export function mergeKunLabSettings(
   if (!patch) return base
   return {
     pptAgent: {
-      enabled: patch.pptAgent?.enabled ?? base.pptAgent.enabled,
+      enabled: true,
       imageAssets: patch.pptAgent?.imageAssets ?? base.pptAgent.imageAssets
     },
     conversationVisualization: {

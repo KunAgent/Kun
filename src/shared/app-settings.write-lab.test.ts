@@ -131,7 +131,7 @@ describe('Fast Context settings', () => {
     })
   })
 
-  it('keeps lab.pptAgent defaults and merging', () => {
+  it('ignores the retired lab.pptAgent switch while preserving image defaults', () => {
     const lab = defaultKunRuntimeSettings().lab
     expect(lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
 
@@ -142,7 +142,7 @@ describe('Fast Context settings', () => {
         }
       }
     })
-    expect(next.lab.pptAgent).toEqual({ enabled: false, imageAssets: true })
+    expect(next.lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
   })
 
   it('defaults and merges GUI-only Automatic plan-build settings independently', () => {

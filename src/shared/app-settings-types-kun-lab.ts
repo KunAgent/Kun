@@ -2,11 +2,11 @@
 import type { ScheduleReasoningEffort } from './app-settings-types-provider'
 
 /**
- * Lab settings for the slides skill's PPT tools. The stored key stays
- * `pptAgent` so existing settings files keep their switches.
+ * PPT preferences retain the historical `lab.pptAgent` storage key so older
+ * settings keep `imageAssets`. The former `enabled` switch is inert.
  */
 export type KunLabPptAgentSettingsV1 = {
-  /** Master switch for ppt_preview / ppt_export / ppt_import_asset. Default true. */
+  /** Retired Lab switch, always normalized to true; PPT tools are built in. */
   enabled: boolean
   /** Let image slots be filled with generated supplementary assets when an image model is available. Default true. */
   imageAssets: boolean
@@ -62,7 +62,7 @@ export type KunLabSettingsV1 = {
   assistantMailbox: { enabled: boolean }
 }
 
-/** Partial settings patch for the Lab section. Nested fields merge with current values. */
+/** Partial settings patch for the Lab section and the PPT image asset preference. */
 export type KunLabSettingsPatchV1 = {
   pptAgent?: Partial<KunLabPptAgentSettingsV1>
   conversationVisualization?: Partial<KunLabConversationVisualizationSettingsV1>

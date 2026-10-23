@@ -1,6 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { LabConfigSchema } from '../../config/kun-config.js'
+import { buildPptDeckRuntimeProvider } from '../../server/runtime-factory-config.js'
 import { PPT_PREVIEW_TOOL_NAME } from './ppt-deck-tools.js'
 import {
   cleanupPptWorkspaces,
@@ -124,14 +126,32 @@ describe('ppt_preview', () => {
     expect(tooFew).toMatchObject({ isError: true })
   })
 
-  it('stays advertised and refuses calls while the Lab switch is off', async () => {
-    const root = await pptWorkspace('kun-ppt-preview-off-')
-    await writePptDeck(join(root, 'deck'), [{ file: 'pages/01.page', title: 'Off' }])
-    const tool = pptTool(PPT_PREVIEW_TOOL_NAME, { enabled: () => false })
-    expect(tool.shouldAdvertise?.(pptToolContext(root))).toBe(false)
+  it('always previews a deck without a Lab switch', async () => {
+    const root = await pptWorkspace('kun-ppt-preview-default-')
+    await writePptDeck(join(root, 'deck'), [{ file: 'pages/01.page', title: 'Default' }])
+    const tool = pptTool(PPT_PREVIEW_TOOL_NAME, { imageAssets: () => ({ enabled: false, available: true }) })
+    expect(tool.shouldAdvertise).toBeUndefined()
     expect(await tool.execute({ deck: 'deck' }, pptToolContext(root))).toMatchObject({
-      isError: true, output: { error: 'PPT tools are turned off in Lab settings' }
+      output: { pageCount: 1, imageAssets: 'disabled' }
     })
+  })
+
+  it('keeps all deck tools available under a stored disabled Lab config', async () => {
+    const root = await pptWorkspace('kun-ppt-legacy-lab-')
+    await writePptDeck(join(root, 'deck'), [{ file: 'pages/01.page', title: 'Legacy' }])
+    const provider = buildPptDeckRuntimeProvider(
+      () => ({ lab: LabConfigSchema.parse({ pptAgent: { enabled: false, imageAssets: false } }) }),
+      () => true
+    )
+    expect(provider.tools.map((tool) => tool.name)).toEqual(['ppt_preview', 'ppt_export', 'ppt_import_asset'])
+    expect(provider.tools.every((tool) => tool.shouldAdvertise === undefined)).toBe(true)
+    const context = pptToolContext(root)
+    expect(await provider.tools[0].execute({ deck: 'deck' }, context))
+      .toMatchObject({ output: { pageCount: 1, imageAssets: 'disabled' } })
+    expect(await provider.tools[1].execute({ deck: 'deck', output: 'wrong.txt' }, context))
+      .toMatchObject({ isError: true, output: { error: 'output must be a workspace-relative path ending in .pptx' } })
+    expect(await provider.tools[2].execute({ deck: 'deck', source: '../outside.png' }, context))
+      .toMatchObject({ isError: true, output: { error: 'source must be user material in the workspace or a generate_image result under .kun/images' } })
   })
 
   it('rejects decks outside the workspace', async () => {
