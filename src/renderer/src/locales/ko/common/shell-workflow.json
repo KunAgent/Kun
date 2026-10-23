@@ -562,8 +562,6 @@
   "canvasInspectorRemoveFill": "채우기 제거",
   "canvasInspectorRemoveStroke": "획 제거",
   "canvasInspectorTextColor": "색상",
-  "canvasInspectorPin": "핀 검사기",
-  "canvasInspectorUnpin": "검사기 고정 해제",
   "canvasInspectorEmpty": "위치, 채우기, 획 및 기타 속성을 편집하려면 캔버스에서 개체를 선택하세요.",
   "canvasInspectorAiHolder": "AI 이미지",
   "canvasInspectorAiHolderMark": "AI 이미지 슬롯으로 표시",

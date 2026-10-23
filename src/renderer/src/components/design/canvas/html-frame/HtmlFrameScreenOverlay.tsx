@@ -14,7 +14,7 @@ import { replaceHtmlElementTextInSource } from '../../../../design/design-html-e
 import { writeDesignWorkspaceFile } from '../../../../design/design-persistence-coordinator'
 import { useDesignHtmlPreview } from '../../DesignHtmlPreviewHost'
 import { HtmlFrameAiCursorOverlay } from './HtmlFrameAiCursorOverlay'
-import { HtmlFrameChrome } from './HtmlFrameChrome'
+import { HtmlFrameChrome, htmlFrameChromeOffset } from './HtmlFrameChrome'
 import { HtmlFrameGeneratingCanvas } from './HtmlFrameGeneratingCanvas'
 import { GenerationFailedNotice, HtmlFramePlaceholder } from './HtmlFramePlaceholder'
 import {
@@ -55,6 +55,8 @@ type ScreenOverlayProps = {
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
   onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
   onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
+  /** The whole canvas is read-only (browsing a historical drawing). */
+  canvasReadOnly?: boolean
 }
 function ScreenOverlayInner({
   shape,
@@ -73,7 +75,8 @@ function ScreenOverlayInner({
   onToggleModify,
   onUseElementAsContext,
   onRuntimeQualityFindings,
-  onRequestQualityRepair
+  onRequestQualityRepair,
+  canvasReadOnly = false
 }: ScreenOverlayProps): ReactElement {
   const [localPreviewError, setLocalPreviewError] = useState('')
   const previewAsyncEpochRef = useRef<HtmlFramePreviewAsyncEpoch | null>(null)
@@ -353,8 +356,9 @@ function ScreenOverlayInner({
     ? parallelState.error || '生成失败'
     : ''
   const frameRadius = Math.min(7, Math.max(3, screenWidth * 0.012))
-  const chromeOffset = Math.min(28, Math.max(18, screenWidth * 0.045))
-  const showChrome = screenWidth > 92 && screenHeight > 42
+  const chromeOffset = htmlFrameChromeOffset(screenWidth)
+  // Labels stay readable at any zoom, like board names on a design canvas.
+  const showChrome = screenWidth > 60
   const placeholderPreview = !preview.hasRenderableContent && preview.renderState !== 'renderable'
   const transparentGeneratingSurface = placeholderPreview || drawingActive
   const generationFailed =
@@ -392,6 +396,8 @@ function ScreenOverlayInner({
       {showChrome ? (
         <HtmlFrameChrome
           active={active}
+          artifact={renderedArtifact}
+          workspaceRoot={workspaceRoot}
           artifactId={artifact?.id}
           artifactRelativePath={artifactRelativePath}
           chromeOffset={chromeOffset}
@@ -408,7 +414,7 @@ function ScreenOverlayInner({
           shapeName={shape.name}
           onQualityDetailsOpenChange={setQualityDetailsOpen}
           onRequestQualityRepair={isHistoricalVersion ? undefined : onRequestQualityRepair}
-          readOnly={isHistoricalVersion}
+          readOnly={isHistoricalVersion || canvasReadOnly}
           onToggleModify={onToggleModify}
         />
       ) : null}
@@ -417,12 +423,12 @@ function ScreenOverlayInner({
         className={`relative h-full w-full overflow-hidden border ${
           transparentGeneratingSurface
             ? active
-              ? 'border-dashed border-[#6557ff] bg-transparent shadow-none'
-              : 'border-dashed border-ds-border/70 bg-transparent shadow-none dark:border-white/20'
-            : `bg-white shadow-[0_12px_30px_rgba(15,23,42,0.10)] dark:bg-[#101214] ${
+              ? 'border-dashed border-accent bg-transparent shadow-none'
+              : 'border-dashed border-black/15 bg-transparent shadow-none dark:border-white/20'
+            : `bg-white dark:bg-[#101214] ${
                 active
-                  ? 'border-[#6557ff] shadow-[0_0_0_1px_rgba(101,87,255,0.45),0_16px_38px_rgba(15,23,42,0.14)]'
-                  : 'border-black/10 dark:border-white/12'
+                  ? 'border-accent shadow-[0_0_0_1px_var(--ds-accent),0_16px_38px_rgba(15,23,42,0.14)]'
+                  : 'border-black/[0.08] shadow-[0_1px_2px_rgba(15,23,42,0.05),0_10px_28px_rgba(15,23,42,0.07)] dark:border-white/12'
               }`
         }`}
         style={{ borderRadius: frameRadius }}

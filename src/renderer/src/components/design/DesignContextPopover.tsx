@@ -20,6 +20,8 @@ type Props = {
   onOpenSettings?: () => void
   titleKey?: string
   designTargetDisabled?: boolean
+  /** `inline` renders the form inside the canvas inspector's Tweaks tab. */
+  presentation?: 'popover' | 'inline'
 }
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
@@ -37,6 +39,7 @@ function chipClass(active: boolean): string {
 }
 
 const fieldLabel = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-[#8b95a3] dark:text-white/45'
+const inlineFieldLabel = 'mb-1.5 block text-[12px] text-ds-muted'
 const fieldInput =
   'w-full rounded-md border border-[var(--ds-sidebar-row-ring)] bg-transparent px-2 py-1 text-[13px] text-[#1f2733] outline-none focus-visible:border-[#3b82d8] dark:text-white/85'
 
@@ -51,17 +54,19 @@ export function designContextPatchForTargetLock(
 }
 
 /**
- * Popover surface for the design-context form (brand color / tone / system).
- * Replaces the permanent right-column form so the canvas can claim the full
- * width — opened from a gear icon in the canvas toolbar.
+ * Design-context form (target / brand color / tone / system). Renders as a
+ * popover, or inline inside the canvas inspector's Tweaks tab.
  */
 export function DesignContextPopover({
   open,
   onClose,
   onOpenSettings,
   titleKey = 'designContextLabel',
-  designTargetDisabled = false
+  designTargetDisabled = false,
+  presentation = 'popover'
 }: Props): ReactElement | null {
+  const inline = presentation === 'inline'
+  const labelClass = inline ? inlineFieldLabel : fieldLabel
   const { t } = useTranslation('common')
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
   const designContext = useDesignWorkspaceStore((s) => s.designContext)
@@ -73,7 +78,7 @@ export function DesignContextPopover({
   const [importing, setImporting] = useState(false)
 
   useEffect(() => {
-    if (!open) return
+    if (!open || inline) return
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target
       if (!(target instanceof Node)) return
@@ -89,7 +94,7 @@ export function DesignContextPopover({
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [open, onClose])
+  }, [inline, open, onClose])
 
   if (!open) return null
 
@@ -151,10 +156,12 @@ export function DesignContextPopover({
       ref={rootRef}
       role="dialog"
       aria-label={t(titleKey)}
-      className="ds-no-drag w-[300px] rounded-2xl border border-[var(--ds-sidebar-row-ring)] bg-white p-3.5 text-[#1f2733] shadow-[0_14px_34px_rgba(20,47,95,0.16)] dark:bg-[#1f242c] dark:text-white"
+      className={inline
+        ? 'ds-no-drag w-full text-ds-ink'
+        : 'ds-no-drag w-[300px] rounded-2xl border border-[var(--ds-sidebar-row-ring)] bg-white p-3.5 text-[#1f2733] shadow-[0_14px_34px_rgba(20,47,95,0.16)] dark:bg-[#1f242c] dark:text-white'}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[13px] font-medium">{t(titleKey)}</span>
+        <span className={inline ? 'text-[10px] font-medium uppercase tracking-[0.08em] text-ds-faint' : 'text-[13px] font-medium'}>{t(titleKey)}</span>
         <div className="flex items-center gap-0.5">
           <button
             type="button"
@@ -177,21 +184,23 @@ export function DesignContextPopover({
               <Settings2 className="h-3.5 w-3.5" strokeWidth={1.9} />
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={onClose}
-            title={t('close')}
-            aria-label={t('close')}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:text-[#1f2733] dark:text-white/45 dark:hover:text-white/85"
-          >
-            <X className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
+          {inline ? null : (
+            <button
+              type="button"
+              onClick={onClose}
+              title={t('close')}
+              aria-label={t('close')}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:text-[#1f2733] dark:text-white/45 dark:hover:text-white/85"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          )}
         </div>
       </div>
 
       <div className="space-y-3">
         <div>
-          <span className={fieldLabel}>{t('designTargetHint')}</span>
+          <span className={labelClass}>{t('designTargetHint')}</span>
           <DesignTargetToggle
             designTarget={designTarget}
             disabled={designTargetDisabled}
@@ -200,7 +209,7 @@ export function DesignContextPopover({
           />
         </div>
         <label className="block">
-          <span className={fieldLabel}>{t('designAgentBrandColor')}</span>
+          <span className={labelClass}>{t('designAgentBrandColor')}</span>
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -219,7 +228,7 @@ export function DesignContextPopover({
           </div>
         </label>
         <div>
-          <span className={fieldLabel}>{t('designAgentTone')}</span>
+          <span className={labelClass}>{t('designAgentTone')}</span>
           <div className="flex flex-wrap gap-1">
             {DESIGN_TONE_OPTIONS.map((tone) => (
               <button
@@ -234,7 +243,7 @@ export function DesignContextPopover({
           </div>
         </div>
         <label className="block">
-          <span className={fieldLabel}>{t('designAgentSystem')}</span>
+          <span className={labelClass}>{t('designAgentSystem')}</span>
           <select
             value={designContext.designSystemPreset ?? 'none'}
             onChange={(e) =>
