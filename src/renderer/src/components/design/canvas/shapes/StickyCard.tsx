@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import type { CanvasShape, CanvasSticky } from '../../../../design/canvas/canvas-types'
-import { STICKY_PALETTE, stickyMentionsKun } from '../../../../design/canvas/canvas-sticky'
+import { STICKY_PALETTE, stickyAddressesKun } from '../../../../design/canvas/canvas-sticky'
 
 const FOOTER_HEIGHT = 34
 const DOG_EAR = 18
@@ -22,7 +22,7 @@ export function StickyCard({
   const { t } = useTranslation('common')
   const palette = STICKY_PALETTE[sticky.color]
   const { width, height } = shape
-  const addressed = stickyMentionsKun(shape.textContent)
+  const addressed = stickyAddressesKun(shape)
   const done = sticky.status === 'done'
   let footer: string
   if (sticky.status === 'sent') footer = t('canvasStickySent')

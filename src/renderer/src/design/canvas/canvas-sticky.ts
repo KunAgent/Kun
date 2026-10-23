@@ -30,6 +30,11 @@ export function stickyMentionsKun(text: string | undefined): boolean {
   return KUN_MENTION.test(text ?? '')
 }
 
+/** A note is a request for Kun when it mentions @Kun or is attached to an element. */
+export function stickyAddressesKun(shape: Pick<CanvasShape, 'textContent' | 'sticky'>): boolean {
+  return stickyMentionsKun(shape.textContent) || Boolean(shape.sticky?.anchorId)
+}
+
 export function createStickyShape(x: number, y: number, color: CanvasStickyColor = 'yellow'): CanvasShape {
   const shape = createDefaultShape('text', x, y)
   const palette = STICKY_PALETTE[color]
@@ -57,6 +62,7 @@ export function parseCanvasSticky(raw: unknown): CanvasSticky | undefined {
     color,
     status,
     ...(typeof value.targetId === 'string' && value.targetId ? { targetId: value.targetId } : {}),
+    ...(typeof value.anchorId === 'string' && value.anchorId ? { anchorId: value.anchorId } : {}),
     ...(typeof value.resultNote === 'string' && value.resultNote
       ? { resultNote: value.resultNote.slice(0, 240) }
       : {})
@@ -76,7 +82,10 @@ function distanceToRect(shape: CanvasShape, point: { x: number; y: number }): nu
 export function resolveStickyTarget(doc: CanvasDocument, stickyId: string): CanvasShape | null {
   const sticky = doc.objects[stickyId]
   if (!sticky) return null
-  const center = { x: sticky.x + sticky.width / 2, y: sticky.y + sticky.height / 2 }
+  const anchor = sticky.sticky?.anchorId ? doc.objects[sticky.sticky.anchorId] : undefined
+  if (anchor && isArtifactFrame(anchor)) return anchor
+  const basis = anchor ?? sticky
+  const center = { x: basis.x + basis.width / 2, y: basis.y + basis.height / 2 }
   let best: { shape: CanvasShape; distance: number } | null = null
   for (const candidate of Object.values(doc.objects)) {
     if (candidate.id === stickyId || !candidate.visible || !isArtifactFrame(candidate)) continue
@@ -86,13 +95,19 @@ export function resolveStickyTarget(doc: CanvasDocument, stickyId: string): Canv
   return best?.shape ?? null
 }
 
-export function buildStickyKunPrompt(options: { text: string; targetName?: string | null }): string {
+export function buildStickyKunPrompt(options: {
+  text: string
+  targetName?: string | null
+  anchorName?: string | null
+}): string {
   const instruction = options.text.replace(KUN_MENTION, '').replace(/\s+/g, ' ').trim()
   const target = options.targetName
     ? `The note sits next to the board "${options.targetName}"; apply it to that board unless the note names another.`
     : 'No board is next to the note; apply it to the current design as a whole.'
+  const anchor = options.anchorName ? `The note is attached to the element "${options.anchorName}".` : null
   return [
     'A sticky note on the canvas asks for a change.',
+    ...(anchor ? [anchor] : []),
     target,
     `Note: ${instruction || options.text.trim()}`
   ].join('\n')

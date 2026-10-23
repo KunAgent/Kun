@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
   requestStickyKun,
   STICKY_PALETTE,
-  stickyMentionsKun
+  stickyAddressesKun
 } from '../../../design/canvas/canvas-sticky'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
@@ -41,7 +41,7 @@ export function CanvasStickyNotesPanel(): ReactElement {
       {notes.map((shape) => {
         const sticky = shape.sticky!
         const palette = STICKY_PALETTE[sticky.color]
-        const addressed = stickyMentionsKun(shape.textContent)
+        const addressed = stickyAddressesKun(shape)
         return (
           <li key={shape.id} className="flex items-center gap-2.5 rounded-[8px] px-2 py-1.5 hover:bg-ds-hover">
             <span className="h-4 w-4 shrink-0 rounded-[3px]" style={{ background: palette.fill }} aria-hidden="true" />

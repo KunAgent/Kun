@@ -22,8 +22,7 @@ import { hitTest } from '../../../design/canvas/canvas-hit-test'
 import { hasPrototypePlayback, resolvePreferredPrototypeArtifactId } from '../../../design/prototype-player'
 import { ShapeDispatcher } from './shapes/ShapeDispatcher'
 import { CanvasGrid } from './CanvasGrid'
-import { CanvasKunPresence } from './CanvasKunPresence'
-import { CanvasSectionsOverlay } from './CanvasSectionsOverlay'
+import { CanvasContentOverlays } from './CanvasContentOverlays'
 import { CanvasToolbar } from './CanvasToolbar'
 import { MotionSelectionOverlay } from './SelectionOverlay'
 import { PrototypePlayerOverlay } from './PrototypePlayerOverlay'
@@ -651,7 +650,6 @@ export function CanvasViewport({
           ) : null}
           {designArtifactOverlaysEnabled ? (
             <>
-              <CanvasSectionsOverlay readOnly={readOnly} onAskKun={readOnly ? undefined : seedComposer} />
               <HtmlFrameOverlay
                 workspaceRoot={workspaceRoot}
                 readOnly={readOnly}
@@ -664,9 +662,9 @@ export function CanvasViewport({
                 onRequestQualityRepair={onRequestQualityRepair}
               />
               <SvgFrameOverlay workspaceRoot={workspaceRoot} />
-              <CanvasKunPresence />
             </>
           ) : null}
+          <CanvasContentOverlays readOnly={Boolean(readOnly)} artifactOverlays={designArtifactOverlaysEnabled} onAskKun={seedComposer} />
         </div>
         {isDesignCanvasSurface(surface) && !readOnly ? <CanvasMotionDock /> : null}
         {inspector.visible ? (

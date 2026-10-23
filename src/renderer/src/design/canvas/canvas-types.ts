@@ -172,6 +172,8 @@ export type CanvasSticky = {
   status: CanvasStickyStatus
   /** Board the note points at; resolved from proximity when it was sent. */
   targetId?: string
+  /** Element the note was attached to with "comment on this element". */
+  anchorId?: string
   /** Short result line shown once the request is done. */
   resultNote?: string
 }

@@ -3,7 +3,7 @@ import { activePageIdOf, addPage, claimUnpagedShapes, deletePage, duplicatePage,
 import { createSectionFromShapes, moveSection, removeSection, toggleSectionCollapsed } from './canvas-sections'
 import { parseCanvasDocument, serializeCanvasDocument } from './canvas-persistence'
 import { useCanvasShapeStore } from './canvas-shape-store'
-import { buildStickyKunPrompt, createStickyShape, resolveStickyTarget, stickyMentionsKun } from './canvas-sticky'
+import { buildStickyKunPrompt, stickyAddressesKun, createStickyShape, resolveStickyTarget, stickyMentionsKun } from './canvas-sticky'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape } from './canvas-types'
 
 function seed(): { rect: string; frame: string } {
@@ -114,5 +114,18 @@ describe('canvas stickies', () => {
     doc.objects[doc.rootId] = { ...doc.objects[doc.rootId], children: [note.id] }
     const parsed = parseCanvasDocument(serializeCanvasDocument(doc))!
     expect(parsed.objects[note.id].sticky).toEqual({ color: 'blue', status: 'draft' })
+  })
+
+  it('treats a note attached to an element as a request and targets that element\'s screen', () => {
+    const doc = createEmptyDocument()
+    const screen = createHtmlFrameShape('Home', 0, 0, 'a1', 'desktop')
+    const other = createHtmlFrameShape('Other', 3000, 0, 'a2', 'desktop')
+    const note = createStickyShape(2900, 0)
+    note.textContent = 'tighten this up'
+    note.sticky = { ...note.sticky!, anchorId: screen.id }
+    for (const shape of [screen, other, note]) doc.objects[shape.id] = { ...shape, parentId: doc.rootId }
+    expect(stickyAddressesKun(note)).toBe(true)
+    expect(resolveStickyTarget(doc, note.id)?.id).toBe(screen.id)
+    expect(buildStickyKunPrompt({ text: 'tighten this up', anchorName: 'Hero', targetName: 'Home' })).toContain('"Hero"')
   })
 })

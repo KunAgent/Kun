@@ -6,7 +6,7 @@ import { useCanvasUndoStore } from '../../../../design/canvas/canvas-undo-store'
 import {
   requestStickyKun,
   STICKY_PALETTE,
-  stickyMentionsKun
+  stickyAddressesKun
 } from '../../../../design/canvas/canvas-sticky'
 import { StickyCard } from './StickyCard'
 
@@ -81,7 +81,7 @@ function TextShapeInner({ shape }: { shape: CanvasShape }) {
             e.preventDefault()
             const text = e.currentTarget.innerText
             commit(false)
-            if (shape.sticky && stickyMentionsKun(text)) requestStickyKun(shape.id)
+            if (shape.sticky && stickyAddressesKun({ textContent: text, sticky: shape.sticky })) requestStickyKun(shape.id)
           }
         }}
         onBlur={() => {

@@ -4,7 +4,7 @@ import {
   buildStickyKunPrompt,
   resolveStickyTarget,
   STICKY_REQUEST_EVENT,
-  stickyMentionsKun
+  stickyAddressesKun
 } from '../../design/canvas/canvas-sticky'
 import { useCanvasShapeStore } from '../../design/canvas/canvas-shape-store'
 import type { CanvasSticky } from '../../design/canvas/canvas-types'
@@ -36,10 +36,15 @@ export function useStickyKunRequests(sendDesignPrompt: SendDesignPrompt): void {
       if (!stickyId) return
       const doc = useCanvasShapeStore.getState().document
       const note = doc.objects[stickyId]
-      if (!note?.sticky || !stickyMentionsKun(note.textContent) || note.sticky.status === 'sent') return
+      if (!note?.sticky || !stickyAddressesKun(note) || note.sticky.status === 'sent') return
       const target = resolveStickyTarget(doc, stickyId)
       patchSticky(stickyId, { status: 'sent', targetId: target?.id, resultNote: undefined })
-      const prompt = buildStickyKunPrompt({ text: note.textContent ?? '', targetName: target?.name })
+      const anchor = note.sticky.anchorId ? doc.objects[note.sticky.anchorId] : undefined
+      const prompt = buildStickyKunPrompt({
+        text: note.textContent ?? '',
+        targetName: target?.name,
+        anchorName: anchor?.name
+      })
       void sendRef.current(prompt, {
         displayText: (note.textContent ?? '').trim(),
         ...(target ? { screenShapeId: target.id } : {})
