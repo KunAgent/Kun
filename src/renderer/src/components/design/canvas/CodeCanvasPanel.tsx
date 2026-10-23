@@ -516,6 +516,8 @@ export function CodeCanvasPanel({
             workspaceRoot={workspaceRoot}
             threadId={activeThreadId}
             chrome={{ title: t('rightPanelWhiteboard') }}
+            presentation={presentation}
+            onExitFocus={onExitFocus}
           />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">

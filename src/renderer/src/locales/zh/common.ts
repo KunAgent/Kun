@@ -37,6 +37,7 @@ import sddMcp from './common/sdd-mcp.json'
 import agentsGraph from './common/agents-graph.json'
 import codePersonas from './common/code-personas.json'
 import workWhiteboard from './common/work-whiteboard.json'
+import whiteboardChrome from './common/whiteboard-chrome.json'
 import sidebar from './common/sidebar.json'
 import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
@@ -140,6 +141,7 @@ const common = {
   ...agentsGraph,
   ...codePersonas,
   ...workWhiteboard,
+  ...whiteboardChrome,
   ...sidebar,
   ...i18nReview,
   ...commandPalette,
