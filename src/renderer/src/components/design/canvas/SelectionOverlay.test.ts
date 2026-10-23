@@ -1,7 +1,24 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { createHtmlFrameShape } from '../../../design/canvas/canvas-types'
+import { createDefaultShape, createEmptyDocument, createHtmlFrameShape, type CanvasShape } from '../../../design/canvas/canvas-types'
 import type { DesignArtifact } from '../../../design/design-types'
-import { applyPendingHtmlFrameAspectResize, selectionResizeHandles } from './SelectionOverlay'
+import { SelectionOverlay, applyPendingHtmlFrameAspectResize, selectionResizeHandles } from './SelectionOverlay'
+
+function overlayMarkup(shape: CanvasShape): string {
+  const doc = createEmptyDocument()
+  const objects = { ...doc.objects, [shape.id]: { ...shape, parentId: doc.rootId } }
+  objects[doc.rootId] = { ...objects[doc.rootId], children: [shape.id] }
+  return renderToStaticMarkup(createElement(SelectionOverlay, {
+    selectedIds: new Set([shape.id]),
+    hoverTargetId: null,
+    marqueeRect: null,
+    snapGuides: [],
+    objects,
+    zoom: 1,
+    viewBox: { x: 0, y: 0, width: 1600, height: 1000 }
+  }))
+}
 
 function artifact(patch: Partial<DesignArtifact> = {}): DesignArtifact {
   const createdAt = '2026-06-20T00:00:00.000Z'
@@ -63,5 +80,12 @@ describe('SelectionOverlay HTML frame resize helpers', () => {
         singleSelection: true
       })
     ).toEqual({ x: 40, y: 60, width: 960, height: 260 })
+  })
+})
+
+describe('SelectionOverlay rotate handle', () => {
+  it('keeps rotation for vector shapes but not for embedded boards', () => {
+    expect(overlayMarkup(createDefaultShape('rect', 20, 20))).toContain('data-rotate="rotation"')
+    expect(overlayMarkup(createHtmlFrameShape('Home', 20, 120, 'home'))).not.toContain('data-rotate="rotation"')
   })
 })

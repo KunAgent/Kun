@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CanvasViewport } from './CanvasViewport'
-import { PropertiesPanel } from './PropertiesPanel'
+import type { CanvasViewportChromeSlots } from './canvas-viewport/CanvasViewportChrome'
 import { useApplyShapeOpsLive } from '../../../design/canvas/use-apply-shape-ops-live'
 import { useApplyExcalidrawLive } from '../../../whiteboard/use-apply-excalidraw-live'
 import type { ExecuteOpsOptions } from '../../../design/canvas/shape-ops'
@@ -31,6 +31,7 @@ import { DEFAULT_CANVAS_ENGINE, type CanvasEngine } from '../../../whiteboard/ca
 export function CodeCanvasNativeSurface(props: {
   workspaceRoot: string
   threadId: string
+  chrome?: CanvasViewportChromeSlots
 }): ReactElement {
   const { t } = useTranslation('common')
   const { workspaceRoot, threadId } = props
@@ -127,11 +128,11 @@ export function CodeCanvasNativeSurface(props: {
             baseDir={CODE_CANVAS_DIR}
             designSystemBaseDir={designSystemBaseDir}
             surface="code"
+            chrome={props.chrome}
           />
-          <PropertiesPanel surface="code" />
         </>
       )}
-      <div className="pointer-events-none absolute right-3 top-3 z-40">
+      <div className={`pointer-events-none absolute right-3 z-40 ${engine === 'kun' ? 'top-[60px]' : 'top-3'}`}>
         <CanvasEngineSwitcher
           engine={engine}
           canSwitch={canSwitch}

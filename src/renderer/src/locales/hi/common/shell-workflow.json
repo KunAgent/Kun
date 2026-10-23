@@ -562,8 +562,6 @@
   "canvasInspectorRemoveFill": "भराव हटाएँ",
   "canvasInspectorRemoveStroke": "स्ट्रोक हटाओ",
   "canvasInspectorTextColor": "रंग",
-  "canvasInspectorPin": "पिन निरीक्षक",
-  "canvasInspectorUnpin": "इंस्पेक्टर को अनपिन करें",
   "canvasInspectorEmpty": "स्थिति, भरण, स्ट्रोक और अन्य गुणों को संपादित करने के लिए कैनवास पर एक ऑब्जेक्ट का चयन करें।",
   "canvasInspectorAiHolder": "एआई छवि",
   "canvasInspectorAiHolderMark": "एआई छवि स्लॉट के रूप में चिह्नित करें",

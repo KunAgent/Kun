@@ -43,14 +43,20 @@ function center(bounds: Rect): { x: number; y: number } {
   return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
 }
 
-function overlappingHorizontalLane(bounds: readonly Rect[], x1: number, x2: number, preferTop: boolean): number {
+function overlappingHorizontalLane(
+  bounds: readonly Rect[],
+  x1: number,
+  x2: number,
+  preferTop: boolean,
+  topClearance: number
+): number {
   const minX = Math.min(x1, x2)
   const maxX = Math.max(x1, x2)
   const crossed = bounds.filter((bound) => bound.x <= maxX && bound.x + bound.width >= minX)
   const candidates = crossed.length > 0 ? crossed : bounds
   const top = Math.min(...candidates.map((bound) => bound.y))
   const bottom = Math.max(...candidates.map((bound) => bound.y + bound.height))
-  return preferTop ? top - FLOW_LANE_OFFSET : bottom + FLOW_LANE_OFFSET
+  return preferTop ? top - FLOW_LANE_OFFSET - topClearance : bottom + FLOW_LANE_OFFSET
 }
 
 function overlappingVerticalLane(bounds: readonly Rect[], y1: number, y2: number, preferLeft: boolean): number {
@@ -66,7 +72,8 @@ function overlappingVerticalLane(bounds: readonly Rect[], y1: number, y2: number
 function routeBetweenFrames(
   sourceFrame: CanvasShape,
   targetFrame: CanvasShape,
-  frameBounds: readonly Rect[]
+  frameBounds: readonly Rect[],
+  topClearance: number
 ): Pick<PrototypeFlowEdge, 'x1' | 'y1' | 'x2' | 'y2' | 'controlX' | 'controlY'> {
   const source = shapeBounds(sourceFrame)
   const target = shapeBounds(targetFrame)
@@ -87,7 +94,7 @@ function routeBetweenFrames(
       x2,
       y2,
       controlX: (x1 + x2) / 2,
-      controlY: overlappingHorizontalLane(frameBounds, x1, x2, targetIsRight)
+      controlY: overlappingHorizontalLane(frameBounds, x1, x2, targetIsRight, topClearance)
     }
   }
 
@@ -120,8 +127,11 @@ function sortByCanvasReadingOrder(
 
 export function computePrototypeFlowEdges(
   artifacts: readonly DesignArtifact[],
-  objects: Record<string, CanvasShape>
+  objects: Record<string, CanvasShape>,
+  /** Extra canvas-unit room kept above boards (their label row) for top lanes. */
+  options: { topClearance?: number } = {}
 ): PrototypeFlowEdge[] {
+  const topClearance = Math.max(0, options.topClearance ?? 0)
   const framesByArtifactId = new Map<string, CanvasShape>()
   for (const shape of Object.values(objects)) {
     if (!shape || shape.visible === false || !isHtmlFrame(shape) || !shape.htmlArtifactId) continue
@@ -167,7 +177,7 @@ export function computePrototypeFlowEdges(
     if (seen.has(key)) return
     seen.add(key)
     visibleOutboundCountByArtifactId.set(artifact.id, (visibleOutboundCountByArtifactId.get(artifact.id) ?? 0) + 1)
-    const route = routeBetweenFrames(sourceFrame, targetFrame, frameBounds)
+    const route = routeBetweenFrames(sourceFrame, targetFrame, frameBounds, topClearance)
     edges.push({
       id: key,
       sourceArtifactId: artifact.id,

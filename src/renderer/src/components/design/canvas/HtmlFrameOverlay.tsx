@@ -261,6 +261,7 @@ export function HtmlFrameOverlay({
             onUseElementAsContext={readOnly ? undefined : onUseElementAsContext}
             onRuntimeQualityFindings={readOnly ? undefined : onRuntimeQualityFindings}
             onRequestQualityRepair={readOnly ? undefined : onRequestQualityRepair}
+            canvasReadOnly={readOnly}
           />
         )
       })}

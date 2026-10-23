@@ -23,7 +23,7 @@ import { canvasOpErrorKey } from '../../../design/canvas/apply-shape-ops'
 import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 import { useSvgArtifactStatusMonitor } from '../../../design/svg/use-svg-artifact-status-monitor'
 import { CanvasViewport } from './CanvasViewport'
-import { PropertiesPanel } from './PropertiesPanel'
+import type { CanvasViewportChromeSlots } from './canvas-viewport/CanvasViewportChrome'
 import {
   exportActiveCanvasToWorkspace,
   type CanvasAgentExportRequest
@@ -57,6 +57,8 @@ export type DesignDocumentCanvasSurfaceProps = {
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
   onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
   onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
+  /** Title, read-only notice and host buttons for the floating canvas chrome. */
+  chrome?: CanvasViewportChromeSlots
 }
 
 export function canvasDocumentReadyForRuntime(
@@ -72,8 +74,9 @@ function DesignEngineOverlay(props: {
   canSwitch: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
+  // The Kun canvas keeps its view controls top-right; the switcher sits beneath them.
   return (
-    <div className="pointer-events-none absolute right-3 top-3 z-50">
+    <div className={`pointer-events-none absolute right-3 z-50 ${props.engine === 'kun' ? 'top-[60px]' : 'top-3'}`}>
       <CanvasEngineSwitcher
         engine={props.engine}
         canSwitch={props.canSwitch}
@@ -104,7 +107,8 @@ export function DesignDocumentCanvasSurface({
   onSvgCreated,
   onUseElementAsContext,
   onRuntimeQualityFindings,
-  onRequestQualityRepair
+  onRequestQualityRepair,
+  chrome
 }: DesignDocumentCanvasSurfaceProps): ReactElement {
   const document = useDesignWorkspaceStore((state) =>
     state.documents.find((item) => item.id === documentId) ?? null)
@@ -314,14 +318,8 @@ export function DesignDocumentCanvasSurface({
         onRuntimeQualityFindings={onRuntimeQualityFindings}
         onRequestQualityRepair={onRequestQualityRepair}
         onDocumentLoadStateChange={handleDocumentLoadStateChange}
+        chrome={chrome}
       />
-      {!readOnly ? (
-        <PropertiesPanel
-          surface="design"
-          onImplementDesign={onImplementDesign}
-          onRequestModify={(promptSeed) => onUseElementAsContext?.(null, promptSeed)}
-        />
-      ) : null}
       {!readOnly && !engineLocked ? (
         <DesignEngineOverlay
           documentId={documentId!}
