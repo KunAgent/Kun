@@ -44,6 +44,7 @@ export default {
           hover: 'var(--ds-surface-hover)',
           border: 'var(--ds-border)',
           'border-muted': 'var(--ds-border-muted)',
+          'border-strong': 'var(--ds-border-strong)',
           ink: 'var(--ds-text)',
           muted: 'var(--ds-text-muted)',
           faint: 'var(--ds-text-faint)',
