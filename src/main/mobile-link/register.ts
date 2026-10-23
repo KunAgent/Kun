@@ -78,7 +78,10 @@ export function registerMobileLink(
   const resume = new MobileRelayResume({ account, relay: service, preference: new RelayPreference(links), diagnostic })
   const recovery = new MobileLinkRecovery({
     online: () => net.isOnline(), network: networkKey,
-    suspend: () => service.suspend(), reconnect: (reason) => service.reconnect(reason),
+    suspend: () => service.suspend(), reconnect: (reason) => {
+      service.reconnect(reason)
+      resume.recover()
+    },
     power: (listener) => {
       const suspend = () => listener('suspend'), resume = () => listener('resume')
       powerMonitor.on('suspend', suspend)

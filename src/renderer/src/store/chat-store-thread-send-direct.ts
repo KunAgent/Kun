@@ -1,5 +1,5 @@
 import { rememberSubmittedComposerRoute } from './chat-store-submitted-route'
-import { bindWorkAnalyticsTurn } from '../product-analytics/work'
+import { bindWorkAnalyticsTurn, noteWorkSubmissionOutcome } from '../product-analytics/work'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
@@ -364,6 +364,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
       })
       runtimeTurnAccepted = true
+      noteWorkSubmissionOutcome(clientRequestId, 'accepted')
       bindWorkAnalyticsTurn(clientRequestId, activeThreadId, turnId)
       if (submittedMessageForQueue.waitForRuntimeAdmission) settleRuntimeTurnAdmission(clientRequestId, true)
       if (currentTurnStartGeneration() !== sendGeneration) {
@@ -593,6 +594,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         return true
       }
       if (turnAdmissionOutcomeMayBeUnknown(e)) {
+        noteWorkSubmissionOutcome(clientRequestId, 'unknown')
         const view = describeRuntimeError(e)
         set((state) => ({
           blocks: previous.blocks,
@@ -647,6 +649,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         await get().refreshThreads()
         return true
       }
+      noteWorkSubmissionOutcome(clientRequestId, 'failed')
       const view = describeRuntimeError(e)
       if (submittedMessageForQueue.waitForRuntimeAdmission) settleRuntimeTurnAdmission(clientRequestId, false)
       set((state) => ({

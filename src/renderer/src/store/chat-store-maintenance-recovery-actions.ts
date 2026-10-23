@@ -1,3 +1,4 @@
+import { captureWorkSubmissionIntent, sendExplicitWorkMessage } from '../product-analytics/work-submission'
 import type { ThreadGoal, ThreadGoalStatus, ThreadTodoList, ThreadTodoStatus } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -395,6 +396,7 @@ export function createMaintenanceRecoveryActions(
   rewindAndResend: async (userBlockId, newText, options) => {
     const trimmed = newText.trim()
     if (!trimmed) return
+    const analyticsIntent = captureWorkSubmissionIntent()
     const state = get()
     if (state.busy) {
       set({ error: i18n.t('common:rewindBusyError') })
@@ -496,18 +498,23 @@ export function createMaintenanceRecoveryActions(
         turnReasoningLastAtByUserId,
         error: null
       })
-      if (canvasResend) {
-        await get().sendMessage(canvasResend.text, 'agent', {
-          displayText: canvasResend.displayText,
-          ...(canvasResend.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
-          ...(canvasResend.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
-          ...attachmentOverrides
-        })
-      } else if (attachmentIds.length > 0 || composerContexts.length > 0 || fileReferences.length > 0) {
-        await get().sendMessage(trimmed, undefined, attachmentOverrides)
-      } else {
-        await get().sendMessage(trimmed)
+      const resend = (clientRequestId?: string): Promise<boolean> => {
+        const overrides = { ...attachmentOverrides, ...(clientRequestId ? { clientRequestId } : {}) }
+        if (canvasResend) {
+          return get().sendMessage(canvasResend.text, 'agent', {
+            displayText: canvasResend.displayText,
+            ...(canvasResend.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+            ...(canvasResend.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
+            ...overrides
+          })
+        }
+        if (clientRequestId || attachmentIds.length > 0 || composerContexts.length > 0 || fileReferences.length > 0) {
+          return get().sendMessage(trimmed, undefined, overrides)
+        }
+        return get().sendMessage(trimmed)
       }
+      if (state.route === 'write') await sendExplicitWorkMessage(resend, analyticsIntent)
+      else await resend()
       if (fileResetNotice) set({ error: fileResetNotice })
     } catch (e) {
       const message = formatRuntimeError(e)

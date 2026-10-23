@@ -9,7 +9,7 @@ type WorkObservation = {
   epoch: string
   started: number
   runKey: Promise<string>
-  finished: boolean
+  outcome?: SubmissionOutcome
   feedback: boolean
   presented: boolean
   completed: boolean
@@ -38,25 +38,38 @@ export function subscribeWorkAdmission(listener: () => void): () => void {
 }
 
 /** Only a new explicit user submission gets a marker; retries reuse its existing request id. */
-export function beginWorkSubmission(): WorkSubmission | undefined {
+export function beginWorkSubmission(intent?: { epoch?: string }): WorkSubmission | undefined {
   const epoch = productCaptureEpoch()
-  if (!epoch) return
+  if (!epoch || (intent && intent.epoch !== epoch)) return
   try {
     const clientRequestId = `turn_work_${epoch}_${crypto.randomUUID()}`
     const observation: WorkObservation = {
       epoch, started: Date.now(), runKey: analyticsRunKey(workRunKeySource(clientRequestId)),
-      finished: false, feedback: false, presented: false, completed: false
+      feedback: false, presented: false, completed: false
     }
     keep(requests, clientRequestId, observation)
     emit(observation, { name: 'work_task_submitted', properties: { mode: 'work' } })
     return { clientRequestId, finish(outcome) {
-      if (observation.finished) return
-      observation.finished = true
-      emit(observation, { name: 'work_submission_finished', properties: {
-        mode: 'work', requestOutcome: outcome, durationMs: boundedDuration(observation.started)
-      } })
+      // Boolean UI return values are fallback evidence only: an admission
+      // observer may already have recorded a precise accepted/unknown result.
+      if (!observation.outcome) settleSubmission(observation, outcome)
     } }
   } catch { return undefined }
+}
+
+function settleSubmission(observation: WorkObservation, outcome: SubmissionOutcome): void {
+  if (observation.outcome && (observation.outcome !== 'unknown' || outcome === 'unknown')) return
+  observation.outcome = outcome
+  emit(observation, { name: 'work_submission_finished', properties: {
+    mode: 'work', requestOutcome: outcome, durationMs: boundedDuration(observation.started)
+  } })
+}
+
+/** Concrete request receipts outrank a legacy boolean UI return value. A later
+ * receipt may resolve unknown, but must never downgrade a confirmed outcome. */
+export function noteWorkSubmissionOutcome(clientRequestId: string, outcome: SubmissionOutcome): void {
+  const observation = requests.get(clientRequestId)
+  if (observation && observation.epoch === productCaptureEpoch()) settleSubmission(observation, outcome)
 }
 
 export async function observeWorkSubmission(submission: WorkSubmission | undefined,

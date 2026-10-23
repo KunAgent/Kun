@@ -90,7 +90,7 @@
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
-    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.20.1.tgz",
+    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.21.2.tgz",
     "@modelcontextprotocol/client": "^2.3.1",
     "@opentui/core": "0.6.6",
     "@opentui/solid": "0.6.6",
