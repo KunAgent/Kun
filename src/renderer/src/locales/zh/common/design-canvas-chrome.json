@@ -31,6 +31,7 @@
   "canvasTweaksDeviceMobile": "手机",
   "canvasTweaksDeviceTablet": "平板",
   "canvasTweaksDeviceDesktop": "桌面",
+  "canvasTweaksSelectScreen": "在画布上选中一个屏幕，即可切换设备尺寸或让 AI 修改它。",
   "canvasBoardEdit": "直接修改文字",
   "canvasBoardEditDone": "完成修改",
   "canvasBoardEditHint": "点击文字进行修改",

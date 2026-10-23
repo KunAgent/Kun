@@ -1,5 +1,5 @@
 import { memo, useMemo, type ReactElement } from 'react'
-import { Code2, Monitor, PenLine, Smartphone, Tablet } from 'lucide-react'
+import { Code2, Monitor, MousePointerClick, Smartphone, Sparkles, Tablet } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
@@ -7,9 +7,15 @@ import { filterEditableShapeIds } from '../../../design/canvas/canvas-editabilit
 import { isHtmlFrame, type CanvasShape, type DevicePreset } from '../../../design/canvas/canvas-types'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 import type { DesignArtifact } from '../../../design/design-types'
-import { DesignContextPopover } from '../DesignContextPopover'
+import { DesignContextForm } from '../DesignContextForm'
 import { buildScreenModifyPrompt, commitInspectorUpdate } from './PropertiesPanel'
-import { Section } from './properties-panel/primitives'
+import {
+  TWEAKS_BUTTON_PRIMARY,
+  TWEAKS_BUTTON_SECONDARY,
+  TweaksRow,
+  TweaksSection,
+  TweaksSegmented
+} from './tweaks/tweaks-controls'
 
 const DEVICE_PRESETS: { id: DevicePreset; icon: typeof Monitor; labelKey: string; w: number; h: number }[] = [
   { id: 'mobile', icon: Smartphone, labelKey: 'canvasTweaksDeviceMobile', w: 390, h: 844 },
@@ -27,9 +33,6 @@ export function selectedHtmlScreen(
   return shape && isHtmlFrame(shape) ? shape : null
 }
 
-const actionButton =
-  'flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-ds-border-muted px-3 text-[12px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45'
-
 function ScreenTweaks({
   screen,
   artifact,
@@ -43,41 +46,50 @@ function ScreenTweaks({
 }): ReactElement {
   const { t } = useTranslation('common')
   const setDesignIntentMode = useDesignWorkspaceStore((s) => s.setDesignIntentMode)
+  const title = artifact?.title || screen.name
   const requestModify = (): void => {
     setDesignIntentMode('modify')
-    const title = artifact?.title || screen.name
     onRequestModify?.(t('canvasModifyScreenPrompt', buildScreenModifyPrompt(title), { title }))
   }
   return (
-    <Section title={t('canvasInspectorScreen')}>
-      <div className="min-w-0">
-        <div className="truncate text-[13px] font-medium text-ds-ink">{artifact?.title || screen.name}</div>
-        {artifact ? <div className="mt-0.5 truncate font-mono text-[11px] text-ds-faint">{artifact.relativePath}</div> : null}
+    <TweaksSection title={t('canvasInspectorScreen')}>
+      <div className="flex min-w-0 items-center gap-2.5 rounded-[10px] border border-ds-border-muted bg-ds-main px-3 py-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-accent-soft text-accent">
+          <Monitor className="h-4 w-4" strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold text-ds-ink">{title}</div>
+          {artifact ? (
+            <div className="truncate font-mono text-[11px] text-ds-faint" title={artifact.relativePath}>
+              {artifact.relativePath}
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div role="radiogroup" aria-label={t('canvasTweaksDevice')} className="flex items-center gap-1 rounded-[10px] bg-ds-hover p-0.5">
-        {DEVICE_PRESETS.map(({ id, icon: Icon, labelKey, w, h }) => {
-          const active = screen.devicePreset === id
-          return (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => commitInspectorUpdate('design', 'set-device-preset', [screen.id], { devicePreset: id, width: w, height: h })}
-              className={`flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[11.5px] transition ${
-                active ? 'bg-ds-elevated text-ds-ink shadow-[0_1px_2px_rgba(15,23,42,0.1)]' : 'text-ds-muted hover:text-ds-ink'
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
-              {t(labelKey)}
-            </button>
-          )
-        })}
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        <button type="button" onClick={requestModify} disabled={!onRequestModify} className={actionButton}>
-          <PenLine className="h-3.5 w-3.5" strokeWidth={1.8} />
-          {t('designProjectModify')}
+      <TweaksRow label={t('canvasTweaksDevice')}>
+        <TweaksSegmented
+          value={screen.devicePreset}
+          ariaLabel={t('canvasTweaksDevice')}
+          options={DEVICE_PRESETS.map(({ id, icon: Icon, labelKey }) => ({
+            value: id,
+            label: t(labelKey),
+            icon: <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+          }))}
+          onChange={(id) => {
+            const preset = DEVICE_PRESETS.find((item) => item.id === id)
+            if (!preset) return
+            commitInspectorUpdate('design', 'set-device-preset', [screen.id], {
+              devicePreset: id,
+              width: preset.w,
+              height: preset.h
+            })
+          }}
+        />
+      </TweaksRow>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={requestModify} disabled={!onRequestModify} className={TWEAKS_BUTTON_PRIMARY}>
+          <Sparkles className="h-3.5 w-3.5" strokeWidth={1.9} />
+          <span className="truncate">{t('designProjectModify')}</span>
         </button>
         <button
           type="button"
@@ -85,13 +97,25 @@ function ScreenTweaks({
             if (artifact) onImplementDesign?.(artifact)
           }}
           disabled={!artifact || !onImplementDesign}
-          className={actionButton}
+          className={TWEAKS_BUTTON_SECONDARY}
         >
-          <Code2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-          {t('designImplement')}
+          <Code2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+          <span className="truncate">{t('designImplement')}</span>
         </button>
       </div>
-    </Section>
+    </TweaksSection>
+  )
+}
+
+function ScreenTweaksEmpty(): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <TweaksSection title={t('canvasInspectorScreen')}>
+      <div className="flex items-center gap-2.5 rounded-[10px] border border-dashed border-ds-border px-3 py-3 text-[12.5px] leading-5 text-ds-muted">
+        <MousePointerClick className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.7} />
+        <span>{t('canvasTweaksSelectScreen')}</span>
+      </div>
+    </TweaksSection>
   )
 }
 
@@ -116,7 +140,10 @@ function CanvasTweaksPanelInner({
   )
   const artifact = screen ? artifacts.find((item) => item.id === screen.htmlArtifactId) ?? null : null
   return (
-    <div className="grid gap-x-8 gap-y-5 px-4 pb-4 pt-3 text-[12px] [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+    <div
+      className="grid items-start gap-x-10 gap-y-6 px-5 pb-8 pt-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]"
+      data-canvas-tweaks="true"
+    >
       {screen ? (
         <ScreenTweaks
           screen={screen}
@@ -124,16 +151,10 @@ function CanvasTweaksPanelInner({
           onImplementDesign={onImplementDesign}
           onRequestModify={onRequestModify}
         />
-      ) : null}
-      <div className="min-w-0">
-        <DesignContextPopover
-          open
-          presentation="inline"
-          onClose={() => undefined}
-          onOpenSettings={onOpenAgentSettings}
-          designTargetDisabled={designTargetDisabled}
-        />
-      </div>
+      ) : (
+        <ScreenTweaksEmpty />
+      )}
+      <DesignContextForm onOpenSettings={onOpenAgentSettings} designTargetDisabled={designTargetDisabled} />
     </div>
   )
 }
