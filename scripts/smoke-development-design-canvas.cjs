@@ -94,6 +94,9 @@ async function runFlow({ application, page, capture, timeoutMs, workspaceRoot })
   await new Promise((resolve) => setTimeout(resolve, 600))
   await capture('canvas-0-overview')
   diagnostics.toolbar = await page.locator('.design-canvas-toolbar').first().getAttribute('role').catch(() => null)
+  diagnostics.flowConnectors = await page.locator('[data-prototype-flows]').count()
+  assert.equal(diagnostics.flowConnectors, 0, 'reading-order guesses are not drawn as flow lines')
+  checks.push('No guessed prototype-flow lines are drawn between boards')
 
   const label = page.locator('[data-canvas-board-label]').first()
   if (await label.count()) {
