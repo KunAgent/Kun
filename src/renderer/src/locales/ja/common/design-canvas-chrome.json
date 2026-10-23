@@ -31,6 +31,7 @@
   "canvasTweaksDeviceMobile": "モバイル",
   "canvasTweaksDeviceTablet": "タブレット",
   "canvasTweaksDeviceDesktop": "デスクトップ",
+  "canvasTweaksSelectScreen": "キャンバスで画面を選択すると、デバイスを切り替えたり AI に修正を依頼したりできます。",
   "canvasBoardEdit": "テキストを直接編集",
   "canvasBoardEditDone": "編集を完了",
   "canvasBoardEditHint": "テキストをクリックして編集",

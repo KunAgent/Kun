@@ -31,6 +31,7 @@
   "canvasTweaksDeviceMobile": "मोबाइल",
   "canvasTweaksDeviceTablet": "टैबलेट",
   "canvasTweaksDeviceDesktop": "डेस्कटॉप",
+  "canvasTweaksSelectScreen": "डिवाइस बदलने या AI से बदलाव करवाने के लिए कैनवास पर कोई स्क्रीन चुनें।",
   "canvasBoardEdit": "टेक्स्ट वहीं संपादित करें",
   "canvasBoardEditDone": "संपादन पूरा",
   "canvasBoardEditHint": "संपादित करने के लिए टेक्स्ट पर क्लिक करें",

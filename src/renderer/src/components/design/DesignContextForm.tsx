@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
-import { FileInput, Settings2, X } from 'lucide-react'
+import { useState, type ReactElement } from 'react'
+import { Check, ChevronDown, FileInput, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DESIGN_SYSTEM_PRESETS, type DesignSystemPreset } from '@shared/app-settings'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
@@ -13,15 +13,16 @@ import { LEGACY_PROJECT_DESIGN_SYSTEM_PATH } from '../../design/design-md/design
 import { acceptLegacyDesignSystemMigration, createLegacyDesignSystemMigrationDraft } from '../../design/design-md/design-md-legacy-migration'
 import { useDesignSystemStore } from '../../design/canvas/design-system-store'
 import { DesignTargetToggle } from './DesignTargetToggle'
+import {
+  TWEAKS_FIELD,
+  TWEAKS_ICON_BUTTON,
+  TweaksRow,
+  TweaksSection
+} from './canvas/tweaks/tweaks-controls'
 
 type Props = {
-  open: boolean
-  onClose: () => void
   onOpenSettings?: () => void
-  titleKey?: string
   designTargetDisabled?: boolean
-  /** `inline` renders the form inside the canvas inspector's Tweaks tab. */
-  presentation?: 'popover' | 'inline'
 }
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
@@ -30,18 +31,13 @@ function swatchValue(color?: string): string {
   return color && HEX_RE.test(color) ? color : '#3b82d8'
 }
 
-function chipClass(active: boolean): string {
-  return `rounded-full px-2.5 py-1 text-[12px] transition-colors ${
+function toneChipClass(active: boolean): string {
+  return `inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12px] transition ${
     active
-      ? 'bg-[#3b82d8] text-white'
-      : 'bg-black/[0.05] text-[#646e7c] hover:text-[#1f2733] dark:bg-white/[0.06] dark:text-white/55 dark:hover:text-white/85'
+      ? 'border-accent-tint/40 bg-accent-tint/15 font-medium text-accent'
+      : 'border-ds-border bg-ds-main text-ds-muted hover:bg-ds-hover hover:text-ds-ink dark:border-white/10'
   }`
 }
-
-const fieldLabel = 'mb-1 block text-[11px] font-medium uppercase tracking-wide text-[#8b95a3] dark:text-white/45'
-const inlineFieldLabel = 'mb-1.5 block text-[12px] text-ds-muted'
-const fieldInput =
-  'w-full rounded-md border border-[var(--ds-sidebar-row-ring)] bg-transparent px-2 py-1 text-[13px] text-[#1f2733] outline-none focus-visible:border-[#3b82d8] dark:text-white/85'
 
 export function designContextPatchForTargetLock(
   patch: Partial<DesignContext>,
@@ -53,20 +49,11 @@ export function designContextPatchForTargetLock(
   return nextPatch
 }
 
-/**
- * Design-context form (target / brand color / tone / system). Renders as a
- * popover, or inline inside the canvas inspector's Tweaks tab.
- */
-export function DesignContextPopover({
-  open,
-  onClose,
+/** Design context the agent draws with (target / brand color / tone / system), as Tweaks rows. */
+export function DesignContextForm({
   onOpenSettings,
-  titleKey = 'designContextLabel',
-  designTargetDisabled = false,
-  presentation = 'popover'
-}: Props): ReactElement | null {
-  const inline = presentation === 'inline'
-  const labelClass = inline ? inlineFieldLabel : fieldLabel
+  designTargetDisabled = false
+}: Props): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
   const designContext = useDesignWorkspaceStore((s) => s.designContext)
@@ -74,29 +61,7 @@ export function DesignContextPopover({
   const setDesignTarget = useDesignWorkspaceStore((s) => s.setDesignTarget)
   const updateDesignContext = useDesignWorkspaceStore((s) => s.updateDesignContext)
   const setFileError = useDesignWorkspaceStore((s) => s.setFileError)
-  const rootRef = useRef<HTMLDivElement | null>(null)
   const [importing, setImporting] = useState(false)
-
-  useEffect(() => {
-    if (!open || inline) return
-    const onPointerDown = (event: PointerEvent): void => {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (rootRef.current?.contains(target)) return
-      onClose()
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [inline, open, onClose])
-
-  if (!open) return null
 
   const toggleTone = (tone: string): void => {
     const current = designContext.tone ?? []
@@ -130,7 +95,6 @@ export function DesignContextPopover({
               return
             }
             setFileError(null)
-            onClose()
           })
         }
         const imported = importStitchDesignMarkdown(res.content)
@@ -143,7 +107,6 @@ export function DesignContextPopover({
           useDesignSystemStore.getState().setToken(token)
         }
         setFileError(null)
-        onClose()
       })
       .catch((error: unknown) => {
         setFileError(error instanceof Error ? error.message : String(error))
@@ -151,25 +114,20 @@ export function DesignContextPopover({
       .finally(() => setImporting(false))
   }
 
+  const brandColor = designContext.brandColor ?? ''
+  const tones = designContext.tone ?? []
   return (
-    <div
-      ref={rootRef}
-      role="dialog"
-      aria-label={t(titleKey)}
-      className={inline
-        ? 'ds-no-drag w-full text-ds-ink'
-        : 'ds-no-drag w-[300px] rounded-2xl border border-[var(--ds-sidebar-row-ring)] bg-white p-3.5 text-[#1f2733] shadow-[0_14px_34px_rgba(20,47,95,0.16)] dark:bg-[#1f242c] dark:text-white'}
-    >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className={inline ? 'text-[10px] font-medium uppercase tracking-[0.08em] text-ds-faint' : 'text-[13px] font-medium'}>{t(titleKey)}</span>
-        <div className="flex items-center gap-0.5">
+    <TweaksSection
+      title={t('designContextLabel')}
+      actions={(
+        <>
           <button
             type="button"
             onClick={importDesignMd}
             disabled={importing}
             title={t('designImportDesignMd')}
             aria-label={t('designImportDesignMd')}
-            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:text-[#1f2733] disabled:cursor-not-allowed disabled:opacity-45 dark:text-white/45 dark:hover:text-white/85"
+            className={TWEAKS_ICON_BUTTON}
           >
             <FileInput className="h-3.5 w-3.5" strokeWidth={1.9} />
           </button>
@@ -179,77 +137,75 @@ export function DesignContextPopover({
               onClick={onOpenSettings}
               title={t('settings')}
               aria-label={t('settings')}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:text-[#1f2733] dark:text-white/45 dark:hover:text-white/85"
+              className={TWEAKS_ICON_BUTTON}
             >
               <Settings2 className="h-3.5 w-3.5" strokeWidth={1.9} />
             </button>
           ) : null}
-          {inline ? null : (
-            <button
-              type="button"
-              onClick={onClose}
-              title={t('close')}
-              aria-label={t('close')}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:text-[#1f2733] dark:text-white/45 dark:hover:text-white/85"
-            >
-              <X className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <span className={labelClass}>{t('designTargetHint')}</span>
-          <DesignTargetToggle
-            designTarget={designTarget}
-            disabled={designTargetDisabled}
-            disabledReason={designTargetDisabled ? t('designTargetLockedHint') : undefined}
-            onChange={setDesignTarget}
-          />
-        </div>
-        <label className="block">
-          <span className={labelClass}>{t('designAgentBrandColor')}</span>
-          <div className="flex items-center gap-2">
+        </>
+      )}
+    >
+      <TweaksRow label={t('designTarget')}>
+        <DesignTargetToggle
+          variant="segmented"
+          designTarget={designTarget}
+          disabled={designTargetDisabled}
+          disabledReason={designTargetDisabled ? t('designTargetLockedHint') : undefined}
+          onChange={setDesignTarget}
+        />
+      </TweaksRow>
+      <TweaksRow label={t('designAgentBrandColor')}>
+        <div className={`${TWEAKS_FIELD} flex items-center gap-2 pl-1.5 pr-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-tint/25`}>
+          <label
+            className="relative h-5 w-5 shrink-0 cursor-pointer overflow-hidden rounded-[6px] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.12)]"
+            style={{ backgroundColor: swatchValue(brandColor) }}
+          >
             <input
               type="color"
-              value={swatchValue(designContext.brandColor)}
+              value={swatchValue(brandColor)}
               onChange={(e) => updateDesignContext({ brandColor: e.target.value })}
               aria-label={t('designAgentBrandColor')}
-              className="h-7 w-9 shrink-0 cursor-pointer rounded border border-[var(--ds-sidebar-row-ring)] bg-transparent p-0.5"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             />
-            <input
-              type="text"
-              value={designContext.brandColor ?? ''}
-              onChange={(e) => updateDesignContext({ brandColor: e.target.value })}
-              placeholder="#3b82d8"
-              className={fieldInput}
-            />
-          </div>
-        </label>
-        <div>
-          <span className={labelClass}>{t('designAgentTone')}</span>
-          <div className="flex flex-wrap gap-1">
-            {DESIGN_TONE_OPTIONS.map((tone) => (
+          </label>
+          <input
+            type="text"
+            value={brandColor}
+            onChange={(e) => updateDesignContext({ brandColor: e.target.value })}
+            placeholder="#3b82d8"
+            spellCheck={false}
+            className="h-full min-w-0 flex-1 bg-transparent font-mono text-[12px] uppercase text-ds-ink outline-none placeholder:normal-case placeholder:text-ds-faint"
+          />
+        </div>
+      </TweaksRow>
+      <TweaksRow label={t('designAgentTone')} alignTop>
+        <div className="flex flex-wrap gap-1.5">
+          {DESIGN_TONE_OPTIONS.map((tone) => {
+            const active = tones.includes(tone)
+            return (
               <button
                 key={tone}
                 type="button"
+                aria-pressed={active}
                 onClick={() => toggleTone(tone)}
-                className={chipClass((designContext.tone ?? []).includes(tone))}
+                className={toneChipClass(active)}
               >
+                {active ? <Check className="h-3 w-3" strokeWidth={2.4} /> : null}
                 {tone}
               </button>
-            ))}
-          </div>
+            )
+          })}
         </div>
-        <label className="block">
-          <span className={labelClass}>{t('designAgentSystem')}</span>
+      </TweaksRow>
+      <TweaksRow label={t('designAgentSystem')}>
+        <div className="relative">
           <select
             value={designContext.designSystemPreset ?? 'none'}
             onChange={(e) =>
               updateDesignContext({ designSystemPreset: e.target.value as DesignSystemPreset })
             }
-            className={fieldInput}
+            aria-label={t('designAgentSystem')}
+            className={`${TWEAKS_FIELD} cursor-pointer appearance-none pl-2.5 pr-8`}
           >
             {DESIGN_SYSTEM_PRESETS.map((preset) => (
               <option key={preset} value={preset}>
@@ -257,8 +213,12 @@ export function DesignContextPopover({
               </option>
             ))}
           </select>
-        </label>
-      </div>
-    </div>
+          <ChevronDown
+            className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ds-muted"
+            strokeWidth={1.9}
+          />
+        </div>
+      </TweaksRow>
+    </TweaksSection>
   )
 }

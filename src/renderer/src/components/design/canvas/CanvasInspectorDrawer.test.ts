@@ -8,7 +8,7 @@ import { CanvasViewControls } from './CanvasViewControls'
 import { canvasLayerIcon, canvasLayerTextPreview } from './CanvasLayersPanel'
 import { resolveCanvasCodeTarget } from './CanvasCodePanel'
 import { canvasBoardFocusScale } from './CanvasBoardFocusView'
-import { selectedHtmlScreen } from './CanvasTweaksPanel'
+import { CanvasTweaksPanel, selectedHtmlScreen } from './CanvasTweaksPanel'
 import { htmlFrameChromeActionLevel, htmlFrameChromeOffset } from './html-frame/HtmlFrameChrome'
 import { useCanvasInspectorStore } from '../../../design/canvas/canvas-inspector-store'
 import {
@@ -153,6 +153,13 @@ describe('board chrome and focus view', () => {
     expect(htmlFrameChromeActionLevel({ screenWidth: 200, active: true })).toBe('basic')
     expect(htmlFrameChromeActionLevel({ screenWidth: 120, active: true })).toBe('expand')
     expect(htmlFrameChromeActionLevel({ screenWidth: 120, active: false })).toBe('none')
+  })
+
+  it('guides toward selecting a screen before showing screen tweaks', () => {
+    const html = renderToStaticMarkup(createElement(CanvasTweaksPanel, {}))
+    expect(html).toContain('data-canvas-tweaks="true"')
+    expect(html).toContain('Select a screen on the canvas to change its device or ask AI to modify it.')
+    expect(html).toContain('Design context')
   })
 
   it('offers screen tweaks only for exactly one HTML board', () => {

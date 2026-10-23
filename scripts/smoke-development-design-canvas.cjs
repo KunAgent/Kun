@@ -113,6 +113,24 @@ async function runFlow({ application, page, capture, timeoutMs, workspaceRoot })
       await new Promise((resolve) => setTimeout(resolve, tab === 'code' ? 1_200 : 400))
       await capture(`canvas-2-inspector-${tab}`)
       checks.push(`Inspector ${tab} tab renders`)
+      if (tab !== 'tweaks') continue
+      const panel = page.locator('[data-canvas-inspector-panel="tweaks"]').first()
+      const scrollState = () => panel.evaluate((element) => ({
+        top: element.scrollTop,
+        max: element.scrollHeight - element.clientHeight
+      }))
+      const before = await scrollState()
+      const panelBox = await panel.boundingBox()
+      assert(panelBox, 'tweaks panel is visible')
+      await page.mouse.move(panelBox.x + panelBox.width / 2, panelBox.y + panelBox.height / 2)
+      await page.mouse.wheel(0, 600)
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      const after = await scrollState()
+      diagnostics.tweaksScroll = { before, after }
+      assert(before.max > 0, 'tweaks content overflows the drawer at the default height')
+      assert(after.top > before.top, 'the wheel scrolls the tweaks panel')
+      await capture('canvas-2-inspector-tweaks-scrolled')
+      checks.push('The wheel scrolls the Tweaks panel inside the drawer')
     }
     await page.locator('[data-canvas-board-expand]').first().click()
     await page.locator('[data-canvas-board-focus]').first().waitFor({ timeout: timeoutMs })
