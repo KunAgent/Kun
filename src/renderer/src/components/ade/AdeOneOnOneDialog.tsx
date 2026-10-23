@@ -230,7 +230,7 @@ export function AdeOneOnOneDialog({
                         ? 'bg-accent/12 text-ds-ink'
                         : unavailable
                           ? 'text-ds-faint'
-                          : 'text-ds-text hover:bg-ds-hover'
+                          : 'text-ds-ink hover:bg-ds-hover'
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2 truncate">
@@ -252,7 +252,7 @@ export function AdeOneOnOneDialog({
           {rows.some((entry) => harnessRowUnavailableCode(entry) !== null) ? (
             <button
               type="button"
-              className="mt-1 text-[11px] text-ds-accent hover:underline"
+              className="mt-1 text-[11px] text-accent hover:underline"
               onClick={() => {
                 onClose()
                 onOpenSettings('agentsHarnesses')

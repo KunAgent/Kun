@@ -154,7 +154,7 @@ export function CategoryBatchControls({
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11.5px] font-semibold text-ds-heading">
+          <div className="text-[11.5px] font-semibold text-ds-ink">
             {t('subagentsPanel.categoryConfiguration', 'Category default configuration')}
           </div>
           <div className="mt-0.5 text-[10px] text-ds-faint">
@@ -245,7 +245,7 @@ export function SurfaceTabs({
           className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold transition ${
             value === surface
               ? 'bg-ds-card text-accent shadow-sm'
-              : 'text-ds-muted hover:text-ds-heading'
+              : 'text-ds-muted hover:text-ds-ink'
           }`}
         >
           {surfaceLabel(t, surface)}
@@ -287,7 +287,7 @@ export function CatalogPagination({
         >
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
-        <span className="min-w-12 text-center text-[11px] font-semibold text-ds-heading">{page}/{pageCount}</span>
+        <span className="min-w-12 text-center text-[11px] font-semibold text-ds-ink">{page}/{pageCount}</span>
         <button data-settings-action="ghost" data-settings-size="icon"
           type="button"
           disabled={page >= pageCount}
@@ -331,7 +331,7 @@ export function ExtensionAgentsControl({
     <section className="mb-3 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5 shadow-sm shadow-black/5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-ds-heading">
+          <div className="text-[12px] font-semibold text-ds-ink">
             {t('subagentsPanel.extensionAgents.title', 'Extension agents')}
           </div>
           <div className="mt-0.5 text-[10.5px] text-ds-muted">
@@ -414,7 +414,7 @@ export function AgentCatalogToolbar({
           onChange={(event) => onQueryChange(event.target.value)}
           aria-label={t('subagentsPanel.search', 'Search agents')}
           placeholder={t('subagentsPanel.searchPlaceholder', 'Search names, capabilities, or scenarios')}
-          className={`w-full rounded-[10px] border border-ds-border bg-ds-card pl-9 pr-9 text-ds-heading outline-none transition placeholder:text-ds-faint focus:border-accent/45 focus:ring-2 focus:ring-accent/10 ${
+          className={`w-full rounded-[10px] border border-ds-border bg-ds-card pl-9 pr-9 text-ds-ink outline-none transition placeholder:text-ds-faint focus:border-accent/45 focus:ring-2 focus:ring-accent/10 ${
             compact ? 'h-9 text-[12px]' : 'h-10 text-[13px]'
           }`}
         />
@@ -423,7 +423,7 @@ export function AgentCatalogToolbar({
             type="button"
             onClick={() => onQueryChange('')}
             aria-label={t('subagentsPanel.clearSearch', 'Clear search')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-ds-faint hover:bg-ds-subtle hover:text-ds-heading"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-ds-faint hover:bg-ds-subtle hover:text-ds-ink"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -447,7 +447,7 @@ export function AgentCatalogToolbar({
               className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[10.5px] font-semibold transition ${
                 active
                   ? 'border-accent bg-accent text-white shadow-sm'
-                  : 'border-ds-border bg-ds-card text-ds-muted hover:border-accent/30 hover:text-ds-heading'
+                  : 'border-ds-border bg-ds-card text-ds-muted hover:border-accent/30 hover:text-ds-ink'
               }`}
             >
               <span>{label}</span>

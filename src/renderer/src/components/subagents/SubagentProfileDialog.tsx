@@ -69,7 +69,7 @@ export function ProfileDialog({
       <div className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-ds-border bg-ds-main shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 border-b border-ds-border px-4 py-3">
           <Bot className="h-4 w-4 text-ds-muted" />
-          <span className="text-sm font-semibold text-ds-heading">
+          <span className="text-sm font-semibold text-ds-ink">
             {isNew ? t('subagentsPanel.newSubagent', 'New subagent') : t('agentsView.editAgent', 'Edit agent')}
           </span>
         </div>
@@ -256,7 +256,7 @@ export function ProfileDialog({
           )}
         </div>
         <div className="flex justify-end gap-2 border-t border-ds-border px-4 py-3">
-          <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-ds-muted hover:text-ds-heading">
+          <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-ds-muted hover:text-ds-ink">
             {t('agentsView.cancel', 'Cancel')}
           </button>
           <button data-settings-action="primary" data-settings-size="default"
@@ -283,7 +283,7 @@ function TabButton({ active, onClick, badge, children }: {
       type="button"
       onClick={onClick}
       className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition ${
-        active ? 'border-accent text-ds-heading' : 'border-transparent text-ds-muted hover:text-ds-heading'
+        active ? 'border-accent text-ds-ink' : 'border-transparent text-ds-muted hover:text-ds-ink'
       }`}
     >
       {children}
@@ -365,8 +365,8 @@ function PermissionsTab({ d, setD, catalog, loading, t }: {
               onClick={() => setScope(s.id)}
               className={`flex-1 rounded-md px-2 py-1.5 text-[12.5px] font-medium transition ${
                 scope === s.id
-                  ? 'bg-[var(--ds-surface-elevated)] text-ds-heading shadow-[inset_0_0_0_1px_var(--ds-border)]'
-                  : 'text-ds-muted hover:text-ds-heading'
+                  ? 'bg-[var(--ds-surface-elevated)] text-ds-ink shadow-[inset_0_0_0_1px_var(--ds-border)]'
+                  : 'text-ds-muted hover:text-ds-ink'
               }`}
             >
               {s.label}
@@ -390,7 +390,7 @@ function PermissionsTab({ d, setD, catalog, loading, t }: {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('agentsView.permSearch', 'Search tools / MCP / skills…')}
-              className="w-full bg-transparent text-[12.5px] text-ds-heading outline-none placeholder:text-ds-faint"
+              className="w-full bg-transparent text-[12.5px] text-ds-ink outline-none placeholder:text-ds-faint"
             />
           </div>
 
@@ -490,7 +490,7 @@ function Section({ icon, title, badge, children }: {
     <div className="rounded-lg border border-ds-border">
       <div className="flex items-center gap-2 border-b border-ds-border px-3 py-2">
         <span className="text-ds-muted">{icon}</span>
-        <span className="text-[12.5px] font-medium text-ds-heading">{title}</span>
+        <span className="text-[12.5px] font-medium text-ds-ink">{title}</span>
         {badge ? <span className="ml-auto rounded-full bg-ds-subtle px-2 py-px text-[10.5px] text-ds-muted">{badge}</span> : null}
       </div>
       <div className="px-3 py-2.5">{children}</div>
@@ -513,7 +513,7 @@ function CapRow({ on, onToggle, label, meta }: {
       <span className={`flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition ${on ? 'justify-end bg-accent' : 'justify-start bg-ds-border'}`}>
         <span className="h-3 w-3 rounded-full bg-white" />
       </span>
-      <span className={`min-w-0 flex-1 truncate text-[12.5px] ${on ? 'text-ds-heading' : 'text-ds-faint'}`}>{label}</span>
+      <span className={`min-w-0 flex-1 truncate text-[12.5px] ${on ? 'text-ds-ink' : 'text-ds-faint'}`}>{label}</span>
       {meta ? <span className="max-w-[45%] shrink-0 truncate pl-2 text-[10.5px] text-ds-faint">{meta}</span> : null}
     </button>
   )

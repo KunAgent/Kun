@@ -604,7 +604,7 @@ export function SubagentGroup({
         ) : (
           <Check className="h-4 w-4 shrink-0 text-ds-success" strokeWidth={2.4} />
         )}
-        <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-ds-heading">
+        <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-ds-ink">
           {t('subagentSwarmTitle', { count: sorted.length })}
           {summaryParts.length > 0 ? (
             <span className="font-normal text-ds-muted"> · {summaryParts.join(' · ')}</span>

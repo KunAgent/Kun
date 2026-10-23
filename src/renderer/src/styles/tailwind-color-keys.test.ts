@@ -12,36 +12,6 @@ const COLOR_UTILITY = '(?:bg|text|border(?:-[trblxyse])?|ring(?:-offset)?|outlin
 // The key stops at a word boundary; `${...}` template fragments are skipped.
 const DS_COLOR_CLASS = new RegExp(`(?<![\\w-])(?:[a-z0-9-]+:)*${COLOR_UTILITY}-ds-([a-zA-Z0-9-]+?)(?:/\\d+)?(?![\\w$-])`, 'g')
 
-/**
- * `ds-*` names that tailwind.config.js does not define, with how many class
- * uses existed when this guard landed. Tailwind generates nothing for them,
- * so those surfaces silently lose their color. Counts may only go down:
- * define the key (and check each surface) or switch the class to a real one.
- */
-const KNOWN_UNDEFINED: Readonly<Record<string, number>> = {
-  'surface-subtle': 70,
-  'card-muted': 34,
-  heading: 32,
-  accent: 17,
-  surface: 8,
-  raised: 8,
-  bg: 5,
-  text: 4,
-  'warning-soft': 3,
-  'surface-card': 3,
-  error: 3,
-  'surface-elevated': 2,
-  focus: 2,
-  active: 2,
-  control: 1,
-  'control-foreground': 1,
-  dangerSoft: 1,
-  link: 1,
-  'accent-soft': 1,
-  'surface-hover': 1,
-  panel: 1
-}
-
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
@@ -55,7 +25,10 @@ describe('Tailwind ds-* color classes', () => {
     const configUrl = pathToFileURL(resolve('tailwind.config.js')).href
     const config = (await import(configUrl)).default as { theme: { extend: { colors: { ds: Record<string, string> } } } }
     const defined = new Set(Object.keys(config.theme.extend.colors.ds))
-    expect(defined.has('border-strong')).toBe(true)
+    // Names that once went undefined, kept as canaries for the config.
+    for (const key of ['border-strong', 'surface-subtle', 'card-muted', 'warning-soft']) {
+      expect(defined.has(key), key).toBe(true)
+    }
 
     const uses = new Map<string, string[]>()
     for (const path of sourceFiles(RENDERER_ROOT)) {
@@ -66,12 +39,9 @@ describe('Tailwind ds-* color classes', () => {
         uses.set(key, [...(uses.get(key) ?? []), relative(RENDERER_ROOT, path)])
       }
     }
-    const regressions = [...uses].flatMap(([key, files]) => {
-      const allowed = KNOWN_UNDEFINED[key] ?? 0
-      return files.length > allowed
-        ? [`ds-${key}: ${files.length} uses (allowed ${allowed}) in ${[...new Set(files)].join(', ')}`]
-        : []
-    })
-    expect(regressions).toEqual([])
+    // Tailwind generates nothing for an unknown name, so the surface silently
+    // loses its color: define the key or use an existing one.
+    const undefinedNames = [...uses].map(([key, files]) => `ds-${key} in ${[...new Set(files)].join(', ')}`)
+    expect(undefinedNames).toEqual([])
   })
 })

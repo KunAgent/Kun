@@ -404,7 +404,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
           data-testid="subagent-delegation-mode-control"
         >
           <div className="min-w-0 flex-1">
-            <div className="text-[12.5px] font-semibold text-ds-heading">
+            <div className="text-[12.5px] font-semibold text-ds-ink">
               {tSettings('subagentsUseExistingAgents')}
             </div>
             <p className="mt-0.5 text-[10.5px] leading-4 text-ds-muted">
@@ -425,7 +425,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
           t={t}
         />
         <div className="mb-2.5 flex items-center justify-between gap-3">
-          <span className="text-[12px] font-semibold text-ds-heading">
+          <span className="text-[12px] font-semibold text-ds-ink">
             {t('subagentsPanel.delegatableCount', '{{count}} delegatable roles', { count: catalogAgents.length })}
           </span>
           <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] font-semibold text-accent">
@@ -543,7 +543,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
             type="button"
             aria-expanded={systemRolesOpen}
             onClick={() => setSystemRolesOpen((open: boolean) => !open)}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-heading"
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
           >
             <ChevronRight className={`h-3.5 w-3.5 transition ${systemRolesOpen ? 'rotate-90' : ''}`} />
             <span>{t('subagentsPanel.system', 'System · internal')}</span>

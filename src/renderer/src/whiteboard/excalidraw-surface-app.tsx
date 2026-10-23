@@ -197,7 +197,7 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
 
   return (
     <div className="kun-excalidraw-host relative h-full min-h-0 w-full" data-excalidraw-host="ready">
-      {saveError ? <div role="alert" className="absolute left-2 right-2 top-2 z-50 rounded bg-ds-panel p-3 text-sm">
+      {saveError ? <div role="alert" className="absolute left-2 right-2 top-2 z-50 rounded bg-ds-elevated p-3 text-sm">
         <p>{saveError}</p>
         <button type="button" disabled={resolving} onClick={() => void recoverDiskScene()}>
           {t('excalidrawRecoverDisk', { defaultValue: 'Save local copy and reload disk version' })}

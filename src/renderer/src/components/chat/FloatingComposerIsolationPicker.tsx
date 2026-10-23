@@ -120,7 +120,7 @@ export function FloatingComposerIsolationPicker({
               aria-controls={menuId}
               aria-expanded={open}
               onClick={() => setOpen((s) => !s)}
-              className="flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-raised px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-elevated px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
               title={t('adeIsolation.title')}
               aria-label={t('adeIsolation.title')}
               data-composer-isolation-picker
@@ -140,7 +140,7 @@ export function FloatingComposerIsolationPicker({
       ) : null}
       {preparing ? (
         <span
-          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-raised px-2 text-[11px] font-medium text-ds-muted"
+          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-elevated px-2 text-[11px] font-medium text-ds-muted"
           data-worktree-prep="preparing"
           title={prep?.progress?.message ?? t('adeIsolation.preparing')}
         >
@@ -162,7 +162,7 @@ export function FloatingComposerIsolationPicker({
         </button>
       ) : prep?.state === 'ready' || (!prep && boundWorkspaceId) ? (
         <span
-          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-raised px-2 text-[11px] font-medium text-ds-muted"
+          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-elevated px-2 text-[11px] font-medium text-ds-muted"
           data-worktree-prep="ready"
           title={prep?.path ?? boundWorkspacePath ?? boundWorkspaceId}
         >
@@ -173,7 +173,7 @@ export function FloatingComposerIsolationPicker({
         </span>
       ) : showBoundLocal ? (
         <span
-          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-raised px-2 text-[11px] font-medium text-ds-muted"
+          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-elevated px-2 text-[11px] font-medium text-ds-muted"
           data-worktree-prep="local"
           title={boundWorkspacePath || t('adeIsolation.localHint')}
         >

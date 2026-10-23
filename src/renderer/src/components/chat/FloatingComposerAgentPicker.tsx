@@ -134,7 +134,7 @@ export function FloatingComposerAgentPicker({ compact = false, disabled, surface
           aria-controls={menuId}
           aria-expanded={open}
           onClick={() => setOpen((s) => !s)}
-          className={`flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-raised px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60 ${active ? 'text-ds-ink' : ''}`}
+          className={`flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-elevated px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60 ${active ? 'text-ds-ink' : ''}`}
           title={active
             ? t('agentPicker.activeTitle', { name: active.name })
             : t('agentPicker.pickTitle')}

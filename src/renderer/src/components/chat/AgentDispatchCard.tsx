@@ -41,7 +41,7 @@ export function AgentDispatchGroup({ blocks, readOnly = false }: { blocks: reado
 
 type Draft = { title: string; task: string; routes: AgentDispatchAssignmentRoute[] }
 
-const fieldClass = 'w-full rounded-lg border border-ds-border bg-ds-bg px-2.5 py-2 text-ds-ink focus:border-accent focus:outline-none'
+const fieldClass = 'w-full rounded-lg border border-ds-border bg-ds-main px-2.5 py-2 text-ds-ink focus:border-accent focus:outline-none'
 
 function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: boolean }) {
   const { t } = useTranslation('common')

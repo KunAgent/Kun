@@ -141,7 +141,7 @@ export function WorkspacePptxThumbnailRail({
               data-slide-changed={changed ? 'true' : undefined}
               className={`rounded-lg border p-1.5 text-left transition ${
                 active
-                  ? 'border-ds-accent bg-ds-hover shadow-sm ring-1 ring-ds-accent/20'
+                  ? 'border-accent bg-ds-hover shadow-sm ring-1 ring-accent-tint/20'
                   : 'border-ds-border-muted bg-ds-card hover:border-ds-border'
               }`}
               onClick={() => onSelectSlide(slide)}
