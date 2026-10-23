@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { useTranslation } from 'react-i18next'
 import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
-import type { AppState, BinaryFiles } from '@excalidraw/excalidraw/types'
+import type { AppState, BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { OrderedExcalidrawElement } from '@excalidraw/excalidraw/element/types'
 import {
   createEmptyExcalidrawScene,
@@ -29,6 +29,7 @@ import {
 } from './excalidraw-assets'
 import { writeDesignWorkspaceFile } from '../design/design-persistence-coordinator'
 import type { ExcalidrawSurfaceProps } from './excalidraw-surface'
+import { ExcalidrawToolPill } from './excalidraw-tool-pill'
 import './excalidraw-host.css'
 
 function sceneFromLive(
@@ -63,8 +64,15 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
   const skipPersistRef = useRef(false)
   const onEmptyChangeRef = useRef(props.onEmptyChange)
   const onSceneChangeRef = useRef(props.onSceneChange)
+  const onApiChangeRef = useRef(props.onApiChange)
   onEmptyChangeRef.current = props.onEmptyChange
   onSceneChangeRef.current = props.onSceneChange
+  onApiChangeRef.current = props.onApiChange
+  const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null)
+  const [activeTool, setActiveTool] = useState('selection')
+  const [toolLocked, setToolLocked] = useState(false)
+  const [frameWidth, setFrameWidth] = useState(0)
+  const frameRef = useRef<HTMLDivElement | null>(null)
   const identityKey = `${props.workspaceRoot}\0${props.baseDir}\0${props.identityId}`
 
   useEffect(() => {
@@ -120,6 +128,21 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
     }))
   }, [props.baseDir, props.identityId, props.workspaceRoot])
 
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame || typeof ResizeObserver !== 'function') return
+    const observer = new ResizeObserver(() => setFrameWidth(Math.round(frame.getBoundingClientRect().width)))
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [initialScene])
+
+  useEffect(() => () => onApiChangeRef.current?.(null), [])
+
+  const handleApi = useCallback((next: ExcalidrawImperativeAPI): void => {
+    setApi(next)
+    onApiChangeRef.current?.(next)
+  }, [])
+
   useEffect(() => subscribeExcalidrawSaveError(props.workspaceRoot, props.identityId, props.baseDir, setSaveError),
     [props.workspaceRoot, props.identityId, props.baseDir])
 
@@ -150,6 +173,8 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
     appState: AppState,
     files: BinaryFiles
   ): void => {
+    setActiveTool(appState.activeTool.type)
+    setToolLocked(appState.activeTool.locked)
     const scene = sceneFromLive(elements, appState, files)
     if (skipPersistRef.current) {
       skipPersistRef.current = false
@@ -195,29 +220,44 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
     )
   }
 
+  const kunToolbar = props.kunToolbar === true && props.readOnly !== true
   return (
-    <div className="kun-excalidraw-host relative h-full min-h-0 w-full" data-excalidraw-host="ready">
-      {saveError ? <div role="alert" className="absolute left-2 right-2 top-2 z-50 rounded bg-ds-elevated p-3 text-sm">
-        <p>{saveError}</p>
-        <button type="button" disabled={resolving} onClick={() => void recoverDiskScene()}>
-          {t('excalidrawRecoverDisk', { defaultValue: 'Save local copy and reload disk version' })}
-        </button>
-      </div> : null}
-      <Excalidraw
-        key={identityKey + String(loadEpoch)}
-        theme={theme}
-        langCode={excalidrawLangCode(i18n.resolvedLanguage ?? i18n.language)}
-        viewModeEnabled={props.readOnly === true}
-        initialData={initialData}
-        onChange={handleChange}
-        UIOptions={{
-          canvasActions: {
-            loadScene: true,
-            saveToActiveFile: false,
-            toggleTheme: false
-          }
-        }}
-      />
+    <div ref={frameRef} className="relative h-full min-h-0 w-full">
+      {kunToolbar ? (
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-[45] flex justify-center px-3">
+          <div className="pointer-events-auto">
+            <ExcalidrawToolPill api={api} activeTool={activeTool} locked={toolLocked} width={frameWidth} />
+          </div>
+        </div>
+      ) : null}
+      <div
+        className="kun-excalidraw-host relative h-full min-h-0 w-full"
+        data-excalidraw-host="ready"
+        data-kun-toolbar={kunToolbar ? 'true' : undefined}
+      >
+        {saveError ? <div role="alert" className="absolute left-2 right-2 top-2 z-50 rounded bg-ds-elevated p-3 text-sm">
+          <p>{saveError}</p>
+          <button type="button" disabled={resolving} onClick={() => void recoverDiskScene()}>
+            {t('excalidrawRecoverDisk', { defaultValue: 'Save local copy and reload disk version' })}
+          </button>
+        </div> : null}
+        <Excalidraw
+          key={identityKey + String(loadEpoch)}
+          theme={theme}
+          langCode={excalidrawLangCode(i18n.resolvedLanguage ?? i18n.language)}
+          viewModeEnabled={props.readOnly === true}
+          initialData={initialData}
+          onChange={handleChange}
+          excalidrawAPI={handleApi}
+          UIOptions={{
+            canvasActions: {
+              loadScene: true,
+              saveToActiveFile: false,
+              toggleTheme: false
+            }
+          }}
+        />
+      </div>
     </div>
   )
 }

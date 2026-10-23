@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 describe('CodeCanvasNativeSurface', () => {
-  it('hosts the Kun canvas and an empty-board engine switcher by default', () => {
+  it('hosts the Kun canvas under the board header by default', () => {
     const html = renderToStaticMarkup(createElement(CodeCanvasNativeSurface, {
       workspaceRoot: '/workspace',
       threadId: 'thread-code'
@@ -53,7 +53,11 @@ describe('CodeCanvasNativeSurface', () => {
     expect(html).toContain('data-surface="code"')
     expect(html).toContain('canvas-viewport-stub')
     expect(html).not.toContain('properties-stub')
-    expect(html).toContain('data-canvas-engine-switcher="true"')
+    expect(html).toContain('data-whiteboard-header="true"')
+    expect(html).toContain('data-whiteboard-board-menu-trigger="true"')
+    expect(html).toContain('data-whiteboard-view="docked"')
+    // The engine switch lives in the board menu, never floating over the tools.
+    expect(html).not.toContain('data-canvas-engine-switcher="true"')
     expect(html).not.toContain('data-mock-excalidraw')
   })
 
@@ -67,6 +71,18 @@ describe('CodeCanvasNativeSurface', () => {
     expect(html).toContain('data-mock-excalidraw="code-thread-exo"')
     expect(html).not.toContain('canvas-viewport-stub')
     expect(html).not.toContain('properties-stub')
-    expect(html).toContain('data-canvas-engine-switcher="true"')
+    expect(html).toContain('data-whiteboard-header="true"')
+    expect(html).not.toContain('data-canvas-engine-switcher="true"')
+  })
+
+  it('marks the focused presentation on the header', () => {
+    const html = renderToStaticMarkup(createElement(CodeCanvasNativeSurface, {
+      workspaceRoot: '/workspace',
+      threadId: 'thread-focus',
+      presentation: 'focused',
+      onExitFocus: () => undefined
+    }))
+    expect(html).toContain('data-whiteboard-view="focused"')
+    expect(html).toContain('data-whiteboard-exit-view="true"')
   })
 })
