@@ -66,6 +66,10 @@ type Props = {
   reviewEnabled?: boolean
   /** ADE thread has worker activity rows → offer the Workers tab. */
   workersEnabled?: boolean
+  /** Background children are executing right now. */
+  workersRunning?: boolean
+  /** Background children that still need runtime or user action. */
+  workersUnfinished?: number
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
@@ -89,6 +93,8 @@ type RailEntry = {
   running?: boolean
   /** Unread count, e.g. unopened wardrobe bottles. */
   badge?: number
+  /** Neutral in-progress count, e.g. unfinished background tasks. */
+  count?: number
   onClick: () => void
 }
 
@@ -368,6 +374,8 @@ export function WorkbenchSideRail({
   canvasEnabled = false,
   graphEnabled = false,
   workersEnabled = false,
+  workersRunning = false,
+  workersUnfinished = 0,
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
@@ -398,7 +406,17 @@ export function WorkbenchSideRail({
     ...(onOpenSideChat ? [{ key: 'side-chat', label: t('sidePanelOpen'), icon: MessageCircleMore, active: sideChatOpen,
       disabled: !sideChatEnabled, onClick: onOpenSideChat, running: sideChatRunningCount > 0 }] : []),
     panel(BUILTIN_RIGHT_PANEL_IDS.subagents, t('rightPanelSubagents'), Bot),
-    ...(workersEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.workers, t('rightPanelWorkers', { defaultValue: 'Workers' }), Users)] : []),
+    ...(workersEnabled ? [{
+      ...panel(
+        BUILTIN_RIGHT_PANEL_IDS.workers,
+        workersUnfinished > 0
+          ? t('backgroundTaskWorkersRailLabel', { value: workersUnfinished })
+          : t('rightPanelWorkers', { defaultValue: 'Workers' }),
+        Users
+      ),
+      running: workersRunning,
+      ...(workersUnfinished > 0 ? { count: workersUnfinished } : {})
+    }] : []),
     ...(graphEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.graph, t('rightPanelGraph', { defaultValue: 'Graph' }), GitBranch)] : []),
     ...(canvasEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.canvas, t('rightPanelWhiteboard'), Shapes)] : [])
   ], [
@@ -529,8 +547,9 @@ export function WorkbenchSideRail({
               >
                 <Icon className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
                 {entry.running ? (
-                  <span className="absolute bottom-1 left-1 h-[7px] w-[7px] animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" />
+                  <span className="absolute bottom-1 left-1 h-[7px] w-[7px] animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)] motion-reduce:animate-none" />
                 ) : null}
+                {entry.count ? <span className="ds-rail-count absolute bottom-0 right-0 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-accent px-[3px] text-[9.5px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" data-rail-count={entry.count}>{entry.count > 9 ? '9+' : entry.count}</span> : null}
                 {entry.badge ? <span className="ds-rail-badge absolute right-0.5 top-0.5 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-[var(--ds-danger,#d14343)] px-[3px] text-[9.5px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" data-rail-badge={entry.badge}>{entry.badge > 9 ? '9+' : entry.badge}</span> : null}
               </button>
             )

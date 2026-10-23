@@ -7,6 +7,8 @@
   "devPreviewCardDismiss": "Dismiss",
   "processing": "Processing…",
   "processed": "Processed",
+  "turnRecord": "This turn",
+  "turnRecordDuration": "This turn · {{duration}}",
   "processStepCount": "{{count}} steps",
   "workedFor": "Worked for {{duration}}",
   "turnUsageDetailsGatewaySource": "Requests routed through the local Kun gateway.",

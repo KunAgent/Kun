@@ -47,6 +47,11 @@ export type SidebarThreadActivityContext = {
   unreadThreadIds: CompletionAttentionRegistry
   scheduledThreadActivities?: Record<string, ScheduledThreadActivity>
   awaitingUserInputThreadIds?: Record<string, true>
+  /**
+   * Background execution units still working or waiting under a thread.
+   * Keeps a row marked as active after the turn's reply has finished.
+   */
+  backgroundActivityByThread?: Record<string, 'running' | 'waiting'>
 }
 
 /**
@@ -62,11 +67,14 @@ export function sidebarThreadActivity(
 ): SidebarThreadActivity {
   const id = thread.id.trim()
   if (context.awaitingUserInputThreadIds?.[id] === true) return 'awaiting-input'
+  const background = context.backgroundActivityByThread?.[id]
+  if (background === 'waiting') return 'awaiting-input'
   const running =
     threadLooksRunning(thread) ||
     context.watchTurnCompletion[id] === true ||
     (context.activeThreadId === id && context.busy) ||
-    context.scheduledThreadActivities?.[id]?.state === 'running'
+    context.scheduledThreadActivities?.[id]?.state === 'running' ||
+    background === 'running'
   if (running) return 'running'
   const attention = context.activeThreadId === id
     ? null

@@ -7,6 +7,8 @@
   "devPreviewCardDismiss": "关闭提示",
   "processing": "处理中…",
   "processed": "已处理",
+  "turnRecord": "本轮记录",
+  "turnRecordDuration": "本轮记录 · {{duration}}",
   "processStepCount": "{{count}} 步",
   "workedFor": "用时 {{duration}}",
   "turnUsageDetailsGatewaySource": "包含经 Kun 本地网关转发的请求。",
