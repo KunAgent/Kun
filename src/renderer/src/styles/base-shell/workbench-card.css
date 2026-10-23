@@ -1,0 +1,66 @@
+/*
+ * The work area floats as a rounded card on the sidebar's ground: no rule
+ * between sidebar and content, a 4px gutter on the card's free edges, and a
+ * right workspace that shares the conversation's background.
+ */
+
+@media (min-width: 768px) {
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell {
+    --ds-workbench-ground: var(--ds-bg-sidebar);
+    background: var(--ds-workbench-ground);
+  }
+
+  html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell {
+    --ds-workbench-ground: color-mix(in srgb, var(--ds-bg-main) 95%, white);
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell
+    > [data-workbench-left-sidebar]
+    .ds-sidebar-shell {
+    border-right-width: 0;
+    background: var(--ds-workbench-ground);
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-card {
+    margin: 4px 4px 4px 0;
+    overflow: hidden;
+    border: 0.5px solid color-mix(in srgb, var(--ds-border) 72%, transparent);
+    border-radius: 12px;
+    background: var(--ds-bg-main);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell
+    > .ds-workbench-card:first-child {
+    margin-left: 4px;
+  }
+
+  /* The resize handle between sidebar and card shows a line only while hovered. */
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    [data-workbench-left-sidebar]
+    + .ds-workbench-divider {
+    width: 6px;
+    flex-basis: 6px;
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    [data-workbench-left-sidebar]
+    + .ds-workbench-divider:not(:hover)::before,
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    [data-workbench-left-sidebar]
+    + .ds-workbench-divider:not(:hover)::after {
+    opacity: 0;
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-card
+    [data-workbench-right-panel] {
+    --ds-sidebar-surface-bg: var(--ds-bg-main);
+    --ds-sidebar-surface-chrome-bg: var(--ds-bg-main);
+  }
+}

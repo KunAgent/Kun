@@ -1,0 +1,156 @@
+/* Right workspace tab strip: soft pills, one per panel or open file. */
+
+.ds-code-right-tabs {
+  height: 44px;
+  gap: 4px;
+  padding: 0 6px 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ds-border) 55%, transparent);
+}
+
+.ds-code-right-tabs__list {
+  height: 100%;
+  gap: 6px;
+}
+
+.ds-right-tab {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+  max-width: 180px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--ds-text-muted);
+  background: color-mix(in srgb, var(--ds-text) 3.5%, transparent);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ds-right-tab:hover {
+  background: color-mix(in srgb, var(--ds-text) 6%, transparent);
+}
+
+.ds-right-tab[data-active='true'] {
+  color: var(--ds-text);
+  background: color-mix(in srgb, var(--ds-text) 8%, transparent);
+}
+
+.ds-right-tab__select {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 4px 0 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  outline: none;
+}
+
+.ds-right-tab__select:focus-visible {
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+.ds-right-tab__icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.ds-right-tab[data-active='true'] .ds-right-tab__icon {
+  opacity: 0.9;
+}
+
+.ds-right-tab__pin {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--ds-accent);
+}
+
+.ds-right-tab__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-right-tab[data-kind='file'] .ds-right-tab__label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ds-right-tab__dirty {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--ds-git-modified, #b45309);
+}
+
+.ds-right-tab__close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border-radius: 4px;
+  color: var(--ds-text-faint);
+  opacity: 0;
+  transition:
+    opacity 100ms ease,
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.ds-right-tab[data-active='true'] .ds-right-tab__close,
+.ds-right-tab:hover .ds-right-tab__close,
+.ds-right-tab__close:focus-visible {
+  opacity: 1;
+}
+
+.ds-right-tab__close:hover {
+  color: var(--ds-text);
+  background: color-mix(in srgb, var(--ds-text) 10%, transparent);
+}
+
+.ds-right-tabs__icon-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--ds-text-faint);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ds-right-tabs__icon-button:hover {
+  color: var(--ds-text);
+  background: var(--ds-surface-hover);
+}
+
+@container (max-width: 420px) {
+  .ds-right-tab {
+    max-width: 150px;
+  }
+}
+
+/* The file toolbar under a hosted file tab. */
+.ds-code-sidebar-breadcrumbs.is-hosted {
+  min-height: 38px;
+  gap: 0.5rem;
+  padding-left: 0.4rem;
+}

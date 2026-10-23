@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileEdit, Folders, Globe2, IdCard, MessagesSquare, Shirt, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference, RoomMessage } from '@shared/rooms-api'
@@ -18,6 +18,7 @@ import { presentRoomRunItems } from './room-run-presentation'
 import { RoomAgentBrowser } from './RoomAgentBrowser'
 import { RoomDirectFiles } from './RoomDirectChat'
 import { useWardrobe } from './room-wardrobe'
+import type { FilePreviewHostTabActions, FilePreviewHostTabs, FilePreviewHostTabsBridge } from '../workspace-file-preview-host-tabs'
 import './rooms-workbench.css'
 
 const WorkspaceFilePreviewPanel = lazy(() => import('../WorkspaceFilePreviewPanel').then((value) => ({ default: value.WorkspaceFilePreviewPanel })))
@@ -57,6 +58,9 @@ export function RoomWorkbenchRightPanel({
   const [privateFiles, setPrivateFiles] = useState<{ roomId?: string; workspace: boolean }>({ workspace: false })
   const showSavedFiles = room?.conversationKind === 'user_agent' && !(privateFiles.roomId === room.id && privateFiles.workspace)
   const [fileView, setFileView] = useState<WorkbenchFileTreeSidePanelView>('workspace')
+  const [fileTabs, setFileTabs] = useState<FilePreviewHostTabs | null>(null)
+  const fileTabActionsRef = useRef<FilePreviewHostTabActions | null>(null)
+  const fileTabsBridge = useMemo<FilePreviewHostTabsBridge>(() => ({ publish: setFileTabs, actionsRef: fileTabActionsRef }), [])
   const workspaceRoot = room?.conversationKind === 'user_agent'
     ? directWorkspace ?? room.privateWorkspace ?? ''
     : room?.repositories.find((repository) => repository.availability !== 'missing')?.canonicalRoot ?? ''
@@ -114,7 +118,8 @@ export function RoomWorkbenchRightPanel({
       }}
       header={<CodeRightPanelTabs state={tabs} domIdPrefix={prefix} titles={titles}
         sideConversationCount={0} sideConversationRunningCount={0} extensionItems={[]}
-        onActivate={open} onClose={close} onCollapse={panel.collapse} />}>
+        onActivate={open} onClose={close} onCollapse={panel.collapse}
+        fileTabs={panel.contentTarget ? null : fileTabs} fileTabActions={fileTabActionsRef} />}>
         {tabs.tabs.map((id) => {
           const active = tabs.expanded && id === tabs.activeId
           const dom = codeRightTabDomIds(prefix, id)
@@ -140,7 +145,7 @@ export function RoomWorkbenchRightPanel({
                 onAddReference={(reference) => onAddReference?.(reference)}
               />}
               </> : id === BUILTIN_RIGHT_PANEL_IDS.file ? panel.contentTarget ? contentPreview : <WorkspaceFilePreviewPanel
-                target={panel.fileTarget} openTargets={panel.fileTargets} workspaceRoot={workspaceRoot}
+                target={panel.fileTarget} openTargets={panel.fileTargets} workspaceRoot={workspaceRoot} hostTabs={fileTabsBridge}
                 className="h-full min-h-0 w-full" onSelectTarget={panel.previewFile} onCloseTarget={panel.closeFile}
                 onClose={() => close(id)} onToggleFileTree={() => open(BUILTIN_RIGHT_PANEL_IDS.files)}
               /> : id === BUILTIN_RIGHT_PANEL_IDS.browser ? room?.conversationKind === 'user_agent' ? <RoomAgentBrowser
