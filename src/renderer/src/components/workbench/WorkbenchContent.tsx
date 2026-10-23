@@ -146,7 +146,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onBackdropClose={toggleLeftSidebar}
       />
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="ds-workbench-card relative flex min-h-0 min-w-0 flex-1 flex-col">
       {activeExtensionCenterView ? (
         <main className="ds-stage-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

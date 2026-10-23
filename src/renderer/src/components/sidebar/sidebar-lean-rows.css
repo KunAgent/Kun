@@ -1,0 +1,157 @@
+/*
+ * Navigation sidebar rows: one quiet surface for actions, destinations,
+ * projects and conversations. Hover adds a soft fill, the selected row a
+ * stronger one (no ring, no bold), icons rest muted, and section labels are
+ * set apart by type alone.
+ */
+
+html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-ui-plugin-scene-chrome-sidebar])
+  .ds-sidebar-shell {
+  --ds-sidebar-row-hover: color-mix(in srgb, var(--ds-text) 5.5%, transparent);
+  --ds-sidebar-row-active: color-mix(in srgb, var(--ds-text) 9%, transparent);
+  --ds-sidebar-row-ring: transparent;
+}
+
+.ds-sidebar-shell .ds-sidebar-command-row,
+.ds-sidebar-shell .ds-sidebar-tree-row,
+.ds-sidebar-shell .sidebar-menu-row {
+  border-color: transparent;
+  border-radius: 7px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ds-sidebar-shell .ds-sidebar-command-row[data-active='true'],
+.ds-sidebar-shell .ds-sidebar-tree-row[data-active='true'],
+.ds-sidebar-shell .sidebar-menu-row.is-active {
+  border-color: transparent;
+  font-weight: 400;
+}
+
+/* Destination and action rows: 30px, 16px icon, 13px label. */
+.ds-sidebar-shell .ds-sidebar-command-row {
+  min-height: 30px;
+  gap: 8px;
+  padding: 0 9px;
+  font-size: 13px;
+}
+
+.ds-sidebar-shell .ds-sidebar-command-row[data-variant='footer'] {
+  min-height: 28px;
+}
+
+.ds-sidebar-shell .sidebar-code-nav {
+  gap: 1px;
+  padding-top: 6px;
+}
+
+.ds-sidebar-shell .sidebar-menu-row {
+  height: 30px;
+  gap: 8px;
+  padding: 0 9px;
+  font-size: 13px;
+}
+
+.ds-sidebar-shell .sidebar-menu-row-icon,
+.ds-sidebar-shell .ds-sidebar-command-row > span:first-child {
+  opacity: 0.78;
+  transition: opacity 150ms ease;
+}
+
+.ds-sidebar-shell .sidebar-menu-row:hover .sidebar-menu-row-icon,
+.ds-sidebar-shell .sidebar-menu-row.is-active .sidebar-menu-row-icon,
+.ds-sidebar-shell .ds-sidebar-command-row:hover > span:first-child,
+.ds-sidebar-shell .ds-sidebar-command-row[data-active='true'] > span:first-child {
+  opacity: 1;
+}
+
+/* The primary action reads as the first row rather than a raised card. */
+.ds-sidebar-shell .sidebar-primary-actions {
+  gap: 2px;
+  padding: 0;
+}
+
+.ds-sidebar-shell .sidebar-new-task,
+.ds-sidebar-shell .sidebar-new-chat {
+  height: 30px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.ds-sidebar-shell .sidebar-new-task {
+  gap: 8px;
+  padding: 0 9px;
+  font-size: 13px;
+}
+
+.ds-sidebar-shell .sidebar-new-chat {
+  width: 30px;
+  flex-basis: 30px;
+}
+
+.ds-sidebar-shell .sidebar-new-task:hover:not(:disabled),
+.ds-sidebar-shell .sidebar-new-chat:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--ds-sidebar-row-hover);
+  box-shadow: none;
+}
+
+/* Projects and conversations. */
+.ds-sidebar-shell .ds-sidebar-tree-row {
+  font-size: 13px;
+}
+
+.ds-sidebar-shell .ds-sidebar-tree-row > button {
+  min-height: 30px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.ds-sidebar-shell .ds-sidebar-tree-row[data-active='true'] {
+  color: var(--ds-text);
+}
+
+/* Section labels: 12px medium, muted, set apart by space instead of rules. */
+.ds-sidebar-shell .ds-sidebar-section-header {
+  min-height: 26px;
+  padding: 14px 9px 4px;
+}
+
+.ds-sidebar-shell .ds-sidebar-section-header > span:first-child {
+  color: color-mix(in srgb, var(--ds-text-muted) 82%, transparent);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.ds-sidebar-shell .ds-sidebar-footer {
+  margin-top: 4px;
+  border-top-color: transparent;
+  padding-top: 6px;
+}
+
+.ds-sidebar-shell .ds-sidebar-icon-button {
+  border-color: transparent;
+  border-radius: 7px;
+}
+
+/* Section titles that collapse their list: type only, brighter on hover. */
+.ds-sidebar-shell .sidebar-agent-chats-title,
+.ds-sidebar-shell .sidebar-projects-title {
+  padding-left: 9px;
+  color: color-mix(in srgb, var(--ds-text-muted) 82%, transparent);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.ds-sidebar-shell .sidebar-agent-chats-title:hover,
+.ds-sidebar-shell .sidebar-projects-title:hover {
+  background: transparent;
+  color: var(--ds-text);
+}

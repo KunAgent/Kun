@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MutableRefObject,
   type ReactElement
 } from 'react'
 import {
@@ -19,6 +20,7 @@ import {
   IdCard,
   MessageCircleMore,
   PanelRightClose,
+  Pin,
   Plus,
   Puzzle,
   Radio,
@@ -45,6 +47,13 @@ import { boundedPlainText } from '../../extensions/safe-text'
 import { useWorkerViewStore } from '../workers/worker-view-store'
 import { WorkerSessionTabDot } from '../workers/WorkerSessionTabDot'
 import type { CodeRightTabsState } from './code-right-tabs-state'
+import { FileTypeIcon } from '../FileTypeIcon'
+import type {
+  FilePreviewHostTab,
+  FilePreviewHostTabActions,
+  FilePreviewHostTabs
+} from '../workspace-file-preview-host-tabs'
+import './code-right-tabs.css'
 
 type Props = {
   state: CodeRightTabsState
@@ -57,6 +66,15 @@ type Props = {
   onClose: (id: RightPanelContributionId) => void
   onCollapse: () => void
   onNewSideConversation?: () => void
+  /** Open files of the file tab, drawn as one tab each. */
+  fileTabs?: FilePreviewHostTabs | null
+  fileTabActions?: MutableRefObject<FilePreviewHostTabActions | null>
+}
+
+type StripItem = {
+  key: string
+  id: RightPanelContributionId
+  file?: FilePreviewHostTab
 }
 
 type BuiltinTab = {
@@ -79,26 +97,30 @@ export function CodeRightPanelTabs({
   onActivate,
   onClose,
   onCollapse,
-  onNewSideConversation
+  onNewSideConversation,
+  fileTabs,
+  fileTabActions
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const idPrefix = safeDomId(domIdPrefix)
-  const tabRefs = useRef(new Map<RightPanelContributionId, HTMLButtonElement>())
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>())
   const tabListRef = useRef<HTMLDivElement>(null)
   const workerLabels = useWorkerViewStore((s) => s.labels)
-  const tabOrder = state.tabs.join('\n')
+  const tabOrder = `${state.tabs.join('\n')}\n${fileTabs?.tabs.map((tab) => tab.key).join('\n') ?? ''}`
   const activeTitle = state.activeId ? titles[state.activeId] : undefined
+  const activeRevealKey = state.activeId === BUILTIN_RIGHT_PANEL_IDS.file && fileTabs?.tabs.length
+    ? `${state.activeId}\n${fileTabs.activeKey}`
+    : state.activeId
   useLayoutEffect(() => {
     const list = tabListRef.current
-    if (!list || !state.expanded || !state.activeId) return
-    const activeId = state.activeId
+    if (!list || !state.expanded || !activeRevealKey) return
     let live = true
-    const reveal = () => { if (live) tabRefs.current.get(activeId)?.parentElement?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }
+    const reveal = () => { if (live) tabRefs.current.get(activeRevealKey)?.parentElement?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }
     reveal()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(reveal)
     observer?.observe(list)
     return () => { live = false; observer?.disconnect() }
-  }, [state.activeId, state.expanded, tabOrder, activeTitle])
+  }, [activeRevealKey, state.expanded, tabOrder, activeTitle])
 
   const builtinTabs = useMemo<BuiltinTab[]>(() => [
     { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
@@ -182,57 +204,79 @@ export function CodeRightPanelTabs({
     return { label: dynamicTitle || t('rightPanelUnavailable'), icon: Puzzle }
   }
 
-  const handleTabKeyDown = (
-    event: ReactKeyboardEvent<HTMLButtonElement>,
-    id: RightPanelContributionId,
-    index: number
-  ): void => {
+  const fileModel = fileTabs?.tabs.length ? fileTabs : null
+  const items: StripItem[] = state.tabs.flatMap((id): StripItem[] => (
+    id === BUILTIN_RIGHT_PANEL_IDS.file && fileModel
+      ? fileModel.tabs.map((file) => ({ key: `${id}\n${file.key}`, id, file }))
+      : [{ key: id, id }]
+  ))
+  const itemActive = (item: StripItem): boolean => state.activeId === item.id &&
+    (!item.file || item.file.key === fileModel?.activeKey)
+  const activeItemKey = items.find(itemActive)?.key
+
+  const activateItem = (item: StripItem): void => {
+    onActivate(item.id)
+    if (item.file) fileTabActions?.current?.select(item.file.target)
+  }
+  const closeItem = (item: StripItem): void => {
+    if (item.file) fileTabActions?.current?.requestClose(item.file.target, item.file.dirty)
+    else onClose(item.id)
+  }
+
+  const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, item: StripItem, index: number): void => {
+    if (item.file && fileTabActions?.current?.openMenu && (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))) {
+      fileTabActions.current.openMenu(event, item.file.target)
+      return
+    }
     let nextIndex = index
-    if (event.key === 'ArrowRight') nextIndex = (index + 1) % state.tabs.length
-    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + state.tabs.length) % state.tabs.length
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % items.length
+    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + items.length) % items.length
     else if (event.key === 'Home') nextIndex = 0
-    else if (event.key === 'End') nextIndex = state.tabs.length - 1
+    else if (event.key === 'End') nextIndex = items.length - 1
     else if (event.key === 'Delete') {
       event.preventDefault()
-      onClose(id)
+      closeItem(item)
       return
     } else return
     event.preventDefault()
-    const nextId = state.tabs[nextIndex]
-    onActivate(nextId)
+    const next = items[nextIndex]
+    if (!next) return
+    activateItem(next)
     if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => tabRefs.current.get(nextId)?.focus())
+      window.requestAnimationFrame(() => tabRefs.current.get(next.key)?.focus())
     }
   }
 
   return (
-    <div className="ds-code-right-tabs ds-sidebar-surface-chrome ds-no-drag relative flex h-11 shrink-0 items-center gap-1 border-b border-ds-border-muted px-2 backdrop-blur-xl">
+    <div className="ds-code-right-tabs ds-sidebar-surface-chrome ds-no-drag relative flex shrink-0 items-center">
       <div
         ref={tabListRef}
         role="tablist"
         aria-label={t('rightPanelTabs')}
-        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="ds-code-right-tabs__list flex min-w-0 flex-1 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {state.tabs.map((id, index) => {
-          const active = state.activeId === id
-          const meta = tabMeta(id)
+        {items.map((item, index) => {
+          const active = itemActive(item)
+          const meta = item.file
+            ? { label: item.file.label, icon: null }
+            : tabMeta(item.id)
           const Icon = meta.icon
-          const tabId = `${idPrefix}-tab-${safeDomId(id)}`
-          const panelId = `${idPrefix}-panel-${safeDomId(id)}`
+          const domIds = codeRightTabDomIds(idPrefix, item.id)
+          // The tab panel is labelled by the active chip of a multi-file tab.
+          const tabId = item.file && !active ? `${domIds.tabId}-${safeDomId(item.file.key)}` : domIds.tabId
+          const closeLabel = t('rightPanelCloseTab', { title: meta.label })
           return (
-            <Fragment key={id}>
+            <Fragment key={item.key}>
             <div
-              style={{ minWidth: 'min(7rem, 100%)', maxWidth: 'min(15rem, 100%)' }}
-              className={`group flex h-8 min-w-[7rem] max-w-[15rem] shrink-0 items-center rounded-[9px] border transition ${
-                active
-                  ? 'border-ds-border-strong bg-ds-card text-ds-ink shadow-sm'
-                  : 'border-transparent text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-              }`}
+              data-active={active ? 'true' : 'false'}
+              data-kind={item.file ? 'file' : 'panel'}
+              title={item.file?.title}
+              className="ds-right-tab group"
             >
               <button
                 ref={(node) => {
-                  if (node) tabRefs.current.set(id, node)
-                  else tabRefs.current.delete(id)
+                  if (node) tabRefs.current.set(item.key, node)
+                  else tabRefs.current.delete(item.key)
                 }}
                 type="button"
                 id={tabId}
@@ -240,25 +284,37 @@ export function CodeRightPanelTabs({
                 tabIndex={active ? 0 : -1}
                 aria-label={meta.label}
                 aria-selected={active}
-                aria-controls={panelId}
-                onClick={() => onActivate(id)}
-                onKeyDown={(event) => handleTabKeyDown(event, id, index)}
-                className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] font-semibold outline-none"
+                aria-controls={domIds.panelId}
+                onClick={() => activateItem(item)}
+                onDoubleClick={item.file ? () => fileTabActions?.current?.openInEditor(item.file!.target) : undefined}
+                onContextMenu={item.file && fileTabActions?.current?.openMenu
+                  ? (event) => fileTabActions.current?.openMenu?.(event, item.file!.target)
+                  : undefined}
+                onKeyDown={(event) => handleTabKeyDown(event, item, index)}
+                className="ds-right-tab__select"
               >
-                {meta.workerId ? (
+                {item.file ? (
+                  <>
+                    {item.file.pinned ? <Pin aria-hidden className="ds-right-tab__pin" strokeWidth={1.8} /> : null}
+                    <FileTypeIcon path={item.file.target.path} size={14} />
+                  </>
+                ) : 'workerId' in meta && meta.workerId ? (
                   <WorkerSessionTabDot workerId={meta.workerId} active={active} />
-                ) : meta.iconUrl ? (
-                  <img src={meta.iconUrl} alt="" aria-hidden className="h-3.5 w-3.5 shrink-0 object-contain" />
+                ) : 'iconUrl' in meta && meta.iconUrl ? (
+                  <img src={meta.iconUrl} alt="" aria-hidden className="ds-right-tab__icon object-contain" />
                 ) : Icon ? (
-                  <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                  <Icon className="ds-right-tab__icon" strokeWidth={1.8} />
                 ) : null}
-                <span className="min-w-0 flex-1 truncate">{meta.label}</span>
-                {id === BUILTIN_RIGHT_PANEL_IDS.sideConversations && !active && sideConversationCount > 0 ? (
+                {item.file?.dirty ? (
+                  <span aria-label={t('filePreviewUnsavedChanges', { defaultValue: 'Unsaved changes' })} className="ds-right-tab__dirty" />
+                ) : null}
+                <span className="ds-right-tab__label">{meta.label}</span>
+                {item.id === BUILTIN_RIGHT_PANEL_IDS.sideConversations && !active && sideConversationCount > 0 ? (
                   <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] text-white">
                     {Math.min(sideConversationCount, 99)}
                   </span>
                 ) : null}
-                {id === BUILTIN_RIGHT_PANEL_IDS.sideConversations && sideConversationRunningCount > 0 ? (
+                {item.id === BUILTIN_RIGHT_PANEL_IDS.sideConversations && sideConversationRunningCount > 0 ? (
                   <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-500" aria-label={t('sidePanelRunningDot')} />
                 ) : null}
               </button>
@@ -266,22 +322,22 @@ export function CodeRightPanelTabs({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation()
-                  onClose(id)
+                  closeItem(item)
                 }}
-                aria-label={t('rightPanelCloseTab', { title: meta.label })}
-                title={t('rightPanelCloseTab', { title: meta.label })}
-                className="mr-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ds-faint opacity-0 transition hover:bg-ds-hover hover:text-ds-ink focus:opacity-100 group-hover:opacity-100"
+                aria-label={closeLabel}
+                title={closeLabel}
+                className="ds-right-tab__close"
               >
-                <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+                <X className="h-3 w-3" strokeWidth={2} />
               </button>
             </div>
-            {id === BUILTIN_RIGHT_PANEL_IDS.sideConversations && active && onNewSideConversation ? (
+            {item.id === BUILTIN_RIGHT_PANEL_IDS.sideConversations && active && onNewSideConversation ? (
               <button
                 type="button"
                 onClick={onNewSideConversation}
                 aria-label={t('sidePanelNew')}
                 title={t('sidePanelNew')}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+                className="ds-right-tabs__icon-button"
               >
                 <Plus className="h-4 w-4" strokeWidth={1.8} />
               </button>
@@ -296,7 +352,7 @@ export function CodeRightPanelTabs({
         onClick={onCollapse}
         aria-label={t('rightPanelCollapse')}
         title={t('rightPanelCollapse')}
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+        className="ds-right-tabs__icon-button"
       >
         <PanelRightClose className="h-4 w-4" strokeWidth={1.8} />
       </button>

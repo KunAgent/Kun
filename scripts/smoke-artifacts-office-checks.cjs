@@ -27,7 +27,7 @@ function assertBoundedScroller(geometry, label) {
 }
 
 async function checkSlideRailScrolling({ page, capture, poll, diagnostics, timeoutMs }) {
-  const rail = page.getByRole('complementary', { name: 'Slide thumbnails' })
+  const rail = page.getByRole('navigation', { name: 'Slide thumbnails' })
   await rail.waitFor({ timeout: timeoutMs })
   await poll(async () => (await rail.locator('[data-thumbnail-state="ready"]').count()) > 0, timeoutMs, 'slide thumbnails')
   const measure = () => measureScroller(rail)
@@ -37,13 +37,13 @@ async function checkSlideRailScrolling({ page, capture, poll, diagnostics, timeo
   await rail.hover()
   await page.mouse.wheel(0, 1200)
   await poll(async () => (await measure()).scrollTop > 0, timeoutMs, 'wheel scrolling the slide rail')
-  await rail.getByRole('button', { name: 'Go to slide 9' }).click()
-  await page.getByText('Slide 9 of 9').waitFor({ timeout: timeoutMs })
+  await rail.getByRole('button', { name: 'Go to slide 16' }).click()
+  await page.getByText('Slide 16 of 16').waitFor({ timeout: timeoutMs })
   await page.keyboard.press('Home')
-  await page.getByText('Slide 1 of 9').waitFor({ timeout: timeoutMs })
+  await page.getByText('Slide 1 of 16').waitFor({ timeout: timeoutMs })
   await poll(async () => (await measure()).scrollTop === 0, timeoutMs, 'rail following the first slide')
   await page.keyboard.press('End')
-  await page.getByText('Slide 9 of 9').waitFor({ timeout: timeoutMs })
+  await page.getByText('Slide 16 of 16').waitFor({ timeout: timeoutMs })
   await poll(async () => (await measure()).scrollTop > 0, timeoutMs, 'rail following the last slide')
   diagnostics.slideRailAfterNavigation = await measure()
   assert.equal(diagnostics.slideRailAfterNavigation.ancestorScroll, 0, 'Slide navigation scrolled a clipped ancestor')

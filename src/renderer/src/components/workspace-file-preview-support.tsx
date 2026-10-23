@@ -39,6 +39,8 @@ export type Props = {
   onCloseOtherTargets?: (target: WorkspaceFileTarget) => void
   onTogglePreserveAcrossThreads?: () => void
   onClose: () => void
+  /** The host draws the open-file tabs; the preview keeps only its toolbar. */
+  hostTabs?: import('./workspace-file-preview-host-tabs').FilePreviewHostTabsBridge
 }
 
 export type CachedTextDraft = {
