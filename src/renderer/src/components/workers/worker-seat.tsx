@@ -14,13 +14,21 @@ const SEAT_PATHS: readonly string[] = [
 ]
 
 /**
- * Seat numbers for one team. Members take seats 0, 1, 2… in worker-id order,
+ * Seat numbers for one team. `settledIds` are the members the tray also lists. Members take seats 0, 1, 2… in worker-id order,
  * so every surface that lists the same team agrees, and up to six members
  * never share a shape. Colors come from the worker's id and may still collide;
  * the shape tells those apart.
  */
-export function workerSeatMap(workerIds: readonly string[]): Map<string, number> {
-  const sorted = [...new Set(workerIds)].sort()
+export function workerSeatMap(
+  workerIds: readonly string[],
+  settledIds: readonly string[] = workerIds
+): Map<string, number> {
+  const settled = new Set(settledIds)
+  const ids = [...new Set(workerIds)]
+  // Members with an activity row number first, as the tray (which only sees
+  // those) does. A member that has none yet, such as one just dispatched,
+  // takes the seats after them, so it never shifts anyone else's shape.
+  const sorted = [...ids.filter((id) => settled.has(id)).sort(), ...ids.filter((id) => !settled.has(id)).sort()]
   return new Map(sorted.map((id, index) => [id, index % WORKER_SEAT_COUNT]))
 }
 

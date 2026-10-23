@@ -43,7 +43,10 @@ export function WorkerSessionPanel({
   const { rows, loaded, reload } = useTeamWorkers(managerThreadId, active)
   const row = rows.find((entry) => entry.workerId === workerId)
   const seat = useMemo(
-    () => workerSeatMap(rows.map((entry) => entry.workerId)).get(workerId) ?? 0,
+    () => workerSeatMap(
+      rows.map((entry) => entry.workerId),
+      rows.filter((entry) => entry.activityRow).map((entry) => entry.workerId)
+    ).get(workerId) ?? 0,
     [rows, workerId]
   )
 
