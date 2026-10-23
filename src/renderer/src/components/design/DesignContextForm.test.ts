@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import {
-  DesignContextPopover,
+  DesignContextForm,
   designContextPatchForTargetLock
-} from './DesignContextPopover'
+} from './DesignContextForm'
 
 beforeEach(() => {
   useDesignWorkspaceStore.setState({
@@ -14,12 +14,10 @@ beforeEach(() => {
   })
 })
 
-describe('DesignContextPopover', () => {
+describe('DesignContextForm', () => {
   it('renders disabled target buttons while design generation is locked', () => {
     const html = renderToStaticMarkup(
-      createElement(DesignContextPopover, {
-        open: true,
-        onClose: () => {},
+      createElement(DesignContextForm, {
         designTargetDisabled: true
       })
     )
@@ -36,15 +34,22 @@ describe('DesignContextPopover', () => {
 
   it('keeps target buttons editable when generation is not locked', () => {
     const html = renderToStaticMarkup(
-      createElement(DesignContextPopover, {
-        open: true,
-        onClose: () => {}
-      })
+      createElement(DesignContextForm, {})
     )
 
     expect(html).toContain('>Web</button>')
     expect(html).toContain('>App</button>')
     expect(html.match(/disabled=""/g) ?? []).toHaveLength(0)
+  })
+
+  it('lays the context out as labelled rows with a segmented target and toggle chips', () => {
+    const html = renderToStaticMarkup(createElement(DesignContextForm, {}))
+
+    expect(html).toContain('>Target</span>')
+    expect(html).toContain('flex w-full items-center gap-0.5 rounded-[10px]')
+    expect(html).toMatch(/<button[^>]*aria-pressed="false"[^>]*class="inline-flex h-7 items-center gap-1 rounded-full/)
+    expect(html).toContain('aria-label="Design system"')
+    expect(html).toContain('appearance-none')
   })
 
   it('preserves the current target when importing context while target switching is locked', () => {

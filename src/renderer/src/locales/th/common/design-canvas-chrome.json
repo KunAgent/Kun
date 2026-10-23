@@ -31,6 +31,7 @@
   "canvasTweaksDeviceMobile": "มือถือ",
   "canvasTweaksDeviceTablet": "แท็บเล็ต",
   "canvasTweaksDeviceDesktop": "เดสก์ท็อป",
+  "canvasTweaksSelectScreen": "เลือกหน้าจอบนแคนวาสเพื่อเปลี่ยนอุปกรณ์หรือให้ AI แก้ไข",
   "canvasBoardEdit": "แก้ไขข้อความโดยตรง",
   "canvasBoardEditDone": "แก้ไขเสร็จ",
   "canvasBoardEditHint": "คลิกข้อความเพื่อแก้ไข",

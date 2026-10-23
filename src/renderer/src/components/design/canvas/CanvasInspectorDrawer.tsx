@@ -143,7 +143,12 @@ function CanvasInspectorDrawerInner({
       </div>
       <div
         role="tabpanel"
-        className={`min-h-0 flex-1 border-t border-ds-border-muted ${tab === 'code' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        tabIndex={tab === 'code' ? undefined : 0}
+        aria-label={t(TAB_LABEL_KEYS[tab])}
+        data-canvas-inspector-panel={tab}
+        className={`min-h-0 flex-1 border-t border-ds-border-muted outline-none ${
+          tab === 'code' ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable]'
+        }`}
       >
         {tab === 'properties' ? <PropertiesPanel surface={surface} /> : null}
         {tab === 'outline' ? <CanvasLayersPanel /> : null}
