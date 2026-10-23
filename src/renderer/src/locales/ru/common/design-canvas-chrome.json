@@ -20,6 +20,7 @@
   "canvasViewControls": "Управление видом",
   "canvasZoomMenu": "Масштаб и вид",
   "canvasMinimapToggle": "Мини-карта",
+  "canvasFlowsToggle": "Связи прототипа",
   "canvasCodeEmpty": "Выберите экран или слой, чтобы увидеть его код.",
   "canvasCodeLayerData": "Данные слоя (JSON)",
   "canvasCodeCopy": "Копировать",

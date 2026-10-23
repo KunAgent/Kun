@@ -33,7 +33,8 @@ describe('canvas inspector store', () => {
   it('restores valid persisted fields and falls back on junk', () => {
     expect(parsePersistedCanvasInspectorState(
       JSON.stringify({ open: true, tab: 'code', height: 420.4, minimapVisible: true, focusFit: 'fill' })
-    )).toEqual({ open: true, tab: 'code', height: 420, minimapVisible: true, focusFit: 'fill' })
+    )).toEqual({ open: true, tab: 'code', height: 420, minimapVisible: true, focusFit: 'fill', flowsVisible: false })
+    expect(parsePersistedCanvasInspectorState(JSON.stringify({ flowsVisible: true })).flowsVisible).toBe(true)
     expect(parsePersistedCanvasInspectorState(JSON.stringify({ tab: 'layers', height: 'tall', focusFit: 'zoom' })))
       .toMatchObject({ open: false, tab: 'properties', height: CANVAS_INSPECTOR_DEFAULT_HEIGHT, focusFit: 'fit' })
     expect(parsePersistedCanvasInspectorState('{not json').tab).toBe('properties')
