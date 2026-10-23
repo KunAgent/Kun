@@ -8,19 +8,24 @@ import {
   Film,
   Frame,
   Hand,
+  LayoutGrid,
+  ImageIcon,
   ImagePlus,
   ListTree,
   Menu,
   Minus,
   Monitor,
+  MoreHorizontal,
   MousePointer2,
   Palette,
   Pencil,
   Redo2,
   Shapes,
   ShieldCheck,
-  Sparkles,
+  Smartphone,
+  StickyNote,
   Square,
+  Tablet,
   Type as TypeIcon,
   Undo2
 } from 'lucide-react'
@@ -29,11 +34,12 @@ import { lintDesignSystem, setLastLintFindings } from '../../../design/canvas/de
 import { filterEditableRootShapeIds } from '../../../design/canvas/canvas-editability'
 import { importWorkspaceImageToCanvas } from '../../../design/canvas/canvas-image-import'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
+import { createSectionFromShapes } from '../../../design/canvas/canvas-sections'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasUndoStore } from '../../../design/canvas/canvas-undo-store'
 import { useDesignSystemStore } from '../../../design/canvas/design-system-store'
 import { openCanvasInspectorTab, useCanvasInspectorStore } from '../../../design/canvas/canvas-inspector-store'
-import type { CanvasTool } from '../../../design/canvas/canvas-types'
+import type { CanvasTool, DevicePreset } from '../../../design/canvas/canvas-types'
 import type { CanvasExportFormat } from '../../../design/canvas/canvas-export'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useCanvasMotionStore } from '../../../design/motion/canvas-motion-store'
@@ -48,6 +54,7 @@ import { DesignAgentActionMenu } from './DesignAgentActionMenu'
 import type { DesignExportFormat } from '@shared/design-export'
 import type { CanvasSurface } from '../../../design/canvas/canvas-surface'
 import { isDesignCanvasSurface } from '../../../design/canvas/canvas-surface'
+import { CanvasPageSwitcher } from './chrome/CanvasPageSwitcher'
 import {
   CANVAS_CHROME_DIVIDER,
   CANVAS_CHROME_MENU,
@@ -79,7 +86,13 @@ type ToolDef = {
   shortcut?: string
 }
 
-type ToolGroupId = 'pen' | 'shape' | 'image'
+const DEVICE_PRESETS: Array<{ id: DevicePreset; icon: typeof Monitor; labelKey: string; size: string }> = [
+  { id: 'mobile', icon: Smartphone, labelKey: 'canvasDeviceMobile', size: '390×844' },
+  { id: 'tablet', icon: Tablet, labelKey: 'canvasDeviceTablet', size: '768×1024' },
+  { id: 'desktop', icon: Monitor, labelKey: 'canvasDeviceDesktop', size: '1280×800' }
+]
+
+type ToolGroupId = 'board' | 'pen' | 'shape' | 'image'
 
 type ToolSlot =
   | { kind: 'tool'; tool: ToolDef }
@@ -92,6 +105,7 @@ const TOOL: Record<CanvasTool, ToolDef> = {
   select: { id: 'select', icon: MousePointer2, labelKey: 'canvasToolSelect', shortcut: 'V' },
   hand: { id: 'hand', icon: Hand, labelKey: 'canvasToolHand', shortcut: 'H' },
   text: { id: 'text', icon: TypeIcon, labelKey: 'canvasToolText', shortcut: 'T' },
+  sticky: { id: 'sticky', icon: StickyNote, labelKey: 'canvasToolSticky', shortcut: 'N' },
   frame: { id: 'frame', icon: Frame, labelKey: 'canvasToolFrame', shortcut: 'F' },
   screen: { id: 'screen', icon: Monitor, labelKey: 'canvasToolScreen' },
   draw: { id: 'draw', icon: Pencil, labelKey: 'canvasToolDraw', shortcut: 'P' },
@@ -99,7 +113,7 @@ const TOOL: Record<CanvasTool, ToolDef> = {
   arrow: { id: 'arrow', icon: ArrowRight, labelKey: 'canvasToolArrow', shortcut: 'A' },
   rect: { id: 'rect', icon: Square, labelKey: 'canvasToolRect', shortcut: 'R' },
   ellipse: { id: 'ellipse', icon: Circle, labelKey: 'canvasToolEllipse', shortcut: 'O' },
-  image: { id: 'image', icon: Sparkles, labelKey: 'canvasToolImage', codeLabelKey: 'codeCanvasToolImage', shortcut: 'I' }
+  image: { id: 'image', icon: ImageIcon, labelKey: 'canvasToolImage', codeLabelKey: 'codeCanvasToolImage', shortcut: 'I' }
 }
 
 /** Tool slots in display order; grouped tools share one button that remembers the last pick. */
@@ -108,8 +122,10 @@ export function canvasToolbarSlots(designSurface: boolean): ToolSlot[] {
     { kind: 'tool', tool: TOOL.select },
     { kind: 'tool', tool: TOOL.hand },
     { kind: 'tool', tool: TOOL.text },
-    { kind: 'tool', tool: TOOL.frame },
-    ...(designSurface ? [{ kind: 'tool' as const, tool: TOOL.screen }] : []),
+    designSurface
+      ? { kind: 'group', id: 'board', labelKey: 'canvasBoardTools', tools: [TOOL.frame, TOOL.screen] }
+      : { kind: 'tool', tool: TOOL.frame },
+    ...(designSurface ? [{ kind: 'tool' as const, tool: TOOL.sticky }] : []),
     { kind: 'group', id: 'pen', labelKey: 'canvasPenTools', tools: [TOOL.draw, TOOL.line, TOOL.arrow] },
     { kind: 'group', id: 'shape', labelKey: 'canvasShapeTools', tools: [TOOL.rect, TOOL.ellipse] },
     { kind: 'group', id: 'image', labelKey: 'canvasImageTools', tools: [TOOL.image] }
@@ -215,6 +231,8 @@ function CanvasToolbarInner({
   const artifacts = useDesignWorkspaceStore((s) => s.artifacts)
   const activeTool = useCanvasViewportStore((s) => s.activeTool)
   const setActiveTool = useCanvasViewportStore((s) => s.setActiveTool)
+  const screenPreset = useCanvasViewportStore((s) => s.screenDevicePreset)
+  const setScreenDevicePreset = useCanvasViewportStore((s) => s.setScreenDevicePreset)
   const motionOpen = useCanvasMotionStore((s) => s.open)
   const toggleMotionOpen = useCanvasMotionStore((s) => s.toggleOpen)
   const undoCount = useCanvasUndoStore((s) => s.undoStack.length)
@@ -329,8 +347,172 @@ function CanvasToolbarInner({
       />
     </>
   )
+  const sectionCandidates = useMemo(
+    () => [...selectedIds].filter((id) => canvasDocument.objects[id]?.parentId === canvasDocument.rootId),
+    [canvasDocument, selectedIds]
+  )
+  const createSection = (): void => {
+    const id = createSectionFromShapes(sectionCandidates, t('canvasSectionUntitled'))
+    setOpenMenu(null)
+    if (id) useCanvasSelectionStore.getState().select(sectionCandidates)
+  }
   const mainMenuLabel = t('canvasMainMenu')
   const icon = (Icon: typeof Menu): ReactElement => <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+
+  const mainMenu = (
+  <div className="relative flex items-center">
+    <button
+      type="button"
+      className={`${canvasChromeButtonClass(openMenu === 'main', compact)} ${designSurface ? '' : 'w-auto gap-1 px-1.5'}`}
+      onClick={() => toggleMenu('main')}
+      title={documentTitle || mainMenuLabel}
+      aria-label={mainMenuLabel}
+      aria-expanded={openMenu === 'main'}
+      aria-haspopup="menu"
+    >
+      {designSurface ? (
+        <MoreHorizontal className="h-4 w-4" strokeWidth={1.9} />
+      ) : documentTitle && compact ? (
+        <>
+          <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
+          <span className="sr-only">{documentTitle}</span>
+        </>
+      ) : documentTitle ? (
+        <>
+          <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
+          <span className="max-w-[148px] truncate text-[12.5px] font-medium text-ds-ink">{documentTitle}</span>
+        </>
+      ) : (
+        <Menu className="h-4 w-4" strokeWidth={1.9} />
+      )}
+      {designSurface ? null : <ChevronDown className="h-3 w-3 shrink-0 text-ds-faint" strokeWidth={2} />}
+    </button>
+    {openMenu === 'main' ? (
+      <div role="menu" aria-label={mainMenuLabel} className={`${CANVAS_CHROME_MENU} ${designSurface ? 'right-0' : 'left-0'} top-full mt-2 w-64`}>
+        <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuEdit')}</div>
+        <CanvasChromeMenuItem
+          icon={icon(Undo2)}
+          label={t('canvasUndo')}
+          shortcut={`${MOD}Z`}
+          disabled={undoCount === 0}
+          onSelect={() => useCanvasShapeStore.getState().undo()}
+        />
+        <CanvasChromeMenuItem
+          icon={icon(Redo2)}
+          label={t('canvasRedo')}
+          shortcut={`${MOD}⇧Z`}
+          disabled={redoCount === 0}
+          onSelect={() => useCanvasShapeStore.getState().redo()}
+        />
+        <CanvasChromeMenuItem
+          icon={icon(ImagePlus)}
+          label={uploadLabel}
+          disabled={imageImportBusy}
+          onSelect={importImage}
+        />
+        <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuView')}</div>
+        <CanvasChromeMenuItem
+          icon={icon(ListTree)}
+          label={t('canvasInspectorTabOutline')}
+          onSelect={() => openInspector('outline')}
+        />
+        {designSurface ? (
+          <CanvasChromeMenuItem
+            role="menuitemcheckbox"
+            checked={motionOpen}
+            icon={icon(Film)}
+            label={t('canvasMotionMode', 'Motion')}
+            onSelect={() => {
+              setActiveTool('select')
+              if (!motionOpen) useCanvasInspectorStore.getState().setOpen(false)
+              toggleMotionOpen()
+              setOpenMenu(null)
+            }}
+          />
+        ) : null}
+        {designSurface ? (
+          <>
+            <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuDesign')}</div>
+            <CanvasChromeMenuItem
+              icon={icon(Palette)}
+              label={t('designContextLabel')}
+              onSelect={() => openInspector('tweaks')}
+            />
+            <CanvasChromeMenuItem
+              icon={icon(ShieldCheck)}
+              label={t('canvasToolCritique')}
+              onSelect={requestCanvasCritique}
+            />
+            <CanvasChromeMenuItem
+              icon={icon(LayoutGrid)}
+              label={t('canvasSectionCreate')}
+              disabled={sectionCandidates.length === 0}
+              onSelect={createSection}
+            />
+          </>
+        ) : null}
+        <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuExport')}</div>
+        <CanvasChromeMenuItem
+          icon={icon(FileCode2)}
+          label={designSurface
+            ? t('canvasExportBoardSvg', 'Board SVG (prototype previews excluded)')
+            : t('canvasExportSvg')}
+          disabled={!onExportCanvas || exportBusy}
+          onSelect={() => runExport(onExportCanvas ? () => onExportCanvas('svg') : null)}
+        />
+        <CanvasChromeMenuItem
+          icon={icon(FileImage)}
+          label={designSurface
+            ? t('canvasExportBoardPng', 'Board PNG (prototype previews excluded)')
+            : t('canvasExportPng')}
+          disabled={!onExportCanvas || exportBusy}
+          onSelect={() => runExport(onExportCanvas ? () => onExportCanvas('png') : null)}
+        />
+        {designSurface ? (
+          <>
+            <CanvasChromeMenuItem
+              icon={icon(FileCode2)}
+              label={t('designExportHtml')}
+              disabled={!onExportPrototype || exportBusy}
+              onSelect={() => runExport(onExportPrototype ? () => onExportPrototype('html') : null)}
+            />
+            <CanvasChromeMenuItem
+              icon={icon(FileImage)}
+              label={t('designExportPdf')}
+              disabled={!onExportPrototype || exportBusy}
+              onSelect={() => runExport(onExportPrototype ? () => onExportPrototype('pdf') : null)}
+            />
+          </>
+        ) : null}
+        {exportError ? (
+          <div role="alert" className="break-words px-2 py-1 text-[11px] leading-4 text-ds-danger">
+            {exportError}
+          </div>
+        ) : null}
+      </div>
+    ) : null}
+  </div>
+  )
+  const deviceItems = designSurface ? (
+    <>
+      <div className={CANVAS_CHROME_MENU_SEPARATOR} />
+      <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasScreenDevices')}</div>
+      {DEVICE_PRESETS.map((preset) => (
+        <CanvasChromeMenuItem
+          key={preset.id}
+          role="menuitemradio"
+          checked={activeTool === 'screen' && screenPreset === preset.id}
+          icon={<preset.icon className="h-3.5 w-3.5" strokeWidth={1.8} />}
+          label={t(preset.labelKey)}
+          shortcut={preset.size}
+          onSelect={() => {
+            setScreenDevicePreset(preset.id)
+            pickTool('screen')
+          }}
+        />
+      ))}
+    </>
+  ) : null
 
   return (
     <div ref={rootRef} className="relative pointer-events-auto">
@@ -340,130 +522,7 @@ function CanvasToolbarInner({
         aria-label={t('canvasToolbarLabel')}
         data-code-canvas-titlebar={documentTitle ? 'true' : undefined}
       >
-        <div className="relative flex items-center">
-          <button
-            type="button"
-            className={`${canvasChromeButtonClass(openMenu === 'main', compact)} w-auto gap-1 px-1.5`}
-            onClick={() => toggleMenu('main')}
-            title={documentTitle || mainMenuLabel}
-            aria-label={mainMenuLabel}
-            aria-expanded={openMenu === 'main'}
-            aria-haspopup="menu"
-          >
-            {documentTitle && compact ? (
-              <>
-                <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
-                <span className="sr-only">{documentTitle}</span>
-              </>
-            ) : documentTitle ? (
-              <>
-                <Shapes className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
-                <span className="max-w-[148px] truncate text-[12.5px] font-medium text-ds-ink">{documentTitle}</span>
-              </>
-            ) : (
-              <Menu className="h-4 w-4" strokeWidth={1.9} />
-            )}
-            <ChevronDown className="h-3 w-3 shrink-0 text-ds-faint" strokeWidth={2} />
-          </button>
-          {openMenu === 'main' ? (
-            <div role="menu" aria-label={mainMenuLabel} className={`${CANVAS_CHROME_MENU} left-0 top-full mt-2 w-64`}>
-              <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuEdit')}</div>
-              <CanvasChromeMenuItem
-                icon={icon(Undo2)}
-                label={t('canvasUndo')}
-                shortcut={`${MOD}Z`}
-                disabled={undoCount === 0}
-                onSelect={() => useCanvasShapeStore.getState().undo()}
-              />
-              <CanvasChromeMenuItem
-                icon={icon(Redo2)}
-                label={t('canvasRedo')}
-                shortcut={`${MOD}⇧Z`}
-                disabled={redoCount === 0}
-                onSelect={() => useCanvasShapeStore.getState().redo()}
-              />
-              <CanvasChromeMenuItem
-                icon={icon(ImagePlus)}
-                label={uploadLabel}
-                disabled={imageImportBusy}
-                onSelect={importImage}
-              />
-              <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuView')}</div>
-              <CanvasChromeMenuItem
-                icon={icon(ListTree)}
-                label={t('canvasInspectorTabOutline')}
-                onSelect={() => openInspector('outline')}
-              />
-              {designSurface ? (
-                <CanvasChromeMenuItem
-                  role="menuitemcheckbox"
-                  checked={motionOpen}
-                  icon={icon(Film)}
-                  label={t('canvasMotionMode', 'Motion')}
-                  onSelect={() => {
-                    setActiveTool('select')
-                    if (!motionOpen) useCanvasInspectorStore.getState().setOpen(false)
-                    toggleMotionOpen()
-                    setOpenMenu(null)
-                  }}
-                />
-              ) : null}
-              {designSurface ? (
-                <>
-                  <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuDesign')}</div>
-                  <CanvasChromeMenuItem
-                    icon={icon(Palette)}
-                    label={t('designContextLabel')}
-                    onSelect={() => openInspector('tweaks')}
-                  />
-                  <CanvasChromeMenuItem
-                    icon={icon(ShieldCheck)}
-                    label={t('canvasToolCritique')}
-                    onSelect={requestCanvasCritique}
-                  />
-                </>
-              ) : null}
-              <div className={CANVAS_CHROME_MENU_SECTION}>{t('canvasMenuExport')}</div>
-              <CanvasChromeMenuItem
-                icon={icon(FileCode2)}
-                label={designSurface
-                  ? t('canvasExportBoardSvg', 'Board SVG (prototype previews excluded)')
-                  : t('canvasExportSvg')}
-                disabled={!onExportCanvas || exportBusy}
-                onSelect={() => runExport(onExportCanvas ? () => onExportCanvas('svg') : null)}
-              />
-              <CanvasChromeMenuItem
-                icon={icon(FileImage)}
-                label={designSurface
-                  ? t('canvasExportBoardPng', 'Board PNG (prototype previews excluded)')
-                  : t('canvasExportPng')}
-                disabled={!onExportCanvas || exportBusy}
-                onSelect={() => runExport(onExportCanvas ? () => onExportCanvas('png') : null)}
-              />
-              {designSurface ? (
-                <>
-                  <CanvasChromeMenuItem
-                    icon={icon(FileCode2)}
-                    label={t('designExportHtml')}
-                    disabled={!onExportPrototype || exportBusy}
-                    onSelect={() => runExport(onExportPrototype ? () => onExportPrototype('html') : null)}
-                  />
-                  <CanvasChromeMenuItem
-                    icon={icon(FileImage)}
-                    label={t('designExportPdf')}
-                    disabled={!onExportPrototype || exportBusy}
-                    onSelect={() => runExport(onExportPrototype ? () => onExportPrototype('pdf') : null)}
-                  />
-                </>
-              ) : null}
-              {exportError ? (
-                <div role="alert" className="break-words px-2 py-1 text-[11px] leading-4 text-ds-danger">
-                  {exportError}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        {designSurface ? <CanvasPageSwitcher compact={compact} /> : mainMenu}
 
         <div className={CANVAS_CHROME_DIVIDER} />
 
@@ -494,7 +553,7 @@ function CanvasToolbarInner({
               open={openMenu === slot.id}
               onToggle={() => toggleMenu(slot.id)}
               onPick={pickTool}
-              extraItems={slot.id === 'image' ? uploadItem : null}
+              extraItems={slot.id === 'image' ? uploadItem : slot.id === 'board' ? deviceItems : null}
             />
           )
         })}
@@ -509,6 +568,8 @@ function CanvasToolbarInner({
               onToggle={() => toggleMenu('agent')}
               onSelect={requestAgentAction}
             />
+            <div className={CANVAS_CHROME_DIVIDER} />
+            {mainMenu}
           </>
         ) : null}
       </div>

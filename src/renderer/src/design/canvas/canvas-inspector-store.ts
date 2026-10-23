@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { useCanvasMotionStore } from '../motion/canvas-motion-store'
 
 /** Tabs of the bottom inspector drawer, in display order. */
-export const CANVAS_INSPECTOR_TABS = ['properties', 'outline', 'code', 'tweaks'] as const
+export const CANVAS_INSPECTOR_TABS = ['properties', 'outline', 'code', 'tweaks', 'notes'] as const
 export type CanvasInspectorTab = (typeof CANVAS_INSPECTOR_TABS)[number]
 
 export const CANVAS_INSPECTOR_DEFAULT_HEIGHT = 300
@@ -54,7 +54,9 @@ export function clampCanvasInspectorHeight(height: number, hostHeight: number): 
 
 /** Tabs a surface offers: design-generation tweaks only exist on the Design canvas. */
 export function canvasInspectorTabsForSurface(designSurface: boolean): readonly CanvasInspectorTab[] {
-  return designSurface ? CANVAS_INSPECTOR_TABS : CANVAS_INSPECTOR_TABS.filter((tab) => tab !== 'tweaks')
+  return designSurface
+    ? CANVAS_INSPECTOR_TABS
+    : CANVAS_INSPECTOR_TABS.filter((tab) => tab !== 'tweaks' && tab !== 'notes')
 }
 
 export function parsePersistedCanvasInspectorState(raw: string | null): PersistedInspectorState {

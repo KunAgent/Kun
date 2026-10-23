@@ -159,6 +159,23 @@ export type CanvasAgentNote = {
   resolved?: boolean
 }
 
+/**
+ * A sticky note: a `text` shape drawn as a colored card. A note that mentions
+ * `@Kun` is an instruction for the design agent about the nearest board; its
+ * status follows the request (`draft` → `sent` → `done`).
+ */
+export type CanvasStickyStatus = 'draft' | 'sent' | 'done'
+export type CanvasStickyColor = 'yellow' | 'pink' | 'green' | 'blue' | 'violet'
+
+export type CanvasSticky = {
+  color: CanvasStickyColor
+  status: CanvasStickyStatus
+  /** Board the note points at; resolved from proximity when it was sent. */
+  targetId?: string
+  /** Short result line shown once the request is done. */
+  resultNote?: string
+}
+
 export type CanvasRunningAppFrameStatus = 'unknown' | 'reachable' | 'unreachable'
 
 export type CanvasRunningAppFrame = {
@@ -230,6 +247,10 @@ export type CanvasShape = {
   tokenBindings?: Record<string, string>
   /** Agent/critic/decision metadata for whiteboard text notes. */
   agentNote?: CanvasAgentNote
+  /** Present on sticky-note text shapes. */
+  sticky?: CanvasSticky
+  /** Root-level shapes only: the page this shape lives on (unset = first page). */
+  pageId?: string
   /**
    * Component instance back-reference (only on an instance's ROOT shape): which
    * component def it was stamped from, at what version, and the per-instance slot
@@ -286,6 +307,27 @@ export type CanvasShape = {
  * coords (one convention shared by render, hit-test, selection, the AI
  * snapshot). v1 docs are flattened on load — see canvas-persistence.
  */
+/**
+ * A section: a title over a set of root-level boards. Members are referenced by
+ * id (not reparented) because HTML/SVG artifact frames must stay root-level.
+ */
+export type CanvasSection = {
+  id: string
+  title: string
+  memberIds: string[]
+  collapsed?: boolean
+  /** Members hidden by collapsing, so expanding restores only those. */
+  hiddenByCollapse?: string[]
+  /** Frozen union bounds while collapsed (members are hidden then). */
+  collapsedBounds?: Rect
+}
+
+export type CanvasPage = {
+  id: string
+  /** Empty = show the default "Page N" label for this position. */
+  name: string
+}
+
 export type CanvasDocument = {
   version: 2
   rootId: string
@@ -298,6 +340,15 @@ export type CanvasDocument = {
   /** Last completed Design turn fully materialized into this document. */
   rendererReplayWatermarkTurnId?: string
   codeBindings?: DesignCodeBinding[]
+  sections?: CanvasSection[]
+  /**
+   * Pages are a view over one shape tree: shapes of other pages are hidden, so
+   * artifact sync, export and hit-testing keep seeing a single document.
+   */
+  pages?: CanvasPage[]
+  activePageId?: string
+  /** Shapes hidden only because their page is not active. */
+  pageHidden?: string[]
 }
 
 export type CanvasDocumentGraphMetadata = {
@@ -368,6 +419,7 @@ export type CanvasTool =
   | 'text'
   | 'frame'
   | 'screen'
+  | 'sticky'
   | 'image'
   | 'arrow'
   | 'line'
@@ -509,7 +561,7 @@ export function applyDiagramShapeDefaults(shape: CanvasShape): CanvasShape {
   return shape
 }
 
-const DEVICE_DIMENSIONS: Record<DevicePreset, { width: number; height: number }> = {
+export const DEVICE_DIMENSIONS: Record<DevicePreset, { width: number; height: number }> = {
   mobile: { width: 390, height: 844 },
   tablet: { width: 768, height: 1024 },
   desktop: { width: 1280, height: 800 }
