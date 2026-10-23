@@ -19,7 +19,9 @@ import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import type { WriteEditorSelectionState, WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
 import { WriteWorkspaceDocumentPane } from './WriteWorkspaceDocumentPane'
 import { WorkWhiteboardSurface } from './WorkWhiteboardSurface'
+import { WorkWhiteboardUnavailable } from './WorkWhiteboardUnavailable'
 import { isMarkdownFile } from './write-workspace-view-utils'
+import { boardIdFromWriteTabKey } from '../../write/work-whiteboard'
 
 type Props = {
   document: WriteDocumentSession | undefined
@@ -176,6 +178,15 @@ export function WriteEditorGroupContent({
           onOpenOutput={onOpenWorkspaceFile}
           onError={onImagePasteError}
         />
+      </div>
+    )
+  }
+
+  const unavailableBoardId = boardIdFromWriteTabKey(requestedPath)
+  if (unavailableBoardId) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
+        <WorkWhiteboardUnavailable boardId={unavailableBoardId} workspaceRoot={workspaceRoot} />
       </div>
     )
   }

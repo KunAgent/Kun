@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileText, Image as ImageIcon, MessageSquare, Palette, Presentation, Shapes, Table2, type LucideIcon } from 'lucide-react'
 import { useBoardPreview } from './artifact-board-preview'
@@ -99,6 +99,34 @@ function Thumbnail({ artifact }: { artifact: LibraryArtifact }): ReactElement {
   )
 }
 
+/**
+ * Defers a card thumbnail until the card is near the viewport. Board previews
+ * read a scene and render a PNG, so a long grid must not load every preview
+ * as soon as the page opens.
+ */
+function useLazyThumbnail(): { ref: RefObject<HTMLSpanElement | null>; visible: boolean } {
+  const ref = useRef<HTMLSpanElement | null>(null)
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    if (visible) return
+    const node = ref.current
+    if (!node) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisible(true)
+      return
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisible(true)
+        observer.disconnect()
+      }
+    }, { rootMargin: '240px 0px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [visible])
+  return { ref, visible }
+}
+
 export function ArtifactKindChip({ kind, className = '' }: { kind: LibraryArtifactKind; className?: string }): ReactElement {
   const { t } = useTranslation('common')
   return (
@@ -115,6 +143,7 @@ export function ArtifactCard({ artifact, sourceTitle, onOpen }: {
 }): ReactElement {
   const { i18n } = useTranslation('common')
   const meta = [artifact.projectName, fileTypeLabel(artifact) || null].filter(Boolean).join(' · ')
+  const thumbnailVisible = useLazyThumbnail()
   return (
     <button
       type="button"
@@ -122,8 +151,11 @@ export function ArtifactCard({ artifact, sourceTitle, onOpen }: {
       onClick={() => onOpen(artifact)}
       className="ds-no-drag group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-ds-border bg-ds-card text-left transition hover:border-ds-border-strong hover:shadow-[0_10px_30px_rgba(24,24,27,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
-      <span className="relative flex h-[176px] items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-900/60">
-        <Thumbnail artifact={artifact} />
+      <span
+        ref={thumbnailVisible.ref}
+        className="relative flex h-[176px] items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-900/60"
+      >
+        {thumbnailVisible.visible ? <Thumbnail artifact={artifact} /> : null}
         <ArtifactKindChip kind={artifact.kind} className="absolute bottom-3 left-3 ring-1 ring-white dark:ring-transparent" />
       </span>
       <span className="flex min-w-0 flex-col gap-1.5 px-4 pb-4 pt-3.5">
@@ -139,10 +171,11 @@ export function ArtifactCard({ artifact, sourceTitle, onOpen }: {
   )
 }
 
-export function ArtifactListRow({ artifact, sourceTitle, onOpen }: {
+export function ArtifactListRow({ artifact, sourceTitle, onOpen, actions }: {
   artifact: LibraryArtifact
   sourceTitle?: string
   onOpen: (artifact: LibraryArtifact) => void
+  actions?: ReactNode
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const Icon = ARTIFACT_KIND_ICONS[artifact.kind]
@@ -161,6 +194,7 @@ export function ArtifactListRow({ artifact, sourceTitle, onOpen }: {
       <td className="max-w-[260px] truncate px-4 py-2.5 text-[13px] text-ds-muted">{sourceTitle ?? ''}</td>
       <td className="px-4 py-2.5 text-[13px] text-ds-muted">{formatArtifactSize(artifact.size)}</td>
       <td className="whitespace-nowrap px-4 py-2.5 text-[13px] text-ds-muted">{formatArtifactTime(artifact.updatedAt, i18n.language)}</td>
+      {actions !== undefined ? <td className="px-2 py-2.5 text-right">{actions}</td> : null}
     </tr>
   )
 }
