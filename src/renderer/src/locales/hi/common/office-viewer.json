@@ -4,5 +4,11 @@
   "officeZoomFitPage": "पेज में फ़िट",
   "officeZoomFitWidth": "चौड़ाई में फ़िट",
   "officeZoomAutomatic": "स्वचालित",
-  "officeZoomLevel": "ज़ूम स्तर"
+  "officeZoomLevel": "ज़ूम स्तर",
+  "officeDocxOpening": "दस्तावेज़ खुल रहा है…",
+  "officeDocxOpenFailed": "यह दस्तावेज़ नहीं खुल सका",
+  "officeDocxRenderError": "यह Word दस्तावेज़ दिखाया नहीं जा सका।",
+  "officeSheetOpenFailed": "यह वर्कबुक नहीं खुल सकी",
+  "officeSheetRenderError": "यह स्प्रेडशीट दिखाई नहीं जा सकी।",
+  "officeCopyFailed": "चयन कॉपी नहीं हो सका"
 }

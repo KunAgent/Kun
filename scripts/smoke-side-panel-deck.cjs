@@ -21,7 +21,8 @@ const {
 } = require('./smoke-packaged-extension-desktop-runtime.cjs')
 const { availablePort, argumentValue, positiveIntegerArgument, terminateProcessTree } = require('./smoke-packaged-extension-desktop-process.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
-const { buildSmokePptx } = require('./smoke-artifacts-office-fixtures.cjs')
+const XLSX = require('xlsx')
+const { buildSmokeDocx, buildSmokePptx } = require('./smoke-artifacts-office-fixtures.cjs')
 
 const diagnostics = {}
 const DECK_TITLES = ['Roadmap 2027', 'Why now', 'Users', 'Product', 'Architecture', 'Pricing', 'Team', 'Milestones', 'Thanks']
@@ -37,6 +38,12 @@ async function seedWorkspace(root) {
   }
   await write('README.md', '# Kun deck smoke\n\nThe deck lives in presentations/.\n')
   await write('presentations/roadmap.pptx', await buildSmokePptx(DECK_TITLES))
+  await write('notes/handbook.docx', await buildSmokeDocx(Array.from({ length: 6 }, (_, index) => `Handbook page ${index + 1}`)))
+  const book = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Agent', 'Tokens'], ['Kun', 1200], ['Devin', 860], ['Cursor', 430]]), 'Usage')
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Note'], ['Second sheet']]), 'Notes')
+  await mkdir(join(root, 'data'), { recursive: true })
+  XLSX.writeFile(book, join(root, 'data', 'usage.xlsx'))
 }
 
 async function poll(check, timeoutMs, description) {
@@ -65,10 +72,17 @@ async function closeExplorerOverlay(page) {
 }
 
 async function summary(page) {
-  return (await page.locator(`${deck} .kun-pptx-toolbar [aria-live="polite"]`).innerText()).trim()
+  return (await page.locator(`${deck} .kun-office-toolbar [aria-live="polite"]`).innerText()).trim()
 }
 
-async function runFlow({ page, capture, timeoutMs, pageErrors, diagnostics }) {
+async function openFromTree(page, folder, name, timeoutMs) {
+  await ensureTree(page, timeoutMs)
+  if (!(await page.locator(row(name)).count())) await page.locator(row(folder)).first().click()
+  await page.locator(row(name)).first().click()
+  await closeExplorerOverlay(page)
+}
+
+async function runFlow({ application, page, capture, timeoutMs, pageErrors, diagnostics }) {
   const checks = []
   await capture('deck-01-workbench')
 
@@ -97,12 +111,12 @@ async function runFlow({ page, capture, timeoutMs, pageErrors, diagnostics }) {
   await capture('deck-02-first-slide')
   checks.push('README.md and roadmap.pptx show as two tabs in the right panel strip; the preview has no second tab row')
 
-  await page.locator(`${deck} .kun-pptx-toolbar button[aria-label]`).nth(1).click()
+  await page.locator(`${deck} .kun-office-toolbar button[aria-label]`).nth(1).click()
   await poll(async () => /2/.test((await summary(page)).replace(/9/g, '')), timeoutMs, 'the next slide')
   await page.locator(`${deck} .rpv-thumbnail`).nth(4).click()
   await poll(async () => /5/.test((await summary(page)).replace(/9/g, '')), timeoutMs, 'a rail-picked slide')
-  await page.locator(`${deck} .kun-pptx-toolbar select`).selectOption('fit-width')
-  assert.equal(await page.locator(`${deck} .kun-pptx-toolbar select`).inputValue(), 'fit-width')
+  await page.locator(`${deck} .kun-office-toolbar select`).selectOption('fit-width')
+  assert.equal(await page.locator(`${deck} .kun-office-toolbar select`).inputValue(), 'fit-width')
   await capture('deck-03-slide-5-fit-width')
   checks.push(`Next and the rail move the deck: "${await summary(page)}"; zoom switched to fit width`)
 
@@ -115,6 +129,67 @@ async function runFlow({ page, capture, timeoutMs, pageErrors, diagnostics }) {
   await page.locator(`${deck} .rpv-normalized-slide`).first().waitFor({ timeout: timeoutMs })
   await capture('deck-04-after-close')
   checks.push('Switching to README.md and closing its tab leaves the deck open')
+
+  // Word: pages from the browser-native renderer, navigation, and a quotable selection.
+  await openFromTree(page, 'notes', 'handbook.docx', timeoutMs)
+  const docxSummary = () => page.locator('.kun-docx .kun-office-toolbar [aria-live="polite"]').innerText()
+  await page.locator('.kun-docx [data-docx-page-wrapper]').first().waitFor({ timeout: timeoutMs })
+  await poll(async () => /6/.test(await docxSummary()), timeoutMs, 'the Word page count')
+  await page.locator('.kun-docx .kun-office-toolbar button[aria-label]').nth(1).click()
+  await poll(async () => /2/.test((await docxSummary()).replace(/6/g, '')), timeoutMs, 'the next Word page')
+  // "Next page" lands the page at the top of the pane, whatever the zoom.
+  await page.waitForTimeout(500)
+  const pageTop = await page.evaluate(() => {
+    const pane = document.querySelector('.kun-docx .kun-office-scroll')
+    const second = document.querySelector('.kun-docx [data-docx-page-wrapper][data-docx-page-index="1"]')
+    return pane && second ? Math.round(second.getBoundingClientRect().top - pane.getBoundingClientRect().top) : null
+  })
+  assert(pageTop !== null && Math.abs(pageTop) <= 24, `The second page is ${pageTop}px from the top of the pane`)
+  const paragraph = await page.evaluate(() => {
+    const pane = document.querySelector('.kun-docx .kun-office-scroll').getBoundingClientRect()
+    for (const element of document.querySelectorAll('.kun-docx [data-docx-source-id]')) {
+      const box = element.getBoundingClientRect()
+      if (box.top >= pane.top + 8 && box.bottom <= pane.bottom - 8 && box.width > 40) {
+        return { x: box.left, y: box.top, width: box.width, height: box.height }
+      }
+    }
+    return null
+  })
+  assert(paragraph, 'No Word paragraph is on screen')
+  // The drag runs on past the end of the heading's text, into the blank of the line.
+  await page.mouse.move(paragraph.x + 2, paragraph.y + paragraph.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(paragraph.x + paragraph.width - 4, paragraph.y + paragraph.height / 2, { steps: 6 })
+  await page.mouse.up()
+  const dragged = await page.evaluate(() => window.getSelection()?.toString() ?? '')
+  assert.match(dragged, /^Handbook page \d$/, `Dragging over Word text selects the whole heading (selected ${JSON.stringify(dragged)})`)
+  await capture('deck-06-docx')
+  checks.push(`Word opens as pages with navigation ("${await docxSummary()}") and its text can be selected`)
+
+  // Excel: a canvas grid with worksheet tabs, a range readout and a working Copy.
+  await openFromTree(page, 'data', 'usage.xlsx', timeoutMs)
+  const xlsxGrid = page.locator('.kun-xlsx [role="grid"]')
+  await xlsxGrid.waitFor({ timeout: timeoutMs })
+  assert.match((await xlsxGrid.getAttribute('aria-label')) ?? '', /Usage|用量/)
+  const sheetTabs = page.locator('.kun-xlsx-tabs [role="tab"]')
+  assert.equal(await sheetTabs.count(), 2, 'Both worksheets should have a tab')
+  await sheetTabs.nth(1).click()
+  await poll(async () => /Notes/.test((await xlsxGrid.getAttribute('aria-label')) ?? ''), timeoutMs, 'the second worksheet')
+  await sheetTabs.nth(0).click()
+  await poll(async () => /Usage/.test((await xlsxGrid.getAttribute('aria-label')) ?? ''), timeoutMs, 'the first worksheet')
+  const gridBox = await xlsxGrid.boundingBox()
+  assert(gridBox, 'The grid has no box')
+  await page.mouse.move(gridBox.x + 90, gridBox.y + 44)
+  await page.mouse.down()
+  await page.mouse.move(gridBox.x + 230, gridBox.y + 84, { steps: 6 })
+  await page.mouse.up()
+  const range = page.locator('.kun-xlsx .kun-office-toolbar .font-mono')
+  await range.waitFor({ timeout: timeoutMs })
+  assert.match((await range.innerText()).trim(), /^[A-Z]+\d+(:[A-Z]+\d+)?$/)
+  await page.locator('.kun-xlsx .kun-office-toolbar button:not([disabled]):has(svg.lucide-copy)').click()
+  await poll(async () => /Kun|Devin|Cursor|Agent/.test(await application.evaluate(({ clipboard }) => clipboard.readText())), timeoutMs, 'the copied cells')
+  await capture('deck-07-xlsx')
+  checks.push(`Excel draws the worksheet grid with tabs, shows the selected range "${(await range.innerText()).trim()}" and copies it`)
 
   // Left sidebar: one text column for nav rows, section labels and projects.
   diagnostics.sidebarColumns = await page.evaluate(() => {
@@ -217,8 +292,11 @@ async function main() {
       if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 500))
     })
     await page.waitForLoadState('domcontentloaded', { timeout: 120_000 })
+    // The Word viewer renders every page and reports one while a WebDriver drives the
+    // window; the app is not driven that way, so the smoke looks like a person.
+    await page.evaluate(() => Object.defineProperty(navigator, 'webdriver', { get: () => false, configurable: true }))
     await page.locator('.ds-composer-textarea').waitFor({ timeout: timeoutMs })
-    const assertions = await runFlow({ page, capture, timeoutMs, pageErrors, diagnostics })
+    const assertions = await runFlow({ application, page, capture, timeoutMs, pageErrors, diagnostics })
     result = { ok: true, status: 'passed', completedAt: new Date().toISOString(), screenshots, assertions, diagnostics, consoleErrors,
       ...(keepDirs ? { temporaryRoot, workspaceRoot } : {}) }
   } catch (error) {

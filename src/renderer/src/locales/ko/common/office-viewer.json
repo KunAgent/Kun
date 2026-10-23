@@ -4,5 +4,11 @@
   "officeZoomFitPage": "페이지에 맞춤",
   "officeZoomFitWidth": "너비에 맞춤",
   "officeZoomAutomatic": "자동",
-  "officeZoomLevel": "확대/축소 비율"
+  "officeZoomLevel": "확대/축소 비율",
+  "officeDocxOpening": "문서를 여는 중…",
+  "officeDocxOpenFailed": "이 문서를 열 수 없습니다",
+  "officeDocxRenderError": "이 Word 문서를 표시할 수 없습니다.",
+  "officeSheetOpenFailed": "이 통합 문서를 열 수 없습니다",
+  "officeSheetRenderError": "이 스프레드시트를 표시할 수 없습니다.",
+  "officeCopyFailed": "선택한 내용을 복사할 수 없습니다"
 }
