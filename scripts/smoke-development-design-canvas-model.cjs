@@ -51,12 +51,11 @@ function screenHtml(screen) {
 
 /**
  * Offline OpenAI-compatible model for the Design canvas chrome smoke. A Code
- * turn marked [design-canvas-smoke] calls design_open; the Design pass adds a
- * section title and four screens; every screen page turn writes its HTML.
+ * turn marked [design-canvas-smoke] writes four screens with design_open in the
+ * same turn.
  */
 async function startDesignCanvasModelFixture(model) {
   const observations = []
-  const written = new Set()
   const server = createServer(async (request, response) => {
     if (request.method === 'GET' && /\/models(?:\?|$)/u.test(request.url ?? '')) {
       response.writeHead(200, { 'content-type': 'application/json' })
@@ -78,64 +77,22 @@ async function startDesignCanvasModelFixture(model) {
       tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
     let message = { role: 'assistant', content: 'Done.' }
     let lane = 'other'
-    const htmlPaths = [...new Set(text.match(/\.kun-design\/[A-Za-z0-9._/-]+?\.html/gu) ?? [])]
-    if (text.includes('Design request from the coding agent')) {
-      lane = 'design-pass'
-      if (tools.includes('design_canvas') && !toolResult('design-title-1')) {
-        message = call('design-title-1', 'design_canvas', {
-          action: 'update_shapes',
-          ops: [{ op: 'add', shape: { type: 'text', name: 'Section title', x: 0, y: 0, width: 1400, height: 64,
-            textContent: SECTION_TITLE, fontSize: 44, fontWeight: 700, fontColor: '#1f2329' } }]
-        })
-      } else if (tools.includes('design_create_screen') && !toolResult('design-screens-1')) {
-        message = call('design-screens-1', 'design_create_screen', {
-          screens: SCREENS.map((screen, index) => ({
-            name: screen.name,
-            brief: `${screen.name}: the composer tray state described in the design request.`,
-            x: index * 1400,
-            y: 320,
-            width: 960,
-            height: 640
-          }))
-        })
-      } else {
-        message = { role: 'assistant', content: 'Laid out the four tray states on the canvas.' }
-      }
-    } else if (text.includes('[design-canvas-smoke]')) {
+    if (text.includes('[design-canvas-smoke]')) {
       lane = 'code'
       if (tools.includes('design_open') && !toolResult('design-open-1')) {
         message = call('design-open-1', 'design_open', {
           title: 'Composer tray redesign',
-          brief: 'Explore how task progress, workers and approvals collapse into one tray behind the composer.',
-          target: 'web'
+          target: 'web',
+          note: SECTION_TITLE,
+          screens: SCREENS.map((screen) => ({ name: screen.name, html: screenHtml(screen), width: 960, height: 640 }))
         })
       } else {
-        message = { role: 'assistant', content: 'I queued a design pass for the composer tray.' }
-      }
-    } else if (tools.includes('delegate_task') && text.includes('fan out a multi-page design build')) {
-      lane = 'fanout'
-      const jobs = [...text.matchAll(/```json\n([\s\S]*?)\n```/gu)].map((match) => {
-        try { return JSON.parse(match[1]) } catch { return null }
-      }).filter(Boolean)
-      if (jobs.length > 0 && !toolResult('fanout-0')) {
-        message = { role: 'assistant', content: null, tool_calls: jobs.map((job, index) => ({
-          id: `fanout-${index}`, type: 'function', function: { name: 'delegate_task', arguments: JSON.stringify(job) }
-        })) }
-      }
-    } else if (htmlPaths.length > 0 && tools.includes('write')) {
-      lane = 'page'
-      // Each page turn reserves one file; sibling screens appear in its manifest.
-      const target = /Reserved artifact file: (\S+?\.html)/u.exec(text)?.[1] ?? htmlPaths[0]
-      if (!written.has(target)) {
-        written.add(target)
-        const screen = SCREENS.find((candidate) => text.includes(`${candidate.name}:`)) ?? SCREENS[written.size % SCREENS.length]
-        message = call(`write-${written.size}`, 'write', { path: target, content: screenHtml(screen) })
+        message = { role: 'assistant', content: 'The four tray states are on the design canvas.' }
       }
     }
     observations.push({
       lane,
       toolCount: tools.length,
-      htmlPaths,
       userText: text.slice(0, 160),
       response: (message.tool_calls ?? []).map((entry) => entry.function.name)
     })

@@ -39,6 +39,18 @@ async function poll(check, timeoutMs, description) {
   throw new Error(`Timed out waiting for ${description}${last ? `: ${last.message}` : ''}`)
 }
 
+async function latestThread(page) {
+  return page.evaluate(async () => {
+    const read = async (path) => {
+      const response = await globalThis.kunGui.runtimeRequest(path, 'GET')
+      if (!response.ok) throw new Error(`${path} (${response.status})`)
+      return JSON.parse(response.body)
+    }
+    const list = await read('/v1/threads?limit=5')
+    return list.threads[0] ? read(`/v1/threads/${list.threads[0].id}`) : null
+  })
+}
+
 async function approvePending(application, page) {
   const allow = page.locator('[data-approval-choice="1"]').first()
   if (!(await allow.isVisible().catch(() => false))) return false
@@ -84,7 +96,10 @@ async function runFlow({ application, page, capture, timeoutMs, workspaceRoot })
   diagnostics.screenFiles = files.map((path) => path.slice(workspaceRoot.length + 1))
   await poll(async () => (await page.locator('webview').count()) >= SCREENS.length, timeoutMs, 'screen webviews')
   await new Promise((resolve) => setTimeout(resolve, 2_500))
-  checks.push(`The Design pass laid out ${files.length} HTML screens`)
+  const thread = await latestThread(page)
+  diagnostics.turns = thread?.turns?.length ?? null
+  assert.equal(diagnostics.turns, 1, 'the agent designs in its own turn; no design pass or per-screen turns')
+  checks.push(`One Code turn wrote ${files.length} HTML screens onto the canvas`)
 
   const svg = page.locator('svg[data-canvas-surface="design"]').first()
   const box = await svg.boundingBox()

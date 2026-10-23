@@ -2,9 +2,9 @@
 'use strict'
 
 // Code-agent Design smoke on an isolated profile: real Electron, the Kun
-// runtime and an offline model fixture. A Code turn calls design_open; the
-// workbench must show the transcript card, open the Design canvas beside the
-// conversation and run one Design pass on the same thread afterwards.
+// runtime and an offline model fixture. A Code turn writes its screens with
+// design_open; the workbench must show the transcript card and open the Design
+// canvas beside the conversation, with no extra design turns.
 //   npm run build && node scripts/smoke-development-agent-design.cjs [--keep-dirs]
 // Screenshots and report.json land under dist/agent-design-smoke (or --evidence <dir>).
 
@@ -74,22 +74,21 @@ async function waitForTurns(application, page, count, timeoutMs, description) {
   return thread
 }
 
-/** Persisted boards under .kun-design whose objects include a shape with this name. */
-async function boardFilesContaining(workspaceRoot, shapeName) {
-  const matches = []
-  const visit = async (directory, depth) => {
-    if (depth > 4) return
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => [])
-    for (const entry of entries) {
-      const path = join(directory, entry.name)
-      if (entry.isDirectory()) { await visit(path, depth + 1); continue }
-      if (entry.name !== 'canvas.json') continue
-      const board = JSON.parse(await readFile(path, 'utf8').catch(() => '{}'))
-      if (Object.values(board.objects ?? {}).some((shape) => shape?.name === shapeName)) matches.push(path)
+/** Screen HTML files the Code agent wrote under .kun-design/<document>/<screen>/v1.html. */
+async function writtenScreens(workspaceRoot) {
+  const found = []
+  const documents = await readdir(join(workspaceRoot, '.kun-design'), { withFileTypes: true }).catch(() => [])
+  for (const document of documents) {
+    if (!document.isDirectory()) continue
+    const screens = await readdir(join(workspaceRoot, '.kun-design', document.name), { withFileTypes: true }).catch(() => [])
+    for (const screen of screens) {
+      if (!screen.isDirectory()) continue
+      const path = join(workspaceRoot, '.kun-design', document.name, screen.name, 'v1.html')
+      const html = await readFile(path, 'utf8').catch(() => '')
+      if (html.includes('Update ready')) found.push(path)
     }
   }
-  await visit(join(workspaceRoot, '.kun-design'), 0)
-  return matches
+  return found
 }
 
 async function runFlow({ application, page, capture, timeoutMs, workspaceRoot }) {
@@ -107,53 +106,42 @@ async function runFlow({ application, page, capture, timeoutMs, workspaceRoot })
   await capture('agent-design-0-composer')
   checks.push('The composer has no Code/Design switch; Kun is offered as a single Code mode')
 
-  // 2. A Code turn calls design_open; the transcript shows the design card.
+  // 2. The Code turn writes the screens itself with design_open.
   const composer = page.locator('.ds-composer-textarea')
   await composer.fill('[agent-design-smoke] Move the update button into the sidebar footer. Show me a design first.')
   await page.locator('.ds-composer-primary-action').click()
   const card = page.locator('[data-design-open-card]').first()
   await card.waitFor({ timeout: timeoutMs })
-  diagnostics.firstCardState = await card.getAttribute('data-design-open-state')
-  checks.push(`design_open renders a transcript card (first state: ${diagnostics.firstCardState})`)
-
-  // 3. After the reply ends, one Design pass runs on the same conversation.
-  const thread = await waitForTurns(application, page, 2, timeoutMs, 'Code turn plus Design pass')
-  const [codeTurn, designTurn] = thread.turns
-  assert(JSON.stringify(codeTurn).includes('design_open'), 'the Code turn called design_open')
-  const designTurnText = JSON.stringify(designTurn)
-  assert(designTurnText.includes('Design request from the coding agent'), 'the second turn is the agent-started Design pass')
-  assert(designTurnText.includes('design_continuation'), 'the Design pass is marked as a continuation notice')
-  diagnostics.designTurnSurface = designTurn.agentSurface ?? null
-  diagnostics.threadDesignProfile = thread.designProfile ?? thread.thread?.designProfile ?? null
+  const thread = await waitForTurns(application, page, 1, timeoutMs, 'the Code turn')
+  assert(JSON.stringify(thread.turns[0]).includes('design_open'), 'the Code turn called design_open')
   await poll(async () => (await card.getAttribute('data-design-open-state')) === 'ready', timeoutMs, 'card ready')
-  checks.push('The Design pass starts automatically after the reply and runs on the same thread')
+  let screens = []
+  await poll(async () => (screens = await writtenScreens(workspaceRoot)).length >= 2, timeoutMs, 'screens written')
+  diagnostics.screenFiles = screens.map((path) => path.slice(workspaceRoot.length + 1))
+  checks.push('design_open writes both screens into the design folder in the same turn')
 
-  // 4. The Design canvas is open beside the conversation and shows the drawing.
+  // 3. The canvas opens beside the conversation with the screens on it.
   const titlebar = page.locator('[data-code-canvas-titlebar]').first()
   await titlebar.waitFor({ timeout: timeoutMs })
   diagnostics.canvasEngine = await page.locator('[data-canvas-engine]').first().getAttribute('data-canvas-engine').catch(() => null)
-  let boardFiles = []
-  await poll(async () => (boardFiles = await boardFilesContaining(workspaceRoot, 'Update ready pill')).length > 0,
-    timeoutMs, 'Design pass shapes persisted on the bound board')
-  diagnostics.boardFiles = boardFiles.map((path) => path.slice(workspaceRoot.length + 1))
   const titleText = await titlebar.innerText()
-  assert(titleText.includes('Footer update entry'), `drawing is named from the request title: ${titleText}`)
+  assert(titleText.includes('Footer update entry'), `canvas is named after the design: ${titleText}`)
+  await poll(async () => (await page.locator('[data-canvas-board-label]').count()) >= 2, timeoutMs, 'two boards on the canvas')
   await capture('agent-design-1-canvas')
-  checks.push('The Design canvas opens in the right panel without switching modes, named after the request and holding the drawn shapes')
+  checks.push('The canvas opens on its own, named after the design, with both screens as boards')
 
-  // 5. The card reopens the canvas after it is closed.
-  const collapse = page.locator('[data-code-canvas-titlebar] button[aria-label]').last()
-  diagnostics.collapseLabel = await collapse.getAttribute('aria-label').catch(() => null)
+  // 4. The card reopens the canvas.
   await page.locator('[data-design-open-open]').first().click()
   await titlebar.waitFor({ timeout: timeoutMs })
   await capture('agent-design-2-card-ready')
-  checks.push('The ready card opens the bound Design canvas')
+  checks.push('The transcript card opens the design canvas')
 
-  // 6. No second Design pass is started on idle re-renders.
+  // 5. No separate design pass or page turns follow.
   await new Promise((resolve) => setTimeout(resolve, 2_500))
   const settled = await latestThread(page)
-  assert.equal(settled.turns.length, 2, 'exactly one Design pass ran')
-  checks.push('Exactly one Design pass ran for the request')
+  assert.equal(settled.turns.length, 1, 'the design needs no extra turns')
+  assert(!JSON.stringify(settled).includes('Design request from the coding agent'), 'no design pass was started')
+  checks.push('The design is done in one turn: no design pass, no per-screen turns')
   return checks
 }
 
