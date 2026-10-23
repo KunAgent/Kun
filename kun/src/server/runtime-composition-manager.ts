@@ -118,7 +118,7 @@ export function createHarnessListDeps(input: {
 /**
  * ADE manager control plane wiring: assembles ManagerRuntime
  * deps from the composition composites. The runtime fills
- * isolated/unattended/recentFailures/managerRoute/language per call.
+ * isolated/unattended/routeHealth/managerRoute/language per call.
  */
 export function createManagerRuntime(input: {
   services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks' | 'attribution' | 'agentDispatchService'>
@@ -156,6 +156,9 @@ export function createManagerRuntime(input: {
   return new ManagerRuntime({
     ...runtimeDeps,
     ...services.adeStores,
+    // The raw notice store in adeStores only persists; the caller's sink is
+    // the wake-up coordinator that actually tells the manager.
+    notices: runtimeDeps.notices,
     taskWorkspaces: core.taskWorkspaces,
     activity: core.activityStore,
     delegation: delegationRuntime,

@@ -443,6 +443,30 @@ describe('scheduler reconciliation and cancellation', () => {
     await expect(fixture.service.replace(intent.intentId, { recommendation: replacement.recommendation, payload: {} }))
       .rejects.toThrow('another automatic replacement')
   })
+
+  it('reroutes one failed batch assignment once and drops outcomes computed from the older card', async () => {
+    const fixture = await setup()
+    const assignments = [{ label: 'First', agentId: 'external-test' }, { label: 'Second', agentId: 'external-test' }]
+    const intent = await fixture.service.propose(proposal('ask-for-approval', {
+      payload: { items: [{ input: 'first' }, { input: 'second' }] },
+      recommendation: { ...proposal().recommendation, permissionMode: 'ask-for-approval', assignments }
+    }))
+    await fixture.service.act(intent.intentId, { action: 'start_now', requestId: 'start', expectedRevision: intent.revision })
+    await fixture.service.reconcile()
+    const running = (await fixture.service.get(intent.intentId))!
+    const reroute = { index: 0, item: { input: 'first', fallbackCount: 1 },
+      assignment: { label: 'First', agentId: 'fallback', model: 'other-model' }, reason: 'First: fallback took over' }
+    const rerouted = await fixture.service.replaceAssignment(intent.intentId, { ...reroute, expectedRevision: running.revision })
+    expect(rerouted).toMatchObject({ state: 'uncertain', replacementCount: 0, replacementReason: 'First: fallback took over',
+      payload: { items: [{ input: 'first', fallbackCount: 1 }, { input: 'second' }] },
+      recommendation: { agentId: 'fallback', assignments: [{ agentId: 'fallback' }, { agentId: 'external-test' }] } })
+
+    // A reconcile pass that read the card before the reroute must not overwrite it.
+    await fixture.service.updateTarget(intent.intentId, { state: 'failed', error: 'stale' }, running.revision)
+    expect(await fixture.service.get(intent.intentId)).toMatchObject({ state: 'uncertain', revision: rerouted.revision })
+    await expect(fixture.service.replaceAssignment(intent.intentId, { ...reroute, expectedRevision: rerouted.revision }))
+      .rejects.toThrow('does not permit rerouting')
+  })
 })
 
 describe('no-response automatic dispatch', () => {

@@ -308,6 +308,41 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild.mock.calls[1][0].childId).not.toBe(original.workerId)
   })
 
+  it('reroutes only the failed assignment of an automatic batch while its sibling keeps running', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(2)
+    const [original, sibling] = (await f.teams.get('parent'))!.workers
+    await f.teams.upsertWorker('parent', { ...original, selection: { reason: 'Automatic choice', score: 1,
+      alternatives: [{ route: { harnessId: 'codex', model: 'main-model', credentialMode: 'native-login' }, label: 'Codex', score: 0.9 }] } })
+    const failed = (await f.dispatches.list('parent')).find((entry) => entry.workerId === original.workerId)!
+    await f.dispatches.update('parent', failed.dispatchId, { state: 'failed',
+      failureReason: "model request failed with status 400: The 'main-model' model is not supported" })
+    await f.childRuns.upsert({ ...(await f.childRuns.get(original.workerId))!, status: 'failed',
+      failure: { source: 'model', code: 'http_400', category: 'model_not_found', httpStatus: 400 } })
+    await f.service.reconcile(); await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(3))
+    const rerouted = f.runChild.mock.calls[2][0]
+    expect(rerouted).toMatchObject({ harnessId: 'codex' })
+    expect([original.workerId, sibling.workerId]).not.toContain(rerouted.childId)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent).toMatchObject({ replacementCount: 0, recommendation: { assignments: [
+      { label: f.assignment.label, agentId: 'codex' }, { label: 'Second', agentId: sibling.route.harnessId }] } })
+    expect(intent.replacementReason).toContain('took over')
+    expect(intent.target?.workerIds).toEqual([rerouted.childId, sibling.workerId])
+    expect(await f.teams.worker('parent', original.workerId)).toMatchObject({ state: 'released' })
+
+    // One reroute per assignment: a second failure settles the card instead of looping.
+    const replacement = (await f.dispatches.list('parent')).find((entry) => entry.workerId === rerouted.childId)!
+    await f.dispatches.update('parent', replacement.dispatchId, { state: 'failed', failureReason: 'Still failing' })
+    const siblingDispatch = (await f.dispatches.list('parent')).find((entry) => entry.workerId === sibling.workerId)!
+    await f.dispatches.update('parent', siblingDispatch.dispatchId, { state: 'completed', verdict: { status: 'passed', checks: [] } })
+    await f.service.reconcile(); await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(3)
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed' })
+  })
+
   it('keeps a user-pinned Agent fixed on failure', async () => {
     const f = await setup('full-access')
     const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, agentSelection: 'user' }, f.context)

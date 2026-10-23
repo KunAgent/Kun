@@ -149,6 +149,8 @@ export abstract class DelegationRuntimeBase {
       cumulativeUsage?: UsageSnapshot
     ) => unknown
     proactiveRetryWait?: (delayMs: number, signal: AbortSignal) => Promise<boolean>
+    /** Siblings settling within this window wake their parent once (0 = per child, at once). */
+    detachedNoticeMergeMs?: number
   }) {
     this.detachedHandoffs = new DetachedChildHandoffCoordinator({
       store: options.store.handoffs,
@@ -156,7 +158,8 @@ export abstract class DelegationRuntimeBase {
       turns: options.turns,
       runTurn: () => this.runTurn,
       proactiveRetry: () => this.options.config.proactiveRetry,
-      nowIso: () => this.now()
+      nowIso: () => this.now(),
+      mergeWindowMs: options.detachedNoticeMergeMs
     })
   }
 

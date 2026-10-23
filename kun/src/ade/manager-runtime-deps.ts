@@ -128,6 +128,6 @@ export type ManagerRuntimeDeps = {
   roster?: Pick<import('../delegation/agent-roster.js').AgentRoster, 'resolve'>
   selector?: Omit<
     WorkerSelectorDeps,
-    'catalog' | 'detector' | 'capabilitiesForRoute' | 'isolated' | 'unattended' | 'allowUnattendedFullAccess' | 'recentFailures' | 'managerRoute' | 'language'
+    'catalog' | 'detector' | 'capabilitiesForRoute' | 'isolated' | 'unattended' | 'allowUnattendedFullAccess' | 'routeHealth' | 'managerRoute' | 'language'
   >
 }

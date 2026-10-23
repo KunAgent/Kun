@@ -15,6 +15,7 @@ import {
 import { legacyProviderKindFor } from '../harness/harness-provider-kind.js'
 import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime.js'
 import type { WorkerCreateInput } from './manager-worker-inputs.js'
+import type { WorkerRouteHealth } from './worker-route-health.js'
 import { rosterRefusal } from '../delegation/agent-roster.js'
 import {
   NoEligibleWorkerError,
@@ -181,7 +182,7 @@ export async function resolveManagerWorkerRoute(
   ctx: ManagerToolContext,
   input: WorkerCreateInput,
   isolated: boolean,
-  recentFailures: (teamId: string, harnessId: HarnessId) => Promise<number>
+  routeHealth: (teamId: string, route: HarnessRoute) => Promise<WorkerRouteHealth>
 ): Promise<ResolvedWorkerRoute | { error: string }> {
   const managerThread = await deps.threads.get(ctx.threadId).catch(() => null)
   if (input.profile?.trim()) {
@@ -217,8 +218,7 @@ export async function resolveManagerWorkerRoute(
                   model: managerThread?.model?.trim() || undefined,
                   providerId: managerThread?.providerId?.trim() || undefined
                 }),
-                recentFailures: (teamId, harnessId) =>
-                  recentFailures(teamId, harnessId),
+                routeHealth,
                 language: deps.language
               },
               {

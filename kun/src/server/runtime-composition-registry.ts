@@ -311,6 +311,8 @@ export function createRuntimeRegistry(
 	        turns: turnService,
 	        artifactStore,
 	        nowIso,
+	        // Background siblings that settle together (a failed batch) wake the parent once.
+	        detachedNoticeMergeMs: 2_000,
 	        executor: createChildAgentExecutor({
             providerKinds: services.providerKinds, harnessCatalog: services.harnesses.catalog,
 	          model: timedModelClient,

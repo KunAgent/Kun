@@ -1,7 +1,9 @@
 import type {
   AgentDispatchAction,
   AgentDispatchAssignment,
-  AgentDispatchRecommendation
+  AgentDispatchIntent,
+  AgentDispatchRecommendation,
+  AgentDispatchState
 } from '../contracts/agent-dispatch-intents.js'
 
 type AssignmentRouteEdits = NonNullable<NonNullable<AgentDispatchAction['recommendation']>['assignments']>
@@ -56,4 +58,45 @@ function sameRoute(left: AssignmentRouteEdits[number], right: AssignmentRouteEdi
   return left.agentId === right.agentId && (left.profileId ?? '') === (right.profileId ?? '') &&
     (left.model ?? '') === (right.model ?? '') &&
     (left.providerId ?? '') === (right.providerId ?? '') && (left.credentialMode ?? '') === (right.credentialMode ?? '')
+}
+
+/** Host-only reroute of one failed card assignment, decided by the kind's handler. */
+export type AssignmentReplacement = {
+  index: number
+  /** The rerouted payload item; the handler owns its shape. */
+  item: Record<string, unknown>
+  assignment: AgentDispatchAssignment
+  reason: string
+  expectedRevision: number
+}
+
+/** Cards whose failed assignment may be rerouted without touching admitted siblings. */
+const REROUTABLE = new Set<AgentDispatchState>(['queued', 'running', 'failed'])
+
+/**
+ * Swap one assignment's route and payload item in place, once per
+ * assignment. The card returns to `uncertain`, so the ordinary
+ * reconcile -> start path creates only the missing worker while siblings
+ * are matched by their unchanged ids.
+ */
+export function rerouteAssignment(intent: AgentDispatchIntent, input: AssignmentReplacement): void {
+  const items = (intent.payload as { items?: unknown }).items
+  const assignments = intent.recommendation.assignments
+  const previous = Array.isArray(items) ? items[input.index] as { fallbackCount?: unknown } | undefined : undefined
+  if (!REROUTABLE.has(intent.state) || intent.recommendation.agentSelection !== 'auto' ||
+      intent.cancellationRequested || intent.takenOver || !Array.isArray(items) || !previous ||
+      previous.fallbackCount === 1 || !assignments?.[input.index] || assignments.length !== items.length) {
+    throw new Error('Dispatch does not permit rerouting this assignment')
+  }
+  intent.payload = { ...intent.payload, items: items.map((item, index) => index === input.index ? input.item : item) }
+  intent.recommendation.assignments = assignments.map((assignment, index) =>
+    index === input.index ? input.assignment : assignment)
+  if (input.index === 0) {
+    intent.recommendation.agentId = input.assignment.agentId
+    intent.recommendation.agentName = input.assignment.agentName
+    intent.recommendation.model = input.assignment.model
+  }
+  intent.state = 'uncertain'
+  delete intent.error; delete intent.resultSummary
+  intent.replacementReason = [intent.replacementReason, input.reason].filter(Boolean).join('\n').slice(-8_192)
 }

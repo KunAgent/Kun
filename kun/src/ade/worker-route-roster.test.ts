@@ -43,7 +43,7 @@ const resolved = (route?: Extract<AgentRosterResolution, { ok: true }>['route'])
 describe('resolveManagerWorkerRoute with a roster profile', () => {
   it('runs a bound role on its engine and records the role', async () => {
     const { deps: d, resolve } = deps(resolved({ harnessId: 'codex', model: 'gpt-5.5-codex', credentialMode: 'native-login' }))
-    const result = await resolveManagerWorkerRoute(d, ctx, input(), true, async () => 0)
+    const result = await resolveManagerWorkerRoute(d, ctx, input(), true, async () => ({ failures: 0 }))
     expect(result).toEqual({
       route: { harnessId: 'codex', model: 'gpt-5.5-codex', credentialMode: 'native-login' },
       profileId: 'reviewer'
@@ -53,7 +53,7 @@ describe('resolveManagerWorkerRoute with a roster profile', () => {
 
   it('runs an unbound role on the native loop with the manager route', async () => {
     const { deps: d } = deps(resolved())
-    expect(await resolveManagerWorkerRoute(d, ctx, input(), true, async () => 0)).toEqual({
+    expect(await resolveManagerWorkerRoute(d, ctx, input(), true, async () => ({ failures: 0 }))).toEqual({
       route: { harnessId: 'kun', model: 'deepseek-chat', providerId: 'deepseek', credentialMode: 'provider' },
       profileId: 'reviewer'
     })
@@ -63,20 +63,20 @@ describe('resolveManagerWorkerRoute with a roster profile', () => {
     const { deps: d, resolve } = deps(resolved())
     const result = await resolveManagerWorkerRoute(d, ctx, input({
       agent: { harnessId: 'codex', model: 'gpt-5.5-codex', credentialMode: 'native-login' }
-    }), true, async () => 0)
+    }), true, async () => ({ failures: 0 }))
     expect(result).toMatchObject({ route: { harnessId: 'codex', model: 'gpt-5.5-codex' }, profileId: 'reviewer' })
     expect(resolve).toHaveBeenCalledWith('reviewer', expect.objectContaining({ engineOverridden: true }))
   })
 
   it('refuses with the roster reason instead of re-homing the role', async () => {
     const { deps: d } = deps({ ok: false, code: 'engine_not_ready', message: 'harness codex is signed out' })
-    expect(await resolveManagerWorkerRoute(d, ctx, input(), true, async () => 0))
+    expect(await resolveManagerWorkerRoute(d, ctx, input(), true, async () => ({ failures: 0 })))
       .toEqual({ error: 'reviewer cannot run as a worker (engine_not_ready): harness codex is signed out' })
   })
 
   it('needs a roster to resolve a profile', async () => {
     const { deps: d } = deps(undefined)
-    expect(await resolveManagerWorkerRoute(d, ctx, input(), true, async () => 0))
+    expect(await resolveManagerWorkerRoute(d, ctx, input(), true, async () => ({ failures: 0 })))
       .toMatchObject({ error: expect.stringContaining('roster is unavailable') })
   })
 })

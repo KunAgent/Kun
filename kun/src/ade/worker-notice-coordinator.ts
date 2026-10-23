@@ -10,12 +10,21 @@ import { kunToolPermissionModeFromSettings, type KunToolPermissionSettings } fro
 import { intersectDispatchPolicy } from './worker-dispatch-security.js'
 import type { FileDispatchStore } from './dispatch-store.js'
 import { renderWorkerUpdates } from './notice-render.js'
+import { replacedWorkerIds } from './worker-dispatch-ids.js'
 
 type RunTurn = (threadId: string, turnId: string) => Promise<unknown>
 
 export const WORKER_NOTICE_MERGE_WINDOW_MS = 3_000
 export const WORKER_NOTICE_MAX_HOLD_MS = 60_000
 const MAX_RETRY_DELAY_MS = 30_000
+/**
+ * Facts the manager need not act on (a release 30 s after completion, a user
+ * takeover or cancellation). They never start a turn on their own; they ride
+ * the next wake-up or the user's next message.
+ */
+const QUIET_NOTICE_KINDS: ReadonlySet<WorkerNotice['kind']> = new Set([
+  'worker_released', 'worker_detached', 'worker_taken_over', 'dispatch_cancelled'
+])
 
 /**
  * Manager wake-up coordinator. Wraps the notice store so every
@@ -52,7 +61,7 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
 
   async enqueue(notice: WorkerNotice): Promise<WorkerNotice> {
     const stored = await this.options.notices.enqueue(notice)
-    this.scheduleMerge(stored.teamId)
+    if (!QUIET_NOTICE_KINDS.has(stored.kind)) this.scheduleMerge(stored.teamId)
     return stored
   }
 
@@ -142,11 +151,14 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
       const intentId = notice.dispatchIntentId ?? worker?.dispatchIntentId
       const intent = intentId ? await this.options.agentDispatchService?.get(intentId) : undefined
       const completion = notice.kind === 'dispatch_completed' || notice.kind === 'dispatch_failed'
-      if (completion && (worker?.control === 'user' || intent?.takenOver || intent?.cancellationRequested)) suppressed.push(notice.noticeId)
-      else pending.push(notice)
+      // A failure the card already rerouted to another Agent needs nothing from the manager.
+      const rerouted = notice.kind === 'dispatch_failed' && Boolean(intent && replacedWorkerIds(intent).includes(notice.workerId))
+      if (rerouted || (completion && (worker?.control === 'user' || intent?.takenOver || intent?.cancellationRequested))) {
+        suppressed.push(notice.noticeId)
+      } else pending.push(notice)
     }
     if (suppressed.length) await this.options.notices.ack(managerThreadId, suppressed)
-    if (!pending.length) return
+    if (!pending.some((notice) => !QUIET_NOTICE_KINDS.has(notice.kind))) return
     const thread = await this.options.threads.get(managerThreadId).catch(() => null)
     if (!thread) {
       await this.options.notices.ack(managerThreadId, pending.map((entry) => entry.noticeId))

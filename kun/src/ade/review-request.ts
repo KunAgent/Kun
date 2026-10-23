@@ -9,11 +9,11 @@ import {
 import type { HarnessId, HarnessRoute } from '../contracts/harness.js'
 import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime.js'
 import {
-  countRecentWorkerFailures,
   NoEligibleWorkerError,
   selectWorkerRoute,
   type WorkerRouteSelection
 } from './worker-selector.js'
+import { workerRouteHealth } from './worker-route-health.js'
 import { resolveWorkerRoute, type ResolvedWorkerRoute } from './worker-route.js'
 import { checkHarnessAdmission } from '../harness/harness-admission.js'
 import { clampPermission } from './permission-clamp.js'
@@ -343,12 +343,7 @@ export class ReviewRequests {
             model: meta.managerModel?.trim() || undefined,
             providerId: meta.managerProviderId?.trim() || undefined
           }),
-          recentFailures: (teamId, harnessId) =>
-            countRecentWorkerFailures(
-              { teams: this.deps.teams, dispatches: this.deps.dispatches },
-              teamId,
-              harnessId
-            ),
+          routeHealth: (teamId, route) => workerRouteHealth(this.deps, teamId, route),
           language: this.deps.language
         },
         {

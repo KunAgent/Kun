@@ -16,7 +16,7 @@ import type { ApprovalResolution } from '../domain/approval.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import type { AgentDispatchIntentStore } from './agent-dispatch-intent-store.js'
-import { mergeAssignmentRoutes } from './agent-dispatch-assignment-routes.js'
+import { mergeAssignmentRoutes, rerouteAssignment, type AssignmentReplacement } from './agent-dispatch-assignment-routes.js'
 
 /** Default no-response window before a waiting card starts on its own. */
 export const AGENT_DISPATCH_COUNTDOWN_MS = 60_000
@@ -229,8 +229,17 @@ export class AgentDispatchService {
     return (await this.get(intentId)) ?? changed
   }
 
-  async updateTarget(intentId: string, update: Exclude<AgentDispatchReconciliation, { state: 'absent' | 'resume' }>): Promise<AgentDispatchIntent | null> {
+  /**
+   * Publish a reconciled outcome. With `expectedRevision`, an outcome computed
+   * from an older card (e.g. before an assignment was rerouted) is dropped;
+   * the next scan recomputes it from the current card.
+   */
+  async updateTarget(
+    intentId: string, update: Exclude<AgentDispatchReconciliation, { state: 'absent' | 'resume' }>,
+    expectedRevision?: number
+  ): Promise<AgentDispatchIntent | null> {
     return this.mutate(intentId, (intent) => {
+      if (expectedRevision !== undefined && intent.revision !== expectedRevision) return false
       if (terminal.has(intent.state)) return false
       // Outcome hooks cannot revive a paused/unapproved card.
       if (!active.has(intent.state) && intent.state !== 'queued') return false
@@ -293,6 +302,26 @@ export class AgentDispatchService {
     })
     await this.emit(replaced); this.launch(intentId)
     return replaced
+  }
+
+  /** Host-only reroute of one failed batch assignment after its worker settled; siblings keep running. */
+  replaceAssignment(intentId: string, input: AssignmentReplacement): Promise<AgentDispatchIntent> {
+    return this.command(async () => {
+      this.assertAdmission()
+      const candidate = structuredClone(required((await this.get(intentId)) ?? undefined))
+      rerouteAssignment(candidate, input)
+      await this.handler(candidate).validate(AgentDispatchIntentSchema.parse(candidate), this.controller.signal)
+      const replaced = await this.options.store.transaction((file) => {
+        const current = required(file.intents.find((entry) => entry.intentId === intentId))
+        if (current.revision !== input.expectedRevision) throw new AgentDispatchConflictError(current.revision)
+        rerouteAssignment(current, input)
+        current.revision += 1; current.updatedAt = this.nowIso()
+        return current
+      })
+      this.startFailures.delete(intentId)
+      await this.emit(replaced); this.launch(intentId)
+      return replaced
+    })
   }
 
   async start(): Promise<void> {
@@ -440,7 +469,7 @@ export class AgentDispatchService {
           if (reconciled.state === 'resume') delete current.target
           return true
         })
-      } else { await this.updateTarget(intentId, reconciled); return }
+      } else { await this.updateTarget(intentId, reconciled, intent.revision); return }
     }
     if (intent?.state === 'queued' && !intent.target) { await this.admit(intent, handler); return }
     if (intent && (active.has(intent.state) || (intent.state === 'queued' && intent.target))) {
@@ -455,7 +484,7 @@ export class AgentDispatchService {
         })
       } else if (result?.state === 'absent' && intent.cancellationRequested) {
         await this.updateTarget(intentId, { state: 'cancelled' })
-      } else if (result && result.state !== 'absent') await this.updateTarget(intentId, result)
+      } else if (result && result.state !== 'absent') await this.updateTarget(intentId, result, revision)
     }
   }
 
@@ -497,7 +526,7 @@ export class AgentDispatchService {
             current.state = 'uncertain'
             return true
           })
-        } else if (status && status.state !== 'absent') await this.updateTarget(intent.intentId, status)
+        } else if (status && status.state !== 'absent') await this.updateTarget(intent.intentId, status, admitted.revision)
       }
     } catch (error) {
       // A transport error cannot prove that the scheduler did not accept work.

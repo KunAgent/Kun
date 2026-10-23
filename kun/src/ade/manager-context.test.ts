@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DispatchRecord, QuestionRecord, TeamRecord } from '../contracts/ade.js'
 import type { AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
 import { createAdeManagerContext } from './manager-context.js'
+import { workerDispatchIds } from './worker-dispatch-ids.js'
 
 const NOW = '2026-09-29T00:00:00.000Z'
 
@@ -160,6 +161,19 @@ describe('createAdeManagerContext', () => {
     })({ threadId: 'thr_mgr' })
     expect(block).toContain('dsp_1 [failed: Interrupted by a Kun runtime restart before the worker started this assignment')
     expect(block).not.toContain('Dispatch cards without a started worker')
+  })
+
+  it('tells the manager a failed dispatch was already rerouted', async () => {
+    const rerouted = intent({ state: 'running', startRequestId: 'adi_1:start', replacementCount: 0,
+      payload: { items: [{ fallbackCount: 1 }] } })
+    const { workerId } = workerDispatchIds(rerouted, 0)
+    const block = await createAdeManagerContext({
+      ...makeDeps({ dispatches: [dispatch({ workerId, state: 'failed', failureReason: 'model refused' })] }),
+      dispatchIntents: { list: async () => [rerouted] },
+      nowMs: () => Date.parse(NOW)
+    })({ threadId: 'thr_mgr' })
+    expect(block).toContain(`dsp_1 [failed, rerouted automatically to another Agent; do not redo it] fix login bug → ${workerId}`)
+    expect(block).not.toContain('model refused')
   })
 
   it('still returns guidance when no team exists yet', async () => {
