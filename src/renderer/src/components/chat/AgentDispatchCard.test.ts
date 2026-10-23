@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentDispatchIntentPublicSchema, type AgentDispatchIntentView } from '@shared/agent-dispatch'
 import type { ChatBlock } from '../../agent/types'
 import { AgentDispatchGroup } from './AgentDispatchCard'
+import { Split } from 'lucide-react'
+import { AgentDispatchIntentControls } from './AgentDispatchIntentControls'
+import { rememberAgentIconAliases } from '../../lib/agent-icon-aliases'
 
 const state = vi.hoisted(() => ({ intent: undefined as AgentDispatchIntentView | undefined,
   act: vi.fn(), busy: false, error: '', activeThreadId: 'parent', rows: {} as Record<string, unknown> }))
@@ -67,6 +70,79 @@ async function render(): Promise<string> {
 }
 
 describe('Agent dispatch card', () => {
+  const header = () => renderer!.root.findByType('header')
+  const headerIcons = () => header().findAll((node) => typeof node.type === 'string' && node.props['data-agent-icon'])
+
+  it.each(['kun', 'codex', 'claude-code'])('shows the %s icon independently of the model', async (agentId) => {
+    state.intent = fixture()
+    state.intent.recommendation.assignments = [{ label: 'Task', agentId, model: 'gpt-5' }]
+    await render()
+    expect(headerIcons()).toHaveLength(1)
+    expect(headerIcons()[0].props['data-agent-icon']).toBe(agentId)
+    expect(headerIcons()[0].props['aria-hidden']).toBe(true)
+    expect(headerIcons()[0].props.style).toMatchObject({ width: 16, height: 16 })
+    expect(header().findAllByType(Split)).toHaveLength(0)
+  })
+
+  it('shows the common icon for a batch including derived agents', async () => {
+    rememberAgentIconAliases([{ definition: { id: 'test-derived-kun', derivedFrom: 'kun' } }])
+    try {
+      state.intent = fixture()
+      state.intent.recommendation.assignments![1].agentId = 'test-derived-kun'
+      await render()
+      expect(headerIcons()[0].props['data-agent-icon']).toBe('kun')
+    } finally {
+      rememberAgentIconAliases([{ definition: { id: 'test-derived-kun' } }])
+    }
+  })
+
+  it('keeps the group icon and individual routes for mixed-agent batches', async () => {
+    state.intent = fixture({ state: 'running' })
+    state.intent.recommendation.assignments![1].agentId = 'codex'
+    await render()
+    expect(headerIcons()).toHaveLength(0)
+    expect(header().findAllByType(Split)).toHaveLength(1)
+    expect(renderer!.root.findAll((node) => node.type === 'span' && node.props['data-route-label'])
+      .map((node) => node.props['data-route-label'])).toEqual(['kun', 'codex'])
+  })
+
+  it('uses the legacy recommendation route when assignments are absent', async () => {
+    state.intent = fixture()
+    delete state.intent.recommendation.assignments
+    state.intent.recommendation.agentId = 'claude-code'
+    await render()
+    expect(headerIcons()[0].props['data-agent-icon']).toBe('claude-code')
+  })
+
+  it('preserves the shared unknown-agent fallback', async () => {
+    state.intent = fixture()
+    state.intent.recommendation.assignments = [{ label: 'Custom', agentId: 'unknown-test-agent' }]
+    await render()
+    expect(headerIcons()[0].props['data-agent-icon']).toBe('unknown')
+  })
+
+  it('updates the header from draft routes before saving', async () => {
+    state.intent = fixture({ state: 'paused' })
+    await render()
+    expect(headerIcons()[0].props['data-agent-icon']).toBe('kun')
+    await act(async () => { renderer!.root.findByType(AgentDispatchIntentControls).props.onEdit(state.intent) })
+    const pickers = () => renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])
+    await act(async () => { pickers()[0].props.onClick() })
+    expect(header().findAllByType(Split)).toHaveLength(1)
+    await act(async () => { pickers()[1].props.onClick() })
+    expect(headerIcons()[0].props['data-agent-icon']).toBe('codex')
+    expect(state.act).not.toHaveBeenCalled()
+  })
+
+  it('refreshes the header when the persisted route changes', async () => {
+    state.intent = fixture()
+    await render()
+    expect(headerIcons()[0].props['data-agent-icon']).toBe('kun')
+    state.intent.recommendation.assignments = [{ label: 'Task', agentId: 'codex' }]
+    await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
+    expect(headerIcons()[0].props['data-agent-icon']).toBe('codex')
+  })
+
   it('switches one worker route from a counting-down batch card', async () => {
     state.intent = fixture()
     const text = await render()
