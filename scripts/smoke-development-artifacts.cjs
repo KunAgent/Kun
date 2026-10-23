@@ -129,9 +129,9 @@ async function runFlow({ page, capture, timeoutMs, model, workspaceRoot }) {
 
   await page.locator('[data-artifact-card="sheet"]').click()
   await page.locator('[data-artifact-stage="office"]').waitFor({ timeout: timeoutMs })
-  await poll(async () => (await page.locator('[data-artifact-stage="office"]').innerText()).includes('Runtime events'), timeoutMs, 'spreadsheet cells')
+  await page.locator('[data-artifact-stage="office"] [role="grid"]').waitFor({ timeout: timeoutMs })
   await capture('artifacts-3-sheet-viewer')
-  checks.push('The spreadsheet opens in a viewer that renders its cells with the shared office preview')
+  checks.push('The spreadsheet opens in a viewer that draws its worksheet grid with the shared office preview')
   checks.push(await checkSheetScrolling(office))
 
   await page.getByRole('button', { name: 'Back to artifacts' }).click()
@@ -251,6 +251,9 @@ async function main() {
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
     await page.waitForLoadState('domcontentloaded', { timeout: 120_000 })
+    // The Word viewer renders every page and reports one while a WebDriver drives the
+    // window; the app is not driven that way, so the smoke looks like a person.
+    await page.evaluate(() => Object.defineProperty(navigator, 'webdriver', { get: () => false, configurable: true }))
     await page.locator('.ds-composer-textarea').waitFor({ timeout: timeoutMs })
     const assertions = await runFlow({ page, capture, timeoutMs, model, workspaceRoot })
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')

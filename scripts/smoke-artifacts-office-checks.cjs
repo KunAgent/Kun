@@ -76,12 +76,19 @@ async function scrollToEnd(scroller, page) {
   await page.waitForTimeout(300)
 }
 
+// The artifact chat shows what is selected in the viewer as a chip above its composer.
+async function expectSelectionChip(page, poll, timeoutMs, text) {
+  const panel = page.locator('[data-artifact-chat-panel="chat"]')
+  await poll(async () => (await panel.innerText()).includes(text), timeoutMs, `the chat chip "${text}"`)
+}
+
 async function checkDocScrolling({ page, capture, poll, diagnostics, timeoutMs }) {
   const stage = page.locator('[data-artifact-stage="office"]')
-  await poll(async () => (await stage.locator('section.docx').count()) >= 6, timeoutMs, 'rendered DOCX pages')
-  const scroller = stage.locator('.workspace-docx-preview').locator('xpath=../..')
+  await poll(async () => (await stage.locator('[data-docx-page-wrapper]').count()) >= 1, timeoutMs, 'rendered DOCX pages')
+  const scroller = stage.locator('.kun-docx .kun-office-scroll')
+  const zoomSelect = stage.locator('.kun-office-toolbar select')
   const summary = () => stage.locator('[aria-label^="Page "]').first().getAttribute('aria-label')
-  const fitZoom = await stage.getByRole('button', { name: 'Reset zoom' }).innerText()
+  await poll(async () => (await summary()) === 'Page 1 of 6', timeoutMs, 'the page count')
   diagnostics.docInitial = await measureScroller(scroller)
   await capture('artifacts-11-doc-viewer')
   assertBoundedScroller(diagnostics.docInitial, 'Document pane')
@@ -89,24 +96,32 @@ async function checkDocScrolling({ page, capture, poll, diagnostics, timeoutMs }
   await page.mouse.wheel(0, 900)
   await poll(async () => (await summary()) === 'Page 2 of 6', timeoutMs, 'page indicator following the wheel')
   const next = stage.getByRole('button', { name: 'Next page' })
-  while (await next.isEnabled()) await next.click()
-  assert.equal(await summary(), 'Page 6 of 6')
+  while (await next.isEnabled()) {
+    await next.click()
+    await page.waitForTimeout(150)
+  }
+  await poll(async () => (await summary()) === 'Page 6 of 6', timeoutMs, 'the last page')
   assert.equal((await measureScroller(scroller)).ancestorScroll, 0, 'Page navigation scrolled a clipped ancestor')
 
-  diagnostics.docZoomOut = await zoomBy(stage, page, 'Zoom out', 3)
+  await zoomSelect.selectOption('50')
+  await page.waitForTimeout(500)
   await scrollToEnd(scroller, page)
-  diagnostics.docZoomedOut = { ...(await measureScroller(scroller)), slack: await trailingSlack(scroller, 'section.docx') }
+  diagnostics.docZoomedOut = { ...(await measureScroller(scroller)), slack: await trailingSlack(scroller, '[data-docx-page-wrapper]') }
   await capture('artifacts-12-doc-zoomed-out')
+  assert(diagnostics.docZoomedOut.scrollHeight < diagnostics.docInitial.scrollHeight * 6, 'Zoomed-out document keeps its full-size scroll range')
   assert(diagnostics.docZoomedOut.slack.bottom < 64, 'Zoomed-out document leaves a blank scroll range below the last page')
   assert.equal(diagnostics.docZoomedOut.scrollWidth, diagnostics.docZoomedOut.clientWidth, 'Zoomed-out document scrolls sideways')
 
-  diagnostics.docZoomIn = await zoomBy(stage, page, 'Zoom in', 9)
-  await scroller.evaluate((node) => { node.scrollLeft = 0 })
-  await page.waitForTimeout(200)
+  await zoomSelect.selectOption('200')
+  await page.waitForTimeout(500)
+  await scroller.evaluate((node) => { node.scrollTop = 0; node.scrollLeft = 0 })
+  await page.waitForTimeout(300)
   const pageEdges = () => scroller.evaluate((node) => {
     const box = node.getBoundingClientRect()
-    const first = node.querySelector('section.docx').getBoundingClientRect()
-    return { left: Math.round(first.left - box.left), right: Math.round(box.right - first.right) }
+    const wrappers = Array.from(node.querySelectorAll('[data-docx-page-wrapper]'))
+    const first = wrappers[0].getBoundingClientRect()
+    const last = wrappers[wrappers.length - 1].getBoundingClientRect()
+    return { left: Math.round(first.left - box.left), right: Math.round(box.right - last.right) }
   })
   diagnostics.docZoomedInStart = { ...(await measureScroller(scroller)), edges: await pageEdges() }
   await scrollToEnd(scroller, page)
@@ -115,50 +130,59 @@ async function checkDocScrolling({ page, capture, poll, diagnostics, timeoutMs }
   assert(diagnostics.docZoomedInStart.scrollWidth > diagnostics.docZoomedInStart.clientWidth, 'Zoomed-in page cannot scroll sideways')
   assert(diagnostics.docZoomedInStart.edges.left >= 0, 'Zoomed-in page is cut off on the left')
   assert(diagnostics.docZoomedInEnd.edges.right >= 0, 'Zoomed-in page is cut off on the right')
-  await stage.getByRole('button', { name: 'Reset zoom' }).click()
-  await poll(async () => (await stage.getByRole('button', { name: 'Reset zoom' }).innerText()) === fitZoom, timeoutMs, 'fit zoom restored')
-  return 'The document pane scrolls inside the stage, tracks pages, and its scroll range follows zoom out and in'
+  await zoomSelect.selectOption('automatic')
+  await page.waitForTimeout(500)
+  await scroller.evaluate((node) => { node.scrollTop = 0; node.scrollLeft = 0 })
+  await page.waitForTimeout(300)
+
+  // Dragging over text quotes it into the chat, with the page it came from.
+  const paragraph = await stage.locator('[data-docx-source-id]').first().boundingBox()
+  assert(paragraph, 'The first paragraph is not on screen')
+  await page.mouse.move(paragraph.x + 2, paragraph.y + paragraph.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(paragraph.x + Math.min(paragraph.width - 4, 220), paragraph.y + paragraph.height / 2, { steps: 6 })
+  await page.mouse.up()
+  await expectSelectionChip(page, poll, timeoutMs, 'Selected: “Handbook page 1')
+  await capture('artifacts-12c-doc-selected')
+  return 'The document pane scrolls inside the stage, tracks pages, follows zoom out and in, and quotes selected text into the chat'
 }
 
 async function checkSheetScrolling({ page, capture, poll, diagnostics, timeoutMs }) {
   const stage = page.locator('[data-artifact-stage="office"]')
-  const table = stage.locator('table')
-  await table.waitFor({ timeout: timeoutMs })
-  const scroller = table.locator('xpath=../..')
-  // Gaps between the scroller edge and the frozen header row / row-number column.
-  const pinned = () => scroller.evaluate((node) => {
-    const box = node.getBoundingClientRect()
-    const header = node.querySelector('thead th:nth-child(2)').getBoundingClientRect()
-    const rowHeader = node.querySelector('tbody th').getBoundingClientRect()
-    return { top: Math.round(header.top - box.top), left: Math.round(rowHeader.left - box.left) }
-  })
-  diagnostics.sheetInitial = await measureScroller(scroller)
+  const grid = stage.locator('[role="grid"]')
+  await grid.waitFor({ timeout: timeoutMs })
+  await poll(async () => Number(await grid.getAttribute('aria-rowcount')) >= 260, timeoutMs, 'the worksheet rows')
+  assert.match((await grid.getAttribute('aria-label')) ?? '', /Compare/, 'The grid is not the Compare worksheet')
+  diagnostics.sheetInitial = await measureScroller(grid)
   assertBoundedScroller(diagnostics.sheetInitial, 'Sheet pane')
-  await scroller.hover()
+  await grid.hover()
   await page.mouse.wheel(0, 900)
   await page.mouse.wheel(600, 0)
   await poll(async () => {
-    const geometry = await measureScroller(scroller)
+    const geometry = await measureScroller(grid)
     return geometry.scrollTop > 0 && geometry.scrollLeft > 0
   }, timeoutMs, 'wheel scrolling the sheet both ways')
-  diagnostics.sheetScrolled = { ...(await measureScroller(scroller)), pinned: await pinned() }
+  diagnostics.sheetScrolled = await measureScroller(grid)
   await capture('artifacts-13-sheet-scrolled')
-  assert.deepEqual(diagnostics.sheetScrolled.pinned, { top: 0, left: 0 }, 'Frozen sheet headers leave a gap at the pane edge')
   assert.equal(diagnostics.sheetScrolled.ancestorScroll, 0)
 
   diagnostics.sheetZoomOut = await zoomBy(stage, page, 'Zoom out', 3)
-  await scrollToEnd(scroller, page)
-  diagnostics.sheetZoomedOut = { ...(await measureScroller(scroller)), pinned: await pinned(),
-    slack: await trailingSlack(scroller, 'table') }
+  await scrollToEnd(grid, page)
+  diagnostics.sheetZoomedOut = await measureScroller(grid)
   await capture('artifacts-14-sheet-zoomed-out')
-  const zoomedOut = diagnostics.sheetZoomedOut
-  const scrollsSideways = zoomedOut.scrollWidth > zoomedOut.clientWidth
-  assert(zoomedOut.slack.bottom <= 20 && (!scrollsSideways || zoomedOut.slack.right <= 20),
-    'Zoomed-out sheet leaves a blank scroll range past the table')
-  assert.equal(zoomedOut.pinned.top, 0, 'Zoomed-out sheet loses its frozen header row')
-  if (scrollsSideways) assert.equal(zoomedOut.pinned.left, 0, 'Zoomed-out sheet loses its frozen row numbers')
+  assert(diagnostics.sheetZoomedOut.scrollHeight < diagnostics.sheetInitial.scrollHeight, 'Zoomed-out sheet keeps its full-size scroll range')
+  assert(diagnostics.sheetZoomedOut.scrollTop + diagnostics.sheetZoomedOut.clientHeight >= diagnostics.sheetZoomedOut.scrollHeight - 2, 'Zoomed-out sheet cannot reach its last row')
   await stage.getByRole('button', { name: 'Reset zoom' }).click()
-  return 'The sheet pane scrolls both ways with its header row and row numbers pinned, at any zoom, with no blank range'
+  await grid.evaluate((node) => { node.scrollTop = 0; node.scrollLeft = 0 })
+  await page.waitForTimeout(300)
+
+  // Clicking a cell quotes its address into the chat; the cells are painted on a canvas.
+  const box = await grid.boundingBox()
+  assert(box, 'The grid has no box')
+  await page.mouse.click(box.x + 140, box.y + 70)
+  await expectSelectionChip(page, poll, timeoutMs, 'Selected: Compare!')
+  await capture('artifacts-14b-sheet-selected')
+  return 'The sheet pane scrolls both ways at any zoom, reaches its last row zoomed out, and quotes a clicked cell into the chat'
 }
 
 module.exports = { checkDocScrolling, checkSheetScrolling, checkSlideRailScrolling }

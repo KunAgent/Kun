@@ -4,5 +4,11 @@
   "officeZoomFitPage": "По размеру страницы",
   "officeZoomFitWidth": "По ширине",
   "officeZoomAutomatic": "Автоматически",
-  "officeZoomLevel": "Масштаб"
+  "officeZoomLevel": "Масштаб",
+  "officeDocxOpening": "Открытие документа…",
+  "officeDocxOpenFailed": "Не удалось открыть документ",
+  "officeDocxRenderError": "Не удалось отобразить этот документ Word.",
+  "officeSheetOpenFailed": "Не удалось открыть книгу",
+  "officeSheetRenderError": "Не удалось отобразить эту таблицу.",
+  "officeCopyFailed": "Не удалось скопировать выделенное"
 }
