@@ -31,10 +31,9 @@ import { SidebarAgentChatRow } from './SidebarAgentChatRow'
 import { SidebarAgentChatMenu, type SidebarAgentChatAction } from './SidebarAgentChatMenu'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
 import { SidebarNewConversationMenu } from './SidebarNewConversationMenu'
-import { AddAssistantDialog } from '../assistants/AddAssistantDialog'
 import { SidebarAssistantRow } from '../assistants/SidebarAssistantRow'
 import { assistantMailbox, startAssistantMailbox, useAssistantMailboxStore } from '../assistants/assistant-mailbox-store'
-import { closeAssistantConversation, openAssistantConversation, useAssistantNavigationStore } from '../assistants/assistant-navigation'
+import { closeAssistantConversation, openAddAssistantDialog, openAssistantConversation, useAssistantNavigationStore } from '../assistants/assistant-navigation'
 import { assistantSidebarItems, filterAssistantItems, mergeConversationItems, type AssistantSidebarItem } from '../assistants/assistant-sidebar'
 import { useAssistantAttention } from '../assistants/useAssistantAttention'
 import {
@@ -75,7 +74,6 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   const readAt = useAssistantNavigationStore((state) => state.readAt)
   const assistantStatus = useAssistantMailboxStore((state) => state.status)
   const assistantsOn = assistantStatus?.availability === 'available'
-  const [addingAssistant, setAddingAssistant] = useState(false)
   useEffect(() => { startAssistantMailbox() }, [])
   useAssistantAttention(assistantStatus)
   const selectedRoomId = route === 'agent-chat' && !assistantSelection ? roomId : null
@@ -224,7 +222,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
             <Search size={14} />
           </SidebarIconButton>
           <SidebarNewConversationMenu title={t('agentChatsStart')} disabled={!props.runtimeReady || pending}
-            assistants={assistantsOn} onNewChat={openNewChat} onAddAssistant={() => setAddingAssistant(true)} />
+            assistants={assistantsOn} onNewChat={openNewChat} onAddAssistant={openAddAssistantDialog} />
           <RoomPopover label={`${t('sidebarConversations')} · ${t('roomsMoreActions')}`} trigger={<MoreHorizontal size={14} />}
             disabled={!props.runtimeReady}
             className="sidebar-agent-chats-list-menu rooms-icon-button" align="end" width={232}>
@@ -297,8 +295,6 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
         </button> : null}
       </> : null}
     </section>
-    {addingAssistant ? <AddAssistantDialog onClose={() => setAddingAssistant(false)}
-      onCreated={(enrollmentId) => { setAddingAssistant(false); openAssistantConversation({ kind: 'enrollment', id: enrollmentId }) }} /> : null}
     {removal ? <ConversationRemovalDialog target={removal.target} removal={removal.kind}
       busy={busyEntries.has(removal.entry.id)} error={actionError}
       onCancel={() => { setRemoval(null); setActionError('') }}

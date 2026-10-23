@@ -7,7 +7,7 @@ import '../../i18n'
 import en from '../../locales/en/common/assistant-mailbox.json'
 import type { AssistantMailboxStatus, AssistantNoteView, AssistantTaskView, AssistantView } from '@shared/assistant-mailbox'
 import type { RoomSidebarEntry } from '@shared/rooms-api'
-import { AddAssistantDialog } from './AddAssistantDialog'
+import { AddAssistantDialog, AddAssistantForm } from './AddAssistantDialog'
 import { AssistantConversationStage } from './AssistantConversationStage'
 import { AssistantLogo } from './AssistantLogo'
 import { AssistantThread, assistantTimeline } from './AssistantThread'
@@ -135,13 +135,34 @@ describe('assistant conversation', () => {
   })
 
   it('offers the six presets and any other product, with logos or a monogram', () => {
-    const dialog = renderToStaticMarkup(createElement(AddAssistantDialog, { onClose: () => {}, onCreated: () => {} }))
+    const dialog = renderToStaticMarkup(createElement(AddAssistantForm, { onClose: () => {}, onCreated: () => {} }))
     expect(dialog.match(/aria-pressed=/g)).toHaveLength(9)
-    for (const name of ['Cue', 'Grok Bot', 'Muse', 'dots', 'Hark', 'Today']) expect(dialog).toContain(`<strong class="text-[13.5px]">${name}</strong>`)
+    for (const name of ['Cue', 'Grok Bot', 'Muse', 'dots', 'Hark', 'Today']) expect(dialog).toContain(`<strong class="truncate text-[13px] font-semibold">${name}</strong>`)
     expect(dialog).toContain(text('assistantOtherNote'))
+    // Only the chosen product's setup note is spelled out.
+    expect(dialog).toContain(text('assistantPresetNoteCue'))
+    expect(dialog).not.toContain(text('assistantPresetNoteMuse'))
     expect(renderToStaticMarkup(createElement(AssistantLogo, { kind: 'today', name: 'Today' }))).toMatch(/<img src="[^"]*today/)
     expect(renderToStaticMarkup(createElement(AssistantLogo, { kind: 'zo', name: 'Zo', icon: 'data:image/png;base64,AAAA' }))).toContain('src="data:image/png;base64,AAAA"')
     expect(renderToStaticMarkup(createElement(AssistantLogo, { kind: 'zo', name: '我的 Zo' }))).toContain('>Z</span>')
+  })
+
+  it('opens the connect dialog at window level, outside the sidebar that asked for it', async () => {
+    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute('open', '') } })
+    Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function (this: HTMLDialogElement) { this.removeAttribute('open') } })
+    const sidebar = document.body.appendChild(document.createElement('aside'))
+    const root = createRoot(sidebar)
+    let closed = 0
+    await act(async () => { root.render(createElement(AddAssistantDialog, { onClose: () => { closed += 1 }, onCreated: () => {} })) })
+    const dialog = document.querySelector('dialog')
+    expect(dialog?.hasAttribute('open')).toBe(true)
+    expect(dialog?.parentElement).toBe(document.body)
+    expect(sidebar.querySelector('dialog')).toBeNull()
+    expect(dialog?.querySelector('h2')?.textContent).toBe(text('assistantMailboxDialogTitle'))
+    await act(async () => { dialog?.dispatchEvent(new Event('cancel', { cancelable: true })) })
+    expect(closed).toBe(1)
+    await act(async () => { root.unmount() })
+    sidebar.remove()
   })
 
   it('shows the verification code to compare and blocks approval without this computer\'s key', () => {

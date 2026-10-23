@@ -1,5 +1,6 @@
-// Which personal assistant conversation the Code stage shows. Assistants are not Rooms, so this
-// rides on the existing `agent-chat` route; opening any Room clears it.
+// Which personal assistant conversation the Code stage shows, and whether the connect dialog is
+// open. Assistants are not Rooms, so this rides on the existing `agent-chat` route; opening any Room
+// clears it.
 import { create } from 'zustand'
 import { useChatStore } from '../../store/chat-store'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
@@ -13,6 +14,8 @@ type Navigation = {
   selection: AssistantSelection | null
   /** When the user last looked at each assistant's conversation, for unread dots. */
   readAt: Record<string, string>
+  /** The workbench hosts the connect dialog, like the new-conversation picker, so it is never clipped by the sidebar. */
+  connecting: boolean
 }
 
 function loadReadMarks(): Record<string, string> {
@@ -24,11 +27,19 @@ function loadReadMarks(): Record<string, string> {
   }
 }
 
-export const useAssistantNavigationStore = create<Navigation>(() => ({ selection: null, readAt: loadReadMarks() }))
+export const useAssistantNavigationStore = create<Navigation>(() => ({ selection: null, readAt: loadReadMarks(), connecting: false }))
 
 export function openAssistantConversation(selection: AssistantSelection): void {
   useAssistantNavigationStore.setState({ selection })
   useChatStore.getState().setRoute('agent-chat')
+}
+
+export function openAddAssistantDialog(): void {
+  useAssistantNavigationStore.setState({ connecting: true })
+}
+
+export function closeAddAssistantDialog(): void {
+  useAssistantNavigationStore.setState({ connecting: false })
 }
 
 export function closeAssistantConversation(): void {
