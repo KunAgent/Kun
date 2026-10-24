@@ -66,9 +66,9 @@ function StatusMark({ status, dot }: { status: SubagentLivenessStatus; dot: stri
 }
 
 /**
- * Role-icon tile with the run status on its corner: a turning ring while
- * running, an amber ring while waiting for approval, a dashed outline while
- * queued, a check / ! / grey dot once it ended.
+ * Role-icon tile with the run status on its corner: a still rounded track with
+ * a traveling highlight while running, an amber ring while waiting for approval,
+ * a dashed outline while queued, and a check / ! / grey dot once it ended.
  */
 export function SubagentRoleTile({
   profileId,
@@ -116,15 +116,20 @@ export function SubagentRoleTile({
       {children ?? <Icon size={dim.icon} strokeWidth={2} aria-hidden="true" />}
       {status === 'running' ? (
         <svg
-          className={`pointer-events-none absolute -inset-1 text-accent ${animate ? 'animate-spin' : ''}`}
-          style={animate ? { animationDuration: '1.1s' } : undefined}
+          className="pointer-events-none absolute -inset-1 text-accent"
           width={dim.ring}
           height={dim.ring}
           viewBox="0 0 38 38"
           fill="none"
           aria-hidden="true"
         >
-          <rect x="1.5" y="1.5" width="35" height="35" rx="11.5" stroke="currentColor" strokeWidth="1.6" strokeDasharray="24 90" strokeLinecap="round" />
+          <rect x="1.5" y="1.5" width="35" height="35" rx="11.5" stroke="currentColor" strokeOpacity="0.14" strokeWidth="1.4" />
+          <rect
+            className={animate ? 'ds-subagent-ring-trail' : undefined}
+            x="1.5" y="1.5" width="35" height="35" rx="11.5"
+            pathLength="100" stroke="currentColor" strokeWidth="1.6"
+            strokeDasharray="18 82" strokeLinecap="round"
+          />
         </svg>
       ) : null}
       {!isTerminalSubagentStatus(status) ? null : <StatusMark status={status} dot={dim.dot} />}
