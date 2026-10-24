@@ -102,14 +102,27 @@ it('scrubs a legacy empty-excerpt snapshot through Manager validation and skips 
     job('invalid', { id: '', kind: 'user', trust: 'explicit-user' }, 2),
     job('later', { id: 'reply', kind: 'inference', excerpt: 'Reports use Chinese.', trust: 'inferred' }, 3)
   ]
-  const agents = { store: { list: async (_kind: string, filter: { phase: string }) => filter.phase === 'capture' ? rows : [] } }
+  const values = new Map(rows.map((row) => [row.id, row]))
+  const agents = { store: {
+    list: async (_kind: string, filter: { phase: string; afterSeq?: number }) =>
+      [...values.values()].filter((row) => row.value.phase === filter.phase && row.seq > (filter.afterSeq ?? 0))
+        .sort((a, b) => a.seq - b.seq),
+    get: async (_kind: string, id: string) => values.get(id) ?? null,
+    commit: async (request: { puts: Array<{ id: string; value: unknown }> }) => {
+      for (const put of request.puts) {
+        const current = values.get(put.id)!
+        values.set(put.id, { ...current, revision: current.revision + 1, value: put.value as typeof current.value })
+      }
+    } } }
   const service = new AgentMemoryService(agents as never, () => remote)
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   try {
     await service.scrubForgotten()
     expect(checked.map((input) => input.content)).toEqual(rows.map((row) => row.value.snapshot.input))
     expect(checked[0]!.sources?.[0]).not.toHaveProperty('excerpt', '')
-    const skipped = warn.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[kun] agent memory scrub'))
-    expect(skipped).toEqual(['[kun] agent memory scrub skipped capture job invalid in room room:'])
+    const skipped = warn.mock.calls.filter((call) => String(call[0]) === '[kun] agent memory scrub:')
+    expect(skipped).toHaveLength(1)
+    expect(skipped[0]![1]).toMatchObject({ roomId: 'room', requestId: 'root', jobId: 'invalid', stopped: true })
+    expect((values.get('invalid')!.value as { scrubFailure?: { attempts: number } }).scrubFailure?.attempts).toBe(1)
   } finally { await shared.close() }
 })

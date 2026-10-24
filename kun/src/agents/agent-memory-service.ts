@@ -159,7 +159,7 @@ export class AgentMemoryService {
     this.scrubDue = false
     this.scrubbedAt = now
     try {
-      await scrubForgottenAgentMemory(this)
+      await scrubForgottenAgentMemory(this, { force: options.force, now })
       this.scrubFailures = 0
       this.scrubRetryAt = 0
     } catch (error) {
