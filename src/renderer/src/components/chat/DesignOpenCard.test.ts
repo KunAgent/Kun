@@ -1,45 +1,59 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import i18n from '../../i18n'
+import '../../i18n'
 import type { NormalizedThread, ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
-import { useAgentDesignRequestStore } from '../../design/agent-design-requests'
-import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
-import { DesignOpenCard } from './DesignOpenCard'
+import { DesignOpenCard, designOpenCardState } from './DesignOpenCard'
 
-const panelMocks = vi.hoisted(() => ({ requestCodeCanvasPanelOpen: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  requestCodeCanvasPanelOpen: vi.fn(),
+  openAgentDesignCanvas: vi.fn(async () => true)
+}))
 vi.mock('../../lib/code-canvas-panel-event', () => ({
-  requestCodeCanvasPanelOpen: panelMocks.requestCodeCanvasPanelOpen
+  requestCodeCanvasPanelOpen: mocks.requestCodeCanvasPanelOpen
+}))
+vi.mock('../../design/agent-design-ingest', () => ({
+  openAgentDesignCanvas: mocks.openAgentDesignCanvas
 }))
 
 const REQUEST_ID = 'design_0123456789abcdef'
+const DOCUMENT_ID = '0a1b2c3d'
 
-const block = {
-  kind: 'tool',
-  id: 'tool_design',
-  turnId: 'turn-1',
-  summary: 'design_open',
-  status: 'success',
-  toolKind: 'file_change',
-  meta: {
-    toolName: 'design_open',
-    designOpenRequest: {
-      status: 'queued',
-      requestId: REQUEST_ID,
-      title: 'Footer entry',
-      brief: 'Move the update button.',
-      target: 'web'
-    }
-  }
-} as unknown as ToolBlock
+function block(designOpenRequest: Record<string, unknown>): ToolBlock {
+  return {
+    kind: 'tool',
+    id: 'tool_design',
+    turnId: 'turn-1',
+    summary: 'design_open',
+    status: 'success',
+    toolKind: 'file_change',
+    meta: { toolName: 'design_open', designOpenRequest }
+  } as unknown as ToolBlock
+}
+
+const readyRequest = {
+  status: 'ready',
+  requestId: REQUEST_ID,
+  title: 'Footer entry',
+  documentId: DOCUMENT_ID,
+  target: 'web',
+  screenCount: 1,
+  screens: [{
+    artifactId: '9f8e7d6c',
+    name: 'Footer',
+    relativePath: `.kun-design/${DOCUMENT_ID}/9f8e7d6c/v1.html`,
+    width: 1280,
+    height: 800
+  }]
+}
 
 function thread(overrides: Partial<NormalizedThread> = {}): NormalizedThread {
   return {
     id: 'thread-1',
     title: 'Code task',
-    updatedAt: '2026-10-20T00:00:00.000Z',
+    updatedAt: '2026-10-24T00:00:00.000Z',
     model: '',
     mode: 'agent',
     workspace: '/workspace',
@@ -48,102 +62,87 @@ function thread(overrides: Partial<NormalizedThread> = {}): NormalizedThread {
   }
 }
 
+async function render(request: Record<string, unknown>, requestTurnLive = false): Promise<ReactTestRenderer> {
+  let renderer!: ReactTestRenderer
+  await act(async () => {
+    renderer = create(createElement(DesignOpenCard, { block: block(request), threadId: 'thread-1', requestTurnLive }))
+  })
+  return renderer
+}
+
+function card(renderer: ReactTestRenderer) {
+  return renderer.root.find((node) => node.type === 'button' && node.props['data-design-open-card'] !== undefined)
+}
+
+function cardText(renderer: ReactTestRenderer): string {
+  return card(renderer).findAll((node) => typeof node.children[0] === 'string')
+    .map((node) => node.children.join('')).join(' | ')
+}
+
+beforeEach(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  useChatStore.setState({ threads: [thread()] })
+  useCodeCanvasDesignSurface.getState().clearDesignSurface()
+})
+
+afterEach(() => {
+  mocks.requestCodeCanvasPanelOpen.mockClear()
+  mocks.openAgentDesignCanvas.mockClear()
+})
+
 describe('DesignOpenCard', () => {
-  let renderer: ReactTestRenderer | null = null
-
-  async function render(requestTurnLive = false): Promise<ReactTestRenderer> {
-    await act(async () => {
-      renderer = create(createElement(DesignOpenCard, { block, threadId: 'thread-1', requestTurnLive }))
-    })
-    return renderer!
-  }
-
-  function section(): { props: Record<string, unknown> } {
-    return renderer!.root.find((node) => node.type === 'section' && node.props['data-design-open-card'] !== undefined)
-  }
-
-  beforeEach(async () => {
-    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    await i18n.changeLanguage('en')
-    panelMocks.requestCodeCanvasPanelOpen.mockClear()
-    useAgentDesignRequestStore.setState({ records: {}, manualStarts: [] })
-    useCodeCanvasDesignSurface.setState({ surface: null })
-    useDesignWorkspaceStore.setState({ documents: [] })
-    useChatStore.setState({ busy: false, threads: [thread()] })
-  })
-
-  afterEach(async () => {
-    if (renderer) await act(async () => renderer!.unmount())
-    renderer = null
-  })
-
-  it('tells the user the pass starts after the live reply', async () => {
-    await render(true)
-    expect(section().props['data-design-open-state']).toBe('queued')
-    expect(JSON.stringify(renderer!.toJSON())).toContain('Starts when this reply finishes')
-  })
-
-  it('offers a manual start for a request that never ran', async () => {
-    await render(false)
-    expect(section().props['data-design-open-state']).toBe('not-started')
-    const start = renderer!.root.find((node) => node.type === 'button' && node.props['data-design-open-start'] !== undefined)
-    act(() => start.props.onClick())
-    expect(useAgentDesignRequestStore.getState().manualStarts).toEqual([REQUEST_ID])
-  })
-
-  it('opens the bound Design canvas with its screen count once ready', async () => {
-    useChatStore.setState({
-      threads: [thread({
-        designProfile: {
-          version: 1,
-          documentTarget: { documentId: 'doc-1', boardArtifactId: 'board-1' },
-          outputMedium: 'html',
-          target: 'web',
-          preset: 'none',
-          context: { tone: [] },
-          lockedAtTurnId: 'turn-2'
-        }
-      })]
-    })
-    useDesignWorkspaceStore.setState({
-      documents: [{
-        id: 'doc-1',
-        title: 'Footer entry redesign',
-        createdAt: '2026-10-20T00:00:00.000Z',
-        updatedAt: '2026-10-20T00:00:00.000Z',
-        order: 0,
-        activeArtifactId: null,
-        artifacts: [
-          { id: 'a', kind: 'html', title: 'A' },
-          { id: 'b', kind: 'html', title: 'B' },
-          { id: 'board-1', kind: 'canvas', title: 'Board' }
-        ]
-      }]
-    } as never)
-    await render(false)
-    expect(section().props['data-design-open-state']).toBe('ready')
-    const json = JSON.stringify(renderer!.toJSON())
-    expect(json).toContain('Footer entry redesign')
-    expect(json).toContain('2 screens')
-    const open = renderer!.root.find((node) => node.type === 'button' && node.props['data-design-open-open'] !== undefined)
-    act(() => open.props.onClick())
-    expect(useCodeCanvasDesignSurface.getState().surface).toMatchObject({
+  it('opens a finished design on the canvas with one click', async () => {
+    const renderer = await render(readyRequest)
+    expect(card(renderer).props['data-design-open-state']).toBe('ready')
+    expect(card(renderer).props.disabled).toBe(false)
+    expect(cardText(renderer)).toBe('Footer entry | 1 screen · Web')
+    await act(async () => card(renderer).props.onClick())
+    expect(mocks.openAgentDesignCanvas).toHaveBeenCalledWith(expect.objectContaining({
       threadId: 'thread-1',
       workspaceRoot: '/workspace',
-      documentId: 'doc-1',
-      boardArtifactId: 'board-1'
-    })
-    expect(panelMocks.requestCodeCanvasPanelOpen).toHaveBeenCalledTimes(1)
+      request: expect.objectContaining({ documentId: DOCUMENT_ID, status: 'ready' })
+    }))
+    await act(async () => renderer.unmount())
   })
 
-  it('shows a designing state while the dispatched pass runs', async () => {
-    useAgentDesignRequestStore.getState().setPhase(REQUEST_ID, {
-      threadId: 'thread-1',
-      turnId: 'turn-1',
-      phase: 'running'
+  it('shows progress while the agent is still writing the screens, with nothing to click', async () => {
+    const renderer = await render({ status: 'pending', title: 'Footer entry', screenCount: 2 }, true)
+    expect(card(renderer).props['data-design-open-state']).toBe('designing')
+    expect(card(renderer).props.disabled).toBe(true)
+    expect(cardText(renderer)).toBe('Footer entry | Designing on the canvas… · 2 screens')
+    await act(async () => renderer.unmount())
+  })
+
+  it('stops spinning when the reply ended before the design was written', () => {
+    const pending = { status: 'pending' as const, title: 'X', screenCount: 1, screens: [] }
+    expect(designOpenCardState(pending, true)).toBe('designing')
+    expect(designOpenCardState(pending, false)).toBe('interrupted')
+  })
+
+  it('reports a failed call inline', async () => {
+    const renderer = await render({ status: 'failed', title: 'Footer entry', error: 'screen "A" needs html' })
+    expect(card(renderer).props['data-design-open-state']).toBe('failed')
+    expect(cardText(renderer)).toContain('screen "A" needs html')
+    expect(card(renderer).props.disabled).toBe(true)
+    await act(async () => renderer.unmount())
+  })
+
+  it('reopens the bound document of an old queued request without a start button', async () => {
+    useChatStore.setState({
+      threads: [thread({
+        designProfile: { documentTarget: { documentId: 'legacydoc', boardArtifactId: 'board-1' } }
+      } as unknown as Partial<NormalizedThread>)]
     })
-    useChatStore.setState({ busy: true })
-    await render(false)
-    expect(section().props['data-design-open-state']).toBe('designing')
+    const renderer = await render({ status: 'legacy', requestId: REQUEST_ID, title: 'Footer entry' })
+    expect(card(renderer).props['data-design-open-state']).toBe('legacy')
+    expect(renderer.root.findAll((node) => node.props['data-design-open-start'] !== undefined)).toHaveLength(0)
+    await act(async () => card(renderer).props.onClick())
+    expect(useCodeCanvasDesignSurface.getState().surface).toMatchObject({
+      threadId: 'thread-1',
+      documentId: 'legacydoc',
+      boardArtifactId: 'board-1'
+    })
+    expect(mocks.requestCodeCanvasPanelOpen).toHaveBeenCalledTimes(1)
+    await act(async () => renderer.unmount())
   })
 })

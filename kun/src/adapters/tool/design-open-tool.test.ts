@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { buildDesignCanvasLocalTools } from './design-canvas-tool.js'
@@ -5,7 +8,10 @@ import { modelToolDiscoveryContexts } from '../../loop/tool-discovery-context-fa
 import {
   createDesignOpenTool,
   DESIGN_OPEN_TOOL_NAME,
+  designOpenDocumentId,
   designOpenRequestId,
+  designOpenScreenId,
+  normalizeDesignScreenHtml,
   shouldAdvertiseDesignOpen
 } from './design-open-tool.js'
 
@@ -65,56 +71,85 @@ describe('design_open tool', () => {
     expect(shouldAdvertiseDesignOpen(designTurn)).toBe(false)
   })
 
-  it('queues a stable design request without touching the workspace', async () => {
-    const tool = createDesignOpenTool()
-    const result = await tool.execute({
-      title: '  Update entry redesign  ',
-      brief: 'Move the update button into the sidebar footer.',
-      target: 'web',
-      medium: 'html'
-    }, codeContext())
-    expect(result.isError).toBeUndefined()
-    const expectedId = designOpenRequestId(
-      codeContext(),
-      'Update entry redesign',
-      'Move the update button into the sidebar footer.'
-    )
-    expect(expectedId).toMatch(/^design_[0-9a-f]{16}$/)
-    expect(result.output).toMatchObject({
-      ok: true,
-      status: 'queued',
-      designRequest: {
-        version: 1,
-        requestId: expectedId,
-        status: 'queued',
-        title: 'Update entry redesign',
-        brief: 'Move the update button into the sidebar footer.',
-        target: 'web',
-        medium: 'html'
-      }
-    })
-    expect(JSON.stringify(result.output)).toContain('starts as soon as this reply ends')
+  it('writes every screen into a stable design document in the same turn', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-design-open-'))
+    try {
+      const context = codeContext({ workspace })
+      const result = await createDesignOpenTool().execute({
+        title: '  Update entry redesign  ',
+        target: 'app',
+        note: 'Pill moves next to the account row.',
+        screens: [
+          { name: 'Sidebar footer', html: '<!doctype html><html><body><p>Footer</p></body></html>' },
+          { name: 'Update ready', html: '<div class="pill">Update ready</div>', width: 420, height: 9000 }
+        ]
+      }, context)
+      expect(result.isError).toBeUndefined()
+      const documentId = designOpenDocumentId('thread_1', 'update ENTRY  redesign')
+      const footerId = designOpenScreenId(documentId, 'Sidebar footer')
+      expect(result.output).toMatchObject({
+        ok: true,
+        status: 'ready',
+        designRequest: {
+          version: 2,
+          requestId: designOpenRequestId(context, documentId),
+          status: 'ready',
+          title: 'Update entry redesign',
+          documentId,
+          target: 'app',
+          note: 'Pill moves next to the account row.',
+          screens: [
+            { artifactId: footerId, name: 'Sidebar footer', relativePath: `.kun-design/${documentId}/${footerId}/v1.html`, width: 390, height: 844 },
+            { name: 'Update ready', width: 420, height: 4000 }
+          ]
+        }
+      })
+      expect(await readFile(join(workspace, `.kun-design/${documentId}/${footerId}/v1.html`), 'utf8')).toContain('<p>Footer</p>')
+      const request = (result.output as { designRequest: { screens: { relativePath: string }[] } }).designRequest
+      const wrapped = await readFile(join(workspace, request.screens[1].relativePath), 'utf8')
+      expect(wrapped).toContain('<!doctype html>')
+      expect(wrapped).toContain('<div class="pill">Update ready</div>')
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
   })
 
-  it('drops unknown target and medium values', async () => {
-    const result = await createDesignOpenTool().execute(
-      { title: 'Login', brief: 'Design a login screen.', target: 'tv', medium: 'video' },
-      codeContext()
-    )
-    const request = (result.output as { designRequest: Record<string, unknown> }).designRequest
-    expect(request.target).toBeUndefined()
-    expect(request.medium).toBeUndefined()
+  it('rewrites a screen in place when called again with the same title and name', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-design-open-'))
+    try {
+      const tool = createDesignOpenTool()
+      const call = (html: string, turnId: string) => tool.execute(
+        { title: 'Login', screens: [{ name: 'Sign in', html }] },
+        codeContext({ workspace, turnId })
+      )
+      const first = (await call('<html><body>v1</body></html>', 'turn_1')).output as { designRequest: { screens: { relativePath: string }[]; requestId: string } }
+      const second = (await call('<html><body>v2</body></html>', 'turn_2')).output as { designRequest: { screens: { relativePath: string }[]; requestId: string } }
+      expect(second.designRequest.screens[0].relativePath).toBe(first.designRequest.screens[0].relativePath)
+      expect(second.designRequest.requestId).not.toBe(first.designRequest.requestId)
+      expect(await readFile(join(workspace, second.designRequest.screens[0].relativePath), 'utf8')).toContain('v2')
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
   })
 
-  it('rejects a missing title or brief', async () => {
+  it('rejects a missing title, empty screens, blank html and duplicate names', async () => {
     const tool = createDesignOpenTool()
-    expect((await tool.execute({ title: 'Login', brief: '  ' }, codeContext())).isError).toBe(true)
-    expect((await tool.execute({ brief: 'Design a login screen.' }, codeContext())).isError).toBe(true)
+    const screen = { name: 'A', html: '<p>a</p>' }
+    expect((await tool.execute({ screens: [screen] }, codeContext())).isError).toBe(true)
+    expect((await tool.execute({ title: 'X', screens: [] }, codeContext())).isError).toBe(true)
+    expect((await tool.execute({ title: 'X', screens: [{ name: 'A', html: '  ' }] }, codeContext())).isError).toBe(true)
+    expect((await tool.execute({ title: 'X', screens: [screen, { ...screen, name: ' a ' }] }, codeContext())).isError).toBe(true)
+  })
+
+  it('wraps fragments into a standalone document and keeps full documents', () => {
+    expect(normalizeDesignScreenHtml('<main>Hi</main>')).toMatch(/^<!doctype html>[\s\S]*<main>Hi<\/main>[\s\S]*<\/html>\n$/)
+    expect(normalizeDesignScreenHtml('<html lang="en"><body>x</body></html>')).toBe('<html lang="en"><body>x</body></html>\n')
   })
 
   it('derives a different request id per tool call', () => {
-    const first = designOpenRequestId(codeContext(), 'A', 'B')
-    const second = designOpenRequestId(codeContext({ activeToolCallId: 'call_2' }), 'A', 'B')
+    const first = designOpenRequestId(codeContext(), 'doc')
+    const second = designOpenRequestId(codeContext({ activeToolCallId: 'call_2' }), 'doc')
+    expect(first).toMatch(/^design_[0-9a-f]{16}$/)
     expect(first).not.toBe(second)
   })
 })

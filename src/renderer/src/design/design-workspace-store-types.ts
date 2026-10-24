@@ -114,6 +114,8 @@ export type DesignWorkspaceState = {
       titleOrigin?: 'generated' | 'user'
       folderId?: string | null
       engine?: CanvasEngine
+      /** Adopt a document folder written elsewhere (an agent's `design_open` screens). */
+      id?: string
     }
   ) => string
   /** Open the new-drawing launcher without creating a document or changing the persisted active id. */
