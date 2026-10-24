@@ -190,6 +190,12 @@ route and FileMemoryStore with isolated synthetic data and a deterministic mock
 provider. It does **not** validate real model quality or the full packaged Electron
 preload/Manager path. Manager ownership has separate integration coverage.
 
+For a continuous demo recording, also set `KUN_MEMORY_VIDEO=1`. This saves
+`workflow.webm` alongside the screenshots and slows only the smoke's UI actions
+and evidence checkpoints for readability. Playwright's FFmpeg binary must be
+installed (`npx playwright-core install ffmpeg`). The recording uses the same
+synthetic fixture and is not a recording of a real provider or packaged app.
+
 These checks establish plumbing and safety invariants, not measured improvements in
 real model answers or relation precision. The default remains off pending voluntary
 use and review. Acceptance alone does not enable the switch or authorize ranking

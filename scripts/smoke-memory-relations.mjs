@@ -17,6 +17,7 @@ import tailwindConfig from '../tailwind.config.js'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const temporary = await mkdtemp(join(tmpdir(), 'kun-relation-smoke-'))
 const evidence = resolve(process.env.KUN_MEMORY_EVIDENCE ?? join(root, 'output/playwright/memory-relations'))
+const recordVideo = process.env.KUN_MEMORY_VIDEO === '1'
 await mkdir(evidence, { recursive: true })
 let browser, page
 const errors = []
@@ -44,8 +45,9 @@ try {
     .relation-fixture{max-width:780px;margin:auto;padding:24px;background:var(--ds-bg-main)}
     </style><div id="root"></div><script type="module" src="./fixture.js"></script></html>`)
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/chromium',
-    headless: true, args: ['--allow-file-access-from-files'] })
-  page = await browser.newPage({ viewport: { width: 1000, height: 1000 } })
+    headless: true, slowMo: recordVideo ? 150 : 0, args: ['--allow-file-access-from-files'] })
+  page = await browser.newPage({ viewport: { width: 1000, height: 1000 },
+    ...(recordVideo ? { recordVideo: { dir: evidence, size: { width: 1000, height: 1000 } } } : {}) })
   page.on('pageerror', (error) => errors.push(error.message))
   await page.exposeFunction('__relationTransport', backend.request)
   await page.exposeFunction('__relationSource', () => backend.source)
@@ -72,7 +74,8 @@ try {
   await confirmation.getByText('Rejected', { exact: true }).waitFor()
   assert.equal(backend.calls, 1)
   await screenshot('decisions-persisted')
-  await page.getByLabel('Workspace path', { exact: true }).fill(temporary)
+  await page.getByLabel('Workspace path', { exact: true }).fill(
+    process.platform === 'win32' ? 'C:\\synthetic\\memory-workspace' : '/synthetic/memory-workspace')
   await page.getByLabel('Query', { exact: true }).fill('project database PostgreSQL')
   await page.getByRole('button', { name: 'Preview context', exact: true }).click()
   await page.getByRole('heading', { name: 'Relation annotations', exact: true }).waitFor()
@@ -155,12 +158,25 @@ try {
   if (page) await page.screenshot({ path: join(evidence, 'failure.png'), fullPage: true }).catch(() => undefined)
   throw error
 } finally {
-  await writeFile(join(evidence, 'results.json'), JSON.stringify({ status, errors }, null, 2))
-  await browser?.close()
-  // mkdtemp owns this exact directory; never use a profile or workspace as a cleanup target.
-  await rm(temporary, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  try {
+    const video = page?.video()
+    await page?.context().close()
+    if (video) await video.saveAs(join(evidence, 'workflow.webm'))
+  } catch (error) {
+    status = 'failed'
+    errors.push(error.message)
+    console.error(error)
+    process.exitCode = 1
+  } finally {
+    await writeFile(join(evidence, 'results.json'), JSON.stringify({ status, errors }, null, 2))
+    await browser?.close()
+    // mkdtemp owns this exact directory; never use a profile or workspace as a cleanup target.
+    await rm(temporary, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  }
 }
 async function screenshot(name) {
   assert.deepEqual(await page.evaluate(() => window.relationFixture.missingKeys), [])
   await page.screenshot({ path: join(evidence, `${name}.png`), fullPage: true })
+  // Keep evidence states readable in the optional continuous demo recording.
+  if (recordVideo) await page.waitForTimeout(1000)
 }
