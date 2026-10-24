@@ -47,6 +47,10 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   default data location and existing history; never silently select another.
 - A live or starting foreign owner fails closed with actionable guidance. Do
   not reuse it because its build matches, or replace it because builds differ.
+- Explicit startup Retry can retire a recorded orphan Manager after verifying
+  the dead application owner, all canonical profile claims, the Manager's
+  birth identity, and absence of live Runtime participants. Recheck identity
+  before escalation; never infer shutdown authority from an HTTP timeout.
 - Main-window close, platform Quit, updater exit, and storage relocation use
   the same shutdown barrier. Close admission and restart/recovery timers before
   awaiting cleanup; collect each failure without skipping remaining resources.
