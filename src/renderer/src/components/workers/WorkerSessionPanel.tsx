@@ -86,7 +86,7 @@ function WorkerSession({
   const canStop = live && (row.child ? Boolean(row.child.turnId) : row.state === 'active')
 
   return (
-    <section className={`flex h-full min-h-0 flex-col ${className ?? ''}`} data-worker-inspector={workerId}>
+    <section className={`ds-no-drag flex h-full min-h-0 flex-col ${className ?? ''}`} data-worker-inspector={workerId}>
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-ds-border-muted pl-3.5 pr-2">
         <WorkerAvatar workerId={workerId} harnessId={row.harnessId ?? row.activityRow?.harnessId} size={24} />
         <span

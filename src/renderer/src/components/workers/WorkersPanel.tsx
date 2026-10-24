@@ -53,7 +53,7 @@ export function WorkersPanel({
   ]
 
   return (
-    <div className={`flex h-full min-h-0 min-w-0 flex-col ${className ?? ''}`} data-workers-panel>
+    <div className={`ds-no-drag flex h-full min-h-0 min-w-0 flex-col ${className ?? ''}`} data-workers-panel>
       {rows.length > 0 ? (
         <div className="flex shrink-0 flex-col gap-2.5 border-b border-ds-border-muted px-4 pb-3.5 pt-4" data-workers-summary>
           <div className="flex items-baseline gap-2">
