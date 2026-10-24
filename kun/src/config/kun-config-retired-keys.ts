@@ -17,3 +17,17 @@ export function withoutRetiredPptAgentKeys(value: unknown): unknown {
   for (const key of RETIRED_PPT_AGENT_KEYS) delete rest[key]
   return rest
 }
+
+/**
+ * `lab.genUi` and `lab.mcpApps` were Lab toggles. Generated widgets and MCP App
+ * pages are built in, so the flags are dropped and the features always run.
+ */
+const RETIRED_LAB_APP_SURFACE_KEYS = ['genUi', 'mcpApps'] as const
+
+export function withoutRetiredLabAppSurfaceFlags(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  if (!RETIRED_LAB_APP_SURFACE_KEYS.some((key) => key in value)) return value
+  const rest = { ...(value as Record<string, unknown>) }
+  for (const key of RETIRED_LAB_APP_SURFACE_KEYS) delete rest[key]
+  return rest
+}

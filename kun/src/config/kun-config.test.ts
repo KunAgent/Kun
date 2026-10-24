@@ -175,6 +175,12 @@ describe('LabPptAgentConfigSchema', () => {
       .toEqual({ enabled: false, imageAssets: false })
   })
 
+  it('drops the retired Gen UI and MCP Apps Lab flags', () => {
+    const lab = LabConfigSchema.parse({ genUi: { enabled: false }, mcpApps: { enabled: false } })
+    expect(lab).not.toHaveProperty('genUi')
+    expect(lab).not.toHaveProperty('mcpApps')
+  })
+
   it('defaults Fast Context at the config root', () => {
     expect(FastContextConfigSchema.parse({})).toEqual({ enabled: true, fast: false })
   })

@@ -1,8 +1,0 @@
-{
-  "labGenUiTitle": "Interactive widgets (Gen UI)",
-  "labGenUiDescription": "Lets the desktop agent build small interactive pages in the conversation: simulators, parameter explorers, calculators and UI mockups. Pages run in an isolated sandbox without network, tool or file access.",
-  "labGenUiEnabled": "Enable interactive widgets",
-  "labMcpAppsTitle": "MCP Apps",
-  "labMcpAppsDescription": "Shows the interactive pages of MCP tools that provide one, inline or in the App panel, and adds the built-in editable canvas app. Pages can only call tools of their own server.",
-  "labMcpAppsEnabled": "Enable MCP Apps"
-}

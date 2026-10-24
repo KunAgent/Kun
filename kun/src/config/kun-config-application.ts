@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { withoutRetiredPptAgentKeys } from './kun-config-retired-keys.js'
+import { withoutRetiredLabAppSurfaceFlags, withoutRetiredPptAgentKeys } from './kun-config-retired-keys.js'
 import { ProviderAdmissionSchema, ProviderAuthProfileSchema, ProviderHeaderProfileSchema } from '../contracts/provider-configuration.js'
 import {
   ApprovalReviewModelSelectionSchema
@@ -364,7 +364,7 @@ export const LabProjectBoardConfigSchema = z.object({
 }).strict()
 export type LabProjectBoardConfig = z.infer<typeof LabProjectBoardConfigSchema>
 
-export const LabConfigSchema = z
+const LabConfigObjectSchema = z
   .object({
     pptAgent: LabPptAgentConfigSchema.default({
       enabled: true,
@@ -376,14 +376,16 @@ export const LabConfigSchema = z
     projectBoard: LabProjectBoardConfigSchema.default({
       enabled: false
     }),
-    // Generated widgets (`render_widget`) and MCP App pages for `ui://` tools.
-    genUi: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
-    mcpApps: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     opencodeReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     claudeCodeReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     codexReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false })
   })
   .strict()
+
+// Built-in Gen UI widgets (render_widget) and MCP App pages no longer have a
+// Lab switch; the preprocess drops the historical flags so old config files
+// keep loading without disabling the features.
+export const LabConfigSchema = z.preprocess(withoutRetiredLabAppSurfaceFlags, LabConfigObjectSchema)
 export type LabConfig = z.infer<typeof LabConfigSchema>
 
 // Harness section schemas live in kun-config-harnesses.ts (file split);

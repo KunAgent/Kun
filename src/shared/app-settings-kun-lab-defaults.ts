@@ -27,8 +27,6 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
     projectBoard: {
       enabled: false
     },
-    genUi: { enabled: false },
-    mcpApps: { enabled: false },
     assistantMailbox: { enabled: false }
   }
 }

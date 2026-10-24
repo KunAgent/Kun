@@ -145,6 +145,26 @@ describe('Fast Context settings', () => {
     expect(next.lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
   })
 
+  it('drops the retired Gen UI and MCP Apps Lab switches during normalization', () => {
+    const defaults = defaultKunRuntimeSettings()
+    const legacy = {
+      agents: {
+        kun: {
+          ...defaults,
+          lab: {
+            ...defaults.lab,
+            genUi: { enabled: false },
+            mcpApps: { enabled: false }
+          }
+        }
+      }
+    } as unknown as Parameters<typeof normalizeAppSettings>[0]
+
+    const normalized = normalizeAppSettings(legacy)
+    expect(normalized.agents.kun.lab).not.toHaveProperty('genUi')
+    expect(normalized.agents.kun.lab).not.toHaveProperty('mcpApps')
+  })
+
   it('defaults and merges GUI-only Automatic plan-build settings independently', () => {
     const defaults = defaultKunRuntimeSettings().lab.autoPlanBuild
     expect(defaults).toEqual({

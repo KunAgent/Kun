@@ -1,4 +1,4 @@
-import { buildCanvasKunMcpServer, CANVAS_MCP_SERVER_ID, canvasMcpEnabled } from '../canvas-mcp/canvas-mcp-config'
+import { buildCanvasKunMcpServer, CANVAS_MCP_SERVER_ID } from '../canvas-mcp/canvas-mcp-config'
 import { ASSISTANT_MCP_SERVER_ID, assistantMailboxEnabled, buildAssistantKunMcpServer } from '../assistant-mailbox/mcp-config'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -158,9 +158,9 @@ export async function syncGuiManagedKunConfig(
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
   const retainedMcpServers = stripGeneratedProjectMcpServers(objectValue(mcp.servers))
-  // The built-in canvas MCP App is host-owned: rebuilt from the Lab flag every sync.
+  // The built-in canvas MCP App is host-owned: rebuilt on every sync.
   delete retainedMcpServers[CANVAS_MCP_SERVER_ID]
-  const canvasMcpServer = options?.scheduleMcp && canvasMcpEnabled(appSettings)
+  const canvasMcpServer = options?.scheduleMcp
     ? { [CANVAS_MCP_SERVER_ID]: buildCanvasKunMcpServer(options.scheduleMcp.launch, dataDir) }
     : {}
   delete retainedMcpServers[ASSISTANT_MCP_SERVER_ID]
@@ -371,9 +371,7 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
     codexReferenceBranches: { enabled: lab?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: lab?.projectBoard?.enabled === true
-    },
-    genUi: { enabled: lab?.genUi?.enabled === true },
-    mcpApps: { enabled: lab?.mcpApps?.enabled === true }
+    }
   }
 }
 

@@ -323,8 +323,7 @@ async function main() {
     fixture = await startAppSurfacesModelFixture(MODEL)
     const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, realProfile), locale: 'en', initialSetupCompleted: true }
     Object.assign(settings.agents.kun, {
-      baseUrl: fixture.baseUrl, apiKey: 'app-surfaces-offline-fixture', model: MODEL, approvalPolicy: 'auto',
-      lab: { genUi: { enabled: true }, mcpApps: { enabled: true } }
+      baseUrl: fixture.baseUrl, apiKey: 'app-surfaces-offline-fixture', model: MODEL, approvalPolicy: 'auto'
     })
     settings.schedule = { internal: { port: await availablePort() } }
     const serialized = `${JSON.stringify(settings, null, 2)}\n`

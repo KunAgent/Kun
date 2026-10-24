@@ -1,6 +1,5 @@
-import { useEffect, type ReactElement } from 'react'
+import type { ReactElement } from 'react'
 import type { ToolBlock } from '../agent/types'
-import { ensureAppSurfaceFlags, useAppSurfaceStore } from './app-surface-store'
 import { genUiRefFromBlock, mcpAppFromBlock } from './app-surface-tool-meta'
 import { GenUiCard } from './gen-ui/GenUiCard'
 import { McpAppCard } from './mcp-apps/McpAppCard'
@@ -17,16 +16,13 @@ export function AppSurfaceBlocks({
   threadId: string | null | undefined
   blocks: readonly ToolBlock[]
 }): ReactElement | null {
-  const mcpAppsEnabled = useAppSurfaceStore((state) => state.flags.mcpApps)
-  const hasBlocks = blocks.length > 0
-  useEffect(() => { if (hasBlocks) ensureAppSurfaceFlags() }, [hasBlocks])
   if (!threadId || blocks.length === 0) return null
   return (
     <>
       {blocks.map((block) => {
         const widget = genUiRefFromBlock(block)
         if (widget) return <GenUiCard key={block.id} threadId={threadId} widget={widget} />
-        if (mcpAppsEnabled && mcpAppFromBlock(block)) {
+        if (mcpAppFromBlock(block)) {
           return <McpAppCard key={block.id} threadId={threadId} block={block} />
         }
         return null

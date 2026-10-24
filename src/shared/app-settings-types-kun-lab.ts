@@ -54,10 +54,6 @@ export type KunLabSettingsV1 = {
   claudeCodeReferenceBranches: { enabled: boolean }
   codexReferenceBranches: { enabled: boolean }
   projectBoard: KunLabProjectBoardSettingsV1
-  /** Agent-generated interactive widgets in desktop conversations. */
-  genUi: { enabled: boolean }
-  /** Interactive pages of MCP tools that declare a `ui://` resource. */
-  mcpApps: { enabled: boolean }
   /** Personal assistants (Cue, Grok Bot, Muse, dots) driven through Kun's assistant mailbox. */
   assistantMailbox: { enabled: boolean }
 }
@@ -73,7 +69,5 @@ export type KunLabSettingsPatchV1 = {
   claudeCodeReferenceBranches?: { enabled?: boolean }
   codexReferenceBranches?: { enabled?: boolean }
   projectBoard?: Partial<KunLabProjectBoardSettingsV1>
-  genUi?: { enabled?: boolean }
-  mcpApps?: { enabled?: boolean }
   assistantMailbox?: { enabled?: boolean }
 }

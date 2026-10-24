@@ -15,10 +15,6 @@ import { resolveWorkspacePath } from './builtin-tool-utils.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
 
-export type GenUiToolConfig = {
-  enabled?: boolean
-}
-
 const inputSchema = {
   type: 'object',
   properties: {
@@ -84,10 +80,9 @@ async function readFragmentFile(path: string, context: ToolHostContext): Promise
 }
 
 export function buildGenUiToolProvider(
-  config: () => GenUiToolConfig | undefined,
   store: () => GenUiStore | undefined
 ): CapabilityToolProvider[] {
-  const enabled = (): boolean => config()?.enabled === true && store() !== undefined
+  const available = (): boolean => store() !== undefined
   return [{
     id: GEN_UI_PROVIDER_ID,
     kind: 'gui',
@@ -106,11 +101,11 @@ export function buildGenUiToolProvider(
       toolKind: 'tool_call',
       policy: 'auto',
       sideEffect: 'read-only',
-      shouldAdvertise: enabled,
+      shouldAdvertise: available,
       execute: async (args, context) => {
         const target = store()
-        if (!enabled() || !target) {
-          return { output: { status: 'failed', error: 'render_widget is disabled in Lab settings' }, isError: true }
+        if (!target) {
+          return { output: { status: 'failed', error: 'render_widget is unavailable' }, isError: true }
         }
         const parsed = GenUiRenderInputSchema.safeParse(args)
         if (!parsed.success) {

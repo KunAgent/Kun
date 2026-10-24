@@ -1,8 +1,0 @@
-{
-  "labGenUiTitle": "交互组件（Gen UI）",
-  "labGenUiDescription": "让桌面端 Agent 在对话中生成可交互的小页面：模拟器、参数探索、计算器和界面原型。页面运行在隔离沙箱中，无法联网、调用工具或访问文件。",
-  "labGenUiEnabled": "启用交互组件",
-  "labMcpAppsTitle": "MCP Apps",
-  "labMcpAppsDescription": "为提供交互页面的 MCP 工具显示页面（对话内或 App 面板），并启用内置的可编辑画布应用。页面只能调用它所属服务的工具。",
-  "labMcpAppsEnabled": "启用 MCP Apps"
-}

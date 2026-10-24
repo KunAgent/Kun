@@ -463,7 +463,7 @@ export function createRuntimeRegistry(
     ...buildChartToolProvider(
       () => core.activeOptions.lab?.conversationVisualization
     ),
-    ...buildGenUiToolProvider(() => core.activeOptions.lab?.genUi, () => core.genUiStore),
+    ...buildGenUiToolProvider(() => core.genUiStore),
     ...buildPaperSearchToolProvider({
       proxyUrl: () => core.activeOptions.modelProxyUrl,
       enabledSources: () => core.activeOptions.capabilities?.paperSearch?.enabledSources,

@@ -404,7 +404,7 @@ export function createRuntimeConfigController(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
 	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization),
-	      ...buildGenUiToolProvider(() => activeOptions.lab?.genUi, () => core.genUiStore),
+	      ...buildGenUiToolProvider(() => core.genUiStore),
 	      ...buildPaperSearchToolProvider({
 	        proxyUrl: () => activeOptions.modelProxyUrl,
 	        enabledSources: () => activeOptions.capabilities?.paperSearch?.enabledSources,

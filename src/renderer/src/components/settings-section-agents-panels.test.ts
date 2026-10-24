@@ -147,8 +147,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(features.map((feature) => feature.props['aria-label'])).toEqual([
       'Context compression',
       'Session display optimization',
-      'labGenUiTitle',
-      'labMcpAppsTitle',
       'Codex history branches',
       'Automatic plan and build',
       'Graph mode',
@@ -183,8 +181,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         }
       }))
     }
-    expect(renderCount(false)).toContain('1/11')
-    expect(renderCount(true)).toContain('1/11')
+    expect(renderCount(false)).toContain('1/9')
+    expect(renderCount(true)).toContain('1/9')
   })
 
   it('passes the runtime Browser Use capability into its settings panel', () => {

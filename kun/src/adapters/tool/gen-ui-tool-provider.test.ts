@@ -33,18 +33,15 @@ describe('render_widget provider', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('is advertised only when enabled and only on the desktop GUI surface', () => {
-    let enabled = false
-    const registry = new CapabilityRegistry(buildGenUiToolProvider(() => ({ enabled }), () => store))
-    expect(registry.listTools(context(root))).toEqual([])
-    enabled = true
+  it('is always advertised on the desktop GUI surface only', () => {
+    const registry = new CapabilityRegistry(buildGenUiToolProvider(() => store))
     expect(registry.listTools(context(root)).map((tool) => tool.name)).toContain(GEN_UI_TOOL_NAME)
     expect(registry.listTools(context(root, 'tui'))).toEqual([])
     expect(registry.listTools(context(root, 'im'))).toEqual([])
   })
 
   it('stores the fragment and returns the widget reference only in the UI sideband', async () => {
-    const tool = buildGenUiToolProvider(() => ({ enabled: true }), () => store)[0]!.tools[0]!
+    const tool = buildGenUiToolProvider(() => store)[0]!.tools[0]!
     const result = await tool.execute({ title: 'Sine explorer', html: '<div id="w">x</div>' }, context(root))
     expect(result.isError).toBeUndefined()
     expect(result.output).toEqual({ status: 'completed', summary: 'Displayed the interactive widget "Sine explorer" to the user.' })
@@ -54,7 +51,7 @@ describe('render_widget provider', () => {
   })
 
   it('reads workspace .html files but refuses other extensions and paths outside the workspace', async () => {
-    const tool = buildGenUiToolProvider(() => ({ enabled: true }), () => store)[0]!.tools[0]!
+    const tool = buildGenUiToolProvider(() => store)[0]!.tools[0]!
     const workspace = join(root, 'ws')
     await rm(workspace, { recursive: true, force: true })
     await import('node:fs/promises').then((fs) => fs.mkdir(workspace, { recursive: true }))
@@ -70,11 +67,10 @@ describe('render_widget provider', () => {
       .resolves.toMatchObject({ isError: true })
   })
 
-  it('fails closed when disabled or given invalid input', async () => {
-    let enabled = false
-    const tool = buildGenUiToolProvider(() => ({ enabled }), () => store)[0]!.tools[0]!
-    await expect(tool.execute({ title: 'x', html: '<p/>' }, context(root))).resolves.toMatchObject({ isError: true })
-    enabled = true
+  it('fails closed without a store or given invalid input', async () => {
+    const unavailable = buildGenUiToolProvider(() => undefined)[0]!.tools[0]!
+    await expect(unavailable.execute({ title: 'x', html: '<p/>' }, context(root))).resolves.toMatchObject({ isError: true })
+    const tool = buildGenUiToolProvider(() => store)[0]!.tools[0]!
     await expect(tool.execute({ title: 'x' }, context(root))).resolves.toMatchObject({ isError: true })
     await expect(tool.execute({ title: 'x', html: ' ' }, context(root))).resolves.toMatchObject({ isError: true })
   })
