@@ -38,6 +38,17 @@ export type DesignHtmlElementContext = {
   tagName: string
   text: string
   html: string
+  /** Display label such as `Button · 接管`, produced by the component picker. */
+  label?: string
+  /** Short location path, outermost first, e.g. `Page / Card / Button`. */
+  path?: string[]
+  componentName?: string
+  /** Canvas frame the element was picked from. */
+  frameId?: string
+  /** Preview revision the reference was captured against. */
+  previewRevision?: number
+  /** Opaque renderer validation handle, not a source-code selector. */
+  validationToken?: string
 }
 
 export type DesignComposerContextTarget =
@@ -210,12 +221,17 @@ export function designHtmlElementContextTarget(input: {
   const artifact = input.artifacts.find((item) => item.id === input.element.artifactId)
   if (artifact?.kind !== 'html') return null
   const text = input.element.text.trim()
-  const label = text ? `${input.element.tagName.toLowerCase()}: ${text}` : `${input.element.tagName.toLowerCase()} element`
+  const fallbackTag = input.element.tagName.toLowerCase()
+  const label =
+    input.element.label?.trim() ||
+    (text ? `${fallbackTag}: ${text}` : `${fallbackTag} element`)
   const chip = {
-    id: `html-element:${input.element.artifactId}:${input.element.selector}`,
+    id: input.element.frameId
+      ? `html-element:${input.element.artifactId}:${input.element.frameId}:${input.element.selector}`
+      : `html-element:${input.element.artifactId}:${input.element.selector}`,
     kind: 'html-element' as const,
     label,
-    detail: input.element.selector,
+    detail: input.element.path?.length ? input.element.path.join(' / ') : input.element.selector,
     removable: true
   }
   return input.suppressedIds?.has(chip.id)
@@ -275,7 +291,9 @@ export function resolveDesignComposerContextViewTargets(input: {
   suppressedIds?: ReadonlySet<string>
   htmlElementContext?: DesignHtmlElementContext | null
 }): DesignComposerContextTarget[] {
-  if (input.route !== 'design') return []
+  // A picked HTML element is surface-agnostic: the Design canvas and the Code
+  // whiteboard both talk about the same artifact, so the chip must survive the
+  // route change instead of silently dropping the user's reference.
   const elementTarget = input.htmlElementContext
     ? designHtmlElementContextTarget({
         artifacts: input.artifacts,
@@ -283,6 +301,7 @@ export function resolveDesignComposerContextViewTargets(input: {
         suppressedIds: input.suppressedIds
       })
     : null
+  if (input.route !== 'design') return elementTarget ? [elementTarget] : []
   const baseTargets = resolveDesignComposerContextTargets({
     artifacts: input.artifacts,
     activeArtifactId: input.activeArtifactId,
@@ -304,9 +323,15 @@ export function designContextChipsForRoute(input: {
   targetChip: DesignComposerContext
   targets: readonly DesignComposerContextTarget[]
 }): DesignComposerContext[] {
-  return input.route === 'design'
-    ? [input.targetChip, ...designComposerContextChips(input.targets)]
-    : []
+  if (input.route === 'design') {
+    return [input.targetChip, ...designComposerContextChips(input.targets)]
+  }
+  // Code whiteboard keeps only the picked-element chip; the Web/App target chip
+  // belongs to Design mode.
+  if (input.route === 'code') {
+    return designComposerContextChips(input.targets).filter((chip) => isHtmlElementContextChipId(chip.id))
+  }
+  return []
 }
 
 export function isHtmlElementContextChipId(id: string): boolean {
@@ -329,8 +354,13 @@ export function reconcileDesignHtmlElementContext(input: {
   activeArtifactId: string | null
 }): DesignHtmlElementContext | null {
   if (!input.current) return input.current
-  if (input.route !== 'design') return null
+  if (input.route !== 'design' && input.route !== 'code') return null
   const active = input.artifacts.find((artifact) => artifact.id === input.activeArtifactId) ?? null
+  if (!input.activeArtifactId) {
+    return input.artifacts.some((artifact) => artifact.id === input.current?.artifactId)
+      ? input.current
+      : null
+  }
   if (active?.kind === 'canvas') {
     return input.artifacts.some((artifact) => artifact.id === input.current?.artifactId)
       ? input.current

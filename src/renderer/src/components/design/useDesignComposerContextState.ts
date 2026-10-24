@@ -12,6 +12,8 @@ import {
   type DesignHtmlElementContext
 } from '../../design/design-composer-context'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
+import { useChatStore } from '../../store/chat-store'
+import { useCanvasShapeStore } from '../../design/canvas/canvas-shape-store'
 
 export type DesignComposerContextStateOptions = {
   route: string
@@ -65,9 +67,16 @@ export function useDesignComposerContextState({
   const artifacts = useDesignWorkspaceStore((s) => s.artifacts)
   const activeArtifactId = useDesignWorkspaceStore((s) => s.activeArtifactId)
   const designTarget = useDesignWorkspaceStore((s) => s.designContext.designTarget ?? 'web')
+  const activeThreadId = useChatStore((s) => s.activeThreadId)
+  const documentKey = useCanvasShapeStore((s) => s.documentKey)
   const [suppressedIds, setSuppressedIds] = useState<Set<string>>(() => new Set())
   const [htmlElementContext, setHtmlElementContext] =
     useState<DesignHtmlElementContext | null>(null)
+
+  useEffect(() => {
+    setHtmlElementContext(null)
+    setSuppressedIds(new Set())
+  }, [activeThreadId, documentKey])
 
   const rawTargets = useMemo(
     () => resolveDesignComposerContextViewTargets({

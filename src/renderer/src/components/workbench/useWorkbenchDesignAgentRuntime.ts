@@ -135,7 +135,8 @@ export function useWorkbenchDesignAgentRuntime({
     activeThreadId,
     composerReasoningEffort,
     sendMessage,
-    setError
+    setError,
+    htmlElementContext: designHtmlElementContext
   })
   const designPrompt = useDesignPromptController({
     route,

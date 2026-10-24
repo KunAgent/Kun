@@ -1,3 +1,4 @@
+import { validateHtmlElementReference } from './html-element-reference-validation'
 import type { AttachmentReference } from '../agent/types'
 import type { SendMessageOverrides } from '../store/chat-store-types'
 import { canvasOpErrorKey, takeLastCanvasOpErrors } from './canvas/apply-shape-ops'
@@ -338,6 +339,7 @@ export async function submitDesignTurn(
   let sent: boolean
   try {
     await options.onBeforeSend?.()
+    await validateHtmlElementReference(resolvedTarget.htmlElementContext)
     sent = await options.sendMessage(
       designProfile
         ? applyDesignTaskProfileContract(promptPayload.prompt, designProfile)

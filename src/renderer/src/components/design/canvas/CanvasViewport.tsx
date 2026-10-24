@@ -43,7 +43,7 @@ import {
   shouldRenderCanvasMinimap,
   shouldRenderDesignArtifactOverlays,
   shouldSyncCanvasHtmlFrames,
-  shouldToggleHtmlFrameInteractiveOnDoubleClick,
+  shouldEnterHtmlFrameComponentPickOnDoubleClick,
   resolveSelectedImageAnnotationAction,
   resolveCanvasDesignSystemBaseDir,
   resolveHtmlFrameOverlayInteractionState
@@ -84,7 +84,7 @@ export {
   shouldRenderCanvasMinimap,
   shouldRenderDesignArtifactOverlays,
   shouldSyncCanvasHtmlFrames,
-  shouldToggleHtmlFrameInteractiveOnDoubleClick,
+  shouldEnterHtmlFrameComponentPickOnDoubleClick,
   resolveCanvasSelectionAfterDocumentSync,
   resolveHtmlFrameOverlayInteractionState,
   shouldResetCanvasTransientInteractionAfterDocumentSync,
@@ -442,9 +442,9 @@ export function CanvasViewport({
       const hitId = hitTest(interactionDocument, canvas.x, canvas.y)
       if (!hitId) return
       const shape = doc.objects[hitId]
-      if (shouldToggleHtmlFrameInteractiveOnDoubleClick(surface, shape)) {
+      if (shouldEnterHtmlFrameComponentPickOnDoubleClick(surface, shape)) {
         useCanvasSelectionStore.getState().select([hitId])
-        toggleHtmlFrameInteractive(hitId)
+        toggleHtmlFrameModify(hitId)
         return
       }
       if (shape?.type === 'text') {
@@ -459,7 +459,7 @@ export function CanvasViewport({
         useImageAnnotationStore.getState().openImageAnnotation(hitId)
       }
     },
-    [screenToCanvas, surface, toggleHtmlFrameInteractive]
+    [screenToCanvas, surface, toggleHtmlFrameModify]
   )
 
   const onWheel = useCallback(

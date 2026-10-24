@@ -128,7 +128,12 @@ export function resolveSelectedImageAnnotationAction(
   }
 }
 
-export function shouldToggleHtmlFrameInteractiveOnDoubleClick(
+/**
+ * Double-click opens component picking on an HTML board, not live interaction:
+ * prototypes should not fire actions just because the user wants to select
+ * something. Preview mode has its own explicit chrome button.
+ */
+export function shouldEnterHtmlFrameComponentPickOnDoubleClick(
   surface: CanvasSurface,
   shape: CanvasDocument['objects'][string] | undefined
 ): boolean {

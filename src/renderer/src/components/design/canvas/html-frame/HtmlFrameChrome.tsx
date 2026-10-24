@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Maximize2, PenLine, SlidersHorizontal } from 'lucide-react'
+import { Maximize2, MousePointerClick, Play, SlidersHorizontal, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { DesignRuntimeQualityPayload } from '../../../../design/design-html-quality'
 import type { DesignHtmlQualityFinding } from '../../../../design/design-html-quality'
@@ -50,6 +50,7 @@ type HtmlFrameChromeProps = {
   workspaceRoot: string
   onQualityDetailsOpenChange: React.Dispatch<React.SetStateAction<boolean>>
   onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
+  onToggleInteractive?: (shapeId: string) => void
   onToggleModify: (shapeId: string) => void
   readOnly?: boolean
 }
@@ -78,6 +79,7 @@ export function HtmlFrameChrome({
   readOnly,
   onQualityDetailsOpenChange,
   onRequestQualityRepair,
+  onToggleInteractive,
   onToggleModify
 }: HtmlFrameChromeProps): React.JSX.Element {
   const { t } = useTranslation('common')
@@ -88,7 +90,7 @@ export function HtmlFrameChrome({
   const actionsVisible = hovered || active || editing || qualityDetailsOpen
   const statusDot = drawingActive ? 'generating' : failedMessage ? 'failed' : null
   const level = interactive ? 'none' : htmlFrameChromeActionLevel({ screenWidth, active })
-  const showActions = level !== 'none'
+  const showActions = level !== 'none' || interactive
   const selectBoard = (): void => useCanvasSelectionStore.getState().select([shapeId])
   const expandBoard = (): void => {
     selectBoard()
@@ -162,23 +164,48 @@ export function HtmlFrameChrome({
               {t('canvasBoardEditHint')}
             </span>
           ) : null}
-          {ready && !readOnly && (editing || (active && level === 'full')) ? (
+          {ready && !readOnly && (editing || active) ? (
             <button
               type="button"
               onPointerDown={stop}
               onClick={(event) => {
                 stop(event)
+                selectBoard()
                 onToggleModify(shapeId)
               }}
               title={t(editing ? 'canvasBoardEditDone' : 'canvasBoardEdit')}
               aria-label={t(editing ? 'canvasBoardEditDone' : 'canvasBoardEdit')}
               aria-pressed={editing}
-              className={`${actionButton} ${editing ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
+              className={`${actionButton} ${screenWidth > 440 ? '!w-auto gap-1 px-1.5' : ''} ${editing ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
+              data-canvas-board-pick={shapeId}
             >
-              <PenLine className="h-3.5 w-3.5" strokeWidth={1.9} />
+              <MousePointerClick className="h-3.5 w-3.5" strokeWidth={1.9} />
+              {screenWidth > 440 ? <span className="whitespace-nowrap text-[11px]">{t(editing ? 'canvasBoardEditDone' : 'canvasBoardEdit')}</span> : null}
             </button>
           ) : null}
-          {readOnly || level === 'expand' ? null : (
+          {ready && !readOnly && (interactive || active) ? (
+            <button
+              type="button"
+              onPointerDown={stop}
+              onClick={(event) => {
+                stop(event)
+                selectBoard()
+                onToggleInteractive?.(shapeId)
+              }}
+              title={t(interactive ? 'canvasBoardPreviewExit' : 'canvasBoardPreview')}
+              aria-label={t(interactive ? 'canvasBoardPreviewExit' : 'canvasBoardPreview')}
+              aria-pressed={interactive}
+              className={`${actionButton} ${interactive ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
+              data-canvas-board-preview={shapeId}
+            >
+              {interactive ? (
+                <Square className="h-3 w-3" strokeWidth={2.2} />
+              ) : (
+                <Play className="h-3.5 w-3.5" strokeWidth={1.9} />
+              )}
+            </button>
+          ) : null}
+          {readOnly || level === 'expand' || level === 'none' ? null : (
             <button
               type="button"
               onPointerDown={stop}
