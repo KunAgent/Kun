@@ -2,6 +2,7 @@ import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, ArrowUp, Check, HelpCircle, Loader2 } from 'lucide-react'
 import type { AdeQuestionRecord } from '@shared/ade-teams'
+import { AgentIcon } from '../agent-icon'
 import { workerHue, type WorkerStatusKind } from './worker-presentation'
 import { WorkerSeatGlyph } from './worker-seat'
 
@@ -17,10 +18,13 @@ export function WorkerAvatar({
   workerId,
   seat,
   status,
+  harnessId,
   size = 32
 }: {
   workerId: string
   seat: number
+  /** An external harness (Codex, Claude Code…) shows its mark in the corner; Kun's own does not. */
+  harnessId?: string
   status?: WorkerStatusKind
   size?: 24 | 32 | 36
 }): ReactElement {
@@ -32,11 +36,15 @@ export function WorkerAvatar({
     <span
       className={`ds-worker-avatar ${AVATAR_CLASS[size]}`}
       data-hue={workerHue(workerId)}
-      data-seat={seat}
       data-ring={ring}
       data-status={status}
       aria-hidden
     >
+      {harnessId && harnessId !== 'kun' ? (
+        <span className="ds-worker-avatar-harness" data-harness={harnessId}>
+          <AgentIcon harnessId={harnessId} size={size === 24 ? 8 : 10} />
+        </span>
+      ) : null}
       <WorkerSeatGlyph seat={seat} size={AVATAR_GLYPH[size]} />
       {badge ? (
         <span className="ds-worker-avatar-badge" data-tone={badge}>

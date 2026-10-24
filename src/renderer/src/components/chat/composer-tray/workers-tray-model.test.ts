@@ -37,6 +37,11 @@ describe('worker avatars', () => {
     expect(crowd.get(`w${WORKER_SEAT_COUNT}`)).toBe(0)
   })
 
+  it('keeps a member without an activity row from shifting the others', () => {
+    const seats = workerSeatMap(['a', 'b', 'c'], ['a', 'c'])
+    expect([seats.get('a'), seats.get('c'), seats.get('b')]).toEqual([0, 1, 2])
+  })
+
   it('puts the seat on every tray row, so the segment and the sheet agree', () => {
     const rows = buildWorkersTrayRows([workerRow({ unitId: 'b' }), workerRow({ unitId: 'a' })], { now: NOW, feedError: false })
     expect(Object.fromEntries(rows.map((row) => [row.id, row.seat]))).toEqual({ a: 0, b: 1 })

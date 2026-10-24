@@ -41,7 +41,10 @@ export function WorkersPanel({
   const { busy, error, dismissError, stop, detach, answer } = useWorkerActions(reload)
   const summary = useMemo(() => summarizeWorkerRows(rows), [rows])
   const groups = useMemo(() => groupWorkerRows(rows), [rows])
-  const seats = useMemo(() => workerSeatMap(rows.map((row) => row.workerId)), [rows])
+  const seats = useMemo(() => workerSeatMap(
+    rows.map((row) => row.workerId),
+    rows.filter((row) => row.activityRow).map((row) => row.workerId)
+  ), [rows])
   const now = useWorkerClock(active && rows.some(workerIsLive))
 
   const onOpen = useCallback((row: WorkerRowData): void => openWorkerSession(row.workerId, row.label), [])

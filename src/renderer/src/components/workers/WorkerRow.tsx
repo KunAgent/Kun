@@ -72,7 +72,7 @@ export function WorkerRow({
           data-worker-open={row.workerId}
           className="flex min-w-0 flex-1 gap-[11px] text-left outline-none"
         >
-          <WorkerAvatar workerId={row.workerId} seat={seat} status={status.kind} />
+          <WorkerAvatar workerId={row.workerId} seat={seat} status={status.kind} harnessId={row.harnessId ?? row.activityRow?.harnessId} />
           <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[13.5px] font-semibold leading-[18px] text-ds-ink" title={row.label}>
