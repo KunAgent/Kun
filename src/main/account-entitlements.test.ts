@@ -5,7 +5,7 @@ const owner = '11111111-1111-1111-1111-111111111111'
 const snapshot = (userId = owner) => ({ version: 1, userId, tier: 'plus', effectiveTier: 'plus', status: 'active', expiresAt: null, revision: 1, checkedAt: new Date().toISOString(), features: { mobileRemote: true, personalAssistant: false } })
 const account: ArtAccountAccess = {
   getState: async () => ({ status: 'authenticated', error: null, user: { id: owner, name: 'Owner', email: 'owner@example.test', avatarUrl: null } }),
-  accessToken: async () => 'test-token', expire: () => {}, onState: () => () => {}
+  accessToken: async () => 'test-token', expire: async () => {}, onState: () => () => {}
 }
 describe('account membership reader', () => {
   it('loads only the current account with a user token and no device credential', async () => {
