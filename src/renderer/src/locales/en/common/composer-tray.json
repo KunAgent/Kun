@@ -1,0 +1,38 @@
+{
+  "composerTray": {
+    "regionLabel": "Current activity",
+    "queueLabel": "Queued messages",
+    "collapse": "Collapse",
+    "stop": "Stop",
+    "duration": {
+      "seconds": "{{seconds}}s",
+      "minutes": "{{minutes}}m",
+      "minutesSeconds": "{{minutes}}m {{seconds}}s",
+      "hours": "{{hours}}h",
+      "hoursMinutes": "{{hours}}h {{minutes}}m",
+      "underMinute": "<1 min",
+      "minutesRounded": "{{minutes}} min",
+      "hoursRounded": "{{hours}} h",
+      "hoursMinutesRounded": "{{hours}} h {{minutes}} min",
+      "justNow": "just now",
+      "ago": "{{duration}} ago"
+    }
+  },
+  "composerInterrupt": {
+    "previous": "Previous",
+    "next": "Next",
+    "pagerPosition": "{{index}} of {{total}}",
+    "countdown": "{{seconds}} s",
+    "countdownTitle": "Kun continues on its own in {{seconds}} s",
+    "deciding": "Kun is deciding on its own…",
+    "recommended": "Recommended",
+    "optionsLabel": "Options",
+    "freeTextLabel": "Your own answer"
+  },
+  "composerDock": {
+    "runningPlaceholder": "Keep typing to queue follow-up changes…",
+    "queueMessage": "Queue message",
+    "stopWithShortcut": "Stop (Esc)",
+    "enterToQueue": "Enter to queue"
+  }
+}

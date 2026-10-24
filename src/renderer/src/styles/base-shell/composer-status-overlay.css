@@ -1,14 +1,12 @@
 .ds-chat-main-stack {
   --ds-composer-transition-height: 2.5rem;
-  --ds-composer-floating-status-height: 0px;
 }
 
+/* The activity tray lives in the dock's normal flow, so the timeline only
+   needs to clear the dock's soft top transition. */
 .ds-chat-stage:not([data-empty-task-layout='true'])
   .ds-message-timeline-content {
-  padding-bottom: calc(
-    var(--ds-composer-transition-height) +
-    var(--ds-composer-floating-status-height)
-  );
+  padding-bottom: var(--ds-composer-transition-height);
 }
 
 .ds-chat-stage:not([data-empty-task-layout='true']) .ds-composer-dock {
@@ -68,4 +66,26 @@
     -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
     mask-image: linear-gradient(180deg, transparent 0%, #000 34%, #000 100%);
   }
+}
+
+/* Input slot: the composer shell, or the interrupt card that replaces it,
+   sits above the activity tray tucked behind its top edge. */
+.ds-composer-input-slot {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+/* Stop: a quiet neutral circle with an ink square (sending stays dark). */
+.ds-composer-primary-action.ds-composer-stop-action {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.ds-composer-primary-action.ds-composer-stop-action:hover {
+  background: color-mix(in srgb, var(--ds-text) 9%, var(--ds-surface-hover));
+}
+
+.ds-composer-toolbar[data-fit-1] .ds-composer-queue-hint {
+  display: none;
 }

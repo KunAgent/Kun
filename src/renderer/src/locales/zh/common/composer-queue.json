@@ -1,0 +1,16 @@
+{
+  "composerQueue": {
+    "caption_other": "排队 {{count}} 条 · 这一轮结束后按顺序发送",
+    "dragHint": "拖动可调整顺序",
+    "showMore_other": "还有 {{count}} 条",
+    "showLess": "收起",
+    "now": "立即",
+    "nowLabel": "立即插入",
+    "pausedTitle": "由于你中断了当前回复，队列已暂停",
+    "pausedCount_other": "{{count}} 条",
+    "resume": "继续",
+    "resumeHint": "按顺序发送排队的消息",
+    "images_other": "图片 {{count}}",
+    "files_other": "文件 {{count}}"
+  }
+}

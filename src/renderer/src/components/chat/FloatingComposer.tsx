@@ -73,7 +73,6 @@ import {
 import { FloatingComposerAgentPicker } from './FloatingComposerAgentPicker'
 import { FloatingComposerIsolationPicker } from './FloatingComposerIsolationPicker'
 import { FloatingComposerUserInputPanel } from './FloatingComposerUserInputPanel'
-import { BackgroundShellOverlay } from './BackgroundShellOverlay'
 import {
   useComposerUserInput,
   type PendingUserInputBlock,
@@ -106,10 +105,6 @@ import { useComposerSlashCommandMenu } from './use-composer-slash-command-menu'
 import { useAdeComposerControls } from './use-ade-composer-controls'
 import { useCodeCollaboration } from './use-code-collaboration'
 import { FloatingComposerSlashCommandMenu } from './FloatingComposerSlashCommandMenu'
-import { FloatingComposerTodoProgress } from './FloatingComposerTodoProgress'
-import { FloatingComposerWorkersPill } from './FloatingComposerWorkersPill'
-import { FloatingComposerDispatchableAgents } from './FloatingComposerDispatchableAgents'
-import { FloatingComposerGraphProgress } from './FloatingComposerGraphProgress'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import {
   canAcceptComposerFileDrop,
@@ -140,7 +135,7 @@ import { useGoalElapsedLabel } from './use-goal-elapsed'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { FloatingComposerApprovalPanel } from './FloatingComposerApprovalPanel'
 import { FloatingComposerStackView } from './FloatingComposerStackView'
-import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
+import { useComposerInterrupt } from './use-composer-interrupt'
 import { FloatingComposerTaskProfile } from './FloatingComposerTaskProfile'
 import { FloatingComposerTaskSurfacePicker } from './FloatingComposerTaskSurfacePicker'
 export * from './floating-composer-public'
@@ -479,12 +474,12 @@ export function FloatingComposer({
   const composerMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const composerMenuPanelRef = useRef<HTMLDivElement | null>(null)
   const goalPanelRef = useRef<HTMLDivElement | null>(null)
+  // Approvals (while busy) or the live ask-user request take the shell's place.
+  const composerInterrupt = useComposerInterrupt({ pendingApprovals, userInput, focusComposer, composerRootRef })
   const placeholder = disabled && disabledReason
     ? disabledReason
     : !runtimeReady
     ? t('runtimeActionNeedsConnection')
-    : pendingUserInputBlock
-      ? t('userInputComposerPlaceholder')
     : !hasActiveThread && !effectiveWorkspaceRoot
       ? t('workspaceRequiredToCreateThread')
       : (goalInputMode || goalPanelOpen) && route !== 'claw'
@@ -492,7 +487,7 @@ export function FloatingComposer({
       : busy
         ? currentTurnOrchestration === 'graph'
           ? t('composerGraphQueuePlaceholder')
-          : t('composerQueuePlaceholder')
+          : t('composerDock.runningPlaceholder')
         : route === 'claw'
             ? clawHasInboundConversation
               ? t('clawPlaceholder', { name: clawAgentName })
@@ -519,26 +514,12 @@ export function FloatingComposer({
           : useWorktreePool
             ? t('composerWorktreeModeHint')
             : null
-  const showTodoProgress = !compact
-    && route === 'chat'
-    && Boolean(activeThreadId)
-    && activeThreadTodos != null
-    && activeThreadTodos.threadId === activeThreadId
-    && activeThreadTodos.items.length > 0
+  // Base visibility for the Todo / Graph tray kinds.
+  const showTodoProgress = !compact && route === 'chat' && Boolean(activeThreadId) && activeThreadTodos != null
+    && activeThreadTodos.threadId === activeThreadId && activeThreadTodos.items.length > 0
     && activeThreadTodos.items.some((item) => item.status !== 'completed')
-    && slashQuery == null
-    && !composerMenuOpen
-    && !goalPanelOpen
-    && !pendingUserInputBlock
-  const showGraphProgress = showCodeExecutionControls && graphEnabled
-    && !compact
-    && route === 'chat'
-    && Boolean(activeThreadId)
-    && runtimeReady
-    && slashQuery == null
-    && !composerMenuOpen
-    && !goalPanelOpen
-    && !pendingUserInputBlock
+  const showGraphProgress = showCodeExecutionControls && graphEnabled && !compact && route === 'chat'
+    && Boolean(activeThreadId) && runtimeReady
 
   const parsedGoalCommand = parseGoalCommand(input)
   const goalPanelDraftObjective = getGoalPanelDraftObjective(input, goalPanelOpen)
@@ -549,17 +530,13 @@ export function FloatingComposer({
     && goalPanelDraftObjective.length > 0
   const primaryActionLabel = highlightedSlashCommand
     ? t('slashCommandApply')
-    : userInput.active
-      ? t('userInputSubmit')
     : canSetGoalPanelDraft
       ? t('goalSetCurrentInput')
     : busy
-      ? t('queueMessage')
+      ? t('composerDock.queueMessage')
       : t('send')
   const primaryActionDisabled = highlightedSlashCommand
     ? highlightedSlashCommand.disabled === true
-    : userInput.active
-      ? !canCompose || input.trim().length === 0
     : canSetGoalPanelDraft
       ? false
     : !canSend || promptEnhance.running || (route === 'ade' && adeComposerEnabled && !activeThreadId &&
@@ -625,8 +602,8 @@ export function FloatingComposer({
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
     canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode,
-    clearActiveThreadGoal, compact, compactActiveThread, composerRootRef, composerSendKey,
-    dictationPrimaryActionRef, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
+    clearActiveThreadGoal, compact, compactActiveThread, composerInterrupt, composerMenuOpen, composerRootRef, composerSendKey,
+    dictationPrimaryActionRef, goalPanelOpen, onInterrupt, primaryActionKind, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
     fileReferences,
     forkActiveThread, goalInputMode, goalPanelDraftObjective, handleComposerImagePaste,
     hideBtwCommand, highlightedSlashCommand, input, inputHistory, isComposerSendHotkey,
@@ -646,10 +623,9 @@ export function FloatingComposer({
   const renderContext: FloatingComposerRenderContext = {
     ...actionContext,
     ...composerActions,
-    BackgroundShellOverlay, BarChart3, Bot, FileText, FloatingComposerAboveInputStack, FloatingComposerAgentPicker, FloatingComposerAttachments, FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
+    BarChart3, Bot, FileText, FloatingComposerAboveInputStack, FloatingComposerAgentPicker, FloatingComposerAttachments, FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerApprovalPanel,
-    FloatingComposerDispatchableAgents,
-    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerIsolationPicker, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
+    FloatingComposerFileMentionMenu, FloatingComposerIsolationPicker, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerUsageHistory, FloatingComposerUserInputPanel,
     FloatingComposerActionMenu,
     Folder, GitBranchPicker, ImagePlus, ListTodo, Loader2, Mic, Monitor, Paperclip,
     PauseCircle, Pencil, PlayCircle, Plus, Puzzle, Send, Share2, Sparkles,
@@ -687,7 +663,6 @@ export function FloatingComposer({
     >
       <div className="relative" data-composer-stack>
         <FloatingComposerStackView context={renderContext} />
-        <FloatingComposerSurfaceView context={renderContext} />
       </div>
     </div>
   )

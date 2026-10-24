@@ -31,16 +31,19 @@ export function memoryApprovalDetails(
 export function MemoryApprovalHint({
   toolName,
   action,
-  t
+  t,
+  className = 'mt-2'
 }: {
   toolName: string | undefined
   action: CoreApprovalActionJson | undefined
   t: (key: string) => string
+  /** Placement (margins) in the surrounding card. */
+  className?: string
 }): ReactElement | null {
   const details = memoryApprovalDetails(toolName, action)
   if (!details) return null
   return (
-    <div className="mt-2 flex flex-col gap-1.5">
+    <div className={`flex flex-col gap-1.5 ${className}`}>
       {details.isDirective ? (
         <div className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">
           <Pin className="h-3.5 w-3.5" strokeWidth={2} />
@@ -48,7 +51,7 @@ export function MemoryApprovalHint({
         </div>
       ) : null}
       {details.content ? (
-        <div className="whitespace-pre-wrap break-words rounded-[10px] border border-ds-border-muted bg-ds-main/40 px-3 py-2.5 font-mono text-[12px] leading-5 text-ds-ink [overflow-wrap:anywhere]">
+        <div className="whitespace-pre-wrap break-words rounded-[10px] border border-ds-border-muted bg-ds-surface-subtle/60 px-3 py-2.5 font-mono text-[12px] leading-5 text-ds-ink [overflow-wrap:anywhere]">
           {details.content}
         </div>
       ) : null}

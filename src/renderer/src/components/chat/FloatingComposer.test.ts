@@ -630,9 +630,7 @@ describe('FloatingComposer Graph entry', () => {
       expect(renderer.root.findAllByProps({
         'data-composer-graph-running': true
       })).toHaveLength(0)
-      expect(renderer.root.findAllByProps({
-        'data-graph-planning-correction': true
-      })).toHaveLength(1)
+      // The correction row itself belongs to the Graph tray kind (composer-tray/graph-tray-kind).
     } finally {
       if (renderer) {
         await act(async () => renderer.unmount())

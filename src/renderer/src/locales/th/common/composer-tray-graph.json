@@ -1,0 +1,25 @@
+{
+  "composerTrayGraph": {
+    "segmentLabel": "Graph · {{titles}}",
+    "segmentLabelStatus": "Graph · {{status}}",
+    "titleSeparator": ", ",
+    "segmentAria": "การรัน Graph: ผ่านการตรวจรับ {{accepted}} จาก {{total}} โหนด กำลังรัน {{running}} โหนด",
+    "segmentAriaQuiet": "การรัน Graph: ผ่านการตรวจรับ {{accepted}} จาก {{total}} โหนด โหนดที่กำลังรันไม่มีความเคลื่อนไหวมาสักพัก",
+    "segmentAriaAsking": "การรัน Graph: ผ่านการตรวจรับ {{accepted}} จาก {{total}} โหนด มีโหนดกำลังรอคำตอบจากคุณ",
+    "segmentAriaAwaiting": "การรัน Graph: ผ่านการตรวจรับ {{accepted}} จาก {{total}} โหนด การรันกำลังรอให้คุณดำเนินการ",
+    "segmentAriaFlagged": "การรัน Graph: ผ่านการตรวจรับ {{accepted}} จาก {{total}} โหนด มีโหนดที่ต้องตรวจสอบ",
+    "sheetTitle": "การรัน Graph",
+    "acceptedSummary": "ผ่านการตรวจรับ {{accepted}} จาก {{total}} โหนด",
+    "runningSummary_one": "กำลังรัน {{count}}",
+    "runningSummary_other": "กำลังรัน {{count}}",
+    "nodeRetry": "ลองใหม่ครั้งที่ {{number}}",
+    "lastActivitySeconds": "กิจกรรมล่าสุดเมื่อ {{seconds}} วินาทีที่แล้ว",
+    "lastActivityAgo": "กิจกรรมล่าสุด {{ago}}",
+    "stillWaiting": "ยังรอการตอบกลับจากโมเดลหรือเครื่องมืออยู่",
+    "elapsedTitle": "กำลังรันมาแล้ว {{duration}}",
+    "correctionAria": "การวางแผนของ Graph หยุดชั่วคราว: แผนต้องการข้อมูลเพิ่มจากคุณ",
+    "correctionNote": "บันทึกร่างไว้แล้ว เพิ่มคำแนะนำในแชตแล้วจึงวางแผนต่อ",
+    "correctionMore_one": "มีอีก {{count}} ปัญหา",
+    "correctionMore_other": "มีอีก {{count}} ปัญหา"
+  }
+}

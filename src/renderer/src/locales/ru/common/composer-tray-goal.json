@@ -1,0 +1,20 @@
+{
+  "composerTrayGoal": {
+    "label": "Цель",
+    "segmentAria": "Цель ({{status}}): {{objective}}",
+    "status": {
+      "active": "Активна",
+      "paused": "На паузе",
+      "blocked": "Заблокирована",
+      "usageLimited": "Лимит использования",
+      "budgetLimited": "Бюджет исчерпан",
+      "complete": "Выполнена"
+    },
+    "edit": "Изменить",
+    "elapsed": "Прошло",
+    "tokens": "токены",
+    "tokensOfBudget": "токены / бюджет",
+    "panelHintEmpty": "Напишите цель в поле ввода ниже и выберите «Установить как цель».",
+    "panelHintReplace": "Напишите новую цель в поле ввода ниже, чтобы заменить текущую."
+  }
+}

@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react'
 import { ShieldAlert } from 'lucide-react'
-import type { ApprovalChoice, ApprovalPermissionOption } from '@shared/approval-choice'
 import type { CoreApprovalActionJson } from '../../agent/kun-contract-approval'
 import { GmailLogo } from '../rooms/gmail-brand'
 import { approvalEmail, type ApprovalEmail } from './ApprovalEmailPreview'
@@ -27,40 +26,13 @@ export function approvalQuestion(kind: ApprovalKind, toolName: string | undefine
   return toolName ? t('approvalToolQuestion', { name: toolName }) : t('approvalTitle')
 }
 
-export type ApprovalOptionRow = {
-  label: string
-  decision: 'allow' | 'deny'
-  choice?: ApprovalChoice
-}
-
-/**
- * Numbered decision rows. Runtime-offered scopes (allow always, ...) come
- * first in their own order; the final "deny" row is rendered separately so
- * it can carry an optional note for the agent.
- */
-export function approvalOptionRows(kind: ApprovalKind, options: ApprovalPermissionOption[] | undefined, t: Translate): {
-  rows: ApprovalOptionRow[]
-  deny: ApprovalOptionRow
-} {
-  const denyLabel = kind.kind === 'email' ? t('approvalEmailDontSend') : t('approvalDeny')
-  if (!options?.length) {
-    const allowLabel = kind.kind === 'email' ? t('approvalEmailSend')
-      : kind.kind === 'command' ? t('approvalCommandRun') : t('approvalAllow')
-    return { rows: [{ label: allowLabel, decision: 'allow' }], deny: { label: denyLabel, decision: 'deny' } }
-  }
-  const rejectOnce = options.find((option) => option.kind === 'reject_once')
-  const rows = options
-    .filter((option) => option !== rejectOnce)
-    .map((option): ApprovalOptionRow => ({
-      label: option.name || t(`approvalOption_${option.kind}`),
-      decision: option.kind.startsWith('allow') ? 'allow' : 'deny',
-      choice: { optionId: option.optionId }
-    }))
-  return {
-    rows,
-    deny: { label: denyLabel, decision: 'deny', choice: rejectOnce ? { optionId: rejectOnce.optionId } : { cancelled: true } }
-  }
-}
+// Decision rows live with the rest of the card copy; re-exported for existing imports.
+export {
+  approvalOptionRows,
+  type ApprovalOptionDescription,
+  type ApprovalOptionFamily,
+  type ApprovalOptionRow
+} from './approval-card-options'
 
 /** Tile that tells the three request families apart at a glance. */
 export function ApprovalKindIcon({ kind, size = 'md' }: { kind: ApprovalKind['kind']; size?: 'sm' | 'md' }): ReactElement {

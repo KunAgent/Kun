@@ -1,62 +1,78 @@
-import { useMemo, type ReactElement } from 'react'
-import { useTranslation } from 'react-i18next'
-import { Bot } from 'lucide-react'
+import { useMemo } from 'react'
+import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
-import {
-  harnessRowAvailable,
-  harnessRowRunsTurns,
-  useHarnessStore
-} from '../../store/harness-store'
+import { harnessRowAvailable, harnessRowRunsTurns, useHarnessStore } from '../../store/harness-store'
 
-/**
- * on a manager session the composer shows which agents the manager can
- * dispatch to — the ready turn-capable harness rows. Terminal-only agents
- * and one-to-one/worker threads never see the label; clicking opens
- * the Agent Center where the dispatchable set is managed.
+/*
+ * Dispatchable agents of a manager session: the ready, turn-capable harness
+ * rows the manager can hand work to. Terminal-only agents and one-to-one or
+ * worker threads never show them. The composer tray surfaces them twice: as
+ * the Dispatch segment while the session has no workers yet, and as the
+ * footer of the Workers sheet once it does. Both open the Agent Center
+ * (Settings > agentsHarnesses), where the dispatchable set is managed.
  */
-export function FloatingComposerDispatchableAgents({
-  thread,
-  enabled
-}: {
-  thread: NormalizedThread | null
+
+/** How many names the tray spells out before "+n". */
+export const DISPATCHABLE_NAMES_SHOWN = 3
+
+type DispatchThread = Pick<NormalizedThread, 'workspaceMode' | 'executionUnit' | 'harnessId'>
+
+/** A manager session: ADE workspace, not an execution unit, not bound to one harness. */
+export function isDispatchManagerThread(
+  thread: DispatchThread | null | undefined,
   enabled: boolean
-}): ReactElement | null {
-  const { t } = useTranslation('common')
-  const openSettings = useChatStore((s) => s.openSettings)
-  const rows = useHarnessStore((s) => s.rows)
-  const isManager =
-    enabled === true &&
+): boolean {
+  return enabled === true &&
     thread?.workspaceMode === 'ade' &&
     !thread.executionUnit &&
     !thread.harnessId
-  const names = useMemo(
-    () =>
-      rows
-        .filter((row) => harnessRowRunsTurns(row) && harnessRowAvailable(row))
-        .map((row) => row.definition.displayName),
-    [rows]
-  )
-  if (!isManager) return null
-  const empty = names.length === 0
-  const shown = names.slice(0, 3)
-  const label = empty
-    ? t('adeDispatchableNone')
-    : t('adeDispatchable', {
-        names: shown.join(' · ') + (names.length > shown.length ? ` +${names.length - shown.length}` : '')
-      })
-  return (
-    <button
-      type="button"
-      data-dispatchable-agents-pill
-      onClick={() => openSettings('agentsHarnesses')}
-      title={t('adeDispatchableHint')}
-      className={`ds-composer-status-glass pointer-events-auto inline-flex min-h-8 items-center gap-1.5 self-start rounded-full border px-3 py-1 text-[12px] font-medium transition hover:border-accent/40 ${
-        empty ? 'border-ds-status-warning/40 text-ds-status-warning' : 'text-ds-muted hover:text-ds-ink'
-      }`}
-    >
-      <Bot className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden />
-      {label}
-    </button>
-  )
+}
+
+export function dispatchableAgentNames(rows: readonly AdeHarnessRow[]): string[] {
+  return rows
+    .filter((row) => harnessRowRunsTurns(row) && harnessRowAvailable(row))
+    .map((row) => row.definition.displayName)
+}
+
+/** The first names plus how many more there are. */
+export function splitDispatchableNames(
+  names: readonly string[],
+  shown: number = DISPATCHABLE_NAMES_SHOWN
+): { shown: string[]; extra: number } {
+  const visible = names.slice(0, Math.max(0, shown))
+  return { shown: visible, extra: names.length - visible.length }
+}
+
+/** "Claude Code · Codex · OpenCode +2" */
+export function formatDispatchableNames(
+  names: readonly string[],
+  shown: number = DISPATCHABLE_NAMES_SHOWN
+): string {
+  const split = splitDispatchableNames(names, shown)
+  return split.shown.join(' · ') + (split.extra > 0 ? ` +${split.extra}` : '')
+}
+
+/**
+ * Opens the Agent Center ("管理 Agent"): through the composer's own
+ * `openSettings` when the render context carries one, else the store's.
+ */
+export function openAgentCenter(openSettings?: unknown): void {
+  if (typeof openSettings === 'function') {
+    ;(openSettings as (section: 'agentsHarnesses') => void)('agentsHarnesses')
+    return
+  }
+  useChatStore.getState().openSettings('agentsHarnesses')
+}
+
+const NO_NAMES: readonly string[] = []
+
+/**
+ * Dispatchable agent names, read only while `active`. The selector returns a
+ * joined string, so unrelated harness-row updates (probes, model catalogs)
+ * never re-render the tray.
+ */
+export function useDispatchableAgentNames(active: boolean): readonly string[] {
+  const key = useHarnessStore((state) => (active ? dispatchableAgentNames(state.rows).join('\n') : ''))
+  return useMemo(() => (key ? key.split('\n') : NO_NAMES), [key])
 }

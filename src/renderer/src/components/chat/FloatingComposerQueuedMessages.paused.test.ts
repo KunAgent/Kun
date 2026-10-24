@@ -6,6 +6,7 @@ import {
   FloatingComposerQueuedMessages,
   type QueuedComposerMessage
 } from './FloatingComposerQueuedMessages'
+import css from './FloatingComposerQueuedMessages.module.css'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -47,7 +48,7 @@ describe('FloatingComposerQueuedMessages paused queue and row menu', () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false
   })
 
-  it('replaces the count header with a paused banner whose resume button resumes the queue', async () => {
+  it('replaces the caption with a paused notice whose Continue button resumes the queue', async () => {
     const onResume = vi.fn(async () => true)
     await render({
       messages: [
@@ -57,7 +58,17 @@ describe('FloatingComposerQueuedMessages paused queue and row menu', () => {
       onResume
     })
     const banner = container.querySelector('[data-queue-paused-banner]')
-    expect(banner?.textContent).toContain('queuePausedDetail count=2')
+    expect(banner?.getAttribute('role')).toBe('status')
+    expect(banner?.textContent).toContain('composerQueue.pausedTitle')
+    expect(banner?.textContent).toContain('composerQueue.pausedCount count=2')
+    // Only the reason ellipsizes: the count sits beside it, outside the clip.
+    const spans = [...(banner?.querySelectorAll('span') ?? [])]
+    const title = spans.find((span) => span.textContent === 'composerQueue.pausedTitle')
+    const count = spans.find((span) => span.textContent === 'composerQueue.pausedCount count=2')
+    expect(title?.classList.contains(css.captionText)).toBe(true)
+    expect(count?.closest(`.${css.captionText}`)).toBeNull()
+    expect(count?.parentElement).toBe(title?.parentElement)
+    expect(container.querySelector('[data-queued-message-caption]')).toBeNull()
     expect(container.querySelector('[data-queued-message-header]')).toBeNull()
     expect(container.querySelectorAll('[data-queued-message-id]')).toHaveLength(2)
     // Rows defer to the banner: no per-row retry or paused chip.
@@ -67,6 +78,8 @@ describe('FloatingComposerQueuedMessages paused queue and row menu', () => {
 
     const resume = container.querySelector<HTMLButtonElement>('[data-queue-resume]')!
     expect(resume.disabled).toBe(false)
+    expect(resume.textContent).toBe('composerQueue.resume')
+    expect(resume.title).toBe('composerQueue.resumeHint')
     await act(async () => resume.click())
     expect(onResume).toHaveBeenCalledTimes(1)
   })
@@ -97,9 +110,6 @@ describe('FloatingComposerQueuedMessages paused queue and row menu', () => {
       messages: [message('q-1'), message('q-2'), message('q-3')],
       running: true,
       onReorder
-    })
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-queued-message-header]')!.click()
     })
     const thirdRow = container.querySelector('[data-queued-message-id="q-3"]')!
     const more = thirdRow.querySelector<HTMLButtonElement>('[data-queued-message-action="more"]')!
