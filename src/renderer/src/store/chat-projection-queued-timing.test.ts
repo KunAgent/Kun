@@ -106,3 +106,31 @@ describe('queued turn execution timing', () => {
     expect(patch.turnStartedAtByUserId?.['queued-user']).toBe(startedMs)
   })
 })
+
+describe('background shell continuation timing', () => {
+  function completionEvent(): CoreRuntimeEventJson {
+    const event = userEvent()
+    event.item = {
+      ...event.item!, id: 'shell-notice',
+      text: '<background_shell_completed><session_id>shell-1</session_id><command>npm run build</command><exit_code>0</exit_code><output_preview>ok</output_preview><hint>read output</hint></background_shell_completed>'
+    }
+    return event
+  }
+
+  it('starts the clock when a background completion wakes an idle thread', () => {
+    const running = projectEvent(state(), completionEvent())
+    expect(running.busy).toBe(true)
+    expect(running.currentTurnId).toBe('queued')
+    expect(running.currentTurnUserId).toBeNull()
+    expect(running.currentTurnStartedAtMs).toBe(startedMs)
+  })
+
+  it('preserves the clock when a background notice joins the same running turn', () => {
+    const running = projectEvent(state())
+    const event = { ...completionEvent(), turnStartedAt: new Date(now).toISOString() }
+    const guided = projectEvent(running, event)
+    expect(guided.currentTurnUserId).toBe('queued-user')
+    expect(guided.currentTurnStartedAtMs).toBe(startedMs)
+    expect(guided.turnStartedAtByUserId).toEqual(running.turnStartedAtByUserId)
+  })
+})

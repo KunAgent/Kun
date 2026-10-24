@@ -186,8 +186,10 @@ export function reduceChatProjection(
         busyUnconfirmed: false,
         currentTurnId: event.turnId ?? state.currentTurnId,
         currentTurnUserId,
+        // A background notice can start a new runtime turn without a new
+        // visible user bubble; only same-turn notices retain the old clock.
         currentTurnStartedAtMs:
-          backgroundNotice || (event.turnId != null && event.turnId === state.currentTurnId)
+          (event.turnId ? event.turnId === state.currentTurnId : backgroundNotice)
             ? state.currentTurnStartedAtMs
             : startedAt,
         turnStartedAtByUserId: backgroundNotice
