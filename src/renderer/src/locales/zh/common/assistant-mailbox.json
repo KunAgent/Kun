@@ -116,5 +116,7 @@
   "assistantProgramLegacy": "旧程序 {{version}} · 待迁移",
   "assistantProgramUpdateAvailable": "有可用更新",
   "assistantProgramUpdateFailed": "上次更新失败",
-  "assistantUpdatesNotConfigured": "更新发行尚未配置，请先完成签名发行配置。"
+  "assistantUpdatesNotConfigured": "更新发行尚未配置，请先完成签名发行配置。",
+  "assistantVipRequired": "个人助手需要 Pro 或 Max 会员。开通或续期后刷新即可恢复原连接。",
+  "assistantVipFeature": "Pro / Max 会员功能"
 }

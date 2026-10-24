@@ -22,6 +22,7 @@ export function useMobileLink() {
     owner = useRef<string | null>(null),
     accountId = signedIn ? account.state.user?.id ?? null : null
   owner.current = accountId
+  const vipRequired = zh ? '手机远控需要 Plus、Pro 或 Max 会员。开通或续期后重新连接。' : 'Mobile remote access requires Plus, Pro or Max. Reconnect after activating or renewing membership.'
   const unavailable = zh
     ? '连接不可用，请检查 Kun 账号登录和服务状态。'
     : 'Connection unavailable. Check your Kun account and service status.'
@@ -61,15 +62,15 @@ export function useMobileLink() {
     try {
       const next = await run()
       if (current()) setState(next)
-    } catch {
-      if (current()) setError(unavailable)
+    } catch (failure) {
+      if (current()) setError(String(failure).includes('vip_mobile_remote_required') ? vipRequired : unavailable)
     } finally {
       if (current()) setBusy(null)
     }
   }
   const starting = Boolean(state?.starting || busy === 'start'),
     canStop = signedIn && Boolean(state?.enabled || starting),
-    connectionError = error || (state?.error ? unavailable : ''),
+    connectionError = error || (state?.error === 'VIP_REQUIRED' ? vipRequired : state?.error ? unavailable : ''),
     enabled = signedIn && state?.enabled === true
   return {
     api,
@@ -82,6 +83,7 @@ export function useMobileLink() {
     canStop,
     enabled,
     connectionError,
+    retryVip: () => api && void action(() => api.reconnect(), 'start'),
     toggle: () => api && void action(() => api.enable(!canStop), canStop ? 'stop' : 'start'),
     confirm: (id: string, scopes?: MobileLinkScope[]) => api && void action(() => api.confirm(id, scopes)),
     setScopes: (id: string, scopes: MobileLinkScope[]) => api && void action(() => api.setScopes(id, scopes)),

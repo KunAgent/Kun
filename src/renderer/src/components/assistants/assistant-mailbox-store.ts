@@ -15,6 +15,7 @@ const api = () => (typeof window === 'undefined' ? undefined : window.kunGui?.as
 
 function message(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error)
+  if (text.includes('vip_personal_assistant_required')) return i18n.t('assistantVipRequired', { ns: 'common' })
   if (text.includes('updates_not_configured')) return i18n.t('assistantUpdatesNotConfigured', { ns: 'common' })
   return text.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 }

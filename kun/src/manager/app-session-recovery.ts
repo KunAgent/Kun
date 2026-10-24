@@ -65,7 +65,8 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
     const managers = live.filter((entry) => entry.instanceId.startsWith('manager-'))
     const runtimes = live.filter((entry) => !entry.instanceId.startsWith('manager-'))
     if (managers.some((entry) => !manager?.appOwner || entry.pid !== manager.pid ||
-      entry.instanceId !== `manager-${manager.appOwner.generation}`)) {
+      entry.instanceId !== `manager-${manager.appOwner.generation}`) ||
+      (manager && runtimeProcessIsAlive(manager.pid, manager) && !managers.some((entry) => entry.pid === manager.pid))) {
       throw new Error('Leftover Manager does not match the recorded application session')
     }
     const assertEvidence = async () => {
@@ -77,8 +78,7 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
         }
       }
       const current = await readManagerHandoffDiscoveryStrict(profile.controlDir)
-      if (current && (!manager || current.instanceId !== manager.instanceId || current.pid !== manager.pid ||
-        current.startedAt !== manager.startedAt || !sameAppSessionOwner(current.appOwner, manager.appOwner))) {
+      if (current && JSON.stringify(current) !== JSON.stringify(manager)) {
         throw new Error('Manager identity changed during recovery')
       }
       const remaining = await Promise.all(paths.map(readParticipants))
@@ -114,7 +114,8 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
     // Verify the entire set before stopping anything. Records in all canonical
     // claims, not a port scan or stale PID alone, grant orphan recovery authority.
     for (const participant of live) verifySignalTarget(participant)
-    await stopParticipants(runtimes, input.graceMs ?? 10_000)
+    // Leave time for serve's own 10-second cleanup deadline before escalation.
+    await stopParticipants(runtimes, input.graceMs ?? 15_000)
     await assertEvidence()
     await stopParticipants(managers, input.graceMs ?? 3_000)
     await assertEvidence()
@@ -141,7 +142,8 @@ function sameParticipant(left: Participant, right: Participant): boolean {
 
 function verifiedLiveParticipants(snapshots: Participant[][]): Participant[] {
   const live = new Map<number, Participant>()
-  for (const entry of snapshots.flat()) {
+  const candidates = new Map(snapshots.flat().map((entry) => [JSON.stringify(entry), entry]))
+  for (const entry of candidates.values()) {
     if (!runtimeProcessIsAlive(entry.pid, entry)) continue
     if (snapshots.some((snapshot) => !snapshot.some((current) => sameParticipant(entry, current))) ||
       (live.has(entry.pid) && !sameParticipant(live.get(entry.pid)!, entry))) {

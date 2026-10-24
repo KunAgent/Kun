@@ -212,6 +212,36 @@ describe('orphaned application Manager recovery', () => {
     expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
   })
 
+  it('verifies every Runtime before signalling any process', async () => {
+    const f = await fixture()
+    const runtime = await childProcess()
+    await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
+    const requireIdentity = identity.requireRuntimeProcessIdentity
+    vi.spyOn(identity, 'requireRuntimeProcessIdentity').mockImplementation((pid) => {
+      if (pid === runtime.pid) throw new Error('Runtime identity unavailable')
+      return requireIdentity(pid)
+    })
+    await expect(f.recover()).rejects.toThrow('Runtime identity unavailable')
+    expect(identity.runtimeProcessIsAlive(runtime.pid!)).toBe(true)
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+  })
+
+  it('preserves the Manager and avoids escalation when cancelled during Runtime drain', async () => {
+    const f = await fixture()
+    const runtime = await childProcess(true)
+    await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
+    const controller = new AbortController()
+    const kill = process.kill.bind(process)
+    vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (pid === runtime.pid && signal === 'SIGTERM') controller.abort(new Error('cancelled during drain'))
+      return kill(pid, signal)
+    })
+    await expect(retireOrphanedAppSessionManager({ ...f.profile, signal: controller.signal }))
+      .rejects.toThrow('cancelled during drain')
+    expect(identity.runtimeProcessIsAlive(runtime.pid!)).toBe(true)
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+  })
+
   it('rechecks reservation identity before escalating a stuck Manager', async () => {
     const f = await fixture({ ignoreTerm: true })
     const kill = process.kill.bind(process)

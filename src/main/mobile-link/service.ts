@@ -298,7 +298,7 @@ export class MobileLinkService {
           grants = g.grants
           this.pairingPeers = new Map(p.pairings.map((pairing: { id: string; controllerId: string }) => [pairing.id, pairing.controllerId]))
           this.updateGrants(g.grants)
-          this.error = undefined
+          if (this.error !== 'VIP_REQUIRED') this.error = undefined
         }
       } catch {
         if (generation === this.generation && grantsVersion === this.grantsVersion)
@@ -468,9 +468,11 @@ export class MobileLinkService {
       relay: (notice: RelayNotice) => {
         if (generation === this.generation) this.relayNotice(notice, () => refreshPeers(this.transportEpoch))
       },
-      state: (online: boolean) => {
+      state: (online: boolean, reason?: string) => {
         if (generation === this.generation) {
           this.online = online
+          if (reason === 'VIP_REQUIRED') this.error = 'VIP_REQUIRED'
+          if (online) this.error = undefined
           if (online) {
             this.authorizationId = randomUUID()
             this.notifyReconnected()

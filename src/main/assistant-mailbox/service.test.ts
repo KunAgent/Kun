@@ -1,3 +1,4 @@
+import { AGENT_VERSION } from '@kun/assistant-agent'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -301,7 +302,7 @@ describe('assistant program migration', () => {
     const enrollment = await t.service.createEnrollment({ name: 'Existing', kind: 'cue', locale: 'en' })
     await t.connect(enrollment.code)
     const status = await t.service.refresh()
-    expect(status.assistants[0].reportedVersion).toBe('0.5.0')
+    expect(status.assistants[0].reportedVersion).toBe(AGENT_VERSION)
     await expect(t.service.updatePrompt(status.assistants[0].id, 'en')).rejects.toThrow('updates_not_configured')
     expect((await t.service.snapshot()).assistants[0].id).toBe(status.assistants[0].id)
   })

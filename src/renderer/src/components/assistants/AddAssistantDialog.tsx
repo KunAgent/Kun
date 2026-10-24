@@ -65,6 +65,7 @@ export function AddAssistantForm({ onClose, onCreated }: Props): ReactElement {
   return <form aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void submit() }} className="flex flex-col gap-3.5 text-ds-ink">
     <AssistantSteps current={1} />
     <p className="text-[13px] leading-[20px] text-ds-muted">{t('assistantMailboxDialogHint')}</p>
+    <p className="text-[12px] font-medium text-ds-muted">{t('assistantVipFeature')}</p>
     <fieldset className="flex flex-col gap-2" disabled={busy}>
       <legend className="sr-only">{t('assistantMailboxKind')}</legend>
       <div className="grid grid-cols-3 gap-2">

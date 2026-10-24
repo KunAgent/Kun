@@ -187,6 +187,8 @@ export class AssistantMailboxService {
 
   private async sync(session: Session): Promise<void> {
     const listed = await session.host.list()
+    session.assistants = listed.assistants
+    session.enrollments = listed.enrollments
     await this.flushTasks(session, listed.assistants)
     const names = new Map(listed.assistants.map((assistant) => [assistant.id, assistant.name]))
     let received = 0
@@ -263,7 +265,10 @@ export class AssistantMailboxService {
         this.failures = 0
         this.error = undefined
       } catch (error) {
-        if (error instanceof AssistantMailboxError && error.code === 'LOGIN_REQUIRED') this.availability = 'login_required'
+        if (error instanceof MailboxRequestError && error.code === 'vip_personal_assistant_required') {
+          this.availability = 'upgrade_required'
+          this.error = 'vip_personal_assistant_required'
+        } else if (error instanceof AssistantMailboxError && error.code === 'LOGIN_REQUIRED') this.availability = 'login_required'
         else {
           this.failures = Math.min(this.failures + 1, 6)
           this.error = describe(error)
@@ -278,7 +283,7 @@ export class AssistantMailboxService {
   }
 
   async snapshot(): Promise<AssistantMailboxStatus> {
-    const session = this.availability === 'available' ? this.session : null
+    const session = ['available', 'upgrade_required'].includes(this.availability) ? this.session : null
     if (!session) {
       return { availability: this.availability, assistants: [], enrollments: [], tasks: [], notes: [], ...(this.error ? { error: this.error } : {}) }
     }

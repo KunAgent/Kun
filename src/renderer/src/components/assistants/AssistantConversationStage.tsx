@@ -148,7 +148,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
         className="h-8 rounded-lg border border-ds-border-muted bg-ds-card px-3 text-[12.5px] text-ds-muted transition hover:text-ds-danger">{t('assistantCancelEnrollment')}</button> : null}
     </header>
     {error ? <div role="alert" className="flex items-center gap-2 border-b border-ds-border px-4 py-2 text-[12.5px] text-ds-danger">
-      <span className="min-w-0 flex-1 break-words">{t('assistantMailboxError', { message: error })}</span>
+      <span className="min-w-0 flex-1 break-words">{error.includes('vip_personal_assistant_required') ? t('assistantVipRequired') : t('assistantMailboxError', { message: error })}</span>
       <button type="button" aria-label={t('assistantMailboxClose')} onClick={assistantMailbox.clearError} className="text-ds-muted hover:text-ds-ink"><X size={14} /></button>
     </div> : null}
     <div ref={scroller} aria-label={t('assistantMessages')} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-5 pb-2 pt-6"
@@ -164,9 +164,9 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
           : <ConnectedHero assistant={assistant} onPick={(text) => { setDraft(text); setFocusSignal((value) => value + 1) }} /> : null}
     </div>
     <footer className="flex shrink-0 justify-center px-5 pb-4 pt-2">
-      {assistant && assistant.keyAvailable ? <AssistantComposer assistant={assistant} draft={draft} onDraft={setDraft} replyTo={replyTo}
+      {assistant && assistant.keyAvailable && status?.availability !== 'upgrade_required' ? <AssistantComposer assistant={assistant} draft={draft} onDraft={setDraft} replyTo={replyTo}
         onClearReply={() => setReplyTo(null)} busy={busy} onSend={send} focusSignal={focusSignal} />
-        : <AssistantComposerPlaceholder text={assistant ? t('assistantMailboxKeyMissing') : enrollment?.requests.length ? t('assistantComposerAfterApprove') : t('assistantComposerAfterConnect')} />}
+        : <AssistantComposerPlaceholder text={status?.availability === 'upgrade_required' ? t('assistantVipRequired') : assistant ? t('assistantMailboxKeyMissing') : enrollment?.requests.length ? t('assistantComposerAfterApprove') : t('assistantComposerAfterConnect')} />}
     </footer>
   </section>
 }

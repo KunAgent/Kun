@@ -116,5 +116,7 @@
   "assistantProgramLegacy": "Legacy {{version}} · migration needed",
   "assistantProgramUpdateAvailable": "Update available",
   "assistantProgramUpdateFailed": "Last update failed",
-  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet."
+  "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet.",
+  "assistantVipRequired": "Personal assistants require Pro or Max. Refresh after activating or renewing membership to resume the existing connection.",
+  "assistantVipFeature": "Included with Pro / Max membership"
 }

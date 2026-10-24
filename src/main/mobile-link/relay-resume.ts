@@ -8,7 +8,7 @@ type Relay = {
   dispose(keepAccess?: boolean): void
 }
 // Retrying cannot help until the account or the user acts.
-const FINAL = new Set(['LOGIN_REQUIRED', 'SECURE_STORAGE_REQUIRED'])
+const FINAL = new Set(['LOGIN_REQUIRED', 'SECURE_STORAGE_REQUIRED', 'vip_mobile_remote_required'])
 export const RESUME_RETRY_MS = [15000, 30000, 60000, 120000, 300000, 300000]
 
 /**
