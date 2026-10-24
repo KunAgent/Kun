@@ -1,3 +1,5 @@
+import { createMarkdownReview } from './write-markdown-editor-review'
+import { markdownSelectionHold } from './write-markdown-selection-hold'
 import { useEffect, useRef, useState, type MutableRefObject, type ReactElement } from 'react'
 import { ListOrdered, WrapText } from 'lucide-react'
 import { Annotation, Compartment, EditorSelection, EditorState, type Extension } from '@codemirror/state'
@@ -5,8 +7,8 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { bracketMatching, indentOnInput } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers, showPanel, type Panel, type ViewUpdate } from '@codemirror/view'
-import { acceptChunk, getChunks, rejectChunk, unifiedMergeView } from '@codemirror/merge'
+import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers, type ViewUpdate } from '@codemirror/view'
+import { getChunks } from '@codemirror/merge'
 import i18n from '../../i18n'
 import {
   applyWriteBlockTypeToLines,
@@ -173,77 +175,8 @@ export function WriteMarkdownEditor({
     displayCompartmentRef.current = displayCompartment
     mergeCompartmentRef.current = mergeCompartment
 
-    // --- Inline red/green diff review -----------------------------------------
-    // AI rewrites enter a unified merge view (per-line accept/reject) instead of
-    // overwriting the document. While a review is active, onChange is suppressed
-    // so nothing is persisted until the user resolves every chunk.
-    const finishDiffReview = (): void => {
-      const instance = viewRef.current
-      if (!instance || !reviewActiveRef.current) return
-      const finalDoc = instance.state.doc.toString()
-      reviewActiveRef.current = false
-      instance.dispatch({
-        effects: [mergeCompartment.reconfigure([])]
-      })
-      lastEmittedValueRef.current = finalDoc
-      onChangeRef.current(finalDoc)
-      onReviewStateChangeRef.current?.(false)
-    }
-    const resolveAllDiffChunks = (mode: 'accept' | 'reject'): void => {
-      const instance = viewRef.current
-      if (!instance || !reviewActiveRef.current) return
-      for (let guard = 0; guard < 10_000; guard += 1) {
-        const data = getChunks(instance.state)
-        if (!data || data.chunks.length === 0) break
-        const pos = data.chunks[0].fromB
-        if (mode === 'accept') acceptChunk(instance, pos)
-        else rejectChunk(instance, pos)
-      }
-      finishDiffReview()
-    }
-    const buildDiffReviewPanel = (): Panel => {
-      const dom = document.createElement('div')
-      dom.className = 'cm-write-diff-panel'
-      const label = document.createElement('span')
-      label.className = 'cm-write-diff-panel-label'
-      label.textContent = i18n.t('writeDiffReviewing', { ns: 'common' })
-      const reject = document.createElement('button')
-      reject.type = 'button'
-      reject.className = 'cm-write-diff-reject-all'
-      reject.textContent = i18n.t('writeDiffRejectAll', { ns: 'common' })
-      reject.addEventListener('mousedown', (event) => event.preventDefault())
-      reject.addEventListener('click', () => resolveAllDiffChunks('reject'))
-      const accept = document.createElement('button')
-      accept.type = 'button'
-      accept.className = 'cm-write-diff-accept-all'
-      accept.textContent = i18n.t('writeDiffAcceptAll', { ns: 'common' })
-      accept.addEventListener('mousedown', (event) => event.preventDefault())
-      accept.addEventListener('click', () => resolveAllDiffChunks('accept'))
-      dom.append(label, reject, accept)
-      return { dom, top: true }
-    }
-    // Restartable: when a review is already active (e.g. the agent edits the
-    // file again mid-turn), this re-points the merge view at the new target
-    // against the same baseline instead of bailing.
-    const beginDiffReview = (original: string, nextDoc: string): boolean => {
-      const instance = viewRef.current
-      if (!instance || readOnlyRef.current) return false
-      if (nextDoc === original) return false
-      reviewActiveRef.current = true
-      instance.dispatch({
-        changes: { from: 0, to: instance.state.doc.length, insert: nextDoc },
-        annotations: externalValueSyncAnnotation.of(true),
-        effects: [
-          mergeCompartment.reconfigure([
-            unifiedMergeView({ original, gutter: false, collapseUnchanged: { margin: 3, minSize: 4 } }),
-            showPanel.of(buildDiffReviewPanel)
-          ])
-        ]
-      })
-      lastEmittedValueRef.current = nextDoc
-      onReviewStateChangeRef.current?.(true)
-      return true
-    }
+    const review = createMarkdownReview({ viewRef, readOnlyRef, reviewActiveRef, lastEmittedValueRef,
+      onChangeRef, onReviewStateChangeRef, mergeCompartment, editableCompartment })
     const inlineCompletionExtension = buildInlineCompletionExtension({
       getDebounceMs: () => completionDebounceMsRef.current,
       getMinAcceptScore: () => completionMinAcceptScoreRef.current,
@@ -291,6 +224,7 @@ export function WriteMarkdownEditor({
         mergeCompartment.of([]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         history(),
+        markdownSelectionHold,
         drawSelection(),
         highlightActiveLine(),
         indentOnInput(),
@@ -401,6 +335,7 @@ export function WriteMarkdownEditor({
         }),
         inlineCompletionCompartment.of(inlineCompletionExtension),
         EditorView.updateListener.of((update) => {
+          if (reviewActiveRef.current) review.notifyLayout()
           const externalValueSync = update.transactions.some((transaction) =>
             transaction.annotation(externalValueSyncAnnotation)
           )
@@ -412,7 +347,7 @@ export function WriteMarkdownEditor({
           if (reviewActiveRef.current && !externalValueSync) {
             const chunkData = getChunks(update.state)
             if (!chunkData || chunkData.chunks.length === 0) {
-              queueMicrotask(() => finishDiffReview())
+              queueMicrotask(() => review.finish())
             }
           }
           // Materialise the document string at most once per update; on large
@@ -478,7 +413,7 @@ export function WriteMarkdownEditor({
 
     if (handleRef) {
       handleRef.current = {
-        applyRangeReplacement: (range, original, replacement) => {
+        applyRangeReplacement: (range, original, replacement, selected) => {
           const instance = viewRef.current
           if (!instance || readOnlyRef.current) return false
           const from = clampOffset(instance.state, range.from)
@@ -487,7 +422,7 @@ export function WriteMarkdownEditor({
           instance.focus()
           instance.dispatch({
             changes: { from, to, insert: replacement },
-            selection: EditorSelection.range(from, from + replacement.length),
+            selection: EditorSelection.range(from + (selected?.from ?? 0), from + (selected?.to ?? replacement.length)),
             scrollIntoView: true
           })
           return true
@@ -512,10 +447,7 @@ export function WriteMarkdownEditor({
           })
           return true
         },
-        beginDiffReview: ({ original, nextDoc }) => beginDiffReview(original, nextDoc),
-        isDiffReviewActive: () => reviewActiveRef.current,
-        acceptAllDiff: () => resolveAllDiffChunks('accept'),
-        rejectAllDiff: () => resolveAllDiffChunks('reject')
+        ...review
       }
     }
 
@@ -538,7 +470,7 @@ export function WriteMarkdownEditor({
     const editableCompartment = editableCompartmentRef.current
     if (!view || !editableCompartment) return
     view.dispatch({
-      effects: [editableCompartment.reconfigure(buildInteractionExtensions(readOnly))]
+      effects: [editableCompartment.reconfigure(buildInteractionExtensions(readOnly || reviewActiveRef.current))]
     })
   }, [readOnly])
 

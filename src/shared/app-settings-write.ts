@@ -75,17 +75,14 @@ export const WRITE_QUICK_ACTION_MAX_COUNT = 12
 export const WRITE_QUICK_ACTION_LABEL_MAX_CHARS = 64
 export const WRITE_QUICK_ACTION_PROMPT_MAX_CHARS = 4_000
 
-// Built-in default modes: polish/explain answer through the sidebar assistant —
-// reliable, high-quality prose (the in-place inline-edit pipeline proved too
-// lossy/slow for whole-paragraph rewrites). reformat rewrites in place and lands
-// as an inline red/green diff review, as does any instruction typed into the
-// floating "AI edit" box.
+// Explicit rewrites use an edit-only chat request and remain pending until accepted.
+// Pristine built-ins follow these modes; customized labels/prompts keep their saved mode.
 const WRITE_QUICK_ACTION_BUILTIN_MODES: Record<string, WriteQuickActionMode> = {
-  polish: 'chat',
+  polish: 'edit',
   explain: 'chat',
   reformat: 'edit',
   // Design-vocabulary transforms + review. Whole-selection rewrites go through
-  // the sidebar assistant (like polish); critique is a read-only review.
+  // the sidebar assistant; critique is a read-only review.
   distill: 'chat',
   bolder: 'chat',
   quieter: 'chat',

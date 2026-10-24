@@ -424,6 +424,7 @@ export function WriteWorkspaceDocumentPane({
           {editorSurface === 'document' ? (
             <WriteEditorErrorBoundary resetKey={activeFilePath ?? ''}>
             <WriteRichEditor
+              key={`${workspaceRoot}:${activeFilePath}`}
               value={fileContent}
               workspaceRoot={workspaceRoot}
               filePath={activeFilePath}
@@ -450,6 +451,7 @@ export function WriteWorkspaceDocumentPane({
             </WriteEditorErrorBoundary>
           ) : (
             <WriteMarkdownEditor
+              key={`${workspaceRoot}:${activeFilePath}`}
               value={fileContent}
               workspaceRoot={workspaceRoot}
               filePath={activeFilePath}

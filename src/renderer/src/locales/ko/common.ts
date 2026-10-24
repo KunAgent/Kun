@@ -1,3 +1,4 @@
+import writeSelectionMenu from './common/write-selection-menu.json'
 import agentUpdates from './common/agent-updates.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
@@ -51,6 +52,7 @@ import workersPanel from './common/workers-panel.json'
 import officeViewer from './common/office-viewer.json'
 
 const common = {
+  ...writeSelectionMenu,
   ...taskSuggestion,
   ...agentUpdates,
   ...shellWorkflow,

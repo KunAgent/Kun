@@ -229,8 +229,7 @@ export function buildWriteInlineEditCompletionRequest(
       instruction: [
         'The user explicitly requested an in-place text edit.',
         `User instruction: ${request.instruction}`,
-        'Prefer returning <<<EDIT ... >>> with replacement text for the editable scope.',
-        'Return <<<SHORT ... >>> or <<<LONG ... >>> only if the instruction clearly asks to insert text at the cursor instead of changing the scope.'
+        'Return only <<<EDIT ... >>> containing the complete replacement for the selected passage.'
       ].join('\n'),
       acceptanceCriteria: [
         'The action should satisfy the user instruction.',

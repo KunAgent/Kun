@@ -164,7 +164,7 @@
   "writeInfographicPromptLabel": "生成信息图提示词",
   "writeInfographicPromptDesc": "生成信息图时发给图像模型的提示词前缀，选中文本会附在后面。",
   "writeQuickActionsLabel": "AI 快捷指令",
-  "writeQuickActionsDesc": "显示在选中文字工具栏里的快捷指令。「原地修改」会直接用 AI 结果替换选中文本（如整理格式）；「发送到助手」会连同选中文本交给侧边栏办公助手（如润色、解释）。",
+  "writeQuickActionsDesc": "选区菜单中的快捷指令。“原地修改”先显示修订，确认后写入（如润色、重新格式化）；“发到助手”将选区交给侧栏对话（如解释）。",
   "writeQuickActionLabelPlaceholder": "按钮名称",
   "writeQuickActionPromptPlaceholder": "提示词（原地修改作为编辑指令，发送到助手作为对话内容）",
   "writeQuickActionModeLabel": "处理方式",
