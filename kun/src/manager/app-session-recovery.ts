@@ -12,7 +12,8 @@ import { readManagerHandoffDiscoveryStrict, removeManagerDiscovery, withManagerS
 type Reservation = z.infer<typeof AppSessionReservationSchema>
 type Participant = z.infer<typeof AppSessionParticipantSchema>
 
-/** Explicit recovery of a recorded orphan; an unresponsive HTTP endpoint is not identity evidence. */
+/** Stop a dead application's recorded consumers before its data writer.
+ * An unresponsive HTTP endpoint is not identity evidence. */
 export async function retireOrphanedAppSessionManager(input: AppSessionReservation['profile'] & {
   signal?: AbortSignal
   graceMs?: number
@@ -51,21 +52,21 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
       })) throw new AppSessionConflictError(profile.dataDir, `application pid ${owner.ownerPid} is still running; close it before retrying`)
     }
     assertOwnerExited()
-    const participants = (await Promise.all(paths.map(readParticipants))).flat()
-    const live = participants.filter((participant) => runtimeProcessIsAlive(participant.pid, participant))
+    const snapshots = await Promise.all(paths.map(readParticipants))
+    const live = verifiedLiveParticipants(snapshots)
     if (live.length === 0) return
     const manager = await readManagerHandoffDiscoveryStrict(profile.controlDir)
-    if (!manager?.appOwner || !sameAppSessionOwner(manager.appOwner, {
+    if (manager && (!manager.appOwner || !sameAppSessionOwner(manager.appOwner, {
       ...reservation.owner, generation: manager.appOwner.generation
     }) || await canonicalSessionPath(manager.dataDir) !== profile.dataDir ||
-      await canonicalSessionPath(manager.settingsPath) !== profile.settingsPath) {
+      await canonicalSessionPath(manager.settingsPath) !== profile.settingsPath)) {
       throw new Error('Leftover Manager does not match the recorded application session')
     }
-    const participant = live[0]!
-    if (live.some((entry) => entry.pid !== manager.pid ||
-      entry.instanceId !== `manager-${manager.appOwner!.generation}` ||
-      entry.processIdentity !== participant.processIdentity)) {
-      throw new Error('Application Runtime processes are still running or their identities changed; wait for them to exit, then retry')
+    const managers = live.filter((entry) => entry.instanceId.startsWith('manager-'))
+    const runtimes = live.filter((entry) => !entry.instanceId.startsWith('manager-'))
+    if (managers.some((entry) => !manager?.appOwner || entry.pid !== manager.pid ||
+      entry.instanceId !== `manager-${manager.appOwner.generation}`)) {
+      throw new Error('Leftover Manager does not match the recorded application session')
     }
     const assertEvidence = async () => {
       assertOwnerExited()
@@ -76,41 +77,48 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
         }
       }
       const current = await readManagerHandoffDiscoveryStrict(profile.controlDir)
-      if (current && (current.instanceId !== manager.instanceId || current.pid !== manager.pid ||
+      if (current && (!manager || current.instanceId !== manager.instanceId || current.pid !== manager.pid ||
         current.startedAt !== manager.startedAt || !sameAppSessionOwner(current.appOwner, manager.appOwner))) {
         throw new Error('Manager identity changed during recovery')
       }
-      const remaining = (await Promise.all(paths.map(readParticipants))).flat()
-      if (remaining.some((entry) => runtimeProcessIsAlive(entry.pid, entry) &&
-        (entry.pid !== participant.pid || entry.processIdentity !== participant.processIdentity ||
-          entry.instanceId !== participant.instanceId))) {
+      const remaining = await Promise.all(paths.map(readParticipants))
+      if (verifiedLiveParticipants(remaining).some((entry) => !live.some((original) => sameParticipant(entry, original))) ||
+        live.some((entry) => runtimeProcessIsAlive(entry.pid, entry) &&
+          remaining.some((snapshot) => !snapshot.some((current) => sameParticipant(entry, current))))) {
         throw new Error('Application participants changed during recovery')
       }
       assertOwnerExited()
     }
-    const signalManager = async (signal: NodeJS.Signals) => {
+    const signalParticipant = async (participant: Participant, signal: NodeJS.Signals) => {
       await assertEvidence()
-      if (!runtimeProcessIsAlive(participant.pid, participant)) return
       // The liveness helper deliberately treats inspection failures as alive.
       // Sending a signal requires positive birth identity, including at escalation.
-      if (participant.pid === process.pid || requireRuntimeProcessIdentity(participant.pid) !== participant.processIdentity) {
-        throw new Error('Leftover Manager process identity could not be verified')
-      }
+      if (!verifySignalTarget(participant)) return
       input.signal?.throwIfAborted()
       try { process.kill(participant.pid, signal) } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
       }
     }
-    await signalManager('SIGTERM')
-    await waitForExit(participant, input.graceMs ?? 3_000, input.signal)
-    if (runtimeProcessIsAlive(participant.pid, participant)) {
-      await signalManager('SIGKILL')
-      await waitForExit(participant, input.exitTimeoutMs ?? 2_000, input.signal)
+    const stopParticipants = async (participants: Participant[], graceMs: number) => {
+      for (const participant of participants) await signalParticipant(participant, 'SIGTERM')
+      await waitForExit(participants, graceMs, input.signal)
+      for (const participant of participants) {
+        if (runtimeProcessIsAlive(participant.pid, participant)) await signalParticipant(participant, 'SIGKILL')
+      }
+      await waitForExit(participants, input.exitTimeoutMs ?? 2_000, input.signal)
+      const remaining = participants.filter((entry) => runtimeProcessIsAlive(entry.pid, entry))
+      if (remaining.length) {
+        throw new Error(`Leftover Kun processes did not exit (pid ${remaining.map((entry) => entry.pid).join(', ')}); ownership has been preserved`)
+      }
     }
-    if (runtimeProcessIsAlive(participant.pid, participant)) {
-      throw new Error(`Leftover Manager pid ${participant.pid} did not exit; ownership has been preserved`)
-    }
-    await removeManagerDiscovery(profile.controlDir, manager.instanceId, manager)
+    // Verify the entire set before stopping anything. Records in all canonical
+    // claims, not a port scan or stale PID alone, grant orphan recovery authority.
+    for (const participant of live) verifySignalTarget(participant)
+    await stopParticipants(runtimes, input.graceMs ?? 10_000)
+    await assertEvidence()
+    await stopParticipants(managers, input.graceMs ?? 3_000)
+    await assertEvidence()
+    if (manager) await removeManagerDiscovery(profile.controlDir, manager.instanceId, manager)
     // Acquisition reclaims the dead session claims. Never remove business data.
   }
 }
@@ -126,9 +134,38 @@ async function readParticipants(path: string): Promise<Participant[]> {
     AppSessionParticipantSchema.parse(JSON.parse(await readFile(join(path, name), 'utf8')))))
 }
 
-async function waitForExit(participant: Participant, timeoutMs: number, signal?: AbortSignal): Promise<void> {
+function sameParticipant(left: Participant, right: Participant): boolean {
+  return left.pid === right.pid && left.instanceId === right.instanceId &&
+    left.startedAt === right.startedAt && left.processIdentity === right.processIdentity
+}
+
+function verifiedLiveParticipants(snapshots: Participant[][]): Participant[] {
+  const live = new Map<number, Participant>()
+  for (const entry of snapshots.flat()) {
+    if (!runtimeProcessIsAlive(entry.pid, entry)) continue
+    if (snapshots.some((snapshot) => !snapshot.some((current) => sameParticipant(entry, current))) ||
+      (live.has(entry.pid) && !sameParticipant(live.get(entry.pid)!, entry))) {
+      throw new Error('Application participant identities do not match all profile reservations')
+    }
+    live.set(entry.pid, entry)
+  }
+  return [...live.values()]
+}
+
+function verifySignalTarget(participant: Participant): boolean {
+  if (!runtimeProcessIsAlive(participant.pid, participant)) return false
+  try {
+    if (participant.pid !== process.pid && requireRuntimeProcessIdentity(participant.pid) === participant.processIdentity) return true
+  } catch (error) {
+    if (!runtimeProcessIsAlive(participant.pid, participant)) return false
+    throw error
+  }
+  throw new Error(`Leftover Kun process identity could not be verified (pid ${participant.pid})`)
+}
+
+async function waitForExit(participants: Participant[], timeoutMs: number, signal?: AbortSignal): Promise<void> {
   const deadline = Date.now() + timeoutMs
-  while (runtimeProcessIsAlive(participant.pid, participant) && Date.now() < deadline) {
+  while (participants.some((entry) => runtimeProcessIsAlive(entry.pid, entry)) && Date.now() < deadline) {
     signal?.throwIfAborted()
     await new Promise((resolve) => setTimeout(resolve, 50))
   }

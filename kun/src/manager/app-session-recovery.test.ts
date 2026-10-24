@@ -90,13 +90,91 @@ describe('orphaned application Manager recovery', () => {
     expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
   })
 
-  it('preserves the Manager while any recorded Runtime is still alive', async () => {
+  it.each([false, true])('stops orphaned Runtimes before the Manager (stuck Runtime: %s)', async (ignoreTerm) => {
+    const f = await fixture()
+    const runtime = await childProcess(ignoreTerm)
+    const otherRuntime = await childProcess()
+    const unrelated = await childProcess()
+    await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
+    await f.reservation.recordProcess({ pid: otherRuntime.pid!, instanceId: 'other-runtime-instance' })
+    const kill = process.kill.bind(process)
+    const signals: Array<{ pid: number; signal: string | number | undefined }> = []
+    vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (signal && signal !== 0) {
+        signals.push({ pid, signal })
+        if (pid === f.child.pid) {
+          expect(identity.runtimeProcessIsAlive(runtime.pid!)).toBe(false)
+          expect(identity.runtimeProcessIsAlive(otherRuntime.pid!)).toBe(false)
+        }
+      }
+      return kill(pid, signal)
+    })
+    await f.recover()
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(false)
+    expect(identity.runtimeProcessIsAlive(unrelated.pid!)).toBe(true)
+    expect(signals.filter(({ pid }) => pid === runtime.pid).map(({ signal }) => signal))
+      .toEqual(ignoreTerm ? ['SIGTERM', 'SIGKILL'] : ['SIGTERM'])
+    expect(await readManagerHandoffDiscoveryStrict(f.profile.controlDir)).toBeNull()
+    expect(await readFile(join(f.profile.dataDir, 'history.json'), 'utf8')).toBe('saved conversations')
+    expect(await readFile(f.profile.settingsPath, 'utf8')).toBe('saved settings')
+    const next = await acquireAppSessionReservation({ ...f.profile, owner: {
+      ...f.owner, ownerSessionId: randomUUID(), ownerPid: process.pid,
+      ownerProcessIdentity: identity.requireRuntimeProcessIdentity()
+    } })
+    await next.release()
+  })
+
+  it('recovers a Runtime after its Manager already exited and unpublished discovery', async () => {
     const f = await fixture()
     const runtime = await childProcess()
     await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
-    await expect(f.recover()).rejects.toThrow('Runtime processes are still running')
-    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+    const exited = once(f.child, 'exit')
+    f.child.kill('SIGTERM')
+    await exited
+    await rm(join(f.profile.controlDir, 'manager.json'))
+    await f.recover()
+    expect(identity.runtimeProcessIsAlive(runtime.pid!)).toBe(false)
+  })
+
+  it('refuses Runtime evidence missing from any profile claim before stopping anything', async () => {
+    const f = await fixture()
+    const runtime = await childProcess()
+    await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
+    await rm(join(f.claims[0]!, 'process-runtime-instance.json'))
+    await expect(f.recover()).rejects.toThrow('do not match all profile reservations')
     expect(identity.runtimeProcessIsAlive(runtime.pid!)).toBe(true)
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+  })
+
+  it('preserves a recycled Runtime PID while recovering the recorded Manager', async () => {
+    const f = await fixture()
+    const runtime = await childProcess()
+    await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
+    for (const path of f.claims) {
+      const file = join(path, 'process-runtime-instance.json')
+      const participant = JSON.parse(await readFile(file, 'utf8'))
+      await writeFile(file, JSON.stringify({ ...participant, processIdentity: 'previous-process-birth' }))
+    }
+    await f.recover()
+    expect(identity.runtimeProcessIsAlive(runtime.pid!)).toBe(true)
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(false)
+  })
+
+  it('does not escalate a Runtime or stop its Manager after participant evidence changes', async () => {
+    const f = await fixture()
+    const runtime = await childProcess(true)
+    await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
+    const kill = process.kill.bind(process)
+    vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (pid === runtime.pid && signal === 'SIGTERM') {
+        const path = join(f.claims[0]!, 'process-runtime-instance.json')
+        writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, 'utf8')), instanceId: 'changed' }))
+      }
+      return kill(pid, signal)
+    })
+    await expect(f.recover()).rejects.toThrow('do not match all profile reservations')
+    expect(identity.runtimeProcessIsAlive(runtime.pid!)).toBe(true)
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
   })
 
   it('refuses mismatched Manager owner evidence', async () => {

@@ -150,6 +150,11 @@ inflight cleanup、steering queue、context compaction、usage/cache telemetry�
 - GUI Runtime 重启只替换本次 Runtime，Manager 保持本次 session。Manager
   崩溃恢复由应用 owner 决定：先停旧 Runtime 与消费者，再启动下一 generation
   并统一重绑。app-owned Runtime 不能因 Manager 断连自行 ensure 或 re-election。
+- 启动失败页的 Recover 在确认旧应用已退出、三个规范化 profile 的所有权与
+  进程登记一致后，先停止残留 Runtime，确认退出后再停止 Manager。每次发送
+  信号及升级终止都重新核对登记和进程出生身份；未知归属或 PID 复用不能成为
+  终止依据。恢复保留原有会话与设置，不能只清理 Manager 而让残留 Runtime
+  永久阻塞恢复按钮。
 - 旧版常驻实例只有在认证身份、规范化目录、原子冻结新接入和空闲状态均可证明时
   才允许退休。discovery、PID、endpoint、owner 或 Manager registration 存在歧义，
   或旧协议不能证明无活跃外部工作时，必须停止接管并提示关闭旧应用。同版本

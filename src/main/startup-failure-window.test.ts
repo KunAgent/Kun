@@ -196,13 +196,15 @@ it('presents a typed handoff failure with safe owner details and task continuity
 })
 
 describe('showStartupFailureWindow', () => {
-  it('presents orphan recovery as leftover data-service cleanup', async () => {
+  it('presents orphan recovery as Runtime cleanup followed by data-service cleanup', async () => {
     const recoverRetry = vi.fn(async () => undefined)
     showStartupFailureWindow(new OrphanedAppSessionError('/tmp/profile', 'owner exited'), '/tmp/logs', { recoverRetry })
     expect(lastRenderedHtml()).toContain('Recover Kun')
+    expect(lastRenderedHtml()).toContain('stops its recorded leftover Runtime processes, then stops its data service')
+    expect(lastRenderedHtml()).not.toContain('Live Runtime processes block recovery')
     expect(lastRenderedHtml()).toContain('Saved conversations and settings are preserved')
     electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
-    expect(lastRenderedHtml()).toContain('Recovering the leftover Kun data service')
+    expect(lastRenderedHtml()).toContain('Recovering leftover Kun processes')
     await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledOnce())
   })
 

@@ -39,7 +39,7 @@ export function sanitizeStartupFailureMessage(error: unknown): string {
 export function startupFailurePresentation(error: unknown): StartupFailurePresentation {
   if (error instanceof OrphanedAppSessionError) {
     return {
-      message: sanitizeStartupFailureMessage(`${error.message}\n\nRecover Kun verifies the previous application has exited and stops its recorded leftover data service. Live Runtime processes block recovery. Saved conversations and settings are preserved.`),
+      message: sanitizeStartupFailureMessage(`${error.message}\n\nRecover Kun verifies the previous application has exited, stops its recorded leftover Runtime processes, then stops its data service. Processes whose ownership cannot be verified are left untouched. Saved conversations and settings are preserved.`),
       handoff: false, retryable: true, orphaned: true
     }
   }
@@ -155,7 +155,7 @@ export function startupFailureHtml(
       : 'Kun could not safely verify the previous local owner, so it left the process, active work, and saved data untouched.'
     : 'The application is still running so you can inspect the failure or retry. The diagnostic detail is:'
   const primaryAction = busy
-    ? `<span class="working">${options.orphaned ? 'Recovering the leftover Kun data service…' : options.recheck ? 'Checking Service Manager ownership…' : handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
+    ? `<span class="working">${options.orphaned ? 'Recovering leftover Kun processes…' : options.recheck ? 'Checking Service Manager ownership…' : handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
     : retryable
       ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${options.orphaned ? 'Recover Kun' : options.recheck ? 'Recheck Kun' : handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
       : ''
