@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactElement } from 'react'
-import { ArrowUp, Check, CornerUpLeft, MessageCircle, RotateCcw, Sparkles, Square, X } from 'lucide-react'
+import { ArrowUp, Check, CornerUpLeft, MessageCircle, RotateCcw, Sparkle, Square, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { writeFocusModeFloatingLayerClassName } from '../../../write/write-focus-mode'
 import { barPlacement } from './edit-bar-placement'
@@ -48,7 +48,7 @@ export function SelectionEditLayer({ controller, focusMode = false }: {
     role="region" aria-label={t(running ? 'writeEditRunning' : 'writeEditDone', { label: session.label })}
     data-selection-ignore="true" style={{ ...position, visibility: position ? 'visible' : 'hidden' }}>
     <div className="write-selection-edit-main">
-      <span className="write-selection-edit-icon"><Sparkles /></span>
+      <span className="write-selection-edit-icon"><Sparkle /></span>
       <span className="write-selection-edit-label" role="status">{t(running ? 'writeEditRunning' : 'writeEditDone', { label: session.label })}
         {running && <span className="write-selection-edit-dots" aria-hidden="true"><i>·</i><i>·</i><i>·</i></span>}</span>
       {!running && <span className="write-selection-edit-count">· {t('writeEditHunks', { count: session.hunks })}</span>}

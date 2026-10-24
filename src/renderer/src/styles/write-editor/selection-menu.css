@@ -42,7 +42,7 @@
 }
 :is(.write-selection-menu, .write-selection-menu-flyout) svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--ds-text-muted); stroke-width: 1.8; }
 .write-selection-menu-row.is-skill > svg:first-child,
-.write-selection-menu-ask > svg { color: var(--ds-skill); }
+.write-selection-menu-ask > svg { color: var(--ds-skill); stroke-width: 1.75; }
 .write-selection-menu-row .is-check { color: var(--ds-accent); width: 14px; height: 14px; }
 .write-selection-menu-row .write-selection-menu-chevron { width: 14px; height: 14px; }
 .write-selection-menu-trail { color: var(--ds-text-muted); font-size: 12px; opacity: 0; white-space: nowrap; }

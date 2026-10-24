@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { AppWindow, ImageIcon, LayoutTemplate, Lightbulb, LockKeyhole, MessageSquare, MessageSquareQuote, Sparkles, Wand2, WandSparkles } from 'lucide-react'
+import { AlignLeft, AppWindow, ImageIcon, LayoutTemplate, LockKeyhole, MessageCircleQuestion, MessageSquare, MessageSquareQuote, PenLine, Sparkle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { MenuButton } from './MenuButton'
 import { BlockTypeFlyout } from './BlockTypeFlyout'
@@ -58,7 +58,7 @@ export function SelectionMenu(props: SelectionMenuProps): ReactElement {
       {typing ? <>
         <div className="write-selection-menu-heading">{t('writeSelectionAskGroup')}</div>
         {editEnabled && <MenuButton role="menuitem" className="write-selection-menu-row is-skill" label={t('writeSelectionAskEdit')}
-          onActivate={() => submit('edit')}><Wand2 /><span>{t('writeSelectionAskEdit')}</span><kbd>↵</kbd></MenuButton>}
+          onActivate={() => submit('edit')}><PenLine aria-hidden="true" /><span>{t('writeSelectionAskEdit')}</span><kbd>↵</kbd></MenuButton>}
         <MenuButton role="menuitem" className="write-selection-menu-row is-skill" label={t('writeSelectionAskChat')}
           onActivate={() => submit('chat')}><MessageSquare /><span>{t('writeSelectionAskChat')}</span><kbd>{editEnabled ? `${modifierLabel()}↵` : '↵'}</kbd></MenuButton>
         {rows.length > 0 && <div className="write-selection-menu-heading">{t('writeSelectionMatchedSkills')}</div>}
@@ -67,9 +67,9 @@ export function SelectionMenu(props: SelectionMenuProps): ReactElement {
           active={props.activeAgentId ?? ''} onSelect={props.onSelectAgent} onManage={props.onOpenAgentSettings} focusMode={props.focusMode} />}
       </div>}
       {rows.map((action) => {
-        const Icon = action.id === 'polish' ? Wand2 : action.id === 'explain' ? Lightbulb : action.id === 'reformat' ? WandSparkles : Sparkles
+        const Icon = action.id === 'polish' ? PenLine : action.id === 'explain' ? MessageCircleQuestion : action.id === 'reformat' ? AlignLeft : Sparkle
         return <MenuButton key={action.id} role="menuitem" className="write-selection-menu-row is-skill" label={action.label}
-          onActivate={() => { props.onQuickAction?.(action); onReleaseSelection?.() }}><Icon /><span>{action.label}</span>
+          onActivate={() => { props.onQuickAction?.(action); onReleaseSelection?.() }}><Icon aria-hidden="true" /><span>{action.label}</span>
           <small className="write-selection-menu-trail">{t(action.mode === 'edit' ? 'writeSelectionTrailEdit' : 'writeSelectionTrailChat')}</small></MenuButton>
       })}
       {!typing && generated.map(({ label, icon: Icon, run }) => <MenuButton key={label} role="menuitem" className="write-selection-menu-row is-skill"
