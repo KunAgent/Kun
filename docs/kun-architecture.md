@@ -512,8 +512,9 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
   账号，不按模型名或供应商 preset 猜账号，不将 API 余额当成订阅额度。没有可靠额度时
   不显示该区域；只有额度、没有上下文数据时仍可单独打开。每次打开重新确认账号，
   切换路线立即移除旧值。探测是只读的，不启动 Agent，也不替模型登录刷新或改写凭据。
-- Design 任务：与 Code 任务共用工作台、会话列表、输入框、模型、权限和工作区控制；
-  设计稿、原型和设计流程图落在 `.kun-design/`，在右侧白板中预览和迭代。
+- Design：Code 会话的能力而不是输入框模式。Code agent 用 `design_open` 提交设计需求，
+  本轮回复结束后工作台在同一会话里启动一次 Design pass；设计稿、原型和设计流程图落在
+  `.kun-design/`，在右侧白板中预览和迭代。
 - Work：办公助手和 inline completion 读取同一份 Kun API key /
   base URL 配置。内部 Write thread registry 只把办公线程识别为 Kun
   thread，不再区分旧运行时会话。白板只缓存其绑定 thread 的 session title：

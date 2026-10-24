@@ -18,6 +18,9 @@ import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js
 import type { AgentDispatchIntentStore } from './agent-dispatch-intent-store.js'
 
 export const AGENT_DISPATCH_COUNTDOWN_MS = 60_000
+/** Scan cadence while some intent is unfinished, and while every intent is settled. */
+export const AGENT_DISPATCH_SCAN_MS = 1_000
+export const AGENT_DISPATCH_IDLE_SCAN_MS = 5_000
 /** Proven-absent start failures before the card fails visibly instead of retrying forever. */
 export const AGENT_DISPATCH_MAX_START_ATTEMPTS = 3
 const terminal = new Set<AgentDispatchState>(['completed', 'failed', 'cancelled'])
@@ -78,6 +81,7 @@ export class AgentDispatchService {
   private readonly controller = new AbortController()
   private timer?: ReturnType<typeof setTimeout>
   private scan?: Promise<Promise<void>[]>
+  private idle = false
   private accepting = true
   private started = false
   private readonly now: () => number
@@ -314,10 +318,12 @@ export class AgentDispatchService {
   private scanIntents(): Promise<Promise<void>[]> {
     if (!this.accepting) return Promise.resolve([])
     if (this.scan) return this.scan
-    const scan = this.list().then((intents) => intents
-      .filter((intent) => !terminal.has(intent.state) && intent.state !== 'paused' && intent.state !== 'pending_confirmation')
-      .map((intent) => this.launch(intent.intentId)))
-      .finally(() => { this.scan = undefined })
+    const scan = this.list().then((intents) => {
+      const pending = intents.filter((intent) =>
+        !terminal.has(intent.state) && intent.state !== 'paused' && intent.state !== 'pending_confirmation')
+      this.idle = pending.length === 0
+      return pending.map((intent) => this.launch(intent.intentId))
+    }).finally(() => { this.scan = undefined })
     this.scan = scan
     return scan
   }
@@ -552,12 +558,24 @@ export class AgentDispatchService {
 
   private schedule(): void {
     if (!this.started || !this.accepting) return
+    // Intents made by this process launch immediately and wake the scan (see
+    // emit); the timer covers deadlines and other processes, so an all-settled
+    // file is polled at the idle cadence.
     this.timer = runWithoutTurnMutationFence(() => setTimeout(() => {
+      this.timer = undefined
       void this.scanIntents().catch((error) => {
         console.warn(`[kun] dispatch timer failed: ${message(error)}`)
-      }).finally(() => this.schedule())
-    }, 1000))
+      }).finally(() => { if (!this.timer) this.schedule() })
+    }, this.idle ? AGENT_DISPATCH_IDLE_SCAN_MS : AGENT_DISPATCH_SCAN_MS))
     this.timer.unref?.()
+  }
+
+  private wakeScan(): void {
+    if (!this.idle) return
+    this.idle = false
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = undefined
+    this.schedule()
   }
 
   private handler(intent: AgentDispatchIntent): AgentDispatchHandler {
@@ -569,6 +587,7 @@ export class AgentDispatchService {
   private nowIso(): string { return new Date(this.now()).toISOString() }
   private deadline(): string { return new Date(this.now() + AGENT_DISPATCH_COUNTDOWN_MS).toISOString() }
   private async emit(intent: AgentDispatchIntent): Promise<void> {
+    if (!terminal.has(intent.state)) this.wakeScan()
     // Audit delivery failure must never reverse a durable scheduler admission.
     try { await this.options.onUpdated?.(structuredClone(intent)) } catch (error) {
       console.warn(`[kun] dispatch event delivery failed intent=${intent.intentId}: ${message(error)}`)

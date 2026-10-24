@@ -1,0 +1,21 @@
+{
+  "appSurfaceDesktopOnly": "Интерактивные страницы доступны в настольном приложении Kun.",
+  "appSurfaceRetry": "Повторить",
+  "appSurfacePageError": "Ошибка страницы: {{message}}",
+  "appSurfaceWidgetAria": "Интерактивный виджет: {{title}}",
+  "appSurfaceCopyImage": "Копировать как изображение",
+  "appSurfaceCopied": "Скопировано",
+  "appSurfaceExpand": "Открыть на панели приложения",
+  "appSurfaceOpenInPanel": "Показано на панели приложения. Нажмите, чтобы открыть снова.",
+  "appSurfaceFollowUpConfirm": "Отправить это сообщение от «{{app}}»?",
+  "appSurfaceOpenLinkConfirm": "«{{app}}» хочет открыть эту ссылку в браузере.",
+  "appSurfaceToolConsent": "Разрешить «{{app}}» запускать свои инструменты в этом разговоре?",
+  "appSurfaceToolConsentDetail": "Страница может вызывать инструменты своего MCP-сервера, например сохранять или изменять свои документы. Другие серверы, файлы и история разговора ей недоступны.",
+  "appSurfaceWidgetStateChip": "Состояние: {{title}}",
+  "appSurfaceWidgetStateSummary": "Выбор, сохранённый в интерактивном виджете",
+  "appSurfaceAppContextChip": "Контекст: {{title}}",
+  "appSurfaceAppContextSummary": "Контекст, выбранный в приложении",
+  "appSurfaceDownloadConfirm": "«{{app}}» хочет сохранить файл на ваш компьютер.",
+  "appSurfacePanelTab": "Приложение",
+  "appSurfacePanelEmpty": "Нет открытых приложений. Откройте интерактивную карточку из разговора."
+}

@@ -92,6 +92,62 @@ export class HarnessProcess {
   }
 }
 
+/** The OS could not create a process right now; the launch itself is fine. */
+const TRANSIENT_SPAWN_CODES = new Set(['EAGAIN', 'EMFILE', 'ENFILE', 'ENOMEM'])
+const TRANSIENT_SPAWN_MESSAGE = /\b(EAGAIN|EMFILE|ENFILE|ENOMEM)\b/
+/** Waits before the second and third launch attempts. */
+export const HARNESS_SPAWN_RETRY_DELAYS_MS: readonly number[] = [1_000, 3_000]
+
+export function isTransientSpawnError(error: unknown): boolean {
+  let current: unknown = error
+  for (let depth = 0; current && depth < 8; depth += 1) {
+    const { code, message, cause } = current as { code?: unknown; message?: unknown; cause?: unknown }
+    if (typeof code === 'string' && TRANSIENT_SPAWN_CODES.has(code)) return true
+    if (typeof message === 'string' && TRANSIENT_SPAWN_MESSAGE.test(message)) return true
+    current = cause
+  }
+  return false
+}
+
+function delay(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason)
+      return
+    }
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(signal?.reason)
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/**
+ * A loaded machine can refuse a fork (`EAGAIN`) or run out of descriptors for
+ * a moment; the user used to see the turn fail and resend it by hand. A failed
+ * spawn never started the agent, so starting again cannot repeat its work.
+ */
+async function spawnWithTransientRetry(
+  launch: () => Promise<ChildProcess>,
+  signal: AbortSignal | undefined,
+  retryDelaysMs: readonly number[]
+): Promise<ChildProcess> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await launch()
+    } catch (error) {
+      const wait = retryDelaysMs[attempt]
+      if (wait === undefined || signal?.aborted || !isTransientSpawnError(error)) throw error
+      await delay(wait, signal)
+    }
+  }
+}
+
 export async function startHarnessProcess(input: {
   signal?: AbortSignal
   validateLaunch?: () => Promise<unknown>
@@ -109,6 +165,8 @@ export async function startHarnessProcess(input: {
   /** Injectable for tests; production uses the owned-process launcher. */
   spawn?: HarnessSpawnFn
   stderrTailBytes?: number
+  /** Injectable for tests; defaults to `HARNESS_SPAWN_RETRY_DELAYS_MS`. */
+  spawnRetryDelaysMs?: readonly number[]
 }): Promise<HarnessProcess> {
   const spawn =
     input.spawn ??
@@ -124,13 +182,17 @@ export async function startHarnessProcess(input: {
     input.signal?.throwIfAborted()
   }
   await beforeLaunch()
-  const child = await spawn(input.command, input.args ?? [], {
-    beforeLaunch,
-    env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
-    ...(input.cwd ? { cwd: input.cwd } : {})
-  })
+  const child = await spawnWithTransientRetry(
+    () => spawn(input.command, input.args ?? [], {
+      beforeLaunch,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+      ...(input.cwd ? { cwd: input.cwd } : {})
+    }),
+    input.signal,
+    input.spawnRetryDelaysMs ?? HARNESS_SPAWN_RETRY_DELAYS_MS
+  )
   const process = new HarnessProcess(child, { stderrTailBytes: input.stderrTailBytes })
   if (input.signal?.aborted) {
     await process.stop().catch(() => undefined)

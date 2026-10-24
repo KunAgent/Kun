@@ -6,9 +6,8 @@ import type { KunTuiClient, ThreadDetail, TuiConnection } from '../client.js'
 import { TuiController } from '../controller.js'
 import { parseTuiKeymapConfig } from '../keymap.js'
 import type { TuiOptions } from '../options.js'
-import type { ScrollbackCommit } from '../scrollback-plan.js'
 import { ChatSession } from './chat-session.js'
-import type { ComposerPort, TerminalPort } from './session-types.js'
+import type { ComposerPort, TerminalPort, ViewportScroll } from './session-types.js'
 
 const CREATED_AT = '2026-10-18T00:00:00.000Z'
 
@@ -61,7 +60,7 @@ export class FakeComposer implements ComposerPort {
   }
 }
 
-export async function startSessionHarness(options: { thread?: ThreadDetail; continueLatest?: boolean } = {}) {
+export async function startSessionHarness(options: { thread?: ThreadDetail; continueLatest?: boolean; width?: number } = {}) {
   let current = options.thread
   const client = {
     listThreads: vi.fn(async () => current ? [current] : []),
@@ -97,17 +96,15 @@ export async function startSessionHarness(options: { thread?: ThreadDetail; cont
     copyToClipboard: vi.fn(() => true),
     setMouseEnabled: vi.fn(),
     suspend: vi.fn(async (work) => work()),
-    clearScreen: vi.fn(),
     repaint: vi.fn(),
-    size: () => ({ width: 100, height: 30 }),
+    size: () => ({ width: options.width ?? 100, height: 30 }),
     suspendProcess: vi.fn()
   }
-  const commits: ScrollbackCommit[] = []
+  const scrolls: ViewportScroll[] = []
   const session = new ChatSession(controller, parseTuiKeymapConfig({}).keymap)
   session.attachComposer(composer)
   session.attachTerminal(terminal)
-  session.attachScrollback((next) => commits.push(...next))
-  session.setScrollbackReady(true)
+  session.attachViewport({ scroll: (target) => scrolls.push(target) })
   const running = session.run()
-  return { client, controller, session, composer, terminal, commits, running }
+  return { client, controller, session, composer, terminal, scrolls, running }
 }

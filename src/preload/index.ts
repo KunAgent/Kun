@@ -1,3 +1,4 @@
+import { productAnalyticsApi } from './product-analytics'
 import { USER_ATTENTION_CHANNEL } from '../shared/user-attention'
 import { mobileLink } from './mobile-link'
 import { kunArtApi } from './kun-art'
@@ -16,23 +17,24 @@ import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
 import { quotaReminderPreloadApi } from './quota-reminder-bridge'
 import { worktreePreloadApi } from './worktree-bridge'
+import { gitTurnUndoPreloadApi } from './git-turn-undo-api'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { marketApi } from './market-api'
+import { gitCommitApi } from './git-commit-api'
 import { kunAccountApi } from './kun-account'
+import { appSandboxPreloadApi } from './app-sandbox-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
 // process via additionalArguments and read off process.argv instead.
 const HOME_DIR_ARG = '--kun-home-dir='
 const homeDirFromArgs = process.argv.find((arg) => arg.startsWith(HOME_DIR_ARG))?.slice(HOME_DIR_ARG.length) ?? ''
-
 const APP_ENVIRONMENT_ARG = '--kun-app-environment='
 const appEnvironment = parseAppEnvironment(process.argv
   .find((arg) => arg.startsWith(APP_ENVIRONMENT_ARG))?.slice(APP_ENVIRONMENT_ARG.length))
-
 const DESKTOP_TITLE_BAR_MODE_ARG = '--kun-desktop-title-bar-mode='
 const desktopTitleBarMode = normalizeDesktopTitleBarMode(
   process.platform, // Per-window additionalArguments are appended; prefer the last occurrence.
@@ -44,6 +46,7 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 
 const api = {
   mobileLink,
+  productAnalytics: productAnalyticsApi,
   kunAccount: kunAccountApi,
   kunArt: kunArtApi,
   platform: process.platform,
@@ -141,6 +144,7 @@ const api = {
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
   ...providerBridge,
   optimizePrompt: (payload) => ipcRenderer.invoke('prompt:optimize', payload),
+  cancelPromptOptimization: (payload) => ipcRenderer.invoke('prompt:optimize-cancel', payload),
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) => ipcRenderer.invoke('claw:task:run', taskId),
   getScheduleStatus: () => ipcRenderer.invoke('schedule:status'),
@@ -246,6 +250,7 @@ const api = {
     ipcRenderer.invoke('kun:project-config:open-dir', { workspaceRoot }),
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
+  getGitFileStatus: (workspaceRoot) => ipcRenderer.invoke('git:status-files', workspaceRoot),
   getWorkspaceCreationTimes,
   switchGitBranch: (workspaceRoot, branch) =>
     ipcRenderer.invoke('git:switch-branch', { workspaceRoot, branch }),
@@ -264,11 +269,13 @@ const api = {
   removeGitBranchWorktree: (params) =>
     ipcRenderer.invoke('git:remove-branch-worktree', params),
   ...worktreePreloadApi,
+  ...gitTurnUndoPreloadApi,
   listEditors: () => ipcRenderer.invoke('editor:list'),
   openEditorPath: (options) =>
     ipcRenderer.invoke('editor:open-path', options),
   listWorkspaceDirectory: (options) =>
     ipcRenderer.invoke('file:list-workspace-directory', options),
+  listWorkspaceFiles: (options) => ipcRenderer.invoke('file:list-workspace-files', options),
   resolveWorkspaceFile: (options) =>
     ipcRenderer.invoke('file:resolve-workspace', options),
   openWorkspaceFileInSystem: (options) =>
@@ -685,6 +692,8 @@ const api = {
     return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
   },
   ...paperApi,
-  ...marketApi
+  ...marketApi,
+  ...gitCommitApi,
+  ...appSandboxPreloadApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

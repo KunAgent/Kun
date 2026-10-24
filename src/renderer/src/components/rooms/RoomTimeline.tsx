@@ -7,6 +7,7 @@ import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/brows
 import { mergeRoomMessages, roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import { RoomMessageRow } from './RoomMessageRow'
 import { roomMessageLayout } from './room-message-layout'
+import { privateTurnPositions, type RoomTurnPosition } from './room-turn-steps'
 import { roomButtonClass } from './RoomSettings'
 import { RoomTimelineSearch } from './RoomTimelineSearch'
 import { captureTimelinePosition, restoreTimelinePosition, type RoomTimelinePosition } from './room-timeline-position'
@@ -44,6 +45,8 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
   const restorePending = useRef<RoomTimelinePosition | null>(null)
   const rows = useMemo(() => mergeRoomMessages(contextMessages, messages), [contextMessages, messages])
   const messageById = useMemo(() => new Map(rows.map((message) => [message.id, message])), [rows])
+  const privateChat = room.conversationKind === 'user_agent'
+  const turns = useMemo(() => privateChat ? privateTurnPositions(rows) : undefined, [privateChat, rows])
   const virtual = rows.length > 40
   const virtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => scrollRef.current,
     estimateSize: () => 160, overscan: 6, getItemKey: (index) => rows[index].id })
@@ -184,8 +187,8 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
     thread: (message: RoomMessage) => actions.current.onReplyThread?.(message),
     viewReply: (id: string) => actions.current.jump(id)
   }), [])
-  const renderMessage = (message: RoomMessage, continuation: boolean) => message.presentationKind === 'choice' && renderChoice
-    ? renderChoice(message) : <StableMessageRow room={room} message={message} continuation={continuation}
+  const renderMessage = (message: RoomMessage, continuation: boolean, turn?: RoomTurnPosition) => message.presentationKind === 'choice' && renderChoice
+    ? renderChoice(message) : <StableMessageRow room={room} message={message} continuation={continuation} turn={turn}
       member={room.members.find((member) => member.id === message.authorMemberId)} task={tasks.find((task) => task.id === message.taskId)}
       referencedMessage={message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined}
       onOpenContent={onOpenContent} onHandoff={onHandoff} onRun={onRun ? stableActions.run : undefined}
@@ -215,6 +218,9 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
           paddingBottom: Math.max(0, totalSize - (rendered.at(-1)?.end ?? 0)) } : undefined}>
           {rendered.map((row) => {
             const message = rows[row.index], layout = roomMessageLayout(rows[row.index - 1], message)
+            // A private turn keeps one header for all its messages and starts a new one for the next run.
+            const turn = turns?.get(message.id)
+            const continuation = turn ? !turn.first && !layout.newDay : layout.continuation
             return <div key={row.key} data-index={row.index} data-timeline-id={message.id}
               ref={virtual ? virtualizer.measureElement : undefined}
               className={`rooms-timeline-row${flashId === message.id ? ' is-message-target' : ''}`}>
@@ -222,7 +228,7 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
                 {new Date(message.createdAt).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })}</div> : null}
               {row.index === unreadIndex ? <div role="separator" className="rooms-unread-boundary">
                 {t('roomsUnreadBoundary', { defaultValue: 'Unread messages' })}</div> : null}
-              {renderMessage(message, layout.continuation)}
+              {renderMessage(message, continuation, turn)}
             </div>
           })}
         </div>{afterMessages}</div>
@@ -243,5 +249,6 @@ const StableMessageRow = memo(function StableMessageRow(props: Parameters<typeof
   return <RoomMessageRow {...props} />
 }, (a, b) => a.message === b.message && a.room === b.room && a.member === b.member && a.task === b.task &&
   a.referencedMessage === b.referencedMessage && a.continuation === b.continuation && a.onPin === b.onPin && a.onTask === b.onTask &&
+  a.turn?.runId === b.turn?.runId && a.turn?.first === b.turn?.first && a.turn?.last === b.turn?.last && a.turn?.since === b.turn?.since &&
   a.onMember === b.onMember && a.onOpenContent === b.onOpenContent && a.onHandoff === b.onHandoff &&
   a.onReply === b.onReply && a.onThread === b.onThread && a.onRun === b.onRun && a.onViewReply === b.onViewReply)

@@ -479,6 +479,9 @@ async finishTurn(this: TurnService, input: {
             ...(turn.error ? { error: turn.error } : {})
           }
         }
+        // Read before endTurn below releases the in-memory fold: the turn
+        // keeps the averages its live usage events carried.
+        const modelTiming = this['deps'].usage?.turnModelTiming(input.threadId, input.turnId)
         const turns = current.turns.map((candidate) => {
           if (candidate.id !== input.turnId) return candidate
           const finished = this['finalizeOpenItems'](finishTurn(candidate, input.status), input.status)
@@ -486,7 +489,8 @@ async finishTurn(this: TurnService, input: {
           return {
             ...finished,
             ...(input.error ? { error: input.error } : {}),
-            ...(terminalCode ? { terminalCode } : {})
+            ...(terminalCode ? { terminalCode } : {}),
+            ...(modelTiming ? { modelTiming } : {})
           }
         })
         await this['deps'].threadStore.upsert({

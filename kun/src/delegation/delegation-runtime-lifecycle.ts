@@ -450,12 +450,15 @@ export class DelegationRuntime extends DelegationRuntimeRun {
   async abortDetachedChildrenForThread(parentThreadId: string): Promise<number> {
     const settlements: Promise<void>[] = []
     let aborted = 0
-    for (const [childId, controller] of this.detachedAborts) {
-      if (this.detachedParentThreads.get(childId) !== parentThreadId) continue
+    for (const [childId, parentId] of this.detachedParentThreads) {
+      if (parentId !== parentThreadId) continue
       const settlement = this.detachedSettlements.get(childId)
       if (settlement) settlements.push(settlement)
-      controller.abort()
-      aborted += 1
+      const controller = this.detachedAborts.get(childId)
+      if (controller) {
+        controller.abort()
+        aborted += 1
+      }
     }
     await Promise.allSettled(settlements)
     return aborted

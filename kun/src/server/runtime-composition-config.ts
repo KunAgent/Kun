@@ -20,6 +20,7 @@ import {
   buildDiagramVisualizationToolProvider,
   buildConversationVisualizationToolProvider,
   buildChartToolProvider,
+  buildGenUiToolProvider,
   buildWebToolProviders,
   buildImageGenToolProviders,
   protocolSupportsImageEdit,
@@ -420,6 +421,7 @@ export function createRuntimeConfigController(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
 	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization),
+	      ...buildGenUiToolProvider(() => activeOptions.lab?.genUi, () => core.genUiStore),
 	      ...buildPaperSearchToolProvider({
 	        proxyUrl: () => activeOptions.modelProxyUrl,
 	        enabledSources: () => activeOptions.capabilities?.paperSearch?.enabledSources,
@@ -533,6 +535,7 @@ export function createRuntimeConfigController(
 	    tokenEconomy = nextTokenEconomy
     core.modelProfiles = modelProfiles
     core.providerModelProfiles = providerModelProfiles
+    modelConnections.invalidateSnapshotCache?.() // Registry projections derive capabilities from these profiles.
     core.tokenEconomy = tokenEconomy
 	    refreshDelegatedProviderIds()
 	    directModelClient.replace(nextModelClients)

@@ -4,6 +4,7 @@ import { Check, Copy, Download, Loader2, Presentation } from 'lucide-react'
 import type { ChatBlock, RuntimeDisclosureMetadata, UserInputAnswer } from '../../agent/types'
 import type { WriteExportFormat } from '@shared/write-export'
 import { ComposerContextAttachmentSchema } from '@kun/extension-api'
+import { messageQuoteFromComposerContext } from '../../lib/message-quote'
 import { useChatStore } from '../../store/chat-store'
 import { assistantExportMarkdown } from '../../lib/conversation-export-markdown'
 import {
@@ -42,6 +43,8 @@ export function metaComposerContextLabels(meta: Record<string, unknown> | undefi
     const record = entry as Record<string, unknown>
     const parsed = ComposerContextAttachmentSchema.safeParse(entry)
     if (parsed.success && readWorkspaceOfficeViewPosition(parsed.data)) return []
+    // Reply quotes render as quotes above the message text.
+    if (messageQuoteFromComposerContext(entry)) return []
     const title = typeof record.title === 'string' ? record.title.trim() : ''
     const provenance = record.provenance && typeof record.provenance === 'object'
       ? record.provenance as Record<string, unknown>
@@ -185,10 +188,12 @@ export function RuntimeMetaChips({
 
 export function CopyFeedbackButton({
   text,
-  iconOnly = false
+  iconOnly = false,
+  onCopied
 }: {
   text: string
   iconOnly?: boolean
+  onCopied?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -214,6 +219,7 @@ export function CopyFeedbackButton({
       if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable')
       await navigator.clipboard.writeText(text)
       setStatus('success')
+      onCopied?.()
     } catch {
       setStatus('error')
     }

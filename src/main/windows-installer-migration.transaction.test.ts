@@ -411,6 +411,34 @@ windowsOnly('Windows automatic update transaction', () => {
     expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
   })
 
+  it('restores deep Unicode payload bytes through the in-place transaction rollback', () => {
+    const input = fixture(true, true)
+    const relative = join('resources', 'app.asar.unpacked',
+      ...Array.from({ length: 7 }, (_, index) => `dependency ${index} ${'x'.repeat(24)}`), '\u6a21\u5757.bin')
+    const oldFile = join(input.source, relative)
+    const bytes = Buffer.from(Array.from({ length: 4096 }, (_, index) => index % 256))
+    expect(oldFile.length).toBeGreaterThan(260)
+    expect(join(input.backup, relative).length).toBeGreaterThan(260)
+    mkdirSync(dirname(oldFile), { recursive: true })
+    writeFileSync(oldFile, bytes)
+    assertSucceeded(run(input, 'Prepare'), 'Prepare long-path backup')
+    expect(readFileSync(join(input.backup, relative))).toEqual(bytes)
+    payload(input.stage, 'Kun.exe')
+    // The rejected candidate is parked under the longer .kun-failed root and must still be removable.
+    mkdirSync(dirname(join(input.stage, relative)), { recursive: true })
+    writeFileSync(join(input.stage, relative), 'candidate')
+    assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
+    // Remove the renamed original so success requires copying from BackupRoot.
+    rmSync(join(`${input.source}.kun-old-${process.pid}`, relative))
+    assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction long paths')
+    expect(existsSync(`${input.target}.kun-failed`)).toBe(false)
+    expect(readFileSync(oldFile)).toEqual(bytes)
+    expect(transaction(input.transaction)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
+    assertSucceeded(run(input, 'FinalizeUpdateTransaction'), 'FinalizeUpdateTransaction long paths')
+    expect(existsSync(input.backup)).toBe(false)
+    expect(readFileSync(oldFile)).toEqual(bytes)
+  }, 120_000)
+
   it('rolls back cleanup_pending after the candidate later fails its first full startup', () => {
     const input = fixture()
     assertSucceeded(run(input, 'Prepare'), 'Prepare')

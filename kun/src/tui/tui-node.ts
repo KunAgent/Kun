@@ -5,6 +5,7 @@ import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { electronHostForNativeModules } from '../process/host-node.js'
 
 /**
  * The terminal renderer (opentui) drives a native Zig core through Node's
@@ -168,15 +169,21 @@ export async function downloadTuiNode(
 /**
  * Environment for the Node 26 TUI child. Runtime and Service Manager
  * children must keep using the interpreter Kun was installed with, so the
- * current executable is passed down explicitly.
+ * current executable is passed down explicitly. A development checkout whose
+ * native modules target Electron passes its Electron binary instead.
  */
-export function tuiHandoffEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function tuiHandoffEnv(
+  env: NodeJS.ProcessEnv,
+  electronHost: () => string | null = electronHostForNativeModules
+): NodeJS.ProcessEnv {
   const next: NodeJS.ProcessEnv = { ...env, [TUI_HANDOFF_ENV]: '1' }
   delete next.ELECTRON_RUN_AS_NODE
   if (process.versions.electron) {
     if (!next.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()) next.KUN_PACKAGED_RUNTIME_EXECUTABLE = process.execPath
   } else if (!next.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim() && !next.KUN_HOST_NODE_EXECUTABLE?.trim()) {
-    next.KUN_HOST_NODE_EXECUTABLE = process.execPath
+    const electron = electronHost()
+    if (electron) next.KUN_PACKAGED_RUNTIME_EXECUTABLE = electron
+    else next.KUN_HOST_NODE_EXECUTABLE = process.execPath
   }
   return next
 }

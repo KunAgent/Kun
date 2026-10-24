@@ -271,7 +271,7 @@ jobs:
             artifacts/windows-installer-transaction/**/fixture-summary.json
 
       - name: Test Windows installer recovery safety
-        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts
+        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts src/main/windows-installer-migration.payload-backup.test.ts
 
       - name: Build Windows installer
         run: npm run dist:win

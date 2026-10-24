@@ -1,0 +1,20 @@
+{
+  "composerPromptEnhance": "Улучшить промпт",
+  "composerPromptEnhanceHint": "Улучшить промпт · черновик перепишет {{model}}",
+  "composerPromptEnhanceHintDefault": "Улучшить промпт · черновик перепишет модель Kun по умолчанию",
+  "composerPromptEnhanceCancel": "Отменить улучшение",
+  "composerPromptEnhanceCancelHint": "Отменить улучшение (Esc)",
+  "composerPromptEnhanceRunning": "Улучшение с помощью {{model}}… Черновик доступен только для чтения; нажмите кнопку ещё раз или Esc, чтобы отменить",
+  "composerPromptEnhanceRunningDefault": "Улучшение… Черновик доступен только для чтения; нажмите кнопку ещё раз или Esc, чтобы отменить",
+  "composerPromptEnhanceDone": "Улучшено с помощью {{model}}, черновик заменён",
+  "composerPromptEnhanceUndo": "Отменить",
+  "composerPromptEnhanceUndoHint": "Вернуть черновик до улучшения",
+  "composerPromptEnhanceDismiss": "Закрыть",
+  "composerPromptEnhanceEmpty": "Сначала введите промпт для улучшения",
+  "composerPromptEnhanceUnsupportedAgent": "Текущая модель использует собственный вход {{agent}}, поэтому Kun не может вызвать её напрямую. Выберите модель провайдера Kun или задайте модель для улучшения в настройках.",
+  "composerPromptEnhanceUnsupported": "Текущую модель нельзя использовать для улучшения промптов. Выберите модель провайдера Kun или задайте модель для улучшения в настройках.",
+  "composerPromptEnhanceOpenSettings": "Открыть настройки",
+  "composerPromptEnhanceFailed": "Не удалось улучшить: {{message}} Черновик не изменён.",
+  "composerPromptEnhanceTimeout": "Время улучшения истекло. Черновик не изменён; повторите попытку или увеличьте тайм-аут в настройках.",
+  "composerPromptEnhanceDisabled": "Улучшение промптов отключено в настройках."
+}

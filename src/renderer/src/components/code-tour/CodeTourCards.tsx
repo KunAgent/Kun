@@ -1,3 +1,4 @@
+import { FirstTaskGuide } from '../../product-analytics/FirstTaskGuide'
 import { useState, type ReactElement, type ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
@@ -155,6 +156,7 @@ export function CodeTourDone({ onClose, onPrefill }: {
       </div>
       <TourButton primary autoFocus onClick={onClose}>{t('codeTourExplore')}</TourButton>
       <span className="code-tour-foot-hint">{t('codeTourReplayHint')}</span>
+      <FirstTaskGuide beforeNavigate={onClose} />
     </section>
   )
 }

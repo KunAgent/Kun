@@ -14,6 +14,7 @@ import type {
   ThreadUsageSnapshot,
   KnowledgeBaseIndexStatus,
   KnowledgeBaseMount,
+  UserFileReference,
   UserInputAnswer
 } from '../agent/types'
 import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
@@ -37,6 +38,7 @@ import type {
   ExtensionComposerContextEvent,
   PendingComposerContextEvent
 } from '@shared/extension-ipc'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { DesignTaskProfile } from '../agent/design-task-profile'
 import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
 import type { CodeWorkspaceFolderSetsRegistry } from '../lib/code-workspace-folder-sets'
@@ -80,7 +82,7 @@ export type {
   SendMessageOverrides,
   WriteAssistantMessageContext
 }
-export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe'
+export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe' | 'artifacts'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -151,6 +153,12 @@ export type SideConversationDraftOptions = {
   reasoningEffort?: string
   fastMode?: boolean
   attachments?: AttachmentReference[]
+  /** Context for the seed turn only, e.g. the passage the side chat quotes. */
+  composerContexts?: ComposerContextAttachment[]
+}
+
+export type SideMessageSendOptions = {
+  composerContexts?: ComposerContextAttachment[]
 }
 
 export type ChatState = {
@@ -580,7 +588,16 @@ export type ChatState = {
   attachComposerContext: (event: PendingComposerContextEvent) => void
   removeComposerContext: (attachmentId: string) => void
   clearComposerContexts: (filter?: { source?: 'dev-preview'; threadId?: string }) => void
-  rewindAndResend: (userBlockId: string, newText: string) => Promise<void>
+  /**
+   * Edit an earlier message and resend it. `resetFiles` also undoes the file
+   * changes of that turn and every later one when all of them are safe to
+   * restore; otherwise only the conversation is reset.
+   */
+  rewindAndResend: (
+    userBlockId: string,
+    newText: string,
+    options?: { resetFiles?: boolean; fileReferences?: UserFileReference[] }
+  ) => Promise<void>
   rollbackWorkspaceToCheckpoint: (checkpointId: string) => Promise<void>
   interrupt: (options?: { discard?: boolean }) => Promise<void>
   cancelToolCall: (threadId: string, turnId: string, callId: string) => Promise<boolean>
@@ -616,7 +633,7 @@ export type ChatState = {
    * thread. The first draft send will create the side thread.
    */
   openSideConversationDraft: () => void
-  sendSideMessage: (sideId: string, text: string) => Promise<boolean>
+  sendSideMessage: (sideId: string, text: string, options?: SideMessageSendOptions) => Promise<boolean>
   interruptSide: (sideId: string) => Promise<void>
   resolveSideUserInput: (
     sideId: string,

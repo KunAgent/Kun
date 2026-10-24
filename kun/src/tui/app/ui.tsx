@@ -1,4 +1,4 @@
-import { StyledText, TextAttributes, type TextChunk } from '@opentui/core'
+import { StyledText, TextAttributes, type RGBA, type TextChunk } from '@opentui/core'
 import { Show, type JSX } from 'solid-js'
 import { cellWidth } from '../layout.js'
 import { ansiToStyled } from './ansi.js'
@@ -9,6 +9,9 @@ import { Txt } from './txt.js'
 export type Seg = {
   text: string
   tone?: ToneName
+  /** Explicit colors win over the tone (mode colors, panel edges). */
+  color?: RGBA
+  bg?: RGBA
   bold?: boolean
   italic?: boolean
   underline?: boolean
@@ -30,10 +33,12 @@ export function styled(theme: KunTheme, segments: readonly SegInput[]): StyledTe
     if (value.italic) attributes |= TextAttributes.ITALIC
     if (value.underline) attributes |= TextAttributes.UNDERLINE
     if (value.strike) attributes |= TextAttributes.STRIKETHROUGH
+    const fg = value.color ?? base.fg
     chunks.push({
       __isChunk: true,
       text: value.text,
-      ...(base.fg ? { fg: base.fg } : {}),
+      ...(fg ? { fg } : {}),
+      ...(value.bg ? { bg: value.bg } : {}),
       ...(attributes ? { attributes } : {})
     })
   }
@@ -42,6 +47,10 @@ export function styled(theme: KunTheme, segments: readonly SegInput[]): StyledTe
 
 export const seg = {
   muted: (text: string, extra: Partial<Seg> = {}): Seg => ({ text, tone: 'muted', ...extra }),
+  faint: (text: string, extra: Partial<Seg> = {}): Seg => ({ text, tone: 'faint', ...extra }),
+  think: (text: string, extra: Partial<Seg> = {}): Seg => ({ text, tone: 'think', ...extra }),
+  info: (text: string, extra: Partial<Seg> = {}): Seg => ({ text, tone: 'info', ...extra }),
+  color: (text: string, color: RGBA, extra: Partial<Seg> = {}): Seg => ({ text, color, ...extra }),
   brand: (text: string, extra: Partial<Seg> = {}): Seg => ({ text, tone: 'brand', ...extra }),
   focus: (text: string, extra: Partial<Seg> = {}): Seg => ({ text, tone: 'focus', ...extra }),
   user: (text: string, extra: Partial<Seg> = {}): Seg => ({ text, tone: 'user', ...extra }),

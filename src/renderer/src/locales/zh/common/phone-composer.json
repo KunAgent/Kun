@@ -358,8 +358,6 @@
   "composerVoiceStop": "停止录音",
   "composerVoiceSend": "停止并发送",
   "composerVoiceTranscribing": "正在转写…",
-  "composerPromptOptimize": "优化提示词",
-  "composerPromptOptimizing": "正在优化提示词…",
   "composerVoiceMicDenied": "麦克风权限被拒绝，请在系统设置中允许后重试。",
   "composerVoiceTooShort": "录音太短，请再说久一点。",
   "composerVoiceFailed": "语音转写失败：{{message}}",

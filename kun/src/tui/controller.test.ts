@@ -1,5 +1,7 @@
 import '../../tests/tui-cases/controller-models.cases.js'
+import '../../tests/tui-cases/controller-model-switch.cases.js'
 import '../../tests/tui-cases/controller-graph.cases.js'
 import '../../tests/tui-cases/controller-sessions.cases.js'
 import '../../tests/tui-cases/controller-workspace.cases.js'
 import '../../tests/tui-cases/controller-attachments.cases.js'
+import '../../tests/tui-cases/controller-turn-stats.cases.js'

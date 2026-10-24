@@ -14,6 +14,8 @@ import { FloatingComposer } from '../chat/FloatingComposer'
 import { ChatFindBar } from '../chat/ChatFindBar'
 import { ConversationFileDropZone } from '../chat/ConversationFileDropZone'
 import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
+import { MessageEditAssistProvider } from '../chat/UserMessageEditField'
+import { EMPTY_SKILL_COMMANDS } from '../chat/floating-composer-policy'
 import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
 import {
   GraphChildSessionBar,
@@ -361,45 +363,51 @@ export function WorkbenchChatStage({
             className={`${trajectoryOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}
             options={conversationFileDropOptions}
           >
-            <LazyMessageTimeline
-              fallback={activeThreadId ? <ThreadHydrationLoading /> : <WorkbenchPaneFallback />}
-              blocks={blocks}
-              liveReasoning={liveReasoning}
-              live={liveAssistant}
-              activeThreadId={activeThreadId}
-              runtimeConnection={runtimeConnection}
-              runtimeError={runtimeError}
-              onRetryConnection={onRetryConnection}
-              onOpenSettings={onOpenSettings}
-              onSelectSuggestion={onSelectSuggestion}
-              focusModeEnabled={focusModeEnabled}
-              planActionsBusy={planActionsBusy}
-              graphEnabled={graphEnabled}
-              onBuildPlan={onBuildPlan}
-              onOpenPlan={onOpenPlan}
-              onOpenChanges={onOpenChanges}
-              onReviewChanges={onReviewChanges}
-              reviewChangesDisabled={reviewChangesDisabled}
-              onPreviewGeneratedDocument={onPreviewGeneratedDocument}
-              onOpenGeneratedDocuments={onOpenGeneratedDocuments}
-              onComponentPrototypePrompt={composerProps.setInput}
-              devPreviewCard={
-                devPreviewVisible && devPreviewUrl ? (
-                  <DevPreviewLaunchCard
-                    url={devPreviewUrl}
-                    opened={devPreviewOpened}
-                    onOpen={onOpenDevPreview}
-                  />
-                ) : null
-              }
-              extensionMessageActions={extensionMessageActions}
-              extensionContextMenus={extensionContextMenus}
-              extensionAttachmentContextMenus={extensionAttachmentContextMenus}
-              extensionCommands={extensionCommands}
-              extensionResultPreviews={extensionResultPreviews}
-              messageContributionsForSurface={messageContributionsForSurface}
-              onExtensionCommand={onExtensionCommand}
-            />
+            <MessageEditAssistProvider
+              skillCommands={composerProps.skillCommands ?? EMPTY_SKILL_COMMANDS}
+              disabledSkillIds={composerProps.disabledSkillIds}
+            >
+              <LazyMessageTimeline
+                fallback={activeThreadId ? <ThreadHydrationLoading /> : <WorkbenchPaneFallback />}
+                blocks={blocks}
+                liveReasoning={liveReasoning}
+                live={liveAssistant}
+                activeThreadId={activeThreadId}
+                runtimeConnection={runtimeConnection}
+                runtimeError={runtimeError}
+                onRetryConnection={onRetryConnection}
+                onOpenSettings={onOpenSettings}
+                onSelectSuggestion={onSelectSuggestion}
+                focusModeEnabled={focusModeEnabled}
+                messageSelectionToolbar
+                planActionsBusy={planActionsBusy}
+                graphEnabled={graphEnabled}
+                onBuildPlan={onBuildPlan}
+                onOpenPlan={onOpenPlan}
+                onOpenChanges={onOpenChanges}
+                onReviewChanges={onReviewChanges}
+                reviewChangesDisabled={reviewChangesDisabled}
+                onPreviewGeneratedDocument={onPreviewGeneratedDocument}
+                onOpenGeneratedDocuments={onOpenGeneratedDocuments}
+                onComponentPrototypePrompt={composerProps.setInput}
+                devPreviewCard={
+                  devPreviewVisible && devPreviewUrl ? (
+                    <DevPreviewLaunchCard
+                      url={devPreviewUrl}
+                      opened={devPreviewOpened}
+                      onOpen={onOpenDevPreview}
+                    />
+                  ) : null
+                }
+                extensionMessageActions={extensionMessageActions}
+                extensionContextMenus={extensionContextMenus}
+                extensionAttachmentContextMenus={extensionAttachmentContextMenus}
+                extensionCommands={extensionCommands}
+                extensionResultPreviews={extensionResultPreviews}
+                messageContributionsForSurface={messageContributionsForSurface}
+                onExtensionCommand={onExtensionCommand}
+              />
+            </MessageEditAssistProvider>
             {uiModeCameosEnabled && !focusModeEnabled && !emptyTaskLayout ? <IkunCameoLayer /> : null}
             {!focusModeEnabled ? <KunCelebrationLayer active={busy} suppressed={Boolean(runtimeError)} /> : null}
           </ConversationFileDropZone>

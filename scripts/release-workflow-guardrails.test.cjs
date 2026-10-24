@@ -114,7 +114,8 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
     ['Test Windows installer recovery safety', 'recovery-safety']
   ]) {
     const step = stepByName(recovery, name)
-    assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts`)
+    const extra = file === 'recovery-safety' ? ' src/main/windows-installer-migration.payload-backup.test.ts' : ''
+    assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts${extra}`)
     assert.equal(step.if, undefined)
   }
   const boundaryName = 'Test native Windows file path boundaries'
@@ -142,6 +143,11 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
   assert.equal(windowsJobs.flatMap(job => job.steps ?? []).filter(step => step.run?.startsWith(speechCommand)).length, 1)
   assert.equal(stepByName(workflow.jobs['package-macos'],
     'Test local speech downloads and worker paths').run, speechCommand)
+  const identity = stepByName(recovery, 'Test Windows process identity and owned startup')
+  assert.equal(identity['working-directory'], 'kun')
+  assert.equal(identity.if, undefined)
+  assert.equal(identity.run, 'node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts')
+  assert.ok(recovery.steps.indexOf(identity) > recovery.steps.indexOf(stepByName(recovery, 'Install root dependencies')))
   assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
     const job = workflow.jobs[name]

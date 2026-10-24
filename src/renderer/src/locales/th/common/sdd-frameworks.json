@@ -552,7 +552,6 @@
   "rewindCancel": "ยกเลิก",
   "rewindResend": "ส่งอีกครั้ง",
   "rewindHint": "Esc เพื่อยกเลิก · ⌘/Ctrl + Enter เพื่อส่ง",
-  "rewindFileRollbackNotice": "การส่งซ้ำจะย้อนกลับการเปลี่ยนแปลงไฟล์",
   "rewindBusyError": "รอให้การเลี้ยวปัจจุบันเสร็จสิ้นก่อนที่จะกรอกลับ",
   "toolActionFile": "แก้ไขไฟล์",
   "toolActionCommand": "รันคำสั่ง",

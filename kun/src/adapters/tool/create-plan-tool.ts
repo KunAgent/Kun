@@ -26,8 +26,9 @@ export const CREATE_PLAN_TOOL_NAME = 'create_plan'
 
 const TOOL_DESCRIPTION = [
   'Create or replace a Kun implementation plan.',
-  'Available throughout a Plan-mode conversation: investigate first, then',
-  'call this once you understand the task to save the full Markdown plan.',
+  'Use it only when the user wants a plan or asks for work that needs one;',
+  'answer questions and conversation directly instead. Investigate first,',
+  'then call this once you understand the task to save the full Markdown plan.',
   'Writes the supplied Markdown to a reserved plan artifact under',
   '.kunsdd/plan and returns structured metadata. Call again to revise.'
 ].join(' ')

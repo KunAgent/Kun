@@ -4,8 +4,10 @@ import { ArrowRight, ArrowUpRight, Check, ChevronDown, Sparkles, Wrench, X } fro
 import { firstSentence, pickHighlights, type ReleaseNoteItem } from '@shared/release-notes-summary'
 import kunCheerUrl from '../../../../asset/img/kun_cheer.png'
 import kunMagicUrl from '../../../../asset/img/kun_magic.png'
+import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 import { pulseFocusModeSwitch } from '../../lib/focus-mode'
 import type { WhatsNewContent } from './whats-new-content'
+import { WhatsNewArtifactsSpotlight } from './WhatsNewArtifactsSpotlight'
 import { WhatsNewFocusSpotlight } from './WhatsNewFocusSpotlight'
 import { WhatsNewOlderVersions } from './WhatsNewOlderVersions'
 import { SPOTLIGHT_HIGHLIGHT_LIMIT, whatsNewSpotlight } from './whats-new-spotlights'
@@ -51,6 +53,10 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
     if (spotlight?.id === 'focus-mode') pulseFocusModeSwitch()
     dismiss()
   }, [dismiss, spotlight])
+  const openArtifacts = useCallback((): void => {
+    dismiss()
+    openArtifactsPage()
+  }, [dismiss])
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -170,6 +176,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
           {summary.intro && !fixesOnly ? <p className="kun-wn-intro">{summary.intro}</p> : null}
 
           {spotlight?.id === 'focus-mode' ? <WhatsNewFocusSpotlight /> : null}
+          {spotlight?.id === 'artifacts' ? <WhatsNewArtifactsSpotlight onOpen={openArtifacts} /> : null}
 
           {highlights.length ? (
             <>

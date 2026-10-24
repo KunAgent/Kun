@@ -391,7 +391,7 @@ function RoomComposerEditor({
       setBusy(false)
     }
   }
-  const attach = async (files: FileList | null): Promise<void> => {
+  const attach = async (files: FileList | File[] | null): Promise<void> => {
     if (!files || room.archivedAt || busy) return
     const selected = Array.from(files)
     if (fileRef.current) fileRef.current.value = ''
@@ -429,7 +429,8 @@ function RoomComposerEditor({
         <RoomAttachmentUploads pending={uploads.pending} onCancel={uploads.cancel} onRetry={uploads.retry} />
         <RoomContentReferenceChips references={draft.references} onChange={(references) => patch({ references })} disabled={disabled} />
         <RoomRichInput ref={editorRef} room={room} value={draft.body} mentions={draft.mentions}
-          disabled={disabled} placeholder={t('directPlaceholder', { name: room.name })} onChange={patch}
+          disabled={disabled} placeholder={responding && room.conversationKind === 'user_agent'
+            ? t('directSteerPlaceholder') : t('directPlaceholder', { name: room.name })} onChange={patch}
           onDictationPendingChange={voice.setInsertionPending}
           onSubmit={() => void submit()} onPasteFiles={(files) => void attach(files)} />
         <RoomVoiceStatus voice={voice} />
@@ -459,7 +460,9 @@ function RoomComposerEditor({
           voiceControl={<RoomVoiceButton voice={voice} disabled={disabled} onSetup={onVoiceSetup} />}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
-        <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p>
+        {/* A private chat keeps the shortcut on the send button's tooltip instead of a standing row. */}
+        {room.conversationKind !== 'user_agent'
+          ? <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p> : null}
       </fieldset>
       {!compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
         ? <RoomPermissionPicker roomId={room.id} /> : null}

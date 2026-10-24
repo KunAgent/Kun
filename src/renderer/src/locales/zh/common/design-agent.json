@@ -1,0 +1,22 @@
+{
+  "designAgentCardPending": "正在整理设计需求…",
+  "designAgentCardQueued": "本次回复结束后开始设计",
+  "designAgentCardStarting": "正在打开设计画布…",
+  "designAgentCardDesigning": "正在画布上设计…",
+  "designAgentCardReady": "已在画布上完成",
+  "designAgentCardNotStarted": "未开始",
+  "designAgentCardStartFailed": "设计未能开始",
+  "designAgentCardStartFailedDetail": "未能开始：{{error}}",
+  "designAgentCardSuperseded": "已被更新的设计请求替代",
+  "designAgentCardFailed": "设计请求失败",
+  "designAgentCardFailedDetail": "设计请求失败：{{error}}",
+  "designAgentCardScreens_one": "{{count}} 个页面",
+  "designAgentCardScreens_other": "{{count}} 个页面",
+  "designAgentCardTargetWeb": "网页",
+  "designAgentCardTargetApp": "App",
+  "designAgentCardOpen": "打开",
+  "designAgentCardOpenAria": "打开「{{title}}」的设计画布",
+  "designAgentCardStart": "开始设计",
+  "designAgentCardRetry": "重试",
+  "toolBuiltinDesignOpen": "打开设计画布"
+}

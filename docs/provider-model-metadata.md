@@ -88,7 +88,7 @@ by the available total context. Existing soft/hard compaction policy remains
 in force. Main-loop history may be compacted; auxiliary and gateway requests
 are rejected on overflow without silently rewriting caller history.
 
-An unknown window uses a clearly marked 32K execution estimate. The gateway
+An unknown window uses a clearly marked 1M execution estimate. The gateway
 omits an unknown capacity instead of publishing this estimate as fact.
 
 Reasoning support, selectable effort levels, and request encoding are separate.

@@ -2,6 +2,7 @@ import { latestExecutedTurn, hasRunningTurn, restartSourceIsCurrent } from '../d
 import { touchThread } from '../domain/thread.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
+import type { StartTurnRequest, Turn } from '../contracts/turns.js'
 import type { TurnService } from '../services/turn-service.js'
 import {
   InterruptedTurnResumeCoordinator,
@@ -194,7 +195,11 @@ export class InterruptedTurnCoordinator {
               ...(lastTurn.guiDesignMode ? { guiDesignMode: true } : {})
             }
           : {}),
-        ...(lastTurn?.disableUserInput ? { disableUserInput: true } : {})
+        ...(lastTurn?.disableUserInput ? { disableUserInput: true } : {}),
+        // Resume on the engine that was interrupted. Without the frozen route
+        // admission falls back to the thread pin or the default provider, so an
+        // external Agent's task restarted on the Kun loop.
+        ...(lastTurn ? interruptedTurnRoute(lastTurn) : {})
       }
     }, {
       expectedLatestFailedTurnId: sourceTurnId,
@@ -214,6 +219,21 @@ export class InterruptedTurnCoordinator {
         code: 'interrupted_turn_auto_resume', severity: 'warning'
       }
     })
+  }
+}
+
+function interruptedTurnRoute(turn: Turn): Partial<StartTurnRequest> {
+  return {
+    ...(turn.harnessId ? { harnessId: turn.harnessId } : {}),
+    ...(turn.providerId ? { providerId: turn.providerId } : {}),
+    ...(turn.model ? { model: turn.model } : {}),
+    ...(turn.credentialMode ? { credentialMode: turn.credentialMode } : {}),
+    ...(turn.harnessAgentId ? { harnessAgentId: turn.harnessAgentId } : {}),
+    ...(turn.harnessSettings ? { harnessSettings: turn.harnessSettings } : {}),
+    ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {}),
+    ...(turn.accountId ? { accountId: turn.accountId } : {}),
+    ...(turn.reasoningEffort ? { reasoningEffort: turn.reasoningEffort } : {}),
+    ...(turn.serviceTier ? { serviceTier: turn.serviceTier } : {})
   }
 }
 

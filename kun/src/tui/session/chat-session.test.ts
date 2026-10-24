@@ -74,29 +74,49 @@ describe('ChatSession', () => {
     expect(session.page).toBeUndefined()
   })
 
-  it('writes a resumed thread to scrollback and keeps nothing live once it is settled', async () => {
+  it('exposes every entry of a resumed thread for the scrollable conversation', async () => {
     const thread = sessionThread([
       item.user('u1', 'turn_1', 'hello'),
       item.text('a1', 'turn_1', 'Hi there.\n\nSecond paragraph.')
     ])
-    const { session, commits } = await harness({ thread })
-    await waitFor(() => commits.length > 0)
-    expect(commits[0]).toMatchObject({ kind: 'thread-header', title: 'Session thread' })
-    const keysWritten = commits.flatMap((commit) => commit.kind === 'entry' ? [commit.entry.key] : [])
-    expect(keysWritten).toEqual(['u1', 'kun-reply:turn_1', 'a1#0', 'a1#1'])
-    expect(session.liveEntries).toEqual([])
+    const { session } = await harness({ thread })
+    await waitFor(() => session.entries.length > 0)
+    expect(session.entries.map((entry) => entry.key)).toEqual(['u1', 'kun-reply:turn_1', 'a1#0', 'a1#1', 'turn-footer:turn_1'])
   })
 
-  it('does not write scrollback while it is not ready, then catches up', async () => {
-    const thread = sessionThread([item.user('u1', 'turn_1', 'hello')])
-    const { session, commits } = await harness({ thread })
-    await waitFor(() => commits.length > 0)
-    const before = commits.length
-    session.setScrollbackReady(false)
-    session.replayScrollback()
-    expect(commits.length).toBe(before)
-    session.setScrollbackReady(true)
-    expect(commits.length).toBeGreaterThan(before)
-    expect(commits[before]).toMatchObject({ kind: 'thread-header' })
+  it('routes message paging keys to the conversation viewport', async () => {
+    const { session, scrolls } = await harness()
+    expect(session.handleKey(keys.pageUp)).toBe(true)
+    expect(session.handleKey(keys.pageDown)).toBe(true)
+    session.handleKey(key('\x1b\x15')) // Ctrl+Alt+U
+    session.handleKey(key('\x1b\x04')) // Ctrl+Alt+D
+    expect(scrolls).toEqual(['page-up', 'page-down', 'half-page-up', 'half-page-down'])
+  })
+
+  it('docks the sidebar on wide terminals and overlays it on narrow ones', async () => {
+    const wide = await harness({ width: 140 })
+    expect(wide.session.sidebarVisible).toBe(true)
+    wide.session.handleKey(key('\x18'))
+    wide.session.handleKey(key('b')) // Ctrl+X B hides the docked sidebar
+    expect(wide.session.sidebarVisible).toBe(false)
+    expect(wide.session.sidebarOverlay).toBe(false)
+
+    const narrow = await harness({ width: 90 })
+    narrow.session.handleKey(key('\x18'))
+    narrow.session.handleKey(key('b'))
+    expect(narrow.session.sidebarOverlay).toBe(true)
+    expect(narrow.session.handleKey(keys.escape)).toBe(true)
+    expect(narrow.session.sidebarOverlay).toBe(false)
+  })
+
+  it('toggles tool details in place with Ctrl+O and closes a dialog on an outside click', async () => {
+    const { session } = await harness()
+    session.handleKey(key('\x0f')) // Ctrl+O
+    expect(session.showToolDetails).toBe(true)
+    expect(session.page).toBeUndefined()
+    session.handleKey(key('\x10')) // Ctrl+P
+    expect(session.page?.kind).toBe('commands')
+    session.dismissPage()
+    expect(session.page).toBeUndefined()
   })
 })

@@ -230,7 +230,7 @@ export async function resolveOpenTargetPath(
     }
   }
 
-  throw new Error(`File not found: ${rawPath}`)
+  throw Object.assign(new Error(`File not found: ${rawPath}`), { code: 'ENOENT' })
 }
 
 export async function resolveWorkspaceDirectory(

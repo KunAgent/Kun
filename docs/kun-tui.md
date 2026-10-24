@@ -121,11 +121,18 @@ conflict；请真实退出该 owner（仅最小化到托盘不算退出），或
 会话；`/connect` 配置模型，`Ctrl+X L` 打开已有会话，`Ctrl+P` 搜索全部命令。退出
 TUI 会停止该会话持有的精确 Runtime，但不会停止 Service Manager 或删除已保存数据。
 
-欢迎页只显示文字 `KUN`、一句用途说明、Workspace/Model/Mode/Version 元数据，以及
-“直接输入任务”、`/connect`、`/sessions` 三个起点；不再放大 Logo、运行时诊断、
-MCP 数量或整套快捷键。进入会话后，每个 assistant turn 统一收在一个 `Kun` 分组下，
-Thinking 默认折叠，工具与 Subagent 使用紧凑的状态/对象/耗时行。composer 只保留
-一个输入框、provider/model · effort · mode 元数据和当前上下文真正可用的操作。
+欢迎页显示像素 Logo、一句出处、输入面板、最近 3 个会话，以及底部的
+Workspace:branch 与版本；不放运行时诊断、MCP 数量或整套快捷键。
+
+会话视图是全屏布局：顶部是本 TUI 打开过的会话标签（`Ctrl+X 1`–`9` 直接切换，
+运行中、等待审批和有未读回复的会话分别带状态符号），终端宽度不小于 180 列时改为
+左侧按工作区分组的会话栏。右侧栏（不小于 120 列时常驻，否则 `Ctrl+X B` 以浮层打开）
+显示上下文环、Goal、Plan、Agents 和 `git diff` 统计。输入面板左侧色条随模式变化
+（Agent/Plan/Graph/Goal），下方一行显示模式、模型、推理强度和上下文占用。
+已结束的 turn 会把成功的工具调用折叠成一行 `▸ Worked 38s · read 4 · edit 2`，点击
+展开，失败步骤始终保留；turn 末尾显示 `◆ Kun · 模型 · 耗时`。Thinking 显示为一行
+摘要（`Thinking:` / `Thought:`），点击展开全文。审批与结构化问答在输入面板的位置
+弹出，其余页面以对话框形式覆盖在会话之上。配色随终端的深浅色主题自动切换。
 窄终端优先保留标题、选择、错误和主操作，次要计数与描述会先隐藏或截短。
 
 按 Enter 后 composer 会立即清空，状态行在服务端确认 turn 前先显示带动画的
@@ -213,6 +220,8 @@ Timeline、Skills、Help、Status、Context、Queue、MCP、Permissions、Approv
 | `Ctrl+P` | 打开可搜索命令面板 |
 | `Ctrl+X L` | 打开会话搜索/切换页面 |
 | `Ctrl+X N` | 新建并打开会话 |
+| `Ctrl+X 1`–`9` | 切换到对应编号的会话标签 |
+| `Ctrl+X B` | 显示/隐藏会话侧栏 |
 | `Ctrl+X P` | 进入/退出 Pointer 模式；仅在该模式下由 Kun 接管鼠标点击 |
 | `Ctrl+T` | 循环当前模型支持的推理强度 |
 | `F2` / `Shift+F2` | 正向/反向切换最近使用模型 |
@@ -221,7 +230,7 @@ Timeline、Skills、Help、Status、Context、Queue、MCP、Permissions、Approv
 | `Ctrl+D` | composer 非空时向前删除；空闲且输入为空时连续按两次退出；会话列表中打开永久删除确认 |
 | `Backspace` / `Delete` | composer 文字为空且有待发送附件时，删除最后加入的附件；有文字时保持正常文字编辑 |
 | `Esc` | 依次关闭补全/当前页面，或中止运行中的 turn；空闲时连续按两次安全撤销上一轮 |
-| `Ctrl+O` | 打开完整 transcript 页：滚动浏览整段对话，`T` 展开 Thinking，`D` 切换工具详情 |
+| `Ctrl+O` | 展开/折叠所有工具详情与已折叠的 `Worked` 行 |
 | `Ctrl+G` | 用 `$VISUAL`/`$EDITOR` 编辑当前 composer 草稿 |
 | `Ctrl+S` | turn 运行中立即 steer 当前非空草稿 |
 | macOS `Cmd+V` / `Ctrl+X V`；Windows/Linux `Ctrl+V` | 从系统剪贴板读取截图并加入当前 composer；也接受 `Alt+V`、终端转发的 `Ctrl+Shift+V` / `Super+V` |

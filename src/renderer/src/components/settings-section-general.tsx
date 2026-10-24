@@ -1,3 +1,5 @@
+import { ProductAnalyticsConsent } from '../product-analytics/PrivacyControl'
+import { FirstTaskGuide } from '../product-analytics/FirstTaskGuide'
 import { settingsButtonClass } from './settings-button'
 import type { AppSettingsV1 } from '@shared/app-settings'
 import { APP_LOCALE_OPTIONS, normalizeComposerSendKey } from '@shared/app-settings'
@@ -12,6 +14,8 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
 
   return (
     <>
+      <ProductAnalyticsConsent />
+      <FirstTaskGuide />
       <SettingsCard title={t('settingsIaLanguageCard')}>
         <SettingRow
           title={t('language')}

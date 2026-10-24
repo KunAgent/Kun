@@ -1,3 +1,4 @@
+import { registerProductAnalyticsRoutes } from './register-product-analytics-routes.js'
 import { registerEngagementRoutes } from './register-engagement-routes.js'
 import { installArtCatalog } from '../../contracts/kun-art-catalog.js'
 import { z } from 'zod'
@@ -26,6 +27,7 @@ const SettingsRequest = z.object({ ...Mutation, settings: z.object({ drops: z.bo
 /** The wardrobe is one row per user; drops are produced by finished Agent and Code turns, never by these routes. */
 export function registerRoomWardrobeRoutes(add: Add) {
   registerEngagementRoutes(add)
+  registerProductAnalyticsRoutes(add)
   add('POST', '/v1/rooms/wardrobe/art-catalog', async (rooms, request) => {
     const raw = await readJsonBody(request)
     if (!raw.ok) return raw.response

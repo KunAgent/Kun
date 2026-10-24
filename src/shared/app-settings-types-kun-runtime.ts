@@ -190,6 +190,10 @@ export type KunLabSettingsV1 = {
   claudeCodeReferenceBranches: { enabled: boolean }
   codexReferenceBranches: { enabled: boolean }
   projectBoard: KunLabProjectBoardSettingsV1
+  /** Agent-generated interactive widgets in desktop conversations. */
+  genUi: { enabled: boolean }
+  /** Interactive pages of MCP tools that declare a `ui://` resource. */
+  mcpApps: { enabled: boolean }
 }
 
 /** Partial settings patch for the Lab section. Nested fields merge with current values. */
@@ -203,6 +207,8 @@ export type KunLabSettingsPatchV1 = {
   claudeCodeReferenceBranches?: { enabled?: boolean }
   codexReferenceBranches?: { enabled?: boolean }
   projectBoard?: Partial<KunLabProjectBoardSettingsV1>
+  genUi?: { enabled?: boolean }
+  mcpApps?: { enabled?: boolean }
 }
 
 export const KUN_GRAPH_ROLLOUT_STAGES = [

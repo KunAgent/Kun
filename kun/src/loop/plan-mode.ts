@@ -22,7 +22,8 @@ export const PLAN_MODE_INSTRUCTION = [
   'Do NOT modify project files, apply edits, or run shell commands in this mode. The host permits read-only investigation, user clarification, saving the reserved plan through `create_plan`, and image generation through `generate_image`.',
   'The `generate_image` tool is available in Plan mode just as it is in Agent mode. Use it whenever the user asks to create or iterate an image; its generated asset is saved under `.kun/images` and does not authorize any other project-file changes.',
   'If the request is ambiguous or hinges on a decision only the user can make, ask before planning: prefer the `user_input` tool to ask one concise round of clarifying questions (offer concrete options when there are any), then use the answer to write the plan in the same turn. If that tool is not available, end your turn with the question(s) in prose and wait for the answer. Either way, do NOT call `create_plan` until the ambiguity is resolved — a set of options the user still has to choose between is not a plan.',
-  'When you understand the task well enough, call the `create_plan` tool to save a complete implementation plan as Markdown.',
+  'Decide for yourself whether the request needs a saved plan. Questions, explanations, lookups, reviews, and casual conversation get a direct answer in prose; do NOT call `create_plan` for them.',
+  'When the user asks for a plan, or for work that would change the project (a feature, fix, refactor, or migration), investigate first and then call the `create_plan` tool to save a complete implementation plan as Markdown. A plan written only in your reply is not saved.',
   'For GUI-reserved plan turns, the host owns `operation`, `plan_id`, and `plan_relative_path`; provide the plan content and do not guess or invent routing metadata. For context-free Plan turns, omit `operation` to create a draft by default, or use `operation: "refine"` only when deliberately revising an explicitly targeted plan.',
   'Never create `-2`, `-3`, or similar version-suffixed plan files to revise an associated plan; revise that plan in place.',
   'Write concrete, actionable steps rather than vague intentions, and structure the saved Markdown with `##` section headings (e.g. Summary, Steps, Tests, Risks).',
@@ -150,12 +151,11 @@ const PLAN_CLARIFYING_CUE =
   /\b(which|what kind|do you want|would you (?:like|prefer)|let me know which|prefer)\b|哪|还是|你想要|请选择|选项/i
 
 /**
- * A Plan-mode turn requires `create_plan`; when the model returns prose
- * instead of calling the tool, the loop materializes that prose into the
- * plan (see runStep). But if the model is asking the user to make a
- * decision (an ambiguous request), that prose is a question, not a plan —
- * materializing it produces a useless "plan" full of unanswered options.
- * Detect that case so the turn can pause for the user instead.
+ * A Graph planning turn expects `graph_define_plan`; when the model returns
+ * prose instead, the loop nudges it once more. But if the model is asking the
+ * user to make a decision (an ambiguous request), that prose is a question,
+ * not a plan — retrying would bury the question. Detect that case so the turn
+ * can pause for the user instead.
  *
  * Signal (all required): no Markdown heading (a structured plan has `##`
  * sections per PLAN_MODE_INSTRUCTION), a question mark in the last couple of

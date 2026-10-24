@@ -83,14 +83,21 @@ export class ModelPage implements TuiPage {
     }
     const favorite = (entry: ModelEntry): number => Number(this.controller.isModelFavorite(entry.providerId, entry.accountId, entry.model))
     this.allEntries = [...entries.values()].sort((a, b) => favorite(b) - favorite(a))
-    const target = preferred ?? {
-      providerId: this.snapshot.defaultProviderId ?? '',
-      accountId: this.snapshot.defaultAccountId ?? '',
-      model: this.snapshot.defaultModel ?? ''
-    }
+    const target = preferred ?? this.current()
     this.index = Math.max(0, this.allEntries.findIndex((entry) =>
       entry.providerId === target.providerId && entry.accountId === target.accountId && entry.model === target.model
     ))
+  }
+
+  /** An open session's selection, which can differ from the shared default. */
+  private current(): { providerId?: string; accountId?: string; model?: string } {
+    return this.controller.state.projection
+      ? this.controller.activeModelSelection()
+      : {
+          providerId: this.snapshot.defaultProviderId,
+          accountId: this.snapshot.defaultAccountId,
+          model: this.snapshot.defaultModel
+        }
   }
 
   private entries(): ModelEntry[] {
@@ -112,8 +119,9 @@ export class ModelPage implements TuiPage {
   }
 
   view(size: PageSize): PageView {
-    const current = this.snapshot.defaultProviderId && this.snapshot.defaultModel
-      ? `${this.snapshot.defaultProviderId} / ${this.snapshot.defaultModel}`
+    const selection = this.current()
+    const current = selection.model
+      ? selection.providerId ? `${selection.providerId} / ${selection.model}` : selection.model
       : 'not selected'
     const lead: PageBlock[] = [{ kind: 'field', field: this.search, label: 'Search', focused: true }, { kind: 'spacer' }]
     const capacity = listCapacity(size, 5)
@@ -147,9 +155,9 @@ export class ModelPage implements TuiPage {
     const rows: PageBlock[] = []
     let group = ''
     for (const { value: entry, index } of visibleWindow(entries, this.index, capacity)) {
-      const active = entry.providerId === this.snapshot.defaultProviderId &&
-        entry.accountId === this.snapshot.defaultAccountId &&
-        entry.model === this.snapshot.defaultModel
+      const active = entry.providerId === selection.providerId &&
+        entry.accountId === selection.accountId &&
+        entry.model === selection.model
       const favorite = this.controller.isModelFavorite(entry.providerId, entry.accountId, entry.model)
       const nextGroup = `${entry.providerId} · ${entry.accountId}`
       if (nextGroup !== group) {
@@ -167,7 +175,9 @@ export class ModelPage implements TuiPage {
     return {
       path: ['KUN', 'Models'],
       right: `Current · ${sanitizeTerminalText(current)}`,
-      description: 'Choose the shared default model.',
+      description: this.controller.state.projection
+        ? 'Choose the model for this session and new sessions.'
+        : 'Choose the shared default model.',
       body: [
         ...lead,
         ...(rows.length ? rows : [{ kind: 'line' as const, text: ` ${dim('No model catalogs. Run /connect first.')}` }]),

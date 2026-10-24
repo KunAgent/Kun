@@ -1,0 +1,19 @@
+{
+  "messageQuoteToolbarLabel": "選択テキストの操作",
+  "messageQuoteStartSide": "ブランチ会話を開始",
+  "messageQuoteStartSideTitle": "この部分について、現在の会話の文脈をすべて引き継いだブランチ会話で質問します",
+  "messageQuoteSideNeedsRuntime": "ランタイムに接続すると使用できます",
+  "messageQuoteSideNeedsThread": "先に会話を始めてください",
+  "messageQuoteReply": "返信",
+  "messageQuoteReplyTitle": "次のメッセージでこの部分を引用します",
+  "messageQuoteReplyingToAssistant": "Kun への返信",
+  "messageQuoteReplyingToUser": "自分のメッセージへの返信",
+  "messageQuoteTruncated": "先頭 2,000 文字",
+  "messageQuoteExpand": "引用全体を表示",
+  "messageQuoteCollapse": "引用を折りたたむ",
+  "messageQuoteRemove": "引用を削除",
+  "messageQuoteComposerPlaceholder": "この部分に返信…",
+  "messageQuoteSidePlaceholder": "この部分について質問…",
+  "messageQuoteJumpToSource": "元の位置へ移動",
+  "messageQuoteJumpToSourceLabel": "引用元へ移動：{{text}}"
+}

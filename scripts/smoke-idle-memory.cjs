@@ -10,6 +10,10 @@
 //   node scripts/smoke-idle-memory.cjs [--idle-seconds 90] [--max-footprint-mb 1400]
 //     [--evidence <dir>] [--timeout-ms 180000] [--repository <checkout>] [--report-only]
 //     [--stack <request substring>]   (records Main call stacks for matching requests)
+//     [--profile-seed <dir>]          (copied into the disposable ~/.kun/data first, e.g.
+//                                      a Registry, model catalogs and rooms from a large profile)
+//     [--control-seed <dir>]          (copied into the disposable ~/.kun/control first)
+//     [--app <Kun.app>]               (measures a packaged app instead of this checkout's build)
 //
 // The app starts twice on the same disposable profile: the first start seeds
 // the caches a real profile already has (MCP catalogs, readiness proofs), the
@@ -19,8 +23,8 @@
 
 const assert = require('node:assert/strict')
 const { execFileSync } = require('node:child_process')
-const { existsSync } = require('node:fs')
-const { mkdir, mkdtemp, readFile, realpath, rm, writeFile } = require('node:fs/promises')
+const { constants, existsSync } = require('node:fs')
+const { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
 const { _electron } = require('playwright-core')
@@ -166,7 +170,8 @@ async function launchApplication(context) {
   const application = await _electron.launch({
     executablePath: context.electronExecutable,
     args: [`--user-data-dir=${context.userData}`, '--no-first-run', '--disable-background-networking',
-      '--disable-component-update', '--disable-default-apps', ...platformDesktopArguments(process.platform), context.repositoryRoot],
+      '--disable-component-update', '--disable-default-apps', ...platformDesktopArguments(process.platform),
+      ...(context.packaged ? [] : [context.repositoryRoot])],
     cwd: context.repositoryRoot, env: context.environment, chromiumSandbox: true, timeout: context.timeoutMs
   })
   const page = await findWorkbenchWindow(application, context.timeoutMs)
@@ -186,7 +191,8 @@ async function closeApplication(context, application) {
 
 async function main() {
   const repositoryRoot = resolve(argumentValue('--repository') ?? resolve(__dirname, '..'))
-  for (const entry of ['out/main/index.js', 'out/renderer/index.html', 'kun/dist/cli/serve-entry.js']) {
+  const appBundle = argumentValue('--app')
+  for (const entry of appBundle ? ['kun/dist/cli/shared-runtime.js'] : ['out/main/index.js', 'out/renderer/index.html', 'kun/dist/cli/serve-entry.js']) {
     assert(existsSync(join(repositoryRoot, entry)), `Missing ${entry}; run npm run build first`)
   }
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
@@ -199,8 +205,11 @@ async function main() {
   }
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'idle-memory-smoke'))
   const electronPathFile = join(repositoryRoot, 'node_modules', 'electron', 'path.txt')
-  assert(existsSync(electronPathFile), 'Electron binary is not installed')
-  const electronExecutable = join(repositoryRoot, 'node_modules', 'electron', 'dist', (await readFile(electronPathFile, 'utf8')).trim())
+  assert(appBundle || existsSync(electronPathFile), 'Electron binary is not installed')
+  const electronExecutable = appBundle
+    ? join(resolve(appBundle), 'Contents', 'MacOS', 'Kun')
+    : join(repositoryRoot, 'node_modules', 'electron', 'dist', (await readFile(electronPathFile, 'utf8')).trim())
+  assert(existsSync(electronExecutable), `Missing ${electronExecutable}`)
   const temporaryRoot = await realpath(await mkdtemp(join(tmpdir(), 'kun-idle-memory-smoke-')))
   const home = join(temporaryRoot, 'home')
   const profile = join(home, '.kun', 'data')
@@ -215,6 +224,11 @@ async function main() {
   try {
     await Promise.all([home, profile, userData, appData, localAppData, temporaryDirectory, evidenceRoot]
       .map((directory) => mkdir(directory, { recursive: true })))
+    const profileSeed = argumentValue('--profile-seed')
+    // Clone where the filesystem allows it: a seed can hold a full threads directory.
+    if (profileSeed) await cp(resolve(profileSeed), profile, { recursive: true, mode: constants.COPYFILE_FICLONE })
+    const controlSeed = argumentValue('--control-seed')
+    if (controlSeed) await cp(resolve(controlSeed), join(home, '.kun', 'control'), { recursive: true, mode: constants.COPYFILE_FICLONE })
     const environment = createIsolatedEnvironment(process.env, { home, appData, localAppData, temporaryDirectory })
     modelFixture = await startDirectModel({ real: false })
     const settings = { ...desktopSmokeSettings(await availablePort(), workspaceRoot, profile), initialSetupCompleted: true }
@@ -229,7 +243,7 @@ async function main() {
         await mkdir(directory, { recursive: true })
         await writeFile(join(directory, 'kun-settings.json'), serialized)
       }))
-    const context = { electronExecutable, userData, repositoryRoot, environment, timeoutMs, profile, home }
+    const context = { electronExecutable, userData, repositoryRoot, environment, timeoutMs, profile, home, packaged: Boolean(appBundle) }
     // Seed start: populate the caches a returning user's profile already has.
     const seed = await launchApplication(context)
     await new Promise((settle) => setTimeout(settle, 15_000))

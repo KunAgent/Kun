@@ -1,4 +1,5 @@
-import { useCallback, useEffect, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useAppSurfaceStore } from '../../app-surfaces/app-surface-store'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   type RightPanelContributionId,
@@ -12,6 +13,7 @@ import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
+import { useMessageQuoteStore } from '../../store/message-quote-store'
 
 type Params = {
   input: string
@@ -93,6 +95,32 @@ export function useWorkbenchRightTools({
     }
   }, [activeThreadId, prevThreadId, setSidePanelOpen, sidePanel.open])
 
+  // "Start side conversation" on a selection opens the draft tab; the quote
+  // itself already waits in the side draft composer.
+  const sideDraftRevealRequest = useMessageQuoteStore((state) => state.sideDraftRevealRequest)
+  const handledSideDraftRevealSeq = useRef(sideDraftRevealRequest?.seq ?? 0)
+  useEffect(() => {
+    if (!sideDraftRevealRequest || sideDraftRevealRequest.seq === handledSideDraftRevealSeq.current) return
+    handledSideDraftRevealSeq.current = sideDraftRevealRequest.seq
+    if (sideDraftRevealRequest.parentThreadId !== activeThreadId) return
+    openSideConversationDraft()
+    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
+  }, [activeThreadId, openRightPanelTab, openSideConversationDraft, sideDraftRevealRequest])
+
+  // Interactive app pages (Gen UI expand, MCP App surfaces) open as the App tab.
+  const appPanelKey = useAppSurfaceStore((state) => state.panel?.key ?? null)
+  const previousAppPanelKey = useRef<string | null>(appPanelKey)
+  useEffect(() => {
+    const previous = previousAppPanelKey.current
+    previousAppPanelKey.current = appPanelKey
+    if (appPanelKey && appPanelKey !== previous) openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.appSurface)
+    if (!appPanelKey && previous) closeRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.appSurface)
+  }, [appPanelKey, closeRightPanelTab, openRightPanelTab])
+  useEffect(() => {
+    const panel = useAppSurfaceStore.getState().panel
+    if (panel && panel.threadId !== activeThreadId) useAppSurfaceStore.getState().closePanel()
+  }, [activeThreadId])
+
   const openSideChat = useCallback((): void => {
     const latestSide = currentSideConversations.at(-1)
     if (latestSide) selectSideConversation(latestSide.threadId)
@@ -146,6 +174,7 @@ export function useWorkbenchRightTools({
 
   const closeCodeRightTool = useCallback((id: RightPanelContributionId): void => {
     if (id === BUILTIN_RIGHT_PANEL_IDS.sideConversations) setSidePanelOpen(false)
+    if (id === BUILTIN_RIGHT_PANEL_IDS.appSurface) useAppSurfaceStore.getState().closePanel()
     closeRightPanelTab(id)
   }, [closeRightPanelTab, setSidePanelOpen])
 

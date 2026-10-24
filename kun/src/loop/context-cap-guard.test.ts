@@ -52,15 +52,15 @@ describe('context cap guard', () => {
 
 describe('mergeModelContextProfiles', () => {
   const global = modelContextProfilesFromConfig({
-    models: { profiles: { 'deepseek-v4.1-flash-expires-on-0910': { contextWindowTokens: 1_000_000 } } }
+    models: { profiles: { 'deepseek-v4.1-flash-expires-on-0910': { contextWindowTokens: 400_000 } } }
   })
   const scoped = modelContextProfilesFromConfig({ models: { profiles: {} } })
 
   it('lets a global profile cover a model the provider does not describe', () => {
     const model = 'deepseek-v4.1-flash-expires-on-0910'
-    expect(modelCapabilitiesForModel(model, scoped).contextWindowTokens).toBe(32_000)
+    expect(modelCapabilitiesForModel(model, scoped).contextWindowTokens).toBe(1_000_000)
     expect(modelCapabilitiesForModel(model, mergeModelContextProfiles(scoped, global)).contextWindowTokens)
-      .toBe(1_000_000)
+      .toBe(400_000)
   })
 
   it('keeps the provider-scoped profile when both describe the model', () => {

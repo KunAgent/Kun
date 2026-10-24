@@ -104,6 +104,8 @@ export function parseProviderModelDescriptor(value: unknown, protocol: ModelReas
   return profile
 }
 
+const CODEX_DEFAULT_REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh']
+
 export function parseCodexModelDescriptors(body: string): ModelDiscoveryResult {
   const root = record(JSON.parse(body))
   if (!Array.isArray(root.models)) throw new Error('Invalid Codex catalog')
@@ -115,6 +117,12 @@ export function parseCodexModelDescriptors(body: string): ModelDiscoveryResult {
     if (!id || id.length > 512 || profiles[id]) continue
     const profile = parseProviderModelDescriptor(row, 'openai-responses')
     if (row.use_responses_lite === true) profile.responsesMode = 'lite'
+    // Newer catalog rows can omit the level list; Responses accepts these for every listed model, so don't leave the picker on Auto alone.
+    if (!profile.reasoning && profile.supportsReasoning !== false) {
+      profile.reasoning = parseNativeReasoning(CODEX_DEFAULT_REASONING_LEVELS, 'medium', 'openai-responses')
+      profile.supportsReasoning ??= true
+      profile.evidence!.reasoning = { source: 'adapter', status: 'declared', sourceId: 'codex-models', fieldPath: 'default_reasoning_levels', match: 'exact', observedAt: new Date().toISOString() }
+    }
     if (typeof row.max_context_window === 'number' && Number.isSafeInteger(row.max_context_window) &&
         row.max_context_window > (profile.contextWindowTokens ?? 0) && row.max_context_window <= MAX_MODEL_CONTEXT_WINDOW_TOKENS) {
       profile.conditionalCapabilities = [{ condition: 'provider-extension', contextWindowTokens: row.max_context_window }]

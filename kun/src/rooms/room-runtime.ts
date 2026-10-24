@@ -44,6 +44,7 @@ import { fireDueRoomReminders } from './room-reminders.js'
 import { bindRoomReminderWake } from './room-reminder-tools.js'
 import { WorkbenchBridge, bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import { reconcileWorkbench } from '../workbench-bridge/reconcile.js'
+import { withRoomTickReads } from './room-tick-reads.js'
 
 /** A tick reports whether live work remains and, when idle, the next scheduled wake time. */
 type RoomTickOutcome = { active: boolean; nextWakeAt?: number; catchUp?: boolean }
@@ -146,7 +147,7 @@ export class RoomRuntime {
     this.timer.unref?.()
   }
   private runTick(): void {
-    this.inFlight = this.tick().catch((error) => {
+    this.inFlight = withRoomTickReads(() => this.tick()).catch((error) => {
       console.warn('[kun] room coordinator:', error instanceof Error ? error.message : String(error))
       const outcome: RoomTickOutcome = { active: true }
       return outcome

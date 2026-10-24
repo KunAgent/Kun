@@ -53,6 +53,11 @@ export interface AttachmentStore {
     referencedIds: ReadonlySet<string>,
     expiresBeforeIso: string
   ): Promise<{ deleted: number; released: number }>
+  /**
+   * Read-only: attachments pruneExpiredLeases would delete unless a thread
+   * still references them. An empty answer means no pass needs to read threads.
+   */
+  expiredLeaseCandidates?(expiresBeforeIso: string): Promise<string[]>
   replaceMetadata?(metadata: AttachmentMetadata): Promise<void>
   resolveContent(id: string, scope: { threadId?: string; workspace?: string }): Promise<AttachmentContent>
   textFallbackPolicy(): Pick<
@@ -338,6 +343,23 @@ export class FileAttachmentStore implements AttachmentStore {
       })
     }
     return { deleted, released }
+  }
+
+  async expiredLeaseCandidates(expiresBeforeIso: string): Promise<string[]> {
+    await this.ensureRoot()
+    const entries = await readdir(this.options.rootDir).catch(() => [])
+    const candidates: string[] = []
+    for (const entry of entries) {
+      const id = entry.endsWith('.json') ? entry.slice(0, -'.json'.length) : ''
+      if (!ATTACHMENT_ID_PATTERN.test(id)) continue
+      // Same predicate as pruneExpiredLeases, minus the thread references.
+      const metadata = await this.getStored(id)
+      if (!metadata?.leaseManaged) continue
+      if (metadata.pendingLeases.some((lease) => lease.createdAt >= expiresBeforeIso)) continue
+      if (await this.options.isRetained?.(id)) continue
+      candidates.push(id)
+    }
+    return candidates
   }
 
   async replaceMetadata(metadata: AttachmentMetadata): Promise<void> {

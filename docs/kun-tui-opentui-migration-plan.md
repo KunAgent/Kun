@@ -1,17 +1,41 @@
 # Kun TUI 迁移到 opentui 的修改计划
 
-状态:已实现(2026-10-18,分支 `codex/kun-tui-opentui` 合入 develop)。下文保留原计划,
-实现与计划的差异见"实现记录"。
+状态:已实现(2026-10-18,分支 `codex/kun-tui-opentui` 合入 develop)。2026-10-19 起屏幕模型
+从内联 `split-footer` 改为全屏 `alternate-screen`(分支 `codex/tui-fullscreen`,对齐 opencode
+主界面而不是 `mini` 模式),见"全屏布局"。下文保留原计划,实现与计划的差异见"实现记录"。
+
+## 全屏布局(2026-10-19)
+
+- 屏幕模型:`alternate-screen` + `passthrough`,默认捕获鼠标。对话在 App 内的 `scrollbox`
+  里滚动(`stickyScroll` 贴底,上滚后停止跟随,回到底部恢复),退出时恢复终端原屏幕并打印
+  `kun tui --thread <id>` 恢复提示。scrollback 链路(`scrollback-plan.ts`、`ScrollbackWriter`、
+  `InlineScreen`、宽度变化重放、footer 高度计算)以及 `/transcript` 页已删除。
+- 布局:无会话时是首页(Logo + 居中输入框 + 常用命令);会话页是对话 + 底部输入框 + 状态栏。
+  终端宽度 >= 120 列时右侧固定 42 列侧边栏(标题、上下文用量、累计 token/缓存/费用、
+  等待你处理的审批/提问、Graph、Todo、子代理、工作区),更窄时显示一行标题栏,侧边栏以
+  浮层打开。`Ctrl+X B`/`/sidebar` 切换,浮层按 Esc 关闭。
+- 页面:除审批和提问外的页面都以居中浮层显示,高度按内容估算,Esc 或点击浮层外关闭;
+  `frame: 'popup'` 页(子代理会话、Graph 看板)占 90%×85%。审批和提问停靠在输入框位置。
+  页面按浮层内宽排版。
+- 滚动与交互:PgUp/PgDn、`Ctrl+Alt+U/D` 半页、`Ctrl+Alt+Y/E` 单行、`Ctrl+Home`/`Ctrl+End`
+  首尾(沿用 opencode 的 `messages_*` 动作名,可在 `~/.kun/tui.json` 改键);滚轮滚动;
+  拖选松开即复制(OSC 52 + 系统剪贴板);点击 Thinking、子代理、Graph 行打开;
+  `Ctrl+X P`/`/mouse off` 把选择交还终端。`Ctrl+O`/`/details` 在原位展开工具详情。
+- 长会话:默认挂载最近 240 条,滚到顶部或点击提示行时每次多挂载 160 条;挂载窗口按起始
+  条目固定,新输出不会卸载正在阅读的内容,只在贴底时把顶部裁回预算。已完成条目使用不含
+  动画帧的渲染参数,内容未变的条目保持挂载不重渲染。
+- 渲染无关的规则在 `session-view-model.ts`(侧边栏停靠、挂载窗口、Todo 排序、费用、
+  退出提示),有单测;PTY 冒烟断言 alt-screen、默认鼠标、退出提示和浮层。
 
 ## 实现记录
 
 - 渲染层:`@opentui/core` / `@opentui/solid` 0.6.6 + `solid-js` 1.9.12,JSX 只在
   `kun/src/tui/app/**` 中,由 `vite.tui.config.ts` 编译为 `dist/tui/app/main.js`;
   pi-tui 依赖及其全部壳层/对话框文件已删除。
-- UI 无关层:`session/*`(ChatSession,键位、手势、历史、补全、页面栈、scrollback 计划)、
+- UI 无关层:`session/*`(ChatSession,键位、手势、历史、补全、页面栈)、
   `pages/*`(各页面模型,输出 `PageView`)、`transcript-model.ts`(带 `settled` 的条目)、
-  `scrollback-plan.ts`、`markdown-blocks.ts`;JSX 只负责渲染,单测不依赖原生库。
-- 屏幕模型:`split-footer` + `capture-stdout`,已完成条目经 `ScrollbackSurface` 逐条写入
+  `markdown-blocks.ts`;JSX 只负责渲染,单测不依赖原生库。
+- 屏幕模型(已被"全屏布局"取代):`split-footer` + `capture-stdout`,已完成条目经 `ScrollbackSurface` 逐条写入
   原生 scrollback;流式 Markdown 按段落/列表/表格/代码块提交,只有增长中的尾部留在实时
   区域。全屏页面使用 Alternate Screen,返回时恢复内联偏移。宽度变化后(防抖 200ms)
   清屏并清除已保存行,再按新宽度重放对话(与参考实现一致)。

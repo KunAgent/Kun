@@ -29,5 +29,10 @@
   "whatsNewFocusWhere": "สลับได้ทุกเมื่อด้วยสวิตช์ \"โฟกัส\" ที่ด้านล่างของแถบข้าง",
   "whatsNewFocusPreviewLogo": "โลโก้ Kun",
   "whatsNewFocusPreviewAccount": "การ์ดบัญชี",
-  "whatsNewFocusPreviewCalm": "เฉพาะแชท"
+  "whatsNewFocusPreviewCalm": "เฉพาะแชท",
+  "whatsNewArtifactsTag": "คลังผลงาน",
+  "whatsNewArtifactsTitle": "ทุกอย่างที่ Kun สร้าง รวมไว้ในที่เดียว",
+  "whatsNewArtifactsBody": "แบบร่างดีไซน์ เอกสาร สไลด์ ตาราง ไวต์บอร์ด และรูปภาพที่สร้างขึ้น จัดตามโปรเจกต์และประเภท เปิดเพื่อดูตัวอย่าง หรือให้ Kun แก้ไขต่อในบทสนทนาเดิม",
+  "whatsNewArtifactsOpen": "เปิดคลังผลงาน",
+  "whatsNewArtifactsWhere": "เปิดได้ทุกเมื่อจาก \"ผลงาน\" ในแถบข้าง"
 }

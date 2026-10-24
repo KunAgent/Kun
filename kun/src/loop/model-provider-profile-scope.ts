@@ -1,6 +1,6 @@
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import { MODEL_METADATA_FIELDS, metadataEvidence } from '../contracts/model-metadata-evidence.js'
-import type { ProviderModelCapabilityInput } from './model-context-profile-types.js'
+import { DEFAULT_CONTEXT_WINDOW_TOKENS, type ProviderModelCapabilityInput } from './model-context-profile-types.js'
 
 /** Bare model names are not proof that a relay or another product has the same limits. */
 export function providerOwnsBuiltInModel(input: ProviderModelCapabilityInput): boolean {
@@ -33,5 +33,5 @@ export function scopeBuiltInModelCapability(input: ProviderModelCapabilityInput,
     }
   }
   return { id: capability.id, inputModalities: ['text'], outputModalities: ['text'], messageParts: ['text'],
-    supportsToolCalling: true, contextWindowTokens: 32_000, ...kept, evidence } as ModelCapabilityMetadata
+    supportsToolCalling: true, contextWindowTokens: DEFAULT_CONTEXT_WINDOW_TOKENS, ...kept, evidence } as ModelCapabilityMetadata
 }

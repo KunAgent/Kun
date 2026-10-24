@@ -7,6 +7,7 @@ import { ConversationTurn } from './MessageTimeline'
 import { activeTimelineTurnIndex, groupTurns, stableTurnKey } from './message-timeline-turns'
 import { InjectedMemoryLookupProvider } from './injected-memory-lookup'
 import { TimelineFilePreviewWorkspaceProvider } from './timeline-file-preview-workspace'
+import { MessageSelectionToolbar } from './MessageSelectionToolbar'
 
 type SideConversationTimelineProps = {
   side: SideConversation
@@ -140,6 +141,7 @@ export function SideConversationTimeline({
             <div ref={endRef} aria-hidden className="h-px w-full shrink-0" />
           </div>
         </div>
+        <MessageSelectionToolbar containerRef={viewportRef} surface="side" sideId={side.threadId} />
       </InjectedMemoryLookupProvider>
     </TimelineFilePreviewWorkspaceProvider>
   )

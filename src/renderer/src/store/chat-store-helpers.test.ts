@@ -298,7 +298,7 @@ describe('chat-store Claw helpers', () => {
       }
     ]
 
-    expect(DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS).toBe(32_000)
+    expect(DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS).toBe(1_000_000)
     expect(resolveComposerContextWindowTokens(modelGroups, 'custom-model', 'custom')).toBe(
       DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS
     )
@@ -502,5 +502,13 @@ describe('chat-store Claw helpers', () => {
       'thread-a': { model: 'deepseek-v4-pro', providerId: 'deepseek', source: 'user' },
       'thread-b': { model: 'MiniMax-M2', providerId: 'minimax', source: 'user' }
     })
+  })
+})
+
+describe('composer reasoning default without model facts', () => {
+  it('shows Auto, as the picker does, instead of an unseen max', () => {
+    const profile = { inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'] }
+    const groups = [{ providerId: 'p', label: 'P', modelIds: ['m1'], modelProfiles: { m1: profile } }] as never
+    expect(composerReasoningEffortForSelection(groups, 'm1', 'p')).toBe('auto')
   })
 })

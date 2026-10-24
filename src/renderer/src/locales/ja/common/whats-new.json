@@ -29,5 +29,10 @@
   "whatsNewFocusWhere": "サイドバー下部の「フォーカス」スイッチでいつでも切り替えられます",
   "whatsNewFocusPreviewLogo": "Kun ロゴ",
   "whatsNewFocusPreviewAccount": "アカウント",
-  "whatsNewFocusPreviewCalm": "会話だけ"
+  "whatsNewFocusPreviewCalm": "会話だけ",
+  "whatsNewArtifactsTag": "成果物ライブラリ",
+  "whatsNewArtifactsTitle": "Kun が作ったものを一か所に",
+  "whatsNewArtifactsBody": "デザイン案、ドキュメント、スライド、表、ホワイトボード、生成画像をプロジェクトと種類ごとに整理します。開いてプレビューしたり、元の会話で Kun に修正を頼んだりできます。",
+  "whatsNewArtifactsOpen": "成果物を開く",
+  "whatsNewArtifactsWhere": "サイドバーの「成果物」からいつでも開けます"
 }

@@ -23,6 +23,7 @@ import type { AttachmentReference } from '../../agent/types'
 import { uploadRuntimePastedText } from '../../lib/runtime-attachment'
 import { FloatingComposer } from './FloatingComposer'
 import { modelProfileForComposerSelection } from '../workbench/useWorkbenchComposerCapabilities'
+import { useSideConversationQuotes } from './use-side-conversation-quotes'
 import {
   runtimeImagePreviewUrl,
   runtimeImageSourceForFile,
@@ -125,6 +126,11 @@ export function SideConversationPanel({
     ? sideData.threads.find((thread) => thread.id === sideData.parentThreadId) ?? null
     : null
   const docked = variant === 'docked'
+  const sideQuotes = useSideConversationQuotes({
+    parentThreadId: sideData.parentThreadId,
+    activeSideId: activeSide?.threadId ?? null,
+    workspaceRoot: (parentThread?.workspace || sideData.workspaceRoot).trim()
+  })
   const shouldRender = Boolean(sideData.parentThreadId && (docked || sideData.panel.open))
   const showDraft = shouldRender && !activeSide
   const ordinal = activeSideConversationOrdinal(currentSides, activeId)
@@ -238,14 +244,17 @@ export function SideConversationPanel({
     const text = draftInput.trim()
     if (!text && draftAttachments.length === 0) return
     void (async () => {
+      const quoted = await sideQuotes.prepareSend()
       const sideId = await sideData.spawnSideConversation(text, {
         model: effectiveDraftModel,
         providerId: effectiveDraftProviderId,
         reasoningEffort: effectiveDraftReasoningEffort,
         fastMode: draftFastMode,
-        attachments: draftAttachments
+        attachments: draftAttachments,
+        ...(quoted ? { composerContexts: quoted.composerContexts } : {})
       })
       if (!sideId) return
+      quoted?.consume()
       setDraftInput('')
       setDraftAttachments([])
       setAttachmentUploadError(null)
@@ -254,7 +263,18 @@ export function SideConversationPanel({
 
   const sendActiveSide = (): void => {
     if (!activeSide) return
-    void sideData.sendSideMessage(activeSide.threadId, activeSide.input)
+    const { threadId, input } = activeSide
+    void (async () => {
+      const quoted = await sideQuotes.prepareSend()
+      if (!quoted) {
+        await sideData.sendSideMessage(threadId, input)
+        return
+      }
+      const sent = await sideData.sendSideMessage(threadId, input, {
+        composerContexts: quoted.composerContexts
+      })
+      if (sent) quoted.consume()
+    })()
   }
 
   const discardActiveSide = (): void => {
@@ -605,6 +625,8 @@ export function SideConversationPanel({
           composerReasoningEffort={composerReasoningEffort}
           composerFastMode={composerFastMode}
           attachments={composerAttachments}
+          contextChips={sideQuotes.contextChips}
+          onRemoveContextChip={sideQuotes.removeQuote}
           attachmentUploadEnabled={attachmentUploadEnabled}
           attachmentUploadBusy={attachmentUploadBusy}
           attachmentUploadError={attachmentUploadError}

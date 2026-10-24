@@ -46,7 +46,7 @@ import {
 } from '../loop-test-harness.js'
 
 describe('AgentLoop', () => {
-  it('fails GUI plan turns only when neither create_plan nor plan text is returned', async () => {
+  it('does not fail a GUI plan turn that skips create_plan', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-empty-'))
     try {
       const h = makeHarness(
@@ -77,19 +77,19 @@ describe('AgentLoop', () => {
       const items = await h.sessionStore.loadItems(h.threadId)
       const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
 
-      expect(status).toBe('failed')
+      expect(status).toBe('completed')
       expect(items.some((item) =>
         item.kind === 'error' && item.code === 'required_tool_missing'
-      )).toBe(true)
+      )).toBe(false)
       expect(events.some((event) =>
         event.kind === 'error' && event.code === 'required_tool_missing'
-      )).toBe(true)
+      )).toBe(false)
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
   })
 
-  it('keeps create_plan as a soft completion condition after unrelated tool calls', async () => {
+  it('never forces create_plan on a GUI plan turn after unrelated tool calls', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-other-tool-'))
     const observedRequiredToolNames: Array<string | undefined> = []
     let calls = 0
@@ -134,10 +134,8 @@ describe('AgentLoop', () => {
       const status = await h.loop.runTurn(h.threadId, h.turnId)
 
       expect(status).toBe('completed')
-      expect(observedRequiredToolNames).toEqual([undefined, undefined, undefined])
-      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).resolves.toBe(
-        '## Plan\nImplement auth after checking context.'
-      )
+      expect(observedRequiredToolNames).toEqual([undefined, undefined])
+      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).rejects.toThrow()
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
@@ -280,9 +278,8 @@ describe('AgentLoop', () => {
         id: 'long_history',
         turnId: 'turn_1',
         threadId: 'thr_1',
-        // ~200k estimated tokens: above the 256k fallback profile's 192k soft
-        // threshold, but below the DeepSeek v4 soft threshold
-        // (750k = 0.75 * 1M) so the v4 profiles do not.
+        // ~200k estimated tokens: below the 750k soft threshold (0.75 * 1M)
+        // that the DeepSeek v4 profiles and unknown models now share.
         text: 'x'.repeat(800_000)
       })
     ]
@@ -291,7 +288,7 @@ describe('AgentLoop', () => {
     expect(resolveModelContextProfile('provider/deepseek-v4-flash')?.contextWindowTokens).toBe(1_000_000)
     expect(resolveModelContextProfile('deepseek-chat')?.canonicalModel).toBe('deepseek-v4-flash')
     expect(resolveModelContextProfile('deepseek-reasoner')?.canonicalModel).toBe('deepseek-v4-flash')
-    expect(compactor.shouldCompact(items)).toBe(true)
+    expect(compactor.shouldCompact(items)).toBe(false)
     expect(compactor.shouldCompact(items, { model: 'deepseek-v4-pro' })).toBe(false)
     expect(compactor.shouldCompact(items, { model: 'deepseek-v4-flash' })).toBe(false)
     expect(compactor.hardCap('deepseek-v4-flash')).toBe(850_000)

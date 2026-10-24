@@ -9,6 +9,7 @@ import { useHarnessStore } from '../../store/harness-store'
 import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ComposerInlineError } from './ComposerInlineError'
+import { ComposerPromptEnhanceButton, ComposerPromptEnhanceStatus } from './ComposerPromptEnhance'
 import { FloatingComposerFooterView } from './FloatingComposerFooterView'
 import { FloatingComposerContextChips } from './FloatingComposerContextChips'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
@@ -32,12 +33,12 @@ export function FloatingComposerSurfaceView({
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
     FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerIsolationPicker, FloatingComposerModelPicker,
-    FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
-    Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
+    FloatingComposerTaskProfile,
+    Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread, activeThreadGoal,
     activeThreadId, adeComposer, adeComposerEnabled, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
     collaborationError, dismissCollaborationError,
-    canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
+    canChangeModel, canCompose, canEditComposer, canOpenComposerMenu,
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
     composerReasoningEffort, contextChips, designTaskProfile, designProfileLocked, dictation, draft, effectiveWorkspaceRoot,
@@ -45,13 +46,13 @@ export function FloatingComposerSurfaceView({
     goalInputMode, graphEnabled, graphPlanningNeedsCorrection, handleAttachmentInput,
     handleComposerDragOver, handleComposerDrop, handleComposerKeyDown, handleComposerMenuButtonClick,
     handleComposerPaste, handleComposerShellMouseDown, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, handlePrimaryAction,
-    handlePromptOptimizationClick, hideModelPicker, input, isComposerDirectoryReference, mode,
+    hideModelPicker, input, isComposerDirectoryReference, mode,
     imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, modelPickerMode, onComposerFastModeChange, onComposerModelChange,
     onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange, onInterrupt,
-    onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onDismissPromptOptimizationError, onToggleWorktreeMode,
+    onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onToggleWorktreeMode,
     onWorktreeBranchChange, openSettings, orchestration, placeholder, primaryActionDisabled,
-    primaryActionKind, primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError, queuedMessages,
-    promptOptimizationSettings, route, runningGraphTurn, runtimeReady, setGoalInputMode, showComposerMenuButton,
+    primaryActionKind, primaryActionLabel, primaryActionLoading, promptEnhance, queuedMessages,
+    route, runningGraphTurn, runtimeReady, setGoalInputMode, showComposerMenuButton,
     showCodeExecutionControls, showExecutionSettingsPicker, showProviderInModelLabel, showToolbarStartControls,
     showVoiceDictation, showWorkspaceControls, side, stretchModelPicker, t, useWorktreePool,
     taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement,
@@ -91,6 +92,7 @@ export function FloatingComposerSurfaceView({
     ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
   const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
+  const messageQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'message-quote')
   // "continue local session" is offered only on a fresh thread when
   // the picked harness exposes a matching historySource + lab flag.
   const [continueDialogOpen, setContinueDialogOpen] = useState(false)
@@ -219,10 +221,14 @@ export function FloatingComposerSurfaceView({
             rows={1}
             className={`ds-composer-textarea ds-no-drag block w-full min-w-0 resize-none break-words bg-transparent px-1 py-2.5 text-[15px] leading-[1.45] text-ds-ink placeholder:text-ds-faint focus:outline-none [overflow-wrap:anywhere] ${
               canEditComposer ? '' : 'opacity-80'
-            } ${compact ? 'text-[14px] py-2' : emptyTaskLayout ? 'min-h-[64px]' : 'min-h-[40px]'}`}
-            placeholder={documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : placeholder}
+            } ${promptEnhance?.running ? 'text-ds-muted' : ''} ${compact ? 'text-[14px] py-2' : emptyTaskLayout ? 'min-h-[64px]' : 'min-h-[40px]'}`}
+            placeholder={messageQuoteAttached
+              ? t(side ? 'messageQuoteSidePlaceholder' : 'messageQuoteComposerPlaceholder')
+              : documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : placeholder}
             value={input}
             disabled={!canEditComposer}
+            readOnly={promptEnhance?.running === true}
+            aria-busy={promptEnhance?.running === true || undefined}
             onChange={(e) => {
               fileMentions.updateInput(
                 e.target.value,
@@ -298,12 +304,8 @@ export function FloatingComposerSurfaceView({
               dismissLabel={t('composerDismissError')}
             />
           ) : null}
-          {promptOptimizationError && onDismissPromptOptimizationError ? (
-            <ComposerInlineError
-              message={promptOptimizationError}
-              onDismiss={onDismissPromptOptimizationError}
-              dismissLabel={t('composerDismissError')}
-            />
+          {promptEnhance?.visible ? (
+            <ComposerPromptEnhanceStatus enhance={promptEnhance} t={t} onOpenSettings={() => openSettings('agents')} />
           ) : null}
           {runtimeReady ? <div
             ref={composerToolbarFitRef}
@@ -349,13 +351,7 @@ export function FloatingComposerSurfaceView({
                             onContinueLocalSession: openContinueLocalSession
                           }}
                         />
-                      ) : (
-                        <FloatingComposerTaskSurfacePicker
-                          surface={taskSurface}
-                          disabled={!canCompose || busy}
-                          onSurfaceChange={onTaskSurfaceChange}
-                        />
-                      )
+                      ) : null
                     ) : null}
                     {showCodeExecutionControls && mode === 'plan' ? (
                       <button
@@ -596,22 +592,7 @@ export function FloatingComposerSurfaceView({
                       )}
                     </button>
                   ) : null}
-                  {!side && promptOptimizationSettings?.enabled === true ? (
-                    <button
-                      type="button"
-                      disabled={!canOptimizePrompt}
-                      onClick={handlePromptOptimizationClick}
-                      className="ds-composer-optional-action ds-composer-prompt-optimize-action ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
-                      aria-label={promptOptimizationBusy ? t('composerPromptOptimizing') : t('composerPromptOptimize')}
-                      title={promptOptimizationBusy ? t('composerPromptOptimizing') : t('composerPromptOptimize')}
-                    >
-                      {promptOptimizationBusy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
-                      ) : (
-                        <Sparkles className="h-4 w-4" strokeWidth={2} />
-                      )}
-                    </button>
-                  ) : null}
+                  {!side && promptEnhance?.visible ? <ComposerPromptEnhanceButton enhance={promptEnhance} t={t} /> : null}
                   <button
                     type="button"
                     disabled={primaryActionKind === 'submit' && primaryActionDisabled}

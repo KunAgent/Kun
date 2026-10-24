@@ -110,6 +110,23 @@ describe('turn usage client', () => {
     expect(result.get('turn-legacy')?.referenceEstimateUsd).toBe(0.01)
   })
 
+  it('reads the stamped model timing of settled turns', () => {
+    const bucket = {
+      requests: 1, input_tokens: 10, output_tokens: 5, reasoning_tokens: 0, cached_tokens: 0,
+      cache_write_tokens: 0, total_tokens: 15, actual_cost: null, reference_estimate_usd: null,
+      estimate_coverage: 'unavailable', provider_ids: [], models: []
+    }
+    const result = parseTurnUsageResponse(JSON.stringify({
+      group_by: 'turn', thread_id: 'thread-1', buckets: [
+        { ...bucket, turn_id: 'turn-timed', avg_ttft_ms: 640, avg_tokens_per_second: null },
+        { ...bucket, turn_id: 'turn-legacy' }
+      ]
+    }), 'thread-1')
+
+    expect(result.get('turn-timed')).toMatchObject({ avgTtftMs: 640, avgTokensPerSecond: null })
+    expect(result.get('turn-legacy')).not.toHaveProperty('avgTtftMs')
+  })
+
   it('requests only the active thread turn grouping', async () => {
     const runtimeRequest = vi.fn(async () => ({
       ok: true,

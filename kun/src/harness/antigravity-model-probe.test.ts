@@ -26,6 +26,17 @@ describe('Antigravity model probe', () => {
     expect((await probe.probeCatalog(ANTIGRAVITY_DEFINITION)).models).toEqual(['gemini-3.1-pro'])
     expect(spawn).toHaveBeenCalledOnce()
   })
+  it('reports successful listings only', async () => {
+    const onCatalog = vi.fn()
+    const listing = new AntigravityModelProbe({ onCatalog, resolve: async () => '/bin/agy',
+      spawn: async () => ({ stdout: LIST, stderr: '', exitCode: 0, timedOut: false }) })
+    await listing.probeCatalog(ANTIGRAVITY_DEFINITION)
+    const failing = new AntigravityModelProbe({ onCatalog, resolve: async () => '/bin/agy',
+      spawn: async () => ({ stdout: '', stderr: 'boom', exitCode: 1, timedOut: false }) })
+    await failing.probeCatalog(ANTIGRAVITY_DEFINITION)
+    expect(onCatalog).toHaveBeenCalledOnce()
+    expect(onCatalog.mock.calls[0]![1].models).toEqual(['gemini-3.1-pro', 'claude-opus-4-6-thinking'])
+  })
   it('lists the Agent\'s own models in the composer', () => {
     expect(ANTIGRAVITY_DEFINITION.modelSource).toBe('probe')
   })

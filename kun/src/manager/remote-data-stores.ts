@@ -529,6 +529,10 @@ export class ManagerRemoteAttachmentStore implements AttachmentStore {
     }))
   }
 
+  async expiredLeaseCandidates(expiresBeforeIso: string) {
+    return z.array(z.string()).parse(await this.call('expiredLeaseCandidates', { expiresBeforeIso }))
+  }
+
   async replaceMetadata(metadata: z.infer<typeof AttachmentMetadata>): Promise<void> {
     await this.call('replaceMetadata', metadata)
   }

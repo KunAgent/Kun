@@ -9,6 +9,7 @@ import {
   WriteRichEditor,
   type WriteRichEditorHandle
 } from '../../write/tiptap/WriteRichEditor'
+import { WriteEditorErrorBoundary } from './WriteEditorErrorBoundary'
 import type { WriteEditorSelectionState, WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
 import { WriteMarkdownEditor } from './WriteMarkdownEditor'
 import { WriteWorkspaceStart } from './WriteWorkspaceStart'
@@ -421,6 +422,7 @@ export function WriteWorkspaceDocumentPane({
       <div className="flex min-h-0 min-w-0 flex-1">
         <div ref={editorPaneRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">
           {editorSurface === 'document' ? (
+            <WriteEditorErrorBoundary resetKey={activeFilePath ?? ''}>
             <WriteRichEditor
               value={fileContent}
               workspaceRoot={workspaceRoot}
@@ -445,6 +447,7 @@ export function WriteWorkspaceDocumentPane({
               handleRef={richHandleRef}
               publishToPanels={focused}
             />
+            </WriteEditorErrorBoundary>
           ) : (
             <WriteMarkdownEditor
               value={fileContent}

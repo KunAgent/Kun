@@ -195,7 +195,7 @@ describe('RoundOutcomeCoordinator', () => {
     expect(h.failures.at(-1)).toMatchObject({ code: 'graph_create_run_failed' })
   })
 
-  it('materializes plan text before dispatch without adding interactive flags', async () => {
+  it('ends a plan turn on prose without writing it through create_plan', async () => {
     const h = harness()
     const planContext = {
       operation: 'draft' as const,
@@ -206,22 +206,11 @@ describe('RoundOutcomeCoordinator', () => {
       title: 'Example'
     }
     const outcome = await h.coordinator.resolve(input(completed({ text: '# Plan\nDo it.' }), {
-      softRequiredToolName: CREATE_PLAN_TOOL_NAME,
       prepared: prepared({
         mode: 'plan',
         planTurnActive: true,
-        activePlanContext: planContext,
-        userInputDisabled: true
+        activePlanContext: planContext
       }),
-      turn: createTurnRecord({
-        id: turnId,
-        threadId,
-        prompt: 'plan it',
-        status: 'running',
-        imContext: true
-      }),
-      modelProviderId: 'provider_main',
-      modelReasoningEffort: 'high',
       toolProviderMetadata: new Map([[
         CREATE_PLAN_TOOL_NAME,
         { providerId: 'provider_tool', providerKind: 'built-in' }
@@ -230,22 +219,9 @@ describe('RoundOutcomeCoordinator', () => {
       toolProviderKinds: new Map([[CREATE_PLAN_TOOL_NAME, 'built-in']])
     }))
 
-    expect(outcome).toBe('continue')
-    expect(h.effects).toEqual(['item:tool_call', 'event:tool_call_ready', 'dispatch'])
-    expect(h.items[0]).toMatchObject({
-      kind: 'tool_call',
-      toolName: CREATE_PLAN_TOOL_NAME,
-      arguments: {
-        markdown: '# Plan\nDo it.',
-        plan_id: 'example',
-        plan_relative_path: '.kunsdd/plan/example.md',
-        source_request: 'source request'
-      }
-    })
-    expect(h.dispatches[0]?.calls[0]).toMatchObject({ providerId: 'provider_tool', toolKind: 'file_change' })
-    expect(h.dispatches[0]?.reasoningEffort).toBe('high')
-    expect(Object.hasOwn(h.dispatches[0] ?? {}, 'userInputDisabled')).toBe(false)
-    expect(Object.hasOwn(h.dispatches[0] ?? {}, 'imContext')).toBe(false)
+    expect(outcome).toBe('stop')
+    expect(h.effects).toEqual([])
+    expect(h.dispatches).toEqual([])
   })
 
   it('records required-tool failure in event-then-item order', async () => {

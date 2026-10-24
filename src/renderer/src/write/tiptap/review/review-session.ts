@@ -11,6 +11,7 @@
  */
 import type { Editor } from '@tiptap/core'
 import { Fragment, type Node as PMNode } from '@tiptap/pm/model'
+import type { Transaction } from '@tiptap/pm/state'
 import {
   parseWorkDocument,
   serializeWorkDocument,
@@ -126,9 +127,9 @@ export class WriteReviewSession {
     if (this.preReviewCtx) next.ctx.sourceMap.absorb(this.preReviewCtx.sourceMap)
     this.setCtx(next.ctx)
 
-    this.swapToTopNodes(next.nodes)
-
-    const tr = this.editor.state.tr
+    // One transaction: the new document and the chunks addressing it must
+    // never be rendered apart (stale chunks over a swapped doc crash the view).
+    const tr = this.swapTransaction(next.nodes) ?? this.editor.state.tr
     tr.setMeta(writeReviewPluginKey, { type: 'start', chunks })
     tr.setMeta(writeRichExternalSyncMeta, true)
     tr.setMeta('addToHistory', false)
@@ -166,12 +167,13 @@ export class WriteReviewSession {
 
   resolveAll(action: 'accept' | 'reject'): void {
     if (!this.active) return
-    if (action === 'reject' && this.preReviewDoc) {
-      // Rejecting everything restores the pre-review document verbatim —
-      // chunk-level position bookkeeping is unnecessary.
-      this.swapToTopNodes(topNodes(this.preReviewDoc))
-    }
-    const tr = this.editor.state.tr
+    // Rejecting everything restores the pre-review document verbatim; the
+    // restore and the cleared chunks go out as one transaction so no render
+    // sees one without the other.
+    const restore = action === 'reject' && this.preReviewDoc
+      ? this.swapTransaction(topNodes(this.preReviewDoc))
+      : null
+    const tr = restore ?? this.editor.state.tr
     tr.setMeta(writeReviewPluginKey, { type: 'start', chunks: [] })
     tr.setMeta(writeRichExternalSyncMeta, true)
     tr.setMeta('addToHistory', false)
@@ -286,10 +288,10 @@ export class WriteReviewSession {
    * unchanged blocks keep their live nodes — cursor, scroll position, and
    * undo history survive entering/leaving the review.
    */
-  private swapToTopNodes(nodes: PMNode[]): void {
+  private swapTransaction(nodes: PMNode[]): Transaction | null {
     const target = this.editor.schema.topNodeType.create(null, Fragment.from(nodes))
     const replacement = computeBlockSyncReplacement(this.editor.state.doc, target)
-    if (!replacement) return
+    if (!replacement) return null
     const tr = this.editor.state.tr
     if (replacement.nodes.length > 0) {
       tr.replaceWith(replacement.from, replacement.to, replacement.nodes)
@@ -298,7 +300,7 @@ export class WriteReviewSession {
     }
     tr.setMeta(writeRichExternalSyncMeta, true)
     tr.setMeta('addToHistory', false)
-    this.editor.view.dispatch(tr)
+    return tr
   }
 
   private finish(): void {

@@ -17,6 +17,7 @@ import {
   createMcpOAuthProvider,
   defaultOpenExternal
 } from './mcp-oauth-provider.js'
+import { MCP_APP_HTML_MIME_TYPE, MCP_APPS_EXTENSION_ID } from '../../contracts/mcp-apps.js'
 import { McpElicitationRuntime } from './mcp-elicitation.js'
 import { buildMcpStdioEnvironment, errorMessage } from './mcp-stdio-environment.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
@@ -213,7 +214,12 @@ function isGitHubCredentialRejection(error: unknown): boolean {
 
 export function mcpClientOptions(server: McpServerConfig): ClientOptions {
   return {
-    capabilities: { elicitation: { form: {}, url: {} } },
+    capabilities: {
+      elicitation: { form: {}, url: {} },
+      // MCP Apps: servers built on the official template only register their
+      // interactive tools when the client advertises the UI extension.
+      extensions: { [MCP_APPS_EXTENSION_ID]: { mimeTypes: [MCP_APP_HTML_MIME_TYPE] } }
+    },
     inputRequired: { maxRounds: 10 },
     versionNegotiation: server.transport === 'sse'
       ? { mode: 'legacy' }

@@ -1,3 +1,5 @@
+import { useResultPresented } from '../../product-analytics/presentation'
+import { trackProduct } from '../../product-analytics/client'
 import { TimelineApprovalCard } from './TimelineApprovalCard'
 import { memo, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -72,6 +74,13 @@ type TurnMetricsLike = {
   avgTtftMs: number | null
   avgTokensPerSecond: number | null
 }
+/** The settled turn's stamped timing, when the runtime measured any. */
+export function settledTurnMetrics(usage: TurnUsageSummary | undefined): TurnMetricsLike | undefined {
+  const avgTtftMs = usage?.avgTtftMs ?? null
+  const avgTokensPerSecond = usage?.avgTokensPerSecond ?? null
+  return avgTtftMs === null && avgTokensPerSecond === null ? undefined : { avgTtftMs, avgTokensPerSecond }
+}
+
 /**
  * Renders a turn's average TTFT/TPS as a compact footer label. Segments with
  * no data are omitted so legacy turns show nothing at all.
@@ -112,6 +121,7 @@ function MessageBubbleImpl({
   turnUsageStale?: boolean
   allowThreadActions?: boolean
 }): ReactElement {
+  useResultPresented(block)
   const { t, i18n } = useTranslation('common')
   const turnTimingMetrics = useChatStore((s) => s.turnTimingMetrics)
   const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
@@ -150,9 +160,11 @@ function MessageBubbleImpl({
     const createdAtLabel = block.createdAt
       ? formatMessageDateTime(block.createdAt, i18n.language)
       : null
+    // Live usage events cover turns that ran in this view; the runtime
+    // stamps the same averages on settled turns for reopened history.
     const turnMetrics =
       !streaming && block.turnId
-        ? turnTimingMetrics.get(block.turnId)
+        ? turnTimingMetrics.get(block.turnId) ?? settledTurnMetrics(turnUsage)
         : undefined
     return (
       <LiveAssistantStreamingProvider streaming={effectiveStreaming}>
@@ -180,12 +192,12 @@ function MessageBubbleImpl({
                   onClick={() => rollbackAction.onRollback()}
                   disabled={rollbackAction.busy}
                   className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:opacity-60"
-                  title={t('rollbackWorkspaceFromAssistantResponse')}
-                  aria-label={t('rollbackWorkspaceFromAssistantResponse')}
+                  title={t('turnUndoMessageActionTitle')}
+                  aria-label={t('turnUndoMessageActionTitle')}
                   data-assistant-action="rollback"
                 >
                   <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
-                  <span>{rollbackAction.busy ? t('rollingBackWorkspace') : t('rollbackWorkspace')}</span>
+                  <span>{rollbackAction.busy ? t('turnUndoWorking') : t('turnUndoMessageAction')}</span>
                 </button>
               ) : null}
               {forkAction ? (
@@ -205,7 +217,7 @@ function MessageBubbleImpl({
               <AssistantSpeakButton blockId={block.id} text={block.text} />
               <AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} />
               <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode} />
-              <CopyFeedbackButton text={block.text} />
+              <CopyFeedbackButton text={block.text} onCopied={() => trackProduct({ name: 'result_action', properties: { mode: 'code', action: 'copy' } })} />
               {surface === 'mobile' ? (
                 <button
                   type="button"

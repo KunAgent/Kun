@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { makeHarness } from '../../tests/loop-test-harness.js'
 import { metadataEvidence, capabilityFieldKnown } from '../contracts/model-metadata-evidence.js'
 import { modelCapabilitiesForModel, modelCapabilitiesForProviderModel, modelContextProfilesFromConfig,
-  modelContextProfilesForProvider } from '../loop/model-context-profile.js'
+  modelContextProfilesForProvider, DEFAULT_CONTEXT_WINDOW_TOKENS } from '../loop/model-context-profile.js'
 import { providerScopedModelCapabilities, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { mergeModelContextProfiles } from '../loop/model-context-profile-merge.js'
 import { createRuntimeCore } from './runtime-composition-core.js'
@@ -35,20 +35,20 @@ describe('provider-scoped model facts', () => {
   })
   it.each(['gpt-5.5', 'relay/gpt-5.5', 'deepseek-v4-pro', 'glm-5.2'])('keeps %s unknown on an unproven relay', (model) => {
     const value = modelCapabilitiesForProviderModel({ ...relay, model })
-    expect(value.contextWindowTokens).toBe(32_000)
+    expect(value.contextWindowTokens).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS)
     expect(capabilityFieldKnown(value, 'contextWindowTokens')).toBe(false)
     expect(value.reasoning).toBeUndefined()
   })
   it('requires the real endpoint even if an edited connection retains a preset name', () => {
     const value = modelCapabilitiesForProviderModel({ ...relay, providerId: 'codex', presetSource: 'codex', model: 'gpt-5.5' })
-    expect(value.contextWindowTokens).toBe(32_000)
+    expect(value.contextWindowTokens).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS)
     expect(value.serviceTiers).toBeUndefined()
     expect(modelCapabilitiesForProviderModel({ ...relay, providerId: 'kimi-code', presetSource: 'kimi-code', model: 'k3' }).reasoning).toBeUndefined()
   })
   it('does not trust a vendor base when an alternate model protocol points to a relay', () => {
     const value = modelCapabilitiesForProviderModel({ providerId: 'openai-api', baseUrl: 'https://api.openai.com/v1',
       endpoints: { responses: 'https://relay.example/responses' }, model: 'gpt-5.5' })
-    expect(value.contextWindowTokens).toBe(32_000)
+    expect(value.contextWindowTokens).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS)
     expect(capabilityFieldKnown(value, 'contextWindowTokens')).toBe(false)
   })
   it('retains maintained capabilities on the vendor and plan endpoints', () => {
@@ -64,7 +64,7 @@ describe('provider-scoped model facts', () => {
     const provider = { apiKey: '', baseUrl: relay.baseUrl, modelProfiles: {} }
     const primary = modelContextProfilesByProvider({ relay: provider }).get('relay')!
     expect(modelCapabilitiesForModel('gpt-5.5', mergeModelContextProfiles(primary, profiles)).contextWindowTokens).toBe(64_000)
-    expect(providerScopedModelCapabilities('relay', provider, (model) => modelCapabilitiesForModel(model))('gpt-5.5').contextWindowTokens).toBe(32_000)
+    expect(providerScopedModelCapabilities('relay', provider, (model) => modelCapabilitiesForModel(model))('gpt-5.5').contextWindowTokens).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS)
     expect(providerScopedModelCapabilities('relay', provider, (model) => modelCapabilitiesForModel(model, profiles))('gpt-5.5').contextWindowTokens).toBe(64_000)
   })
   it('does not apply generated preset observations after editing its endpoint, while keeping user overrides', async () => {

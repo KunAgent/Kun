@@ -130,8 +130,7 @@
  * the only way to start a turn, so it stays in cramped composers such as Work.
  */
 .ds-composer-toolbar[data-fit-1] .ds-composer-context-control,
-.ds-composer-toolbar[data-fit-1] .ds-composer-agent-picker:not([data-native-agent-picker]),
-.ds-composer-toolbar[data-fit-1] .ds-composer-agent-surface {
+.ds-composer-toolbar[data-fit-1] .ds-composer-agent-picker:not([data-native-agent-picker]) {
   display: none;
 }
 

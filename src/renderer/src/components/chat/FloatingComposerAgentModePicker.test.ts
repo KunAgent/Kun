@@ -58,7 +58,7 @@ function choice(id: string): HTMLButtonElement {
 describe('Agent and Kun mode picker', () => {
   it('offers Work as the single Kun mode in Work, with the same external Agents', async () => {
     const trigger = await open('write')
-    expect(trigger.textContent).toContain('Kun · Work')
+    expect(trigger.textContent).toBe('Kun')
     expect(trigger.getAttribute('data-task-surface')).toBe('write')
     expect(document.querySelectorAll('[data-agent-mode-group="kun"] [role="menuitemradio"]')).toHaveLength(1)
     expect(choice('kun-write').getAttribute('aria-checked')).toBe('true')
@@ -68,21 +68,23 @@ describe('Agent and Kun mode picker', () => {
     expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('claude-code', 'write')
   })
 
-  it('keeps Kun modes together in the original surface position and lists external Agents once', async () => {
-    const trigger = await open('design')
-    expect(trigger.textContent).toContain('Kun · Design')
+  it('offers Code as the single Kun mode outside Work and lists external Agents once', async () => {
+    const trigger = await open('code')
+    expect(trigger.textContent).toBe('Kun')
     expect(controls.onOpen).toHaveBeenCalledOnce()
-    expect(document.querySelectorAll('[data-agent-mode-group="kun"] [role="menuitemradio"]')).toHaveLength(2)
+    expect(document.querySelectorAll('[data-agent-mode-group="kun"] [role="menuitemradio"]')).toHaveLength(1)
     expect(document.querySelectorAll('[data-agent-mode-group="external"] [role="menuitemradio"]')).toHaveLength(2)
-    expect(choice('kun-design').getAttribute('aria-checked')).toBe('true')
+    expect(choice('kun-code').getAttribute('aria-checked')).toBe('true')
+    // Design is opened by the Code agent itself (design_open), not chosen here.
+    expect(choice('kun-design')).toBeNull()
     expect(choice('claude-code').querySelector('[data-agent-icon="claude-code"]')).not.toBeNull()
     expect(choice('devin').disabled).toBe(false)
-    expect(document.activeElement).toBe(choice('kun-design'))
+    expect(document.activeElement).toBe(choice('kun-code'))
     expect(host.querySelector('[data-agent-mode-menu]')).toBeNull()
   })
 
-  it('switches an external Agent from Design to Code and returns to the requested Kun mode', async () => {
-    const trigger = await open('design')
+  it('switches an external Agent and returns to Kun Code', async () => {
+    const trigger = await open()
     await act(async () => choice('claude-code').click())
     expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('claude-code', 'code')
     expect(document.querySelector('[data-agent-mode-menu]')).toBeNull()
@@ -90,31 +92,30 @@ describe('Agent and Kun mode picker', () => {
     controls = { ...controls, harnessId: 'claude-code', harnessLabel: 'Claude Code', onSelect: vi.fn() }
     await open()
     expect(trigger.textContent).toContain('Claude Code')
-    expect(trigger.textContent).not.toContain('Design')
-    await act(async () => choice('kun-design').click())
-    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('kun', 'design')
+    await act(async () => choice('kun-code').click())
+    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('kun', 'code')
   })
 
-  it('switches Kun Code and Design without requiring a cross-Agent handoff', async () => {
+  it('reselects Kun Code without requiring a cross-Agent handoff', async () => {
     controls.needsConfirm = vi.fn(() => true)
     await open()
-    await act(async () => choice('kun-design').click())
+    await act(async () => choice('kun-code').click())
     expect(controls.needsConfirm).not.toHaveBeenCalled()
-    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('kun', 'design')
+    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('kun', 'code')
   })
 
   it('requires a handoff decision and preserves the requested Kun mode in the confirmation', async () => {
     controls = { ...controls, harnessId: 'claude-code', harnessLabel: 'Claude Code', needsConfirm: () => true }
     await open()
-    await act(async () => choice('kun-design').click())
+    await act(async () => choice('kun-code').click())
     expect(controls.onSelect).not.toHaveBeenCalled()
-    expect(document.querySelector('[data-agent-mode-confirm]')?.textContent).toContain('Kun · Design')
+    expect(document.querySelector('[data-agent-mode-confirm]')?.textContent).toContain('Kun')
     await act(async () => document.querySelector<HTMLButtonElement>('[data-agent-mode-confirm-cancel]')!.click())
     expect(controls.onSelect).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(choice('claude-code'))
-    await act(async () => choice('kun-design').click())
+    await act(async () => choice('kun-code').click())
     await act(async () => document.querySelector<HTMLButtonElement>('[data-agent-mode-confirm-yes]')!.click())
-    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('kun', 'design')
+    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('kun', 'code')
   })
 
   it('hides disabled or unready Agents and keeps a settings repair entry', async () => {

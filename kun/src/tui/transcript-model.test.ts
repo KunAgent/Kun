@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTranscriptEntries, type TranscriptEntry } from './transcript-model.js'
+import { buildTranscriptEntries, sameTranscriptEntry, type TranscriptEntry } from './transcript-model.js'
 import { fixtureItems as item, fixtureProjection } from './transcript-fixtures.test-support.js'
 
 const options = { showReasoning: false, splitAssistantText: true }
@@ -82,5 +82,34 @@ describe('buildTranscriptEntries', () => {
     const unsettled = entries.filter((entry) => !entry.settled).map((entry) => entry.kind)
     expect(unsettled.length).toBeGreaterThan(0)
     expect(entries.find((entry) => entry.kind === 'item' && entry.item.kind === 'user_message')?.settled).toBe(true)
+  })
+
+  it('treats rebuilt entries with the same items as unchanged', () => {
+    const user = item.user('u1', 'turn_1', 'hi')
+    const first = buildTranscriptEntries(fixtureProjection([{ id: 'turn_1', running: true, items: [user, item.text('a1', 'turn_1', 'One\n\nTw', 'running')] }]), options)
+    const second = buildTranscriptEntries(fixtureProjection([{ id: 'turn_1', running: true, items: [user, item.text('a1', 'turn_1', 'One\n\nTwo', 'running')] }]), options)
+    const byKey = (entries: readonly TranscriptEntry[], key: string) => entries.find((entry) => entry.key === key)!
+    expect(sameTranscriptEntry(byKey(first, 'u1'), byKey(second, 'u1'))).toBe(true)
+    expect(sameTranscriptEntry(byKey(first, 'a1#0'), byKey(second, 'a1#0'))).toBe(true)
+    expect(sameTranscriptEntry(byKey(first, 'a1#1'), byKey(second, 'a1#1'))).toBe(false)
+  })
+
+  it('shows a delegation as its child or the agent tree, not also as a tool row', () => {
+    const child = (childId: string, label: string) => ({
+      childId, parentTurnId: 'turn_1', label, prompt: `${label} task`, status: 'running' as const,
+      startedAt: '2026-10-18T00:00:01.000Z', updatedAt: '2026-10-18T00:00:02.000Z'
+    })
+    const delegate = (id: string, label: string) => item.call(id, 'turn_1', 'delegate_task', { label, prompt: `${label} task` })
+    const single = fixtureProjection([{ id: 'turn_1', running: true, items: [item.user('u1', 'turn_1', 'go'), delegate('c1', 'layout')] }])
+    single.childRuns = [child('child_1', 'layout')]
+    expect(buildTranscriptEntries(single, options).map((entry) => entry.key)).toEqual(['u1', 'kun-reply:turn_1', 'child:child_1'])
+
+    const group = fixtureProjection([{
+      id: 'turn_1',
+      running: true,
+      items: [item.user('u1', 'turn_1', 'go'), delegate('c1', 'layout'), delegate('c2', 'style'), delegate('c3', 'no child yet')]
+    }])
+    group.childRuns = [child('child_1', 'layout'), child('child_2', 'style')]
+    expect(buildTranscriptEntries(group, options).map((entry) => entry.key)).toEqual(['u1', 'kun-reply:turn_1', 'c3', 'child-group:turn_1'])
   })
 })

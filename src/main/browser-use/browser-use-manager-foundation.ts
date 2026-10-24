@@ -22,6 +22,7 @@ import {
   normalizeBrowserUseOrigin,
   sanitizeBrowserUseUrl
 } from './network-policy'
+import { resolveBrowserUseUpstreamProxy } from './browser-use-upstream-proxy'
 import {
   ACTION_DECISION_TIMEOUT_MS, BrowserUseOperationAbortedError, MAX_AUDIT_ENTRIES,
   MOUNT_TIMEOUT_MS, NAVIGATION_TIMEOUT_MS, ORIGIN_DECISION_TIMEOUT_MS,
@@ -76,7 +77,12 @@ export abstract class BrowserUseManagerFoundation {
     }
     this.createView = options.createView ?? createBrowserUseView
     this.createProxy = options.createProxy ?? ((mode, exactLocalOrigin, onPolicyEvent) =>
-      new BrowserUsePolicyProxy({ mode, exactLocalOrigin, onPolicyEvent }))
+      new BrowserUsePolicyProxy({
+        mode,
+        exactLocalOrigin,
+        onPolicyEvent,
+        resolveUpstreamProxy: resolveBrowserUseUpstreamProxy
+      }))
   }
   abstract clear(threadId: string, reason?: string): Promise<boolean>
 

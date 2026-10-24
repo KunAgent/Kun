@@ -1,3 +1,4 @@
+import { useProductAnalyticsLifecycle } from './product-analytics/lifecycle'
 import { lazy, Suspense, useEffect } from 'react'
 import { useQuotaReminderNotifications } from './hooks/useQuotaReminderNotifications'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
@@ -93,6 +94,7 @@ function RouteFallback(): React.ReactElement {
 }
 
 export default function AppShell(): React.ReactElement {
+  useProductAnalyticsLifecycle()
   useRoomEvents()
   useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)

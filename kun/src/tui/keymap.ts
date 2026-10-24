@@ -25,6 +25,14 @@ export type TuiKeyAction =
   | 'session_sibling_next'
   | 'session_sibling_previous'
   | 'messages_copy'
+  | 'messages_page_up'
+  | 'messages_page_down'
+  | 'messages_line_up'
+  | 'messages_line_down'
+  | 'messages_half_page_up'
+  | 'messages_half_page_down'
+  | 'messages_first'
+  | 'messages_last'
   | 'model_list'
   | 'model_provider_list'
   | 'model_favorite_toggle'
@@ -112,6 +120,16 @@ const DEFAULT_BINDINGS: Record<TuiKeyAction, string | readonly string[]> = {
   session_sibling_next: '<leader>right',
   session_sibling_previous: '<leader>left',
   messages_copy: '<leader>y',
+  // Home/End stay with the composer's cursor; the conversation uses the
+  // modified forms.
+  messages_page_up: ['pageup', 'ctrl+alt+b'],
+  messages_page_down: ['pagedown', 'ctrl+alt+f'],
+  messages_line_up: 'ctrl+alt+y',
+  messages_line_down: 'ctrl+alt+e',
+  messages_half_page_up: 'ctrl+alt+u',
+  messages_half_page_down: 'ctrl+alt+d',
+  messages_first: ['ctrl+home', 'alt+home'],
+  messages_last: ['ctrl+end', 'ctrl+alt+g'],
   model_list: '<leader>m',
   model_provider_list: 'ctrl+a',
   model_favorite_toggle: 'ctrl+f',
@@ -137,7 +155,7 @@ const DEFAULT_BINDINGS: Record<TuiKeyAction, string | readonly string[]> = {
       : ['ctrl+v', 'ctrl+shift+v', 'alt+v', 'super+v', '<leader>v'],
   input_newline: ['shift+return', 'ctrl+return', 'alt+return', 'ctrl+j'],
   input_clear: 'ctrl+c',
-  sidebar_toggle: 'none',
+  sidebar_toggle: '<leader>b',
   theme_list: 'none',
   session_share: 'none',
   session_unshare: 'none',
@@ -158,13 +176,6 @@ const DEFAULT_BINDINGS: Record<TuiKeyAction, string | readonly string[]> = {
 }
 
 const ACTIONS = new Set<TuiKeyAction>(Object.keys(DEFAULT_BINDINGS) as TuiKeyAction[])
-
-// Kun intentionally leaves chat paging to the terminal's native scrollback in
-// inline mode. Accept the OpenCode names so a shared tui.json stays portable,
-// but report these two actions as unavailable instead of installing no-ops.
-const UNAVAILABLE_OPENCODE_ACTIONS = new Set([
-  'messages_page_up', 'messages_page_down'
-])
 
 const VALID_SYMBOL_KEYS = new Set([
   '`', '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/', '!', '@', '#', '$',
@@ -273,11 +284,7 @@ export function parseTuiKeymapConfig(input: unknown): Omit<TuiKeymapLoadResult, 
 
   for (const name of Object.keys(requested)) {
     if (ACTIONS.has(name as TuiKeyAction)) continue
-    if (UNAVAILABLE_OPENCODE_ACTIONS.has(name)) {
-      warnings.push(`Keybind ${name} is recognized but unavailable in Kun.`)
-    } else {
-      warnings.push(`Unknown keybind action ${name} was ignored.`)
-    }
+    warnings.push(`Unknown keybind action ${name} was ignored.`)
   }
 
   return { keymap: new TuiKeymap(bindings, leaderTimeoutMs), warnings }

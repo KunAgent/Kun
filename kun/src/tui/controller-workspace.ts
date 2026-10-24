@@ -276,13 +276,14 @@ export abstract class TuiControllerWorkspace extends TuiControllerAttachments {
     const thread = projection.thread
     const graph = latestTuiGraphRun(this.stateValue.graphRuns, thread.id)
     const graphProgress = graph ? summarizeTuiGraphRun(graph) : undefined
+    const selection = this.activeModelSelection()
     this.inspect('Status', [
       `Connection: ${this.stateValue.connection}`,
       `Runtime: ${this.runtime.runtimeInfo.serviceVersion ?? 'unknown'} · ${this.runtime.runtimeInfo.instanceId ?? 'unknown'} · PID ${this.runtime.runtimeInfo.pid ?? 'unknown'}`,
       `URL: ${this.runtime.baseUrl}`,
       `Session: ${thread.title} (${thread.id})`,
       `State: ${thread.status}${projection.runningTurnId ? ` · turn ${projection.runningTurnId}` : ''}`,
-      `Model: ${thread.providerId ? `${thread.providerId}/` : ''}${thread.model}`,
+      `Model: ${selection.providerId ? `${selection.providerId}/` : ''}${selection.model ?? thread.model}`,
       `Reasoning: ${this.stateValue.reasoningEffort ?? 'model default'}`,
       `Workspace: ${thread.workspace}`,
       `Mode: ${thread.goal?.status === 'active' ? 'goal' : thread.mode}`,

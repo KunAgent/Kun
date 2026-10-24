@@ -24,6 +24,7 @@ export function isValidRuntimeProcessIdentity(value: unknown): value is string |
 }
 
 const PROCESS_INSPECTION_TIMEOUT_MS = 3_000
+const PROCESS_ADMISSION_ATTEMPTS = 2
 const PROCESS_INSPECTION_MAX_BUFFER = 16 * 1024
 let cachedCurrentProcessInspection: RuntimeProcessInspection | undefined
 
@@ -61,9 +62,14 @@ function inspectWindowsProcess(pid: number): RuntimeProcessInspection | undefine
     ? join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
     : 'powershell.exe'
   const command = [
-    `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" -ErrorAction Stop`,
-    'if ($null -eq $p) { exit 3 }',
-    `[Console]::Out.Write($p.CreationDate.ToUniversalTime().ToString('O'))`
+    '$ErrorActionPreference = "Stop"',
+    // Process.StartTime uses GetProcessTimes instead of the WMI/CIM service.
+    `try { $p = [System.Diagnostics.Process]::GetProcessById(${pid}) } catch [System.ArgumentException] { exit 3 }`,
+    'try { $startedAt = $p.StartTime.ToUniversalTime() } finally { $p.Dispose() }',
+    // win32-v1 was written from CIM datetime (microseconds). Keep that exact
+    // precision rather than changing the identity of an existing live owner.
+    '$startedAt = $startedAt.AddTicks(-($startedAt.Ticks % 10))',
+    `[Console]::Out.Write($startedAt.ToString('O'))`
   ].join('; ')
   const startedAt = boundedExec(powershell, [
     '-NoProfile',
@@ -112,21 +118,47 @@ function inspectPosixProcess(pid: number): RuntimeProcessInspection | undefined 
   return { identity: `${process.platform}-v1:${startedAt}`, startedAtMs }
 }
 
-export function inspectRuntimeProcess(pid: number): RuntimeProcessInspection | undefined {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+function inspectRuntimeProcessOrThrow(pid: number): RuntimeProcessInspection {
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('invalid PID')
   if (pid === process.pid && cachedCurrentProcessInspection) {
     return cachedCurrentProcessInspection
   }
   let inspection: RuntimeProcessInspection | undefined
-  try {
-    if (process.platform === 'win32') inspection = inspectWindowsProcess(pid)
-    else if (process.platform === 'linux') inspection = inspectProcProcess(pid)
-    else inspection = inspectPosixProcess(pid)
-  } catch {
-    inspection = undefined
-  }
-  if (pid === process.pid && inspection) cachedCurrentProcessInspection = inspection
+  if (process.platform === 'win32') inspection = inspectWindowsProcess(pid)
+  else if (process.platform === 'linux') inspection = inspectProcProcess(pid)
+  else inspection = inspectPosixProcess(pid)
+  if (!inspection?.identity) throw new Error('invalid process identity response')
+  if (pid === process.pid) cachedCurrentProcessInspection = inspection
   return inspection
+}
+
+export function inspectRuntimeProcess(pid: number): RuntimeProcessInspection | undefined {
+  try { return inspectRuntimeProcessOrThrow(pid) } catch { return undefined }
+}
+
+/** Admission needs a verified birth identity; errors must not become permission to proceed. */
+export function requireRuntimeProcessIdentity(pid = process.pid): string {
+  let error: unknown
+  // A cold query process under startup load can miss the budget once. Retry
+  // only a timeout; not-found and invalid answers are definitive.
+  for (let attempt = 1; attempt <= PROCESS_ADMISSION_ATTEMPTS; attempt += 1) {
+    try { return inspectRuntimeProcessOrThrow(pid).identity! } catch (caught) {
+      error = caught
+      if (errnoCode(caught) !== 'ETIMEDOUT') break
+    }
+  }
+  const code = errnoCode(error)
+  const status = typeof error === 'object' && error !== null && 'status' in error
+    ? (error as { status?: unknown }).status : undefined
+  const reason = code === 'ETIMEDOUT'
+    ? `process identity query timed out after ${PROCESS_INSPECTION_TIMEOUT_MS}ms (${PROCESS_ADMISSION_ATTEMPTS} attempts)`
+    : status === 3 ? 'process was not found by the identity query'
+      : code === 'ENOENT' ? 'process identity query executable or process data is unavailable'
+        : 'process identity query failed or returned an invalid response'
+  // Never copy child stderr, command arguments or environment into diagnostics.
+  const state = Number.isSafeInteger(pid) && pid > 0 && processExists(pid)
+    ? 'PID still exists or its state is inaccessible' : 'PID is no longer present'
+  throw new Error(`Unable to verify owned process ${pid}: ${reason}; ${state}`)
 }
 
 export function runtimeProcessIdentity(pid = process.pid): string | undefined {

@@ -281,6 +281,62 @@ describe('FloatingComposer image transfer helpers', () => {
     expect(onPasteLongText).not.toHaveBeenCalled()
   })
 
+  it('pastes Office text instead of the picture the source rendered of it', () => {
+    const rendered = new File([new Uint8Array([1])], 'image.png', { type: 'image/png' })
+    const unnamed = new File([new Uint8Array([1])], '', { type: 'image/png' })
+    for (const file of [rendered, unnamed]) {
+      const preventDefault = vi.fn()
+      const onPasteClipboardImage = vi.fn()
+      const onPickAttachments = vi.fn()
+      const handled = handleComposerImagePaste({
+        canPickAttachment: true,
+        clipboardData: {
+          getData: (format) => format === 'text/plain' ? 'Quarterly plan' : format === 'text/html' ? '<p>Quarterly plan</p>' : '',
+          items: { length: 1, 0: { kind: 'file', type: 'image/png', getAsFile: () => file } }
+        },
+        preventDefault,
+        onPickAttachments,
+        onPasteClipboardImage
+      })
+      expect(handled).toBe(false)
+      expect(preventDefault).not.toHaveBeenCalled()
+      expect(onPasteClipboardImage).not.toHaveBeenCalled()
+      expect(onPickAttachments).not.toHaveBeenCalled()
+    }
+  })
+
+  it('does not probe the native clipboard image beside rich text', () => {
+    const onPasteClipboardImage = vi.fn()
+    expect(handleComposerImagePaste({
+      canPickAttachment: true,
+      clipboardData: {
+        getData: (format) => format === 'text/plain' ? 'slide title' : format === 'text/rtf' ? '{\\rtf1 slide title}' : ''
+      },
+      preventDefault: vi.fn(),
+      onPasteClipboardImage
+    })).toBe(false)
+    expect(onPasteClipboardImage).not.toHaveBeenCalled()
+  })
+
+  it('turns long Office text into an attachment rather than its rendered picture', () => {
+    const rendered = new File([new Uint8Array([1])], 'image.png', { type: 'image/png' })
+    const onPasteClipboardImage = vi.fn()
+    const onPasteLongText = vi.fn()
+    const longText = 'x'.repeat(LONG_PASTE_ATTACHMENT_THRESHOLD_CHARS + 1)
+    expect(handleComposerImagePaste({
+      canPickAttachment: true,
+      clipboardData: {
+        getData: (format) => format === 'text/plain' ? longText : '',
+        items: { length: 1, 0: { kind: 'file', type: 'image/png', getAsFile: () => rendered } }
+      },
+      preventDefault: vi.fn(),
+      onPasteClipboardImage,
+      onPasteLongText
+    })).toBe(true)
+    expect(onPasteLongText).toHaveBeenCalledWith(longText)
+    expect(onPasteClipboardImage).not.toHaveBeenCalled()
+  })
+
   it('falls back to the Electron clipboard image bridge when files are unavailable', () => {
     const preventDefault = vi.fn()
     const onPasteClipboardImage = vi.fn()

@@ -167,6 +167,7 @@ function buildDecorations(state: EditorState): DecorationSet {
   if (!pluginState?.active) return DecorationSet.empty
   const decorations: Decoration[] = []
   for (const chunk of pluginState.chunks) {
+    if (!isChunkValidForDoc(state.doc, chunk)) continue
     if (chunk.kind === 'removed') {
       decorations.push(
         Decoration.widget(chunk.from, (view) => removedWidgetDom(view, chunk), {
@@ -193,21 +194,49 @@ function buildDecorations(state: EditorState): DecorationSet {
       })
     )
   }
-  return DecorationSet.create(state.doc, decorations)
+  try {
+    return DecorationSet.create(state.doc, decorations)
+  } catch {
+    return DecorationSet.empty
+  }
+}
+
+/** True when `pos` sits between two top-level blocks (or at either end). */
+function isTopLevelBoundary(doc: PMNode, pos: number): boolean {
+  if (!Number.isInteger(pos) || pos < 0 || pos > doc.content.size) return false
+  return doc.resolve(pos).depth === 0
+}
+
+/**
+ * A chunk is usable only while it still addresses the current document:
+ * removed chunks are an anchor on a block boundary, the others span exactly
+ * one top-level block. Anything else would make `Decoration.node` throw.
+ */
+export function isChunkValidForDoc(doc: PMNode, chunk: Pick<ReviewChunkState, 'kind' | 'from' | 'to'>): boolean {
+  if (!isTopLevelBoundary(doc, chunk.from)) return false
+  if (chunk.kind === 'removed') return chunk.from === chunk.to
+  const node = doc.resolve(chunk.from).nodeAfter
+  return Boolean(node) && !node!.isText && chunk.from + node!.nodeSize === chunk.to
 }
 
 function mapChunks(chunks: ReviewChunkState[], transaction: Transaction): ReviewChunkState[] {
-  return chunks.map((chunk) => {
+  if (!transaction.docChanged) return chunks
+  const mapped: ReviewChunkState[] = []
+  for (const chunk of chunks) {
     if (chunk.kind === 'removed') {
       const pos = transaction.mapping.map(chunk.from, 1)
-      return { ...chunk, from: pos, to: pos }
+      mapped.push({ ...chunk, from: pos, to: pos })
+      continue
     }
-    return {
-      ...chunk,
-      from: transaction.mapping.map(chunk.from, 1),
-      to: transaction.mapping.map(chunk.to, -1)
-    }
-  })
+    const from = transaction.mapping.mapResult(chunk.from, 1)
+    const to = transaction.mapping.mapResult(chunk.to, -1)
+    // A chunk whose block was deleted has nothing left to review.
+    if (from.deleted && to.deleted) continue
+    mapped.push({ ...chunk, from: from.pos, to: to.pos })
+  }
+  // Edits that reshape blocks can leave a stale range; drop it instead of
+  // rendering it (the document keeps the AI version of that block).
+  return mapped.filter((chunk) => isChunkValidForDoc(transaction.doc, chunk))
 }
 
 export const writeReviewPlugin = new Plugin<WriteReviewPluginState>({

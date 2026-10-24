@@ -65,6 +65,9 @@ const WriteRightPanelContent = lazy(() =>
 const SddAssistantPanel = lazy(() =>
   import('../sdd/SddAssistantPanel').then((module) => ({ default: module.SddAssistantPanel }))
 )
+const AppSurfacePanelContent = lazy(() =>
+  import('../../app-surfaces/AppSurfacePanelContent').then((module) => ({ default: module.AppSurfacePanelContent }))
+)
 const SideConversationPanel = lazy(() =>
   import('../chat/SideConversationPanel').then((module) => ({ default: module.SideConversationPanel }))
 )
@@ -376,6 +379,9 @@ function CodeRightPanelWorkspace({
           active={visible && code.state.activeId === id}
         />
       )
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.appSurface) {
+      return <AppSurfacePanelContent onTitleChange={(title) => updateTitle(id, title)} />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.wardrobe) {
       return <RoomWardrobePanel active={visible && code.state.activeId === id} />

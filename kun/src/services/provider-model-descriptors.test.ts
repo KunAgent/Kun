@@ -14,6 +14,14 @@ describe('account model metadata discovery', () => {
       conditionalCapabilities: [{ contextWindowTokens: 1000000 }], serviceTiers: [] })
     expect(result.modelProfiles['test-model'].supportsToolCalling).toBeUndefined()
   })
+  it('offers the standard Responses levels when a listed Codex model reports none, unless reasoning is denied', () => {
+    const result = parseCodexModelDescriptors(JSON.stringify({ models: [
+      { slug: 'no-levels', visibility: 'list' },
+      { slug: 'denied', visibility: 'list', supports_reasoning: false }] }))
+    expect(result.modelProfiles['no-levels'].reasoning).toMatchObject({ supportedEfforts: ['low', 'medium', 'high', 'max'],
+      defaultEffort: 'medium', requestProtocol: 'openai-responses', effortMapping: { max: 'xhigh' } })
+    expect(result.modelProfiles.denied.reasoning).toBeUndefined()
+  })
   it('keeps unknown, false and missing values distinct and discards only malformed fields', () => {
     expect(parseProviderModelDescriptor({ context_window: -1, max_input_tokens: 128000, supports_tools: false })).toMatchObject({
       maxInputTokens: 128000, supportsToolCalling: false, metadataIssues: [{ field: 'contextWindowTokens', code: 'invalid' }] })
