@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "id": "minimax-m-plan-cn",
+  "name": "MiniMax M Plan",
+  "category": "subscription",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "subscription",
+  "baseUrl": "https://api.minimax.cn/anthropic",
+  "endpointFormat": "messages",
+  "models": [
+    "MiniMax-M3.1-Flash"
+  ],
+  "docsUrl": "https://platform.minimax.cn/docs/m-plan/intro",
+  "credentialUrl": "https://platform.minimax.cn/console/plan",
+  "endpoints": {
+    "messages": "https://api.minimax.cn/anthropic",
+    "chat_completions": "https://api.minimax.cn/v1"
+  }
+}

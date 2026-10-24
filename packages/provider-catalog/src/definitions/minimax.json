@@ -9,14 +9,8 @@
   "baseUrl": "https://api.minimaxi.com/anthropic",
   "endpointFormat": "messages",
   "models": [
-    "MiniMax-M3",
-    "MiniMax-M2.7",
-    "MiniMax-M2.7-highspeed",
-    "MiniMax-M2.5",
-    "MiniMax-M2.5-highspeed",
-    "MiniMax-M2.1",
-    "MiniMax-M2.1-highspeed",
-    "MiniMax-M2"
+    "MiniMax-M3.1-Flash",
+    "MiniMax-M3"
   ],
   "docsUrl": "https://platform.minimax.io/docs/api-reference/text-anthropic-api",
   "credentialUrl": "https://platform.minimaxi.com/user-center/basic-information/interface-key",

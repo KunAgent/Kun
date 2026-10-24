@@ -9,9 +9,9 @@ import {
 describe('provider catalog', () => {
   it('publishes every GUI base preset and Token Plan as stable entries', () => {
     const entries = providerCatalogEntries()
-    expect(PROVIDER_CATALOG).toHaveLength(57)
-    expect(entries).toHaveLength(65)
-    expect(entries.filter((entry) => entry.category === 'subscription')).toHaveLength(21)
+    expect(PROVIDER_CATALOG).toHaveLength(58)
+    expect(entries).toHaveLength(66)
+    expect(entries.filter((entry) => entry.category === 'subscription')).toHaveLength(22)
     expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(44)
     expect(entries.filter((entry) => entry.category === 'free')).toEqual([])
     expect(entries.find((entry) => entry.profileId === 'zenmux'))
@@ -27,9 +27,30 @@ describe('provider catalog', () => {
       'zenmux-token-plan',
       'xiaomi-token-plan',
       'minimax-token-plan',
+      'minimax-m-plan-cn',
       'aliyun-token-plan',
       'tencentcloud-token-plan'
     ]))
+  })
+
+  it('keeps the China M Plan separate from the legacy Token Plan', () => {
+    expect(getProviderCatalogPreset('minimax-m-plan-cn')).toMatchObject({
+      category: 'subscription',
+      authType: 'subscription',
+      baseUrl: 'https://api.minimax.cn/anthropic',
+      endpointFormat: 'messages',
+      models: ['MiniMax-M3.1-Flash'],
+      credentialUrl: 'https://platform.minimax.cn/console/plan',
+      endpoints: {
+        messages: 'https://api.minimax.cn/anthropic',
+        chat_completions: 'https://api.minimax.cn/v1'
+      }
+    })
+    expect(getProviderCatalogPreset('minimax')?.tokenPlan?.models).toContain('MiniMax-M3')
+    expect(resolveProviderCatalogSource({ id: 'minimax-m-plan-cn-2' })).toMatchObject({
+      presetSource: 'minimax-m-plan-cn',
+      presetMode: 'api'
+    })
   })
 
   it('publishes separate ZenMux pay-as-you-go and Builder Plan entries', () => {

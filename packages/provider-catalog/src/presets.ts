@@ -19,6 +19,7 @@ import preset15 from './definitions/moonshot-cn.json' with { type: 'json' }
 import preset16 from './definitions/moonshot-global.json' with { type: 'json' }
 import preset17 from './definitions/xiaomi.json' with { type: 'json' }
 import preset18 from './definitions/minimax.json' with { type: 'json' }
+import preset18a from './definitions/minimax-m-plan-cn.json' with { type: 'json' }
 import preset19 from './definitions/aliyun.json' with { type: 'json' }
 import preset20 from './definitions/tencentcloud.json' with { type: 'json' }
 import preset21 from './definitions/codex.json' with { type: 'json' }
@@ -79,6 +80,7 @@ export const PROVIDER_CATALOG: readonly ProviderCatalogPreset[] = validateProvid
   preset16,
   preset17,
   preset18,
+  preset18a,
   preset19,
   preset20,
   preset21,
