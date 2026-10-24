@@ -284,7 +284,10 @@ function prunePackedHoistedKunDependencies(context) {
     const rootManifest = join(modules, relativeManifest)
     const duplicateManifest = join(kunModules, relativeManifest)
     assertExists(rootManifest, `root-hoisted package manifest ${packageName}`)
-    assertExists(duplicateManifest, `duplicate Kun package manifest ${packageName}`)
+    // npm prune may already have removed a duplicate production dependency.
+    // Kun resolves it from the app-root node_modules after hoisting, so only
+    // compare versions when the duplicate is still present.
+    if (!existsSync(duplicateManifest)) continue
     const rootVersion = JSON.parse(readFileSync(rootManifest, 'utf8')).version
     const duplicateVersion = JSON.parse(readFileSync(duplicateManifest, 'utf8')).version
     if (!rootVersion || rootVersion !== duplicateVersion) {

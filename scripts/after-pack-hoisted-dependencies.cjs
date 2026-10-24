@@ -12,6 +12,10 @@ const { dirname, join, relative } = require('node:path')
 // Every entry here must also appear in KUN_ROOT_HOISTED_VERSION_ANCHORS so the
 // pack fails loudly whenever the root and Kun copies stop matching.
 const KUN_ROOT_HOISTED_SHARED_JS_PACKAGES = [
+  // The GUI and Kun runtime share this immutable protocol package. Keep its
+  // root copy unpacked so the child runtime can resolve it after pruning the
+  // nested copy from Kun's node_modules.
+  '@kun/remote-protocol',
   'pdfjs-dist',
   'xlsx',
   'diff',

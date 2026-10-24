@@ -160,7 +160,11 @@ function packageDependencies(manifestPath) {
   try {
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     return Object.keys(manifest.dependencies || {}).filter(
-      (name) => !name.startsWith('@types/')
+      (name) =>
+        !name.startsWith('@types/') &&
+        // better-sqlite3 uses this only from its install script. The packaged
+        // runtime already includes the Electron-rebuilt native binding.
+        !(manifest.name === 'better-sqlite3' && name === 'prebuild-install')
     )
   } catch {
     return []
