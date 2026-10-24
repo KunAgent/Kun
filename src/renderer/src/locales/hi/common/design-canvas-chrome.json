@@ -20,6 +20,7 @@
   "canvasViewControls": "दृश्य नियंत्रण",
   "canvasZoomMenu": "ज़ूम और दृश्य विकल्प",
   "canvasMinimapToggle": "मिनीमैप",
+  "canvasFlowsToggle": "प्रोटोटाइप फ़्लो",
   "canvasCodeEmpty": "कोड देखने के लिए कोई स्क्रीन या लेयर चुनें।",
   "canvasCodeLayerData": "लेयर डेटा (JSON)",
   "canvasCodeCopy": "कॉपी करें",

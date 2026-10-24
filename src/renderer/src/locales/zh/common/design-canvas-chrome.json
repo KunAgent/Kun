@@ -20,6 +20,7 @@
   "canvasViewControls": "视图控制",
   "canvasZoomMenu": "缩放与视图选项",
   "canvasMinimapToggle": "小地图",
+  "canvasFlowsToggle": "原型连线",
   "canvasCodeEmpty": "选中屏幕或图层即可查看代码。",
   "canvasCodeLayerData": "图层数据（JSON）",
   "canvasCodeCopy": "复制",

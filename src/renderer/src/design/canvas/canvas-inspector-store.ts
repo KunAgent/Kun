@@ -20,6 +20,8 @@ type PersistedInspectorState = {
   height: number
   minimapVisible: boolean
   focusFit: CanvasBoardFocusFit
+  /** Show every prototype link; otherwise only the selected board's links draw. */
+  flowsVisible: boolean
 }
 
 type CanvasInspectorState = PersistedInspectorState & {
@@ -33,6 +35,7 @@ type CanvasInspectorState = PersistedInspectorState & {
   setHeight: (height: number) => void
   setMinimapVisible: (visible: boolean) => void
   setFocusFit: (fit: CanvasBoardFocusFit) => void
+  setFlowsVisible: (visible: boolean) => void
   focusBoard: (shapeId: string | null) => void
 }
 
@@ -60,7 +63,8 @@ export function parsePersistedCanvasInspectorState(raw: string | null): Persiste
     tab: 'properties',
     height: CANVAS_INSPECTOR_DEFAULT_HEIGHT,
     minimapVisible: false,
-    focusFit: 'fit'
+    focusFit: 'fit',
+    flowsVisible: false
   }
   if (!raw) return fallback
   try {
@@ -72,7 +76,8 @@ export function parsePersistedCanvasInspectorState(raw: string | null): Persiste
         ? Math.max(CANVAS_INSPECTOR_MIN_HEIGHT, Math.round(parsed.height))
         : fallback.height,
       minimapVisible: typeof parsed.minimapVisible === 'boolean' ? parsed.minimapVisible : fallback.minimapVisible,
-      focusFit: parsed.focusFit === 'fill' ? 'fill' : 'fit'
+      focusFit: parsed.focusFit === 'fill' ? 'fill' : 'fit',
+      flowsVisible: typeof parsed.flowsVisible === 'boolean' ? parsed.flowsVisible : fallback.flowsVisible
     }
   } catch {
     return fallback
@@ -101,7 +106,8 @@ function persistedSlice(state: CanvasInspectorState): PersistedInspectorState {
     tab: state.tab,
     height: state.height,
     minimapVisible: state.minimapVisible,
-    focusFit: state.focusFit
+    focusFit: state.focusFit,
+    flowsVisible: state.flowsVisible
   }
 }
 
@@ -120,6 +126,7 @@ export const useCanvasInspectorStore = create<CanvasInspectorState>((set, get) =
     setHeight: (height) => update({ height: Math.max(CANVAS_INSPECTOR_MIN_HEIGHT, Math.round(height)) }),
     setMinimapVisible: (minimapVisible) => update({ minimapVisible }),
     setFocusFit: (focusFit) => update({ focusFit }),
+    setFlowsVisible: (flowsVisible) => update({ flowsVisible }),
     focusBoard: (focusedShapeId) => set({ focusedShapeId })
   }
 })
