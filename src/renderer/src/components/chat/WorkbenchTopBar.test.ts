@@ -9,6 +9,7 @@ import {
   ContributionRegistry,
   ExtensionWorkbenchSnapshotSchema
 } from '../../extensions/contribution-registry'
+import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 
 describe('WorkbenchTopActions', () => {
   beforeEach(async () => {
@@ -366,6 +367,25 @@ describe('WorkbenchSideRail', () => {
     act(() => button.props.onClick())
     expect(onSelectExtension).toHaveBeenCalledWith(entry)
     expect(onToggleRightPanelMode).not.toHaveBeenCalled()
+    act(() => renderer.unmount())
+  })
+
+  it('opens the wardrobe rail entry without an unread badge', async () => {
+    await i18n.changeLanguage('en')
+    const onToggleRightPanelMode = vi.fn()
+    let renderer!: ReturnType<typeof createRenderer>
+    act(() => {
+      renderer = createRenderer(createElement(WorkbenchSideRail, {
+        rightPanelMode: null,
+        onToggleRightPanelMode
+      }))
+    })
+    const wardrobe = renderer.root.find((node) =>
+      node.type === 'button' && node.props['aria-label'] === 'Wardrobe')
+    expect(wardrobe.findAll((node) => node.props['data-rail-badge'] !== undefined)).toHaveLength(0)
+    expect(wardrobe.props['data-rail-badge']).toBeUndefined()
+    act(() => wardrobe.props.onClick())
+    expect(onToggleRightPanelMode).toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.wardrobe)
     act(() => renderer.unmount())
   })
 })

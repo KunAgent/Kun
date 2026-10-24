@@ -3,7 +3,6 @@ import { TerminalAttentionBadge, useTerminalButtonTooltip } from '../terminal/Te
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
 import { WorkbenchSideRailDivider, WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
-import { useWardrobe } from '../rooms/room-wardrobe'
 import {
   Blocks,
   Bot,
@@ -91,7 +90,7 @@ type RailEntry = {
   active: boolean
   disabled?: boolean
   running?: boolean
-  /** Unread count, e.g. unopened wardrobe bottles. */
+  /** Optional rail counter shown as a small pill; never used for unread mail. */
   badge?: number
   /** Neutral in-progress count, e.g. unfinished background tasks. */
   count?: number
@@ -390,7 +389,6 @@ export function WorkbenchSideRail({
   const { t } = useTranslation(['common', 'settings'])
   // The Remote panel configures this host; hide the entry inside Remote clients.
   const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
-  const bottles = useWardrobe().wardrobe?.pending.length ?? 0
   const pairings = useMobilePairings().length
   const panel = (mode: Exclude<RightPanelMode, null>, label: string, icon: LucideIcon): RailEntry => ({
     key: mode, label, icon, active: rightPanelMode === mode, onClick: () => onToggleRightPanelMode(mode)
@@ -422,7 +420,7 @@ export function WorkbenchSideRail({
   ], [
     panel(BUILTIN_RIGHT_PANEL_IDS.mcpSkills, t('rightPanelMcpSkills'), Blocks),
     panel(BUILTIN_RIGHT_PANEL_IDS.providerQuotas, t('rightPanelProviderQuotas'), Gauge),
-    { ...panel(BUILTIN_RIGHT_PANEL_IDS.wardrobe, t('rightPanelWardrobe'), Shirt), badge: bottles },
+    panel(BUILTIN_RIGHT_PANEL_IDS.wardrobe, t('rightPanelWardrobe'), Shirt),
     ...(isRemoteWeb ? [] : [{ ...panel(BUILTIN_RIGHT_PANEL_IDS.remote, t('rightPanelRemote'), Radio), badge: pairings }])
   ]]
 
