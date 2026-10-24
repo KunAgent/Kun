@@ -164,7 +164,7 @@
   "writeInfographicPromptLabel": "Infographic prompt",
   "writeInfographicPromptDesc": "Prompt prefix sent to the image model when generating an infographic; the selected text is appended after it.",
   "writeQuickActionsLabel": "AI quick actions",
-  "writeQuickActionsDesc": "Quick actions shown in the selection toolbar. \"Edit in place\" replaces the selection with the AI result (reformat); \"Send to assistant\" hands the selection to the sidebar (polish, explain).",
+  "writeQuickActionsDesc": "Quick actions in the selection menu. “Edit in place” proposes changes for review (polish, reformat); “Send to assistant” opens a conversation about the selection (explain).",
   "writeQuickActionLabelPlaceholder": "Button label",
   "writeQuickActionPromptPlaceholder": "Prompt (an edit instruction in place, or chat content for the assistant)",
   "writeQuickActionModeLabel": "Behavior",

@@ -17,6 +17,8 @@ export function toggleRichInlineFormat(
   kind: WriteInlineFormatKind
 ): boolean {
   if (!usable(editor, readOnly)) return false
+  if (kind === 'link') return editor.commands.openLinkBubble()
+  if (kind === 'clear') return clearRichFormatting(editor, readOnly)
   const chain = editor.chain().focus()
   if (kind === 'bold') return chain.toggleBold().run()
   if (kind === 'italic') return chain.toggleItalic().run()
@@ -105,4 +107,8 @@ export function runRichToolbarToggle(editor: Editor | null, readOnly: boolean, t
     case 'task':
       return editor.chain().focus().toggleTaskList().run()
   }
+}
+
+export function clearRichFormatting(editor: Editor | null, readOnly: boolean): boolean {
+  return usable(editor, readOnly) ? editor.chain().focus().unsetAllMarks().run() : false
 }

@@ -38,6 +38,7 @@
   --ds-bubble-user: #f5f7fb;
   --ds-bubble-user-fg: #20242d;
   --ds-accent: #5b78ff;
+  --ds-accent-strong: #4a67f0;
   --ds-accent-soft: #eef2ff;
   --ds-control: #20242d;
   --ds-control-foreground: #ffffff;
@@ -192,6 +193,7 @@
   --ds-bubble-user: var(--kun-dark-ui-effective-panel);
   --ds-bubble-user-fg: #d4d4d4;
   --ds-accent: #78a3ea;
+  --ds-accent-strong: #3e6fd0;
   --ds-accent-soft: #353b46;
   --ds-control: #eeeeee;
   --ds-control-foreground: #252222;
@@ -303,6 +305,7 @@
   --ds-bubble-user: rgba(250, 204, 21, 0.2);
   --ds-bubble-user-fg: #43321c;
   --ds-accent: #d8730d;
+  --ds-accent-strong: #a85708;
   --ds-accent-soft: rgba(216, 115, 13, 0.15);
   --ds-control: #d8730d;
   --ds-control-foreground: #ffffff;
@@ -393,6 +396,7 @@ html[data-color-palette='parchment']:not([data-theme='dark']):not([data-palette-
   --ds-bubble-user: rgba(110, 58, 102, 0.12);
   --ds-bubble-user-fg: #6e3a66;
   --ds-accent: #0f7887;
+  --ds-accent-strong: #0c6470;
   --ds-accent-soft: rgba(15, 120, 135, 0.15);
   --ds-control: #0f7887;
   --ds-control-foreground: #ffffff;
@@ -491,6 +495,7 @@ html[data-color-palette='parchment']:not([data-theme='dark']):not([data-palette-
   --ds-bubble-user: rgba(250, 204, 21, 0.12);
   --ds-bubble-user-fg: #f9f3e5;
   --ds-accent: #f2b13d;
+  --ds-accent-strong: #8c5900;
   --ds-accent-soft: rgba(242, 177, 61, 0.18);
   --ds-control: #f2b13d;
   --ds-control-foreground: #16110d;

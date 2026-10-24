@@ -1,3 +1,4 @@
+import writeSelectionMenu from './common/write-selection-menu.json'
 import githubApp from './common/github-app.json'
 import composerSubscriptionQuota from './common/composer-subscription-quota.json'
 import toolApprovalDetails from './common/tool-approval-details.json'
@@ -84,6 +85,7 @@ import workersPanel from './common/workers-panel.json'
 import officeViewer from './common/office-viewer.json'
 
 const common = {
+  ...writeSelectionMenu,
   ...githubApp,
   ...composerSubscriptionQuota,
   ...toolApprovalDetails,

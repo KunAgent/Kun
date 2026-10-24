@@ -1,0 +1,50 @@
+[data-review-origin='selection'] {
+  --selection-added: color-mix(in srgb, var(--ds-accent) 78%, black);
+  --selection-added-bg: color-mix(in srgb, var(--ds-accent) 10%, transparent);
+}
+[data-theme='dark'] [data-review-origin='selection'] {
+  --selection-added: color-mix(in srgb, var(--ds-accent) 70%, white);
+  --selection-added-bg: color-mix(in srgb, var(--ds-accent) 16%, transparent);
+}
+[data-review-origin='selection'] .write-diff-word-removed {
+  color: var(--ds-text-muted);
+  background: transparent;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+[data-review-origin='selection'] .write-diff-word-added {
+  color: var(--selection-added);
+  background: var(--selection-added-bg);
+  border-radius: 2px;
+  text-decoration: none;
+}
+[data-review-origin='selection'] .write-diff-modified { background: transparent; border-color: transparent; }
+[data-review-origin='selection'] .write-diff-added { background: var(--selection-added-bg); border-color: transparent; }
+[data-review-origin='selection'] .write-diff-removed { background: transparent; color: var(--ds-text-muted); border-color: transparent; text-decoration: line-through; }
+[data-review-origin='selection'] :is(.cm-changedLine, .cm-insertedLine) { background: var(--selection-added-bg); }
+[data-review-origin='selection'] .cm-insertedText { background: var(--selection-added-bg); color: var(--selection-added); text-decoration: none; }
+[data-review-origin='selection'] :is(.cm-deletedText, .cm-deletedLine) { color: var(--ds-text-muted); background: transparent; text-decoration: line-through; }
+.write-selection-hold { background: color-mix(in srgb, var(--ds-accent) 11%, transparent); border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+[data-theme='dark'] .write-selection-hold { background: color-mix(in srgb, var(--ds-accent) 16%, transparent); }
+
+[data-review-origin='selection'] :is(.write-diff-added, .write-diff-modified, .write-diff-removed) { box-shadow: none; }
+[data-review-origin='selection'] .write-diff-removed-body { text-decoration-color: currentColor; }
+[data-review-origin='selection'] .write-diff-word-removed { opacity: 1; }
+
+/* Override both the merge package's theme gradients and the agent review host colors. */
+.write-codemirror-host .cm-editor[data-review-origin='selection'] :is(.cm-deletedChunk, .cm-deletedLine, .cm-deletedText, .cm-deletedLine del) {
+  background: none;
+  color: var(--ds-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: currentColor;
+}
+.write-codemirror-host .cm-editor[data-review-origin='selection'] :is(.cm-changedLine, .cm-insertedLine) {
+  background: none;
+  text-decoration: none;
+}
+.write-codemirror-host .cm-editor[data-review-origin='selection'] .cm-changedText {
+  background: var(--selection-added-bg);
+  color: var(--selection-added);
+  border-radius: 2px;
+  text-decoration: none;
+}
