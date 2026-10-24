@@ -1,34 +1,15 @@
 /* Slide deck viewer: slides on a soft desk beside a numbered thumbnail rail. */
-
-:root {
-  --kun-pptx-desk: #e8e5df;
-  --kun-pptx-rail: #f2f0ec;
-  --kun-pptx-rule: rgba(66, 56, 44, 0.12);
-  --kun-pptx-number: #8c857b;
-  --kun-pptx-thumb-ring: rgba(46, 38, 28, 0.13);
-  --kun-pptx-slide-shadow: 0 1px 2px rgba(31, 25, 18, 0.1), 0 10px 28px rgba(31, 25, 18, 0.12);
-}
-
-html[data-theme='dark'] {
-  --kun-pptx-desk: #141517;
-  --kun-pptx-rail: #191a1d;
-  --kun-pptx-rule: rgba(255, 255, 255, 0.07);
-  --kun-pptx-number: #7e8085;
-  --kun-pptx-thumb-ring: rgba(255, 255, 255, 0.1);
-  --kun-pptx-slide-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.45);
-}
-
 .kun-pptx__body > .rpv-root {
   --rpv-ink: var(--ds-text);
-  --rpv-paper: var(--kun-pptx-desk);
-  --rpv-panel: var(--kun-pptx-rail);
-  --rpv-rule: var(--kun-pptx-rule);
+  --rpv-paper: var(--kun-office-desk);
+  --rpv-panel: var(--kun-office-rail);
+  --rpv-rule: var(--kun-office-rule);
   --rpv-accent: var(--ds-accent);
   position: absolute;
   inset: 0;
   border: 0;
   color: var(--ds-text);
-  background: var(--kun-pptx-desk);
+  background: var(--kun-office-desk);
   font: 500 12px/1.4 inherit;
 }
 
@@ -42,8 +23,8 @@ html[data-theme='dark'] {
   width: 152px;
   flex: 0 0 152px;
   padding: 14px 12px 28px 6px;
-  border-right: 1px solid var(--kun-pptx-rule);
-  background: var(--kun-pptx-rail);
+  border-right: 1px solid var(--kun-office-rule);
+  background: var(--kun-office-rail);
   scrollbar-width: thin;
 }
 
@@ -56,7 +37,7 @@ html[data-theme='dark'] {
   left: 0;
   display: block;
   width: 19px;
-  color: var(--kun-pptx-number);
+  color: var(--kun-office-number);
   font-size: 10.5px;
   text-align: right;
 }
@@ -71,7 +52,7 @@ html[data-theme='dark'] {
   border: 0;
   border-radius: 4px;
   background: #fff;
-  box-shadow: 0 0 0 1px var(--kun-pptx-thumb-ring);
+  box-shadow: 0 0 0 1px var(--kun-office-thumb-ring);
   transition:
     transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 160ms ease-out;
@@ -79,12 +60,12 @@ html[data-theme='dark'] {
 
 .kun-pptx .rpv-thumbnail[data-thumbnail-state='pending'] .rpv-thumbnail__canvas {
   aspect-ratio: 16 / 9;
-  background: color-mix(in srgb, var(--kun-pptx-rule) 60%, var(--kun-pptx-rail));
+  background: color-mix(in srgb, var(--kun-office-rule) 60%, var(--kun-office-rail));
 }
 
 .kun-pptx .rpv-thumbnail:hover .rpv-thumbnail__canvas {
   transform: translateY(-1px);
-  box-shadow: 0 0 0 1px var(--kun-pptx-thumb-ring), 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 0 0 1px var(--kun-office-thumb-ring), 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .kun-pptx .rpv-thumbnail[data-active] .rpv-thumbnail__canvas {
@@ -110,11 +91,11 @@ html[data-theme='dark'] {
   height: 7px;
   border-radius: 999px;
   background: var(--ds-accent);
-  box-shadow: 0 0 0 2px var(--kun-pptx-rail);
+  box-shadow: 0 0 0 2px var(--kun-office-rail);
 }
 
 .kun-pptx .rpv-stage {
-  background: var(--kun-pptx-desk);
+  background: var(--kun-office-desk);
 }
 
 .kun-pptx .rpv-viewport {
@@ -124,11 +105,11 @@ html[data-theme='dark'] {
 
 .kun-pptx .rpv-viewport .rpv-normalized-slide {
   border-radius: 2px;
-  box-shadow: var(--kun-pptx-slide-shadow);
+  box-shadow: var(--kun-office-slide-shadow);
 }
 
 .kun-pptx .rpv-status {
-  background: var(--kun-pptx-desk);
+  background: var(--kun-office-desk);
   color: var(--ds-text-muted);
 }
 
@@ -149,7 +130,7 @@ html[data-theme='dark'] {
 .kun-pptx-deck__spinner {
   width: 20px;
   height: 20px;
-  border: 2px solid var(--kun-pptx-rule);
+  border: 2px solid var(--kun-office-rule);
   border-top-color: var(--ds-accent);
   border-radius: 50%;
   animation: rpv-spin 0.8s linear infinite;
@@ -160,7 +141,7 @@ html[data-theme='dark'] {
   inset: 0;
   display: grid;
   place-content: center;
-  background: var(--kun-pptx-desk);
+  background: var(--kun-office-desk);
   color: var(--ds-text-muted);
   font-size: 12px;
 }
@@ -185,7 +166,7 @@ html[data-theme='dark'] {
   display: grid;
   place-content: center;
   padding: 32px;
-  background: var(--kun-pptx-desk);
+  background: var(--kun-office-desk);
   color: var(--ds-text-muted);
 }
 

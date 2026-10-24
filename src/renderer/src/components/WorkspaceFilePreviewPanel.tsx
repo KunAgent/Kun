@@ -49,6 +49,7 @@ import {
   type CachedTextDraft,
   type Props
 } from './workspace-file-preview-support'
+import { registeredDocxPreviewText } from './workspace-docx-text'
 import { useWorkspaceFilePreviewLoad } from './useWorkspaceFilePreviewLoad'
 import { useWorkspaceFilePreviewTextActions } from './useWorkspaceFilePreviewTextActions'
 import { WorkspaceFilePreviewChrome, type PreviewViewMode } from './WorkspaceFilePreviewChrome'
@@ -636,5 +637,8 @@ export function WorkspaceFilePreviewPanel({
 export function renderedDocxPreviewText(container: ParentNode | null): string {
   const preview = container?.querySelector<HTMLElement>('.workspace-docx-preview')
   if (!preview) return ''
+  // The Word viewer mounts only nearby pages, so it supplies the whole document itself.
+  const fullText = registeredDocxPreviewText(preview)
+  if (fullText) return fullText
   return (preview.innerText || preview.textContent || '').replaceAll(' ', ' ').trim()
 }

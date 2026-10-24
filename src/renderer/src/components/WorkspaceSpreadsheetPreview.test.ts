@@ -1,171 +1,86 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { JSDOM } from 'jsdom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceOfficePreviewSuccess } from '@shared/office-document'
+import type { WorkspaceXlsxGridProps } from './WorkspaceXlsxGrid'
 
-const libraryMocks = vi.hoisted(() => ({ readWorkbook: vi.fn() }))
+const grid = vi.hoisted(() => ({ props: [] as WorkspaceXlsxGridProps[] }))
 
-vi.mock('xlsx', () => ({
-  read: libraryMocks.readWorkbook,
-  utils: {
-    decode_range: (ref: string) => decodeRange(ref),
-    encode_cell: ({ r, c }: { r: number; c: number }) => `${encodeColumn(c)}${r + 1}`,
-    encode_col: encodeColumn
+vi.mock('./WorkspaceXlsxGrid', () => ({
+  WorkspaceXlsxGrid: (props: WorkspaceXlsxGridProps): ReactElement => {
+    grid.props.push(props)
+    return createElement('div', { 'data-engine': 'xlsx' })
   }
 }))
 
 import { WorkspaceSpreadsheetPreview } from './WorkspaceSpreadsheetPreview'
 
-let dom: JSDOM
-let renderer: ReactTestRenderer | undefined
-
-function preview(): WorkspaceOfficePreviewSuccess {
+function preview(sha: string, data = new Uint8Array([1, 2, 3])): WorkspaceOfficePreviewSuccess {
   return {
     ok: true,
-    path: '/repo/fixture.xlsx',
-    name: 'fixture.xlsx',
+    path: '/repo/usage.xlsx',
+    name: 'usage.xlsx',
     sourceFormat: 'xlsx',
     renderFormat: 'xlsx',
     viewer: 'spreadsheet',
-    size: 3,
+    size: data.byteLength,
     mtimeMs: 1,
-    sourceSha256: 'a'.repeat(64),
-    data: new Uint8Array([1, 2, 3])
+    sourceSha256: sha,
+    data
   }
 }
 
-beforeEach(() => {
-  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  dom = new JSDOM('<!doctype html><html><body></body></html>')
-  vi.stubGlobal('window', dom.window)
-  vi.stubGlobal('document', dom.window.document)
-  vi.stubGlobal('Event', (dom.window as unknown as typeof globalThis).Event)
-  libraryMocks.readWorkbook.mockReset()
-  libraryMocks.readWorkbook.mockReturnValue({
-    SheetNames: ['Summary'],
-    Sheets: {
-      Summary: {
-        A1: { t: 's', v: 'Summary', w: 'Summary' },
-        '!ref': 'A1:A1'
-      }
-    }
-  })
-})
+describe('WorkspaceSpreadsheetPreview', () => {
+  let renderer: ReactTestRenderer | undefined
 
-afterEach(async () => {
-  if (renderer) await act(async () => renderer?.unmount())
-  renderer = undefined
-  dom.window.close()
-  vi.unstubAllGlobals()
-})
-
-describe('WorkspaceSpreadsheetPreview outside-click dismissal', () => {
-  it('clears an active cell selection when the user clicks outside the table', async () => {
-    const onSelectionChange = vi.fn()
-    await act(async () => {
-      renderer = create(createElement(WorkspaceSpreadsheetPreview, {
-        result: preview(),
-        loading: false,
-        onSelectionChange
-      }))
-      await flushPromises()
-    })
-
-    const rect = { left: 1, right: 20, top: 2, bottom: 12, width: 19, height: 10 }
-    await act(async () => {
-      renderer?.root.findByProps({ 'data-office-sheet-cell': '0:0' }).props.onPointerDown({
-        button: 0,
-        preventDefault: vi.fn(),
-        currentTarget: { getBoundingClientRect: () => rect }
-      })
-      await flushPromises()
-    })
-    expect(onSelectionChange).toHaveBeenCalledWith(expect.objectContaining({
-      sourceKind: 'spreadsheet',
-      sheetName: 'Summary',
-      cellRange: 'A1:A1'
-    }))
-
-    const outside = document.createElement('div')
-    document.body.appendChild(outside)
-    await act(async () => {
-      outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-      await flushPromises()
-    })
-    outside.remove()
-
-    expect(onSelectionChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      sourceKind: 'spreadsheet',
-      text: '',
-      charCount: 0
-    }))
+  beforeEach(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    grid.props = []
   })
 
-  it('keeps the cell selection when the click targets the sidebar quote action', async () => {
-    const onSelectionChange = vi.fn()
-    await act(async () => {
-      renderer = create(createElement(WorkspaceSpreadsheetPreview, {
-        result: preview(),
-        loading: false,
-        onSelectionChange
-      }))
-      await flushPromises()
-    })
-
-    const rect = { left: 1, right: 20, top: 2, bottom: 12, width: 19, height: 10 }
-    await act(async () => {
-      renderer?.root.findByProps({ 'data-office-sheet-cell': '0:0' }).props.onPointerDown({
-        button: 0,
-        preventDefault: vi.fn(),
-        currentTarget: { getBoundingClientRect: () => rect }
-      })
-      await flushPromises()
-    })
-    expect(onSelectionChange).toHaveBeenCalledWith(expect.objectContaining({
-      sourceKind: 'spreadsheet',
-      cellRange: 'A1:A1'
-    }))
-
-    const menu = document.createElement('div')
-    menu.setAttribute('data-selection-ignore', 'true')
-    document.body.appendChild(menu)
-    await act(async () => {
-      menu.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-      await flushPromises()
-    })
-    menu.remove()
-
-    expect(onSelectionChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      sourceKind: 'spreadsheet',
-      cellRange: 'A1:A1'
-    }))
+  afterEach(async () => {
+    if (renderer) await act(async () => renderer?.unmount())
+    renderer = undefined
   })
-})
 
-async function flushPromises(): Promise<void> {
-  for (let index = 0; index < 40; index += 1) await Promise.resolve()
-}
-
-function encodeColumn(column: number): string {
-  let value = column + 1
-  let label = ''
-  while (value > 0) {
-    value -= 1
-    label = String.fromCharCode(65 + (value % 26)) + label
-    value = Math.floor(value / 26)
+  async function render(element: ReactElement, update = false): Promise<void> {
+    await act(async () => {
+      if (update && renderer) renderer.update(element)
+      else renderer = create(element)
+      for (let index = 0; index < 20; index += 1) await Promise.resolve()
+    })
   }
-  return label
-}
 
-function decodeRange(ref: string): { s: { r: number; c: number }; e: { r: number; c: number } } {
-  const [start = 'A1', end = start] = ref.split(':')
-  return { s: decodeCell(start), e: decodeCell(end) }
-}
+  it('loads the grid lazily and hands it the file, refresh state and selection callback', async () => {
+    const onSelectionChange = vi.fn()
+    const result = preview('a')
+    await render(createElement(WorkspaceSpreadsheetPreview, {
+      result,
+      loading: true,
+      refreshError: 'Could not refresh',
+      onSelectionChange
+    }))
+    const props = grid.props.at(-1)!
+    expect(props.result).toBe(result)
+    expect(props.source).toBe(result.data)
+    expect(props.loading).toBe(true)
+    expect(props.refreshError).toBe('Could not refresh')
+    expect(props.onSelectionChange).toBe(onSelectionChange)
+  })
 
-function decodeCell(cell: string): { r: number; c: number } {
-  const match = /^([A-Z]+)(\d+)$/.exec(cell) ?? ['', 'A', '1']
-  let column = 0
-  for (const character of match[1]!) column = column * 26 + character.charCodeAt(0) - 64
-  return { r: Number.parseInt(match[2]!, 10) - 1, c: column - 1 }
-}
+  it('keeps the open workbook for the same bytes and reloads a changed file', async () => {
+    const first = preview('a')
+    await render(createElement(WorkspaceSpreadsheetPreview, { result: first, loading: false }))
+    const firstSource = grid.props.at(-1)!.source
+    await render(createElement(WorkspaceSpreadsheetPreview, {
+      result: { ...first, data: new Uint8Array(first.data) },
+      loading: false
+    }), true)
+    expect(grid.props.at(-1)!.source).toBe(firstSource)
+    await render(createElement(WorkspaceSpreadsheetPreview, {
+      result: preview('b', new Uint8Array([4, 5])),
+      loading: false
+    }), true)
+    expect(grid.props.at(-1)!.source).not.toBe(firstSource)
+  })
+})

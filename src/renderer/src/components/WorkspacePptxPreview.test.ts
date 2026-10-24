@@ -41,7 +41,7 @@ vi.mock('./WorkspacePptxDeck', () => ({
 
 import { requestKnowledgeSourceNavigation } from '../lib/knowledge-source-navigation'
 import { WorkspacePptxPreview } from './WorkspacePptxPreview'
-import { steppedPptxZoom } from './WorkspacePptxToolbar'
+import { steppedOfficeZoom } from './WorkspaceOfficeToolbar'
 
 function preview(name: string, sha: string): WorkspaceOfficePreviewSuccess {
   return {
@@ -275,10 +275,10 @@ describe('WorkspacePptxPreview', () => {
     expect(lastDeckProps().zoom).toBe(75)
     await act(async () => renderer?.root.findByType('select').props.onChange({ target: { value: 'fit-width' } }))
     expect(lastDeckProps().zoom).toBe('fit-width')
-    expect(steppedPptxZoom(100, 1)).toBe(125)
-    expect(steppedPptxZoom(100, -1)).toBe(75)
-    expect(steppedPptxZoom(300, 1)).toBe(300)
-    expect(steppedPptxZoom(20, -1)).toBe(25)
+    expect(steppedOfficeZoom(100, 1)).toBe(125)
+    expect(steppedOfficeZoom(100, -1)).toBe(75)
+    expect(steppedOfficeZoom(300, 1)).toBe(300)
+    expect(steppedOfficeZoom(20, -1)).toBe(25)
   })
 
   it('hides the rail for a single slide and passes changed slides to it', async () => {

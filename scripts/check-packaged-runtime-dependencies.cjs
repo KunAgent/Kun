@@ -24,7 +24,8 @@ const RENDERER_BUNDLED_ONLY_PACKAGES = [
   '@univerjs/presets',
   '@univerjs/preset-sheets-core',
   '@extend-ai/react-pptx',
-  'docx-preview',
+  '@extend-ai/react-docx',
+  '@extend-ai/react-xlsx',
   '@tanstack/react-virtual'
 ]
 
