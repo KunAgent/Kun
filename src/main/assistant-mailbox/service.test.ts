@@ -23,9 +23,13 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
   cleanup.push(dir)
   const registrations: unknown[] = []
   let delivery: 'normal' | 'drop' | 'offline' | 'reject' = 'normal'
+  let membershipActive = true
   const sends: Array<{ messageId: string; envelope: string }> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(String(input))
+    if (!membershipActive && url.pathname.startsWith('/api/assistants/') && (url.pathname.endsWith('/messages') || url.pathname.endsWith('/host/inbox'))) {
+      return Response.json({ error: 'vip_personal_assistant_required' }, { status: 403 })
+    }
     if (options.serverEnabled === false && url.pathname.startsWith('/api/assistants/')) return Response.json({ error: 'not_found' }, { status: 404 })
     if (url.pathname === '/api/remote/v1/devices') {
       registrations.push({ device: new Headers(init?.headers).get('X-Kun-Device'), body: JSON.parse(String(init?.body)) })
@@ -83,6 +87,7 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
   }
   return { server, get service() { return service }, run, connect, emitted, timers, registrations, sends,
     setDelivery: (mode: typeof delivery) => { delivery = mode },
+    setMembership: (active: boolean) => { membershipActive = active },
     persisted: async () => JSON.parse(await readFile(join(dir, 'desktop', 'user-1', 'tasks.json'), 'utf8')),
     restart: () => { service.dispose(); service = new AssistantMailboxService(dependencies) } }
 }
@@ -229,6 +234,32 @@ describe('custom assistants and replies', () => {
 
 
 describe('durable task delivery', () => {
+  it('preserves bindings and queued tasks during VIP suspension and resumes after explicit refresh', async () => {
+    const t = await setup()
+    const { code } = await t.service.createEnrollment({ name: 'Cue', kind: 'cue', locale: 'en' })
+    await t.connect(code)
+    const assistantId = (await t.service.snapshot()).assistants[0].id
+    t.setDelivery('offline')
+    const task = await t.service.assign({ assistantId, body: 'Keep this task until membership resumes' })
+    t.setDelivery('normal')
+    t.setMembership(false)
+    const timerCount = t.timers.length
+    try {
+      const paused = await t.service.refresh()
+      expect(paused.availability).toBe('upgrade_required')
+      expect(paused.assistants[0]).toMatchObject({ id: assistantId, keyAvailable: true })
+      expect(paused.tasks[0]).toMatchObject({ id: task.id, status: 'queued' })
+      expect((await t.persisted()).pending).toHaveLength(1)
+      expect(t.timers).toHaveLength(timerCount)
+      t.setMembership(true)
+      const resumed = await t.service.refresh()
+      expect(resumed.availability).toBe('available')
+      expect(resumed.assistants[0].id).toBe(assistantId)
+      expect((await t.persisted()).pending).toEqual([])
+      expect((await t.run(['inbox'])).stdout).toContain('Keep this task until membership resumes')
+      expect(new Set(t.sends.map(item => item.messageId)).size).toBe(1)
+    } finally { t.service.dispose() }
+  })
   for (const mode of ['drop', 'offline'] as const) {
     it(`recovers the same task and sealed envelope after restart (${mode})`, async () => {
       const t = await setup()

@@ -573,6 +573,33 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('read detail should stay tucked away')
   })
 
+  it('renders one terminal action per command in an expanded process group', () => {
+    const html = renderToStaticMarkup(
+      createElement(ProcessSectionRow, {
+        section: {
+          id: 'execution-batch', kind: 'execution', blocks: [
+            toolBlock({
+              id: 'command', toolKind: 'command_execution',
+              summary: 'bash: npm run typecheck', detail: 'Typecheck passed',
+              meta: { toolName: 'bash', command: 'npm run typecheck' }
+            }),
+            {
+              kind: 'approval', id: 'pending-approval', approvalId: 'approval',
+              status: 'pending', toolName: 'edit', summary: 'Edit source file'
+            }
+          ]
+        },
+        processing: true,
+        singleReasoningSection: false,
+        workspaceRoot: '/tmp/project',
+        viewportRef: { current: null }
+      })
+    )
+
+    expect(html).toContain('ds-work-stack')
+    expect(html.match(/lucide-square-terminal/g) ?? []).toHaveLength(1)
+  })
+
   it('renders automatic review rationale without manual Allow or Deny controls', () => {
     const reviewBlock: ChatBlock = {
       kind: 'approval_review',

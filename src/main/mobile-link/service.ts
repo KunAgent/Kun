@@ -301,7 +301,7 @@ export class MobileLinkService {
           if (this.error !== 'VIP_REQUIRED') this.error = undefined
         }
       } catch {
-        if (generation === this.generation && grantsVersion === this.grantsVersion)
+        if (generation === this.generation && grantsVersion === this.grantsVersion && this.error !== 'VIP_REQUIRED')
           this.error = 'CONNECTION_UNAVAILABLE'
       }
     }
@@ -315,6 +315,17 @@ export class MobileLinkService {
       grants: grants.map((grant) => ({ ...grant, scopes: this.authorities.scopes(grant.controllerId, grant.id) }))
     }
   }
+  async retryMembership() {
+    if (this.error !== 'VIP_REQUIRED') throw new Error('INVALID_MEMBERSHIP_RETRY')
+    const client = this.client, api = this.api
+    if (!client || !api) return this.enable(true, true)
+    const value = await api.entitlements()
+    if (client !== this.client || api !== this.api || value.userId !== this.owner) throw new Error('ACCOUNT_CHANGED')
+    if (!value.features.mobileRemote) throw new Error('vip_mobile_remote_required')
+    client.start()
+    return this.status()
+  }
+
   async enable(value: boolean, keepGrants = false) {
     if (!value) {
       ++this.enableOperation
@@ -328,6 +339,7 @@ export class MobileLinkService {
       return await this.setEnabled(value, keepGrants)
     } catch (error) {
       if (operation === this.enableOperation && !this.enabled) this.stop()
+      if ((error as { code?: string })?.code === 'vip_mobile_remote_required') this.error = 'VIP_REQUIRED'
       throw error
     } finally {
       if (operation === this.enableOperation) this.enabling = false
@@ -419,7 +431,7 @@ export class MobileLinkService {
     } catch (error) {
       // An old enable request may finish after logout's disable request.
       // Repeat cleanup after that request settles, still with the old identity.
-      if (token)
+      if (token && (error as { code?: string })?.code !== 'vip_mobile_remote_required')
         await this.disable(identity, token)
       throw error
     }
@@ -451,7 +463,7 @@ export class MobileLinkService {
         // Lease renewal must never wait behind noncritical grants/UI metadata.
         const result = await api.request('/relay-lease', 'POST', undefined, false, signal)
         this.transportCurrent(generation, epoch, signal)
-        // The transport reports the renewed expiry (up to five minutes) through leaseChanged.
+        // The transport reports the server's membership-capped expiry through leaseChanged.
         if (Date.now() - peersListedAt < PEER_LIST_INTERVAL_MS) return result
         peersListedAt = Date.now()
         void refreshPeers(epoch, signal).catch(() => {

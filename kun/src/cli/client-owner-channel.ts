@@ -11,6 +11,7 @@ export type RuntimeClientOwnerChannel = {
 
 export type RuntimeClientOwnerMonitor = {
   disconnected: Promise<void>
+  readonly reason?: 'client_owner_disconnected' | 'client_owner_stop_requested'
   dispose(): void
 }
 
@@ -36,9 +37,14 @@ export function monitorRuntimeClientOwnerChannel(
   }
   let signalDisconnect!: () => void
   const disconnected = new Promise<void>((resolve) => { signalDisconnect = resolve })
-  const onDisconnect = (): void => signalDisconnect()
+  let reason: RuntimeClientOwnerMonitor['reason']
+  const onDisconnect = (): void => {
+    reason ??= 'client_owner_disconnected'
+    signalDisconnect()
+  }
   const onMessage = (message: unknown): void => {
     if (message && typeof message === 'object' && 'type' in message && message.type === 'kun-runtime-stop') {
+      reason ??= 'client_owner_stop_requested'
       signalDisconnect()
     }
   }
@@ -46,6 +52,7 @@ export function monitorRuntimeClientOwnerChannel(
   channel.on('message', onMessage)
   return {
     disconnected,
+    get reason() { return reason },
     dispose: () => {
       channel.removeListener('disconnect', onDisconnect)
       channel.removeListener('message', onMessage)

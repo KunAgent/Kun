@@ -232,6 +232,8 @@ export type ServerRuntime = {
    * Must never touch the filesystem or await persistence.
    */
   liveCounters?: () => { inflight: number; activeCaptures: number }
+  /** Local liveness control; uncertain Manager ownership parks new side effects. */
+  setManagerHeartbeatAuthority?: (state: import('../../ports/thread-execution-lease.js').ThreadLeaseAuthorityState) => void
   approvalGate: ApprovalGate
   userInputGate: UserInputGate
   workspaceInspector: WorkspaceInspector

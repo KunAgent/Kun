@@ -95,7 +95,7 @@ export function registerMobileLink(
   })
   ipcMain.handle(channels.reconnect, (event) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
-    return service.enable(true, true)
+    return service.retryMembership()
   })
   ipcMain.handle(channels.entitlements, (event) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

@@ -63,6 +63,15 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   stays in the same application session. Manager failure recovery belongs to
   the application owner and must stop old consumers before rebinding a new
   Manager generation; app-owned Runtime must never independently elect one.
+- Steady Manager heartbeats are single-flight. Transport failures park new
+  side-effecting tools and retry the same Manager with capped backoff; reads
+  may continue. Resume only after both the heartbeat and thread lease are
+  confirmed. Only an explicit slot rejection proves Runtime ownership loss;
+  prolonged outages still obey thread lease deadlines and app-owned recovery.
+- Log the first shutdown reason, Runtime instance and PID before cleanup,
+  then its completion, failure or deadline. Distinguish ownership loss,
+  host stop requests, IPC disconnects and signals. Heartbeat logs must omit
+  credentials and raw response bodies.
 - Owned launchers register processes before user commands can run. POSIX uses
   a dedicated process group and owner-loss guard; Windows uses a native Job
   launcher that assigns suspended children before resuming them. PTY, daemon,

@@ -268,6 +268,7 @@ export function createServerRuntimeComposition(
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
     }),
+    setManagerHeartbeatAuthority: (state) => executionLeases?.setRuntimeAuthority(state),
     startBackgroundMaintenance: () => {
       backgroundMaintenance.start()
       roomComposition.start()

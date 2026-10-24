@@ -380,8 +380,7 @@ function ProcessStackRows({
                 </button>
               ) : null}
               <ToolTerminalButton block={block} />
-              <ToolTerminalButton block={block} />
-        <ToolCancelButton block={block} processing={processing} onCancelToolCall={onCancelToolCall} />
+              <ToolCancelButton block={block} processing={processing} onCancelToolCall={onCancelToolCall} />
             </div>
             {open ? (
               detail.kind === 'assistant' ? (

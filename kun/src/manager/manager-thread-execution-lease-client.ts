@@ -31,10 +31,10 @@ const LEASE_RELEASE_ATTEMPTS = 3
 type LeaseClientState = 'open' | 'closing' | 'closed'
 
 /**
- * Per-thread authority as seen by this runtime. `grace` means the local
- * deadline fired and this runtime unilaterally extended its own deadline to
- * renew; Manager may already have re-issued the lease to another runtime, so
- * side-effecting tool dispatch must pause until renewal resolves.
+ * Per-thread authority as seen by this runtime. `grace` means either the
+ * Runtime heartbeat is uncertain or the local lease deadline fired while
+ * renewing. Manager may have reassigned execution, so side effects must wait
+ * for both the Runtime registration and the thread fence to be confirmed.
  */
 export type ThreadLeaseAuthorityState = 'holder' | 'grace' | 'lost'
 
@@ -57,6 +57,7 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
   private shutdownPromise: Promise<void> | undefined
   private readonly authorityByThread = new Map<string, ThreadLeaseAuthorityState>()
   private readonly authorityWaiters = new Map<string, AuthorityWaiter[]>()
+  private runtimeAuthority: ThreadLeaseAuthorityState = 'holder'
 
   constructor(
     private readonly manager: ServiceManagerConnection,
@@ -69,7 +70,29 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
   }
 
   authorityState(threadId: string): ThreadLeaseAuthorityState {
-    return this.authorityByThread.get(threadId) ?? 'holder'
+    const thread = this.authorityByThread.get(threadId) ?? 'holder'
+    if (this.state !== 'open' || thread === 'lost' || this.runtimeAuthority === 'lost') return 'lost'
+    return thread === 'grace' || this.runtimeAuthority === 'grace' ? 'grace' : 'holder'
+  }
+
+  setRuntimeAuthority(state: ThreadLeaseAuthorityState): void {
+    if (this.state !== 'open' || this.runtimeAuthority === 'lost' || state === this.runtimeAuthority) return
+    this.runtimeAuthority = state
+    if (state === 'lost') {
+      for (const { lease } of [...this.renewals.values()]) this.loseRenewal(lease)
+    } else {
+      for (const current of this.renewals.values()) {
+        // A recovered Runtime registration does not renew any thread fence.
+        // Require an actual per-thread acknowledgement before releasing work.
+        if (state === 'grace' || Date.parse(current.lease.expiresAt) <= Date.now()) {
+          this.setAuthority(current.lease.threadId, 'grace')
+        }
+        if (state === 'holder' && this.authorityState(current.lease.threadId) === 'grace') {
+          void this.renew(current.lease.threadId)
+        }
+      }
+    }
+    for (const threadId of this.authorityWaiters.keys()) this.resolveAuthorityWaiters(threadId)
   }
 
   waitAuthorityResolution(threadId: string): Promise<'holder' | 'lost'> {
@@ -84,6 +107,11 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
 
   private setAuthority(threadId: string, state: ThreadLeaseAuthorityState): void {
     this.authorityByThread.set(threadId, state)
+    this.resolveAuthorityWaiters(threadId)
+  }
+
+  private resolveAuthorityWaiters(threadId: string): void {
+    const state = this.authorityState(threadId)
     if (state === 'grace') return
     const waiters = this.authorityWaiters.get(threadId)
     if (!waiters || waiters.length === 0) return
@@ -93,6 +121,7 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
 
   async acquire(threadId: string, turnId: string): Promise<ThreadExecutionLease> {
     if (this.state !== 'open') throw new Error('thread execution lease client is shutting down')
+    if (this.runtimeAuthority === 'lost') throw new Error('runtime no longer owns its Manager registration')
     const pending = this.acquireOpen(threadId, turnId)
     this.pendingAcquires.add(pending)
     try {
@@ -125,7 +154,7 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
     this.leasesByTurn.set(parsed.lease.turnId, parsed.lease)
     rememberTurnLease(parsed.lease)
     this.setAuthority(parsed.lease.threadId, 'holder')
-    if (this.state !== 'open') {
+    if (this.state !== 'open' || this.runtimeAuthority === 'lost') {
       await this.release(parsed.lease.threadId, parsed.lease.turnId)
       throw new Error('thread execution lease client is shutting down')
     }
@@ -215,6 +244,7 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
   shutdown(): Promise<void> {
     if (this.shutdownPromise) return this.shutdownPromise
     this.state = 'closing'
+    for (const threadId of this.authorityWaiters.keys()) this.resolveAuthorityWaiters(threadId)
     this.stopAllRenewals()
     this.shutdownPromise = this.finishShutdown()
     return this.shutdownPromise
