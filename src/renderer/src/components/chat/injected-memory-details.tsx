@@ -5,6 +5,8 @@ import { loadMemoryHistory } from '../../agent/kun-runtime-memory-lifecycle'
 import { getProvider } from '../../agent/registry'
 import { MemoryEvidence } from '../memory/MemoryEvidence'
 import { MemoryHistory } from '../memory/MemoryHistory'
+import { MemoryRelationAnnotations } from '../memory/MemoryRelationAnnotations'
+import { parseMemoryRelationMetadata } from '../../agent/memory-relation-metadata'
 import { metaInjectedDirectiveIds, metaInjectedDirectiveSummaries, metaInjectedMemorySummaries, useInjectedMemoryRecords } from './injected-memory-lookup'
 import '../rooms/agents.css'
 import '../rooms/rooms-runs.css'
@@ -39,6 +41,7 @@ export function InjectedMemoryDetails({ meta, memoryIds, onClose }: {
       {directives.map((id) => <p key={id}>{directiveSnapshots.get(id) ?? id}</p>)}
     </details> : null}
     {memoryIds.map((id) => <InjectedMemoryDetail key={id} id={id} snapshot={snapshots.get(id)} record={records.get(id)} />)}
+    <MemoryRelationAnnotations annotations={parseMemoryRelationMetadata(meta?.injectedMemoryRelations)} historical />
   </div></div>
 }
 

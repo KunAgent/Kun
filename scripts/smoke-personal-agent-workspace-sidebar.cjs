@@ -299,7 +299,7 @@ async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, 
   const rail = page.locator(CODE.rail + ':visible'), panel = page.locator(CODE.panel + ':visible')
   await rail.getByRole('button', { name: 'Files', exact: true }).click()
   const activePanel = CODE.panel + ' [role="tabpanel"]:not([hidden])'
-  const file = panel.getByRole('button', { name: /^baseline\.txt/ }).first()
+  const file = panel.getByRole('treeitem', { name: /^baseline\.txt/ }).first()
   await file.waitFor()
   await sidebar.codeCapture('sidebar-code-files-wide', activePanel)
   await sidebar.pointerResize('code', activePanel)

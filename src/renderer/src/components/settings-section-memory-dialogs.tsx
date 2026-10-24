@@ -1,4 +1,5 @@
 import { MemoryEvidence } from './memory/MemoryEvidence'
+import { MemoryRelationsPanel } from './memory/MemoryRelationsPanel'
 import { MemoryRecordLifecycle } from './memory/MemoryRecordLifecycle'
 import { settingsButtonClass } from './settings-button'
 import {
@@ -406,6 +407,7 @@ export function MemoryRecordDialog({
                 <div>{t('memoryImportance')}: <span className="font-mono text-ds-ink">{(memory.importance ?? 0.5).toFixed(2)}</span></div>
               </div>
               {onLifecycleChanged ? <MemoryRecordLifecycle key={memory.id + ':' + memory.revision} record={memory} onChanged={onLifecycleChanged} /> : <MemoryEvidence sources={memory.sources} consolidation={memory.consolidation} />}
+              {!memory.deletedAt ? <MemoryRelationsPanel key={memory.id + ':' + memory.revision} memory={memory} t={t} /> : null}
             </div>
           ) : null}
         </div>
