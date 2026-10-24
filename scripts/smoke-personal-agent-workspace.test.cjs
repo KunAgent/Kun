@@ -68,7 +68,35 @@ test('diagnostic redaction remains bounded and removes credentials nested in err
   assert(result.output.long.length < 17000)
 })
 
-const { dragSidebar, sidebarGeometryIssues } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+const { dragSidebar, sidebarGeometryIssues, captureCodeSidebarBaseline } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+
+test('Code baseline waits for a file treeitem rather than its overridden button role', async () => {
+  const workspaceRoot = '/synthetic/workspace', ready = new Error('file tree ready')
+  const evaluations = [true, { id: 'code-test' }, { route: 'chat', activeThreadId: 'code-test', workspaceRoot }]
+  const selected = []
+  const page = {
+    evaluate: async () => evaluations.shift(),
+    locator: (selector) => ({
+      waitFor: async () => {},
+      getByRole: (role, { name }) => {
+        if (selector === '.ds-workbench-side-rail:visible') {
+          assert.equal(role, 'button'); assert.equal(name, 'Files')
+          return { click: async () => {} }
+        }
+        assert.equal(selector, '[data-workbench-right-panel]:visible')
+        assert.equal(role, 'treeitem', 'file rows have an explicit treeitem role')
+        assert(name.test('baseline.txt'))
+        return { first: () => ({ waitFor: async () => selected.push('baseline.txt') }) }
+      }
+    })
+  }
+  await assert.rejects(captureCodeSidebarBaseline({ page, workspaceRoot,
+    fixture: { snapshot: () => ({ real: false, mainCalls: 0 }) },
+    poll: async (predicate) => assert(await predicate()),
+    sidebar: { codeCapture: async () => { throw ready } }
+  }), error => error === ready)
+  assert.deepEqual(selected, ['baseline.txt'])
+})
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const bounds = (x, y, width, height) => ({ x, y, width, height, right: x + width, bottom: y + height })
