@@ -80,6 +80,16 @@ import assistantMailbox from './common/assistant-mailbox.json'
 import terminalDock from './common/terminal-dock.json'
 import pptDeck from './common/ppt-deck.json'
 import workersPanel from './common/workers-panel.json'
+import composerTray from './common/composer-tray.json'
+import composerTrayTodo from './common/composer-tray-todo.json'
+import composerTrayGraph from './common/composer-tray-graph.json'
+import composerTrayWorkers from './common/composer-tray-workers.json'
+import composerTrayShells from './common/composer-tray-shells.json'
+import composerTrayGoal from './common/composer-tray-goal.json'
+import composerQueue from './common/composer-queue.json'
+import composerAsk from './common/composer-ask.json'
+import composerApproval from './common/composer-approval.json'
+import composerRecords from './common/composer-records.json'
 
 const common = {
   ...githubApp,
@@ -168,7 +178,17 @@ const common = {
   ...assistantMailbox,
   ...terminalDock,
   ...pptDeck,
-  ...workersPanel
+  ...workersPanel,
+  ...composerTray,
+  ...composerTrayTodo,
+  ...composerTrayGraph,
+  ...composerTrayWorkers,
+  ...composerTrayShells,
+  ...composerTrayGoal,
+  ...composerQueue,
+  ...composerAsk,
+  ...composerApproval,
+  ...composerRecords
 }
 
 export default common

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { nativePermissionPreview } from '../../lib/harness-native-permission'
 import { selectedNativeAgentPreview, useHarnessNativeAgentStore } from '../../lib/harness-native-agent'
 import type { KunToolPermissionMode } from '@shared/app-settings'
@@ -23,11 +23,22 @@ import { FloatingComposerNativeAgentPicker } from './FloatingComposerNativeAgent
 import { FloatingComposerAgentSettings } from './FloatingComposerAgentSettings'
 import { composerToolbarFitRef } from './composer-toolbar-fit'
 import { composerSubscriptionSelection } from './composer-subscription-selection'
+import { FloatingComposerPrimaryAction } from './FloatingComposerPrimaryAction'
+import { FloatingComposerInterruptSlot } from './FloatingComposerInterruptSlot'
+import type { ComposerInterrupt } from './use-composer-interrupt'
 
+/**
+ * Composer controls rows, then `aboveInput` (flow panels + the activity tray,
+ * which tucks behind what follows), then the input slot: the interrupt card
+ * when one is active, and the shell + footer, kept mounted but hidden and
+ * inert while a card holds the slot.
+ */
 export function FloatingComposerSurfaceView({
-  context
+  context,
+  aboveInput
 }: {
   context: FloatingComposerRenderContext
+  aboveInput?: ReactNode
 }): ReactElement {
   const {
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
@@ -56,8 +67,9 @@ export function FloatingComposerSurfaceView({
     showCodeExecutionControls, showExecutionSettingsPicker, showProviderInModelLabel, showToolbarStartControls,
     showVoiceDictation, showWorkspaceControls, side, stretchModelPicker, t, useWorktreePool,
     taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement,
-    agentSwitcher, worktreeBranch
+    agentSwitcher, worktreeBranch, composerSendKey
   } = context
+  const interrupt = (context.composerInterrupt ?? null) as ComposerInterrupt | null
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
   const rawProviderId = useChatStore((state) => state.composerProviderId)
   const rawModelGroups = useChatStore((state) => state.composerModelGroups)
@@ -199,6 +211,11 @@ export function FloatingComposerSurfaceView({
           </div>
         ) : null}
 
+        {aboveInput}
+        <div className="ds-composer-input-slot" data-composer-input-slot data-interrupt={interrupt?.kind}>
+        {interrupt ? <FloatingComposerInterruptSlot interrupt={interrupt} compact={compact} t={t} /> : null}
+        <div hidden={interrupt ? true : undefined} inert={interrupt ? true : undefined}
+          aria-hidden={interrupt ? true : undefined} data-composer-editor>
         <div
           ref={composerShellRef}
           className={`ds-composer-shell ds-chat-composer ds-frosted ds-no-drag flex flex-col gap-1 transition ${
@@ -480,7 +497,7 @@ export function FloatingComposerSurfaceView({
                   <button
                     type="button"
                     onClick={() => dictation.stop('insert')}
-                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-ink transition hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-ink transition hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/30"
                     aria-label={t('composerVoiceStop')}
                     title={t('composerVoiceStop')}
                   >
@@ -489,7 +506,7 @@ export function FloatingComposerSurfaceView({
                   <button
                     type="button"
                     onClick={() => dictation.stop('send')}
-                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/30"
                     aria-label={t('composerVoiceSend')}
                     title={t('composerVoiceSend')}
                   >
@@ -593,24 +610,14 @@ export function FloatingComposerSurfaceView({
                     </button>
                   ) : null}
                   {!side && promptEnhance?.visible ? <ComposerPromptEnhanceButton enhance={promptEnhance} t={t} /> : null}
-                  <button
-                    type="button"
-                    disabled={primaryActionKind === 'submit' && primaryActionDisabled}
-                    onClick={primaryActionKind === 'interrupt'
-                      ? () => onInterrupt()
-                      : handlePrimaryAction}
-                    className="ds-composer-primary-action ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:bg-ds-card disabled:text-ds-faint"
-                    aria-label={primaryActionKind === 'interrupt' ? t('interrupt') : primaryActionLabel}
-                    title={primaryActionKind === 'interrupt' ? t('interrupt') : primaryActionLabel}
-                  >
-                    {primaryActionKind === 'interrupt' ? (
-                      <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.4} />
-                    ) : primaryActionLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
-                    ) : (
-                      <Send className="h-4 w-4" strokeWidth={2.2} />
-                    )}
-                  </button>
+                  {primaryActionKind === 'queue' && !compact && composerSendKey !== 'shiftEnter' ? (
+                    <span className="ds-composer-queue-hint shrink-0 whitespace-nowrap px-1 text-[12px] text-ds-faint">
+                      {t('composerDock.enterToQueue')}
+                    </span>
+                  ) : null}
+                  <FloatingComposerPrimaryAction kind={primaryActionKind ?? 'submit'} label={primaryActionLabel}
+                    disabled={primaryActionDisabled === true} loading={primaryActionLoading === true}
+                    onInterrupt={() => onInterrupt()} onSubmit={handlePrimaryAction} t={t} />
                 </>
               )}
             </div>
@@ -625,6 +632,8 @@ export function FloatingComposerSurfaceView({
           </div>}
         </div>
         {runtimeReady ? <FloatingComposerFooterView context={context} /> : null}
+        </div>
+        </div>
         {continueDialogOpen && adeComposer?.continuation ? (
           <CodexReferenceDialog
             workspaceRoot={effectiveWorkspaceRoot}

@@ -19,13 +19,13 @@ describe('resolveComposerPrimaryActionKind', () => {
     expect(resolve({ input: '   \n  ' })).toBe('interrupt')
   })
 
-  it('replaces interrupt with submit while a running composer has text', () => {
-    expect(resolve({ input: 'Follow up after this reply' })).toBe('submit')
+  it('queues the draft while a running composer has text', () => {
+    expect(resolve({ input: 'Follow up after this reply' })).toBe('queue')
   })
 
-  it('treats enabled attachments and file references as submit payloads', () => {
-    expect(resolve({ attachmentCount: 1 })).toBe('submit')
-    expect(resolve({ fileReferenceCount: 1 })).toBe('submit')
+  it('treats enabled attachments and file references as queued payloads', () => {
+    expect(resolve({ attachmentCount: 1 })).toBe('queue')
+    expect(resolve({ fileReferenceCount: 1 })).toBe('queue')
     expect(resolve({ attachmentUploadEnabled: false, attachmentCount: 1 })).toBe('interrupt')
     expect(resolve({ fileReferenceEnabled: false, fileReferenceCount: 1 })).toBe('interrupt')
   })

@@ -133,7 +133,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     // Answering and cancelling moved to the composer-docked panel; the bubble
     // is now only a compact record pointing to that actionable surface.
     expect(html).not.toContain('<textarea')
-    expect(html).toContain('Complete this above the input box')
+    expect(html).toContain('Answer below')
     expect(html).not.toContain('Cancel')
   })
 
@@ -168,7 +168,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     // The record still shows what was asked…
     expect(html).toContain('你更想去南方还是北方？')
     // …but offers no live affordances, so it cannot fire a dead resolve.
-    expect(html).not.toContain('Complete this above the input box')
+    expect(html).not.toContain('Answer below')
     // It reads as an ended record rather than an active prompt.
     expect(html).toContain('Cancelled')
   })

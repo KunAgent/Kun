@@ -1,0 +1,20 @@
+{
+  "composerTrayTodo": {
+    "title": "任务清单",
+    "segmentAria": "任务清单：{{step}} · 第 {{current}} / {{total}} 步",
+    "fromPlan": "来自",
+    "outlineLabel": "计划大纲",
+    "outlineSteps_other": "{{count}} 步",
+    "outlineNote": "Graph 编排正在运行，这里是原始计划大纲，不是实时执行进度。",
+    "inProgress": "正在做",
+    "inProgressFor": "正在做 · {{duration}}",
+    "upNext": "下一步",
+    "foldDone_other": "已完成 {{count}} 项",
+    "foldEarlier_other": "前面 {{count}} 项",
+    "foldRemaining_other": "待处理 {{count}} 项",
+    "foldLater_other": "后面 {{count}} 项",
+    "blockedCount_other": "{{count}} 项受阻",
+    "failedCount_other": "{{count}} 项失败",
+    "ownerTitle": "负责人：{{name}}"
+  }
+}

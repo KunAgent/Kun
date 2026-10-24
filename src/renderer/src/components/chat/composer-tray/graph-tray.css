@@ -1,0 +1,377 @@
+/*
+ * Graph tray kind: the segment's progress track, the node map card, the
+ * inspector strip, and the planning-correction sheet (Graph board). Colors
+ * come from palette tokens and composer-tray.css tokens; translucent fills use
+ * color-mix, never Tailwind `/NN` on bare var() colors.
+ */
+
+/*
+ * Segment: 44px accepted-work track between the label and the count. Its tiny
+ * shrink factor lets the label give way first; only on a very short bar does
+ * the track shorten too, never below 16px, so the count is never pushed out.
+ */
+.ds-graph-tray-track {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  min-width: 16px;
+  height: 4px;
+  flex: 0 0.01 44px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ds-composer-tray-border);
+}
+
+.ds-graph-tray-track-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ds-status-running);
+  transition: width 220ms ease-out;
+}
+
+.ds-graph-tray-track[data-tone='waiting'] .ds-graph-tray-track-fill {
+  background: var(--ds-status-warning);
+}
+
+.ds-composer-tray-segment[data-open='true'] .ds-graph-tray-track {
+  background: var(--ds-border-muted);
+}
+
+/*
+ * Leave room for the other segments: long node titles truncate at the same
+ * cap as the other step labels, and when the bar is short the Graph segment
+ * gives up width before its neighbours lose their labels.
+ */
+.ds-composer-tray-segment[data-tray-kind='graph'] .ds-composer-tray-segment-label {
+  max-width: 220px;
+}
+
+.ds-composer-tray-segment-slot[data-composer-stack-item='graph'] {
+  flex-shrink: 3;
+}
+
+.ds-graph-tray-warning-icon {
+  color: var(--ds-status-warning);
+}
+
+[data-theme='dark'] .ds-graph-tray-map {
+  --ds-graph-tray-line: color-mix(in srgb, var(--ds-text) 17%, var(--ds-surface-card));
+}
+
+/* Node map card */
+.ds-graph-tray-map {
+  /* Card borders, edges and waiting dots; --ds-border fades out on dark cards. */
+  --ds-graph-tray-line: var(--ds-border);
+  min-width: 0;
+  margin: 2px 4px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  border-radius: 12px;
+  background: var(--ds-surface-card);
+  box-shadow: var(--ds-composer-chip-shadow);
+  scrollbar-width: thin;
+}
+
+.ds-graph-tray-canvas {
+  position: relative;
+  margin: 0 auto;
+}
+
+.ds-graph-tray-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.ds-graph-tray-edge {
+  fill: none;
+  stroke: var(--ds-graph-tray-line);
+  stroke-width: 1.5;
+}
+
+.ds-graph-tray-edge[data-kind='message'] {
+  stroke-dasharray: 4 4;
+}
+
+.ds-graph-tray-node {
+  position: absolute;
+  display: flex;
+  height: 52px;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--ds-graph-tray-line);
+  border-radius: 10px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 17px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease-out,
+    box-shadow 150ms ease-out,
+    background-color 150ms ease-out;
+}
+
+.ds-graph-tray-node:hover {
+  border-color: color-mix(in srgb, var(--ds-text) 22%, var(--ds-graph-tray-line));
+}
+
+.ds-graph-tray-node:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+.ds-graph-tray-node[data-state='done'] {
+  background: var(--ds-composer-tray-bg);
+}
+
+.ds-graph-tray-node[data-state='running'] {
+  border-color: var(--ds-status-running);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-status-running) 10%, transparent);
+}
+
+.ds-graph-tray-node[data-state='running']:focus-visible {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--ds-status-running) 10%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+.ds-graph-tray-node[data-state='attention'] {
+  border-color: color-mix(in srgb, var(--ds-status-warning) 55%, var(--ds-graph-tray-line));
+}
+
+.ds-graph-tray-node[data-inspected='true']:not([data-state='running']) {
+  border-color: color-mix(in srgb, var(--ds-text) 28%, var(--ds-graph-tray-line));
+}
+
+.ds-graph-tray-node-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ds-graph-tray-node-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-graph-tray-node[data-state='pending'] .ds-graph-tray-node-title {
+  color: var(--ds-text-muted);
+}
+
+.ds-graph-tray-node-meta {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-graph-tray-node-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ds-graph-tray-line);
+}
+
+.ds-graph-tray-node[data-state='running'] .ds-graph-tray-node-dot {
+  background: var(--ds-status-running);
+}
+
+.ds-graph-tray-node[data-state='attention'] .ds-graph-tray-node-dot {
+  background: var(--ds-status-warning);
+}
+
+.ds-graph-tray-node[data-state='failed'] .ds-graph-tray-node-dot {
+  background: var(--ds-status-danger);
+}
+
+.ds-graph-tray-node[data-state='idle'] .ds-graph-tray-node-dot {
+  background: var(--ds-text-faint);
+}
+
+.ds-graph-tray-node-check {
+  flex-shrink: 0;
+  color: var(--ds-status-success);
+}
+
+/* Inspector strip under the map: avatar · title / objective · live work */
+.ds-graph-tray-inspector {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 4px 10px;
+}
+
+.ds-graph-tray-inspector-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ds-graph-tray-inspector-title {
+  display: flex;
+  min-width: 0;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+/* The node title keeps its room; the agent part gives way first. */
+.ds-graph-tray-inspector-name {
+  min-width: 2em;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-graph-tray-inspector-agent {
+  min-width: 0;
+  flex: 0 1000 auto;
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+
+.ds-graph-tray-inspector-line {
+  display: flex;
+  min-width: 0;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.ds-graph-tray-inspector-objective {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-graph-tray-inspector-liveness {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-graph-tray-inspector-liveness[data-tone='waiting'] {
+  color: var(--ds-status-warning);
+}
+
+/* Planning correction sheet */
+.ds-graph-tray-issues {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 2px 4px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ds-surface-card);
+  box-shadow: var(--ds-composer-chip-shadow);
+}
+
+.ds-graph-tray-issue {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ds-graph-tray-issue-icon {
+  display: inline-flex;
+  height: 18px;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--ds-status-warning);
+}
+
+.ds-graph-tray-issue-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ds-graph-tray-issue-message {
+  display: block;
+  color: var(--ds-text);
+  font-size: 13px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.ds-graph-tray-issue-path {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-graph-tray-issue-hint {
+  display: block;
+  margin-top: 2px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+.ds-graph-tray-issue-more {
+  padding-left: 24px;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.ds-graph-tray-correction-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px 2px 10px;
+}
+
+.ds-graph-tray-correction-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.ds-graph-tray-correction-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-graph-tray-track-fill,
+  .ds-graph-tray-node {
+    transition: none;
+  }
+}

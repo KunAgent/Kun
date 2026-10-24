@@ -1,0 +1,31 @@
+{
+  "composerAsk": {
+    "cardLabel": "Kun का सवाल",
+    "previousQuestion": "पिछला सवाल",
+    "nextQuestion": "अगला सवाल",
+    "freeTextPlaceholder": "अपना जवाब लिखें…",
+    "otherPlaceholder": "अन्य — अपना जवाब लिखें…",
+    "ruleAny": "जितने चाहें उतने चुनें",
+    "ruleMax_one": "अधिकतम {{count}} चुनें",
+    "ruleMax_other": "अधिकतम {{count}} चुनें",
+    "ruleMin_one": "कम से कम {{count}} चुनें",
+    "ruleMin_other": "कम से कम {{count}} चुनें",
+    "ruleExact_one": "{{count}} चुनें",
+    "ruleExact_other": "{{count}} चुनें",
+    "ruleRange": "{{min}}–{{max}} चुनें",
+    "hintSingle": "↑↓ या नंबर कीज़ से चुनें, Enter {{enter}}, Esc {{escape}}",
+    "hintMulti": "↑↓ से हिलें, Space से टॉगल करें, Enter {{enter}}",
+    "hintText": "Enter {{enter}}, नई लाइन के लिए Shift+Enter",
+    "hintTextOnly": "Enter {{enter}}, नई लाइन के लिए Shift+Enter, Esc {{escape}}",
+    "hintEnterSubmit": "जमा करने के लिए",
+    "hintEnterNext": "अगले के लिए",
+    "hintEscapeSkip": "छोड़ने के लिए",
+    "hintEscapeBack": "वापस जाने के लिए",
+    "skip": "छोड़ें",
+    "submit": "जमा करें",
+    "next": "अगला",
+    "submitting": "जमा हो रहा है…",
+    "submitFailed": "जवाब नहीं पहुँचा: {{message}}",
+    "submitFailedGeneric": "जवाब नहीं पहुँचा। फिर से कोशिश करें।"
+  }
+}

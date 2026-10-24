@@ -461,6 +461,7 @@ it('passes draft images to branch creation without changing main attachments', a
     })
 
     let renderer: ReactTestRenderer | undefined
+    let clock: { mockRestore: () => void } | undefined
     try {
       await act(async () => {
         renderer = create(createElement(SideConversationPanel, { variant: 'docked' }))
@@ -470,20 +471,23 @@ it('passes draft images to branch creation without changing main attachments', a
         'data-user-input-variant': 'compact'
       })).toBeDefined()
 
+      // The ask card ignores clicks for a moment after it appears (arming).
+      clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1_000)
       const option = renderer!.root.findAllByType('button').find((button) =>
-        textContent(button).includes('Side only')
+        button.props.role === 'option' && textContent(button).includes('Side only')
       )
       expect(option).toBeDefined()
       await act(async () => {
-        option!.props.onClick()
+        option!.props.onClick({ preventDefault: vi.fn() })
       })
 
       const submit = renderer!.root.findAllByType('button').find((button) =>
-        textContent(button).includes('Submit answers')
+        button.props['data-user-input-primary'] === 'submit'
       )
       expect(submit).toBeDefined()
+      expect(textContent(submit!)).toBe('Submit')
       await act(async () => {
-        submit!.props.onClick()
+        submit!.props.onClick({ preventDefault: vi.fn() })
       })
 
       expect(resolveSideUserInput).toHaveBeenCalledWith(
@@ -495,6 +499,7 @@ it('passes draft images to branch creation without changing main attachments', a
         }
       )
     } finally {
+      clock?.mockRestore()
       const mountedRenderer = renderer
       if (mountedRenderer) {
         act(() => mountedRenderer.unmount())

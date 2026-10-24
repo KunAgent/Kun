@@ -1,100 +1,163 @@
+/*
+ * Queue section of the composer activity tray. The tray owns the surface,
+ * the radius and the hairline above; this only lays out the caption, rows
+ * and disclosure. Colors come from palette tokens (never `/NN` on var()).
+ */
 .dock {
-  box-sizing: border-box;
-  width: calc(100% - 1rem);
-  margin: 0 auto -3px;
+  /* A size container, so a narrow tray (the side conversation, or a narrow
+     window) can drop the drag hint and move the first row's actions out of
+     the flow; see the container query after the row actions. */
+  container: composer-queue / inline-size;
+  min-width: 0;
   pointer-events: auto;
 }
 
-.panel {
-  position: relative;
-  overflow: hidden;
-  width: 100%;
-  padding: 2px 0;
-  border-radius: 12px 12px 0 0;
-  background: color-mix(in srgb, var(--ds-surface-subtle) 90%, var(--surface-1));
-}
-
-.panel::after {
-  position: absolute;
-  inset: 0;
-  border: 1px solid color-mix(in srgb, var(--ds-border) 86%, transparent);
-  border-bottom: 0;
-  border-radius: inherit;
-  content: '';
-  pointer-events: none;
-}
-
-.header,
-.row {
+/* Caption: "3 queued · sent in order after this turn" ...... "Drag to reorder" */
+.caption {
   box-sizing: border-box;
   display: flex;
+  min-width: 0;
+  height: 30px;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: 36px;
-}
-
-.header {
-  padding: 4px 12px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ds-text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.header:disabled {
-  cursor: default;
-}
-
-.header:focus-visible,
-.dragHandle:focus-visible,
-.action:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ds-accent) 48%, transparent);
-  outline-offset: -2px;
-}
-
-.lead,
-.chevron {
-  display: grid;
-  flex: none;
-  place-items: center;
+  gap: 8px;
+  padding: 0 10px 0 14px;
   color: var(--ds-text-faint);
+  font-size: 12px;
+  line-height: 16px;
 }
 
-.count {
-  flex: none;
+.captionText {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 24px;
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chevron {
-  width: 14px;
-  height: 14px;
+.captionHint {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
+:global(.ds-composer-tray[data-compact='true']) .caption {
+  padding-left: 12px;
+}
+
+:global(.ds-composer-tray[data-compact='true']) .captionHint {
+  display: none;
+}
+
+/* Paused: pause icon + why + count ...... outlined Continue. */
+.pausedCaption {
+  height: auto;
+  min-height: 36px;
+  padding-right: 6px;
+  color: var(--ds-text-muted);
+}
+
+.pausedIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--ds-status-warning);
+}
+
+.pausedText {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: baseline;
+}
+
+.pausedTitle {
+  color: color-mix(in srgb, var(--ds-text) 78%, var(--ds-text-muted));
+}
+
+.pausedCount {
+  flex: none;
+  color: var(--ds-text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pausedCount::before {
+  margin: 0 5px;
+  content: '·';
+}
+
+.resumeButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ds-surface-card);
+  box-shadow: inset 0 0 0 1px var(--ds-border);
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+:global([data-theme='dark']) .resumeButton {
+  box-shadow: inset 0 0 0 1px var(--ds-border-strong);
+}
+
+.resumeButton:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+}
+
+.resumeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Rows */
 .list {
   max-height: 180px;
-  overflow-y: auto;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
   scrollbar-color: var(--ds-border-strong) transparent;
   scrollbar-width: thin;
-  list-style: none;
 }
 
 .row {
   position: relative;
-  margin: 0 2px;
-  padding: 4px 5px 4px 10px;
-  border-radius: 8px;
-  width: calc(100% - 4px);
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  height: 36px;
+  align-items: center;
+  gap: 6px;
+  margin: 0 5px;
+  padding: 0 4px;
+  border-radius: 10px;
+  color: var(--ds-text);
+  font-size: 13px;
+  line-height: 20px;
+  transition: background-color 120ms ease-out;
+}
+
+/* A lone message has no grip: its text lines up with the caption. */
+.row[data-plain='true'] {
+  padding-left: 9px;
+}
+
+.row:hover,
+.row:has(:focus-visible),
+.row:has([aria-expanded='true']) {
+  background: var(--ds-surface-card);
 }
 
 .row[data-queue-dragging='true'] {
@@ -103,7 +166,7 @@
 
 .row[data-drop-position]::before {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   right: 8px;
   left: 8px;
   height: 2px;
@@ -121,282 +184,353 @@
   bottom: 0;
 }
 
-.preview {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 20px;
-  overflow: hidden;
-  color: var(--ds-text);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  word-break: break-word;
-}
-
-.status {
-  flex: 0 1 auto;
-  max-width: 30%;
-  overflow: hidden;
-  font-size: 11px;
-  line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.imageMeta {
+.grip,
+.lead {
   display: inline-flex;
   flex: none;
+  width: 22px;
+  height: 22px;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
   color: var(--ds-text-faint);
-  font-size: 11px;
-  line-height: 18px;
 }
 
-.badges {
-  display: inline-flex;
-  flex: none;
+.grip {
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: grab;
+}
+
+button.grip:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+button.grip:active {
+  cursor: grabbing;
+}
+
+.gripIdle {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.leadFailed {
+  color: var(--ds-status-danger);
+}
+
+/*
+ * Text and meta split the space between the grip and the actions evenly,
+ * and whichever needs less than its half gives the rest to the other. So
+ * the message, the row's primary content, never gets less than half, and
+ * the meta yields first when the row is narrow.
+ */
+.text {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: max-content;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+/*
+ * Trailing meta: badges, attachments, delivery status. It is one 20px line
+ * that wraps right to left, so whatever does not fit wraps onto a hidden
+ * second line as a whole item instead of being clipped mid-glyph. `order`
+ * sets what yields first: snapshot badges (the leftmost first), then the
+ * attachments; the status stays and ellipsizes as a last resort.
+ */
+.meta {
+  display: flex;
+  flex: 1 1 0;
+  flex-flow: row-reverse wrap;
+  align-content: flex-start;
   align-items: center;
-  gap: 4px;
+  min-width: 0;
+  max-width: max-content;
+  height: 20px;
+  margin-left: auto;
+  overflow: hidden;
+  column-gap: 6px;
+}
+
+.meta:empty {
+  display: none;
+}
+
+/* Without meta, the first row's in-flow actions still sit at the end. */
+.meta:empty + .actions {
+  margin-left: auto;
+}
+
+.row:not([data-first='true']) .meta {
+  padding-right: 6px;
+}
+
+/* Badges take part in the meta line one by one. */
+.badges {
+  display: contents;
 }
 
 .badge {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
+  box-sizing: border-box;
+  display: inline-block;
+  flex: 0 1 auto;
+  min-width: 0;
   height: 18px;
   padding: 0 6px;
-  border: 1px solid var(--ds-border-muted);
-  border-radius: 999px;
-  background: var(--ds-surface-subtle);
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--ds-surface-hover);
   color: var(--ds-text-muted);
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   line-height: 18px;
-  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.paused {
-  color: color-mix(in srgb, #d97706 78%, var(--ds-text));
+/* Row-reverse lays the meta out from the right: status, attachments, then
+   the badges from the last to the first, so they still read left to right. */
+.badge:nth-child(1) { order: 3; }
+.badge:nth-child(2) { order: 2; }
+.badge:nth-child(3) { order: 1; }
+
+.attachments {
+  flex: 0 1 auto;
+  order: -1;
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.queued {
-  color: var(--ds-text-muted);
+:global(.ds-composer-tray[data-compact='true']) .attachments {
+  max-width: 96px;
 }
 
-.failed {
-  color: var(--ds-danger);
+/*
+ * Delivery status: the label stays whole (it only ellipsizes when even it
+ * does not fit); a failure reason follows it while at least ~3 glyphs fit,
+ * otherwise it wraps onto the hidden line and lives in the tooltip.
+ */
+.status {
+  display: inline-flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  order: -2;
+  min-width: 0;
+  height: 20px;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
+.status[data-tone='warning'] {
+  color: var(--ds-status-warning);
+}
+
+.status[data-tone='danger'] {
+  color: var(--ds-status-danger);
+}
+
+.statusLabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusDetail {
+  flex: 1 1 48px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusDetail::before {
+  margin: 0 5px;
+  content: '·';
+}
+
+/* Actions: in flow on the first row; laid over the meta on the others. */
 .actions {
-  display: flex;
+  display: inline-flex;
   flex: none;
   align-items: center;
   gap: 2px;
 }
 
-.dragHandle {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 20px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ds-text-faint);
-  cursor: grab;
+.row:not([data-first='true']) .actions {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 4px 0 18px;
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(to right, transparent, var(--ds-surface-card) 16px);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
 }
 
-.dragHandle:hover {
-  background: var(--ds-surface-hover);
-  color: var(--ds-text);
+.row:not([data-first='true']):hover .actions,
+.row:not([data-first='true']):has(:focus-visible) .actions,
+.row:not([data-first='true']):has([aria-expanded='true']) .actions {
+  opacity: 1;
 }
 
-.dragHandle:active {
-  cursor: grabbing;
+/*
+ * Narrow tray (the side conversation, a narrow window): in-flow actions would
+ * take almost half the first row and squeeze its text, so the first row uses
+ * the same hover / focus overlay as the others and keeps its text and meta
+ * readable. The caption drops its drag hint so the count line stays whole.
+ */
+@container composer-queue (max-width: 480px) {
+  .captionHint {
+    display: none;
+  }
+
+  .row[data-first='true'] .meta {
+    padding-right: 6px;
+  }
+
+  .row[data-first='true'] .actions {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 4px 0 18px;
+    border-radius: 0 10px 10px 0;
+    background: linear-gradient(to right, transparent, var(--ds-surface-card) 16px);
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+
+  .row[data-first='true']:hover .actions,
+  .row[data-first='true']:has(:focus-visible) .actions,
+  .row[data-first='true']:has([aria-expanded='true']) .actions {
+    opacity: 1;
+  }
 }
 
-.action {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--ds-text-faint);
-  cursor: pointer;
-}
-
-.action:hover:not(:disabled),
-.action[aria-expanded='true'] {
-  background: color-mix(in srgb, var(--ds-text) 8%, transparent);
-  color: var(--ds-text);
-}
-
-.action:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-.headerHint {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--ds-text-muted);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.index {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 20px;
-  color: var(--ds-text-muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* The row number doubles as the drag handle: the grip shows on hover/focus. */
-.dragHandle > .index,
-.dragHandle > .grip {
-  grid-area: 1 / 1;
-}
-
-.dragHandle > .grip,
-.row:hover .dragHandle > .index,
-.dragHandle:focus-visible > .index {
-  visibility: hidden;
-}
-
-.row:hover .dragHandle > .grip,
-.dragHandle:focus-visible > .grip {
-  visibility: visible;
-}
-
-.row:hover {
-  background: var(--ds-surface-hover);
-}
-
-.lead.failed {
-  color: var(--ds-danger);
-}
-
-.textAction {
+.nowAction {
   display: inline-flex;
   flex: none;
+  height: 26px;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 8px;
+  gap: 4px;
+  padding: 0 9px;
   border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--ds-text-muted);
+  border-radius: 8px;
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color 120ms ease-out;
 }
 
-.textAction[hidden] {
+.nowAction[hidden] {
   display: none;
 }
 
-.textAction:hover:not(:disabled) {
-  background: var(--ds-accent-soft);
-  color: var(--ds-accent);
+.nowAction:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-text) 8%, var(--ds-surface-hover));
 }
 
-.textAction:disabled {
+.iconAction {
+  display: inline-flex;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ds-text-muted);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.iconAction:hover:not(:disabled),
+.iconAction[aria-expanded='true'] {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.nowAction:disabled,
+.iconAction:disabled {
   cursor: default;
   opacity: 0.45;
 }
 
-.textAction:focus-visible,
-.resumeButton:focus-visible,
-.menuItem:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ds-accent) 48%, transparent);
-  outline-offset: -2px;
-}
-
-.pausedBanner {
+/* "n more" / "Show less" under the first rows. */
+.expander {
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 38px;
-  margin: 0 2px 2px;
-  padding: 0 5px 0 12px;
-  border-bottom: 1px solid var(--ds-border-muted);
-}
-
-.pausedIcon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  background: var(--ds-warning-soft);
-  color: color-mix(in srgb, var(--ds-warning) 82%, var(--ds-text));
-}
-
-.pausedText {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pausedTitle {
-  color: var(--ds-text);
-  font-weight: 500;
-}
-
-.pausedDetail {
-  color: var(--ds-text-muted);
-}
-
-.pausedDetail::before {
-  margin: 0 6px;
-  content: '·';
-}
-
-.resumeButton {
-  display: inline-flex;
-  flex: none;
+  width: calc(100% - 10px);
+  height: 30px;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 12px 0 10px;
+  margin: 0 5px;
+  padding: 0 4px;
   border: 0;
-  border-radius: 8px;
-  background: var(--ds-accent);
-  color: #fff;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ds-text-faint);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
   cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
 }
 
-.resumeButton:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ds-accent) 88%, #000);
+.expander:hover:not(:disabled) {
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
 }
 
-.resumeButton:disabled {
+.expander:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
+.grip:focus-visible,
+.nowAction:focus-visible,
+.iconAction:focus-visible,
+.resumeButton:focus-visible,
+.expander:focus-visible,
+.menuItem:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+/* Row overflow menu (portaled to body). */
 .menu {
   position: fixed;
   z-index: 60;
@@ -406,15 +540,15 @@
   border: 1px solid var(--ds-border);
   border-radius: 10px;
   background: var(--ds-surface-card);
-  box-shadow: 0 12px 32px rgb(17 24 39 / 12%);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 12%, transparent);
 }
 
 .menuItem {
   display: flex;
-  align-items: center;
-  gap: 10px;
   width: 100%;
   height: 32px;
+  align-items: center;
+  gap: 10px;
   padding: 0 10px;
   border: 0;
   border-radius: 7px;
@@ -460,9 +594,13 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation: none; }
-}
 
-.headerHint::before {
-  margin-right: 6px;
-  content: '·';
+  .row,
+  .actions,
+  .nowAction,
+  .iconAction,
+  .resumeButton,
+  .expander {
+    transition: none !important;
+  }
 }

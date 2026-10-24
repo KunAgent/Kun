@@ -21,7 +21,14 @@ export function shouldShowVoiceDictation(
   return speechToText != null && isSpeechToTextConfigured(speechToText, { credentialReady })
 }
 
-export type ComposerPrimaryActionKind = 'interrupt' | 'submit'
+/**
+ * - interrupt: a turn runs and the draft is empty → grey Stop (Esc also stops).
+ * - queue: a turn runs and the draft has a payload → the send queues it.
+ * - submit: idle send.
+ * `queue` and `submit` both run the primary send path (slash commands and
+ * goal drafts still win inside it); only the look and tooltip differ.
+ */
+export type ComposerPrimaryActionKind = 'interrupt' | 'queue' | 'submit'
 
 export function resolveComposerPrimaryActionKind({
   busy,
@@ -42,7 +49,8 @@ export function resolveComposerPrimaryActionKind({
     || (attachmentUploadEnabled && attachmentCount > 0)
     || (fileReferenceEnabled && fileReferenceCount > 0)
 
-  return busy && !hasDraftPayload ? 'interrupt' : 'submit'
+  if (!busy) return 'submit'
+  return hasDraftPayload ? 'queue' : 'interrupt'
 }
 
 export function returnQueuedMessageToComposer(

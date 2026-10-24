@@ -28,9 +28,9 @@ import {
   AssistantExportButton,
   CopyFeedbackButton,
   RuntimeMetaChips,
-  UserInputBubble,
   formatMessageDateTime
 } from './message-timeline-bubble-support'
+import { UserInputRecord } from './timeline-user-input-record'
 import { AssistantSpeakButton } from './AssistantSpeakButton'
 import { AssistantSpeakTrackButton } from './AssistantSpeakTrackButton'
 import { useSpeakStore } from '../../stores/speak-store'
@@ -256,7 +256,7 @@ function MessageBubbleImpl({
   }
   if (block.kind === 'user_input') {
     return (
-      <UserInputBubble
+      <UserInputRecord
         block={block}
         nested={nested}
       />
