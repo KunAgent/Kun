@@ -459,18 +459,21 @@ export function TrayStopButton({
 
 /**
  * Rounded-square agent avatar: one or two glyphs on a solid color, or an
- * icon. Decorative by default; pass `title` to expose a name.
+ * icon. `round` makes it a circle (a Collaboration member's seat). Decorative
+ * by default; pass `title` to expose a name.
  */
 export function TrayAvatar({
   label,
   color,
   size = 'sm',
+  round = false,
   title,
   icon
 }: {
   label?: string
   color?: string
   size?: 'sm' | 'lg'
+  round?: boolean
   title?: string
   icon?: ReactNode
 }): ReactElement {
@@ -480,6 +483,7 @@ export function TrayAvatar({
     <span
       className="ds-composer-tray-avatar"
       data-size={size}
+      data-round={round ? '' : undefined}
       style={style}
       title={title}
       role={title ? 'img' : undefined}

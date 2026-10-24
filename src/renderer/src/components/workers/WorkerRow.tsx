@@ -9,7 +9,7 @@ import {
   workerStatus,
   workerTimeLabel
 } from './worker-presentation'
-import { WorkerAvatar, WorkerQuestionCard, WorkerStatusGlyph } from './WorkerParts'
+import { WorkerAvatar, WorkerQuestionCard } from './WorkerParts'
 import { WorkerMoreMenu, type WorkerMenuItem } from './WorkerMoreMenu'
 
 /**
@@ -19,6 +19,7 @@ import { WorkerMoreMenu, type WorkerMenuItem } from './WorkerMoreMenu'
  */
 export function WorkerRow({
   row,
+  seat,
   now,
   busyAction,
   onOpen,
@@ -28,6 +29,8 @@ export function WorkerRow({
   onDetach
 }: {
   row: WorkerRowData
+  /** The member's seat in its team (see workerSeatMap). */
+  seat: number
   now: number
   busyAction: 'stop' | 'detach' | 'answer' | null
   onOpen: (row: WorkerRowData) => void
@@ -69,7 +72,7 @@ export function WorkerRow({
           data-worker-open={row.workerId}
           className="flex min-w-0 flex-1 gap-[11px] text-left outline-none"
         >
-          <WorkerAvatar workerId={row.workerId} harnessId={row.harnessId ?? row.activityRow?.harnessId} />
+          <WorkerAvatar workerId={row.workerId} seat={seat} status={status.kind} />
           <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-[13.5px] font-semibold leading-[18px] text-ds-ink" title={row.label}>
@@ -97,7 +100,6 @@ export function WorkerRow({
               }`}
               data-tone={status.tone}
             >
-              <WorkerStatusGlyph kind={status.kind} size={status.kind === 'working' ? 12 : 13} />
               <span className="truncate" data-worker-activity>{workerActivityText(row, t)}</span>
             </span>
             {meta.length || diff || row.activityRow?.stalled ? (
