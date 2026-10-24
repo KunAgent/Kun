@@ -14,9 +14,10 @@ export function noteAnalyticsRoomMessage(id: string, createdAt: string) {
 export function clearAnalyticsPresentation() { liveTurns.clear(); liveRoomMessages.clear() }
 export function useResultPresented(block: ChatBlock) {
   useEffect(() => {
+    if (!productCaptureEnabled()) return
     if (block.kind !== 'assistant' || block.id === 'live-assistant' || !block.turnId || !block.text.trim() || document.hidden) return
     const state = useChatStore.getState(), key = state.activeThreadId + ':' + block.turnId
-    if (state.route !== 'chat' || !productCaptureEnabled() || !liveTurns.delete(key)) return
+    if (state.route !== 'chat' || !liveTurns.delete(key)) return
     const epochTime = captureSince
     void analyticsRunKey(key).then(runKey => { if (captureSince === epochTime) trackProduct({ name: 'result_presented', properties: { mode: 'code', runKey, outputPresent: true } }) }).catch(() => {})
   }, [block])

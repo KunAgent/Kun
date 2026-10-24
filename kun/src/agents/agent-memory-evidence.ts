@@ -16,7 +16,7 @@ export async function collectAgentMemoryEvidence(deps: RoomRuntimeDeps, job: Age
   const request = await deps.store.get<RoomRequestState>('request', job.rootRequestId)
   const add = (id: string, text: string, kind: MemorySourceEvidence['kind'], locator: string, author: string,
     metadata: Partial<MemorySourceEvidence> = {}) => {
-    if (sources.length >= 8 || sources.some((source) => source.id === id)) return false
+    if (!text.trim() || sources.length >= 8 || sources.some((source) => source.id === id)) return false
     const trust = kind === 'user' ? 'explicit-user' : kind === 'tool' ? 'observed' : 'inferred'
     const sourceId = id.length <= 128 ? id : 'src_' + createHash('sha256').update(id).digest('hex').slice(0, 24)
     sources.push({ id: sourceId, kind, locator, threadId: job.rootRequestId, itemId: id, excerpt: text.slice(0, 512),

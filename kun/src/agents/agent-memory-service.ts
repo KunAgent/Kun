@@ -104,7 +104,7 @@ export class AgentMemoryService {
       if (!row || row.roomId !== conversationId || row.value.status !== 'final') throw new Error('agent memory source message not found')
       sources.push({ id, kind: row.value.authorKind === 'user' ? 'user' as const : 'inference' as const,
         locator: 'room:' + conversationId + '/message:' + id,
-        excerpt: row.value.body.slice(0, 512),
+        excerpt: row.value.body.trim() ? row.value.body.slice(0, 512) : undefined,
         contentHash: createHash('sha256').update(row.value.body).digest('hex'),
         trust: row.value.authorKind === 'user' ? 'explicit-user' as const : 'inferred' as const })
     }
@@ -150,7 +150,7 @@ export class AgentMemoryService {
     this.scrubDue = false
     this.scrubbedAt = now
     try {
-      await scrubForgottenAgentMemory(this)
+      await scrubForgottenAgentMemory(this, { force: options.force, now })
     } catch (error) {
       this.scrubDue = true
       throw error
