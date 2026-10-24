@@ -8,6 +8,8 @@ on:
       - 'scripts/fixtures/memory-lifecycle.tsx'
       - 'scripts/fixtures/memory-lifecycle-backend.ts'
       - 'scripts/memory-lifecycle-backend.test.mjs'
+      - 'scripts/memory-lifecycle-renderer.mjs'
+      - 'scripts/memory-lifecycle-renderer.test.mjs'
       - 'scripts/memory-cjk-fonts.mjs'
       - 'scripts/memory-cjk-fonts.test.mjs'
       - 'src/renderer/src/components/memory/**'
@@ -65,7 +67,7 @@ jobs:
           src/renderer/src/agent/kun-runtime-memory-lifecycle.test.ts
           src/renderer/src/agent/kun-runtime-memory-feedback.test.ts
       - name: Verify real isolated store lifecycle and anti-replay
-        run: node --test scripts/memory-lifecycle-backend.test.mjs scripts/memory-cjk-fonts.test.mjs
+        run: node --test scripts/memory-lifecycle-backend.test.mjs scripts/memory-cjk-fonts.test.mjs scripts/memory-lifecycle-renderer.test.mjs
       - name: Exercise real memory components and stores in isolated native Electron
         env:
           KUN_MEMORY_EVIDENCE: dist/memory-workbench
