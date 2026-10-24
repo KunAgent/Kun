@@ -20,7 +20,7 @@ function fixture() {
         : path.endsWith('/relay-tickets') ? { url: 'wss://relay.test/ws', ticket: 'ticket' }
           : { ok: true })
   }) as unknown as ReturnType<typeof vi.fn<typeof fetch>>
-  const deps: LinkDependencies = {
+  const deps: LinkDependencies = { requireMembership: async () => {},
     account: { getState: async () => state, accessToken: async () => 'token',
       expire: async () => {}, onState: () => () => {} },
     identity: async () => ({ id: host, credential: 'a'.repeat(64) }),

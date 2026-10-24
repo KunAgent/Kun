@@ -25,7 +25,7 @@ describe('desktop remembered startup with the real relay service', () => {
             : { ok: true })
     }) as unknown as ReturnType<typeof vi.fn<typeof fetch>>
     const sockets: Socket[] = []
-    const service = new MobileLinkService({ account, origin: 'https://relay.test', name: 'desktop', platform: 'macos',
+    const service = new MobileLinkService({ requireMembership: async () => {}, account, origin: 'https://relay.test', name: 'desktop', platform: 'macos',
       fetch: fetcher, identity: async () => ({ id: '11111111-1111-4111-8111-111111111111', credential: 'a'.repeat(64) }),
       lease: vi.fn(), socket: () => {
         const socket: Socket = { onopen: null, onmessage: null, onerror: null, onclose: null,

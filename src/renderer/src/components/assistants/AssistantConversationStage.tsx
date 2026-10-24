@@ -45,6 +45,8 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
   const { t, i18n } = useTranslation('common')
   const language = i18n.language || 'en'
   const { status, busy, error } = useAssistantMailboxStore()
+  const allowed = status?.availability === 'available'
+  const membershipMessage = t(status?.availability === 'upgrade_required' ? 'assistantVipRequired' : 'assistantVipUnavailable')
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState<AssistantTaskView | null>(null)
   const [focusSignal, setFocusSignal] = useState(0)
@@ -83,7 +85,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
   const subject = assistant ?? enrollment
   const product = subject ? assistantProductLabel(subject.kind, subject.product) : ''
   const expired = enrollment ? Date.parse(enrollment.expiresAt) <= Date.now() : false
-  const tag = assistant ? t('assistantTag') : enrollment?.requests.length ? t('assistantTagApprove') : t('assistantTagEnrolling')
+  const tag = !allowed ? t('assistantVipPaused') : assistant ? t('assistantTag') : enrollment?.requests.length ? t('assistantTagApprove') : t('assistantTagEnrolling')
   const subtitle = assistant
     ? [product, assistant.lastSeenAt ? t('assistantMailboxLastSeen', { time: relativeTime(assistant.lastSeenAt, language) }) : t('assistantMailboxNeverSeen'), t('assistantE2E'), t(assistant.reportedVersion ? 'assistantProgramVersion' : 'assistantProgramLegacy', { version: assistant.reportedVersion ?? assistant.agentVersion }), assistant.updateError ? t(assistant.updateError === 'update_available' ? 'assistantProgramUpdateAvailable' : 'assistantProgramUpdateFailed') : '']
     : enrollment ? [product, expired ? t('assistantCodeExpiredShort') : t('assistantCodeExpires', { time: relativeTime(enrollment.expiresAt, language) })] : []
@@ -97,7 +99,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
     if (enrollment) void assistantMailbox.cancelEnrollment(enrollment.enrollmentId).then((result) => { if (result) closeAssistantConversation() })
   }
   const send = async ({ body, deadline }: { body: string; deadline?: string }): Promise<boolean> => {
-    if (!assistant) return false
+    if (!assistant || !allowed) return false
     const done = replyTo ? await assistantMailbox.reply(replyTo.id, body) : await assistantMailbox.assign({ assistantId: assistant.id, body, ...(deadline ? { deadline } : {}) })
     if (!done) return false
     setDraft('')
@@ -156,17 +158,20 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
       {missing ? <div className="m-auto flex flex-col items-center gap-3 text-center text-[13px] text-ds-muted">
         <p role="status">{missing}</p>
         {status && !subject ? <button type="button" onClick={closeAssistantConversation} className="h-8 rounded-lg border border-ds-border-muted bg-ds-card px-3 text-[12.5px] text-ds-ink">{t('assistantMailboxClose')}</button> : null}
+      </div> : enrollment && !allowed ? <div className="m-auto flex flex-col items-center gap-3 text-center text-[13px] text-ds-muted">
+        <p role="status">{membershipMessage}</p>
+        <button type="button" disabled={busy} onClick={() => void assistantMailbox.refresh()} className="text-accent">{t('assistantMailboxRefresh')}</button>
       </div> : enrollment ? expired ? <div className="m-auto flex flex-col items-center gap-3 text-center text-[13px] text-ds-muted">
         <p role="status">{t('assistantMailboxCodeExpired')}</p>
         <button type="button" onClick={cancelEnrollment} className="h-8 rounded-lg border border-ds-border-muted bg-ds-card px-3 text-[12.5px] text-ds-ink">{t('assistantCancelEnrollment')}</button>
       </div> : <AssistantEnrollmentFlow enrollment={enrollment} busy={busy} />
-        : assistant ? mine ? <AssistantThread assistant={assistant} tasks={status!.tasks} notes={status!.notes} busy={busy} onReply={reply} onCancel={cancelTask} />
+        : assistant ? mine ? <AssistantThread assistant={assistant} tasks={status!.tasks} notes={status!.notes} busy={busy || !allowed} onReply={reply} onCancel={cancelTask} />
           : <ConnectedHero assistant={assistant} onPick={(text) => { setDraft(text); setFocusSignal((value) => value + 1) }} /> : null}
     </div>
     <footer className="flex shrink-0 justify-center px-5 pb-4 pt-2">
-      {assistant && assistant.keyAvailable && status?.availability !== 'upgrade_required' ? <AssistantComposer assistant={assistant} draft={draft} onDraft={setDraft} replyTo={replyTo}
+      {assistant && assistant.keyAvailable && allowed ? <AssistantComposer assistant={assistant} draft={draft} onDraft={setDraft} replyTo={replyTo}
         onClearReply={() => setReplyTo(null)} busy={busy} onSend={send} focusSignal={focusSignal} />
-        : <AssistantComposerPlaceholder text={status?.availability === 'upgrade_required' ? t('assistantVipRequired') : assistant ? t('assistantMailboxKeyMissing') : enrollment?.requests.length ? t('assistantComposerAfterApprove') : t('assistantComposerAfterConnect')} />}
+        : <AssistantComposerPlaceholder text={!allowed ? membershipMessage : assistant ? t('assistantMailboxKeyMissing') : enrollment?.requests.length ? t('assistantComposerAfterApprove') : t('assistantComposerAfterConnect')} />}
     </footer>
   </section>
 }

@@ -13,7 +13,7 @@ export type AssistantPromptLocale = 'zh' | 'en'
 export type AssistantTaskStatus = 'queued' | 'sent' | 'received' | 'working' | 'done' | 'blocked' | 'failed' | 'cancelled'
 
 /** `unavailable` means the server has not enabled the mailbox (it answers 404). */
-export type AssistantMailboxAvailability = 'unknown' | 'available' | 'unavailable' | 'login_required' | 'disabled' | 'upgrade_required'
+export type AssistantMailboxAvailability = 'unknown' | 'available' | 'unavailable' | 'login_required' | 'disabled' | 'upgrade_required' | 'entitlements_unavailable'
 
 export type AssistantView = {
   id: string

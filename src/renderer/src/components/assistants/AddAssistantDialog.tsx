@@ -5,7 +5,7 @@ import { ASSISTANT_NAME_MAX, type AssistantPromptLocale } from '@shared/assistan
 import { RoomModal } from '../rooms/RoomModal'
 import { AssistantLogo } from './AssistantLogo'
 import { ASSISTANT_PRESETS, assistantPreset } from './assistant-catalog'
-import { assistantMailbox, useAssistantMailboxStore } from './assistant-mailbox-store'
+import { assistantMailbox, startAssistantMailbox, useAssistantMailboxStore } from './assistant-mailbox-store'
 import { AssistantSteps } from './AssistantSteps'
 
 const INPUT = 'h-9 w-full rounded-[10px] border border-ds-border-muted bg-ds-card px-3 text-[13px] text-ds-ink outline-none transition focus:border-ds-border-strong'
@@ -31,7 +31,9 @@ function SelectedMark(): ReactElement {
 /** Step 1 of connecting an assistant: which product, what to call it, and the prompt language. */
 export function AddAssistantForm({ onClose, onCreated }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
-  const { busy, error } = useAssistantMailboxStore()
+  const { busy, error, status } = useAssistantMailboxStore()
+  const [checking, setChecking] = useState(true)
+  const [verified, setVerified] = useState(false)
   const [kind, setKind] = useState<string>('cue')
   const [product, setProduct] = useState('')
   const [website, setWebsite] = useState('')
@@ -39,17 +41,22 @@ export function AddAssistantForm({ onClose, onCreated }: Props): ReactElement {
   const [locale, setLocale] = useState<AssistantPromptLocale>((i18n.language ?? '').startsWith('zh') ? 'zh' : 'en')
   const first = useRef<HTMLButtonElement>(null)
   useEffect(() => {
+    let current = true
     assistantMailbox.clearError()
+    startAssistantMailbox()
+    void assistantMailbox.refresh().then(result => { if (current) setVerified(result?.availability === 'available') })
+      .finally(() => { if (current) setChecking(false) })
     // The modal opens after this effect, and opening it moves focus to its first control.
     const frame = requestAnimationFrame(() => first.current?.focus())
-    return () => cancelAnimationFrame(frame)
+    return () => { current = false; cancelAnimationFrame(frame) }
   }, [])
   const custom = kind === 'other'
   const preset = assistantPreset(kind)
   const label = custom ? product.trim() : preset?.name ?? ''
   const defaultName = label ? t('assistantMailboxDefaultName', { kind: label }) : t('assistantMailboxKindOther')
   const finalName = (name.trim() || defaultName).slice(0, ASSISTANT_NAME_MAX)
-  const ready = !busy && (!custom || product.trim().length > 0)
+  const allowed = verified && !checking && status?.availability === 'available'
+  const ready = allowed && !busy && (!custom || product.trim().length > 0)
 
   const submit = async (): Promise<void> => {
     if (!ready) return
@@ -66,6 +73,12 @@ export function AddAssistantForm({ onClose, onCreated }: Props): ReactElement {
     <AssistantSteps current={1} />
     <p className="text-[13px] leading-[20px] text-ds-muted">{t('assistantMailboxDialogHint')}</p>
     <p className="text-[12px] font-medium text-ds-muted">{t('assistantVipFeature')}</p>
+    {!allowed ? <p role="status" className="text-[13px] text-ds-muted">{t(checking ? 'assistantLoading' : status?.availability === 'upgrade_required' ? 'assistantVipRequired' : 'assistantVipUnavailable')}
+      {!checking ? <button type="button" disabled={busy} className="ml-2 text-accent" onClick={() => {
+        setVerified(false); setChecking(true)
+        void assistantMailbox.refresh().then(result => setVerified(result?.availability === 'available')).finally(() => setChecking(false))
+      }}>{t('assistantMailboxRefresh')}</button> : null}
+    </p> : null}
     <fieldset className="flex flex-col gap-2" disabled={busy}>
       <legend className="sr-only">{t('assistantMailboxKind')}</legend>
       <div className="grid grid-cols-3 gap-2">

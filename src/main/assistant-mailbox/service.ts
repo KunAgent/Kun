@@ -23,6 +23,7 @@ const PROBE_TTL_MS = 10 * 60_000
 
 export type AssistantMailboxDeps = {
   origin: string
+  requireMembership(owner: string): Promise<void>
   account: {
     getState(): Promise<KunAccountState>
     accessToken(force?: boolean): Promise<string | null>
@@ -159,11 +160,12 @@ export class AssistantMailboxService {
   }
 
   /** Runs a host call; a 401 retries once with a refreshed access token. */
-  private async withHost<T>(work: (session: Session) => Promise<T>): Promise<T> {
+  private async withHost<T>(work: (session: Session) => Promise<T>, paid = false): Promise<T> {
     if (!(await this.deps.enabled())) throw new AssistantMailboxError('DISABLED')
     if (!(await this.probe())) throw new AssistantMailboxError('UNAVAILABLE')
     const session = await this.currentSession()
     if (!session) throw new AssistantMailboxError('LOGIN_REQUIRED')
+    if (paid) await this.checkMembership(session)
     await this.register(session)
     try {
       return await work(session)
@@ -181,14 +183,29 @@ export class AssistantMailboxService {
     const response = await this.deps.fetch(`${this.deps.origin}/api/assistants/v1/status`, { method: 'GET', redirect: 'error' })
     await response.body?.cancel().catch(() => {})
     this.probedAt = Date.now()
-    this.availability = response.status === 404 ? 'unavailable' : 'available'
-    return this.availability === 'available'
+    if (response.status === 404) this.availability = 'unavailable'
+    return response.ok
+  }
+
+  private async checkMembership(session: Session): Promise<void> {
+    try {
+      await this.deps.requireMembership(session.owner)
+      if (this.session !== session) throw new AssistantMailboxError('ACCOUNT_CHANGED')
+    } catch (error) {
+      const code = (error as { code?: string })?.code
+      this.availability = code === 'vip_personal_assistant_required' ? 'upgrade_required' : 'entitlements_unavailable'
+      this.error = code ?? 'ENTITLEMENTS_UNAVAILABLE'
+      this.schedule()
+      this.deps.emit(await this.snapshot())
+      throw error
+    }
   }
 
   private async sync(session: Session): Promise<void> {
     const listed = await session.host.list()
     session.assistants = listed.assistants
     session.enrollments = listed.enrollments
+    await this.checkMembership(session)
     await this.flushTasks(session, listed.assistants)
     const names = new Map(listed.assistants.map((assistant) => [assistant.id, assistant.name]))
     let received = 0
@@ -265,9 +282,12 @@ export class AssistantMailboxService {
         this.failures = 0
         this.error = undefined
       } catch (error) {
-        if (error instanceof MailboxRequestError && error.code === 'vip_personal_assistant_required') {
+        if ((error as { code?: string })?.code === 'vip_personal_assistant_required') {
           this.availability = 'upgrade_required'
           this.error = 'vip_personal_assistant_required'
+        } else if ((error as { code?: string })?.code === 'ENTITLEMENTS_UNAVAILABLE') {
+          this.availability = 'entitlements_unavailable'
+          this.error = 'ENTITLEMENTS_UNAVAILABLE'
         } else if (error instanceof AssistantMailboxError && error.code === 'LOGIN_REQUIRED') this.availability = 'login_required'
         else {
           this.failures = Math.min(this.failures + 1, 6)
@@ -283,7 +303,7 @@ export class AssistantMailboxService {
   }
 
   async snapshot(): Promise<AssistantMailboxStatus> {
-    const session = ['available', 'upgrade_required'].includes(this.availability) ? this.session : null
+    const session = ['available', 'upgrade_required', 'entitlements_unavailable'].includes(this.availability) ? this.session : null
     if (!session) {
       return { availability: this.availability, assistants: [], enrollments: [], tasks: [], notes: [], ...(this.error ? { error: this.error } : {}) }
     }
@@ -328,8 +348,9 @@ export class AssistantMailboxService {
         const result = await session.host.createEnrollment({ name, kind, locale })
         if (product || website) await session.profiles.update(result.enrollmentId, { ...(product ? { product } : {}), ...(website ? { website } : {}) })
         return result
-      })
+      }, true)
       const session = this.session
+      this.availability = 'available'
       if (session) session.enrollments = [...session.enrollments, { enrollmentId: created.enrollmentId, name, kind, expiresAt: created.expiresAt, requests: [] }]
       if (session && website && this.deps.fetchIcon) {
         void this.deps.fetchIcon(website).then(async (icon) => {
@@ -349,7 +370,7 @@ export class AssistantMailboxService {
     return this.serial(() => this.withHost(async (session) => {
       const enrollment = session.enrollments.find((item) => item.enrollmentId === enrollmentId)
       return enrollment ? session.host.promptFor({ enrollmentId, kind: enrollment.kind, locale }) : null
-    }))
+    }, true))
   }
 
   /** Answers a task (usually one the assistant marked blocked) with a note about it. */
@@ -362,7 +383,7 @@ export class AssistantMailboxService {
       const assistant = await this.findAssistant(session, task.assistantId)
       const message = await session.host.send(assistant, { kind: 'note', inReplyTo: taskId, body: text })
       await session.tasks.addOutgoingNote({ id: message.id, assistantId: assistant.id, assistantName: assistant.name, body: text, at: message.createdAt, inReplyTo: taskId })
-    }))
+    }, true))
     const status = await this.snapshot()
     this.deps.emit(status)
     return status
@@ -370,7 +391,7 @@ export class AssistantMailboxService {
 
   /** Admits a join request the user recognised; only the user can do this, never a Kun tool. */
   async approve(enrollmentId: string, requestId: string, verificationCode: string): Promise<AssistantMailboxStatus> {
-    await this.serial(() => this.withHost((session) => session.host.approve(enrollmentId, requestId, verificationCode)))
+    await this.serial(() => this.withHost((session) => session.host.approve(enrollmentId, requestId, verificationCode), true))
     return this.refresh()
   }
 
@@ -420,7 +441,7 @@ export class AssistantMailboxService {
         const queued = await session.tasks.queueTask(prepared, assistant.name)
         await this.flushTasks(session)
         return (await session.tasks.task(queued.id))!
-      })
+      }, true)
       this.deps.emit(await this.snapshot())
       return task
     })
@@ -436,7 +457,7 @@ export class AssistantMailboxService {
         await this.flushTasks(session)
         await session.host.cancel(assistant, taskId, reason)
         return (await session.tasks.markCancelled(taskId, this.now()))!
-      })
+      }, true)
       this.deps.emit(await this.snapshot())
       return task
     })

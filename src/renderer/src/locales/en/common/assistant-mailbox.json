@@ -118,5 +118,7 @@
   "assistantProgramUpdateFailed": "Last update failed",
   "assistantUpdatesNotConfigured": "Signed updates are not configured for this build yet.",
   "assistantVipRequired": "Personal assistants require Pro or Max. Refresh after activating or renewing membership to resume the existing connection.",
-  "assistantVipFeature": "Included with Pro / Max membership"
+  "assistantVipFeature": "Included with Pro / Max membership",
+  "assistantVipUnavailable": "Membership could not be verified. Personal assistants are paused. Refresh membership and try again.",
+  "assistantVipPaused": "Paused"
 }

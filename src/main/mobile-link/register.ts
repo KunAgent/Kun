@@ -1,4 +1,4 @@
-import { readAccountEntitlements } from '../account-entitlements'
+import { readAccountEntitlements, requireAccountFeature } from '../account-entitlements'
 import { transferSharedFiles } from './share-file-services'
 import { MobileDesktopSchedules } from './desktop-schedules'
 import { app, ipcMain, net, powerMonitor } from 'electron'
@@ -50,6 +50,7 @@ export function registerMobileLink(
   const desktopSchedules = new MobileDesktopSchedules(options)
   const service = new MobileLinkService({
     account,
+    requireMembership: (owner) => requireAccountFeature(account, (input, init) => net.fetch(String(input), init), 'mobileRemote', owner),
     origin: 'https://api-kun-server.com',
     name: hostname(),
     appVersion: app.getVersion(),

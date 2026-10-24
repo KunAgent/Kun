@@ -24,6 +24,7 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
   const registrations: unknown[] = []
   let delivery: 'normal' | 'drop' | 'offline' | 'reject' = 'normal'
   let membershipActive = true
+  let admissionError: string | null = null
   const sends: Array<{ messageId: string; envelope: string }> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(String(input))
@@ -31,6 +32,7 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
       return Response.json({ error: 'vip_personal_assistant_required' }, { status: 403 })
     }
     if (options.serverEnabled === false && url.pathname.startsWith('/api/assistants/')) return Response.json({ error: 'not_found' }, { status: 404 })
+    if (url.pathname === '/api/assistants/v1/status') return Response.json({ enabled: true })
     if (url.pathname === '/api/remote/v1/devices') {
       registrations.push({ device: new Headers(init?.headers).get('X-Kun-Device'), body: JSON.parse(String(init?.body)) })
       return Response.json({ deviceId: host.deviceId, enabled: false })
@@ -50,6 +52,7 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
   const timers: Array<{ ms: number }> = []
   const dependencies: AssistantMailboxDeps = {
     origin: ORIGIN,
+    requireMembership: async () => { if (admissionError) throw Object.assign(new Error(admissionError), { code: admissionError }) },
     account: { getState: async () => state, accessToken: async () => host.accessToken, onState: () => () => {} },
     identity: async () => ({ id: host.deviceId, credential: host.deviceCredential }),
     storageDir: join(dir, 'desktop'),
@@ -88,11 +91,36 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
   return { server, get service() { return service }, run, connect, emitted, timers, registrations, sends,
     setDelivery: (mode: typeof delivery) => { delivery = mode },
     setMembership: (active: boolean) => { membershipActive = active },
+    setAdmission: (code: string | null) => { admissionError = code },
     persisted: async () => JSON.parse(await readFile(join(dir, 'desktop', 'user-1', 'tasks.json'), 'utf8')),
     restart: () => { service.dispose(); service = new AssistantMailboxService(dependencies) } }
 }
 
 describe('assistant mailbox service', () => {
+  for (const code of ['ENTITLEMENTS_UNAVAILABLE', 'vip_personal_assistant_required']) it(`denies new enrollment before a permissive legacy server can receive it: ${code}`, async () => {
+    const t = await setup()
+    t.setAdmission(code)
+    try {
+      await expect(t.service.createEnrollment({ name: 'Legacy', kind: 'dots', locale: 'zh' })).rejects.toMatchObject({ code })
+      expect(t.registrations).toHaveLength(0)
+      expect((await t.service.snapshot()).enrollments).toHaveLength(0)
+    } finally { t.service.dispose() }
+  })
+
+  it('hides old pairing prompts and blocks approval and new tasks while preserving cancellation and bound history', async () => {
+    const t = await setup()
+    const enrollment = await t.service.createEnrollment({ name: 'Legacy', kind: 'dots', locale: 'zh' })
+    t.setAdmission('ENTITLEMENTS_UNAVAILABLE')
+    try {
+      await expect(t.service.promptFor(enrollment.enrollmentId, 'zh')).rejects.toMatchObject({ code: 'ENTITLEMENTS_UNAVAILABLE' })
+      await expect(t.service.approve(enrollment.enrollmentId, 'request', 'CODE')).rejects.toMatchObject({ code: 'ENTITLEMENTS_UNAVAILABLE' })
+      await expect(t.service.assign({ assistantId: 'assistant', body: 'Must not be queued' })).rejects.toMatchObject({ code: 'ENTITLEMENTS_UNAVAILABLE' })
+      expect((await t.service.refresh()).enrollments[0].enrollmentId).toBe(enrollment.enrollmentId)
+      expect(t.sends).toHaveLength(0)
+      expect((await t.service.cancelEnrollment(enrollment.enrollmentId)).enrollments).toEqual([])
+    } finally { t.service.dispose() }
+  })
+
   it('stays idle while the Lab switch is off or the server has not opened the mailbox', async () => {
     const off = await setup({ enabled: false })
     expect((await off.service.refresh()).availability).toBe('disabled')

@@ -16,6 +16,7 @@ const api = () => (typeof window === 'undefined' ? undefined : window.kunGui?.as
 function message(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error)
   if (text.includes('vip_personal_assistant_required')) return i18n.t('assistantVipRequired', { ns: 'common' })
+  if (text.includes('ENTITLEMENTS_UNAVAILABLE')) return i18n.t('assistantVipUnavailable', { ns: 'common' })
   if (text.includes('updates_not_configured')) return i18n.t('assistantUpdatesNotConfigured', { ns: 'common' })
   return text.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 }
@@ -33,7 +34,7 @@ export function startAssistantMailbox(): void {
   mailbox.onStatus(set)
   timer = setInterval(() => {
     const status = useAssistantMailboxStore.getState().status
-    if (status?.enrollments.length && document.visibilityState === 'visible') void mailbox.status().then(set).catch(() => {})
+    if (status?.availability === 'available' && status.enrollments.length && document.visibilityState === 'visible') void mailbox.status().then(set).catch(() => {})
   }, 5000)
 }
 

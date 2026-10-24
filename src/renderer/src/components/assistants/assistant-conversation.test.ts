@@ -45,7 +45,7 @@ let current = status()
 beforeEach(() => {
   current = status()
   Object.assign(window, { kunGui: { assistantMailbox: {
-    status: async () => current, onStatus: () => () => {}, promptFor: async () => ({ code: 'KUN2-x', prompt: 'Install kun-agent and log in.' })
+    status: async () => current, refresh: async () => current, onStatus: () => () => {}, promptFor: async () => ({ code: 'KUN2-x', prompt: 'Install kun-agent and log in.' })
   } } })
 })
 afterEach(() => resetAssistantMailboxForTests())
@@ -64,6 +64,35 @@ async function stage(selection: { kind: 'assistant' | 'enrollment'; id: string }
 }
 
 describe('assistant conversation', () => {
+  for (const mode of ['upgrade_required', 'entitlements_unavailable', 'stale_available'] as const) it(`disables creating a code until a fresh paid check succeeds: ${mode}`, async () => {
+    current = status({ availability: mode === 'stale_available' ? 'available' : mode })
+    useAssistantMailboxStore.setState({ status: current })
+    let creates = 0
+    Object.assign(window.kunGui!.assistantMailbox!, {
+      createEnrollment: async () => { creates++; throw new Error('must not run') },
+      refresh: async () => { if (mode === 'stale_available') throw new Error('offline'); return current }
+    })
+    const host = document.createElement('div'), root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(AddAssistantForm, { onClose: () => {}, onCreated: () => {} })))
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+      expect((host.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(true)
+      await act(async () => { host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+      expect(creates).toBe(0)
+    } finally { act(() => root.unmount()) }
+  })
+  for (const availability of ['upgrade_required', 'entitlements_unavailable'] as const) it(`removes install and approval actions while keeping cancel and history: ${availability}`, async () => {
+    const enrollment = { enrollmentId: 'en-1', name: 'My dots', kind: 'dots', expiresAt: new Date(Date.now() + 600000).toISOString(), requests: [request] }
+    const pending = await stage({ kind: 'enrollment', id: 'en-1' }, status({ availability, assistants: [], enrollments: [enrollment] }))
+    expect(pending.html).not.toContain('data-testid="assistant-prompt"')
+    expect(pending.text).not.toContain('7KQ2M-X9CHD')
+    expect(pending.text).toContain(text('assistantCancelEnrollment'))
+    expect(pending.text).toContain(text(availability === 'upgrade_required' ? 'assistantVipRequired' : 'assistantVipUnavailable'))
+    const history = await stage({ kind: 'assistant', id: 'as-1' }, status({ availability }))
+    expect(history.text).toContain('Task t-1')
+    expect(history.html).not.toContain('<textarea')
+  })
+
   it('orders tasks, reports and notes, and asks for a reply only on the latest blocked report', () => {
     const entries = assistantTimeline('as-1', status().tasks, status().notes)
     expect(entries.map((entry) => entry.type === 'task' ? `task:${entry.task.id}` : entry.type === 'note' ? `note:${entry.note.id}`

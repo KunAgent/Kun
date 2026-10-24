@@ -25,7 +25,7 @@ async function fixture(directory = true) {
       headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' } })
     return { ok: response.ok, status: response.status, body: await response.text() }
   }
-  const deps: LinkDependencies = {
+  const deps: LinkDependencies = { requireMembership: async () => {},
     account: { getState: async () => ({ status: 'authenticated', error: null,
       user: { id: 'owner', name: 'Owner', email: 'owner@test.invalid', avatarUrl: null } }),
     accessToken: async () => 'account-token', expire: async () => {}, onState: () => () => {} },

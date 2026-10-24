@@ -15,6 +15,7 @@ import { assistantMailboxEnabled } from './mcp-config'
 import { electronSecretCipher, type SecretCipher } from './secret-store'
 import { fetchSiteIcon } from './site-icon'
 import { AssistantMailboxService } from './service'
+import { requireAccountFeature } from '../account-entitlements'
 import { AssistantToolEndpoint, assistantToolEndpointPaths } from './tool-endpoint'
 import { ASSISTANT_TOOL_ROUTES, assistantToolHandler } from './tool-routes'
 
@@ -33,6 +34,7 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
   const service = new AssistantMailboxService({
     origin: ORIGIN,
     account,
+    requireMembership: (owner) => requireAccountFeature(account, fetchViaNet, 'personalAssistant', owner, ORIGIN),
     identity: (owner) => loadIdentity(join(userData, 'mobile-link', owner, 'identity.enc')),
     storageDir: join(userData, 'assistant-mailbox'),
     cipher: () => (cipher ??= electronSecretCipher().catch((error: unknown) => { cipher = null; throw error })),

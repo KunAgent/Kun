@@ -24,7 +24,7 @@ function fixture() {
       receipt: { status: 'applied', result: { ok: true } }
     })
   }))
-  const deps: LinkDependencies = {
+  const deps: LinkDependencies = { requireMembership: async () => {},
     account: {
       getState: async () => accountState,
       accessToken: async () => 'token',

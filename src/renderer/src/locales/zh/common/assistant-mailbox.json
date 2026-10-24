@@ -118,5 +118,7 @@
   "assistantProgramUpdateFailed": "上次更新失败",
   "assistantUpdatesNotConfigured": "更新发行尚未配置，请先完成签名发行配置。",
   "assistantVipRequired": "个人助手需要 Pro 或 Max 会员。开通或续期后刷新即可恢复原连接。",
-  "assistantVipFeature": "Pro / Max 会员功能"
+  "assistantVipFeature": "Pro / Max 会员功能",
+  "assistantVipUnavailable": "暂时无法确认会员权益，个人助手已暂停。请刷新会员状态后再试。",
+  "assistantVipPaused": "已暂停"
 }
