@@ -2,17 +2,17 @@ import { expect, it } from 'vitest'
 import { collectAgentMemoryEvidence } from './agent-memory-evidence.js'
 import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
 import { revisionSnapshot } from '../memory/memory-revisions.js'
-import { MemoryRecord } from '../contracts/memory.js'
+import { MemoryRecord, MemorySourceEvidence } from '../contracts/memory.js'
 import { extractAgentMemories, prepareAgentMemoryCapture } from './agent-memory-extraction.js'
 import type { AgentMemoryCapture, AgentMemoryCaptureSnapshot } from './agent-memory-capture-types.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import { memoryEvidenceStatus } from '../memory/memory-consolidation.js'
 
 const at = '2026-10-06T00:00:00.000Z'
-function fixture(status = 'completed', verificationStatus = 'passed') {
+function fixture(status = 'completed', verificationStatus = 'passed', userBody = 'Remember the storage decision.') {
   const data = new Map<string, unknown>([
     ['request:root', { sourceMessageId: 'user', roomSnapshot: { members: [] } }],
-    ['message:user', { authorKind: 'user', body: 'Remember the storage decision.' }],
+    ['message:user', { authorKind: 'user', body: userBody, attachmentIds: ['image'] }],
     ['task:task', { task: { memberSnapshot: { participantAgentId: 'ada' }, latestDeliveryId: 'delivery', status } }],
     ['delivery:delivery', { id: 'delivery', taskId: 'task', attemptId: 'attempt', version: 1,
       baseRevision: 'b'.repeat(40), versionHash: 'a'.repeat(40), pinRef: 'refs/kun/rooms/delivery',
@@ -38,6 +38,14 @@ it('prioritizes execution receipts over a full assistant-message budget and reta
     receiptId: 'delivery:verification:0', repositorySha: 'a'.repeat(40), artifactIds: ['test-log'], outcome: 'succeeded' })]))
   expect(evidence.sources.find((source) => source.id === 'delivery')).toMatchObject({ trust: 'inferred', artifactIds: ['diff-artifact'] })
   expect(evidence.capturedTasks).toEqual(['task'])
+})
+
+it.each(['', '   '])('skips image-only or blank message bodies while retaining other evidence', async (body) => {
+  const f = fixture('completed', 'passed', body)
+  const evidence = await collectAgentMemoryEvidence(f.deps, f.job)
+  expect(evidence.sources.some((source) => source.id === 'user')).toBe(false)
+  expect(evidence.sources.length).toBeGreaterThan(0)
+  expect(MemorySourceEvidence.array().safeParse(evidence.sources).success).toBe(true)
 })
 
 it.each([['failed', 'passed'], ['cancelled', 'passed'], ['completed', 'failed']])('does not promote %s work with %s checks to observed success', async (status, checks) => {
