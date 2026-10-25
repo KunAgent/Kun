@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron } from 'playwright-core'
-import { createServer } from 'vite'
+import { createServer, optimizeDeps } from 'vite'
 
 // Real native Electron production components with an offline host boundary.
 // This does not install an external agent, log in, or send a model request.
@@ -22,7 +22,7 @@ const report = { sourceRevision: git('rev-parse', 'HEAD'), nativePlatform: proce
   scaleMethod: 'Native Electron webContents.setZoomFactor; no CSS transform or DPR emulation',
   captureMethod: 'Full native webContents.capturePage().toPNG(); PNG dimensions verified against native content and display scale',
   started: new Date().toISOString(), assertions: [], screenshots: [], screenshotDetails: [], measurements: [], viewports: [],
-  nativeCaptures: [], pageErrors: [], blockedRequests: [], status: 'running' }
+  nativeCaptures: [], navigations: [], viteMessages: [], preoptimizedDependencies: [], pageErrors: [], blockedRequests: [], status: 'running' }
 let electron, page, server
 try {
   if (process.env.KUN_ENABLEMENT_EXPECTED_SHA) {
@@ -66,6 +66,9 @@ app.on('window-all-closed', () => app.quit())
         })
       }
     }] })
+  // Complete dependency discovery before the first native renderer navigation.
+  const optimized = await optimizeDeps(server.config, true, true)
+  report.preoptimizedDependencies = Object.keys(optimized.optimized)
   await server.listen()
   const origin = new URL(server.resolvedUrls.local[0]).origin
   await page.route('**/*', route => {
@@ -73,6 +76,12 @@ app.on('window-all-closed', () => app.quit())
     if (url.startsWith(origin + '/') || url.startsWith('data:') || url === 'about:blank') return route.continue()
     report.blockedRequests.push(url)
     return route.abort('blockedbyclient')
+  })
+  page.on('framenavigated', frame => {
+    if (frame === page.mainFrame()) report.navigations.push({ url: frame.url(), at: new Date().toISOString() })
+  })
+  page.on('console', message => {
+    if (message.text().includes('[vite]')) report.viteMessages.push({ text: message.text(), at: new Date().toISOString() })
   })
   await page.goto(`${origin}/__agent_enablement?platform=${process.platform}`, { timeout: 90_000 })
   await panel().waitFor({ timeout: 90_000 })

@@ -107,3 +107,35 @@ test('settings baseline copies the complete offline fixture without replacing pr
   assert.doesNotMatch(host, /from ['"]@shared\/harness-enablement['"]/)
   assert.ok(baseline.includes('github.event.pull_request.base.sha'))
 })
+
+test('native harnesses finish dependency optimization before serving or navigating', () => {
+  for (const file of ['scripts/smoke-agent-enablement.mjs', 'scripts/smoke-paper-evidence.mjs']) {
+    const harness = source(file)
+    const optimize = harness.indexOf('const optimized = await optimizeDeps(server.config, true, true)')
+    assert.ok(optimize > harness.indexOf('server = await createServer('), file)
+    assert.ok(optimize < harness.indexOf('await server.listen()'), file)
+    assert.ok(harness.indexOf('await server.listen()') < harness.indexOf('await page.goto('), file)
+    for (const dependency of ['react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime']) {
+      assert.ok(harness.includes(`'${dependency}'`), `${file}: ${dependency}`)
+    }
+    assert.match(harness, /Object.keys\(optimized.optimized\)/)
+    assert.match(harness, /page.on\('framenavigated'/)
+    assert.match(harness, /frame === page.mainFrame\(\)/)
+    assert.match(harness, /page.on\('console'/)
+    assert.match(harness, /message.text\(\).includes\('\[vite\]'\)/)
+    assert.doesNotMatch(harness, /waitForTimeout\(\d{4,}|noDiscovery: true/)
+  }
+})
+
+test('paper evidence optimizer scans the same real fixture that the browser loads', () => {
+  const paper = source('scripts/smoke-paper-evidence.mjs')
+  assert.match(paper, /mkdtemp\(join\(repository, 'out', '\.paper-evidence-smoke-'\)\)/)
+  assert.match(paper, /fixtureId = normalizePath\(join\(fixtureDirectory, 'fixture.tsx'\)\)/)
+  assert.ok(paper.indexOf('await writeFile(fixtureId, paperEvidenceFixture())') < paper.indexOf('server = await createServer('))
+  assert.match(paper, /entries: \[fixtureId\]/)
+  assert.match(paper, /id === fixtureUrl \|\| id === fixtureId\) return fixtureId/)
+  assert.doesNotMatch(paper, /load\(id\)/)
+  assert.match(paper, /await rm\(fixtureDirectory, \{ recursive: true, force: true \}\)/)
+  assert.match(paper, /await page.reload\(\)/)
+  assert.match(paper, /assert.deepEqual\(errors, \[\]/)
+})
