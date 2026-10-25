@@ -148,10 +148,10 @@ export function useAdeComposerControls(input: {
     return () => clearTimeout(timer)
   }, [enabled, harnessId, modelCatalogFailed, modelFailures, modelCache?.errorCode])
   useEffect(() => {
-    if (!composerGatewayBinding || composerModel || composerCredentialMode !== 'kun-gateway') return
+    if (!enabled || !composerGatewayBinding || composerModel || composerCredentialMode !== 'kun-gateway') return
     const alias = providerGroupCache?.aliasGroups?.find((entry) => entry.routeId === composerGatewayBinding.main.routeId)
     if (alias) { setComposerModel(alias.modelId, ''); setComposerGatewayBinding(composerGatewayBinding) }
-  }, [composerGatewayBinding, composerModel, composerCredentialMode, providerGroupCache?.aliasGroups, setComposerModel, setComposerGatewayBinding])
+  }, [enabled, composerGatewayBinding, composerModel, composerCredentialMode, providerGroupCache?.aliasGroups, setComposerModel, setComposerGatewayBinding])
   const credentialMode = composerCredentialMode.trim() || defaultCredentialModeForRow(row)
   const harnessLabel = row?.definition.displayName ?? harnessId
   const isNativeHarness = harnessId !== 'kun' &&
@@ -188,7 +188,7 @@ export function useAdeComposerControls(input: {
 
   useEffect(() => {
     const pending = pendingProvider.current
-    if (!pending || providerGroupCache?.loading || !providerGroupCache) return
+    if (!enabled || !pending || providerGroupCache?.loading || !providerGroupCache) return
     const state = useChatStore.getState()
     if (state.activeThreadId !== pending.threadId || state.workspaceRoot !== pending.workspace ||
       state.adeDraftRevision !== pending.draft || state.composerHarnessId !== pending.harnessId ||
@@ -201,7 +201,7 @@ export function useAdeComposerControls(input: {
     const selection = selectHarnessProvider(providerGroupCache.groups.filter((group) => readyRow &&
       harnessProfileReady(readyRow, { harnessId: pending.harnessId, credentialMode: pending.credentialMode as 'provider' | 'kun-gateway', providerId: group.providerId })), pending.defaults, pending.previous)
     if (selection.providerId) setComposerModel(selection.model, selection.providerId)
-  }, [providerGroupCache, setComposerModel, rows])
+  }, [enabled, providerGroupCache, setComposerModel, rows])
 
   const harnessCommands = useMemo(() => {
     if (!enabled || !isNativeHarness || !session?.commands?.length) return null

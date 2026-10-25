@@ -70,7 +70,7 @@ describe('MessageTimeline live elapsed time', () => {
   const elapsed = (): string | null | undefined =>
     container.querySelector('[data-turn-live-status-owner] .tabular-nums .tabular-nums')?.textContent
 
-  it.each(['background_shell', 'background_subagent', 'worker_update'])(
+  it.each(['background_shell', 'background_subagent', 'worker_update'] as const)(
     'ticks a %s continuation instead of showing the original completed duration', async (source) => {
       useChatStore.setState({
         currentTurnId: 'continuation', currentTurnUserId: 'notice',

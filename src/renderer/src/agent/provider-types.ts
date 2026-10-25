@@ -434,6 +434,8 @@ export interface AgentProvider {
       accountId?: string
       /** ADE harness override for this turn; absent inherits the thread. */
       harnessId?: string
+      /** Embedded branches must not read the main composer's global native-Agent overrides. */
+      inheritHarnessPreferences?: boolean
       /** Harness credential path; absent = the harness's default. */
       gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string

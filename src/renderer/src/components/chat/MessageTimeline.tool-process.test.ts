@@ -383,7 +383,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('&lt;!-- --&gt;')
   })
 
-  it('uses the latest completed tool as the live fallback action', () => {
+  it('keeps the latest tool path in process details but not in the live fallback', () => {
     const html = renderToStaticMarkup(
       createElement(ConversationTurn, {
         turn: {
@@ -410,7 +410,10 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       })
     )
 
-    expect((html.match(/\/tmp\/project\/src\/current\.ts/g) ?? [])).toHaveLength(2)
+    expect((html.match(/\/tmp\/project\/src\/current\.ts/g) ?? [])).toHaveLength(1)
+    const liveStatus = html.slice(html.indexOf('data-turn-live-status-owner="generic"'))
+    expect(liveStatus).not.toContain('/tmp/project/src/current.ts')
+    expect(liveStatus).toContain('ds-shiny-text')
   })
 
   it('keeps same-batch tool calls collapsed by default', () => {

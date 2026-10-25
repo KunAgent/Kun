@@ -9,6 +9,7 @@ import type {
 import { DEFAULT_KUN_MODEL, MODEL_REASONING_EFFORTS } from '@shared/app-settings'
 import type {
   ChatState,
+  SideComposerConfigPatch,
   SideConversation,
   SideConversationDraftOptions,
   SidePanelState
@@ -43,6 +44,7 @@ import {
   type CloneDesignDocumentForForkInput,
   type PreparedDesignDocumentFork
 } from '../design/design-document-fork'
+import { defaultSideAgentConfig, sideCredentialMode, mergeSideComposerConfig } from './side-composer-config'
 import { resolvePreparedDesignCloneAfterError } from './chat-store-design-clone-recovery'
 
 type SideActionDependencies = {
@@ -62,6 +64,7 @@ export function createSideActions(
   | 'interruptSide'
   | 'resolveSideUserInput'
   | 'setSideInput'
+  | 'setSideComposerConfig'
   | 'setSideModel'
   | 'setSideReasoningEffort'
   | 'setSideFastMode'
@@ -80,6 +83,7 @@ export function createSideActions(
     | 'interruptSide'
     | 'resolveSideUserInput'
     | 'setSideInput'
+    | 'setSideComposerConfig'
     | 'setSideModel'
     | 'setSideReasoningEffort'
     | 'setSideFastMode'
@@ -107,6 +111,9 @@ export function createSideActions(
         return null
       }
       const parentThread = state.threads.find((thread) => thread.id === parentId)
+      // Capture before fork/attachment awaits; later main-composer edits are unrelated.
+      options = options ? structuredClone(options) : undefined
+      const inheritedAgent = defaultSideAgentConfig(state, parentId)
       const title = defaultSideTitle(parentThread?.title ?? '', parentId)
       let forked
       let preparedDesignFork: PreparedDesignDocumentFork | null = null
@@ -158,7 +165,21 @@ export function createSideActions(
       if (!forked) return null
       const now = new Date().toISOString()
       const inheritedAt = new Date().toISOString()
-      const draftModel = options?.model?.trim() || defaultSideModel(state, parentId)
+      const requestedHarnessId = options?.harnessId?.trim()
+      const draftHarnessId = requestedHarnessId || inheritedAgent.harnessId
+      // A caller-pinned Agent owns its own credential path; only the inherited
+      // Agent may carry the parent's credential mode / gateway binding.
+      const sameHarness = draftHarnessId === inheritedAgent.harnessId
+      const draftCredentialMode = options && Object.prototype.hasOwnProperty.call(options, 'credentialMode')
+        ? sideCredentialMode(options.credentialMode)
+        : sameHarness ? inheritedAgent.credentialMode : undefined
+      const draftGatewayBinding = options && Object.prototype.hasOwnProperty.call(options, 'gatewayBinding')
+        ? options.gatewayBinding
+        : sameHarness ? inheritedAgent.gatewayBinding : undefined
+      const draftApprovalPolicy = options?.approvalPolicy ?? inheritedAgent.approvalPolicy
+      const draftSandboxMode = options?.sandboxMode ?? inheritedAgent.sandboxMode
+      const draftApprovalReviewer = options?.approvalReviewer ?? inheritedAgent.approvalReviewer
+      const draftModel = options?.model !== undefined ? options.model.trim() : defaultSideModel(state, parentId)
       const draftProviderId =
         options && Object.prototype.hasOwnProperty.call(options, 'providerId')
           ? options.providerId?.trim() ?? ''
@@ -168,6 +189,12 @@ export function createSideActions(
       const side: SideConversation = {
         threadId: forked.id,
         parentThreadId: parentId,
+        harnessId: draftHarnessId,
+        ...(draftCredentialMode ? { credentialMode: draftCredentialMode } : {}),
+        ...(draftGatewayBinding ? { gatewayBinding: draftGatewayBinding } : {}),
+        ...(draftApprovalPolicy ? { approvalPolicy: draftApprovalPolicy } : {}),
+        ...(draftSandboxMode ? { sandboxMode: draftSandboxMode } : {}),
+        ...(draftApprovalReviewer ? { approvalReviewer: draftApprovalReviewer } : {}),
         ...(forked.designProfile ? { designProfile: forked.designProfile } : {}),
         ...(forked.designProfile
           ? { designWorkspaceRoot: parentThread?.workspace || state.workspaceRoot }
@@ -179,7 +206,7 @@ export function createSideActions(
         liveReasoning: '',
         liveAssistant: '',
         lastSeq: 0,
-        input: '',
+        input: seedText?.trim() ?? '',
         model: draftModel,
         providerId: draftProviderId,
         reasoningEffort: draftReasoningEffort,
@@ -219,35 +246,53 @@ export function createSideActions(
 
     sendSideMessage: async (sideId, text, sendOptions) => {
       const state = ctx.get()
-      const side = state.sideConversations[sideId]
-      if (!side) return false
-      if (side.busy) return false
+      const storedSide = state.sideConversations[sideId]
+      if (!storedSide || storedSide.busy || storedSide.submitting) return false
+      const side = mergeSideComposerConfig(storedSide, sendOptions?.config ?? {})
       const trimmed = text.trim()
       const attachmentIds = side.attachments
         .map((attachment) => attachment.id.trim())
         .filter(Boolean)
       if (!trimmed && attachmentIds.length === 0) return false
       const provider = ctx.getProvider()
+      // Freeze one branch config snapshot so a concurrent UI change cannot make
+      // the admitted turn disagree with what the send button showed.
+      const harnessId = side.harnessId.trim()
+      const externalAgent = harnessId !== '' && harnessId !== 'kun'
+      const credentialMode = externalAgent ? side.credentialMode : undefined
+      const gatewayBinding = externalAgent ? side.gatewayBinding : undefined
+      const approvalPolicy = side.approvalPolicy
+      const sandboxMode = side.sandboxMode
+      const approvalReviewer = side.approvalReviewer
       const reasoningEffort = sideReasoningEffortRequestValue(side.reasoningEffort)
       const providerId = side.providerId.trim()
-      const accountId = accountIdForComposerSelection(
-        state.composerModelGroups,
-        providerId,
-        side.model
-      )
-      const serviceTier = serviceTierForComposerSelection(
-        side.fastMode,
-        state.composerModelGroups,
-        side.model,
-        providerId
-      )
+      // Kun provider accounts and service tiers do not apply to external Agents.
+      const accountId = externalAgent
+        ? undefined
+        : accountIdForComposerSelection(state.composerModelGroups, providerId, side.model)
+      const serviceTier = externalAgent
+        ? undefined
+        : serviceTierForComposerSelection(
+            side.fastMode,
+            state.composerModelGroups,
+            side.model,
+            providerId
+          )
+      ctx.set((s) => patchSide(s, sideId, (cur) => ({ ...cur, submitting: true })))
       try {
         const { turnId } = await provider.sendUserMessage(sideId, trimmed, {
+          inheritHarnessPreferences: false,
           model: side.model,
           ...(providerId ? { providerId } : {}),
+          ...(harnessId ? { harnessId } : {}),
+          ...(credentialMode ? { credentialMode } : {}),
+          ...(gatewayBinding ? { gatewayBinding } : {}),
           ...(accountId ? { accountId } : {}),
           ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(serviceTier ? { serviceTier } : {}),
+          ...(approvalPolicy ? { approvalPolicy } : {}),
+          ...(sandboxMode ? { sandboxMode } : {}),
+          ...(approvalReviewer ? { approvalReviewer } : {}),
           // Side conversations do not mount the full Design pipeline/canvas.
           // Keep their next turn explicitly Code even when the fork retains a
           // Design profile for later promotion or recovery.
@@ -260,7 +305,8 @@ export function createSideActions(
         ctx.set((s) =>
           patchSide(s, sideId, (cur) => ({
             ...cur,
-            input: '',
+            input: cur.input === side.input ? '' : cur.input,
+            submitting: false,
             attachments: cur.attachments.filter(
               (attachment) => !attachmentIds.includes(attachment.id.trim())
             ),
@@ -278,6 +324,7 @@ export function createSideActions(
         ctx.set((s) =>
           patchSide(s, sideId, (cur) => ({
             ...cur,
+            submitting: false,
             error: ctx.formatRuntimeError(e)
           }))
         )
@@ -392,22 +439,27 @@ export function createSideActions(
       ctx.set((s) => patchSide(s, sideId, (cur) => ({ ...cur, input: text })))
     },
 
-    setSideModel: (sideId, model, providerId) => {
+    setSideComposerConfig: (sideId, patch) => {
       ctx.set((s) =>
-        patchSide(s, sideId, (cur) => ({
-          ...cur,
-          model,
-          providerId: providerId?.trim() ?? ''
-        }))
+        patchSide(s, sideId, (cur) => {
+          // A running branch keeps the configuration its active turn was admitted
+          // with; the next turn may change it once the branch goes idle.
+          if (cur.busy || cur.submitting) return cur
+          return mergeSideComposerConfig(cur, patch)
+        })
       )
     },
 
+    setSideModel: (sideId, model, providerId) => {
+      actions.setSideComposerConfig(sideId, { model, providerId: providerId?.trim() ?? '' })
+    },
+
     setSideReasoningEffort: (sideId, effort) => {
-      ctx.set((s) => patchSide(s, sideId, (cur) => ({ ...cur, reasoningEffort: effort })))
+      actions.setSideComposerConfig(sideId, { reasoningEffort: effort })
     },
 
     setSideFastMode: (sideId, enabled) => {
-      ctx.set((s) => patchSide(s, sideId, (cur) => ({ ...cur, fastMode: enabled })))
+      actions.setSideComposerConfig(sideId, { fastMode: enabled })
     },
 
     setSideAttachments: (sideId, attachments) => {

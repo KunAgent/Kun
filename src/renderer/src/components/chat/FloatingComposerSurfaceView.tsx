@@ -53,7 +53,7 @@ export function FloatingComposerSurfaceView({
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
     composerReasoningEffort, contextChips, designTaskProfile, designProfileLocked, dictation, draft, effectiveWorkspaceRoot,
-    executionSettings, executionSettingsApplying, fileInputRef, fileMentions, fileReferences,
+    executionSettings, executionSettingsApplying, sideAgentControls, fileInputRef, fileMentions, fileReferences,
     goalInputMode, graphEnabled, graphPlanningNeedsCorrection, handleAttachmentInput,
     handleComposerDragOver, handleComposerDrop, handleComposerKeyDown, handleComposerMenuButtonClick,
     handleComposerPaste, handleComposerShellMouseDown, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, handlePrimaryAction,
@@ -103,6 +103,7 @@ export function FloatingComposerSurfaceView({
   const modelPickList = kunComposer && (composerModelGroups.length || modelCatalogStatus !== 'ready')
     ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
   const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
+  const modelAgent = sideAgentControls ?? (externalAgent ? adeComposer : undefined)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
   const messageQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'message-quote')
   // "continue local session" is offered only on a fresh thread when
@@ -325,13 +326,30 @@ export function FloatingComposerSurfaceView({
             <ComposerPromptEnhanceStatus enhance={promptEnhance} t={t} onOpenSettings={() => openSettings('agents')} />
           ) : null}
           {runtimeReady ? <div
-            ref={composerToolbarFitRef}
+            ref={side ? undefined : composerToolbarFitRef}
             className={`ds-composer-toolbar flex min-h-9 min-w-0 items-center gap-2 ${
               showToolbarStartControls ? 'justify-between' : 'justify-end'
             }`}
           >
             {showToolbarStartControls ? (
               <div className="ds-composer-toolbar-start flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden">
+                {sideAgentControls ? (
+                  <FloatingComposerAgentModePicker
+                    surface="code"
+                    disabled={sideAgentControls.disabled === true}
+                    controls={{
+                      contextKey: sideAgentControls.contextKey,
+                      harnessId: sideAgentControls.harnessId,
+                      harnessLabel: sideAgentControls.harnessLabel,
+                      rows: sideAgentControls.rows,
+                      loading: sideAgentControls.loading,
+                      needsConfirm: sideAgentControls.needsConfirm,
+                      onSelect: (harnessId: string) => sideAgentControls.onSelect(harnessId),
+                      onOpen: sideAgentControls.onOpen,
+                      onManage: sideAgentControls.onManage
+                    }}
+                  />
+                ) : null}
                 {showComposerMenuButton ? (
                   <>
                     <button
@@ -466,15 +484,15 @@ export function FloatingComposerSurfaceView({
                 ) : null}
                 {showExecutionSettingsPicker && executionSettings && onExecutionSettingsChange ? (
                   <FloatingComposerExecutionPicker
-                    agentPermission={externalAgent && adeComposer ? {
+                    agentPermission={sideAgentControls?.agentPermission ?? (externalAgent && adeComposer ? {
                       agentName: adeComposer.harnessLabel,
                       preview: (mode: KunToolPermissionMode) => selectedNativeAgentPreview(harnessRows.find((row) => row.definition.id === adeComposer.harnessId)) ??
                         nativePermissionPreview(adeComposer.harnessId, adeComposer.permissionModes, mode,
                           adeComposer.requestedPermissionMode, adeComposer.transport)
-                    } : undefined}
+                    } : undefined)}
                     value={executionSettings}
                     applying={executionSettingsApplying}
-                    disabled={!canCompose || busy}
+                    disabled={!canCompose || busy || sideAgentControls?.disabled === true}
                     onChange={onExecutionSettingsChange}
                     onOpenPermissionSettings={() => openSettings('agents')}
                   />
@@ -542,19 +560,19 @@ export function FloatingComposerSurfaceView({
                   ) : null}
                   {hideModelPicker ? null : (
                     <FloatingComposerModelPicker
-                      agentHarnessId={externalAgent && adeComposer?.credentialMode === 'native-login' ? adeComposer.harnessId : undefined}
+                      agentHarnessId={modelAgent?.credentialMode === 'native-login' ? modelAgent.harnessId : undefined}
                       compact={compact}
                       mode={modelPickerMode}
                       composerModel={composerModel}
                       composerProviderId={composerProviderId}
                       composerPickList={modelPickList}
                       composerModelGroups={modelGroups}
-                      emptyModelState={externalAgent && adeComposer?.credentialMode === 'native-login'
-                        ? nativeAgentEmptyModelState(adeComposer)
+                      emptyModelState={modelAgent?.credentialMode === 'native-login'
+                        ? nativeAgentEmptyModelState(modelAgent)
                         : kunComposer && modelCatalogStatus !== 'ready'
                           ? modelCatalogStatus === 'error' ? 'unavailable' : 'loading' : undefined}
-                      emptyModelReason={externalAgent ? adeComposer?.modelsError : undefined}
-                      allowedReasoningEfforts={adeComposer?.harnessId === 'claude-code' && adeComposer.credentialMode === 'kun-gateway' ? ['off'] : undefined}
+                      emptyModelReason={modelAgent?.modelsError}
+                      allowedReasoningEfforts={modelAgent?.harnessId === 'claude-code' && modelAgent.credentialMode === 'kun-gateway' ? ['off'] : undefined}
                       composerReasoningEffort={composerReasoningEffort}
                       composerFastMode={composerFastMode}
                       showProviderInModelLabel={showProviderInModelLabel}

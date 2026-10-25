@@ -37,10 +37,10 @@ import {
 } from './message-timeline-process-grouping'
 import {
   describeProcessBlock,
-  summarizeToolBlock,
   toolFilePath,
   toolNameForBlock
 } from './message-timeline-process-detail'
+import { summarizeToolLiveAction } from './message-timeline-tool-action'
 
 export function ProcessGlyph({
   Icon,
@@ -92,7 +92,7 @@ export function describeProcessSection(
       ? activeBlock.kind === 'reasoning'
         ? t('thinkingNow')
         : activeBlock.kind === 'tool'
-          ? t('workingToolAction', { action: summarizeToolBlock(activeBlock, t) })
+          ? t('workingToolAction', { action: summarizeToolLiveAction(activeBlock, t) })
           : describeProcessBlock(activeBlock, t)
       : t('processing')
     const workSummary = summarizeProcessWork(section.blocks, t)

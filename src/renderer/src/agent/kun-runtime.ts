@@ -447,6 +447,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       accountId?: string
       /** ADE harness override for this turn; absent inherits the thread. */
       harnessId?: string
+      inheritHarnessPreferences?: boolean
       /** Harness credential path; absent = the harness's default. */
       gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string
@@ -518,8 +519,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(selectedModel ? { model: selectedModel } : {}),
       ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
       ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
-      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim(), ...harnessAgentRequestField(options.harnessId),
-        ...harnessSettingsRequestField(options.harnessId) } : {}),
+      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim(),
+        ...(options.inheritHarnessPreferences === false ? {} : {
+          ...harnessAgentRequestField(options.harnessId), ...harnessSettingsRequestField(options.harnessId)
+        }) } : {}),
       ...(options?.credentialMode ? { credentialMode: options.credentialMode } : {}),
       ...(options?.gatewayBinding ? { gatewayBinding: options.gatewayBinding } : {}),
       approvalPolicy: options?.approvalPolicy ?? runtime.approvalPolicy,

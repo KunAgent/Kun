@@ -13,7 +13,7 @@ import {
 } from './AnimatedWorkLogo'
 import type { UiPluginLabelKey } from '@shared/ui-plugin'
 import { useUiPluginWorkLabel } from '../../store/ui-plugin-store'
-import { summarizeToolBlock } from './message-timeline-process'
+import { summarizeToolLiveAction } from './message-timeline-tool-action'
 import { liveTurnProgressClass } from './message-timeline-jump-preview'
 import { formatDuration } from './message-timeline-tools'
 import { LiveElapsedText, LiveSilenceText } from './LiveElapsedText'
@@ -63,7 +63,7 @@ export function LiveTurnProgressRow({
     : thinking
       ? t('thinkingNow')
       : tool
-        ? t('workingToolAction', { action: summarizeToolBlock(tool, t) })
+        ? t('workingToolAction', { action: summarizeToolLiveAction(tool, t) })
         : ikunModeOn
           ? t(IKUN_WORK_LOGO_VARIANT_LABEL_KEYS[ikunVariant])
           : pluginLabel ?? t(swimLabelKey)

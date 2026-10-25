@@ -676,4 +676,5 @@ describe('chat-store-side-actions', () => {
     await actions.sendSideMessage(id!, 'and then?')
     expect(provider.sendMock.mock.lastCall?.[2]).not.toHaveProperty('composerContexts')
   })
+
 })
