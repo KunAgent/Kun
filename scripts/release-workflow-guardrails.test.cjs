@@ -300,3 +300,12 @@ test('real personal IM OS verification is explicit opt-in and retains failing as
     assert.ok(source.includes(`assert(storage.${proof})`), proof)
   }
 })
+
+test('macOS PR packaging uses the established renderer heap budget without removing native gates', () => {
+  const job = readWorkflow('pr-checks.yml').jobs['package-macos']
+  assert.equal(job['runs-on'], 'macos-latest')
+  assert.equal(job.env.NODE_OPTIONS, '--max-old-space-size=6144')
+  assert.equal(stepByName(job, 'Build ad-hoc macOS packages (x64 and arm64)').run, 'npm run dist:mac')
+  assert.ok(stepByName(job, 'Smoke packaged update handoff (host-native macOS)'))
+  assert.ok(stepByName(job, 'Upload ad-hoc macOS PR packages'))
+})
