@@ -160,7 +160,7 @@ describe('FloatingComposer capability controls', () => {
     })
   })
 
-  it('keeps enabled composer actions available and never wraps the toolbar', async () => {
+  it('keeps composer actions available and scopes wrapping to compact layouts', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
     const [composerSource, enhanceSource, css] = await Promise.all([
@@ -172,9 +172,11 @@ describe('FloatingComposer capability controls', () => {
     expect(composerSource).toContain('ds-composer-voice-action')
     expect(composerSource).toContain('<ComposerPromptEnhanceButton')
     expect(enhanceSource).toContain('ds-composer-optional-action ds-composer-prompt-optimize-action')
-    expect(composerSource).toContain('ref={composerToolbarFitRef}')
+    expect(composerSource).toContain('ref={side ? undefined : composerToolbarFitRef}')
     expect(css).not.toMatch(/\.ds-composer-optional-action\s*\{[^}]*display:\s*none/)
-    expect(css).not.toMatch(/\.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/s)
+    expect(css).not.toMatch(/(?:^|\n)\s*\.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/)
+    expect(css).toMatch(/\[data-composer-variant='side'\] \.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/s)
+    expect(css).toMatch(/\.ds-composer-toolbar\[data-fit-7\]\s*\{[^}]*flex-wrap:\s*wrap/s)
     expect(css).not.toContain('--ds-composer-model-min')
     // Words give way level by level (composer-toolbar-fit.ts sets data-fit-N), never the actions.
     expect(css).toMatch(/\[data-fit-1\] \.ds-composer-context-control,[\s\S]*?\.ds-composer-agent-picker[^{]*\{[^}]*display:\s*none/s)

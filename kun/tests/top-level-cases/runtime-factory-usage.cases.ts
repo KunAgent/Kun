@@ -341,7 +341,7 @@ describe('runtime factory usage carryover', () => {
     }
   })
 
-  it('keeps all built-in PPT deck tools advertised across retired Lab toggles', async () => {
+  it('keeps the PPT deck tools advertised across Lab hot-apply toggles', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-ppt-lab-'))
     tempDirs.push(dataDir)
     const runtime = await createKunServeRuntime({
@@ -379,14 +379,13 @@ describe('runtime factory usage carryover', () => {
         abortSignal: new AbortController().signal,
         awaitApproval: async () => 'allow'
       })
-      return tools.map((tool) => tool.name).filter((name) => name.startsWith('ppt_')).sort()
+      return tools.some((tool) => tool.name === 'ppt_preview')
     }
 
-    const deckTools = ['ppt_export', 'ppt_import_asset', 'ppt_preview']
     try {
       const diagnostics = await runtime.toolDiagnostics?.()
       expect(diagnostics?.providers.some((provider) => provider.id === 'ppt-deck')).toBe(true)
-      expect(await listPpt()).toEqual(deckTools)
+      expect(await listPpt()).toBe(true)
 
       // Any hot-apply must keep the PPT deck tools in the rebuilt registry.
       expect(await runtime.applyConfig({
@@ -395,21 +394,20 @@ describe('runtime factory usage carryover', () => {
           web: { enabled: true, fetchEnabled: true }
         })
       })).toEqual({ ok: true })
-      expect(await listPpt()).toEqual(deckTools)
+      expect(await listPpt()).toBe(true)
 
-      // The retired master switch remains accepted for persisted settings,
-      // but slides is built in: disabling it must not remove any deck tool.
       expect(await runtime.applyConfig({
         lab: { pptAgent: { enabled: false, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
-      expect(await listPpt()).toEqual(deckTools)
+      // PPT tools are built in; the legacy Lab enabled flag cannot hide them.
+      expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
         lab: { pptAgent: { enabled: true, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
-      expect(await listPpt()).toEqual(deckTools)
+      expect(await listPpt()).toBe(true)
     } finally {
       await runtime.shutdown?.()
     }

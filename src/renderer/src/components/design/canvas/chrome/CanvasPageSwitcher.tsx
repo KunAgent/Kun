@@ -71,7 +71,7 @@ export function CanvasPageSwitcher({ compact }: { compact: boolean }): ReactElem
                   autoFocus
                   defaultValue={page.name || labelOf(index)}
                   aria-label={t('canvasPageRename')}
-                  className="mx-1 my-0.5 h-7 min-w-0 flex-1 rounded-[6px] border border-accent bg-ds-surface px-2 text-[12.5px] text-ds-ink outline-none"
+                  className="mx-1 my-0.5 h-7 min-w-0 flex-1 rounded-[6px] border border-accent bg-ds-card px-2 text-[12.5px] text-ds-ink outline-none"
                   onBlur={(event) => {
                     renamePage(page.id, event.currentTarget.value)
                     setRenamingId(null)

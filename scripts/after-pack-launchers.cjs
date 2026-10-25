@@ -238,8 +238,6 @@ function installLinuxElectronLauncher(context) {
 
 
 module.exports = {
-  normalizeArch,
-  normalizePlatform,
   LINUX_SANDBOX_LAUNCHER_FLAG,
   assertElfExecutable,
   installCliLaunchers,

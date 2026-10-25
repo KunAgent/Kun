@@ -77,10 +77,14 @@ describe('mobile navigation lifecycle', () => {
     window.history.replaceState({}, '', '/?mode=work&mobile=resource&resource=doc&view=edit')
     act(() => root.render(createElement(Harness)))
     act(() => navigation.navigate({ mode: 'code', kind: 'home' }))
-    guardRef.current = () => { throw new Error('save failed') }
+    const guard = vi.fn(() => { throw new Error('save failed') })
+    guardRef.current = guard
     await act(async () => {
       window.history.back()
-      await new Promise((resolve) => setTimeout(resolve, 30))
+      await vi.waitFor(() => {
+        expect(guard).toHaveBeenCalledOnce()
+        expect(window.location.search).toBe('?mode=code&mobile=home')
+      })
     })
     expect(navigation.page).toEqual({ mode: 'code', kind: 'home' })
     expect(window.location.search).toBe('?mode=code&mobile=home')
