@@ -14,10 +14,17 @@ it('rejects malformed JSON without overwriting it', async () => {
   expect(await readFile(path, 'utf8')).toBe('{malformed')
 })
 it('serializes concurrent mutations and preserves the winning revision', async () => {
-  const results = await Promise.allSettled([
-    mutatePaperEvidenceWorkspace(root, 0, async () => { await new Promise((resolve) => setTimeout(resolve, 20)) }),
-    mutatePaperEvidenceWorkspace(root, 0, () => undefined)
-  ])
+  // Canonical path resolution is asynchronous; invocation order does not decide
+  // which request acquires the queue. Hold the first mutation after admission.
+  let entered!: () => void
+  let release!: () => void
+  const admitted = new Promise<void>((resolve) => { entered = resolve })
+  const held = new Promise<void>((resolve) => { release = resolve })
+  const first = mutatePaperEvidenceWorkspace(root, 0, async () => { entered(); await held })
+  await admitted
+  const second = mutatePaperEvidenceWorkspace(root, 0, () => undefined)
+  release()
+  const results = await Promise.allSettled([first, second])
   expect(results[0].status).toBe('fulfilled')
   expect(results[1]).toMatchObject({ status: 'rejected', reason: { code: 'revision-conflict' } })
   expect((await readPaperEvidenceWorkspace(root)).revision).toBe(1)
