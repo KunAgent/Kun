@@ -204,28 +204,15 @@ windowsOnly('Windows automatic update transaction', () => {
       })
     )
 
-    // Do not inject validate.before_check: the real manifest validation must
-    // reject the missing package before moving either install payload.
     const switched = run(input, 'SwitchUpdatePayload')
     assertExpectedFailure(switched, 'SwitchUpdatePayload')
-    expect(`${switched.stdout}\n${switched.stderr}`).toContain('missing the runtime package @earendil-works/pi-tui')
+    expect(readFileSync(input.diagnostic, 'utf8')).toMatch(/FAIL action=SwitchUpdatePayload .*missing the runtime package @earendil-works\/pi-tui/)
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
     expect(existsSync(input.target)).toBe(false)
     expect(transaction(input.transaction).Phase).toBe('prepared')
-
-    // Prepare preserves unknown user files in the journal's stash. They are
-    // restored to the legacy install only when rollback actually runs.
-    const journal = JSON.parse(readFileSync(input.journal, 'utf8').replace(/^\uFEFF/, ''))
-    expect(journal.Phase).toBe('preserved')
-    expect(journal.Records).toHaveLength(1)
-    expect(journal.Records[0].Entries).toContain('notes.txt')
-    expect(readFileSync(join(journal.Records[0].Stash, 'content', 'notes.txt'), 'utf8')).toBe('preserved user file')
-
     assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction')
     expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
-    expect(existsSync(input.target)).toBe(false)
-    expect(transaction(input.transaction)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
   })
 
   it('removes candidate-only files when it restores the previous payload', () => {

@@ -259,6 +259,21 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     })
   })
 
+  it('extracts every Windows installer migration helper into the NSIS plugins directory', () => {
+    const helpers = readdirSync(join(process.cwd(), 'build')).filter((fileName) =>
+      /^windows-installer-migration-.+\.ps1$/.test(fileName)
+    )
+    expect(helpers).toContain('windows-installer-migration-runtime-integrity.ps1')
+    for (const nshFile of ['installer.nsh', 'installer-process-check.nsh']) {
+      const script = readFileSync(join(process.cwd(), 'build', nshFile), 'utf8')
+      for (const helper of helpers) {
+        expect(script, `${nshFile} must extract ${helper}`).toContain(
+          `File /oname=$PLUGINSDIR\\${helper} "\${PROJECT_DIR}\\build\\${helper}"`
+        )
+      }
+    }
+  })
+
   it('migrates Windows install roots without changing identity or touching user data', () => {
     const installerScript = [
       'installer.nsh',
