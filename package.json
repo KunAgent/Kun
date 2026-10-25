@@ -2,7 +2,7 @@
   "name": "kun-gui",
   "productName": "Kun",
   "desktopName": "kun-gui.desktop",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Electron workbench for the Kun runtime (HTTP/SSE)",
   "engines": {
     "node": ">=22.19.0"
