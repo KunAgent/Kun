@@ -285,6 +285,8 @@ export class TurnContextResolver {
       instructionResolution,
       memories,
       memoryDirectives,
+      memoryReferenceBlocks: memoryContext.referenceBlocks,
+      memoryRelationContext: memoryContext.relationContext,
       activeGoalInstruction,
       goalRecoveryInstruction,
       activeTodoInstruction,

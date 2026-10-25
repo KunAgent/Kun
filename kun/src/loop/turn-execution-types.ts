@@ -3,6 +3,7 @@ import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { ModelRequestFailureContext } from '../contracts/model-request-failure.js'
 import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { MemoryRecord } from '../contracts/memory.js'
+import type { MemoryRelationContextResult } from '../contracts/memory-working-context.js'
 import type {
   ModelDocumentAttachment,
   ModelInputAttachment,
@@ -97,6 +98,8 @@ export type PreparedTurnContext = Readonly<{
   memories: readonly MemoryRecord[]
   /** User-approved standing rules injected this turn (empty when none/on rooms). */
   memoryDirectives: readonly MemoryRecord[]
+  memoryReferenceBlocks?: readonly string[]
+  memoryRelationContext?: MemoryRelationContextResult
   activeGoalInstruction: string | null
   goalRecoveryInstruction: string | null
   activeTodoInstruction: string | null

@@ -7,9 +7,12 @@ export { RequiredToolGateSchema, type RequiredToolGate } from './turn-required-t
 import { PaperTurnContextSchema, validatePaperTurnCombination } from './paper-turn-context.js'
 import { HarnessGatewayBindingSchema, HarnessGatewayAliasGrantSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
+import { MemoryRelationAnnotation, MEMORY_CONTEXT_MAX_RELATIONS } from './memory-working-context.js'
 import { SteeringDeliverySchema } from './steering-delivery.js'
 import { TurnItem, UserFileReferenceSchema, UserMessageSource } from './items.js'
-import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
+import { GuiDesignArtifactContextSchema, GuiPlanContextSchema } from './turn-gui-context.js'
+export { GuiDesignArtifactContextSchema, GuiPlanContextSchema, GuiPlanOperationSchema } from './turn-gui-context.js'
+export type { GuiDesignArtifactContextJson, GuiPlanContextJson, GuiPlanOperationJson } from './turn-gui-context.js'
 import {
   ApprovalPolicySchema,
   ApprovalReviewerSchema,
@@ -69,64 +72,6 @@ export type TurnClientSurface = z.infer<typeof TurnClientSurfaceSchema>
 
 export { ActingTurnModelRouteSchema, type ActingTurnModelRoute } from './turn-acting-route.js'
 
-/**
- * Plan operation kinds the renderer can advertise on a plan turn.
- * Mirrors the shared renderer contract so request metadata stays
- * stable across reconnects and replays.
- */
-export const GuiPlanOperationSchema = z.enum(['draft', 'refine'])
-export type GuiPlanOperationJson = z.infer<typeof GuiPlanOperationSchema>
-
-/**
- * Plan context the renderer can attach to a `StartTurnRequest`. The
- * thread mode is carried on the thread record; this struct adds the
- * reserved path and source request needed to scope `create_plan`.
- */
-export const GuiPlanContextSchema = z.object({
-  operation: GuiPlanOperationSchema,
-  workspaceRoot: z.string().min(1),
-  relativePath: z
-    .string()
-    .min(1)
-    .refine(isGuiPlanRelativePath, {
-      message: 'relativePath must be a direct Markdown file under .kunsdd/plan'
-    }),
-  planId: z.string().min(1), fixedPath: z.boolean().optional(),
-  sourceRequest: z.string().optional(),
-  title: z.string().optional()
-})
-export type GuiPlanContextJson = z.infer<typeof GuiPlanContextSchema>
-
-const GuiDesignArtifactPathSchema = (extension: string, message: string) =>
-  z.string().min(1).refine((value) => {
-    const normalized = value.replaceAll('\\', '/')
-    return normalized === value &&
-      normalized.startsWith('.kun-design/') &&
-      !normalized.split('/').includes('..') &&
-      new RegExp(`\\/v\\d+\\.${extension}$`, 'i').test(normalized)
-  }, { message })
-
-export const GuiDesignArtifactContextSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('svg'),
-    artifactId: z.string().min(1),
-    relativePath: GuiDesignArtifactPathSchema('svg', 'relativePath must be a versioned SVG file under .kun-design')
-  }),
-  // A screen-generation turn: the model may write only this page and its design notes.
-  z.object({
-    kind: z.literal('html'),
-    artifactId: z.string().min(1),
-    relativePath: GuiDesignArtifactPathSchema('html', 'relativePath must be a versioned HTML file under .kun-design'),
-    designMdPath: z.string().min(1).refine((value) => {
-      const normalized = value.replaceAll('\\', '/')
-      return normalized === value &&
-        normalized.startsWith('.kun-design/') &&
-        !normalized.split('/').includes('..') &&
-        normalized.endsWith('/DESIGN.md')
-    }, { message: 'designMdPath must be a DESIGN.md file under .kun-design' }).optional()
-  })
-])
-export type GuiDesignArtifactContextJson = z.infer<typeof GuiDesignArtifactContextSchema>
 
 export const TurnStatus = z.enum([
   'queued',
@@ -221,6 +166,7 @@ export const TurnSchema = z.object({
   activeSkillIds: z.array(z.string().min(1)).default([]),
   injectedMemoryIds: z.array(z.string().min(1)).default([]),
   injectedMemorySummaries: z.array(InjectedMemorySummarySchema).default([]),
+  injectedMemoryRelations: z.array(MemoryRelationAnnotation).max(MEMORY_CONTEXT_MAX_RELATIONS).optional(),
   /** User-approved standing rules injected this turn; see injectedMemoryIds. */
   injectedDirectiveIds: z.array(z.string().min(1)).default([]),
   injectedDirectiveSummaries: z.array(InjectedMemorySummarySchema).default([]),

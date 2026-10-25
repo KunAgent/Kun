@@ -52,6 +52,7 @@ export default {
           ink: 'var(--ds-text)',
           muted: 'var(--ds-text-muted)',
           faint: 'var(--ds-text-faint)',
+          focus: 'var(--ds-focus-ring)',
           success: 'var(--ds-success)',
           'success-soft': 'var(--ds-success-soft)',
           danger: 'var(--ds-danger)',

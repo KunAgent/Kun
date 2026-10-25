@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { HarnessStatus } from '../contracts/harness.js'
@@ -11,8 +11,9 @@ const dirs: string[] = []
 const disposers: Array<() => void> = []
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) dispose()
+  vi.restoreAllMocks()
   vi.resetModules()
-  // A disposed probe process may still be logging its exit into the directory.
+  // A disposed probe process may still be releasing its fixture files.
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
@@ -22,32 +23,42 @@ const scenario = (models: string[]) => ({ sessionId: 'probe-session',
     options: models.map((value) => ({ value, name: value })) }] } })
 
 /** Stand-ins for installed OpenCode and CodeMaker: each start and exit is logged. */
-async function agents() {
+async function agents(exitDelaySeconds = 0) {
   const dir = await mkdtemp(join(tmpdir(), 'kun-model-catalog-restart-')); dirs.push(dir)
-  const log = join(dir, 'spawns.log')
-  await writeFile(log, '')
+  const events: string[] = []
   const install = async (id: string, models: string[], body = '') => {
     const scenarioPath = join(dir, `${id}.json`)
     await writeFile(scenarioPath, JSON.stringify(scenario(models)))
     const command = join(dir, id)
-    await writeFile(command, `#!/bin/sh\n${body}echo "start ${id}" >> '${log}'\n` +
-      `FAKE_ACP_SCENARIO='${scenarioPath}' '${process.execPath}' '${fixture}' "$@"\necho "end ${id}" >> '${log}'\n`, { mode: 0o755 })
+    await writeFile(command, `#!/bin/sh\n${body}` +
+      `FAKE_ACP_SCENARIO='${scenarioPath}' '${process.execPath}' '${fixture}' "$@"\n` +
+      (exitDelaySeconds ? `sleep ${exitDelaySeconds}\n` : ''), { mode: 0o755 })
     return { command, scenarioPath }
   }
   const opencode = await install('opencode', ['opencode/big', 'opencode/small'])
   const codemaker = await install('codemaker', ['codemaker/pro', 'codemaker/lite'])
-  const spawns = async () => (await readFile(log, 'utf8')).split('\n').filter(Boolean)
-  return { dir, install, opencode, codemaker, spawns, store: join(dir, 'harness-model-catalogs.json') }
+  const spawns = async () => [...events]
+  return { dir, install, opencode, codemaker, spawns, events, store: join(dir, 'harness-model-catalogs.json') }
 }
 
 /** A fresh module graph and composition stand in for a new Runtime process on the same data directory. */
 async function startRuntime(fixtureAgents: Awaited<ReturnType<typeof agents>>) {
   vi.resetModules()
   const [{ createHarnessComposition }, { WorkbenchHarnessService }, { codingAgentCatalog }, { HarnessesConfigSchema },
-    { HarnessRouter, HarnessRuntimeMap }, { allSupportedStatuses }, { ModelConnectionSnapshotSchema }, { listHarnessModels }] = await Promise.all([
+    { HarnessRouter, HarnessRuntimeMap }, { allSupportedStatuses }, { ModelConnectionSnapshotSchema }, { listHarnessModels }, ownedProcesses] = await Promise.all([
     import('./harness-runtime.js'), import('../workbench-bridge/harnesses.js'), import('../agents/agent-coding-agents.js'),
     import('../config/kun-config-harnesses.js'), import('./harness-router.js'), import('../contracts/harness-capabilities.js'),
-    import('../contracts/model-connections.js'), import('../server/routes/harnesses.js')])
+    import('../contracts/model-connections.js'), import('../server/routes/harnesses.js'), import('../process/owned-process.js')])
+  const spawn = ownedProcesses.spawnOwnedProcess
+  vi.spyOn(ownedProcesses, 'spawnOwnedProcess').mockImplementation(async (...args) => {
+    const child = await spawn(...args)
+    const id = basename(args[0])
+    fixtureAgents.events.push(`start ${id}`)
+    // Observe actual exit in the parent: group shutdown can kill the shell
+    // before a post-child echo (or even an EXIT trap) records its termination.
+    child.once('exit', () => fixtureAgents.events.push(`end ${id}`))
+    return child
+  })
   const options = { dataDir: fixtureAgents.dir, harnesses: HarnessesConfigSchema.parse({
     binaryPaths: { opencode: fixtureAgents.opencode.command, codemaker: fixtureAgents.codemaker.command },
     enabledProfiles: [{ harnessId: 'opencode', credentialMode: 'native-login' }, { harnessId: 'codemaker', credentialMode: 'native-login' }] }) }
@@ -82,8 +93,9 @@ const listedModels = { opencode: ['opencode/big', 'opencode/small'], codemaker: 
 /** Each case starts real Agent processes and two Runtime compositions. */
 const SPAWNING_TEST_TIMEOUT_MS = 30_000
 
-it('lists Agent models after a restart without starting any Agent CLI', async () => {
-  const fixtureAgents = await agents()
+// A delayed shell epilogue makes the signal-versus-exit-log race reproducible.
+it.each([0, 0.1])('lists Agent models after a restart without starting any Agent CLI (exit delay %ss)', async (exitDelay) => {
+  const fixtureAgents = await agents(exitDelay)
   const first = await startRuntime(fixtureAgents)
   expect(await first.listed()).toEqual(listedModels)
   // Discovery starts one Agent at a time: each probe process exits before the next starts.

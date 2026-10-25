@@ -67,7 +67,7 @@
     "build": "node ./scripts/clean-build-output.mjs && tsc -p tsconfig.build.json && vite build -c vite.tui.config.ts && node ./scripts/check-tui-import-graph.mjs && node ./scripts/write-runtime-build-manifest.mjs",
     "build:tui-app": "vite build -c vite.tui.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test ./scripts/runtime-build-manifest.test.mjs ./scripts/test-execution-plan.test.mjs && node ./scripts/run-tests.mjs",
+    "test": "node --test ./scripts/runtime-build-manifest.test.mjs ./scripts/test-execution-plan.test.mjs ./scripts/run-tests.test.mjs && node ./scripts/run-tests.mjs",
     "test:memory-growth": "node ./scripts/run-memory-growth-regression.mjs",
     "bench:fast-context": "node ./scripts/fast-context-benchmark.mjs",
     "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts src/memory/semantic-memory-evaluation-dataset.test.ts src/memory/semantic-memory-evaluation-v2-dataset.test.ts src/memory/semantic-memory-evaluation.test.ts src/memory/semantic-memory-evaluation-comparison.test.ts src/memory/semantic-memory-terminology-candidate.test.ts src/memory/semantic-memory-evaluation-v2-workflow.test.ts src/memory/semantic-memory-evaluation-v2-evidence.test.ts src/memory/semantic-memory-vector-candidate.test.ts src/memory/semantic-memory-candidate-fallback.test.ts src/memory/semantic-memory-evaluation-decision.test.ts src/memory/semantic-memory-evaluation-evidence.test.ts --reporter=verbose",
@@ -115,7 +115,7 @@
     "yaml": "^2.9.0",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -131,11 +131,12 @@
   "overrides": {
     "@hono/node-server": "2.0.11",
     "basic-ftp": "6.2.1",
+    "body-parser": "2.4.0",
     "fast-uri": "3.1.9",
     "hono": "4.13.11",
     "ip-address": "10.7.4",
     "proxy-addr": "2.0.8",
-    "qs": "6.16.0",
+    "qs": "6.16.1",
     "@connectrpc/connect-node": {
       "undici": "6.29.1"
     },

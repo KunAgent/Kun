@@ -1,4 +1,5 @@
 import type { CoreChildRuntimeMetadataJson } from './kun-contract-child'
+import type { MemoryRelationAnnotation } from '@shared/memory-working-context'
 export type { CoreChildRunActivityJson, CoreChildLauncher, CoreChildRuntimeMetadataJson } from './kun-contract-child'
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
 import type { AdeDelegatedTransport } from '@shared/ade-harnesses'
@@ -185,6 +186,7 @@ export type CoreTurnJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
   injectedDirectiveIds?: string[]
   injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
@@ -282,6 +284,7 @@ export type CoreTurnItemJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
   injectedDirectiveIds?: string[]
   injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number

@@ -33,6 +33,7 @@ const vitest = join(dirname(fileURLToPath(import.meta.url)), '..', 'node_modules
 const doctorFiles = [
   largeHistoryTest,
   'src/adapters/hybrid/hybrid-memory-distillation.test.ts',
+  'src/adapters/hybrid/hybrid-memory-context.test.ts',
   'src/adapters/hybrid/hybrid-memory-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-workbench.test.ts',
@@ -52,6 +53,7 @@ const doctorFiles = [
   'src/memory/memory-lexical-abstention-hybrid.test.ts',
   'src/memory/memory-project-identity.test.ts',
   'src/manager/agent-memory-roundtrip.test.ts',
+  'src/manager/memory-relations-manager.test.ts',
   'src/server/memory-managed-runtime.integration.test.ts'
 ]
 

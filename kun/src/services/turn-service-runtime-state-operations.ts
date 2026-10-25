@@ -414,6 +414,7 @@ async updateTurnMetadata(this: TurnService,
       | 'activeSkillIds'
       | 'injectedMemoryIds'
       | 'injectedMemorySummaries'
+      | 'injectedMemoryRelations'
       | 'injectedDirectiveIds'
       | 'injectedDirectiveSummaries'
       | 'skillInjectionBytes'
@@ -444,6 +445,9 @@ async updateTurnMetadata(this: TurnService,
               ...(patch.injectedMemoryIds ? { injectedMemoryIds: [...patch.injectedMemoryIds] } : {}),
               ...(patch.injectedMemorySummaries
                 ? { injectedMemorySummaries: [...patch.injectedMemorySummaries] }
+                : {}),
+              ...(patch.injectedMemoryRelations
+                ? { injectedMemoryRelations: [...patch.injectedMemoryRelations] }
                 : {}),
               ...(patch.injectedDirectiveIds
                 ? { injectedDirectiveIds: [...patch.injectedDirectiveIds] }

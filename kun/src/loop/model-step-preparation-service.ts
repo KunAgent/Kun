@@ -296,6 +296,8 @@ export abstract class ModelStepPreparationService {
       instructionResolution,
       memories,
       memoryDirectives,
+      memoryReferenceBlocks,
+      memoryRelationContext,
       activeGoalInstruction,
       goalRecoveryInstruction,
       activeTodoInstruction,
@@ -385,7 +387,7 @@ export abstract class ModelStepPreparationService {
       await this.deps.turns.updateTurnMetadata(threadId, turnId, {
         activeSkillIds: skillResolution.activeSkillIds,
         skillInjectionBytes: skillResolution.injectedBytes,
-        ...memoryInjectionMetadata({ memories, directives: memoryDirectives }),
+        ...memoryInjectionMetadata({ memories, directives: memoryDirectives, relationContext: memoryRelationContext }),
         injectedInstructionSources: instructionResolution.sources,
         instructionInjectionBytes: instructionResolution.injectedBytes,
         toolCatalogFingerprint: toolCatalog.fingerprint,
@@ -577,7 +579,7 @@ export abstract class ModelStepPreparationService {
         workspace: thread?.workspace ?? '',
         tools: requestToolSpecs
       }).map((content) => kunContextBlock('attachment-reference', 'reference', content)),
-      ...memoryContextBlocks({ memories, directives: memoryDirectives }),
+      ...memoryContextBlocks({ memories, directives: memoryDirectives, referenceBlocks: memoryReferenceBlocks }),
       ...turnDynamicContext.blocks.filter((block) => block.authority === 'user'),
       ...(turn.designProfile
         ? [kunContextBlock(

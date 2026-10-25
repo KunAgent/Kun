@@ -5,6 +5,7 @@ import type {
   CoreRuntimeSkillJson, CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
+import type { MemoryRelationAnnotation } from '@shared/memory-working-context'
 import type { NormalizedThread } from './types-thread'
 export type { NormalizedThread } from './types-thread'
 import type { CoreModelRequestFailureJson } from './kun-contract'
@@ -206,6 +207,7 @@ export type RuntimeDisclosureMetadata = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
   injectedDirectiveIds?: string[]
   injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number

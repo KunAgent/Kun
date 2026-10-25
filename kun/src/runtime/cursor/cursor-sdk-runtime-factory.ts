@@ -176,7 +176,8 @@ export function createCursorSdkRuntime(
       if (memoryContext.memories.length > 0 || memoryContext.directives.length > 0) {
         await deps.turns.updateTurnMetadata(threadId, turnId, memoryInjectionMetadata({
           memories: memoryContext.memories,
-          directives: memoryContext.directives
+          directives: memoryContext.directives,
+          relationContext: memoryContext.relationContext
         }))
       }
       if (!plan.planMode && thread.goal?.status === 'active') {

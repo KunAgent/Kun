@@ -186,7 +186,7 @@
     "yaml": "2.9.0",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.1049.0",
@@ -278,6 +278,7 @@
     "@hono/node-server": "2.0.11",
     "adm-zip": "0.6.0",
     "basic-ftp": "6.2.1",
+    "body-parser": "2.4.0",
     "fast-uri": "3.1.9",
     "hono": "4.13.11",
     "ip-address": "10.7.4",
@@ -287,7 +288,7 @@
       "undici": "8.10.2"
     },
     "proxy-addr": "2.0.8",
-    "qs": "6.16.0",
+    "qs": "6.16.1",
     "zod": "$zod"
   },
   "author": "Kun Contributors",
