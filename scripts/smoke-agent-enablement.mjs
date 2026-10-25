@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron } from 'playwright-core'
 import { createServer, optimizeDeps } from 'vite'
+import { setSmokeAppearance } from './agent-enablement-smoke-operation.mjs'
 
 // Real native Electron production components with an offline host boundary.
 // This does not install an external agent, log in, or send a model request.
@@ -22,7 +23,7 @@ const report = { sourceRevision: git('rev-parse', 'HEAD'), nativePlatform: proce
   scaleMethod: 'Native Electron webContents.setZoomFactor; no CSS transform or DPR emulation',
   captureMethod: 'Full native webContents.capturePage().toPNG(); PNG dimensions verified against native content and display scale',
   started: new Date().toISOString(), assertions: [], screenshots: [], screenshotDetails: [], measurements: [], viewports: [],
-  nativeCaptures: [], navigations: [], viteMessages: [], preoptimizedDependencies: [], pageErrors: [], blockedRequests: [], status: 'running' }
+  nativeCaptures: [], appearanceOperations: [], navigations: [], viteMessages: [], preoptimizedDependencies: [], pageErrors: [], blockedRequests: [], status: 'running' }
 let electron, page, server
 try {
   if (process.env.KUN_ENABLEMENT_EXPECTED_SHA) {
@@ -198,7 +199,7 @@ app.on('window-all-closed', () => app.quit())
   await page.locator('[data-agent-enablement="devin"]').waitFor()
   await enable().click(); await state('ready')
   for (const theme of ['light', 'dark']) {
-    await page.evaluate(async theme => { await window.agentEnablementFixture.language('zh'); window.agentEnablementFixture.theme(theme) }, theme)
+    await setSmokeAppearance(page, 'zh', theme, report.appearanceOperations)
     await panel().locator('[data-agent-profile-model]').click()
     const menu = page.locator('[data-agent-settings-model-menu]')
     await menu.locator('[data-devin-model="swe-2-high"]').waitFor()
@@ -235,10 +236,7 @@ app.on('window-all-closed', () => app.quit())
   await page.locator('[data-agent-enablement="deepseek-harness"]').waitFor()
 
   for (const language of ['en', 'zh']) for (const theme of ['light', 'dark']) {
-    await page.evaluate(async ({ language, theme }) => {
-      await window.agentEnablementFixture.language(language)
-      window.agentEnablementFixture.theme(theme)
-    }, { language, theme })
+    await setSmokeAppearance(page, language, theme, report.appearanceOperations)
     for (const width of [900, 1280]) for (const zoom of [1, 1.5, 2]) {
       await electron.evaluate(({ BrowserWindow }, { width, zoom }) => {
         const window = BrowserWindow.getAllWindows()[0]
