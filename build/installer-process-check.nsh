@@ -10,6 +10,7 @@
     File /oname=$PLUGINSDIR\windows-installer-migration-paths.ps1 "${PROJECT_DIR}\build\windows-installer-migration-paths.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-journal.ps1 "${PROJECT_DIR}\build\windows-installer-migration-journal.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-filesystem.ps1 "${PROJECT_DIR}\build\windows-installer-migration-filesystem.ps1"
+    File /oname=$PLUGINSDIR\windows-installer-migration-runtime-integrity.ps1 "${PROJECT_DIR}\build\windows-installer-migration-runtime-integrity.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-payload-copy.ps1 "${PROJECT_DIR}\build\windows-installer-migration-payload-copy.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-actions.ps1 "${PROJECT_DIR}\build\windows-installer-migration-actions.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-recovery-env.ps1 "${PROJECT_DIR}\build\windows-installer-migration-recovery-env.ps1"
