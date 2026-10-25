@@ -20,16 +20,16 @@ describe('whatsNewSpotlight', () => {
   it.each(['zh', 'en'] as const)('lets the 0.4.2 card replace only the Artifacts highlight (%s)', async (language) => {
     const content = await loadWhatsNewContent({ version: '0.4.2', previousVersion: '0.4.1', changelogUrl: '' }, language)
     const summary = content.current
-    expect(summary?.features).toHaveLength(20)
-    expect(summary?.fixes).toHaveLength(12)
+    expect(summary?.features).toHaveLength(24)
+    expect(summary?.fixes).toHaveLength(14)
 
     const spotlight = whatsNewSpotlight(content.version)
     const picked = pickHighlights(summary!, { exclude: spotlight?.covers, limit: SPOTLIGHT_HIGHLIGHT_LIMIT })
     const shown = [...picked.highlights.map((item) => item.title), ...picked.alsoUpdated]
     expect(picked.highlights).toHaveLength(2)
     expect(picked.highlights.map((item) => item.title)).toEqual(language === 'zh'
-      ? ['工作台与 Office 预览', 'Work 写作审阅']
-      : ['Workbench and Office previews', 'Review writing changes'])
+      ? ['交互组件与 MCP Apps', '工作台与 Office 预览']
+      : ['Interactive widgets and MCP Apps', 'Workbench and Office previews'])
     expect(picked.alsoUpdated).toHaveLength(4)
     expect(summary!.features.filter((item) => spotlight!.covers.test(item.title))).toHaveLength(1)
     expect(shown.some((title) => /artifact|产物/i.test(title))).toBe(false)
