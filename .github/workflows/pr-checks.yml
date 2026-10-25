@@ -170,10 +170,10 @@ jobs:
       # PR validation intentionally uses the afterPack ad-hoc signature only.
       # It never consumes Developer ID or notarization secrets.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      # The 0.3.11 renderer build peaks just above 4 GiB of live heap. 5 GiB
-      # clears it while leaving ~2 GiB of the 7 GB macOS ARM runner for the OS
-      # and esbuild; do not raise further without shrinking the renderer.
-      NODE_OPTIONS: '--max-old-space-size=5120'
+      # Renderer chunk generation now exceeds the former 5 GiB heap ceiling.
+      # Match the 6 GiB budget already exercised by native macOS workspace
+      # builds; retain the same runner, serial packaging and all smoke gates.
+      NODE_OPTIONS: '--max-old-space-size=6144'
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

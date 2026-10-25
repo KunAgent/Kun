@@ -14,6 +14,7 @@ export function noteAnalyticsRoomMessage(id: string, createdAt: string) {
 export function clearAnalyticsPresentation() { liveTurns.clear(); liveRoomMessages.clear() }
 export function useResultPresented(block: ChatBlock) {
   useEffect(() => {
+    if (typeof document === 'undefined') return
     if (block.kind !== 'assistant' || block.id === 'live-assistant' || !block.turnId || !block.text.trim() || document.hidden) return
     const state = useChatStore.getState(), key = state.activeThreadId + ':' + block.turnId
     if (state.route !== 'chat' || state.threads.find(thread => thread.id === state.activeThreadId)?.agentSurface === 'write' ||
@@ -23,6 +24,7 @@ export function useResultPresented(block: ChatBlock) {
   }, [block])
 }
 export function noteAnalyticsRoomRendered(message: RoomMessage) {
+  if (typeof document === 'undefined') return
   if (!productCaptureEnabled() || document.hidden || message.authorKind !== 'member' ||
     message.deliveryPhase !== 'final' || !message.body.trim() || !liveRoomMessages.delete(message.id)) return
   if (!message.originRunId) return
