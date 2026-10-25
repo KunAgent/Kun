@@ -204,12 +204,15 @@ windowsOnly('Windows automatic update transaction', () => {
       })
     )
 
-    const switched = run(input, 'SwitchUpdatePayload', 'validate.before_check')
+    const switched = run(input, 'SwitchUpdatePayload')
     assertExpectedFailure(switched, 'SwitchUpdatePayload')
+    expect(readFileSync(input.diagnostic, 'utf8')).toMatch(/FAIL action=SwitchUpdatePayload .*missing the runtime package @earendil-works\/pi-tui/)
     expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
-    expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
     expect(existsSync(input.target)).toBe(false)
     expect(transaction(input.transaction).Phase).toBe('prepared')
+    assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction')
+    expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
+    expect(existsSync(join(input.source, 'DeepSeek GUI.exe'))).toBe(true)
   })
 
   it('removes candidate-only files when it restores the previous payload', () => {
