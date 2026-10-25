@@ -78,15 +78,20 @@ test('Code baseline waits for a file treeitem rather than its overridden button 
     evaluate: async () => evaluations.shift(),
     locator: (selector) => ({
       waitFor: async () => {},
-      getByRole: (role, { name }) => {
+      getByRole: (role, options = {}) => {
         if (selector === '.ds-workbench-side-rail:visible') {
-          assert.equal(role, 'button'); assert.equal(name, 'Files')
+          assert.equal(role, 'button'); assert.equal(options.name, 'Files')
           return { click: async () => {} }
         }
         assert.equal(selector, '[data-workbench-right-panel]:visible')
-        assert.equal(role, 'treeitem', 'file rows have an explicit treeitem role')
-        assert(name.test('baseline.txt'))
-        return { first: () => ({ waitFor: async () => selected.push('baseline.txt') }) }
+        assert.equal(role, 'tree', 'file rows live inside an explicit tree container')
+        return {
+          getByRole: (innerRole, { name, exact }) => {
+            assert.equal(innerRole, 'treeitem', 'file rows have an explicit treeitem role')
+            assert.equal(name, 'baseline.txt'); assert.equal(exact, true)
+            return { waitFor: async () => selected.push('baseline.txt') }
+          }
+        }
       }
     })
   }
