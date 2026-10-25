@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { _electron as electron } from 'playwright-core'
-import { createServer, normalizePath } from 'vite'
+import { createServer, normalizePath, optimizeDeps } from 'vite'
 import { paperEvidenceFixture } from './paper-evidence-ui-fixture.mjs'
 
 // Native Electron, real production components, offline deterministic IPC fixture.
@@ -15,26 +15,35 @@ const repository = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'kun-paper-evidence-'))
 const evidence = resolve(process.env.KUN_PAPER_EVIDENCE || 'dist/paper-evidence-smoke')
 await mkdir(evidence, { recursive: true })
-const fixtureId = normalizePath(join(repository, '__paper_evidence_fixture.tsx'))
+// A real entry under the repository lets Vite scan production imports and resolve packages.
+await mkdir(join(repository, 'out'), { recursive: true })
+const fixtureDirectory = await mkdtemp(join(repository, 'out', '.paper-evidence-smoke-'))
+const fixtureId = normalizePath(join(fixtureDirectory, 'fixture.tsx'))
 const fixtureUrl = '/__paper_evidence_fixture.tsx'
-const errors = [], externalRequests = [], checks = []
+const errors = [], externalRequests = [], checks = [], navigations = [], viteMessages = []
+let preoptimizedDependencies = []
 let server, application, page
 const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module" src="${fixtureUrl}"></script></body></html>`
 try {
+  await writeFile(fixtureId, paperEvidenceFixture())
   server = await createServer({ configFile: false, root: repository,
     cacheDir: join(temporary, 'vite-cache'), esbuild: { jsx: 'automatic' },
-    optimizeDeps: { entries: [] }, css: { postcss: repository },
+    optimizeDeps: { entries: [fixtureId],
+      include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      holdUntilCrawlEnd: true }, css: { postcss: repository },
     resolve: { alias: { '@renderer': resolve(repository, 'src/renderer/src'), '@shared': resolve(repository, 'src/shared'), '@kun/provider-catalog': resolve(repository, 'packages/provider-catalog/src/index.ts'), '@kun/extension-api': resolve(repository, 'packages/extension-api/src/index.ts') } },
     server: { host: '127.0.0.1', port: 0 },
     plugins: [{ name: 'paper-evidence-fixture', enforce: 'pre',
       resolveId(id) { if (id === fixtureUrl || id === fixtureId) return fixtureId },
-      load(id) { if (id === fixtureId) return paperEvidenceFixture() },
       configureServer(vite) { vite.middlewares.use(async (request, response, next) => {
         if (request.url?.split('?')[0] !== '/__paper') return next()
         response.setHeader('Content-Type', 'text/html')
         response.end(await vite.transformIndexHtml('/__paper', html))
       }) }
     }] })
+  // Finish the cold-cache scan before React can load mixed optimizer generations.
+  const optimized = await optimizeDeps(server.config, true, true)
+  preoptimizedDependencies = Object.keys(optimized.optimized)
   await server.listen()
   const origin = server.resolvedUrls.local[0]
   if (process.argv.includes('--serve')) {
@@ -58,6 +67,12 @@ app.on('window-all-closed',()=>app.quit());`)
   await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1060, 900))
   await page.setViewportSize({ width: 1060, height: 900 })
   page.on('pageerror', (error) => errors.push(error.stack || error.message))
+  page.on('framenavigated', frame => {
+    if (frame === page.mainFrame()) navigations.push({ url: frame.url(), at: new Date().toISOString() })
+  })
+  page.on('console', message => {
+    if (message.text().includes('[vite]')) viteMessages.push({ text: message.text(), at: new Date().toISOString() })
+  })
   await page.goto(origin + '__paper', { timeout: 90_000 })
   await page.waitForFunction(() => window.paperFixture?.ready, undefined, { timeout: 90_000 })
   await page.evaluate(() => window.paperFixture.render({ view: 'reader' }))
@@ -190,9 +205,10 @@ app.on('window-all-closed',()=>app.quit());`)
   }
   throw error
 } finally {
-  await writeFile(join(evidence, 'report.json'), JSON.stringify({ platform: process.platform, checks, errors, externalRequests }, null, 2))
+  await writeFile(join(evidence, 'report.json'), JSON.stringify({ platform: process.platform, checks, errors, externalRequests, preoptimizedDependencies, navigations, viteMessages }, null, 2))
   await application?.close()
   await server?.close()
+  await rm(fixtureDirectory, { recursive: true, force: true })
   await rm(temporary, { recursive: true, force: true })
 }
 async function screenshot(name) {

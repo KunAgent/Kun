@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/memory-workbench-smoke.yml'
       - 'scripts/smoke-memory-lifecycle.mjs'
+      - 'scripts/smoke-url-assets.mjs'
+      - 'scripts/smoke-url-assets.test.mjs'
       - 'scripts/fixtures/memory-lifecycle.tsx'
       - 'scripts/fixtures/memory-lifecycle-backend.ts'
       - 'scripts/memory-lifecycle-backend.test.mjs'
@@ -65,7 +67,7 @@ jobs:
           src/renderer/src/agent/kun-runtime-memory-lifecycle.test.ts
           src/renderer/src/agent/kun-runtime-memory-feedback.test.ts
       - name: Verify real isolated store lifecycle and anti-replay
-        run: node --test scripts/memory-lifecycle-backend.test.mjs scripts/memory-cjk-fonts.test.mjs
+        run: node --test scripts/memory-lifecycle-backend.test.mjs scripts/memory-cjk-fonts.test.mjs scripts/smoke-url-assets.test.mjs
       - name: Exercise real memory components and stores in isolated native Electron
         env:
           KUN_MEMORY_EVIDENCE: dist/memory-workbench

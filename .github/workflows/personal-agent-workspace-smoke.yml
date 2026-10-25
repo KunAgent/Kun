@@ -12,6 +12,8 @@ on:
       - 'src/renderer/src/components/workbench/useWorkbenchFileTreeController*'
       - 'src/renderer/src/components/workbench/CodeRightPanelTabs*'
       - 'src/renderer/src/components/chat/WorkbenchTopBar.tsx'
+      - 'src/renderer/src/components/chat/ChatFileTreePanel*'
+      - 'src/renderer/src/components/chat/ChatFileTreeRowViews*'
       - 'src/renderer/src/locales/*/common/rooms*'
       - 'src/main/browser-use/**'
       - 'src/preload/index.ts'

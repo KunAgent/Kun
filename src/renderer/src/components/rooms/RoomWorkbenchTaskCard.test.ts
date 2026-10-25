@@ -208,4 +208,57 @@ describe('Room workbench task card', () => {
     expect(mocks.dispatch.act).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 2 }), 'resume')
     expect(renderer!.root.findAllByType('textarea')).toHaveLength(0)
   })
+
+  it.each(['countdown', 'pending_confirmation', 'running', 'completed', 'cancelled'])(
+    'discards the local draft without resuming an already %s dispatch', async (state) => {
+      mocks.client.get.mockResolvedValue(link({ dispatchIntentId: 'dispatch-1' }))
+      mocks.dispatch.get.mockResolvedValue({ intentId: 'dispatch-1', revision: 2, state: 'paused' })
+      await mount()
+      await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
+      await act(async () => { renderer!.root.findByType('textarea').props.onChange({ target: { value: 'discard me' } }) })
+      const current = { intentId: 'dispatch-1', revision: 3, state }
+      mocks.dispatch.get.mockResolvedValue(current)
+      mocks.dispatch.act.mockClear()
+      await act(async () => { button(renderer!, 'Cancel')!.props.onClick() })
+      expect(mocks.dispatch.act).not.toHaveBeenCalled()
+      expect(renderer!.root.findAllByType('textarea')).toHaveLength(0)
+      expect(mocks.client.confirm).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([false, true])('reconciles a resume conflict without hiding a still-paused failure (%s)', async (stillPaused) => {
+    mocks.client.get.mockResolvedValue(link({ dispatchIntentId: 'dispatch-1' }))
+    const paused = { intentId: 'dispatch-1', revision: 2, state: 'paused' }
+    mocks.dispatch.get.mockResolvedValue(paused)
+    await mount()
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
+    mocks.dispatch.get.mockResolvedValueOnce(paused).mockResolvedValue({
+      ...paused, revision: 3, state: stillPaused ? 'paused' : 'pending_confirmation'
+    })
+    mocks.dispatch.act.mockRejectedValue(new Error('Dispatch changed'))
+    await act(async () => { button(renderer!, 'Cancel')!.props.onClick() })
+    expect(mocks.dispatch.act).toHaveBeenCalledTimes(1)
+    expect(renderer!.root.findAllByType('textarea')).toHaveLength(stillPaused ? 1 : 0)
+    expect(text(renderer!).includes('Dispatch changed')).toBe(stillPaused)
+    expect(mocks.client.confirm).not.toHaveBeenCalled()
+  })
+
+
+  it('discards a draft opened before the host dispatch was bound to the card', async () => {
+    mocks.client.get.mockResolvedValue(link())
+    await mount()
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
+    expect(mocks.dispatch.act).not.toHaveBeenCalled()
+    await act(async () => { renderer!.root.findByType('textarea').props.onChange({ target: { value: 'discard me' } }) })
+    mocks.client.get.mockResolvedValue(link({ dispatchIntentId: 'dispatch-1' }))
+    await act(async () => { emit({ roomId: 'room', kind: 'workbench.link.updated', payload: { linkId: 'link-1' } }) })
+    const intent = { intentId: 'dispatch-1', revision: 1, state: 'pending_confirmation' }
+    mocks.dispatch.get.mockResolvedValue(intent)
+    await act(async () => { button(renderer!, 'Cancel')!.props.onClick() })
+    expect(mocks.dispatch.act).not.toHaveBeenCalled()
+    expect(mocks.dispatch.publish).toHaveBeenCalledWith(intent)
+    expect(renderer!.root.findAllByType('textarea')).toHaveLength(0)
+    expect(mocks.client.confirm).not.toHaveBeenCalled()
+  })
+
 })

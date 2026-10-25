@@ -121,6 +121,45 @@ describe('HybridThreadDocumentRepository cache budget', () => {
   })
 })
 
+describe('HybridThreadDocumentRepository bounded sizing', () => {
+  it('keeps exact UTF-8 budgets across multiple turns and stops before oversized trailing items', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-thread-cache-sizing-'))
+    roots.push(root)
+    const threadId = 'thread_sizing'
+    const dir = join(root, 'threads', threadId)
+    await mkdir(dir, { recursive: true })
+    const items = ['first', 'second', 'third'].map((id, index) => makeAssistantTextItem({
+      id, threadId, turnId: index < 2 ? 'turn_1' : 'turn_2',
+      text: '\u4e2d\u6587"\\'.repeat(256), status: 'completed'
+    }))
+    const thread = {
+      ...createThreadRecord({ id: threadId, title: 'Sizing', workspace: '/tmp', model: 'test' }),
+      turns: ['turn_1', 'turn_2', 'empty'].map(id => createTurnRecord({
+        id, threadId, prompt: '', status: 'completed'
+      }))
+    }
+    await writeFile(join(dir, 'metadata.jsonl'), `${JSON.stringify({
+      kind: 'thread_metadata', version: 1, timestamp: thread.updatedAt, thread
+    })}\n`)
+    await writeFile(join(dir, 'messages.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n')
+    const hydrated = await new HybridThreadDocumentRepository(root).readThread(threadId)
+    const bytes = Buffer.byteLength(JSON.stringify(hydrated))
+    for (const maxBytes of [bytes * 2, bytes * 2 - 1]) {
+      const documents = new HybridThreadDocumentRepository(root, { cacheMaxBytes: maxBytes })
+      expect(await documents.readThread(threadId)).toEqual(hydrated)
+      expect(documents.cacheStats().bytes).toBe(maxBytes === bytes * 2 ? bytes : 0)
+    }
+    const stringify = vi.spyOn(JSON, 'stringify')
+    const documents = new HybridThreadDocumentRepository(root, { cacheMaxBytes: 1024 })
+    expect(await documents.readThread(threadId)).toEqual(hydrated)
+    expect(documents.cacheStats().entries).toBe(0)
+    expect(stringify.mock.calls.some(([value]) => value?.id === 'third')).toBe(false)
+    expect(stringify.mock.calls.some(([value]) => value?.turns?.some(
+      (turn: { items: unknown[] }) => turn.items.length > 0
+    ))).toBe(false)
+  })
+})
+
 describe('HybridThreadDocumentRepository incremental mirrors', () => {
   it.each(['metadata.jsonl', 'messages.jsonl'])(
     'checks %s incarnation after waiting for a compaction replacement',
