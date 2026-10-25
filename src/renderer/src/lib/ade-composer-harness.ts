@@ -135,7 +135,11 @@ export function adeHarnessModelGroups(input: {
         providerId: `${credentialGroupKey(mode)}:${provider.providerId}`,
         label: `${labelFor[mode]} · ${provider.label}`,
         modelIds: [...provider.models],
-        ...(provider.modelInfo ? { modelProfiles: harnessModelProfiles(provider.modelInfo) } : {})
+        ...(provider.modelInfo ? { modelProfiles: harnessModelProfiles(provider.modelInfo) } : {}),
+        ...(row.definition.id === 'cursor' && provider.modelInfo ? {
+          nativeHarnessId: row.definition.id,
+          modelInfo: Object.fromEntries(provider.modelInfo.map((entry) => [entry.id, entry]))
+        } : {})
       })
     }
   }

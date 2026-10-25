@@ -14,7 +14,7 @@ import {
   shouldShowCanvasDocumentLoading,
   shouldResetCanvasTransientInteractionAfterDocumentSync,
   shouldSyncCanvasHtmlFrames,
-  shouldToggleHtmlFrameInteractiveOnDoubleClick
+  shouldEnterHtmlFrameComponentPickOnDoubleClick
 } from './CanvasViewport'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape } from '../../../design/canvas/canvas-types'
 
@@ -164,16 +164,16 @@ describe('CanvasViewport surface behavior', () => {
     ).toBeNull()
   })
 
-  it('toggles live HTML frame interaction from design-surface double-clicks only', () => {
+  it('enters component picking from design-surface double-clicks only', () => {
     const htmlFrame = createDefaultShape('frame', 0, 0)
     htmlFrame.htmlArtifactId = 'artifact_html'
     const plainFrame = createDefaultShape('frame', 0, 0)
 
-    expect(shouldToggleHtmlFrameInteractiveOnDoubleClick('design', htmlFrame)).toBe(true)
-    expect(shouldToggleHtmlFrameInteractiveOnDoubleClick('code', htmlFrame)).toBe(false)
-    expect(shouldToggleHtmlFrameInteractiveOnDoubleClick('work', htmlFrame)).toBe(false)
-    expect(shouldToggleHtmlFrameInteractiveOnDoubleClick('design', plainFrame)).toBe(false)
-    expect(shouldToggleHtmlFrameInteractiveOnDoubleClick('design', undefined)).toBe(false)
+    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('design', htmlFrame)).toBe(true)
+    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('code', htmlFrame)).toBe(false)
+    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('work', htmlFrame)).toBe(false)
+    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('design', plainFrame)).toBe(false)
+    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('design', undefined)).toBe(false)
   })
 
   it('allows code canvases to override the design-system persistence directory', () => {

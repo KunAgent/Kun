@@ -28,5 +28,6 @@ export function terminalSessionIdForWorkspace(
     const agentKey = target.kind === 'agent' ? `:agent-${hashString(target.harnessId)}` : ''
     return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}${cwdKey}${agentKey}:${tabKey}`
   }
+  if (target.kind === 'kun-process') return `kun-process:${target.processId}`
   return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}:ssh-${hashString(target.hostId)}:${tabKey}`
 }

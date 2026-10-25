@@ -43,6 +43,7 @@ import preset39 from './definitions/fireworks.json' with { type: 'json' }
 import preset40 from './definitions/ollama-local.json' with { type: 'json' }
 import preset41 from './definitions/lmstudio.json' with { type: 'json' }
 import preset42 from './definitions/local-openai.json' with { type: 'json' }
+import magpiePreset from './definitions/magpie.json' with { type: 'json' }
 import preset43 from './definitions/baidu-qianfan.json' with { type: 'json' }
 import preset44 from './definitions/huaweicloud-maas.json' with { type: 'json' }
 import preset45 from './definitions/tencent-tokenhub.json' with { type: 'json' }
@@ -103,6 +104,7 @@ export const PROVIDER_CATALOG: readonly ProviderCatalogPreset[] = validateProvid
   preset40,
   preset41,
   preset42,
+  magpiePreset,
   preset43,
   preset44,
   preset45,

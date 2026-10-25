@@ -132,8 +132,9 @@ async function assertRuntimeQueueBridge(page, workspaceRoot, model) {
     })
     await send('After catalog refresh')
     const c = await waitRow('After catalog refresh')
+    // Up to three queued rows show inline; only longer queues fold behind "n more".
     const header = composer.locator('[data-queued-message-header]')
-    if (await header.getAttribute('aria-expanded') === 'false') await header.click()
+    if (await header.count() && await header.getAttribute('aria-expanded') === 'false') await header.click()
     const editC = composer.locator(`[data-queued-message-id="${c.id}"] [data-queued-message-action="edit"]`)
     if (await editC.isDisabled()) throw new Error('Catalog refresh disabled edit')
     await editC.click()

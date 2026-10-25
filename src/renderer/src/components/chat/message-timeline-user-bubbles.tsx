@@ -20,6 +20,7 @@ import { useTimelineSurface } from './timeline-surface'
 import { RewindFileResetChoice } from './rewind-file-reset-choice'
 import { editedFileReferences, userToComposerFileReferences, UserMessageEditField } from './UserMessageEditField'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
+import { isPendingSteerUserBlock, PendingSteerStatus } from './timeline-pending-steer-record'
 
 export function BackgroundShellNoticeBubble({
   block,
@@ -339,6 +340,8 @@ export function UserMessageBubble({
   const busy = useChatStore((s) => s.busy)
   const route = useChatStore((s) => s.route)
   const rewindAndResend = useChatStore((s) => s.rewindAndResend)
+  // A guided message the runtime accepted but has not folded into the turn yet.
+  const pendingSteer = useChatStore((s) => isPendingSteerUserBlock(block, s))
   const surface = useTimelineSurface()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(block.text)
@@ -459,6 +462,7 @@ export function UserMessageBubble({
 
   return (
     <div className="ds-user-message group relative" data-timeline-block-id={block.id}
+      data-pending-steer={pendingSteer ? 'true' : undefined}
       // Mobile: tapping the bubble focuses the group so the focus-within
       // action row below becomes reachable without hover.
       tabIndex={surface === 'mobile' ? 0 : undefined}>
@@ -495,6 +499,7 @@ export function UserMessageBubble({
           </>
         )}
       </div>
+      {pendingSteer ? <PendingSteerStatus /> : null}
       <div
         data-user-message-actions="inline"
         className="invisible flex min-h-7 min-w-0 max-w-full items-center justify-end pt-1 text-ds-faint opacity-0 transition-[opacity,visibility] duration-150 motion-reduce:transition-none group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"

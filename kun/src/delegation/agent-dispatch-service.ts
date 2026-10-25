@@ -16,7 +16,9 @@ import type { ApprovalResolution } from '../domain/approval.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import type { AgentDispatchIntentStore } from './agent-dispatch-intent-store.js'
+import { mergeAssignmentRoutes, rerouteAssignment, type AssignmentReplacement } from './agent-dispatch-assignment-routes.js'
 
+/** Default no-response window before a waiting card starts on its own. */
 export const AGENT_DISPATCH_COUNTDOWN_MS = 60_000
 /** Scan cadence while some intent is unfinished, and while every intent is settled. */
 export const AGENT_DISPATCH_SCAN_MS = 1_000
@@ -25,6 +27,8 @@ export const AGENT_DISPATCH_IDLE_SCAN_MS = 5_000
 export const AGENT_DISPATCH_MAX_START_ATTEMPTS = 3
 const terminal = new Set<AgentDispatchState>(['completed', 'failed', 'cancelled'])
 const editable = new Set<AgentDispatchState>(['pending_confirmation', 'reviewing', 'countdown', 'paused'])
+/** States whose recommendation the user may still change; a review in flight must settle first. */
+const adjustable = new Set<AgentDispatchState>(['pending_confirmation', 'countdown', 'paused'])
 const active = new Set<AgentDispatchState>(['starting', 'uncertain', 'running', 'awaiting_parent', 'stopping'])
 
 export type AgentDispatchReconciliation = {
@@ -56,11 +60,29 @@ export type AgentDispatchProposal = {
   batchId?: string
 }
 
+/**
+ * How long a card waits for the user before it starts on its own. `delayMs` 0
+ * disables automatic starts; full-access cards then wait for confirmation like
+ * ask-for-approval ones. `whenConfirmationRequired` extends the same window to
+ * ask-for-approval cards, whose workers still ask before each action.
+ */
+export type AgentDispatchAutoStartPolicy = {
+  delayMs: number
+  whenConfirmationRequired: boolean
+}
+
+export const DEFAULT_AGENT_DISPATCH_AUTO_START: AgentDispatchAutoStartPolicy = {
+  delayMs: AGENT_DISPATCH_COUNTDOWN_MS,
+  whenConfirmationRequired: false
+}
+
 export type AgentDispatchServiceOptions = {
   store: AgentDispatchIntentStore
   applicationSessionId: string
   onUpdated?(intent: AgentDispatchIntent): void | Promise<void>
   review?(intent: AgentDispatchIntent, signal: AbortSignal): Promise<ApprovalResolution>
+  /** Read on every decision so settings changes apply without a restart. */
+  autoStart?: () => AgentDispatchAutoStartPolicy
   now?: () => number
 }
 
@@ -113,11 +135,11 @@ export class AgentDispatchService {
       ...proposal, intentId,
       source: { ...proposal.source, applicationSessionId: this.options.applicationSessionId },
       recommendation: { ...proposal.recommendation, permissionMode },
-      state: stateForMode(permissionMode), revision: 1,
+      state: this.initialState(permissionMode), revision: 1,
       startRequestId: `${intentId}:start`,
-      deadline: permissionMode === 'full-access' ? this.deadline() : undefined,
       createdAt: now, updatedAt: now
     })
+    if (intent.state === 'countdown') intent.deadline = this.deadline()
     await this.handler(intent).validate(intent, this.controller.signal)
     const persisted = await this.options.store.transaction((file) => {
       const repeated = file.intents.find((entry) => entry.intentId === intentId)
@@ -164,7 +186,7 @@ export class AgentDispatchService {
           intent.state = 'paused'; delete intent.deadline
           break
         case 'update': {
-          if (intent.state !== 'paused') throw new Error('Pause dispatch before editing')
+          if (!adjustable.has(intent.state)) throw new Error('Only a pending dispatch can be adjusted')
           if (!preparedEdit) throw new Error('Dispatch edit was not prepared')
           intent.recommendation = preparedEdit.recommendation; intent.payload = preparedEdit.payload
           this.resetDecision(intent)
@@ -207,8 +229,17 @@ export class AgentDispatchService {
     return (await this.get(intentId)) ?? changed
   }
 
-  async updateTarget(intentId: string, update: Exclude<AgentDispatchReconciliation, { state: 'absent' | 'resume' }>): Promise<AgentDispatchIntent | null> {
+  /**
+   * Publish a reconciled outcome. With `expectedRevision`, an outcome computed
+   * from an older card (e.g. before an assignment was rerouted) is dropped;
+   * the next scan recomputes it from the current card.
+   */
+  async updateTarget(
+    intentId: string, update: Exclude<AgentDispatchReconciliation, { state: 'absent' | 'resume' }>,
+    expectedRevision?: number
+  ): Promise<AgentDispatchIntent | null> {
     return this.mutate(intentId, (intent) => {
+      if (expectedRevision !== undefined && intent.revision !== expectedRevision) return false
       if (terminal.has(intent.state)) return false
       // Outcome hooks cannot revive a paused/unapproved card.
       if (!active.has(intent.state) && intent.state !== 'queued') return false
@@ -273,6 +304,26 @@ export class AgentDispatchService {
     return replaced
   }
 
+  /** Host-only reroute of one failed batch assignment after its worker settled; siblings keep running. */
+  replaceAssignment(intentId: string, input: AssignmentReplacement): Promise<AgentDispatchIntent> {
+    return this.command(async () => {
+      this.assertAdmission()
+      const candidate = structuredClone(required((await this.get(intentId)) ?? undefined))
+      rerouteAssignment(candidate, input)
+      await this.handler(candidate).validate(AgentDispatchIntentSchema.parse(candidate), this.controller.signal)
+      const replaced = await this.options.store.transaction((file) => {
+        const current = required(file.intents.find((entry) => entry.intentId === intentId))
+        if (current.revision !== input.expectedRevision) throw new AgentDispatchConflictError(current.revision)
+        rerouteAssignment(current, input)
+        current.revision += 1; current.updatedAt = this.nowIso()
+        return current
+      })
+      this.startFailures.delete(intentId)
+      await this.emit(replaced); this.launch(intentId)
+      return replaced
+    })
+  }
+
   async start(): Promise<void> {
     if (this.started) return
     this.assertAdmission(); this.started = true
@@ -283,7 +334,9 @@ export class AgentDispatchService {
         if (terminal.has(intent.state)) continue
         if (intent.source.applicationSessionId !== this.options.applicationSessionId) {
           intent.source.applicationSessionId = this.options.applicationSessionId
-          if (intent.state === 'countdown') {
+          if (intent.state === 'countdown' && !this.autoStarts(intent)) {
+            intent.state = 'pending_confirmation'; delete intent.deadline
+          } else if (intent.state === 'countdown') {
             const key = `${intent.source.threadId}:${intent.source.turnId}:${intent.batchId ?? intent.intentId}`
             const deadline = batchDeadlines.get(key) ?? this.deadline()
             batchDeadlines.set(key, deadline); intent.deadline = deadline
@@ -354,7 +407,14 @@ export class AgentDispatchService {
       if (!intent.deadline || Date.parse(intent.deadline) > this.now()) return
       intent = await this.mutate(intentId, (current) => {
         if (current.state !== 'countdown' || !current.deadline || Date.parse(current.deadline) > this.now()) return false
-        current.state = 'queued'; delete current.deadline
+        delete current.deadline
+        // Turning automatic starts off applies to windows that are already running.
+        if (!this.autoStarts(current)) { current.state = 'pending_confirmation'; return true }
+        current.state = 'queued'
+        current.decision = { decision: 'allow', decidedAt: this.nowIso(),
+          reason: current.recommendation.permissionMode === 'full-access'
+            ? 'Started automatically when the countdown ended'
+            : 'Started automatically after no response within the confirmation window' }
         return true
       })
     }
@@ -409,7 +469,7 @@ export class AgentDispatchService {
           if (reconciled.state === 'resume') delete current.target
           return true
         })
-      } else { await this.updateTarget(intentId, reconciled); return }
+      } else { await this.updateTarget(intentId, reconciled, intent.revision); return }
     }
     if (intent?.state === 'queued' && !intent.target) { await this.admit(intent, handler); return }
     if (intent && (active.has(intent.state) || (intent.state === 'queued' && intent.target))) {
@@ -424,7 +484,7 @@ export class AgentDispatchService {
         })
       } else if (result?.state === 'absent' && intent.cancellationRequested) {
         await this.updateTarget(intentId, { state: 'cancelled' })
-      } else if (result && result.state !== 'absent') await this.updateTarget(intentId, result)
+      } else if (result && result.state !== 'absent') await this.updateTarget(intentId, result, revision)
     }
   }
 
@@ -466,7 +526,7 @@ export class AgentDispatchService {
             current.state = 'uncertain'
             return true
           })
-        } else if (status && status.state !== 'absent') await this.updateTarget(intent.intentId, status)
+        } else if (status && status.state !== 'absent') await this.updateTarget(intent.intentId, status, admitted.revision)
       }
     } catch (error) {
       // A transport error cannot prove that the scheduler did not accept work.
@@ -525,14 +585,20 @@ export class AgentDispatchService {
       return undefined
     }
     if (intent.revision !== input.expectedRevision) throw new AgentDispatchConflictError(intent.revision)
-    if (intent.state !== 'paused') throw new Error('Pause dispatch before editing')
+    if (!adjustable.has(intent.state)) throw new Error('Only a pending dispatch can be adjusted')
+    const { assignments: routeEdits, ...edits } = input.recommendation ?? {}
+    const routes = mergeAssignmentRoutes(intent.recommendation, edits, routeEdits)
     const recommendation = AgentDispatchRecommendationSchema.parse({
-      ...intent.recommendation, ...input.recommendation,
+      ...intent.recommendation, ...edits,
       permissionMode: kunToolPermissionModeFromSettings(intent.policySnapshot),
-      ...(input.recommendation?.agentId && input.recommendation.agentId !== intent.recommendation.agentId
+      ...(edits.agentId && edits.agentId !== intent.recommendation.agentId
         ? { agentName: undefined } : {}),
+      ...(routes ? {
+        assignments: routes.assignments, agentId: routes.assignments[0].agentId,
+        model: routes.assignments[0].model, agentName: routes.assignments[0].agentName
+      } : {}),
       // Explicit user edits pin the selected route; model retry must not override it.
-      ...(input.recommendation?.agentId ? { agentSelection: 'user' } : {})
+      ...(edits.agentId || routes?.changed ? { agentSelection: 'user' } : {})
     })
     const handler = this.handler(intent)
     const payload = handler.updatePayload
@@ -542,12 +608,28 @@ export class AgentDispatchService {
     return { recommendation, payload }
   }
 
+  /** Every user interaction restarts the no-response window from its full length. */
   private resetDecision(intent: AgentDispatchIntent): void {
-    const mode = kunToolPermissionModeFromSettings(intent.policySnapshot)
-    intent.state = stateForMode(mode)
-    if (mode === 'full-access') intent.deadline = this.deadline()
+    intent.state = this.initialState(kunToolPermissionModeFromSettings(intent.policySnapshot))
+    if (intent.state === 'countdown') intent.deadline = this.deadline()
     else delete intent.deadline
     delete intent.decision; delete intent.error
+  }
+
+  private autoStartPolicy(): AgentDispatchAutoStartPolicy {
+    const policy = this.options.autoStart?.() ?? DEFAULT_AGENT_DISPATCH_AUTO_START
+    return { delayMs: Math.max(0, Math.floor(policy.delayMs)), whenConfirmationRequired: policy.whenConfirmationRequired }
+  }
+
+  private initialState(mode: AgentDispatchRecommendation['permissionMode']): AgentDispatchState {
+    if (mode === 'approve-for-me') return 'reviewing'
+    const policy = this.autoStartPolicy()
+    const automatic = policy.delayMs > 0 && (mode === 'full-access' || policy.whenConfirmationRequired)
+    return automatic ? 'countdown' : 'pending_confirmation'
+  }
+
+  private autoStarts(intent: AgentDispatchIntent): boolean {
+    return this.initialState(kunToolPermissionModeFromSettings(intent.policySnapshot)) === 'countdown'
   }
 
   private command<T>(operation: () => Promise<T>): Promise<T> {
@@ -585,7 +667,7 @@ export class AgentDispatchService {
   }
   private assertAdmission(): void { if (!this.accepting) throw new Error('Dispatch service is stopping') }
   private nowIso(): string { return new Date(this.now()).toISOString() }
-  private deadline(): string { return new Date(this.now() + AGENT_DISPATCH_COUNTDOWN_MS).toISOString() }
+  private deadline(): string { return new Date(this.now() + this.autoStartPolicy().delayMs).toISOString() }
   private async emit(intent: AgentDispatchIntent): Promise<void> {
     if (!terminal.has(intent.state)) this.wakeScan()
     // Audit delivery failure must never reverse a durable scheduler admission.
@@ -608,6 +690,3 @@ export function stableAgentDispatchIntentId(proposal: Pick<AgentDispatchProposal
 function hash(value: string): string { return createHash('sha256').update(value).digest('hex') }
 function message(error: unknown): string { return (error instanceof Error ? error.message : String(error)).slice(0, 7000) }
 function required<T>(value: T | undefined): T { if (value === undefined) throw new Error('Dispatch intent not found'); return value }
-function stateForMode(mode: AgentDispatchRecommendation['permissionMode']): AgentDispatchState {
-  return mode === 'full-access' ? 'countdown' : mode === 'approve-for-me' ? 'reviewing' : 'pending_confirmation'
-}

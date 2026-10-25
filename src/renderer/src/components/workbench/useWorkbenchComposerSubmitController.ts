@@ -327,9 +327,6 @@ export function useWorkbenchComposerSubmitController({
       }
       const prepared = await prepareChatMessage()
       if (!prepared) return
-      setInput('')
-      clearComposerAttachments(attachmentScope)
-      if (route === 'chat') clearComposerFileReferences()
       let outboundText = prepared.text
       let outboundDisplay = prepared.displayText
       let outboundGuiDesignCanvas = false, outboundGuiExcalidrawCanvas = false
@@ -363,6 +360,9 @@ export function useWorkbenchComposerSubmitController({
             chatState.composerPersonaId
           )
         : ''
+      setInput('')
+      clearComposerAttachments(attachmentScope)
+      if (route === 'chat') clearComposerFileReferences()
       void sendMessage(outboundText, composerMode === 'plan' ? 'plan' : 'agent', {
         agentSurface: taskSurface,
         ...(outboundDisplay ? { displayText: outboundDisplay } : {}),
@@ -375,7 +375,9 @@ export function useWorkbenchComposerSubmitController({
         ...(userFileReferences.length ? { fileReferences: userFileReferences } : {}),
         ...(pptReviewContexts.length ? { composerContexts: pptReviewContexts } : {})
       })
-    })()
+    })().catch((error: unknown) => {
+      setError(error instanceof Error ? error.message : String(error))
+    })
   }, [
     activeClawChannelId,
     activeClawChannelModel,

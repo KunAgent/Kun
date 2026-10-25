@@ -59,7 +59,11 @@ import type {
 } from './delegated-credentials.js'
 
 export type SessionTurnContextDeps = {
-  readiness?: Pick<import('../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn' | 'commandForTurn'>
+  readiness?: {
+    validateTurn: import('../harness/harness-readiness.js').HarnessReadinessService['validateTurn']
+    commandForTurn: import('../harness/harness-readiness.js').HarnessReadinessService['commandForTurn']
+    reuseIdentityForTurn?: import('../harness/harness-readiness.js').HarnessReadinessService['reuseIdentityForTurn']
+  }
   catalog: { get(id: string): HarnessDefinition | undefined }
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
   resolveSecretEnv?: HarnessSecretRefResolver
@@ -335,6 +339,10 @@ export async function resolveSessionTurnContext(
     model: turn.gatewayBinding ? model ?? 'default' : actingModelRoute.model,
     ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {})
   })
+  // The connection is keyed without the model: an explicit model switch keeps
+  // this Agent process (and its live native session) and applies the model
+  // through the session protocol. Admission still used the full proof above.
+  const reuseIdentity = deps.readiness?.reuseIdentityForTurn?.(threadId, turnId) ?? readinessIdentity
   return {
     ok: true,
     ctx: {
@@ -362,8 +370,8 @@ export async function resolveSessionTurnContext(
       secretEnv,
       poolKey:
         definition.poolScope === 'workspace'
-          ? `${definition.id}:${credentialIdentity}:${workspace}:${nativeAgentNetworkStatus(definition).networkFingerprint}:${readinessIdentity ?? ''}`
-          : `${definition.id}:${credentialIdentity}:${nativeAgentNetworkStatus(definition).networkFingerprint}:${readinessIdentity ?? ''}`,
+          ? `${definition.id}:${credentialIdentity}:${workspace}:${nativeAgentNetworkStatus(definition).networkFingerprint}:${reuseIdentity ?? ''}`
+          : `${definition.id}:${credentialIdentity}:${nativeAgentNetworkStatus(definition).networkFingerprint}:${reuseIdentity ?? ''}`,
       limits: normalizeTurnLimits(deps.turnLimits),
       intent:
         turn.prompt || userMessageTextWithComposerContexts(userItem),

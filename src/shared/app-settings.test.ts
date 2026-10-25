@@ -376,42 +376,39 @@ function clawChannel(provider: ClawImProvider, label: string, name = label): Cla
   }
 }
 
-describe('lab PPT settings', () => {
-  it('preserves explicit image-first disablement across partial and configured patches', () => {
+describe('PPT skill settings', () => {
+  it('preserves explicit image-asset disablement across partial patches', () => {
     const disabled = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       lab: {
         pptAgent: {
           enabled: false,
-          imageFirst: false
+          imageAssets: false
         }
       }
     })
-    expect(disabled.lab.pptAgent).toEqual({
-      enabled: false,
-      model: '',
-      providerId: '',
-      fast: false,
-      imageFirst: false
-    })
+    expect(disabled.lab.pptAgent).toEqual({ enabled: true, imageAssets: false })
 
-    const configured = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
+    const partial = mergeKunRuntimeSettings(disabled, { lab: { pptAgent: { enabled: false } } })
+    expect(partial.lab.pptAgent).toEqual({ enabled: true, imageAssets: false })
+
+    const stored = mergeKunRuntimeSettings({
+      ...disabled,
+      lab: { ...disabled.lab, pptAgent: { enabled: false, imageAssets: false } }
+    }, undefined)
+    expect(stored.lab.pptAgent).toEqual({ enabled: true, imageAssets: false })
+  })
+
+  it('drops retired PPT sub-agent fields from stored settings', () => {
+    const defaults = defaultKunRuntimeSettings()
+    const stored = mergeKunRuntimeSettings({
+      ...defaults,
       lab: {
+        ...defaults.lab,
         pptAgent: {
-          model: 'gpt-5.4',
-          providerId: 'codex-2',
-          reasoningEffort: 'high',
-          fast: true,
-          imageFirst: false
-        }
+          enabled: true, model: 'gpt-5.4', providerId: 'codex-2', reasoningEffort: 'high', fast: true, imageFirst: false
+        } as never
       }
-    })
-    expect(configured.lab.pptAgent).toEqual({
-      enabled: true,
-      model: 'gpt-5.4',
-      providerId: 'codex-2',
-      reasoningEffort: 'high',
-      fast: true,
-      imageFirst: false
-    })
+    }, undefined)
+    expect(stored.lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
   })
 })

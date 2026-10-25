@@ -20,6 +20,7 @@ import { userAgentDefinition } from '../../harness/harness-catalog.js'
 import { probeAcpHandshake } from '../../harness/acp-handshake-probe.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
+import { cursorHarnessModelInfo } from '../../harness/cursor-subscription-catalog.js'
 
 /**
  * `GET /v1/harnesses` — definitions plus detection status. With `wait_ms`
@@ -241,7 +242,8 @@ export async function listHarnessModels(
   // exposable HTTP profiles. Keep the displayed route identical to admission.
   if (credentialMode === 'provider' || credentialMode === 'kun-gateway') {
     const snapshot = await runtime.modelConnections?.snapshot().catch(() => undefined)
-    const groups = (snapshot?.providers ?? [])
+    const refreshCatalog = url.searchParams.get('refresh') === '1'
+    const groups = (await Promise.all((snapshot?.providers ?? [])
       .filter((provider) => {
         if (credentialMode === 'provider' && definition.transport === 'cursor-sdk') {
           return provider.kind === 'cursor-sdk' && provider.configured &&
@@ -249,16 +251,40 @@ export async function listHarnessModels(
         }
         return exposableProvider(provider)
       })
-      .map((provider) => ({
-        providerId: provider.id,
-        label: provider.name,
-        models: providerModelIds(provider),
-        ...(Object.keys(provider.modelCapabilities ?? {}).length ? { modelInfo: providerModelIds(provider).map((id) => ({ id,
+      .map(async (provider) => {
+        const savedModels = providerModelIds(provider)
+        const savedInfo = Object.keys(provider.modelCapabilities ?? {}).length ? savedModels.map((id) => ({ id,
           ...(provider.modelCapabilities?.[id]?.inputModalities
             ? { inputModalities: provider.modelCapabilities[id].inputModalities } : {})
-        })) } : {})
-      }))
-      .filter((group) => group.models.length > 0)
+        })) : undefined
+        if (credentialMode === 'provider' && definition.transport === 'cursor-sdk' && harnesses.cursorModels) {
+          try {
+            const listed = await harnesses.cursorModels.list({
+              providerId: provider.id, refresh: refreshCatalog, signal: request.signal
+            })
+            if (listed?.length) {
+              const modalities = Object.fromEntries(savedModels.flatMap((id) => {
+                const input = provider.modelCapabilities?.[id]?.inputModalities
+                return input ? [[id, input]] : []
+              }))
+              return {
+                providerId: provider.id,
+                label: provider.name,
+                models: listed.map((entry) => entry.id),
+                modelInfo: cursorHarnessModelInfo(listed, modalities)
+              }
+            }
+          } catch {
+            // A failed account listing keeps the models already saved on the provider.
+          }
+        }
+        return {
+          providerId: provider.id,
+          label: provider.name,
+          models: savedModels,
+          ...(savedInfo ? { modelInfo: savedInfo } : {})
+        }
+      }))).filter((group) => group.models.length > 0)
     const aliasGroups = credentialMode === 'kun-gateway' ? (snapshot?.routePools ?? []).filter((pool) => pool.enabled).flatMap((pool) => {
       const targets = gatewayPoolTargets(snapshot?.providers ?? [], pool)
       return targets.length ? [{ routeId: pool.id, label: pool.name, modelId: pool.modelId, connectionIds: [...new Set(targets.map((target) => target.providerId))] }] : []

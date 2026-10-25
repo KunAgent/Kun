@@ -108,7 +108,7 @@ function StartupErrorView({
 }): React.ReactElement {
   return (
     <main className="flex min-h-screen items-center justify-center bg-ds-canvas p-8 text-ds-ink">
-      <section className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-ds-border bg-ds-surface px-8 py-8 text-center shadow-sm">
+      <section className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-ds-border bg-ds-card px-8 py-8 text-center shadow-sm">
         <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
         <h1 className="text-base font-semibold">{title}</h1>
         <p className="text-sm text-ds-faint">{message}</p>

@@ -3,7 +3,7 @@ import type { AdeActivityNotificationCategory } from '@shared/kun-gui-notificati
 import i18n from '../i18n'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useActivityStore } from './activity-store'
-import { syncAppBadgeCount } from './app-badge'
+import { appBadgeInputFromChatState, syncAppBadgeCount } from './app-badge'
 import { useChatStore } from './chat-store'
 import type { ChatState } from './chat-store-types'
 
@@ -141,8 +141,8 @@ let unsubscribe: (() => void) | null = null
 /**
  * Subscribe to ActivityStore row changes and emit OS notifications on
  * transitions to waiting/failed/done/stalled. Badge count
- * is synced on every change so the Dock number always reads needs-you +
- * unread. Idempotent: a second start is a no-op.
+ * is synced on every change so the Dock number always matches the sidebar
+ * "needs you" list. Idempotent: a second start is a no-op.
  */
 export function startActivityNotifications(deps: ActivityNotificationDeps = defaultDeps()): void {
   if (unsubscribe) return
@@ -155,7 +155,7 @@ export function startActivityNotifications(deps: ActivityNotificationDeps = defa
       if (row !== prev) void maybeNotifyTransition(row, prev, deps)
     }
     prevRows = nextRows
-    syncAppBadgeCount(useChatStore.getState().unreadThreadIds, nextRows)
+    syncAppBadgeCount(appBadgeInputFromChatState(useChatStore.getState(), nextRows))
   })
 }
 

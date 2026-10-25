@@ -6,7 +6,7 @@ import { makeAssistantTextItem } from '../../domain/item.js'
 import { createThreadRecord } from '../../domain/thread.js'
 import { appendTurnItem, createTurnRecord } from '../../domain/turn.js'
 import { stripThreadItemBodies } from './hybrid-thread-projection.js'
-import { HybridThreadDocumentRepository } from './hybrid-thread-documents.js'
+import { HybridThreadDocumentRepository, threadRecordBytesUpTo } from './hybrid-thread-documents.js'
 import * as sessionJsonl from '../file/file-session-jsonl.js'
 import { JsonlFileAccessCoordinator } from '../file/jsonl-file-access.js'
 
@@ -97,6 +97,66 @@ describe('HybridThreadDocumentRepository cache budget', () => {
       bytes: 0,
       maxBytes: 1_024
     })
+  })
+
+  it('sizes a record exactly while it fits and stops early once it cannot', () => {
+    const threadId = 'thread_record_size'
+    const turns = ['turn_1', 'turn_2'].map((turnId, turnIndex) => [0, 1, 2].reduce(
+      (turn, index) => appendTurnItem(turn, makeAssistantTextItem({
+        id: `${turnId}_item_${index}`, threadId, turnId, text: `é🙂${'x'.repeat(index * 10)}`, status: 'completed'
+      })),
+      createTurnRecord({ id: turnId, threadId, prompt: `prompt ${turnIndex}`, status: 'completed' })
+    ))
+    const record = { ...createThreadRecord({ id: threadId, title: 'Size', workspace: '/tmp', model: 'test' }), turns }
+    const exact = Buffer.byteLength(JSON.stringify(record))
+    expect(threadRecordBytesUpTo(record, exact)).toBe(exact)
+
+    let serialized = 0
+    const counted = (index: number) => ({
+      toJSON: () => { serialized += 1; return { id: `large_${index}`, text: 'x'.repeat(1_000) } }
+    })
+    const large = { ...record, turns: [{ ...turns[0], items: Array.from({ length: 1_000 }, (_, index) => counted(index)) }] }
+    expect(threadRecordBytesUpTo(large as unknown as typeof record, 4_096)).toBeGreaterThan(4_096)
+    expect(serialized).toBeLessThan(10)
+  })
+})
+
+describe('HybridThreadDocumentRepository bounded sizing', () => {
+  it('keeps exact UTF-8 budgets across multiple turns and stops before oversized trailing items', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-thread-cache-sizing-'))
+    roots.push(root)
+    const threadId = 'thread_sizing'
+    const dir = join(root, 'threads', threadId)
+    await mkdir(dir, { recursive: true })
+    const items = ['first', 'second', 'third'].map((id, index) => makeAssistantTextItem({
+      id, threadId, turnId: index < 2 ? 'turn_1' : 'turn_2',
+      text: '\u4e2d\u6587"\\'.repeat(256), status: 'completed'
+    }))
+    const thread = {
+      ...createThreadRecord({ id: threadId, title: 'Sizing', workspace: '/tmp', model: 'test' }),
+      turns: ['turn_1', 'turn_2', 'empty'].map(id => createTurnRecord({
+        id, threadId, prompt: '', status: 'completed'
+      }))
+    }
+    await writeFile(join(dir, 'metadata.jsonl'), `${JSON.stringify({
+      kind: 'thread_metadata', version: 1, timestamp: thread.updatedAt, thread
+    })}\n`)
+    await writeFile(join(dir, 'messages.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n')
+    const hydrated = await new HybridThreadDocumentRepository(root).readThread(threadId)
+    const bytes = Buffer.byteLength(JSON.stringify(hydrated))
+    for (const maxBytes of [bytes * 2, bytes * 2 - 1]) {
+      const documents = new HybridThreadDocumentRepository(root, { cacheMaxBytes: maxBytes })
+      expect(await documents.readThread(threadId)).toEqual(hydrated)
+      expect(documents.cacheStats().bytes).toBe(maxBytes === bytes * 2 ? bytes : 0)
+    }
+    const stringify = vi.spyOn(JSON, 'stringify')
+    const documents = new HybridThreadDocumentRepository(root, { cacheMaxBytes: 1024 })
+    expect(await documents.readThread(threadId)).toEqual(hydrated)
+    expect(documents.cacheStats().entries).toBe(0)
+    expect(stringify.mock.calls.some(([value]) => value?.id === 'third')).toBe(false)
+    expect(stringify.mock.calls.some(([value]) => value?.turns?.some(
+      (turn: { items: unknown[] }) => turn.items.length > 0
+    ))).toBe(false)
   })
 })
 

@@ -1,7 +1,7 @@
 import { useEffect, type ReactElement } from 'react'
 import { AppWindow } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ensureAppSurfaceFlags, useAppSurfaceStore } from './app-surface-store'
+import { useAppSurfaceStore } from './app-surface-store'
 import { GenUiSurface } from './gen-ui/GenUiSurface'
 import { McpAppSurface } from './mcp-apps/McpAppSurface'
 
@@ -19,7 +19,6 @@ export function AppSurfacePanelContent({
   const panel = useAppSurfaceStore((state) => state.panel)
   const closePanel = useAppSurfaceStore((state) => state.closePanel)
 
-  useEffect(() => { ensureAppSurfaceFlags() }, [])
   useEffect(() => {
     if (panel) onTitleChange(panel.title)
   }, [onTitleChange, panel])

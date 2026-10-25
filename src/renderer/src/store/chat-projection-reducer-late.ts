@@ -382,6 +382,7 @@ export function reduceLateChatProjection(
         ? snapshot.blocks
         : context.settlePendingRuntimeWork(snapshot.blocks)
       const shouldClearLive = snapshotTurnIsCurrent
+      const timingUserId = snapshot.userBlockId ?? state.currentTurnUserId
       return {
         ...(snapshotTurnIsCurrent ? { lastContextSnapshot: restoredThreadContextSnapshot(snapshot.threadId, snapshot.contextSnapshot, state.lastContextSnapshot) } : {}),
         blocks: snapshot.turnId
@@ -415,6 +416,15 @@ export function reduceLateChatProjection(
             ? snapshot.latestTurnStartedAtMs ?? state.currentTurnStartedAtMs
             : null
           : state.currentTurnStartedAtMs,
+        ...(snapshotTurnIsCurrent && busy && timingUserId &&
+          typeof snapshot.latestTurnStartedAtMs === 'number'
+          ? {
+              turnStartedAtByUserId: {
+                ...state.turnStartedAtByUserId,
+                [timingUserId]: snapshot.latestTurnStartedAtMs
+              }
+            }
+          : {}),
         // Merge server-derived durations from the reconciled turn records; the
         // durable record is authoritative, but keep locally recorded durations
         // for turns the snapshot page does not cover.

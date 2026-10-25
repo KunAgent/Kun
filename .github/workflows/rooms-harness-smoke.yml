@@ -27,7 +27,8 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 35
     env:
-      NODE_OPTIONS: '--max-old-space-size=5120'
+      # Match the successful native workspace build on the same macOS runner.
+      NODE_OPTIONS: '--max-old-space-size=6144'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4

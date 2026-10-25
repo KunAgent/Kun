@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useMemo,
   useRef,
   type ComponentProps,
   type PointerEventHandler,
@@ -17,6 +18,8 @@ import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { MessageEditAssistProvider } from '../chat/UserMessageEditField'
 import { EMPTY_SKILL_COMMANDS } from '../chat/floating-composer-policy'
 import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
+import { TaskSessionBar } from '../chat/TaskSessionBar'
+import { useTaskReportSlot } from '../chat/TaskReportCards'
 import {
   GraphChildSessionBar,
   SubagentReturnBar,
@@ -48,6 +51,8 @@ import { CodeHomeQuickStart } from '../chat/CodeHomeQuickStart'
 import { HomeGlyphRipple } from '../chat/HomeGlyphRipple'
 import { useComposerDockHandoff } from './use-composer-dock-handoff'
 import { prefetchSharedDefaultModelSelection } from '../../agent/kun-runtime-shared-default'
+import { useTerminalDockStore } from '../terminal/terminal-dock-store'
+import { TerminalChatCollapsedStrip } from '../terminal/TerminalDrawer'
 
 const CodeTour = lazy(() =>
   import('../code-tour/CodeTour').then((module) => ({ default: module.CodeTour }))
@@ -191,12 +196,17 @@ export function WorkbenchChatStage({
   onExtensionCommand
 }: WorkbenchChatStageProps): ReactElement {
   const { t } = useTranslation('common')
+  const terminalDockLayout = useTerminalDockStore((state) => state.layout)
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const threadRefreshingId = useChatStore((state) => state.threadRefreshingId)
   const trajectoryByThread = useTrajectoryUiStore((state) => state.byThread)
   const updateTrajectoryUi = useTrajectoryUiStore((state) => state.update)
   const trajectoryUi = trajectoryUiState(trajectoryByThread, activeThreadId)
   const trajectoryOpen = trajectoryUi.view === 'trajectory' && Boolean(activeThreadId)
+  const devPreviewTrailing = useMemo(() => devPreviewVisible && devPreviewUrl
+    ? <DevPreviewLaunchCard url={devPreviewUrl} opened={devPreviewOpened} onOpen={onOpenDevPreview} />
+    : null, [devPreviewVisible, devPreviewUrl, devPreviewOpened, onOpenDevPreview])
+  const trailingTimelineCard = useTaskReportSlot(activeThreadId, devPreviewTrailing)
   const trajectoryData = useTrajectoryData({
     threadId: activeThreadId,
     visible: trajectoryOpen,
@@ -256,6 +266,20 @@ export function WorkbenchChatStage({
     getPathForFile: (file: File) => window.kunGui.getPathForFile(file)
   }
 
+  const terminalBeside = terminalOpen && terminalDockLayout.position === 'right'
+  const terminalMaximized = terminalOpen && !terminalBeside && terminalDockLayout.maximized
+  const terminalDrawer = terminalOpen ? (
+    <Suspense fallback={null}>
+      <TerminalDrawer
+        workspaceRoot={terminalWorkspaceRoot}
+        height={terminalHeight}
+        onBeginResize={onBeginTerminalResize}
+        onCollapse={onToggleTerminal}
+        placement={terminalBeside ? 'right' : 'bottom'}
+      />
+    </Suspense>
+  ) : null
+
   return (
     <section
       className="ds-chat-stage ds-drag relative isolate flex min-h-0 min-w-0 flex-1 flex-col"
@@ -264,7 +288,7 @@ export function WorkbenchChatStage({
     >
       <ActiveUiPluginStagePresentation />
       <div
-        className={`${stageInsetClass} ds-ui-plugin-stage-content relative z-[3] flex min-h-0 min-w-0 flex-1 flex-col`}
+        className={`${stageInsetClass} ds-ui-plugin-stage-content relative z-[3] flex min-h-0 min-w-0 ${terminalMaximized ? 'flex-none' : 'flex-1'} flex-col`}
       >
         <header className="chat-topbar ds-topbar-surface relative z-10 flex w-full shrink-0 items-stretch overflow-visible">
           <div className="chat-topbar-grid grid w-full min-w-0 items-center gap-2.5 px-3 py-2 sm:px-4 md:pl-5 md:pr-2">
@@ -344,6 +368,9 @@ export function WorkbenchChatStage({
         {graphChildContext ? (
           <GraphChildSessionBar context={graphChildContext} onBack={onBackToParent} />
         ) : null}
+        <TaskSessionBar />
+        {terminalMaximized ? <TerminalChatCollapsedStrip busy={busy} /> : null}
+        <div className={`min-h-0 min-w-0 flex-1 flex-row ${terminalMaximized ? 'hidden' : 'flex'}`}>
         <div
           ref={mainStackRef}
           className={`ds-chat-main-stack relative flex min-h-0 min-w-0 flex-1 flex-col ${
@@ -390,15 +417,7 @@ export function WorkbenchChatStage({
                 onPreviewGeneratedDocument={onPreviewGeneratedDocument}
                 onOpenGeneratedDocuments={onOpenGeneratedDocuments}
                 onComponentPrototypePrompt={composerProps.setInput}
-                devPreviewCard={
-                  devPreviewVisible && devPreviewUrl ? (
-                    <DevPreviewLaunchCard
-                      url={devPreviewUrl}
-                      opened={devPreviewOpened}
-                      onOpen={onOpenDevPreview}
-                    />
-                  ) : null
-                }
+                devPreviewCard={trailingTimelineCard}
                 extensionMessageActions={extensionMessageActions}
                 extensionContextMenus={extensionContextMenus}
                 extensionAttachmentContextMenus={extensionAttachmentContextMenus}
@@ -457,17 +476,10 @@ export function WorkbenchChatStage({
             )}
           </div>
         </div>
+        {terminalBeside ? terminalDrawer : null}
+        </div>
       </div>
-      {terminalOpen ? (
-        <Suspense fallback={null}>
-          <TerminalDrawer
-            workspaceRoot={terminalWorkspaceRoot}
-            height={terminalHeight}
-            onBeginResize={onBeginTerminalResize}
-            onCollapse={onToggleTerminal}
-          />
-        </Suspense>
-      ) : null}
+      {terminalBeside ? null : terminalDrawer}
     </section>
   )
 }

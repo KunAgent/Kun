@@ -15,7 +15,7 @@ Route requests to the narrowest real Kun tool family and define the required ver
 | `fast_context` | First retrieval step for repository exploration. |
 | `browser_use` | Structured interactive public browsing. |
 | `design_update_shapes` | Editable canvas changes. |
-| `ppt_agent` | Native presentation workflow. |
+| `ppt_preview` / `ppt_export` | Native presentations through the `slides` skill. |
 | `office_inspect` | Inspect Office documents. |
 | `mcp_search` | Discover connected integrations. |
 

@@ -1,0 +1,107 @@
+{
+  "taskSuggestion": {
+    "loading": "सुझाए गए कार्य लोड हो रहे हैं…",
+    "kicker": "सुझाए गए कार्य · साथ-साथ चल सकते हैं",
+    "title": "{{count}} स्वतंत्र आगे के कार्य",
+    "status": {
+      "pending": "शुरू होने बाकी: {{count}}",
+      "progress": "{{started}} / {{total}} शुरू हुए",
+      "countdown": "जवाब न मिलने पर {{time}} में सभी शुरू होंगे",
+      "paused": "रुका हुआ · अपने आप शुरू नहीं होगा",
+      "settled": "{{count}} सुझाए गए कार्य समाप्त हुए"
+    },
+    "summary": {
+      "done": "{{count}} पूरे",
+      "live": "{{count}} चल रहे",
+      "failed": "{{count}} पूरे नहीं हुए",
+      "startFailed": "{{count}} शुरू नहीं हो सके",
+      "ignored": "{{count}} छोड़े गए"
+    },
+    "row": {
+      "suggested": "शुरू नहीं हुआ",
+      "starting": "शुरू हो रहा है…",
+      "running": "चल रहा है",
+      "runningFor": "चल रहा है · {{minutes}} मिनट",
+      "waiting": "आपकी ज़रूरत है",
+      "done": "पूरा",
+      "failed": "पूरा नहीं हुआ",
+      "cancelled": "रोका गया",
+      "ignored": "छोड़ा गया",
+      "here": "इसी चैट में जारी रखा",
+      "start_failed": "शुरू नहीं हो सका"
+    },
+    "failure": {
+      "disk_space": "डिस्क में पर्याप्त जगह नहीं है",
+      "worktree_conflict": "ब्रांच या worktree पहले से उपयोग में है",
+      "agent_unavailable": "चुना गया Agent तैयार नहीं है",
+      "quota": "मॉडल का कोटा खत्म हो गया है",
+      "runtime": "Kun सत्र शुरू नहीं कर सका"
+    },
+    "actions": {
+      "start": "शुरू करें",
+      "startAll": "सभी शुरू करें ({{count}})",
+      "startNow": "अभी शुरू करें",
+      "pause": "रोकें",
+      "resume": "उलटी गिनती जारी रखें",
+      "dismiss": "हटाएँ",
+      "open": "खोलें",
+      "viewResult": "नतीजा देखें",
+      "retry": "फिर कोशिश करें",
+      "noWorktree": "worktree के बिना",
+      "more": "शुरू करने के और तरीके",
+      "details": "विवरण दिखाएँ",
+      "hideDetails": "विवरण छिपाएँ"
+    },
+    "menu": {
+      "session": "नए सत्र के रूप में शुरू करें",
+      "here": "इसी चैट में जारी रखें",
+      "copy": "केवल विवरण कॉपी करें",
+      "ignore": "यह कार्य छोड़ें",
+      "default": "डिफ़ॉल्ट"
+    },
+    "brief": {
+      "goal": "लक्ष्य",
+      "scope": "दायरा",
+      "done": "पूरा तब माना जाए जब",
+      "edit": "विवरण संपादित करें",
+      "save": "विवरण सहेजें",
+      "cancel": "रद्द करें",
+      "copied": "विवरण कॉपी हो गया",
+      "listHint": "हर पंक्ति में एक बिंदु"
+    },
+    "options": {
+      "worktree": "अलग worktree",
+      "inheritContext": "इस चैट का संदर्भ साथ लें"
+    },
+    "meta": {
+      "worktreeOn": "हर कार्य का अपना worktree",
+      "worktreeOff": "कार्य मौजूदा checkout साझा करते हैं",
+      "hint": "शुरू किया गया हर कार्य इस चैट के नीचे एक सत्र बनता है, जिसका पहला संदेश उसका विवरण होता है।",
+      "routeHint": "हर कार्य के लिए Agent और मॉडल बदलें; हर बदलाव उलटी गिनती फिर से शुरू करता है।",
+      "autoStarted": "जवाब नहीं मिला, सुझाव के अनुसार शुरू किया"
+    },
+    "report": {
+      "done": "कार्य {{index}} पूरा हुआ · {{title}}",
+      "failed": "कार्य {{index}} पूरा नहीं हुआ · {{title}}",
+      "cancelled": "कार्य {{index}} रोका गया · {{title}}",
+      "open": "सत्र खोलें",
+      "dismiss": "हटाएँ",
+      "changedFiles": "{{count}} फ़ाइलें बदलीं",
+      "branch": "ब्रांच {{branch}}",
+      "duration": "{{minutes}} मिनट",
+      "noSummary": "सत्र बिना सारांश के समाप्त हुआ।"
+    },
+    "session": {
+      "title": "कार्य सत्र {{index}} / {{total}}",
+      "from": "“{{title}}” से",
+      "back": "मुख्य चैट पर लौटें",
+      "detach": "मुख्य चैट से अलग करें",
+      "branch": "worktree {{branch}}"
+    },
+    "sidebar": {
+      "count": "{{total}} में से {{started}} सुझाए गए कार्य शुरू हुए",
+      "expand": "कार्य सत्र दिखाएँ",
+      "collapse": "कार्य सत्र छिपाएँ"
+    }
+  }
+}

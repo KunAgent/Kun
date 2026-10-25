@@ -227,6 +227,7 @@ export function selectionStateFromEditor(
     ranges,
     charCount: ranges.reduce((total, range) => total + range.charCount, 0),
     blockType: richSelectionBlockType(state),
+    activeFormats: (['bold', 'italic', 'strikethrough', 'code', 'link'] as const).filter((kind) => editor.isActive(kind === 'strikethrough' ? 'strike' : kind)),
     ...(rects.length > 0 ? { anchorRect: unionRects(rects) } : {})
   }
 }

@@ -5,34 +5,7 @@ import {
   type TerminalColorSettingsV1
 } from '@shared/app-settings'
 
-import type { TerminalTarget } from './terminal-backend'
 import type { Terminal } from '@xterm/xterm'
-
-export type TerminalTab = {
-  id: string
-  index: number
-  title?: string
-  target: TerminalTarget
-  /**
-   * command text written into the PTY input once, right after the
-   * fresh session is created — never on re-attach and never with a trailing
-   * Enter, so the user reviews and executes it themselves.
-   */
-  prefill?: string
-  /** harness re-probed (`/v1/harnesses/:id/probe`) when this PTY exits. */
-  probeHarnessId?: string
-}
-
-export type TerminalTabContextMenu = {
-  tabId: string
-  x: number
-  y: number
-}
-
-export type TerminalTabState = {
-  tabs: TerminalTab[]
-  activeTabId: string
-}
 
 type RgbaColor = {
   r: number
@@ -45,18 +18,6 @@ type RgbaColor = {
 // platform-appropriate default (Menlo on macOS, Consolas on Windows).
 export const TERMINAL_FONT_FAMILY =
   'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace'
-export const TERMINAL_FONT_SIZE = 13
-export const TERMINAL_SCROLLBACK = 5000
-export const FIT_DEBOUNCE_MS = 80
-export const INITIAL_TAB_ID = 'main'
-export const MAX_RENDERER_TABS = 8
-
-export function initialTerminalTabState(): TerminalTabState {
-  return {
-    tabs: [{ id: INITIAL_TAB_ID, index: 1, target: { kind: 'local' } }],
-    activeTabId: INITIAL_TAB_ID
-  }
-}
 
 function resolveThemeMode(): 'dark' | 'light' {
   return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'

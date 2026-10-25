@@ -216,7 +216,7 @@ export function FloatingComposerExecutionPicker({
           className={`ds-composer-permission-button inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12.5px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-55 ${
             fullAccess
               ? 'text-orange-600 hover:text-orange-700 focus-visible:outline-orange-500 dark:text-orange-300 dark:hover:text-orange-200 dark:focus-visible:outline-orange-300'
-              : 'text-ds-muted hover:text-ds-ink focus-visible:outline-ds-accent'
+              : 'text-ds-muted hover:text-ds-ink focus-visible:outline-accent'
           }`}
           title={`${t(permissionLabelKey(permissionMode))}. ${t(permissionDescriptionKey(permissionMode))}${nativeNote ? ` ${nativeNote}` : ''}`}
           data-native-permission-mode={currentNative?.id}
@@ -292,7 +292,7 @@ export function FloatingComposerPermissionMenuContent({
             type="button"
             role="menuitem"
             onClick={onOpenPermissionSettings}
-            className="shrink-0 rounded-md px-1 py-0.5 text-[12px] font-medium text-ds-muted underline decoration-ds-muted/45 underline-offset-4 transition-colors hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-accent/40"
+            className="shrink-0 rounded-md px-1 py-0.5 text-[12px] font-medium text-ds-muted underline decoration-ds-muted/45 underline-offset-4 transition-colors hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40"
           >
             {t('composerPermissionLearnMore')}
           </button>
@@ -350,7 +350,7 @@ function ExecutionRow({
       disabled={Boolean(disabledReason)}
       title={disabledReason}
       onClick={onClick}
-      className={`ds-composer-permission-option group flex min-h-[58px] w-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-accent/35 ${
+      className={`ds-composer-permission-option group flex min-h-[58px] w-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-tint/35 ${
         selected
           ? 'text-orange-600 hover:bg-orange-50/45 dark:text-orange-300 dark:hover:bg-orange-950/20'
           : 'text-ds-ink hover:bg-ds-hover/60'

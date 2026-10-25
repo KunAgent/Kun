@@ -27,6 +27,23 @@ export const AgentDispatchSourceSchema = z.object({
 }).strict()
 export type AgentDispatchSource = z.infer<typeof AgentDispatchSourceSchema>
 
+/** The execution route of one dispatched worker: which Agent runs it, on which model. */
+export const AgentDispatchAssignmentRouteSchema = z.object({
+  agentId: z.string().min(1).max(512),
+  /** Agent roster role the worker plays; absent = the engine alone. */
+  profileId: z.string().min(1).max(128).optional(),
+  model: z.string().max(512).optional(),
+  providerId: z.string().min(1).max(128).optional(),
+  credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional()
+}).strict()
+export type AgentDispatchAssignmentRoute = z.infer<typeof AgentDispatchAssignmentRouteSchema>
+
+export const AgentDispatchAssignmentSchema = AgentDispatchAssignmentRouteSchema.extend({
+  label: z.string().min(1).max(64),
+  agentName: z.string().max(512).optional()
+}).strict()
+export type AgentDispatchAssignment = z.infer<typeof AgentDispatchAssignmentSchema>
+
 export const AgentDispatchRecommendationSchema = z.object({
   title: z.string().min(1).max(512),
   task: z.string().min(1).max(128_000),
@@ -37,7 +54,12 @@ export const AgentDispatchRecommendationSchema = z.object({
   acceptanceCriteria: z.array(z.string().max(4096)).max(100).optional(),
   permissionMode: z.enum(['ask-for-approval', 'approve-for-me', 'full-access']),
   effectivePermissionMode: z.enum(['ask-for-approval', 'approve-for-me', 'full-access']).optional(),
-  agentSelection: z.enum(['user', 'auto'])
+  agentSelection: z.enum(['user', 'auto']),
+  /**
+   * One route per worker, in dispatch order. Cards written before per-worker
+   * routes existed omit it and use the top-level agentId/model for every item.
+   */
+  assignments: z.array(AgentDispatchAssignmentSchema).min(1).max(16).optional()
 }).strict()
 export type AgentDispatchRecommendation = z.infer<typeof AgentDispatchRecommendationSchema>
 
@@ -98,6 +120,9 @@ export const AgentDispatchActionSchema = z.object({
   requestId: z.string().min(1).max(256),
   recommendation: AgentDispatchRecommendationSchema.pick({
     title: true, task: true, agentId: true, model: true, workspace: true, acceptanceCriteria: true
+  }).extend({
+    /** Route edits by worker index; labels and display names stay host-owned. */
+    assignments: z.array(AgentDispatchAssignmentRouteSchema).min(1).max(16)
   }).partial().optional()
 }).strict()
 export type AgentDispatchAction = z.infer<typeof AgentDispatchActionSchema>

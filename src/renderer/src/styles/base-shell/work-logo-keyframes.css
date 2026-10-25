@@ -112,6 +112,12 @@
     transform: none;
   }
 }
+.ds-subagent-ring-trail {
+  animation: ds-subagent-ring-flow 2.4s linear infinite;
+}
+@keyframes ds-subagent-ring-flow {
+  to { stroke-dashoffset: -100; }
+}
 .ds-subagent-dot-pulse {
   animation: ds-subagent-pulse 1.4s ease-in-out infinite;
   animation-delay: var(--ds-subagent-stagger, 0s);
@@ -144,6 +150,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ds-subagent-mount,
+  .ds-subagent-ring-trail,
   .ds-subagent-dot-pulse,
   .ds-subagent-lane-sweep {
     animation: none !important;

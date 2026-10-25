@@ -133,7 +133,8 @@ export function buildGraphModeLocalTools(options: {
       shouldAdvertise: graphCreatorOnly,
       nowIso,
       nextId,
-      config: options.config
+      config: options.config,
+      harnesses: options.harnesses
     }),
     buildGraphLeadSupervisionTool({
       control: options.control,

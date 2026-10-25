@@ -1,7 +1,11 @@
-import { HARNESS_GATEWAY_BINDING_JSON_SCHEMA } from '../../contracts/harness-gateway-binding.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
+import {
+  START_FROM_SCHEMA,
+  WORKER_CREATE_BATCH_JSON_SCHEMA,
+  WORKER_CREATE_JSON_SCHEMA
+} from './manager-worker-tool-schemas.js'
 import { shouldAdvertiseManagerTools, shouldAdvertiseNewManagerWork } from '../../domain/manager-tools.js'
 import type { ManagerRuntime, ManagerToolContext } from '../../ade/manager-runtime.js'
 import {
@@ -40,19 +44,6 @@ export type ManagerToolProviderDeps = {
   /** Host check runner; absent → workspace_run_checks hidden. */
   checks?: WorkspaceCheckRunnerDeps
 }
-
-const START_FROM_SCHEMA = {
-  oneOf: [
-    { type: 'object', properties: { kind: { const: 'default-branch' } }, required: ['kind'], additionalProperties: false },
-    { type: 'object', properties: { kind: { const: 'current-head' } }, required: ['kind'], additionalProperties: false },
-    {
-      type: 'object',
-      properties: { kind: { const: 'branch' }, name: { type: 'string', maxLength: 256 } },
-      required: ['kind', 'name'],
-      additionalProperties: false
-    }
-  ]
-} as const
 
 /**
  * Manager (`worker_*`) tools. `shouldAdvertiseManagerTools`
@@ -102,48 +93,7 @@ export function createManagerToolProvider(
           'the worker finishes or asks a question. Explain the returned `userReport` ' +
           'facts in the language used by the user. To dispatch several workers at once, use worker_create_batch ' +
           'instead of calling this repeatedly.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            label: { type: 'string', maxLength: 64 },
-            role: { type: 'string', maxLength: 64 },
-            task: { type: 'string', maxLength: 32_000 },
-            context: {
-              type: 'object',
-              properties: {
-                files: { type: 'array', items: { type: 'string' }, maxItems: 64 },
-                links: { type: 'array', items: { type: 'string' }, maxItems: 32 },
-                constraints: { type: 'array', items: { type: 'string' }, maxItems: 32 }
-              },
-              additionalProperties: false
-            },
-            agent: {
-              type: 'object',
-              properties: {
-                harnessId: { type: 'string', maxLength: 64 },
-                model: { type: 'string', maxLength: 512 },
-                providerId: { type: 'string', maxLength: 128 },
-                credentialMode: { type: 'string', maxLength: 64 },
-                gatewayBinding: HARNESS_GATEWAY_BINDING_JSON_SCHEMA
-              },
-              additionalProperties: false
-            },
-            workspace: {
-              type: 'object',
-              properties: {
-                isolation: { type: 'string', enum: ['worktree', 'local'] },
-                startFrom: START_FROM_SCHEMA
-              },
-              additionalProperties: false
-            },
-            agentSelection: { type: 'string', enum: ['user', 'auto'] },
-            permissionMode: { type: 'string', maxLength: 64 },
-            lifecycle: { type: 'string', enum: ['persistent', 'ephemeral'] },
-            mode: { type: 'string', enum: ['queue', 'interrupt'] }
-          },
-          required: ['label', 'task'],
-          additionalProperties: false
-        },
+        inputSchema: WORKER_CREATE_JSON_SCHEMA,
         toolKind: 'tool_call',
         policy: 'auto',
         shouldAdvertise: advertiseNewWork,
@@ -158,60 +108,7 @@ export function createManagerToolProvider(
           'Create several workers in one call. Items run in input order; when the ' +
           'worker limit is reached the remaining items are marked skipped. Relay ' +
           'the summary `userReport` facts in the language used by the user. Set agentSelection to auto unless the user explicitly chose the execution Agent. Kun saves one durable start decision for the batch.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            items: {
-              type: 'array',
-              minItems: 1,
-              maxItems: 16,
-              items: {
-                type: 'object',
-                properties: {
-                  label: { type: 'string', maxLength: 64 },
-                  role: { type: 'string', maxLength: 64 },
-                  task: { type: 'string', maxLength: 32_000 },
-                  context: {
-                    type: 'object',
-                    properties: {
-                      files: { type: 'array', items: { type: 'string' }, maxItems: 64 },
-                      links: { type: 'array', items: { type: 'string' }, maxItems: 32 },
-                      constraints: { type: 'array', items: { type: 'string' }, maxItems: 32 }
-                    },
-                    additionalProperties: false
-                  },
-                  agent: {
-                    type: 'object',
-                    properties: {
-                      harnessId: { type: 'string', maxLength: 64 },
-                      model: { type: 'string', maxLength: 512 },
-                      providerId: { type: 'string', maxLength: 128 },
-                      credentialMode: { type: 'string', maxLength: 64 },
-                gatewayBinding: HARNESS_GATEWAY_BINDING_JSON_SCHEMA
-                    },
-                    additionalProperties: false
-                  },
-                  workspace: {
-                    type: 'object',
-                    properties: {
-                      isolation: { type: 'string', enum: ['worktree', 'local'] },
-                      startFrom: START_FROM_SCHEMA
-                    },
-                    additionalProperties: false
-                  },
-                  agentSelection: { type: 'string', enum: ['user', 'auto'] },
-                  permissionMode: { type: 'string', maxLength: 64 },
-                  lifecycle: { type: 'string', enum: ['persistent', 'ephemeral'] },
-                  mode: { type: 'string', enum: ['queue', 'interrupt'] }
-                },
-                required: ['label', 'task'],
-                additionalProperties: false
-              }
-            }
-          },
-          required: ['items'],
-          additionalProperties: false
-        },
+        inputSchema: WORKER_CREATE_BATCH_JSON_SCHEMA,
         toolKind: 'tool_call',
         policy: 'auto',
         shouldAdvertise: advertiseNewWork,

@@ -622,6 +622,8 @@ export type UserMessageEventPayload = {
   itemId: string
   turnId?: string
   createdAt?: string
+  /** Execution start, independent from when a queued message was created. */
+  startedAt?: string
   text: string
   modelLabel?: string
   managedBy?: 'claw'

@@ -106,11 +106,9 @@ export type GuiPlanMessageContext = {
   title?: string
 }
 
-export type GuiDesignArtifactMessageContext = {
-  kind: 'svg'
-  artifactId: string
-  relativePath: string
-}
+export type GuiDesignArtifactMessageContext =
+  | { kind: 'svg'; artifactId: string; relativePath: string }
+  | { kind: 'html'; artifactId: string; relativePath: string; designMdPath?: string }
 
 /** Renderer-only routing context that keeps a Write send bound to the file and
  * conversation selected when the user submitted it. */

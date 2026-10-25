@@ -1,0 +1,107 @@
+{
+  "taskSuggestion": {
+    "loading": "กำลังโหลดงานที่แนะนำ…",
+    "kicker": "งานที่แนะนำ · ทำพร้อมกันได้",
+    "title": "งานต่อเนื่อง {{count}} งานที่ไม่ขึ้นต่อกัน",
+    "status": {
+      "pending": "รอเริ่ม {{count}} งาน",
+      "progress": "เริ่มแล้ว {{started}} / {{total}}",
+      "countdown": "จะเริ่มทั้งหมดใน {{time}} หากไม่มีการตอบกลับ",
+      "paused": "หยุดชั่วคราว · จะไม่เริ่มเอง",
+      "settled": "งานที่แนะนำ {{count}} งานเสร็จสิ้นแล้ว"
+    },
+    "summary": {
+      "done": "เสร็จ {{count}}",
+      "live": "กำลังทำ {{count}}",
+      "failed": "ไม่เสร็จ {{count}}",
+      "startFailed": "เริ่มไม่ได้ {{count}}",
+      "ignored": "ข้าม {{count}}"
+    },
+    "row": {
+      "suggested": "ยังไม่เริ่ม",
+      "starting": "กำลังเริ่ม…",
+      "running": "กำลังทำงาน",
+      "runningFor": "กำลังทำงาน · {{minutes}} นาที",
+      "waiting": "ต้องการคุณ",
+      "done": "เสร็จแล้ว",
+      "failed": "ทำไม่เสร็จ",
+      "cancelled": "หยุดแล้ว",
+      "ignored": "ข้ามแล้ว",
+      "here": "ทำต่อในแชตนี้แล้ว",
+      "start_failed": "เริ่มไม่ได้"
+    },
+    "failure": {
+      "disk_space": "พื้นที่ดิสก์ไม่พอ",
+      "worktree_conflict": "สาขาหรือ worktree ถูกใช้งานอยู่แล้ว",
+      "agent_unavailable": "Agent ที่เลือกยังไม่พร้อม",
+      "quota": "โควตาโมเดลหมดแล้ว",
+      "runtime": "Kun เริ่มเซสชันไม่ได้"
+    },
+    "actions": {
+      "start": "เริ่ม",
+      "startAll": "เริ่มทั้งหมด ({{count}})",
+      "startNow": "เริ่มเดี๋ยวนี้",
+      "pause": "หยุดชั่วคราว",
+      "resume": "นับถอยหลังต่อ",
+      "dismiss": "ปิด",
+      "open": "เปิด",
+      "viewResult": "ดูผลลัพธ์",
+      "retry": "ลองอีกครั้ง",
+      "noWorktree": "ไม่ใช้ worktree",
+      "more": "วิธีเริ่มอื่น ๆ",
+      "details": "แสดงสรุปงาน",
+      "hideDetails": "ซ่อนสรุปงาน"
+    },
+    "menu": {
+      "session": "เริ่มเป็นเซสชันใหม่",
+      "here": "ทำต่อในแชตนี้",
+      "copy": "คัดลอกสรุปงานเท่านั้น",
+      "ignore": "ข้ามงานนี้",
+      "default": "ค่าเริ่มต้น"
+    },
+    "brief": {
+      "goal": "เป้าหมาย",
+      "scope": "ขอบเขต",
+      "done": "ถือว่าเสร็จเมื่อ",
+      "edit": "แก้ไขสรุปงาน",
+      "save": "บันทึกสรุปงาน",
+      "cancel": "ยกเลิก",
+      "copied": "คัดลอกสรุปงานแล้ว",
+      "listHint": "หนึ่งรายการต่อบรรทัด"
+    },
+    "options": {
+      "worktree": "worktree แยก",
+      "inheritContext": "นำบริบทของแชตนี้ไปด้วย"
+    },
+    "meta": {
+      "worktreeOn": "แต่ละงานใช้ worktree ของตัวเอง",
+      "worktreeOff": "งานใช้โฟลเดอร์โค้ดปัจจุบันร่วมกัน",
+      "hint": "งานที่เริ่มแล้วจะกลายเป็นเซสชันใต้แชตนี้ โดยข้อความแรกคือสรุปงาน",
+      "routeHint": "เปลี่ยน Agent หรือโมเดลได้ทีละงาน ทุกการเปลี่ยนจะเริ่มนับถอยหลังใหม่",
+      "autoStarted": "ไม่มีการตอบกลับ จึงเริ่มตามที่แนะนำ"
+    },
+    "report": {
+      "done": "งาน {{index}} เสร็จแล้ว · {{title}}",
+      "failed": "งาน {{index}} ทำไม่เสร็จ · {{title}}",
+      "cancelled": "งาน {{index}} ถูกหยุด · {{title}}",
+      "open": "เปิดเซสชัน",
+      "dismiss": "ปิด",
+      "changedFiles": "ไฟล์เปลี่ยน {{count}} ไฟล์",
+      "branch": "สาขา {{branch}}",
+      "duration": "{{minutes}} นาที",
+      "noSummary": "เซสชันจบโดยไม่มีสรุป"
+    },
+    "session": {
+      "title": "เซสชันงาน {{index}} / {{total}}",
+      "from": "จาก “{{title}}”",
+      "back": "กลับไปแชตหลัก",
+      "detach": "แยกออกจากแชตหลัก",
+      "branch": "worktree {{branch}}"
+    },
+    "sidebar": {
+      "count": "เริ่มแล้ว {{started}} จาก {{total}} งานที่แนะนำ",
+      "expand": "แสดงเซสชันงาน",
+      "collapse": "ซ่อนเซสชันงาน"
+    }
+  }
+}

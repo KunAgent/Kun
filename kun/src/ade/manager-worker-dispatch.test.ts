@@ -23,7 +23,8 @@ const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0)) await close() })
 
 async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorkers = 8,
-  harnessDefaults?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['harnessDefaults']) {
+  harnessDefaults?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['harnessDefaults'],
+  roster?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['roster']) {
   const root = await mkdtemp(join(tmpdir(), 'kun-worker-dispatch-'))
   const clock = { now: Date.parse('2026-10-07T00:00:00.000Z') }
   const nowIso = () => new Date(clock.now).toISOString()
@@ -67,7 +68,7 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
     capabilitiesForRoute: async () => KUN_NATIVE_CAPABILITIES,
     taskWorkspaces: taskWorkspaces as never, delegation, deliverer, nowIso,
     ids: { next: (prefix) => `${prefix}_unused` }, teamLimits: () => ({ hardWorkers, softWorkers: Math.min(4, hardWorkers) }),
-    harnessDefaults,
+    harnessDefaults, ...(roster ? { roster } : {}),
     providerPool: async () => ({ models: ['main-model', 'other-model'] }), allowUnattendedFullAccess: () => true
   })
   await service.start()
@@ -196,6 +197,61 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild.mock.calls[0][0]).toMatchObject({ prompt: expect.stringContaining('Perform the revised task.') })
   })
 
+  it('switches one worker of a batch to another Agent and model from the card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent.recommendation.assignments).toEqual([
+      expect.objectContaining({ label: 'Independent task', agentId: 'kun', model: 'main-model' }),
+      expect.objectContaining({ label: 'Second', agentId: 'kun', model: 'main-model' })])
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, ...route }) => route)
+    f.clock.now += 30_000
+    const updated = await f.service.act(intent.intentId, { action: 'update', requestId: 'route', expectedRevision: intent.revision,
+      recommendation: { assignments: [routes[0], { agentId: 'claude-code', model: 'other-model', credentialMode: 'native-login' }] } })
+    expect(updated).toMatchObject({ state: 'countdown', recommendation: { agentSelection: 'user', assignments: [
+      { agentId: 'kun', model: 'main-model' }, { agentId: 'claude-code', model: 'other-model', agentName: 'Claude Code' }] } })
+    f.clock.now += 59_000; await f.service.reconcile(); expect(f.runChild).not.toHaveBeenCalled()
+    f.clock.now += 1_000; await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
+    const harnesses = f.runChild.mock.calls.map(([input]) => (input as { harnessId?: string }).harnessId).sort()
+    expect(harnesses).toEqual(['claude-code', 'kun'])
+  })
+
+  it('carries a roster role from the proposal through card switches to the started worker', async () => {
+    const roster = { resolve: vi.fn(async (id: string) => ({
+      ok: true as const, id, source: 'workspace' as const,
+      profile: { name: id, mode: 'subagent' as const, toolPolicy: 'readOnly' as const },
+      engine: { kind: 'bound' as const, harnessId: 'claude-code', displayName: 'Claude Code', credentialMode: 'native-login' as const },
+      route: { harnessId: 'claude-code', model: 'other-model', credentialMode: 'native-login' as const }
+    })) }
+    const f = await setup('full-access', 'kun', 8, undefined, roster)
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [
+      { ...f.assignment, profile: 'reviewer' }, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent.recommendation.assignments).toEqual([
+      expect.objectContaining({ agentId: 'claude-code', model: 'other-model', profileId: 'reviewer' }),
+      expect.not.objectContaining({ profileId: expect.anything() })])
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, ...route }) => route)
+    await f.service.act(intent.intentId, { action: 'update', requestId: 'role', expectedRevision: intent.revision,
+      recommendation: { assignments: [routes[0], { ...routes[1], profileId: 'explore' }] } })
+    f.clock.now += 60_000; await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
+    const started = f.runChild.mock.calls.map(([input]) => input as { harnessId?: string; profile?: string })
+      .map((input) => [input.harnessId, input.profile]).sort()
+    expect(started).toEqual([['claude-code', 'reviewer'], ['kun', 'explore']])
+  })
+
+  it('rejects an unavailable model choice without changing the card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    await expect(f.service.act(intent.intentId, { action: 'update', requestId: 'bad', expectedRevision: intent.revision,
+      recommendation: { assignments: [{ agentId: 'claude-code', model: 'missing-model', credentialMode: 'native-login' }] } }))
+      .rejects.toThrow(/missing-model/)
+    expect(await f.service.get(intent.intentId)).toMatchObject({ revision: intent.revision,
+      recommendation: { agentId: 'kun', assignments: [{ agentId: 'kun' }] } })
+  })
+
   it('revalidates disabled profiles before workspace creation', async () => {
     const f = await setup('full-access'); const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
     f.disabled.add('kun'); f.clock.now += 60_000; await f.service.reconcile()
@@ -250,6 +306,41 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild).toHaveBeenCalledTimes(2)
     expect(f.runChild.mock.calls[1][0]).toMatchObject({ harnessId: 'codex' })
     expect(f.runChild.mock.calls[1][0].childId).not.toBe(original.workerId)
+  })
+
+  it('reroutes only the failed assignment of an automatic batch while its sibling keeps running', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(2)
+    const [original, sibling] = (await f.teams.get('parent'))!.workers
+    await f.teams.upsertWorker('parent', { ...original, selection: { reason: 'Automatic choice', score: 1,
+      alternatives: [{ route: { harnessId: 'codex', model: 'main-model', credentialMode: 'native-login' }, label: 'Codex', score: 0.9 }] } })
+    const failed = (await f.dispatches.list('parent')).find((entry) => entry.workerId === original.workerId)!
+    await f.dispatches.update('parent', failed.dispatchId, { state: 'failed',
+      failureReason: "model request failed with status 400: The 'main-model' model is not supported" })
+    await f.childRuns.upsert({ ...(await f.childRuns.get(original.workerId))!, status: 'failed',
+      failure: { source: 'model', code: 'http_400', category: 'model_not_found', httpStatus: 400 } })
+    await f.service.reconcile(); await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(3))
+    const rerouted = f.runChild.mock.calls[2][0]
+    expect(rerouted).toMatchObject({ harnessId: 'codex' })
+    expect([original.workerId, sibling.workerId]).not.toContain(rerouted.childId)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent).toMatchObject({ replacementCount: 0, recommendation: { assignments: [
+      { label: f.assignment.label, agentId: 'codex' }, { label: 'Second', agentId: sibling.route.harnessId }] } })
+    expect(intent.replacementReason).toContain('took over')
+    expect(intent.target?.workerIds).toEqual([rerouted.childId, sibling.workerId])
+    expect(await f.teams.worker('parent', original.workerId)).toMatchObject({ state: 'released' })
+
+    // One reroute per assignment: a second failure settles the card instead of looping.
+    const replacement = (await f.dispatches.list('parent')).find((entry) => entry.workerId === rerouted.childId)!
+    await f.dispatches.update('parent', replacement.dispatchId, { state: 'failed', failureReason: 'Still failing' })
+    const siblingDispatch = (await f.dispatches.list('parent')).find((entry) => entry.workerId === sibling.workerId)!
+    await f.dispatches.update('parent', siblingDispatch.dispatchId, { state: 'completed', verdict: { status: 'passed', checks: [] } })
+    await f.service.reconcile(); await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(3)
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed' })
   })
 
   it('keeps a user-pinned Agent fixed on failure', async () => {

@@ -105,6 +105,15 @@ export type PluginHostRoute = 'chat' | 'claw'
 export type SideConversation = {
   threadId: string
   parentThreadId: string
+  /** Branch-owned Agent; changing it must never write the main composer. */
+  harnessId: string
+  /** Credential path on `harnessId`; absent = that Agent's default. */
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  gatewayBinding?: HarnessGatewayBinding
+  /** Per-turn execution policy; never mirrored into the runtime global settings. */
+  approvalPolicy?: ApprovalPolicy
+  sandboxMode?: SandboxMode
+  approvalReviewer?: ApprovalReviewer
   /** Retargeted immutable profile owned by this independently cloned branch. */
   designProfile?: DesignTaskProfile
   designWorkspaceRoot?: string
@@ -132,6 +141,7 @@ export type SideConversation = {
   fastMode: boolean
   attachments: AttachmentReference[]
   busy: boolean
+  submitting?: boolean
   turnId: string | null
   userItemId: string | null
   error: string | null
@@ -147,11 +157,7 @@ export type SidePanelState = {
   activeSideId: string | null
 }
 
-export type SideConversationDraftOptions = {
-  model?: string
-  providerId?: string
-  reasoningEffort?: string
-  fastMode?: boolean
+export type SideConversationDraftOptions = SideComposerConfigPatch & {
   attachments?: AttachmentReference[]
   /** Context for the seed turn only, e.g. the passage the side chat quotes. */
   composerContexts?: ComposerContextAttachment[]
@@ -159,7 +165,17 @@ export type SideConversationDraftOptions = {
 
 export type SideMessageSendOptions = {
   composerContexts?: ComposerContextAttachment[]
+  config?: SideComposerConfigPatch
 }
+
+/**
+ * Branch-owned composer configuration. Applied by side id only, so a branch
+ * change can never leak into the main composer store or another branch.
+ */
+export type SideComposerConfigPatch = Partial<Pick<SideConversation,
+  'harnessId' | 'credentialMode' | 'gatewayBinding' | 'model' | 'providerId' |
+  'reasoningEffort' | 'fastMode' | 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'
+>>
 
 export type ChatState = {
   route: AppRoute
@@ -221,7 +237,7 @@ export type ChatState = {
    */
   adeThreads: NormalizedThread[]
   /** Relationship of the active thread (e.g. `side` for a subagent's own session). */
-  activeThreadRelation: 'primary' | 'fork' | 'side' | null
+  activeThreadRelation: 'primary' | 'fork' | 'side' | 'task' | null
   /** Parent thread of the active thread, when it is a `side`/`fork` branch. */
   activeThreadParentId: string | null
   activeThreadGoal: ThreadGoal | null
@@ -516,8 +532,13 @@ export type ChatState = {
   reindexThreadKnowledgeBase: (threadId: string, knowledgeBaseId: string) => Promise<boolean>
   setThreadSearch: (query: string) => void
   setShowArchivedThreads: (show: boolean) => void
-  /** Clears a non-empty conversation so New task can show its blank page before the thread exists. */
-  leaveThreadForNewTask: () => boolean
+  /**
+   * Clears a non-empty conversation so New task can show its blank page before
+   * the thread exists. A project row's New session passes its `workspaceRoot`:
+   * when that differs from the project in view, the blank page switches to it
+   * renderer-locally. Returns true when the selection was cleared.
+   */
+  leaveThreadForNewTask: (options?: { workspaceRoot?: string }) => boolean
   createThread: (options?: {
     workspaceRoot?: string
     forceNew?: boolean
@@ -641,6 +662,11 @@ export type ChatState = {
     action: { kind: 'submit'; answers: UserInputAnswer[] } | { kind: 'cancel' }
   ) => Promise<void>
   setSideInput: (sideId: string, text: string) => void
+  /**
+   * Apply an Agent/model/permission change to one branch. Refused while that
+   * branch is running, and it never writes main composer state.
+   */
+  setSideComposerConfig: (sideId: string, patch: SideComposerConfigPatch) => void
   setSideModel: (sideId: string, model: string, providerId?: string) => void
   setSideReasoningEffort: (sideId: string, effort: string) => void
   setSideFastMode: (sideId: string, enabled: boolean) => void

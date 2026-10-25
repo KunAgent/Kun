@@ -29,7 +29,7 @@ describe('write workspace whiteboard restoration', () => {
     })
 
     const loadDirectory = vi.fn(async () => '/tmp/write')
-    const loadWhiteboards = vi.fn(async () => {
+    const ensureWhiteboards = vi.fn(async () => {
       set({
         whiteboards: {
           'board-1': {
@@ -44,6 +44,7 @@ describe('write workspace whiteboard restoration', () => {
           }
         }
       })
+      return true
     })
     const openFile = vi.fn(async () => undefined)
     const refreshWorkspace = vi.fn(async () => undefined)
@@ -51,7 +52,7 @@ describe('write workspace whiteboard restoration', () => {
     let state = {
       ...initialState(),
       loadDirectory,
-      loadWhiteboards,
+      ensureWhiteboards,
       openFile,
       refreshWorkspace,
       saveAllDocuments
@@ -70,7 +71,7 @@ describe('write workspace whiteboard restoration', () => {
       ...state,
       ...actions,
       loadDirectory,
-      loadWhiteboards,
+      ensureWhiteboards,
       openFile,
       refreshWorkspace,
       saveAllDocuments
@@ -78,7 +79,7 @@ describe('write workspace whiteboard restoration', () => {
 
     await actions.initializeWorkspace('/tmp/write')
 
-    expect(state.loadWhiteboards).toHaveBeenCalledWith('/tmp/write')
+    expect(state.ensureWhiteboards).toHaveBeenCalledWith('/tmp/write')
     expect(state.openFile).not.toHaveBeenCalled()
     expect(state).toMatchObject({
       activeWhiteboardId: 'board-1',
@@ -91,5 +92,80 @@ describe('write workspace whiteboard restoration', () => {
         }]
       }
     })
+  })
+
+  it('reads only the lightweight index once when the space opens', async () => {
+    vi.stubGlobal('window', { localStorage: new MemoryStorage() })
+    const loadDirectory = vi.fn(async () => '/tmp/write')
+    const ensureWhiteboards = vi.fn(async () => true)
+    const openFile = vi.fn(async () => undefined)
+    const refreshWorkspace = vi.fn(async () => undefined)
+    const saveAllDocuments = vi.fn(async () => true)
+    let state = {
+      ...initialState(),
+      loadDirectory,
+      ensureWhiteboards,
+      openFile,
+      refreshWorkspace,
+      saveAllDocuments
+    } as unknown as WriteWorkspaceState
+    const get: WriteWorkspaceGet = () => state
+    const set: WriteWorkspaceSet = (partial) => {
+      const patch = typeof partial === 'function' ? partial(state) : partial
+      state = { ...state, ...patch }
+    }
+    const actions = createWriteFileActions({ get, set, cancelExternalSyncAnimation: vi.fn() })
+    state = { ...state, ...actions, loadDirectory, ensureWhiteboards, openFile, refreshWorkspace, saveAllDocuments }
+
+    await actions.initializeWorkspace('/tmp/write')
+
+    // One index read keeps session grouping correct; board scenes stay lazy.
+    expect(ensureWhiteboards).toHaveBeenCalledTimes(1)
+    expect(ensureWhiteboards).toHaveBeenCalledWith('/tmp/write')
+  })
+
+  it('keeps a restored whiteboard tab when the index cannot be read', async () => {
+    vi.stubGlobal('window', { localStorage: new MemoryStorage() })
+    persistWriteEditorLayout('/tmp/write', {
+      version: 1,
+      orientation: 'single',
+      ratio: 0.5,
+      focusedGroupId: 'primary',
+      groups: [{
+        id: 'primary',
+        activePath: 'whiteboard:board-1',
+        tabs: [{ kind: 'whiteboard', boardId: 'board-1', viewMode: 'rich' }]
+      }]
+    })
+    const loadDirectory = vi.fn(async () => '/tmp/write')
+    const ensureWhiteboards = vi.fn(async () => false)
+    const openFile = vi.fn(async () => undefined)
+    const refreshWorkspace = vi.fn(async () => undefined)
+    const saveAllDocuments = vi.fn(async () => true)
+    let state = {
+      ...initialState(),
+      loadDirectory,
+      ensureWhiteboards,
+      openFile,
+      refreshWorkspace,
+      saveAllDocuments
+    } as unknown as WriteWorkspaceState
+    const get: WriteWorkspaceGet = () => state
+    const set: WriteWorkspaceSet = (partial) => {
+      const patch = typeof partial === 'function' ? partial(state) : partial
+      state = { ...state, ...patch }
+    }
+    const actions = createWriteFileActions({ get, set, cancelExternalSyncAnimation: vi.fn() })
+    state = { ...state, ...actions, loadDirectory, ensureWhiteboards, openFile, refreshWorkspace, saveAllDocuments }
+
+    await actions.initializeWorkspace('/tmp/write')
+
+    expect(state.editorLayout.groups[0]).toMatchObject({
+      activePath: 'whiteboard:board-1',
+      tabs: [{ kind: 'whiteboard', boardId: 'board-1' }]
+    })
+    // The tab stays active so the editor can offer a retry instead of dropping it.
+    expect(state.activeWhiteboardId).toBe('board-1')
+    expect(state.whiteboards['board-1']).toBeUndefined()
   })
 })

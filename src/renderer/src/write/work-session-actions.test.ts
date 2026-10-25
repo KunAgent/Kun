@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../store/chat-store'
 import { useWriteWorkspaceStore } from './write-workspace-store'
 import { currentWorkSessionId, useWorkSessionStore } from './work-session-store'
+import { rememberWorkSessionTabs } from './work-session-tabs'
+import type { WriteEditorLayoutV1 } from './write-workspace-store-types'
 import {
   nextUntitledDocumentName,
   openWorkSession,
@@ -12,6 +14,34 @@ import {
 
 const ROOT = '/Users/me/Work'
 const now = '2026-08-13T00:00:00.000Z'
+const RESEARCH_SESSION = 'rs-test-000001'
+
+function discoverLayout(): WriteEditorLayoutV1 {
+  return {
+    version: 1,
+    orientation: 'single',
+    ratio: 1,
+    focusedGroupId: 'primary',
+    groups: [{
+      id: 'primary',
+      tabs: [{ kind: 'paper-view', view: 'discover:search', viewMode: 'rich' }],
+      activePath: 'paper-view:discover:search'
+    }]
+  }
+}
+
+function installMemoryStorage(): () => void {
+  const data = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => { data.set(key, String(value)) },
+    removeItem: (key: string) => { data.delete(key) },
+    clear: () => data.clear(),
+    key: (index: number) => [...data.keys()][index] ?? null,
+    get length() { return data.size }
+  })
+  return () => vi.unstubAllGlobals()
+}
 
 describe('Work session actions', () => {
   const createWriteThread = vi.fn(async () => 'thr_new')
@@ -184,6 +214,54 @@ describe('Work session actions', () => {
     expect(currentWorkSessionId(ROOT)).toBe('thr_doc')
     expect(selectWriteThread).toHaveBeenCalledWith('thr_doc', ROOT)
     expect(openFile).toHaveBeenCalledWith(ROOT, `${ROOT}/plan.md`)
+  })
+
+  it('opens a research session onto its conversation when the discover tab is already remembered', async () => {
+    const restoreStorage = installMemoryStorage()
+    try {
+      const openPaperViewTab = vi.fn()
+      useWriteWorkspaceStore.setState({
+        openPaperViewTab,
+        paperResearch: { agentTab: false, sessionId: null }
+      })
+      rememberWorkSessionTabs('thr_research', ROOT, discoverLayout())
+      await openWorkSession({
+        id: 'thr_research',
+        title: 'Find agents',
+        updatedAt: now,
+        anchor: { kind: 'research', sessionId: RESEARCH_SESSION }
+      })
+      expect(currentWorkSessionId(ROOT)).toBe('thr_research')
+      // Once while restoring the remembered tab, again when the research run is applied.
+      expect(openPaperViewTab).toHaveBeenCalledTimes(2)
+      expect(openPaperViewTab).toHaveBeenCalledWith('discover:search')
+      expect(useWriteWorkspaceStore.getState().paperResearch).toEqual({
+        agentTab: true,
+        sessionId: RESEARCH_SESSION
+      })
+    } finally {
+      restoreStorage()
+    }
+  })
+
+  it('opens a research session that has no remembered tabs onto its conversation', async () => {
+    const openPaperViewTab = vi.fn()
+    useWriteWorkspaceStore.setState({
+      openPaperViewTab,
+      paperResearch: { agentTab: false, sessionId: null }
+    })
+    await openWorkSession({
+      id: 'thr_research_fresh',
+      title: 'Find agents',
+      updatedAt: now,
+      anchor: { kind: 'research', sessionId: RESEARCH_SESSION }
+    })
+    expect(openPaperViewTab).toHaveBeenCalledTimes(1)
+    expect(openPaperViewTab).toHaveBeenCalledWith('discover:search')
+    expect(useWriteWorkspaceStore.getState().paperResearch).toEqual({
+      agentTab: true,
+      sessionId: RESEARCH_SESSION
+    })
   })
 
   it('names new documents untitled, then untitled-2 and so on', () => {

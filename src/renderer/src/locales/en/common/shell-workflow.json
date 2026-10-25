@@ -562,8 +562,6 @@
   "canvasInspectorRemoveFill": "Remove fill",
   "canvasInspectorRemoveStroke": "Remove stroke",
   "canvasInspectorTextColor": "Color",
-  "canvasInspectorPin": "Pin inspector",
-  "canvasInspectorUnpin": "Unpin inspector",
   "canvasInspectorEmpty": "Select an object on the canvas to edit position, fill, stroke, and other properties.",
   "canvasInspectorAiHolder": "AI image",
   "canvasInspectorAiHolderMark": "Mark as AI image slot",

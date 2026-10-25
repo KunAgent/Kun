@@ -7,7 +7,11 @@ import type { AppRoute } from '../../store/chat-store-types'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
 import type { DesignComposerContext } from '../../design/design-composer-context'
 import type { QueuedComposerMessage } from './FloatingComposerQueuedMessages'
-import type { ComposerExecutionSettings } from './FloatingComposerExecutionPicker'
+import type {
+  AgentPermissionContext,
+  ComposerExecutionSettings
+} from './FloatingComposerExecutionPicker'
+import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { ComposerReasoningEffort } from './FloatingComposerModelPicker'
 import type { PendingUserInputBlock, ResolveUserInput } from './use-composer-user-input'
 import type { DesignTaskComposerProfile } from './FloatingComposerTaskProfile'
@@ -21,7 +25,14 @@ export function shouldShowVoiceDictation(
   return speechToText != null && isSpeechToTextConfigured(speechToText, { credentialReady })
 }
 
-export type ComposerPrimaryActionKind = 'interrupt' | 'submit'
+/**
+ * - interrupt: a turn runs and the draft is empty → grey Stop (Esc also stops).
+ * - queue: a turn runs and the draft has a payload → the send queues it.
+ * - submit: idle send.
+ * `queue` and `submit` both run the primary send path (slash commands and
+ * goal drafts still win inside it); only the look and tooltip differ.
+ */
+export type ComposerPrimaryActionKind = 'interrupt' | 'queue' | 'submit'
 
 export function resolveComposerPrimaryActionKind({
   busy,
@@ -42,7 +53,8 @@ export function resolveComposerPrimaryActionKind({
     || (attachmentUploadEnabled && attachmentCount > 0)
     || (fileReferenceEnabled && fileReferenceCount > 0)
 
-  return busy && !hasDraftPayload ? 'interrupt' : 'submit'
+  if (!busy) return 'submit'
+  return hasDraftPayload ? 'queue' : 'interrupt'
 }
 
 export function returnQueuedMessageToComposer(
@@ -152,6 +164,31 @@ export function codeExecutionControlsAvailable(
 ): boolean {
   return taskSurface !== 'design'
 }
+
+/**
+ * Agent identity, permission ladder and availability for one branch
+ * conversation. Every callback applies to that branch only.
+ */
+export type SideAgentControls = {
+  contextKey: string
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  selectionReady: boolean
+  modelsLoading: boolean
+  modelsError?: string
+  nativeProfileReady: boolean
+  rows: AdeHarnessRow[]
+  loading: boolean
+  harnessId: string
+  harnessLabel: string
+  /** Ask before retargeting a branch that already produced turns. */
+  needsConfirm: (nextHarnessId: string) => boolean
+  onSelect: (harnessId: string) => void
+  onOpen: () => void
+  onManage: (harnessId?: string, configureProvider?: boolean) => void
+  /** Native permission wording for the selected external Agent. */
+  agentPermission?: AgentPermissionContext
+  disabled?: boolean
+}
 export type { DesignComposerContext } from '../../design/design-composer-context'
 
 export type FloatingComposerProps = {
@@ -247,6 +284,12 @@ export type FloatingComposerProps = {
   webAccessAvailable?: boolean
   executionSettings?: ComposerExecutionSettings | null
   executionSettingsApplying?: boolean
+  /**
+   * Branch-scoped Agent controls. Present only on the side-conversation
+   * composer: values and callbacks belong to that branch, so selecting an Agent
+   * here never writes the main composer selection.
+   */
+  sideAgentControls?: SideAgentControls
   skillCommands?: Array<{
     id: string
     name: string

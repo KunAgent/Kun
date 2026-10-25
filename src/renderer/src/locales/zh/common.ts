@@ -1,8 +1,11 @@
+import writeSelectionMenu from './common/write-selection-menu.json'
+import githubApp from './common/github-app.json'
 import composerSubscriptionQuota from './common/composer-subscription-quota.json'
 import toolApprovalDetails from './common/tool-approval-details.json'
 import toolDetails from './common/tool-details.json'
 import toolStates from './common/tool-states.json'
 import agentDispatch from './common/agent-dispatch.json'
+import taskSuggestion from './common/task-suggestion.json'
 import agentUpdates from './common/agent-updates.json'
 import roomsPolish from './common/rooms-polish.json'
 import executionTasks from './common/execution-tasks.json'
@@ -34,6 +37,7 @@ import sddMcp from './common/sdd-mcp.json'
 import agentsGraph from './common/agents-graph.json'
 import codePersonas from './common/code-personas.json'
 import workWhiteboard from './common/work-whiteboard.json'
+import whiteboardChrome from './common/whiteboard-chrome.json'
 import sidebar from './common/sidebar.json'
 import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
@@ -69,17 +73,37 @@ import gmail from './common/gmail.json'
 import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
 import designAgent from './common/design-agent.json'
+import designCanvasChrome from './common/design-canvas-chrome.json'
 import artifactsLibrary from './common/artifacts-library.json'
+import artifactsChat from './common/artifacts-chat.json'
 import workspaceFiles from './common/workspace-files.json'
 import changesCommit from './common/changes-commit.json'
 import turnUndo from './common/turn-undo.json'
+import assistantMailbox from './common/assistant-mailbox.json'
+import terminalDock from './common/terminal-dock.json'
+import pptDeck from './common/ppt-deck.json'
+import workersPanel from './common/workers-panel.json'
+import officeViewer from './common/office-viewer.json'
+import composerTray from './common/composer-tray.json'
+import composerTrayTodo from './common/composer-tray-todo.json'
+import composerTrayGraph from './common/composer-tray-graph.json'
+import composerTrayWorkers from './common/composer-tray-workers.json'
+import composerTrayShells from './common/composer-tray-shells.json'
+import composerTrayGoal from './common/composer-tray-goal.json'
+import composerQueue from './common/composer-queue.json'
+import composerAsk from './common/composer-ask.json'
+import composerApproval from './common/composer-approval.json'
+import composerRecords from './common/composer-records.json'
 
 const common = {
+  ...writeSelectionMenu,
+  ...githubApp,
   ...composerSubscriptionQuota,
   ...toolApprovalDetails,
   ...toolDetails,
   ...toolStates,
   ...agentDispatch,
+  ...taskSuggestion,
   ...agentUpdates,
   ...roomsInitIm,
   ...roomsDirect,
@@ -117,6 +141,7 @@ const common = {
   ...agentsGraph,
   ...codePersonas,
   ...workWhiteboard,
+  ...whiteboardChrome,
   ...sidebar,
   ...i18nReview,
   ...commandPalette,
@@ -151,10 +176,27 @@ const common = {
   ...messageQuote,
   ...appSurfaces,
   ...designAgent,
+  ...designCanvasChrome,
   ...artifactsLibrary,
+  ...artifactsChat,
   ...workspaceFiles,
   ...changesCommit,
   ...turnUndo,
+  ...assistantMailbox,
+  ...terminalDock,
+  ...pptDeck,
+  ...workersPanel,
+  ...officeViewer,
+  ...composerTray,
+  ...composerTrayTodo,
+  ...composerTrayGraph,
+  ...composerTrayWorkers,
+  ...composerTrayShells,
+  ...composerTrayGoal,
+  ...composerQueue,
+  ...composerAsk,
+  ...composerApproval,
+  ...composerRecords
 }
 
 export default common

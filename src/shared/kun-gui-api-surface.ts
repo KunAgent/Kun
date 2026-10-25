@@ -252,9 +252,9 @@ import {
 import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
 import type { KunGuiMarketApi } from './market/kun-gui-api-market'
 export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
-  import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi &
+  import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi & import('./terminal-dock').KunGuiTerminalDockApi &
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
-  import('./git-turn-undo').KunGuiGitTurnUndoApi &
+  import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi &
   import('./ade-collaboration-settings').AdeCollaborationSettingsBridge & import('./ade-project-defaults').AdeProjectDefaultsBridge & {
   productAnalytics?: import('./product-analytics').ProductAnalyticsApi
   platform: string
@@ -357,6 +357,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
   mobileLink?: import('./mobile-link').MobileLinkApi
+  assistantMailbox?: import('./assistant-mailbox').AssistantMailboxApi
   remoteAccessGetStatus: () => Promise<RemoteAccessStatus>
   remoteAccessSetConfig: (patch: RemoteAccessConfigPatch) => Promise<RemoteAccessStatus>
   remoteAccessSetPassword: (password: string) => Promise<RemoteAccessStatus>

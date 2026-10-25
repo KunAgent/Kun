@@ -1,6 +1,6 @@
 # Gen UI 与 MCP Apps 实现计划
 
-状态:P0-P3 已实现(2026-10-19,Lab 开关默认关闭);P1.5 与 P4 未做。实际实现与本计划的差异见第 15 节。
+状态:P0-P3 已实现;Gen UI 与 MCP Apps 已从 Lab 移出并作为内置能力始终开启(2026-10-25);P1.5 与 P4 未做。实际实现与本计划的差异见第 15 节。
 目标是让 Kun 的 Agent 在桌面会话里直接生成可交互界面(Gen UI),
 并作为 MCP Apps 宿主运行第三方/内置的交互页面,其中第一个完整应用是可由 Agent 与用户共同编辑的画布。
 
@@ -26,7 +26,7 @@
   工具按元素 ID 做带 `expectedRevision` 的增量操作。它同时是宿主协议的验收用例。
 - **命名。** "UI 插件"在 Kun 已指形象工坊皮肤包(`docs/UI_PLUGINS.md`),"Apps in Rooms"指远程 MCP 连接。
   本功能对外叫 **Gen UI** 与 **MCP App**,侧栏页面叫 **App 面板**;代码目录用 `app-surfaces`、`gen-ui`、`mcp-apps`。
-- **全部先挂 Lab 开关,默认关闭**:`lab.genUi.enabled`、`lab.mcpApps.enabled`。
+- **内置启用**:Gen UI 与 MCP Apps 不提供 Lab 开关,始终启用;旧 `lab.genUi`/`lab.mcpApps` 字段仅做兼容清理。
 
 ## 1. 参考实现拆解
 
@@ -113,7 +113,7 @@ MCP: UI 扩展宣告、工具 _meta.ui          AppSandboxRegistry(内存 HTML�
   归一化、visibility 过滤                  owner webContents、分区、凭证)     GenUiBridgeHost(私有 JSON-RPC)
 /v1/mcp-apps/*:资源读取、页面工具        will-attach-webview 加固             McpAppHost(ext-apps AppBridge)
   调用、sampling、实例凭证               MessagePort 交给 shell preload       composer context 芯片、追问确认
-内置 kun:canvas stdio MCP App            手势 token、截图复制                 Lab 开关与设置
+内置 kun:canvas stdio MCP App            手势 token、截图复制                 内置启用与兼容清理
 ```
 
 数据流:
@@ -181,13 +181,13 @@ P4 再按资源声明 + 受保护确认放开。
   HTML ≤1 MiB(模型生成内容),快照上限 5 MB;`GenUiWidgetStateSchema` `{modelContent, privateContent}`
   合计 ≤16 KiB,仅 JSON 值;路径 schema 拒绝 `..`、NUL、换行,文件名小写连字符 `.html`。
 - 工具 `kun/src/adapters/tool/gen-ui-tool-provider.ts`:`render_widget`,`kind: 'gui'`,只读、无网络、
-  `shouldAdvertise` = Lab 开关开启 **且** 本回合 `TurnClientSurface === 'gui'`。
+  `shouldAdvertise` = 本回合 `TurnClientSurface === 'gui'`(内置能力,无 Lab 开关)。
   - `html` 模式:直接校验并写 artifact。
   - `path` 模式:只接受 Gen UI 输出根目录下的非符号链接文件,读出后写 artifact。这样模型可以用普通文件
     工具增量编辑大页面,而历史中的旧卡片仍指向当时的快照,不会被后续编辑改变。
   - 输出 `{status, summary, genUi:{artifactId, sha256, bytes, title, mode}}`;`summary` 是给 TUI/IM 的文字降级。
 - 输出目录:`<dataDir>/gen-ui/<hash(workspaceIdentity)>/<threadId>/`,不写进工作区、不进 Git;文件工具的写入白名单
-  需要加入这个根目录(只在 Lab 开启时)。目录路径通过 `kun_context_block kind="gen-ui-output"` 在 GUI 回合告知
+  需要加入这个根目录(仅在 GUI 回合)。目录路径通过 `kun_context_block kind="gen-ui-output"` 在 GUI 回合告知
   模型,不进稳定前缀。
 - 状态存储 `kun/src/gen-ui/gen-ui-state-store.ts`:每线程一个 JSON(原子替换 + 现有跨进程锁),按
   `artifactId` 归档;路由 `GET|PUT /v1/threads/:id/gen-ui/state`;分叉线程时复制状态;归档/删除线程时一起清理。
@@ -232,8 +232,8 @@ P4 再按资源声明 + 受保护确认放开。
 P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页面 ≤64 组,宿主统一面板与显式提交)、
 导出为独立 HTML(带本地状态回退)、日历等内置组件。
 
-验收:Lab 开关开启后,"用交互页面解释正弦波,能拖动振幅和频率"生成内联卡片;刷新应用后卡片与已保存
-状态恢复;点击追问按钮弹确认并在当前线程发送;TUI 同一线程只显示摘要;关闭开关后新回合不再广告工具,
+验收:默认内置状态下,"用交互页面解释正弦波,能拖动振幅和频率"生成内联卡片;刷新应用后卡片与已保存
+状态恢复;点击追问按钮弹确认并在当前线程发送;TUI 同一线程只显示摘要;TUI/IM 回合不广告该工具,
 历史卡片仍可渲染。
 
 ## 7. P2 MCP Apps(内联)
@@ -243,9 +243,9 @@ P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页�
 - 合约 `kun/src/contracts/mcp-apps.ts`(纯函数、零 IO):`normalizeMcpToolUiMeta`(`resourceUri` 优先级与
   校验规则同 1.2)、`readMcpToolVisibility`、`normalizeMcpAppResourceMeta`(CSP、`prefersBorder`、尺寸提示)、
   surface ID 规则 `^[A-Za-z0-9][A-Za-z0-9_.-]*$` ≤128。
-- `mcp-transport.ts` 的 `mcpClientOptions`:Lab 开启时在 capabilities 加
+- `mcp-transport.ts` 的 `mcpClientOptions`:内置能力在 capabilities 加
   `extensions: {"io.modelcontextprotocol/ui": {mimeTypes: ["text/html;profile=mcp-app"]}}`;`mcp-deferred-client.ts`
-  的工具列表缓存键要包含这个能力位,避免开关前后的缓存串用。
+  的工具列表缓存键要包含这个能力位。
 - `mcp-tool-runtime.ts`:`createMcpLocalTool` 只为 `visibility` 含 `model` 的工具建模型工具;MCP 工具检索目录
   同样过滤;所有工具的 UI 描述保存在连接状态里。工具结果输出增加 `mcpApp` 字段(serverId、resourceUri、
   surface、preferredDisplayMode);给模型的投影只用 `content`(无文本 content 时才退回有界的
@@ -321,14 +321,12 @@ P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页�
 | 原生权限 | 资源声明 + 受保护确认 + 系统授权 | 绑定实际 guest,失效页面的确认不能授权新页面 |
 | 扩展分发 | Kun 扩展 manifest 声明自带 MCP App | 复用扩展权限审核 |
 
-## 10. 设置与开关
+## 10. 内置启用与兼容
 
-- `src/shared/app-settings-kun-lab-defaults.ts` 增加 `genUi: {enabled:false}`、`mcpApps: {enabled:false}`;
-  同步修改 `app-settings-types-kun-runtime.ts`、`app-settings-kun-merge.ts` 与 `.strict()` patch schema
-  (漏掉会导致设置同步循环)。
-- 设置 → 实验室新增两张卡片,复用 `settings-section-lab-conversation-visualization.tsx` 的布局;
-  MCP 设置里显示每个 server 是否提供 App 页面,并提供"清除 App 页面数据"。
-- 文案进全部 locale;中文复数键注意 `_other` 规则。
+- Gen UI 与 MCP Apps 是内置能力,不提供 Lab 开关。`render_widget` 在 GUI 回合始终广告;MCP App 卡片与内置画布 server 始终启用。
+- GUI 设置不再包含 `genUi`/`mcpApps` 字段。历史 `kun-settings.json` 中的旧值在归一化时丢弃,旧 `config.json` 中的
+  `lab.genUi`/`lab.mcpApps` 由 retired-key 预处理删除,不能继续关闭功能。
+- MCP 设置里仍显示每个 server 是否提供 App 页面,并提供"清除 App 页面数据"。
 
 ## 11. 安全与隐私清单
 
@@ -345,11 +343,11 @@ P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页�
 | 风险 | 缓解 |
 | --- | --- |
 | 内存:每个 webview 是独立渲染进程 | 活页面上限 32、离屏回收、Gen UI 用内存分区;接入现有空闲内存基线测量 |
-| 前缀缓存:新工具、动态目录、页面工具 | 工具只在 Lab 开启时广告;目录与状态走 `kun_context_block`;页面工具走稳定代理工具 |
+| 前缀缓存:新工具、动态目录、页面工具 | `render_widget` 只在 GUI 回合广告;目录与状态走 `kun_context_block`;页面工具走稳定代理工具 |
 | 包体:第二份 Excalidraw 与 vendor 库 | 画布页面与 renderer 共用 Excalidraw 构建产物;vendor 只放必要版本;复核 mac arm64 体积门禁 |
 | Electron webview 移动会重载 | 浮层定位、永不 reparent |
 | `body zoom: 0.82` 坐标漂移 | 统一用 `getBoundingClientRect()` 比例换算 |
-| 模型滥用 Gen UI | Skill 写清楚何时不用;GUI 回合才广告;默认关闭 |
+| 模型滥用 Gen UI | Skill 写清楚何时不用;不提供 Lab 开关;GUI 回合才广告 |
 | 第三方页面兼容 | 只声明真实实现的能力;页面按 `getHostCapabilities()` 启用功能 |
 | 700 行文件门禁 | 按 domain/app/adapters/components 拆模块,先写合约再接线 |
 
@@ -358,7 +356,7 @@ P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页�
 | 阶段 | 规模 | 主要改动 | 退出标准 |
 | --- | --- | --- | --- |
 | P0 沙箱宿主 | M | `src/main/app-sandbox/*`、`privileged-schemes.ts`、`extension-webview-security.ts`、`src/preload/app-sandbox-shell.ts`、`src/shared/app-sandbox-contract.ts`、`src/renderer/src/app-surfaces/{app-page-manager,app-page-plane}` | fixture 页面往返;guest 拒绝路径单测 |
-| P1 Gen UI | M | `kun/src/contracts/gen-ui.ts`、`gen-ui-tool-provider.ts`、`kun/src/gen-ui/*`、线程状态路由、context block;renderer 投影与 `GenUiCard`;`resources/bundled-skills/gen-ui`;Lab 开关 | 第 6 节验收 |
+| P1 Gen UI | M | `kun/src/contracts/gen-ui.ts`、`gen-ui-tool-provider.ts`、`kun/src/gen-ui/*`、线程状态路由、context block;renderer 投影与 `GenUiCard`;`resources/bundled-skills/gen-ui`;内置启用 | 第 6 节验收 |
 | P1.5 | S | Tweak、导出、内置组件 | 设计稿可调参数并显式提交 |
 | P2 MCP Apps 内联 | L | `kun/src/contracts/mcp-apps.ts`、`mcp-transport.ts`、`mcp-tool-runtime.ts`、`mcp-deferred-client.ts`、`routes/mcp-apps.ts`;renderer `mcp-apps/*`、composer context;ext-apps 依赖 | 第 7 节冒烟 |
 | P3 面板 + 画布 | L | 右侧面板贡献 ID、`src/main/canvas-mcp/*`、画布页面构建 | 第 8 节验收 |
@@ -376,9 +374,9 @@ P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页�
 3. Gen UI 第三方库是否完全离线(推荐),还是先放行 CDN 白名单、之后再随包。
 4. P2 是否先只支持 inline,把侧栏面板与画布合并到 P3 一起交付(推荐)。
 
-## 15. 实现状态(2026-10-19)
+## 15. 实现状态(2026-10-25)
 
-已交付 P0-P3,两个 Lab 开关(`lab.genUi.enabled`、`lab.mcpApps.enabled`)默认关闭。第 14 节四项均按推荐
+已交付 P0-P3。两个能力已从 Lab 移出,不再有用户开关,默认始终启用;旧配置字段会被兼容清理。第 14 节四项均按推荐
 选择,只有画布存储例外(见下)。
 
 ### 15.1 代码位置
@@ -391,7 +389,7 @@ P1.5:Tweak(对象绑定的滑块/颜色/开关/选择,单组 ≤12 控件、页�
 | Preload | `src/preload/app-sandbox-shell.ts`(shell 页转发)、`src/preload/app-sandbox-api.ts`(`window.kunGui` 上的窄接口) |
 | Renderer | `src/renderer/src/app-surfaces/*`(`AppSandboxFrame`、`GenUiCard`/`GenUiSurface`、`McpAppCard`/`McpAppSurface`、App 面板、composer context) |
 | 画布 | `src/main/canvas-mcp/*`(stdio server 与 board store)、`src/canvas-app/*`(Excalidraw 页面,`vite.canvas-app.config.ts`、`scripts/build-canvas-app.mjs`) |
-| Skill / 设置 | `resources/bundled-skills/gen-ui/`、`settings-section-lab-app-surfaces.tsx`、Lab 默认值与 merge |
+| Skill / 内置启用 | `resources/bundled-skills/gen-ui/`、默认 Lab 设置与 merge、旧 `lab.genUi`/`lab.mcpApps` 兼容清理 |
 | 冒烟 | `scripts/smoke-development-app-surfaces.cjs`(先 `npm run build:kun`、`electron-vite build`、`node scripts/build-canvas-app.mjs`) |
 
 ### 15.2 与计划的差异

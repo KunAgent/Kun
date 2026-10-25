@@ -38,6 +38,8 @@ export type PreviewViewMode = {
 
 type Props = {
   t: Translate
+  /** The hosting panel already shows the open files as tabs. */
+  hostTabs?: boolean
   tabsScrollRef: RefObject<HTMLDivElement | null>
   handleTabWheel: (event: ReactWheelEvent<HTMLDivElement>) => void
   visibleTargets: WorkspaceFileTarget[]
@@ -74,6 +76,7 @@ const ICON_BUTTON = 'ds-code-sidebar-icon-button'
 export function WorkspaceFilePreviewChrome(props: Props): ReactElement {
   const {
     t,
+    hostTabs = false,
     tabsScrollRef,
     handleTabWheel,
     visibleTargets,
@@ -107,9 +110,14 @@ export function WorkspaceFilePreviewChrome(props: Props): ReactElement {
   const editLabel = editingText
     ? t('filePreviewStopEditing', { defaultValue: 'Stop editing' })
     : t('filePreviewEditText', { defaultValue: 'Edit file' })
+  const fileTreeLabel = fileTreeOpen ? t('fileTreeClose') : t('fileTreeOpen')
+  const toggleFileTree = (): void => {
+    if (readingMode) onToggleReadingMode()
+    onToggleFileTree?.()
+  }
   return (
     <>
-      <div className="ds-code-sidebar-topbar">
+      {hostTabs ? null : <div className="ds-code-sidebar-topbar">
         <div
           ref={tabsScrollRef}
           className="ds-code-sidebar-tabs"
@@ -186,13 +194,10 @@ export function WorkspaceFilePreviewChrome(props: Props): ReactElement {
           {onToggleFileTree ? (
             <button
               type="button"
-              onClick={() => {
-                if (readingMode) onToggleReadingMode()
-                onToggleFileTree()
-              }}
+              onClick={toggleFileTree}
               className={`${ICON_BUTTON} ${fileTreeOpen ? 'is-active' : ''}`}
-              title={fileTreeOpen ? t('fileTreeClose') : t('fileTreeOpen')}
-              aria-label={fileTreeOpen ? t('fileTreeClose') : t('fileTreeOpen')}
+              title={fileTreeLabel}
+              aria-label={fileTreeLabel}
               aria-pressed={fileTreeOpen}
             >
               <FolderTree className="h-4 w-4" strokeWidth={1.75} />
@@ -202,9 +207,21 @@ export function WorkspaceFilePreviewChrome(props: Props): ReactElement {
             <PanelRightClose className="h-4 w-4" strokeWidth={1.85} />
           </button>
         </div>
-      </div>
+      </div>}
 
-      <div className="ds-code-sidebar-breadcrumbs">
+      <div className={`ds-code-sidebar-breadcrumbs ${hostTabs ? 'is-hosted' : ''}`}>
+        {hostTabs && onToggleFileTree ? (
+          <button
+            type="button"
+            onClick={toggleFileTree}
+            className={`${ICON_BUTTON} ${fileTreeOpen ? 'is-active' : ''}`}
+            title={fileTreeLabel}
+            aria-label={fileTreeLabel}
+            aria-pressed={fileTreeOpen}
+          >
+            <FolderTree className="h-4 w-4" strokeWidth={1.75} />
+          </button>
+        ) : null}
         <nav aria-label={t('filePreviewPath')} className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
           {breadcrumbSegments.length ? breadcrumbSegments.map((segment, index) => (
             <span key={`${segment}-${index}`} className="contents">

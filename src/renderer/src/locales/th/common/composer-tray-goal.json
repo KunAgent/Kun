@@ -1,0 +1,20 @@
+{
+  "composerTrayGoal": {
+    "label": "เป้าหมาย",
+    "segmentAria": "เป้าหมาย ({{status}}): {{objective}}",
+    "status": {
+      "active": "ใช้งานอยู่",
+      "paused": "หยุดชั่วคราว",
+      "blocked": "ถูกบล็อก",
+      "usageLimited": "จำกัดการใช้งาน",
+      "budgetLimited": "มีงบประมาณจำกัด",
+      "complete": "เสร็จสมบูรณ์"
+    },
+    "edit": "แก้ไข",
+    "elapsed": "เวลาที่ผ่านไป",
+    "tokens": "โทเค็น",
+    "tokensOfBudget": "โทเค็น / งบประมาณ",
+    "panelHintEmpty": "พิมพ์เป้าหมายในช่องข้อความด้านล่าง แล้วเลือก ตั้งเป็นเป้าหมาย",
+    "panelHintReplace": "พิมพ์เป้าหมายใหม่ในช่องข้อความด้านล่างเพื่อแทนที่เป้าหมายนี้"
+  }
+}

@@ -49,6 +49,7 @@ import { registerRuntimeSseIpc } from './runtime-sse-ipc'
 import { registerRemoteAccessIpc } from './remote/remote-ipc-handlers'
 import { RemoteAccessService } from './remote/remote-access-service'
 import { registerTerminalPtyIpc } from './terminal/terminal-pty-ipc'
+import { registerTerminalDockIpc } from './terminal/terminal-dock-ipc'
 import { ensureKunCliLaunch } from './terminal/terminal-agent-cli-env'
 import { resolveKunExecutable } from './resolve-kun-binary'
 import { JsonRemoteSshHostStore } from './remote-ssh/host-store'
@@ -600,6 +601,7 @@ export function registerMainIpc(services: MainServices): void {
       getMainWindow: () => mainState.mainWindow,
       logError,
       getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load()),
+      shellIntegrationDir: join(app.getPath('userData'), 'terminal-shell-integration'),
       resolveKunCli: async () => {
         const appRoot = app.isPackaged
           ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
@@ -626,6 +628,7 @@ export function registerMainIpc(services: MainServices): void {
         } as RequestInit)
       }
     })
+    registerTerminalDockIpc(ipcMain, mainState.terminalPtyController)
     const remoteSshDataDir = join(app.getPath('userData'), 'remote-ssh')
     mainState.remoteSshController = registerRemoteSshIpc({
       ipcMain,

@@ -10,7 +10,7 @@ import tailwindcss from 'tailwindcss'
 import autoprefixer from 'autoprefixer'
 import tailwindConfig from '../tailwind.config.js'
 import { inspectCjkFonts } from './memory-cjk-fonts.mjs'
-import { buildMemoryLifecycleRenderer } from './memory-lifecycle-renderer.mjs'
+import { smokeUrlAssets, writeSmokeAssets } from './smoke-url-assets.mjs'
 import { chromium, _electron } from 'playwright-core'
 
 // Production memory components/styles and real stores; isolated synthetic data only.
@@ -32,11 +32,29 @@ try {
   await build({ entryPoints: [join(root, 'scripts/fixtures/memory-lifecycle-backend.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: backendPath })
   backend = await require(backendPath).createMemorySmokeBackend(join(temporary, 'data'))
   const metadata = await backend.bootstrap()
-  const compiled = await buildMemoryLifecycleRenderer(temporary)
-  for (const file of compiled.outputFiles) {
-    await mkdir(dirname(file.path), { recursive: true })
-    await writeFile(file.path, file.contents)
-  }
+  const compiled = await build({ entryPoints: [join(root, 'scripts/fixtures/memory-lifecycle.tsx')], bundle: true,
+    format: 'esm', platform: 'browser', jsx: 'automatic', write: false, outdir: temporary,
+    loader: { '.woff2': 'dataurl', '.woff': 'dataurl', '.ttf': 'dataurl' },
+    alias: { '@shared': join(root, 'src/shared') },
+    plugins: [smokeUrlAssets(), { name: 'synthetic-memory-transport', setup(builder) {
+      builder.onLoad({ filter: /agent\/registry\.ts$/ }, () => ({ contents: `export const getProvider = () => ({
+        listMemories: async ({workspace}) => (await window.memoryFixture.api('/v1/memory?workspace='+encodeURIComponent(workspace))).memories,
+        updateMemory: async (id,patch,access) => (await window.memoryFixture.api('/v1/memory/'+encodeURIComponent(id)+'?project='+encodeURIComponent(access.project), 'PATCH', patch)).memory
+      });`, loader: 'js' }))
+      builder.onLoad({ filter: /rooms\/useRoomEvents\.ts$/ }, () => ({ contents: `
+        export const roomEventsLive = () => true;
+        export const acknowledgeRoomAttention = () => {};
+        export const useRoomAttentionCount = () => 0;
+        export const useRoomEvents = () => ({});
+        export function subscribeRoomEvents(listener) {
+          const handler = () => listener({kind:'agent.memory.updated'});
+          window.addEventListener('memory-fixture-change', handler);
+          return () => window.removeEventListener('memory-fixture-change', handler);
+        }`, loader: 'js' }))
+    } }]
+  })
+  // Retain emitted URL assets next to the fixture for file:// and Electron loads.
+  await writeSmokeAssets(compiled.outputFiles)
   const javascript = compiled.outputFiles.find((file) => file.path.endsWith('.js')).text
   const rawCss = compiled.outputFiles.find((file) => file.path.endsWith('.css'))?.text ?? ''
   const css = (await postcss([tailwindcss(tailwindConfig), autoprefixer]).process(rawCss, { from: join(root, 'src/renderer/src/index.css') })).css
@@ -157,9 +175,7 @@ try {
   const projectPath = page.getByRole('combobox', { name: 'Exact project path', exact: true })
   assert.equal(await projectPath.evaluate(input => input.list?.id), 'project-knowledge-projects',
     'project path must retain its native labelled datalist semantics')
-  // The datalist uses the stored canonical identity (including Windows case
-  // normalization), not the temporary directory's original path spelling.
-  await projectPath.fill(metadata.project.project)
+  await projectPath.fill(metadata.projectRoot)
   await page.getByRole('button', { name: 'Review preview', exact: true }).click()
   await page.getByText('Empty preview. Select at least one project record before saving.', { exact: true }).waitFor()
   await page.getByRole('checkbox').check()

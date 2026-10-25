@@ -15,6 +15,7 @@ import {
 } from 'react'
 import type { DesignComposerContext } from '../../design/design-composer-context'
 import { ComposerMessageQuoteChip } from './MessageQuoteViews'
+import { TerminalOutputChip } from './TerminalOutputChip'
 
 type Translate = (key: string, values?: unknown) => string
 
@@ -33,7 +34,9 @@ export function FloatingComposerContextChips({
         ? <ComposerMessageQuoteChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />
         : chip.kind === 'document-quote' && chip.quote
           ? <DocumentQuoteChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />
-          : <DefaultContextChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />)}
+          : chip.kind === 'terminal-output' && chip.terminalOutput
+            ? <TerminalOutputChip key={chip.id} id={chip.id} label={chip.label} output={chip.terminalOutput} onRemove={onRemove} />
+            : <DefaultContextChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />)}
     </div>
   )
 }

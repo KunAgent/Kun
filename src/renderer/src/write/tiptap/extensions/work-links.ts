@@ -216,16 +216,17 @@ export const WriteWorkLinks = Extension.create<{ navigation?: WorkLinkNavigation
     ]
   },
 
+  addCommands() {
+    return { openLinkBubble: () => ({ editor }) => {
+      const navigation = this.options.navigation
+      if (!navigation || !editor.isEditable) return false
+      openLinkBubble(editor, navigation, linkAt(editor, editor.state.selection.from))
+      return true
+    } }
+  },
+
   addKeyboardShortcuts() {
-    return {
-      'Mod-k': () => {
-        const navigation = this.options.navigation
-        if (!navigation) return false
-        const { from } = this.editor.state.selection
-        openLinkBubble(this.editor, navigation, linkAt(this.editor, from))
-        return true
-      }
-    }
+    return { 'Mod-k': () => this.editor.commands.openLinkBubble() }
   },
 
   addProseMirrorPlugins() {
@@ -295,3 +296,9 @@ export const WriteWorkLinks = Extension.create<{ navigation?: WorkLinkNavigation
     ]
   }
 })
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    writeWorkLinks: { openLinkBubble: () => ReturnType }
+  }
+}

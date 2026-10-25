@@ -280,6 +280,12 @@ jobs:
         timeout-minutes: 180
         run: npm run smoke:windows-installer -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
 
+      # the installer smoke covers the installed directory; this covers the
+      # unpacked payload that electron-updater stages before switching.
+      - name: Verify packaged runtime integrity (Windows)
+        timeout-minutes: 10
+        run: node ./scripts/verify-packaged-runtime-integrity.cjs --resources dist/win-unpacked/resources --mode hash
+
       - name: Smoke packaged update handoff (Windows)
         timeout-minutes: 20
         run: npm run smoke:packaged-update-handoff -- --resources dist/win-unpacked/resources

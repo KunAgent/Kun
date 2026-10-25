@@ -4,6 +4,11 @@ import type {
   TerminalSettingsPatchV1,
   TerminalSettingsV1
 } from './app-settings-types'
+import {
+  defaultTerminalAppearance,
+  defaultTerminalBehavior,
+  normalizeTerminalDockSettings
+} from './app-settings-terminal-dock'
 
 export type { TerminalColorMode, TerminalColorSettingsV1, TerminalSettingsPatchV1, TerminalSettingsV1 }
 
@@ -42,7 +47,7 @@ const TERMINAL_COLOR_KEYS = [
   ...TERMINAL_ANSI_COLOR_KEYS
 ] as const
 
-export const TERMINAL_COLOR_MODES: readonly TerminalColorMode[] = ['native', 'none', 'custom']
+export const TERMINAL_COLOR_MODES: readonly TerminalColorMode[] = ['native', 'none', 'contrast', 'custom']
 
 /**
  * Built-in dark preset for the terminal surface (background, foreground,
@@ -54,6 +59,30 @@ export const TERMINAL_PRESET_DARK = {
   foreground: '#e6e9ef',
   cursor: '#e6e9ef',
   selectionBackground: '#264f78aa'
+} as const
+
+/** Fixed high-contrast palette: near-black surface with saturated ANSI colors. */
+export const TERMINAL_PRESET_CONTRAST = {
+  background: '#0b0b0c',
+  foreground: '#f2f2f2',
+  cursor: '#ffffff',
+  selectionBackground: '#3a5ba8aa',
+  black: '#000000',
+  red: '#ff9a92',
+  green: '#6ff0a0',
+  yellow: '#ffd36b',
+  blue: '#8fb8ff',
+  magenta: '#d7b4ff',
+  cyan: '#5fe3ef',
+  white: '#f2f2f2',
+  brightBlack: '#b4b7bd',
+  brightRed: '#ffbab4',
+  brightGreen: '#9cf7bf',
+  brightYellow: '#ffe39c',
+  brightBlue: '#b5d0ff',
+  brightMagenta: '#e6ccff',
+  brightCyan: '#94eef6',
+  brightWhite: '#ffffff'
 } as const
 
 export const TERMINAL_PRESET_LIGHT = {
@@ -115,7 +144,12 @@ export function defaultTerminalColors(): TerminalColorSettingsV1 {
 
 export function defaultTerminalSettings(): TerminalSettingsV1 {
   return {
-    colors: defaultTerminalColors()
+    colors: defaultTerminalColors(),
+    appearance: defaultTerminalAppearance(),
+    behavior: defaultTerminalBehavior(),
+    profiles: [],
+    hiddenAgentIds: [],
+    agentOrder: []
   }
 }
 
@@ -181,7 +215,8 @@ export function normalizeTerminalSettings(
   input: TerminalSettingsPatchV1 | undefined
 ): TerminalSettingsV1 {
   return {
-    colors: normalizeTerminalColors(input?.colors)
+    colors: normalizeTerminalColors(input?.colors),
+    ...normalizeTerminalDockSettings(input)
   }
 }
 
@@ -189,9 +224,15 @@ export function mergeTerminalSettings(
   current: TerminalSettingsV1,
   patch: TerminalSettingsPatchV1 | undefined
 ): TerminalSettingsV1 {
-  if (!patch?.colors) return normalizeTerminalSettings(current)
-  const merged: Partial<TerminalColorSettingsV1> = { ...current.colors, ...patch.colors }
-  return normalizeTerminalSettings({ colors: merged })
+  if (!patch) return normalizeTerminalSettings(current)
+  return normalizeTerminalSettings({
+    colors: { ...current.colors, ...patch.colors },
+    appearance: { ...current.appearance, ...patch.appearance },
+    behavior: { ...current.behavior, ...patch.behavior },
+    profiles: patch.profiles ?? current.profiles,
+    hiddenAgentIds: patch.hiddenAgentIds ?? current.hiddenAgentIds,
+    agentOrder: patch.agentOrder ?? current.agentOrder
+  })
 }
 
 /**
@@ -279,6 +320,10 @@ export function resolveTerminalTheme(
       brightCyan: colors.brightCyan,
       brightWhite: colors.brightWhite
     }
+  }
+
+  if (colors.colorMode === 'contrast') {
+    return { ...TERMINAL_PRESET_CONTRAST, cursorAccent: TERMINAL_PRESET_CONTRAST.background }
   }
 
   const preset = mode === 'light' ? TERMINAL_PRESET_LIGHT : TERMINAL_PRESET_DARK

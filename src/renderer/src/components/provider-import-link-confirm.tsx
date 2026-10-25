@@ -27,7 +27,7 @@ export function ProviderImportLinkConfirmDialog({
   staged: StagedProviderImportLink
   t: (key: string, options?: Record<string, unknown>) => string
   onCancel: () => void
-  onConfirm: (providerId: string) => void
+  onConfirm: (providerId: string, unchanged?: boolean) => void
 }): ReactElement {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -47,7 +47,7 @@ export function ProviderImportLinkConfirmDialog({
         setError(result.message)
         return
       }
-      onConfirm(result.providerId)
+      onConfirm(result.providerId, result.unchanged === true)
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError))
     } finally {

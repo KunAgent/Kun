@@ -328,6 +328,9 @@ module.exports = {
         publish: [
           {
             provider: 'generic',
+            // Stable/frontier is selected by the URL; both feeds use latest*.yml.
+            // Do not derive a new manifest name from each daily prerelease version.
+            channel: 'latest',
             url: genericUpdateUrl
           }
         ]

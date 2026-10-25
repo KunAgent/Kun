@@ -157,7 +157,7 @@ export function RaceCompareView({
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
-          {error ? <p className="py-6 text-center text-[12px] text-ds-error">{error}</p> : null}
+          {error ? <p className="py-6 text-center text-[12px] text-ds-status-danger">{error}</p> : null}
           {!error && !comparison ? (
             <p className="flex items-center justify-center gap-2 py-6 text-[12px] text-ds-muted">
               <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />
@@ -202,7 +202,7 @@ export function RaceCompareView({
                         ) : null}
                       </div>
                       {contender.createError ? (
-                        <p className="mt-1 text-[11px] text-ds-error">{contender.createError}</p>
+                        <p className="mt-1 text-[11px] text-ds-status-danger">{contender.createError}</p>
                       ) : null}
                     </td>
                   ))}
@@ -217,7 +217,7 @@ export function RaceCompareView({
                         <button
                           type="button"
                           onClick={() => openWorkspace(contender)}
-                          className="text-[12px] text-ds-link hover:underline"
+                          className="text-[12px] text-accent hover:underline"
                         >
                           {contender.capture.changedFiles} {t('raceFiles')} · +
                           {contender.capture.insertions} −{contender.capture.deletions}
@@ -300,7 +300,7 @@ export function RaceCompareView({
                       type="button"
                       disabled={pending !== null}
                       onClick={() => void decide(contender)}
-                      className="rounded-[8px] bg-ds-accent px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      className="rounded-[8px] bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
                     >
                       {t('racePickWinner', { label: contender.label })}
                     </button>
@@ -321,7 +321,7 @@ export function RaceCompareView({
                     type="button"
                     disabled={pending !== null}
                     onClick={() => void discardOthers()}
-                    className="rounded-[8px] bg-ds-error px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    className="rounded-[8px] bg-ds-danger px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
                   >
                     {pending === 'discard' ? '…' : t('raceDiscardConfirmButton')}
                   </button>

@@ -3,6 +3,7 @@ import type { ChatBlock } from '../../agent/types'
 import type { ThreadDetail, ThreadEventSink } from '../../agent/provider-types'
 import { getProvider } from '../../agent/registry'
 import { formatRuntimeError } from '../../lib/format-runtime-error'
+import { noteThreadLiveActivity } from '../../store/thread-live-activity'
 
 function mergeBlocks(older: ChatBlock[], latest: ChatBlock[]): ChatBlock[] {
   const byId = new Map(older.map((block) => [block.id, block]))
@@ -84,7 +85,8 @@ export function useWorkerTranscript(workerId: string, activityStamp: string | un
       schedule()
     }
     const sink: ThreadEventSink = {
-      onSeq: () => undefined, onDeltas: schedule, onAssistantItem: schedule,
+      // The live row's "no new output" notice reads this thread's last event.
+      onSeq: () => noteThreadLiveActivity(workerId), onDeltas: schedule, onAssistantItem: schedule,
       onUserMessage: schedule, onTool: schedule,
       onCompaction: resetHistory,
       onThreadUpdated: resetHistory,

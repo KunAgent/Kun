@@ -3,6 +3,7 @@ import type { Frame } from '@kun/remote-protocol'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
 import { EventCoalescer } from './event-coalescer'
 import { LiveHistory, type LiveKind } from './live-history'
+import { MobileDirectorySubscriptions } from './directory-subscriptions'
 export type SubscriptionAuthority = { accountId: string; deviceId: string; authorizationId: string; scopes: readonly string[] }
 /** Runtime stream markers that never change a history page. */
 const QUIET_EVENTS = new Set(['heartbeat', 'replay_synchronized'])
@@ -10,6 +11,7 @@ export class MobileSubscriptions {
   private streams = new Map<string, AbortController>()
   /** Live pages by `device:kind:id`, so a phone's own write can refresh the page it watches. */
   private lives = new Map<string, LiveHistory>()
+  private directory: MobileDirectorySubscriptions
   constructor(
     private deps: {
       lease(): Promise<ProtectedRuntimeRequestLease>
@@ -18,8 +20,9 @@ export class MobileSubscriptions {
       /** Reads a history page for one phone; enables live subscriptions when present. */
       read?(device: string, authority: SubscriptionAuthority, method: string, params: Record<string, unknown>): Promise<unknown>
     }
-  ) {}
+  ) { this.directory = new MobileDirectorySubscriptions(deps) }
   clear(device?: string) {
+    this.directory.clear(device)
     for (const [key, control] of this.streams) if (!device || key.startsWith(device + ':')) {
       control.abort(); this.streams.delete(key)
     }
@@ -31,6 +34,7 @@ export class MobileSubscriptions {
     return Boolean(live)
   }
   async subscribe(device: string, input: unknown, authority?: SubscriptionAuthority) {
+    if ((input as { kind?: unknown } | null)?.kind === 'directory') return this.directory.subscribe(device, input, authority)
     const p = input as {
       kind?: string
       id?: string

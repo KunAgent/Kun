@@ -10,6 +10,7 @@ import tailwindcss from 'tailwindcss'
 import autoprefixer from 'autoprefixer'
 import { chromium } from 'playwright-core'
 import tailwindConfig from '../tailwind.config.js'
+import { smokeUrlAssets, writeSmokeAssets } from './smoke-url-assets.mjs'
 
 // Actual component, renderer client, route and canonical store; synthetic model only.
 // Not an Electron preload/Manager/full-app acceptance or a relation-quality evaluation.
@@ -31,8 +32,11 @@ try {
     entryPoints: [join(root, 'scripts/fixtures/memory-relations.tsx')], bundle: true, write: false,
     platform: 'browser', format: 'esm', jsx: 'automatic', outdir: temporary,
     alias: { '@shared': join(root, 'src/shared') },
-    loader: { '.woff2': 'dataurl', '.woff': 'dataurl', '.ttf': 'dataurl' }
+    loader: { '.woff2': 'dataurl', '.woff': 'dataurl', '.ttf': 'dataurl' },
+    plugins: [smokeUrlAssets()]
   })
+  // Retain emitted URL assets next to the fixture for file:// loads.
+  await writeSmokeAssets(compiled.outputFiles)
   const rawCss = compiled.outputFiles.find((file) => file.path.endsWith('.css')).text
   const css = (await postcss([tailwindcss(tailwindConfig), autoprefixer])
     .process(rawCss, { from: join(root, 'src/renderer/src/index.css') })).css

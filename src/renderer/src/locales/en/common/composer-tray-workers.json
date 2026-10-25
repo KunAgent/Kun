@@ -1,0 +1,48 @@
+{
+  "composerTrayWorkers": {
+    "title": "Collaborators",
+    "ariaLabel": "Collaborators: {{status}}",
+    "ariaLabelUnfinished": "Collaborators: {{status}}, {{remaining}} unfinished",
+    "segment": {
+      "waiting_one": "{{count}} needs you",
+      "waiting_other": "{{count}} need you",
+      "failed_one": "{{count}} failed",
+      "failed_other": "{{count}} failed",
+      "review_one": "{{count}} to review",
+      "review_other": "{{count}} to review",
+      "working_one": "{{count}} collaborator working",
+      "working_other": "{{count}} collaborators working",
+      "done": "Collaboration done",
+      "unknown": "Status unconfirmed"
+    },
+    "summary": {
+      "inBackground_one": "{{count}} in background",
+      "inBackground_other": "{{count}} in background",
+      "done_one": "{{count}} done",
+      "done_other": "{{count}} done",
+      "unconfirmed_one": "{{count}} unconfirmed",
+      "unconfirmed_other": "{{count}} unconfirmed"
+    },
+    "openPanel": "Open in panel",
+    "openWorker": "Open {{title}}",
+    "runningFor": "Running for {{duration}}",
+    "starting": "Starting…",
+    "reviewPending": "Awaiting review",
+    "status": {
+      "waiting": "Needs you",
+      "failed": "Failed",
+      "review": "To review",
+      "done": "Done",
+      "cancelled": "Cancelled",
+      "unconfirmed": "Unconfirmed"
+    },
+    "answer": "Answer",
+    "resolve": "Resolve",
+    "stopWorker": "Stop {{title}}",
+    "dispatchFooter": "Can also hand off to: {{names}}",
+    "manageAgents": "Manage agents",
+    "dispatchable_one": "{{count}} agent to hand off to",
+    "dispatchable_other": "{{count}} agents to hand off to",
+    "dispatchableAria": "{{label}}: {{names}}"
+  }
+}

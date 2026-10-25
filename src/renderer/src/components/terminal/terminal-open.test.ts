@@ -1,63 +1,40 @@
 // @vitest-environment jsdom
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  applyTerminalOpenRequest,
   consumePendingTerminalRequest,
   hasPendingTerminalRequest,
-  openTerminalAt,
   openTerminal,
+  openTerminalAt,
   openTerminalWithSetup,
-  TERMINAL_OPEN_AT_EVENT,
-  useTerminalOpenAt
+  paneForTerminalRequest,
+  useTerminalOpenRequests
 } from './terminal-open'
-import type { TerminalTab } from './terminal-panel-support'
+import { resetTerminalDockStoreForTest, seedWorkspace, workspaceTerminals } from './terminal-dock-store'
 
-function HookHarness({
-  tabsRef,
-  setTabs,
-  setActiveTabId
-}: {
-  tabsRef: { current: TerminalTab[] }
-  setTabs: (updater: (current: TerminalTab[]) => TerminalTab[]) => void
-  setActiveTabId: (id: string) => void
-}): null {
-  useTerminalOpenAt(tabsRef, setTabs, setActiveTabId)
+const KEY = 'workspace-a'
+
+function HookHarness(): null {
+  useTerminalOpenRequests(KEY)
   return null
 }
 
-function mountHarness(initial: TerminalTab[] = []) {
-  const state = { tabs: initial, activeTabId: initial[0]?.id ?? '' }
-  const tabsRef = { current: state.tabs }
-  const setTabs = (updater: (current: TerminalTab[]) => TerminalTab[]): void => {
-    state.tabs = updater(state.tabs)
-    tabsRef.current = state.tabs
-  }
-  const setActiveTabId = (id: string): void => {
-    state.activeTabId = id
-  }
-  let renderer!: ReturnType<typeof create>
-  act(() => {
-    renderer = create(createElement(HookHarness, { tabsRef, setTabs, setActiveTabId }))
-  })
-  return { state, renderer }
-}
-
 describe('terminal-open request channel', () => {
+  beforeEach(() => {
+    resetTerminalDockStoreForTest()
+    seedWorkspace(KEY, { id: 'main', target: { kind: 'local' } })
+  })
   afterEach(() => {
     consumePendingTerminalRequest()
-    vi.restoreAllMocks()
   })
 
-  it('stores a pending request until the panel drains it', () => {
+  it('stores a pending request until the dock drains it', () => {
     openTerminalWithSetup({ prefill: 'npm i -g @x/cli', probeHarnessId: 'codex' })
     expect(hasPendingTerminalRequest()).toBe(true)
-    expect(consumePendingTerminalRequest()).toEqual({
-      prefill: 'npm i -g @x/cli',
-      probeHarnessId: 'codex'
-    })
+    expect(consumePendingTerminalRequest()).toEqual({ prefill: 'npm i -g @x/cli', probeHarnessId: 'codex' })
     expect(hasPendingTerminalRequest()).toBe(false)
-    expect(consumePendingTerminalRequest()).toBeNull()
   })
 
   it('openTerminalAt stays a cwd-only shorthand', () => {
@@ -65,76 +42,35 @@ describe('terminal-open request channel', () => {
     expect(consumePendingTerminalRequest()).toEqual({ cwd: '/tmp/work' })
   })
 
-  it('a mounted panel opens a prefill tab straight from the event', () => {
-    const { state, renderer } = mountHarness([
-      { id: 'main', index: 1, target: { kind: 'local' } }
-    ])
-    act(() => {
-      openTerminalWithSetup({
-        prefill: 'claude /login',
-        probeHarnessId: 'claude-code',
-        title: 'Claude Code'
-      })
-    })
-    expect(state.tabs).toHaveLength(2)
-    const tab = state.tabs[1]
-    expect(tab.prefill).toBe('claude /login')
-    expect(tab.probeHarnessId).toBe('claude-code')
-    expect(tab.title).toBe('Claude Code')
-    expect(state.activeTabId).toBe(tab.id)
-    // The live event cleared the pending slot, so a later mount sees nothing.
+  it('builds panes for setup, agent and Kun process requests', () => {
+    const setup = paneForTerminalRequest({ prefill: 'claude /login', probeHarnessId: 'claude-code', title: 'Claude Code' })
+    expect(setup).toMatchObject({ target: { kind: 'local' }, prefill: 'claude /login', probeHarnessId: 'claude-code', title: 'Claude Code', fresh: true })
+    const agent = paneForTerminalRequest({ agent: { harnessId: 'codex', title: 'Codex', task: 'fix it' }, cwd: '/w' })
+    expect(agent.target).toEqual({ kind: 'agent', harnessId: 'codex', title: 'Codex', task: 'fix it', cwd: '/w' })
+    const process = paneForTerminalRequest({ kunProcess: { id: 'p1', command: 'npm run dev', threadId: 't1' } })
+    expect(process.target).toEqual({ kind: 'kun-process', processId: 'p1', command: 'npm run dev', threadId: 't1' })
+  })
+
+  it('reuses a local tab with the same directory and a Kun process tab', () => {
+    applyTerminalOpenRequest(KEY, { cwd: '/tmp/work' })
+    applyTerminalOpenRequest(KEY, { cwd: '/tmp/work' })
+    applyTerminalOpenRequest(KEY, { kunProcess: { id: 'p1', command: 'npm run dev', threadId: 't1' } })
+    applyTerminalOpenRequest(KEY, { kunProcess: { id: 'p1', command: 'npm run dev', threadId: 't1' } })
+    const { tabs, activeTabId } = workspaceTerminals(KEY)
+    expect(tabs).toHaveLength(3)
+    expect(tabs.find((tab) => tab.id === activeTabId)?.panes[0]?.target.kind).toBe('kun-process')
+  })
+
+  it('a mounted dock drains the pending request and handles new events', () => {
+    openTerminal({ cwd: '/tmp/a' })
+    let renderer!: ReturnType<typeof create>
+    act(() => { renderer = create(createElement(HookHarness)) })
+    expect(workspaceTerminals(KEY).tabs).toHaveLength(2)
+    act(() => { openTerminalWithSetup({ prefill: 'codex login', title: 'Codex' }) })
+    const tabs = workspaceTerminals(KEY).tabs
+    expect(tabs).toHaveLength(3)
+    expect(tabs[2]?.panes[0]).toMatchObject({ prefill: 'codex login', title: 'Codex' })
     expect(hasPendingTerminalRequest()).toBe(false)
-    act(() => renderer.unmount())
-  })
-
-  it('reuses an existing local tab for plain cwd requests', () => {
-    const { state, renderer } = mountHarness([
-      { id: 'main', index: 1, target: { kind: 'local', cwd: '/repo' } }
-    ])
-    act(() => openTerminalAt('/repo'))
-    expect(state.tabs).toHaveLength(1)
-    expect(state.activeTabId).toBe('main')
-    act(() => renderer.unmount())
-  })
-
-  it('opens a typed agent target without reusing a local shell or prefilling a command', () => {
-    const { state, renderer } = mountHarness([
-      { id: 'main', index: 1, target: { kind: 'local', cwd: '/repo' } }
-    ])
-    act(() => openTerminal({ cwd: '/repo', agent: { harnessId: 'aider', title: 'Aider' }, title: 'Aider' }))
-    expect(state.tabs).toHaveLength(2)
-    expect(state.tabs[1].target).toEqual({ kind: 'agent', cwd: '/repo', harnessId: 'aider', title: 'Aider' })
-    expect(state.tabs[1].prefill).toBeUndefined()
-    expect(state.activeTabId).toBe(state.tabs[1].id)
-    act(() => renderer.unmount())
-  })
-
-  it('keeps an agent request made in settings until the workbench mounts', () => {
-    openTerminal({ cwd: '/repo', agent: { harnessId: 'aider', title: 'Aider' } })
-    const { state, renderer } = mountHarness()
-    expect(state.tabs[0].target).toEqual({ kind: 'agent', cwd: '/repo', harnessId: 'aider', title: 'Aider' })
-    expect(hasPendingTerminalRequest()).toBe(false)
-    act(() => renderer.unmount())
-  })
-
-  it('never reuses a tab when the request carries a prefill', () => {
-    const { state, renderer } = mountHarness([
-      { id: 'main', index: 1, target: { kind: 'local', cwd: '/repo' } }
-    ])
-    act(() => {
-      openTerminalWithSetup({ cwd: '/repo', prefill: 'devin auth', probeHarnessId: 'devin' })
-    })
-    expect(state.tabs).toHaveLength(2)
-    expect(state.tabs[1].prefill).toBe('devin auth')
-    act(() => renderer.unmount())
-  })
-
-  it('a request dispatched before mount is drained on mount', () => {
-    openTerminalWithSetup({ prefill: 'opencode auth login', probeHarnessId: 'opencode' })
-    const { state, renderer } = mountHarness()
-    expect(state.tabs).toHaveLength(1)
-    expect(state.tabs[0].prefill).toBe('opencode auth login')
-    expect(state.tabs[0].probeHarnessId).toBe('opencode')
     act(() => renderer.unmount())
   })
 })

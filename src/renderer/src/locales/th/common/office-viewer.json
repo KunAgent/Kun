@@ -1,0 +1,14 @@
+{
+  "officePptOpening": "กำลังเปิดงานนำเสนอ…",
+  "officePptOpenFailed": "เปิดงานนำเสนอนี้ไม่ได้",
+  "officeZoomFitPage": "พอดีหน้า",
+  "officeZoomFitWidth": "พอดีความกว้าง",
+  "officeZoomAutomatic": "อัตโนมัติ",
+  "officeZoomLevel": "ระดับการซูม",
+  "officeDocxOpening": "กำลังเปิดเอกสาร…",
+  "officeDocxOpenFailed": "เปิดเอกสารนี้ไม่ได้",
+  "officeDocxRenderError": "แสดงเอกสาร Word นี้ไม่ได้",
+  "officeSheetOpenFailed": "เปิดสมุดงานนี้ไม่ได้",
+  "officeSheetRenderError": "แสดงสเปรดชีตนี้ไม่ได้",
+  "officeCopyFailed": "คัดลอกส่วนที่เลือกไม่ได้"
+}

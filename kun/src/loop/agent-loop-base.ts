@@ -119,6 +119,7 @@ export abstract class AgentLoopBase {
     // accepted turn mode picks the strategy exactly once.
     this.historyCompaction = new ContextWindowStrategyCoordinator({
       summary: summaryCompaction,
+      threadStore: opts.threadStore,
       ...(opts.contextWindowModes
         ? { mode: (threadId: string, turnId: string | undefined) => opts.contextWindowModes!.modeFor(threadId, turnId) }
         : {}),
@@ -244,7 +245,6 @@ export abstract class AgentLoopBase {
       ...(opts.allowHostReads ? { allowHostReads: true } : {}),
       ...(opts.allowedWritePaths ? { allowedWritePaths: opts.allowedWritePaths } : {}),
       ...(opts.allowedArtifactIds ? { allowedArtifactIds: opts.allowedArtifactIds } : {}),
-      ...(opts.pptWorkflowScope ? { pptWorkflowScope: opts.pptWorkflowScope } : {}),
       ...(opts.blockedProviderIds ? { blockedProviderIds: opts.blockedProviderIds } : {}),
       ...(opts.blockedToolNames ? { blockedToolNames: opts.blockedToolNames } : {}),
       ...(opts.blockedSkillIds ? { blockedSkillIds: opts.blockedSkillIds } : {}),
@@ -272,6 +272,8 @@ export abstract class AgentLoopBase {
       get finalAnswerOnlyStep() { return opts.finalAnswerOnlyStep },
       get graphHarnessSummary() { return opts.graphHarnessSummary },
       get adeManagerContext() { return opts.adeManagerContext },
+      get taskSuggestionContext() { return opts.taskSuggestionContext },
+      get delegationContext() { return opts.delegationContext },
       modelRouting: this.modelRouting,
       budgetGate: this.budgetGate,
       goalTurns: this.goalTurns,
@@ -428,7 +430,6 @@ export abstract class AgentLoopBase {
       ...(this.opts.allowHostReads ? { allowHostReads: true } : {}),
       ...(this.opts.allowedWritePaths ? { allowedWritePaths: this.opts.allowedWritePaths } : {}),
       ...(this.opts.allowedArtifactIds ? { allowedArtifactIds: this.opts.allowedArtifactIds } : {}),
-      ...(this.opts.pptWorkflowScope ? { pptWorkflowScope: this.opts.pptWorkflowScope } : {}),
       ...(this.opts.blockedProviderIds ? { blockedProviderIds: this.opts.blockedProviderIds } : {}),
       ...(this.opts.blockedToolNames ? { blockedToolNames: this.opts.blockedToolNames } : {}),
       ...(this.opts.blockedSkillIds ? { blockedSkillIds: this.opts.blockedSkillIds } : {}),

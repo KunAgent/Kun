@@ -2,15 +2,9 @@ import type { RefObject } from 'react'
 import type { TFunction } from 'i18next'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '@shared/write-infographic'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import {
-  applyWriteInlineEditReplacement,
-  buildWriteInlineEditCompletionRequest,
-  buildWriteInlineEditDraft
-} from '../../write/inline-edit'
 import type { WriteBlockType } from '../../write/block-type'
 import { toggleWriteInlineFormat, type WriteInlineFormatKind } from '../../write/inline-format'
 import type { ResolvedWriteQuickAction } from '../../write/quick-actions'
-import { createWriteRecentEdit } from '../../write/recent-edits'
 import {
   beginPendingInfographic,
   buildPendingInfographicMarkdown,
@@ -20,8 +14,8 @@ import {
 } from '../../write/infographic-pending'
 import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import type { WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
-import type { WriteDocumentReviewHandle } from './write-document-editor-handle'
-import { INLINE_EDIT_RECENT_CONTEXT_CHARS, type WriteNotice } from './write-workspace-view-utils'
+import type { SelectionEditInput } from './selection-menu/use-selection-edit'
+import type { WriteNotice } from './write-workspace-view-utils'
 import {
   captureWriteDocumentContext,
   writeDocumentContextMatches,
@@ -32,57 +26,45 @@ import { enqueueWriteWorkspaceFileTask } from '../../write/write-save-coordinato
 type WriteWorkspaceState = ReturnType<typeof useWriteWorkspaceStore.getState>
 
 type Params = {
+  startSelectionEdit: (input: SelectionEditInput) => Promise<void>
   t: TFunction<'common'>
   workspaceReady: boolean
   workspaceRoot: string
   activeFilePath: string | null
   renderReadOnly: boolean
   richModeActive: boolean
-  fileContent: string
   selection: WriteWorkspaceState['selection']
-  inlineCompletion: WriteWorkspaceState['inlineCompletion']
-  recentEdits: WriteWorkspaceState['recentEdits']
-  inlineEditInFlight: boolean
   input: string
   setInput: (value: string) => void
   onSubmitPrompt?: (value: string) => void
   richHandleRef: RefObject<WriteRichEditorHandle | null>
   markdownHandleRef: RefObject<WriteMarkdownEditorHandle | null>
-  documentHandleRef: RefObject<WriteDocumentReviewHandle | null>
   setAssistantOpen: WriteWorkspaceState['setAssistantOpen']
-  setInlineEditInFlight: (value: boolean) => void
   setFileContent: WriteWorkspaceState['setFileContent']
   setFileError: WriteWorkspaceState['setFileError']
   setSelection: WriteWorkspaceState['setSelection']
-  recordRecentEdits: WriteWorkspaceState['recordRecentEdits']
   quoteCurrentSelection: WriteWorkspaceState['quoteCurrentSelection']
   showExportNotice: (notice: WriteNotice) => void
 }
 
 export function createWriteWorkspaceInlineActions({
   t,
+  startSelectionEdit,
   workspaceReady,
   workspaceRoot,
   activeFilePath,
   renderReadOnly,
   richModeActive,
-  fileContent,
   selection,
-  inlineCompletion,
-  recentEdits,
-  inlineEditInFlight,
   input,
   setInput,
   onSubmitPrompt,
   richHandleRef,
   markdownHandleRef,
-  documentHandleRef,
   setAssistantOpen,
-  setInlineEditInFlight,
   setFileContent,
   setFileError,
   setSelection,
-  recordRecentEdits,
   quoteCurrentSelection,
   showExportNotice
 }: Params) {
@@ -91,6 +73,7 @@ export function createWriteWorkspaceInlineActions({
     if (!trimmed || !workspaceReady || !activeFilePath) return
     // The active agent persona is applied downstream (folded into the prompt
     // context in sendWritePrompt) so it never shows as raw text in the bubble.
+    setSelection(selection)
     quoteCurrentSelection(workspaceRoot)
     setAssistantOpen(true)
     if (onSubmitPrompt) {
@@ -102,6 +85,7 @@ export function createWriteWorkspaceInlineActions({
 
   const quoteSelectionToAssistant = (): void => {
     if (!workspaceReady || !activeFilePath) return
+    setSelection(selection)
     quoteCurrentSelection(workspaceRoot)
   }
 
@@ -110,7 +94,7 @@ export function createWriteWorkspaceInlineActions({
   // prompt to the sidebar assistant.
   const runQuickAction = (quickAction: ResolvedWriteQuickAction): void => {
     if (quickAction.mode === 'edit') {
-      void submitInlineEdit(quickAction.prompt)
+      void startSelectionEdit({ instruction: quickAction.prompt, label: quickAction.label, source: { kind: 'skill', actionId: quickAction.id } })
       return
     }
     submitInlineAgent(quickAction.prompt)
@@ -130,7 +114,8 @@ export function createWriteWorkspaceInlineActions({
     markdownHandleRef.current?.applyRangeReplacement(
       { from: range.from, to: range.to },
       range.text,
-      replacement
+      replacement,
+      kind === 'link' ? { from: replacement.lastIndexOf('https://'), to: replacement.lastIndexOf('https://') + 8 } : undefined
     )
   }
 
@@ -145,138 +130,7 @@ export function createWriteWorkspaceInlineActions({
     markdownHandleRef.current?.setBlockType(effective)
   }
 
-  const submitInlineEdit = async (prompt: string): Promise<void> => {
-    const trimmed = prompt.trim()
-    if (!trimmed || !workspaceReady || !activeFilePath || inlineEditInFlight) return
-    if (renderReadOnly) {
-      setFileError(t('writeReadOnlySaveDisabled'))
-      return
-    }
-    if (documentHandleRef.current?.isDiffReviewActive()) {
-      setFileError(t('writeInlineEditReviewPending'))
-      return
-    }
-    if (selection.ranges.length !== 1) {
-      setFileError(t(selection.ranges.length > 1 ? 'writeInlineEditMultiSelection' : 'writeInlineEditNoSelection'))
-      return
-    }
-    if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') {
-      setFileError(t('writeInlineEditUnavailable'))
-      return
-    }
-    const operationContext = captureWriteDocumentContext(useWriteWorkspaceStore.getState())
-    if (!operationContext) return
-
-    const richHandle = richModeActive ? richHandleRef.current : null
-    const richProjectionText = richHandle?.getProjectionText() ?? null
-    const editContent = richProjectionText ?? fileContent
-    const draft = buildWriteInlineEditDraft(editContent, selection.ranges[0], trimmed, {
-      workspaceRoot,
-      currentFilePath: activeFilePath,
-      model: inlineCompletion.model,
-      language: 'markdown',
-      recentEdits
-    })
-
-    setInlineEditInFlight(true)
-    try {
-      const result = await window.kunGui.requestWriteInlineCompletion(
-        buildWriteInlineEditCompletionRequest(draft.request)
-      )
-      if (!writeDocumentContextMatches(useWriteWorkspaceStore.getState(), operationContext)) return
-      if (!result.ok) {
-        setFileError(t('writeInlineEditFailed', { message: result.message }))
-        return
-      }
-      const replacement = result.action?.kind === 'edit'
-        ? result.action.replacement
-        : result.completion
-      if (!replacement.trim() && draft.scope.text.trim()) {
-        setFileError(t('writeInlineEditEmpty'))
-        return
-      }
-
-      if (richHandle) {
-        const applied = richHandle.applyProjectedReplacement(
-          { from: draft.scope.from, to: draft.scope.to },
-          draft.scope.text,
-          replacement,
-          trimmed
-        )
-        if (!applied) {
-          setFileError(t('writeInlineEditChanged'))
-          return
-        }
-        setSelection({ text: '', ranges: [], charCount: 0 })
-        setFileError(null)
-        showExportNotice({ tone: 'success', message: t('writeInlineEditApplied') })
-        return
-      }
-
-      const latest = useWriteWorkspaceStore.getState()
-      if (!writeDocumentContextMatches(latest, operationContext) || latest.activeFileKind !== 'text') {
-        setFileError(t('writeInlineEditChanged'))
-        return
-      }
-      const baseline = latest.fileContent
-      let scopeFrom = draft.scope.from
-      let scopeTo = draft.scope.to
-      if (baseline.slice(scopeFrom, scopeTo) !== draft.scope.text) {
-        const firstMatch = draft.scope.text ? baseline.indexOf(draft.scope.text) : -1
-        const unique = firstMatch >= 0 && baseline.indexOf(draft.scope.text, firstMatch + 1) === -1
-        if (!unique) {
-          setFileError(t('writeInlineEditChanged'))
-          return
-        }
-        scopeFrom = firstMatch
-        scopeTo = firstMatch + draft.scope.text.length
-      }
-
-      const nextContent = applyWriteInlineEditReplacement(
-        baseline,
-        { ...draft.scope, from: scopeFrom, to: scopeTo },
-        replacement
-      )
-      const inlineEditRecord = createWriteRecentEdit({
-        source: 'inline-edit',
-        filePath: activeFilePath,
-        from: scopeFrom,
-        to: scopeTo,
-        deletedText: draft.scope.text,
-        insertedText: replacement,
-        beforeContext: baseline.slice(Math.max(0, scopeFrom - INLINE_EDIT_RECENT_CONTEXT_CHARS), scopeFrom),
-        afterContext: nextContent.slice(
-          scopeFrom + replacement.length,
-          Math.min(nextContent.length, scopeFrom + replacement.length + INLINE_EDIT_RECENT_CONTEXT_CHARS)
-        ),
-        instruction: trimmed,
-        scopeKind: draft.scope.kind
-      })
-
-      const startedReview = documentHandleRef.current?.beginDiffReview({
-        original: baseline,
-        nextDoc: nextContent
-      }) ?? false
-      if (!startedReview) {
-        setFileContent(nextContent)
-        if (inlineEditRecord) recordRecentEdits([inlineEditRecord])
-      }
-      setSelection({ text: '', ranges: [], charCount: 0 })
-      setFileError(null)
-      showExportNotice({
-        tone: 'success',
-        message: startedReview ? t('writeInlineEditReview') : t('writeInlineEditApplied')
-      })
-    } catch (error) {
-      if (writeDocumentContextMatches(useWriteWorkspaceStore.getState(), operationContext)) {
-        setFileError(t('writeInlineEditFailed', {
-          message: error instanceof Error ? error.message : String(error)
-        }))
-      }
-    } finally {
-      setInlineEditInFlight(false)
-    }
-  }
+  const submitInlineEdit = (instruction: string): Promise<void> => startSelectionEdit({ instruction })
 
   const generateInfographic = (): void => {
     if (!workspaceReady || !activeFilePath) return
@@ -456,6 +310,7 @@ export function createWriteWorkspaceInlineActions({
     generateInfographic,
     quoteSelectionToAssistant,
     runQuickAction,
-    submitInlineEdit
+    submitInlineEdit,
+    submitInlineAgent
   }
 }

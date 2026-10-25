@@ -42,6 +42,9 @@ import {
 import { acpLegacyCapabilities } from './acp-runtime-support.js'
 import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
 
+/** Connections whose unexpected exit already invalidates hosted session bindings. */
+const watchedConnections = new WeakSet<AcpConnection>()
+
 export type AcpLifecycleDeps = {
   binaryPath?: (harnessId: HarnessId) => string | undefined
   /** Extra env keys to strip from the harness child beyond the shared denylist. */
@@ -105,13 +108,6 @@ export async function acquireAcpConnection(
       debug: deps.debug
     })
     host.attach(conn)
-    // Drop live handles on exit; preserve native IDs when disk loading is supported.
-    const detachExit = pool.onExit(input.poolKey, () => {
-      detachExit()
-      void sessions
-        .handleConnectionExit(conn, input.definition.id)
-        .catch(() => undefined)
-    })
     if (input.signal.aborted) {
       await conn.close().catch(() => undefined)
       throw new AcpError('request_aborted', 'turn aborted before initialize')
@@ -124,6 +120,19 @@ export async function acquireAcpConnection(
     }
     return conn
   }, { signal: input.signal, validate: input.validateLaunch })
+  // Exit listeners attach to a published pool entry, so this must run after
+  // acquire resolves; registering inside the factory was a no-op that left
+  // stale native session ids after an Agent crash.
+  const conn = lease.connection
+  if (!watchedConnections.has(conn)) {
+    watchedConnections.add(conn)
+    const detachExit = pool.onExit(input.poolKey, () => {
+      detachExit()
+      void sessions
+        .handleConnectionExit(conn, input.definition.id)
+        .catch(() => undefined)
+    })
+  }
   try {
     await input.validateLaunch?.()
     input.signal.throwIfAborted()

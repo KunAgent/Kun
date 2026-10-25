@@ -26,6 +26,8 @@ export type GraphPlanHarnessAdmission = {
   detector: { status(id: HarnessId): Promise<HarnessStatus> }
   capabilitiesForRoute(route: HarnessRoute): Promise<HarnessCapabilities>
   allowUnattendedFullAccess?(): boolean
+  /** Agent roster: resolves task `profile` roles for the graph lane. */
+  roster?: import('./graph-plan-roles.js').GraphPlanRoster
 }
 
 export async function checkGraphPlanHarnesses(input: {

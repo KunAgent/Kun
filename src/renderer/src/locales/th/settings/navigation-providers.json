@@ -27,6 +27,8 @@
   "subagentsRuntimePolicyDesc": "ตั้งค่าจำนวนงานมอบหมายที่ทำงานพร้อมกัน งานส่วนเกินจะรอในคิว",
   "subagentsUseExistingAgents": "ใช้เอเจนต์ที่มีอยู่",
   "subagentsUseExistingAgentsDesc": "เมื่อเปิด delegate_task จะเลือกโปรไฟล์ที่ตั้งค่าไว้ เมื่อปิด เอเจนต์หลักจะกำหนดบทบาทแบบใช้ครั้งเดียวสำหรับแต่ละงาน",
+  "subagentsHonorEngineBinding": "รันบทบาทบนเอนจินที่ผูกไว้",
+  "subagentsHonorEngineBindingDesc": "เปิด: delegate_task จะรันบทบาทที่ผูกกับ Claude Code, Codex หรือเอนจินอื่นบนเอนจินนั้น และปฏิเสธเมื่อเอนจินใช้ไม่ได้ ปิด: งานลูกของ delegate_task ทั้งหมดใช้เส้นทางหลัก",
   "subagentsMaxParallel": "ตัวแทนย่อยแบบขนานสูงสุด",
   "subagentsMaxParallelDesc": "งานใหม่จะรออยู่ในคิวหลังจากที่ตัวแทนย่อยจำนวนมากกำลังทำงานพร้อมกัน",
   "subagentsProactiveRetry": "ตัวแทนหลักลองตัวแทนย่อยที่ล้มเหลวอีกครั้ง",

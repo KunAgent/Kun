@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { AgentDispatchAction, AgentDispatchIntentView } from '@shared/agent-dispatch'
+import type { AgentDispatchAction, AgentDispatchIntentView, AgentDispatchRecommendationEdit } from '@shared/agent-dispatch'
 import { agentDispatchCache, agentDispatchClient, publishAgentDispatchIntent } from '../../agent/agent-dispatch-client'
 
 export function useAgentDispatchIntent(intentId: string, initial?: AgentDispatchIntentView) {
@@ -22,7 +22,7 @@ export function useAgentDispatchIntent(intentId: string, initial?: AgentDispatch
     return () => clearInterval(timer)
   }, [intentState, refresh])
   const act = useCallback(async (action: AgentDispatchAction,
-    changes?: { recommendation?: Partial<AgentDispatchIntentView['recommendation']> }): Promise<AgentDispatchIntentView | undefined> => {
+    changes?: { recommendation?: AgentDispatchRecommendationEdit }): Promise<AgentDispatchIntentView | undefined> => {
     if (!intent || busyRef.current) return undefined
     busyRef.current = true
     setBusy(true)

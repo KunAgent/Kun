@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { HandMetal, Undo2, Users } from 'lucide-react'
+import { HandMetal, Undo2 } from 'lucide-react'
+import { CollaborationIcon } from './CollaborationIcon'
 import type { AdeTeamWorker } from '@shared/ade-teams'
 import { getProvider } from '../../agent/registry'
 import { useChatStore } from '../../store/chat-store'
@@ -78,7 +79,7 @@ export function WorkerControlBanner({
       {underUser ? (
         <HandMetal className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} aria-hidden />
       ) : (
-        <Users className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} aria-hidden />
+        <CollaborationIcon className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} aria-hidden />
       )}
       <span className="min-w-0 flex-1 truncate text-[12px] text-ds-muted">
         {underUser

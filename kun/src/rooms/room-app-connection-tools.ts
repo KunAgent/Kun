@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { githubReady, type GitHubConnectionStatus } from '../contracts/github-app.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
@@ -26,6 +27,7 @@ export type RoomAppAccess = {
   servers: Record<string, { enabled: boolean; oauth?: { enabled?: boolean } }>
   statuses: Record<string, string>
   gmail?: GmailConnectionStatus
+  github?: GitHubConnectionStatus
 }
 const accessBindings = new WeakMap<ThreadStore, (scopeId?: string) => RoomAppAccess | Promise<RoomAppAccess>>()
 export function bindRoomAppAccess(threads: ThreadStore,
@@ -57,13 +59,14 @@ export function roomAppConnectionTools(threads: ThreadStore): LocalTool[] {
           const access = await accessBindings.get(threads)?.(`room:${thread.roomContext.roomId}`)
           if (!access) throw new Error('app connection inventory unavailable')
           return { output: { messagingChannels: Object.entries(ROOM_IM_APPS).map(([id, name]) => ({ id, name, setup: 'official_qr', control: 'verified_owner_only' })), suggested: Object.entries(ROOM_APP_CATALOG).map(([id, app]) => ({ id, name: app.name, connectionKind: app.connectionKind })),
-            configured: [...Object.entries(access.servers).filter(([id]) => !isHiddenRoomGoogleApp(id) && canonicalRoomAppId(id) !== 'google_gmail')
+            configured: [...Object.entries(access.servers).filter(([id]) => !isHiddenRoomGoogleApp(id) && canonicalRoomAppId(id) !== 'google_gmail' && id !== 'github')
               .map(([id, server]) => ({ id, enabled: server.enabled,
               oauth: Boolean(server.oauth && server.oauth.enabled !== false),
               status: access.statuses[id] ?? 'not_connected' })), ...(access.gmail ? [{
                 id: 'google_gmail', enabled: access.gmail.configured, oauth: true,
                 connectionKind: 'native_gmail', status: gmailReady(access.gmail) ? 'connected' : 'not_connected'
-              }] : [])] } }
+              }] : []), ...(access.github ? [{ id: 'github', enabled: access.github.configured, oauth: true,
+                connectionKind: 'native_github', status: githubReady(access.github) ? 'connected' : 'not_connected' }] : [])] } }
         } catch (error) { return fail(error) }
       }
     }),
@@ -87,12 +90,14 @@ export function roomAppConnectionTools(threads: ThreadStore): LocalTool[] {
             throw new Error('App is not in the built-in catalog or configured in Kun')
           }
           const nativeGmail = serverId === 'google_gmail'
+          const nativeGitHub = serverId === 'github'
+          if (nativeGitHub && (context.clientSurface !== 'gui' || context.imContext)) throw new Error('GitHub requires a desktop conversation')
           if (nativeGmail && (context.clientSurface !== 'gui' || context.imContext)) {
             throw new Error('Gmail connections currently require a Kun desktop conversation')
           }
           if (nativeGmail && !access.gmail?.configured) throw new Error('Gmail is unavailable in Kun')
-          if (!nativeGmail && access.servers[serverId]?.enabled === false) throw new Error('App is disabled in Kun')
-          if (!nativeGmail && access.servers[serverId] && (!access.servers[serverId].oauth || access.servers[serverId].oauth.enabled === false)) {
+          if (!nativeGmail && !nativeGitHub && access.servers[serverId]?.enabled === false) throw new Error('App is disabled in Kun')
+          if (!nativeGmail && !nativeGitHub && access.servers[serverId] && (!access.servers[serverId].oauth || access.servers[serverId].oauth.enabled === false)) {
             throw new Error('This MCP app has no OAuth flow configured; ask the user to manage it in Plugins')
           }
           if (scope.blockedProviderIds.includes(`mcp:${serverId}`) || scope.blockedProviderIds.includes(serverId) ||
@@ -117,7 +122,7 @@ export function roomAppConnectionTools(threads: ThreadStore): LocalTool[] {
             throw new Error('Agent is not active in this room')
           }
           if (nativeGmail) await assertGmailRoomNotMirrored(store, scope.roomId)
-          if (nativeGmail ? gmailReady(access.gmail!) : access.statuses[serverId] === 'connected') {
+          if (nativeGmail ? gmailReady(access.gmail!) : nativeGitHub ? Boolean(access.github && githubReady(access.github)) : access.statuses[serverId] === 'connected') {
             return { output: { connected: true, serverId } }
           }
           const prior = (await store.list<RoomMessage>('message', { roomId: scope.roomId, originRunId: runId, limit: 50 }))

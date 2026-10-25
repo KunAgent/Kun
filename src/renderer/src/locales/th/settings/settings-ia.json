@@ -34,7 +34,7 @@
   "settingsIaHarnessesDesc": "นำ Codex, Claude Code, OpenCode และเอเจนต์อื่นเข้ามาในบทสนทนา",
   "settingsIaCollaborationDesc": "ค่าเริ่มต้นสำหรับงานที่หลายเอเจนต์ทำร่วมกัน",
   "settingsIaCodeDesc": "โฟลเดอร์ที่ Code ใช้ วิธีแยกบรานช์ และสแนปช็อตที่ย้อนกลับได้",
-  "settingsIaTerminalDesc": "สีเทอร์มินัล เซิร์ฟเวอร์ SSH และคำสั่ง kun",
+  "settingsIaTerminalDesc": "ลักษณะและการทำงานของเทอร์มินัล เอเจนต์ที่เริ่มจากเมนูเซสชันใหม่ เซิร์ฟเวอร์ SSH และคำสั่ง kun",
   "settingsIaPaperDesc": "การอ่านบทความ แหล่งค้นหา และการแปล",
   "settingsIaLabsDesc": "ความสามารถที่ยังปรับปรุงอยู่ เปิดแล้วการตั้งค่าของฟีเจอร์นั้นจะปรากฏ",
   "settingsIaRuntimeDesc": "บริการในเครื่อง ขีดจำกัดบริบท และการป้องกันขณะทำงาน ส่วนใหญ่ไม่ต้องเปลี่ยน",

@@ -1,18 +1,47 @@
 import { useCallback, useId, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowUpToLine, Copy, Loader2, Ellipsis, Pause, Pencil, Play } from 'lucide-react'
+import { ArrowUpToLine, ChevronDown, ChevronUp, Copy, Ellipsis, Loader2, Pause } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useComposerPickerPopover } from './use-composer-picker-popover'
 import css from './FloatingComposerQueuedMessages.module.css'
 
 const MENU_WIDTH = 184
-const MENU_ESTIMATED_HEIGHT = 120
+const MENU_ESTIMATED_HEIGHT = 84
+
+/** Caption above the rows: how many are waiting and when they go out. */
+export function QueueCaption({
+  count,
+  running,
+  confirming,
+  showDragHint
+}: {
+  count: number
+  running: boolean
+  /** A row is being handed to the runtime right now. */
+  confirming: boolean
+  showDragHint: boolean
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const label = confirming
+    ? t('queuedMessagesConfirming', { count })
+    : running
+      ? t('composerQueue.caption', { count })
+      : t('queuedMessagesTitle', { count })
+  return (
+    <div className={css.caption} data-queued-message-caption>
+      <span className={css.captionText}>{label}</span>
+      {showDragHint ? (
+        <span className={css.captionHint} aria-hidden="true">{t('composerQueue.dragHint')}</span>
+      ) : null}
+    </div>
+  )
+}
 
 /**
- * Queue-level notice shown after an interrupt parked the queue. It replaces
- * the count header so the one action that matters, resuming, sits on top.
+ * Replaces the caption after an interrupt parked the queue, so the one
+ * action that matters, continuing, sits on top of the rows.
  */
-export function QueuePausedBanner({
+export function QueuePausedCaption({
   count,
   running,
   busy,
@@ -24,37 +53,75 @@ export function QueuePausedBanner({
   onResume?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const resumeTitle = running ? t('queueResumeBusy') : t('queueResume')
   return (
-    <div className={css.pausedBanner} data-queue-paused-banner role="status">
+    <div className={`${css.caption} ${css.pausedCaption}`} data-queue-paused-banner role="status">
       <span className={css.pausedIcon} aria-hidden="true">
-        <Pause size={12} strokeWidth={2.6} />
+        <Pause size={13} strokeWidth={0} fill="currentColor" />
       </span>
+      {/* Only the reason ellipsizes; the count always stays readable. */}
       <span className={css.pausedText}>
-        <span className={css.pausedTitle}>{t('queuePausedTitle')}</span>
-        <span className={css.pausedDetail}>{t('queuePausedDetail', { count })}</span>
+        <span className={`${css.captionText} ${css.pausedTitle}`}>{t('composerQueue.pausedTitle')}</span>
+        <span className={css.pausedCount}>{t('composerQueue.pausedCount', { count })}</span>
       </span>
       {onResume ? (
         <button
           type="button"
           className={css.resumeButton}
           data-queue-resume
-          title={resumeTitle}
+          title={running ? t('queueResumeBusy') : t('composerQueue.resumeHint')}
           disabled={running || busy}
           onClick={onResume}
         >
-          {busy
-            ? <Loader2 className={css.spinner} size={12} aria-hidden="true" />
-            : <Play size={11} fill="currentColor" strokeWidth={0} aria-hidden="true" />}
-          {t('queueResume')}
+          {busy ? <Loader2 className={css.spinner} size={12} aria-hidden="true" /> : null}
+          {t('composerQueue.resume')}
         </button>
       ) : null}
     </div>
   )
 }
 
+/**
+ * "n more" disclosure under the first rows of a long queue. Keeps the
+ * `data-queued-message-header` marker the queue smoke script drives.
+ */
+export function QueueExpander({
+  hiddenCount,
+  expanded,
+  disabled,
+  controls,
+  onToggle
+}: {
+  hiddenCount: number
+  expanded: boolean
+  disabled: boolean
+  controls: string
+  onToggle: () => void
+}): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <button
+      type="button"
+      className={css.expander}
+      data-queued-message-header
+      aria-controls={controls}
+      aria-expanded={expanded}
+      disabled={disabled}
+      onClick={onToggle}
+    >
+      <span className={css.lead} aria-hidden="true">
+        {expanded
+          ? <ChevronUp size={14} strokeWidth={1.8} />
+          : <ChevronDown size={14} strokeWidth={1.8} />}
+      </span>
+      <span>
+        {expanded ? t('composerQueue.showLess') : t('composerQueue.showMore', { count: hiddenCount })}
+      </span>
+    </button>
+  )
+}
+
 export type QueueRowMenuItem = {
-  key: 'edit' | 'move-top' | 'copy'
+  key: 'move-top' | 'copy'
   label: string
   title?: string
   disabled?: boolean
@@ -62,12 +129,11 @@ export type QueueRowMenuItem = {
 }
 
 const MENU_ICONS = {
-  edit: Pencil,
   'move-top': ArrowUpToLine,
   copy: Copy
 } as const
 
-/** The per-row overflow menu; portaled so the scrolling dock never clips it. */
+/** The per-row overflow menu; portaled so the scrolling list never clips it. */
 export function QueueRowMoreMenu({
   label,
   disabled,
@@ -137,7 +203,7 @@ export function QueueRowMoreMenu({
       <button
         ref={triggerRef}
         type="button"
-        className={css.action}
+        className={css.iconAction}
         data-queued-message-action="more"
         aria-label={label}
         title={label}

@@ -334,19 +334,26 @@ describe('built-in reasoning compatibility profiles', () => {
   })
 
   it('advertises priority only for eligible Codex subscription models', () => {
-    expect(modelCapabilitiesForProviderModel({
-      providerId: 'codex-2',
-      presetSource: 'codex',
-      model: 'gpt-5.4'
-    }).serviceTiers).toEqual(['priority'])
+    for (const model of ['gpt-5.4', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-6.1-sol']) {
+      expect(modelCapabilitiesForProviderModel({
+        providerId: 'codex-2',
+        presetSource: 'codex',
+        model
+      }).serviceTiers).toEqual(['priority'])
+    }
     expect(modelCapabilitiesForProviderModel({
       providerId: 'codex-2',
       presetSource: 'codex',
       model: 'gpt-5.4-mini'
     }).serviceTiers).toBeUndefined()
     expect(modelCapabilitiesForProviderModel({
+      providerId: 'codex-2',
+      presetSource: 'codex',
+      model: 'gpt-5.3-codex-spark'
+    }).serviceTiers).toBeUndefined()
+    expect(modelCapabilitiesForProviderModel({
       providerId: 'private-openai',
-      model: 'gpt-5.4'
+      model: 'gpt-6-astra'
     }).serviceTiers).toBeUndefined()
   })
 

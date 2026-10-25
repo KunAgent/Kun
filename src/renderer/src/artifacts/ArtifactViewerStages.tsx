@@ -43,7 +43,7 @@ export function PillButton({ label, onClick, children, active = false }: {
   )
 }
 
-function StageMessage({ children }: { children: ReactNode }): ReactElement {
+export function StageMessage({ children }: { children: ReactNode }): ReactElement {
   return <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center text-[13.5px] text-ds-muted">{children}</div>
 }
 
@@ -63,7 +63,8 @@ export function OfficeStage({ artifact }: { artifact: LibraryArtifact }): ReactE
   if (!officeResult.ok) return <FallbackStage artifact={artifact} detail={officeResult.message} />
   return (
     <div className="h-full min-h-0 overflow-hidden p-6" data-artifact-stage="office">
-      <div className="h-full min-h-0 overflow-hidden rounded-xl border border-ds-border bg-ds-card shadow-[0_16px_40px_rgba(24,24,27,0.08)]">
+      {/* Office previews size themselves with flex-1 min-h-0; a flex column here bounds their height. */}
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-ds-border bg-ds-card shadow-[0_16px_40px_rgba(24,24,27,0.08)]">
         <WorkspaceOfficePreview result={officeResult} loading={officeLoading} refreshError={officeRefreshError} />
       </div>
     </div>

@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test } from 'vitest'
 import type { TurnItem } from '../../contracts/items.js'
+import { FileSessionStore } from '../../adapters/file/file-session-store.js'
+import { makeAssistantReasoningItem, makeToolCallItem, makeToolResultItem } from '../../domain/item.js'
+import { resolveTurnHandoff } from '../../handoff/turn-handoff.js'
 import {
   DelegatedSessionCoordinator,
   FileDelegatedSessionBindingStore,
@@ -164,6 +167,68 @@ describe('AcpConnection.initialize', () => {
 })
 
 describe('AcpSessionManager', () => {
+  test.each(['live', 'reconnected'] as const)('keeps the Devin session on model switch after streaming history reload (%s)', async (connection) => {
+    const fixture = await startFixture('legacy-models.json')
+    await fixture.conn.initialize()
+    const root = mkdtempSync(join(tmpdir(), 'acp-model-continuation-'))
+    tempDirs.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const { manager } = makeManager()
+    const ctx = makeCtx({ harnessId: 'devin', model: 'legacy-default', permissionModeId: 'normal' })
+    const first = await manager.ensureSession(ctx, fixture.conn)
+    const user = userItem('turn_1', 'remember the task')
+    const reasoning = makeAssistantReasoningItem({
+      id: 'reasoning', threadId: ctx.threadId, turnId: ctx.turnId, text: 'thinking', status: 'running'
+    })
+    await store.appendItem(ctx.threadId, user)
+    await store.loadItems(ctx.threadId)
+    await store.checkpointLiveItem(ctx.threadId, reasoning, 1)
+    await store.appendItem(ctx.threadId, makeToolCallItem({
+      id: 'call', threadId: ctx.threadId, turnId: ctx.turnId,
+      callId: 'tc', toolName: 'acp:fs.write', arguments: {}
+    }))
+    await store.appendItem(ctx.threadId, makeToolResultItem({
+      id: 'result', threadId: ctx.threadId, turnId: ctx.turnId,
+      callId: 'tc', toolName: 'acp:fs.write', output: 'done'
+    }))
+    await store.finalizeLiveItem(ctx.threadId, makeAssistantReasoningItem({
+      ...reasoning, text: 'thinking', status: 'completed'
+    }))
+    await manager.commit(first, {
+      committedItems: await store.loadItems(ctx.threadId), lastCommittedTurnId: ctx.turnId
+    })
+    first.detach()
+    await store.close()
+    const restored = new FileSessionStore({ dataDir: root })
+    const items = [...await restored.loadItems(ctx.threadId), userItem('turn_2', 'continue')]
+    let nextFixture = fixture
+    if (connection === 'reconnected') {
+      await fixture.conn.close()
+      await manager.handleConnectionExit(fixture.conn, 'devin')
+      nextFixture = await startFixture('legacy-models.json')
+      await nextFixture.conn.initialize()
+    }
+    const next = await manager.ensureSession({
+      ...ctx, turnId: 'turn_2', model: 'legacy-alternative', items
+    }, nextFixture.conn)
+    expect(next.sessionId).toBe(first.sessionId)
+    expect(next.preparation).toMatchObject({ resumed: true, generation: first.preparation.generation })
+    expect(next.preparation.rebaseReason).toBeUndefined()
+    expect(next.replayedHistory).toBe(false)
+    expect(nextFixture.requests('session/new')).toHaveLength(connection === 'live' ? 1 : 0)
+    expect(nextFixture.requests('session/load')).toHaveLength(connection === 'live' ? 0 : 1)
+    expect(nextFixture.requests('session/set_model').map((entry) => entry.params)).toEqual([
+      { sessionId: first.sessionId, modelId: 'legacy-alternative' }
+    ])
+    expect(resolveTurnHandoff({
+      enabled: true, preparation: next.preparation, items, currentTurnId: 'turn_2',
+      ownerThreadId: ctx.threadId, workspacePath: ctx.workspacePath, harnessName: 'Devin'
+    })).toBeUndefined()
+    next.detach()
+    await nextFixture.conn.close()
+    await restored.close()
+  })
+
   test('selects a legacy model on create and resume without bypassing Devin permissions', async () => {
     const { conn, requests } = await startFixture('legacy-models.json')
     await conn.initialize()

@@ -181,6 +181,35 @@ export function sandboxBlockForTool(
   return null
 }
 
+const DESIGN_ARTIFACT_ROOT = '.kun-design'
+
+/**
+ * A screen-generation turn owns exactly one page and its design notes. Writing
+ * anywhere else under `.kun-design` would overwrite a sibling screen that
+ * another turn is responsible for, so it is refused with a message the model
+ * can act on.
+ */
+function designWriteScopeBlock(
+  candidate: string,
+  context: Pick<ToolHostContext, 'workspace' | 'guiDesignArtifact'>
+): SandboxBlock | null {
+  const artifact = context.guiDesignArtifact
+  if (artifact?.kind !== 'html') return null
+  const designRoot = resolve(context.workspace, DESIGN_ARTIFACT_ROOT)
+  if (!isPathInsideOrEqual(designRoot, candidate)) return null
+  const owned = [artifact.relativePath, artifact.designMdPath]
+    .filter((path): path is string => Boolean(path))
+    .map((path) => resolve(context.workspace, path))
+  if (owned.some((path) => sameFilesystemPath(path, candidate))) return null
+  return {
+    code: 'sandbox_write_blocked',
+    message:
+      `design_write_scope_violation: this turn may only write ${artifact.relativePath}` +
+      `${artifact.designMdPath ? ` and ${artifact.designMdPath}` : ''}; ` +
+      `${relative(context.workspace, candidate) || candidate} belongs to another screen`
+  }
+}
+
 export function canWritePath(
   absolutePath: string,
   context: Pick<
@@ -190,11 +219,14 @@ export function canWritePath(
     | 'sandboxMode'
     | 'approvedExternalWriteTargets'
     | 'allowedWritePaths'
+    | 'guiDesignArtifact'
   >
 ): { ok: true } | { ok: false; block: SandboxBlock } {
   const candidate = isAbsolute(absolutePath) ? resolve(absolutePath) : resolve(context.workspace, absolutePath)
   if (isSharedAttachmentCachePath(candidate)) return { ok: false,
     block: { code: 'sandbox_write_blocked', message: 'shared attachment copies are read only' } }
+  const designBlock = designWriteScopeBlock(candidate, context)
+  if (designBlock) return { ok: false, block: designBlock }
   if (
     context.allowedWritePaths &&
     !pathAllowedByScopes(absolutePath, context.workspace, context.allowedWritePaths)
@@ -254,6 +286,7 @@ export function assertCanWritePath(
     | 'sandboxMode'
     | 'approvedExternalWriteTargets'
     | 'allowedWritePaths'
+    | 'guiDesignArtifact'
   >
 ): void {
   const decision = canWritePath(absolutePath, context)
@@ -272,7 +305,8 @@ export async function assertDelegatedWritePathPhysicalScope(
   absolutePath: string,
   context: Pick<
     ToolHostContext,
-    'workspace' | 'additionalWorkspaces' | 'sandboxMode' | 'approvedExternalWriteTargets' | 'allowedWritePaths'
+    'workspace' | 'additionalWorkspaces' | 'sandboxMode' | 'approvedExternalWriteTargets' | 'allowedWritePaths' |
+      'guiDesignArtifact'
   >
 ): Promise<void> {
   assertCanWritePath(absolutePath, context)

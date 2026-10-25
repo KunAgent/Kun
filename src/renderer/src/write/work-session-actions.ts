@@ -1,6 +1,7 @@
 import { useChatStore } from '../store/chat-store'
 import { writeConversationResourcePath } from '../paper/paper-mode-actions'
 import { usePaperModeStore } from '../paper/paper-mode-store'
+import { selectPaperResearchSession } from '../paper/paper-research-actions'
 import { openLibraryEntry } from '../paper/paper-library-actions'
 import { useWriteWorkspaceStore, writeDirnameFromPath, writeJoinPath } from './write-workspace-store'
 import { normalizePath } from './write-workspace-store-helpers'
@@ -46,12 +47,15 @@ function relativeTo(root: string, path: string): string {
   return target.toLowerCase().startsWith(`${base.toLowerCase()}/`) ? target.slice(base.length + 1) : target
 }
 
-/** Open what a session is attached to when it has no remembered tabs. */
+/** Open the document, board, paper, or research run a session is attached to. */
 async function openSessionAnchor(root: string, session: WorkSessionEntry): Promise<void> {
   const write = useWriteWorkspaceStore.getState()
   const anchor = session.anchor
   if (anchor.kind === 'whiteboard') {
-    if (write.whiteboards[anchor.boardId]) write.openWhiteboard(anchor.boardId)
+    // The board index is loaded on demand, so it may not be in memory yet.
+    if (await write.ensureWhiteboards(root) && useWriteWorkspaceStore.getState().whiteboards[anchor.boardId]) {
+      useWriteWorkspaceStore.getState().openWhiteboard(anchor.boardId)
+    }
   } else if (anchor.kind === 'file') {
     await write.openFile(root, anchor.path)
   } else if (anchor.kind === 'paper') {
@@ -60,7 +64,7 @@ async function openSessionAnchor(root: string, session: WorkSessionEntry): Promi
     if (entry) await openLibraryEntry(entry, root)
   } else if (anchor.kind === 'research') {
     write.openPaperViewTab('discover:search')
-    write.setPaperResearch({ agentTab: true, sessionId: anchor.sessionId })
+    selectPaperResearchSession(anchor.sessionId)
   }
 }
 
@@ -103,8 +107,9 @@ async function restoreSessionTabs(root: string, threadId: string): Promise<boole
     const latest = useWriteWorkspaceStore.getState()
     if (normalizePath(latest.workspaceRoot) !== normalizePath(root)) return false
     if (target?.kind === 'whiteboard') {
-      if (!latest.whiteboards[target.boardId]) return false
-      latest.openWhiteboard(target.boardId)
+      if (!(await latest.ensureWhiteboards(root))) return false
+      if (!useWriteWorkspaceStore.getState().whiteboards[target.boardId]) return false
+      useWriteWorkspaceStore.getState().openWhiteboard(target.boardId)
     } else if (target?.kind === 'paper-view') {
       latest.openPaperViewTab(target.view)
     } else if (target?.kind === 'file') {
@@ -139,7 +144,10 @@ export async function openWorkSession(session: WorkSessionEntry, root?: string):
     if (!spaceRoot) return
     useWorkSessionStore.getState().select(spaceRoot, session.id)
     await useChatStore.getState().selectWriteThread(session.id, spaceRoot)
-    if (!(await restoreSessionTabs(spaceRoot, session.id))) await openSessionAnchor(spaceRoot, session)
+    const restored = await restoreSessionTabs(spaceRoot, session.id)
+    // Restoring the discover tab does not carry the research run. Apply it
+    // anyway, or the page stays on the empty "new research" composer.
+    if (!restored || session.anchor.kind === 'research') await openSessionAnchor(spaceRoot, session)
   } finally {
     end()
   }

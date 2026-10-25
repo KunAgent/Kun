@@ -1,3 +1,4 @@
+import type { SubagentProfileConfig } from '../contracts/capabilities.js'
 import { taskParticipantRoom, resolveAgentTaskReviewer } from '../agents/agent-task-participants.js'
 import { roomMemberDiscussionPrompt, roomPollInvitationPrompt } from './room-ax-surfaces.js'
 import { roomDiscussionMessageId } from './room-discussion-message.js'
@@ -262,8 +263,20 @@ export class RoomRequestRunner {
     }
     const reviewerId = assignment.reviewerMemberId ?? member.reviewPolicy?.reviewerMemberId ?? member.configuredReviewerAgentId
     const reviewerSource = await resolveAgentTaskReviewer(this.deps, request, member, reviewerId, repo.id)
+    // Unsnapshotted roles resolve through the agent roster, which also sees
+    // the bound repository's `.kun/agents` roles.
+    const roles = new Map<string, SubagentProfileConfig | null>()
+    for (const source of [member, reviewerSource]) {
+      if (!source || source.presetSnapshot !== undefined || roles.has(source.presetId)) continue
+      roles.set(source.presetId, (await this.deps.workspaceProfile?.(source.presetId, repo.canonicalRoot)) ??
+        this.deps.profiles()[source.presetId] ?? null)
+    }
+    const roleOf = (source: RoomMember) => source.presetSnapshot !== undefined
+      ? source.presetSnapshot
+      : roles.get(source.presetId) ?? this.deps.profiles()[source.presetId] ?? null
+    if (roleOf(member)?.toolPolicy === 'readOnly') throw new Error('执行负责人仅有只读能力，请选择可执行的 Agent。')
     const freeze = (source: RoomMember): RoomMember => {
-      const profile = (source.presetSnapshot !== undefined ? source.presetSnapshot : this.deps.profiles()[source.presetId])
+      const profile = roleOf(source)
       const binding = source.modelRef ?? (profile?.model && profile.providerId
         ? { model: profile.model, providerId: profile.providerId } : this.deps.model())
       return { ...source, modelRef: { ...binding, providerId: binding.providerId ?? 'default' } }
@@ -284,8 +297,8 @@ export class RoomRequestRunner {
         JSON.stringify(reference.discussionEvidence) : ''),
       attachmentIds: request.message.attachmentIds,
       dependencyTaskIds: assignment.dependsOn.map((key) => 'task-' + request.id + '-' + key),
-      attempt: 1, reworkRounds: 0, reviewer, configuration: member.presetSnapshot !== undefined ? member.presetSnapshot : this.deps.profiles()[member.presetId] ?? null,
-      reviewerConfiguration: reviewer ? reviewer.presetSnapshot !== undefined ? reviewer.presetSnapshot : this.deps.profiles()[reviewer.presetId] ?? null : null,
+      attempt: 1, reworkRounds: 0, reviewer, configuration: roleOf(member),
+      reviewerConfiguration: reviewer ? roleOf(reviewer) : null,
       contextSnapshot, rulesSnapshot: contextSnapshot.rules, agreements: contextSnapshot.agreements }
     const workspace: RoomWorkspace = { id, taskId: id, roomId: room.id,
       path: join(this.deps.dataDir, 'rooms', 'worktrees', id), branch: 'codex/rooms/' + id,

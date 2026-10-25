@@ -2,27 +2,26 @@ import type { ReactElement } from 'react'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { steerDelivery } from '../../agent/harness-capability-ui'
 import { useChatStore } from '../../store/chat-store'
+import { ComposerTrayHost } from './composer-tray/ComposerTrayHost'
+import { FloatingComposerGoalPanel } from './FloatingComposerGoalPanel'
+import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
 
+/**
+ * The whole composer stack: popover menus (absolutely positioned above it),
+ * the goal panel, and the surface (controls, activity tray, input slot).
+ */
 export function FloatingComposerStackView({
   context
 }: {
   context: FloatingComposerRenderContext
 }): ReactElement {
   const {
-    BackgroundShellOverlay, FloatingComposerAboveInputStack, FloatingComposerActionMenu,
-    FloatingComposerApprovalPanel,
-    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerQueuedMessages,
-    FloatingComposerDispatchableAgents,
-    FloatingComposerSlashCommandMenu, FloatingComposerTodoProgress, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
-    PauseCircle, Pencil, PlayCircle, Target, Trash2, X, activeThread, activeThreadGoal, activeThreadId, activeThreadTodos, adeComposerEnabled, applySlashCommand,
-    busy, canOpenGoalPanel, canSetGoalPanelDraft, clearActiveThreadGoal, compact, composerMenuOpen,
-    currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, goalBannerLabel,
-    goalElapsedLabel, goalPanelOpen, goalPanelRef, graphEnabled, highlightedSlashCommand,
-    onReorderQueuedMessage, onResumeQueuedMessages, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingApprovals, pendingUserInputBlock,
-    queuedMessages, route, runtimeReady,
-    setActiveThreadGoalStatus, setGoalFromComposerInput, setGoalPanelOpen,
-    showGoalFloater, showGoalMenuOption, showGraphProgress, showTodoProgress, slashCommandMenu,
-    slashQuery, t, userInput
+    FloatingComposerAboveInputStack, FloatingComposerActionMenu,
+    FloatingComposerFileMentionMenu, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu,
+    activeThreadId, applySlashCommand, busy, composerMenuOpen,
+    currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, highlightedSlashCommand,
+    onReorderQueuedMessage, onResumeQueuedMessages, onGuideQueuedMessage, onRemoveQueuedMessage,
+    onRestoreQueuedMessageToComposer, queuedMessages, route, slashCommandMenu, slashQuery
   } = context
   // Only the running turn's own runtime report says how guidance reaches it.
   const steering = useChatStore((s) => {
@@ -30,239 +29,59 @@ export function FloatingComposerStackView({
     return runtime && runtime.threadId === activeThreadId && runtime.turnId === s.currentTurnId
       ? steerDelivery(runtime) : 'live'
   })
+  const queue = queuedMessages?.length ? (
+    <FloatingComposerQueuedMessages
+      messages={queuedMessages}
+      running={busy}
+      guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : steering === 'live' ? 'turn' : steering}
+      onRemove={onRemoveQueuedMessage}
+      onGuide={onGuideQueuedMessage}
+      onRestoreToComposer={onRestoreQueuedMessageToComposer
+        ? async (id: string) => {
+            const restored = await onRestoreQueuedMessageToComposer(id)
+            if (restored !== false) draft.focusComposer()
+            return restored
+          }
+        : undefined}
+      onReorder={onReorderQueuedMessage}
+      onResume={onResumeQueuedMessages}
+    />
+  ) : null
+  // The kind hooks live in the host so their updates re-render only the tray.
+  const tray = <ComposerTrayHost context={context} queue={queue} />
   return (
     <>
-      <FloatingComposerAboveInputStack
-        attachedDock={(
-          <FloatingComposerQueuedMessages
-            messages={queuedMessages}
-            running={busy}
-            guidanceTarget={currentTurnOrchestration === 'graph' ? 'graph' : steering === 'live' ? 'turn' : steering}
-            onRemove={onRemoveQueuedMessage}
-            onGuide={onGuideQueuedMessage}
-            onRestoreToComposer={onRestoreQueuedMessageToComposer
-              ? async (id: string) => {
-                  const restored = await onRestoreQueuedMessageToComposer(id)
-                  if (restored !== false) draft.focusComposer()
-                  return restored
-                }
-              : undefined}
-            onReorder={onReorderQueuedMessage}
-            onResume={onResumeQueuedMessages}
-          />
-        )}
-        floatingStatuses={(
-          <>
-            <FloatingComposerWorkersPill
-              threadId={activeThreadId}
-              enabled={adeComposerEnabled === true}
-            />
-            <FloatingComposerDispatchableAgents
-              thread={activeThread ?? null}
-              enabled={adeComposerEnabled === true}
-            />
-            {showTodoProgress && activeThreadTodos ? (
-              <FloatingComposerTodoProgress todos={activeThreadTodos} enabled={showGraphProgress} />
-            ) : null}
-            <FloatingComposerGraphProgress
-              threadId={activeThreadId}
-              enabled={showGraphProgress}
-              onOpenGraph={onOpenGraph}
-              onOpenChild={onOpenGraphChild}
-            />
-            {showGoalFloater && activeThreadGoal && !pendingUserInputBlock ? (
-              <div
-                data-composer-stack-item="goal"
-                className="ds-composer-status-glass pointer-events-auto flex min-h-11 w-full max-w-[46rem] items-center gap-2 rounded-full border px-3 py-1.5 text-ds-muted"
-              >
-                <Target className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
-                <div className="flex min-w-0 flex-1 items-center gap-1.5 text-[13px] leading-5">
-                  <span className="shrink-0 font-semibold text-ds-ink">
-                    {goalBannerLabel}
-                  </span>
-                  <span className="min-w-0 truncate text-ds-muted">
-                    {activeThreadGoal.objective}
-                  </span>
-                  <span className="shrink-0 text-ds-faint">
-                    · {goalElapsedLabel}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setGoalPanelOpen(true)
-                      draft.focusComposer()
-                    }}
-                    className="ds-no-drag flex h-7 w-7 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-                    aria-label={t('goalActionEdit')}
-                    title={t('goalActionEdit')}
-                  >
-                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void setActiveThreadGoalStatus(activeThreadGoal.status === 'active' ? 'paused' : 'active')
-                    }}
-                    className="ds-no-drag flex h-7 w-7 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-                    aria-label={activeThreadGoal.status === 'active' ? t('goalActionPause') : t('goalActionResume')}
-                    title={activeThreadGoal.status === 'active' ? t('goalActionPause') : t('goalActionResume')}
-                  >
-                    {activeThreadGoal.status === 'active' ? (
-                      <PauseCircle className="h-3.5 w-3.5" strokeWidth={1.9} />
-                    ) : (
-                      <PlayCircle className="h-3.5 w-3.5" strokeWidth={1.9} />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void clearActiveThreadGoal()
-                    }}
-                    className="ds-no-drag flex h-7 w-7 items-center justify-center rounded-full text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-                    aria-label={t('goalActionClear')}
-                    title={t('goalActionClear')}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-                  </button>
-                </div>
-              </div>
-            ) : null}
-            {runtimeReady ? <BackgroundShellOverlay threadId={activeThreadId} /> : null}
-          </>
-        )}
-        flowPanels={(
-          <>
-            {pendingApprovals && pendingApprovals.length > 0 ? (
-              <FloatingComposerApprovalPanel
-                approvals={pendingApprovals}
-                t={t}
-                variant={compact ? 'compact' : 'main'}
-              />
-            ) : null}
-            {userInput.active ? (
-              <FloatingComposerUserInputPanel
-                controller={userInput}
-                t={t}
-                variant={compact ? 'compact' : 'main'}
-              />
-            ) : null}
-          </>
-        )}
+      {composerMenuOpen && slashQuery == null ? (
+        <FloatingComposerActionMenu context={context} />
+      ) : null}
+
+      {slashQuery != null ? (
+        <FloatingComposerSlashCommandMenu
+          commands={filteredSlashCommands}
+          highlighted={highlightedSlashCommand}
+          selectedIndex={slashCommandMenu.selectedIndex}
+          onSelect={applySlashCommand}
+        />
+      ) : null}
+
+      {fileMentions.showMenu ? (
+        <FloatingComposerFileMentionMenu
+          suggestions={fileMentions.suggestions}
+          loading={fileMentions.loading}
+          selectedIndex={fileMentions.selectedIndex}
+          highlighted={fileMentions.highlighted}
+          hasMountedKnowledgeBases={fileMentions.hasMountedKnowledgeBases}
+          knowledgeBaseHint={route !== 'write'}
+          onSelect={fileMentions.applySuggestion}
+        />
+      ) : null}
+
+      <FloatingComposerGoalPanel context={context} />
+
+      <FloatingComposerSurfaceView
+        context={context}
+        aboveInput={<FloatingComposerAboveInputStack tray={tray} />}
       />
-
-        {composerMenuOpen && slashQuery == null ? (
-          <FloatingComposerActionMenu context={context} />
-        ) : null}
-
-        {slashQuery != null ? (
-          <FloatingComposerSlashCommandMenu
-            commands={filteredSlashCommands}
-            highlighted={highlightedSlashCommand}
-            selectedIndex={slashCommandMenu.selectedIndex}
-            onSelect={applySlashCommand}
-          />
-        ) : null}
-
-        {fileMentions.showMenu ? (
-          <FloatingComposerFileMentionMenu
-            suggestions={fileMentions.suggestions}
-            loading={fileMentions.loading}
-            selectedIndex={fileMentions.selectedIndex}
-            highlighted={fileMentions.highlighted}
-            hasMountedKnowledgeBases={fileMentions.hasMountedKnowledgeBases}
-            knowledgeBaseHint={route !== 'write'}
-            onSelect={fileMentions.applySuggestion}
-          />
-        ) : null}
-
-        {showGoalMenuOption && goalPanelOpen && slashQuery == null && !pendingUserInputBlock ? (
-          <div
-            ref={goalPanelRef}
-            className="absolute inset-x-2 bottom-full z-30 mb-3 overflow-hidden rounded-[26px] border border-ds-border bg-white p-3 shadow-[0_18px_52px_rgba(20,47,95,0.14)] backdrop-blur-xl dark:bg-ds-card"
-          >
-            <div className="flex items-start gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ds-border-muted text-ds-muted">
-                <Target className="h-4 w-4" strokeWidth={1.9} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="truncate text-[14px] font-semibold text-ds-ink">
-                    {activeThreadGoal ? activeThreadGoal.objective : t('goalNoActiveTitle')}
-                  </div>
-                  {activeThreadGoal ? (
-                    <span className="shrink-0 rounded-lg border border-ds-border-muted bg-ds-card px-2 py-0.5 text-[11px] font-semibold text-ds-muted">
-                      {t(`goalStatusShort.${activeThreadGoal.status}`)}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {canSetGoalPanelDraft ? (
-                    <button
-                      type="button"
-                      onClick={setGoalFromComposerInput}
-                      className="rounded-full border border-ds-border bg-ds-card px-3 py-1.5 text-[12px] font-semibold text-ds-ink transition hover:bg-ds-hover"
-                    >
-                      {t('goalSetCurrentInput')}
-                    </button>
-                  ) : null}
-                  {activeThreadGoal?.status === 'active' ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGoalPanelOpen(false)
-                        void setActiveThreadGoalStatus('paused')
-                      }}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                      aria-label={t('goalActionPause')}
-                      title={t('goalActionPause')}
-                    >
-                      <PauseCircle className="h-4 w-4" strokeWidth={1.9} />
-                    </button>
-                  ) : activeThreadGoal ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGoalPanelOpen(false)
-                        void setActiveThreadGoalStatus('active')
-                      }}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                      aria-label={t('goalActionResume')}
-                      title={t('goalActionResume')}
-                    >
-                      <PlayCircle className="h-4 w-4" strokeWidth={1.9} />
-                    </button>
-                  ) : null}
-                  {activeThreadGoal ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGoalPanelOpen(false)
-                        void clearActiveThreadGoal()
-                      }}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                      aria-label={t('goalActionClear')}
-                      title={t('goalActionClear')}
-                    >
-                      <Trash2 className="h-4 w-4" strokeWidth={1.9} />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setGoalPanelOpen(false)}
-                className="rounded-lg p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-                aria-label={t('close')}
-                title={t('close')}
-              >
-                <X className="h-4 w-4" strokeWidth={2} />
-              </button>
-            </div>
-          </div>
-        ) : null}
-
     </>
   )
 }

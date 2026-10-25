@@ -131,8 +131,8 @@ export function HeatmapGrid({
                         onFocus={(event) => showTooltip(bucket, event.currentTarget)}
                         onBlur={() => setTooltip(null)}
                         onClick={(event) => showTooltip(bucket, event.currentTarget)}
-                        className={`rounded-[3px] border transition focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-ds-bg ${USAGE_HEATMAP_INTENSITY_CLASSES[usageHeatmapIntensityLevel(bucket, positiveMetrics, useTurns)]} ${
-                          selected?.date === bucket.date ? 'ring-2 ring-accent ring-offset-2 ring-offset-ds-bg' : ''
+                        className={`rounded-[3px] border transition focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-ds-main ${USAGE_HEATMAP_INTENSITY_CLASSES[usageHeatmapIntensityLevel(bucket, positiveMetrics, useTurns)]} ${
+                          selected?.date === bucket.date ? 'ring-2 ring-accent ring-offset-2 ring-offset-ds-main' : ''
                         }`}
                         style={{ width: cellSize, height: cellSize }}
                       />

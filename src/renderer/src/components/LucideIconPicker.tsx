@@ -136,7 +136,7 @@ export function LucideIconPicker({ value, onChange, disabled = false, ariaLabel,
               aria-label={name}
               aria-pressed={name === value}
               onClick={() => commit(name)}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-accent/40 ${
+              className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40 ${
                 name === value
                   ? 'bg-accent/15 text-accent'
                   : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
@@ -174,7 +174,7 @@ export function LucideIconPicker({ value, onChange, disabled = false, ariaLabel,
           aria-haspopup="dialog"
           aria-label={ariaLabel ?? t('codeAgentIconPickerTitle')}
           title={value}
-          className="inline-flex h-9 items-center gap-1 rounded-xl border border-ds-border bg-ds-main/60 px-2.5 text-ds-ink outline-none transition-colors hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-ds-accent/40 disabled:cursor-not-allowed disabled:opacity-55"
+          className="inline-flex h-9 items-center gap-1 rounded-xl border border-ds-border bg-ds-main/60 px-2.5 text-ds-ink outline-none transition-colors hover:bg-ds-hover focus-visible:ring-2 focus-visible:ring-accent-tint/40 disabled:cursor-not-allowed disabled:opacity-55"
         >
           <LucideIconByName name={value} className="h-4 w-4" strokeWidth={1.8} />
           <ChevronDown className="h-3 w-3 text-ds-faint" strokeWidth={1.9} />

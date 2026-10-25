@@ -50,7 +50,7 @@ import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
-  delegatedRouteKey,
+  delegatedProviderStateKey,
   priorItemsForDelegatedTurn,
   type DelegatedSessionPreparation
 } from '../delegated-session-binding.js'
@@ -90,9 +90,7 @@ export function createAgentSdkTurnRuntimeDeps(
         .find((item) => item.turnId === turnId && item.kind === 'user_message')
       const userText =
         userItem && 'text' in userItem ? String((userItem as { text?: unknown }).text ?? '') : ''
-      const managedPptScope = deps.allowSdkBuiltins === false &&
-        deps.toolContextBoundary?.pptWorkflowScope !== undefined
-      const modelUserText = managedPptScope || userItem?.kind !== 'user_message'
+      const modelUserText = userItem?.kind !== 'user_message'
         ? userText
         : userMessageTextWithComposerContexts(userItem)
       const attachmentIds =
@@ -315,9 +313,7 @@ export function createAgentSdkTurnRuntimeDeps(
         graphPolicy?.phase === 'planning'
           ? await deps.graphHarnessSummary?.().catch(() => undefined)
           : undefined
-      const contextInstructions = managedPptScope ? [
-        ...turnDynamicContext.instructions
-      ] : [
+      const contextInstructions = [
         ...historyReferenceInstructions(thread),
         ...dispatchGuidanceForTools(bridgedTools),
         buildClientSurfaceInstruction(clientSurface),
@@ -391,7 +387,7 @@ export function createAgentSdkTurnRuntimeDeps(
           claudeConfigDir = deps.sessionCoordinator.store.providerStateDir(
             'agent-sdk',
             threadId,
-            delegatedRouteKey(preparation.route)
+            delegatedProviderStateKey(preparation.route)
           )
           await mkdir(claudeConfigDir, { recursive: true, mode: 0o700 })
         }
@@ -409,7 +405,6 @@ export function createAgentSdkTurnRuntimeDeps(
       ): TurnHandoff | undefined => {
         const resolved = resolveTurnHandoff({
           enabled: Boolean(deps.sessionCoordinator) &&
-            !managedPptScope &&
             deps.deterministicHandoff !== false,
           preparation: prep,
           items,
@@ -431,7 +426,7 @@ export function createAgentSdkTurnRuntimeDeps(
       // This is the portable rebase handoff. Compatible consecutive turns use
       // the official SDK resume id and do not send this transcript again.
       const historyTranscript =
-        managedPptScope || turnHandoff
+        turnHandoff
           ? ''
           : buildHistoryTranscript(
               items,
@@ -450,9 +445,6 @@ export function createAgentSdkTurnRuntimeDeps(
         workspace: thread.workspace,
         additionalWorkspaces: thread.additionalWorkspaces,
         userText: modelUserText,
-        ...(managedPptScope && turnDynamicContext.instructions.length === 0
-          ? { preserveExactUserPrompt: true }
-          : {}),
         threadPersona: thread.systemPrompt?.trim() || undefined,
         approvalPolicy,
         sandboxMode,
@@ -468,7 +460,7 @@ export function createAgentSdkTurnRuntimeDeps(
           graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || planMode || turn?.guiDesignArtifact?.kind === 'svg'
             ? false
             : deps.allowSdkBuiltins ?? true,
-        ...(graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
+        ...(graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) ? { bridgeKunBuiltinOverlaps: true } : {}),
         ...(graphPolicy ? { graphPhase: graphPolicy.phase } : {}),
         ...(turn?.guiDesignArtifact?.kind === 'svg' ? { requireSvgCompletion: true } : {}),
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude

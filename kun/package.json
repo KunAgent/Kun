@@ -67,7 +67,7 @@
     "build": "node ./scripts/clean-build-output.mjs && tsc -p tsconfig.build.json && vite build -c vite.tui.config.ts && node ./scripts/check-tui-import-graph.mjs && node ./scripts/write-runtime-build-manifest.mjs",
     "build:tui-app": "vite build -c vite.tui.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test ./scripts/runtime-build-manifest.test.mjs ./scripts/run-tests.test.mjs && node ./scripts/run-tests.mjs",
+    "test": "node --test ./scripts/runtime-build-manifest.test.mjs ./scripts/test-execution-plan.test.mjs ./scripts/run-tests.test.mjs && node ./scripts/run-tests.mjs",
     "test:memory-growth": "node ./scripts/run-memory-growth-regression.mjs",
     "bench:fast-context": "node ./scripts/fast-context-benchmark.mjs",
     "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts src/memory/semantic-memory-evaluation-dataset.test.ts src/memory/semantic-memory-evaluation-v2-dataset.test.ts src/memory/semantic-memory-evaluation.test.ts src/memory/semantic-memory-evaluation-comparison.test.ts src/memory/semantic-memory-terminology-candidate.test.ts src/memory/semantic-memory-evaluation-v2-workflow.test.ts src/memory/semantic-memory-evaluation-v2-evidence.test.ts src/memory/semantic-memory-vector-candidate.test.ts src/memory/semantic-memory-candidate-fallback.test.ts src/memory/semantic-memory-evaluation-decision.test.ts src/memory/semantic-memory-evaluation-evidence.test.ts --reporter=verbose",
@@ -85,12 +85,12 @@
     "@agentclientprotocol/sdk": "1.4.0",
     "@anthropic-ai/claude-agent-sdk": "0.3.220",
     "@computer-use/nut-js": "^4.2.0",
-    "@cursor/sdk": "1.0.24",
+    "@cursor/sdk": "1.0.40",
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
-    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.19.0.tgz",
+    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.22.0.tgz",
     "@modelcontextprotocol/client": "^2.3.1",
     "@opentui/core": "0.6.6",
     "@opentui/solid": "0.6.6",
@@ -142,6 +142,7 @@
     },
     "solid-js@1.9.12": {
       "seroval": "1.6.4"
-    }
+    },
+    "zod": "$zod"
   }
 }

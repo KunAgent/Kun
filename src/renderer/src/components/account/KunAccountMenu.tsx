@@ -1,3 +1,4 @@
+import { VipEntitlements } from './VipEntitlements'
 import type { ReactElement, ReactNode } from 'react'
 import { ArrowUpRight, Feather, Gift, LoaderCircle, LockKeyhole, LogIn, LogOut, RefreshCw, Shirt, ShoppingBag } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -72,6 +73,7 @@ export function KunAccountMenu({ state, busy, titleId, onAction, onNavigate, pla
           <span>{user.email}</span>
         </span>
       </div>
+      <VipEntitlements owner={user.id} />
       <dl className="kun-account-stats">
         <div className="kun-account-stat" data-ready={summary.ready || undefined}>
           <dt>{t(summary.ready ? 'kunAccountMenuBottlesReady' : 'kunAccountMenuBottles')}</dt>

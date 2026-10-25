@@ -27,6 +27,8 @@
   "subagentsRuntimePolicyDesc": "设置委派并发数；超出并发上限的任务会进入等待队列。",
   "subagentsUseExistingAgents": "使用现有代理",
   "subagentsUseExistingAgentsDesc": "开启后，delegate_task 会从已配置的代理中选择；关闭后，主代理会为每个任务定义一次性角色。",
+  "subagentsHonorEngineBinding": "按角色绑定的引擎运行",
+  "subagentsHonorEngineBindingDesc": "开启：绑定了 Claude Code、Codex 等引擎的角色，在 delegate_task 中也跑在该引擎上；引擎不可用时直接报错。关闭：delegate_task 的子代理一律使用主会话路由。",
   "subagentsMaxParallel": "最大并行子代理数",
   "subagentsMaxParallelDesc": "同时运行的子代理达到上限后，新任务会进入等待队列。",
   "subagentsProactiveRetry": "主代理主动恢复失败子代理",

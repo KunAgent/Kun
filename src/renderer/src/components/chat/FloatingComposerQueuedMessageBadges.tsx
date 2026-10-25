@@ -4,6 +4,7 @@ import { kunToolPermissionModeFromSettings } from '@shared/app-settings'
 import { writePromptQuotesFromComposerContexts } from '../../write/write-composer-context-quotes'
 import { messageQuotesFromComposerContexts } from '../../lib/message-quote'
 import type { QueuedComposerMessage } from './FloatingComposerQueuedMessages'
+import { queuedAttachmentSummary, type QueuedMessageStatus } from './composer-queue-row-state'
 import css from './FloatingComposerQueuedMessages.module.css'
 
 /**
@@ -61,4 +62,51 @@ export function QueuedMessageSnapshotBadges({
 
   if (badges.length === 0) return null
   return <span className={css.badges}>{badges}</span>
+}
+
+/** One attachment by name, otherwise "2 images" / "1 file" counts. */
+export function QueuedMessageAttachments({
+  message
+}: {
+  message: QueuedComposerMessage
+}): ReactElement | null {
+  const { t } = useTranslation('common')
+  const summary = queuedAttachmentSummary(message)
+  if (summary.imageCount === 0 && summary.documentCount === 0) return null
+  const parts = summary.singleName
+    ? [summary.singleName]
+    : [
+        summary.imageCount > 0 ? t('composerQueue.images', { count: summary.imageCount }) : '',
+        summary.documentCount > 0 ? t('composerQueue.files', { count: summary.documentCount }) : ''
+      ].filter(Boolean)
+  return (
+    <span
+      className={css.attachments}
+      data-queued-message-images={summary.imageCount > 0 ? summary.imageCount : undefined}
+      title={summary.names || undefined}
+    >
+      {parts.join(' · ')}
+    </span>
+  )
+}
+
+/** Delivery state in its tone: confirming, paused, withdrawn, failed + reason. */
+export function QueuedMessageDeliveryStatus({
+  status
+}: {
+  status: QueuedMessageStatus | null
+}): ReactElement | null {
+  if (!status) return null
+  const detail = status.tone === 'danger' ? status.detail : undefined
+  return (
+    <span
+      className={css.status}
+      data-tone={status.tone}
+      data-queued-message-status
+      title={detail ? `${status.label} · ${detail}` : status.label}
+    >
+      <span className={css.statusLabel}>{status.label}</span>
+      {detail ? <span className={css.statusDetail}>{detail}</span> : null}
+    </span>
+  )
 }

@@ -98,6 +98,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
     relation: thread.relation,
     parentThreadId: thread.parentThreadId,
+    ...(thread.taskOrigin ? { taskOrigin: { ...thread.taskOrigin } } : {}),
     ...(thread.executionUnit ? { executionUnit: { ...thread.executionUnit } } : {}),
     ...(thread.roomContext ? { roomContext: thread.roomContext } : {}),
     ...(thread.workbenchOrigin ? { workbenchOrigin: { ...thread.workbenchOrigin } } : {}),

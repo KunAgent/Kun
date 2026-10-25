@@ -157,6 +157,28 @@ describe('adeHarnessModelGroups', () => {
     expect(groups.map((group) => group.providerId)).toEqual([credentialGroupKey('native-login')])
   })
 
+  it('keeps a Cursor account catalog addressable by name and thinking level', () => {
+    const row = harnessRow({ id: 'cursor', credentialModes: ['provider'] })
+    row.definition.displayName = 'Cursor'
+    row.definition.transport = 'cursor-sdk'
+    const groups = adeHarnessModelGroups({
+      row, models: [], labels, hasConfiguredProvider: true,
+      providerGroups: [{ providerId: 'cursor-account', label: 'Cursor subscription', models: ['grok-4.6', 'composer-2.5'],
+        modelInfo: [
+          { id: 'grok-4.6', displayName: 'Grok 4.6', reasoningEfforts: ['high', 'max'], defaultReasoningEffort: 'high', inputModalities: ['text', 'image'] },
+          { id: 'composer-2.5', displayName: 'Composer 2.5', reasoningEfforts: [] }
+        ] }]
+    })
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({
+      nativeHarnessId: 'cursor',
+      label: 'Provider · Cursor subscription',
+      modelIds: ['grok-4.6', 'composer-2.5'],
+      modelInfo: { 'grok-4.6': { displayName: 'Grok 4.6', reasoningEfforts: ['high', 'max'] } }
+    })
+    expect(groups[0]?.modelProfiles?.['grok-4.6']?.inputModalities).toContain('image')
+  })
+
   it('returns no groups for an unknown harness row', () => {
     expect(adeHarnessModelGroups({
       row: undefined,

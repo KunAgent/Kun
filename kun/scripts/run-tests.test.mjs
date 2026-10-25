@@ -38,13 +38,15 @@ function route(requested, mismatched = true) {
 
 test('full ABI-mismatched run excludes Hybrid context from Node and includes it in Electron', () => {
   const calls = route([])
-  assert.equal(calls.length, 2)
+  assert.equal(calls.length, 3)
   assert.equal(calls[0].electron, false)
   const index = calls[0].args.indexOf(contextTest)
   assert.ok(index > 0)
   assert.equal(calls[0].args[index - 1], '--exclude')
   assert.equal(calls[1].electron, true)
   assert.ok(calls[1].args.includes(contextTest))
+  assert.equal(calls[2].electron, true)
+  assert.deepEqual(calls[2].args, ['src/manager/large-thread-mutations.test.ts', '--maxWorkers=1'])
 })
 
 test('explicit mixed requests keep ordinary tests on Node and route Hybrid context to Electron', () => {

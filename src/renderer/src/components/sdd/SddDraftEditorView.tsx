@@ -1,3 +1,6 @@
+import { useSelectionEdit } from '../write/selection-menu/use-selection-edit'
+import { useFrozenSelection } from '../write/selection-menu/use-frozen-selection'
+import { SelectionEditLayer } from '../write/selection-menu/SelectionEditLayer'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { ArrowRight, FileText, Loader2, Palette, Save, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -13,14 +16,8 @@ import { saveActiveSddDraftToDisk, syncActiveSddDraftFromDisk } from '../../sdd/
 import { buildSddPrototypeTurnPrompt } from '../../sdd/sdd-prototype-prompt'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { startWriteWorkspaceFileWatch } from '../../write/write-file-watch'
-import {
-  applyWriteInlineEditReplacement,
-  buildWriteInlineEditCompletionRequest,
-  buildWriteInlineEditDraft
-} from '../../write/inline-edit'
 import { toggleWriteInlineFormat, type WriteInlineFormatKind } from '../../write/inline-format'
 import type { WriteBlockType } from '../../write/block-type'
-import { createWriteRecentEdit } from '../../write/recent-edits'
 import { resolveWriteQuickActions, type ResolvedWriteQuickAction } from '../../write/quick-actions'
 import {
   quotedSelectionFromEditor
@@ -117,7 +114,7 @@ export function SddDraftEditorView({
     selectionAssist,
     imageGenReady,
     prototypeReady,
-    selection,
+    selection: liveSelection,
     recentEdits,
     loadWriteSettings,
     setSelection,
@@ -140,7 +137,6 @@ export function SddDraftEditorView({
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
   const noticeTimerRef = useRef<number | null>(null)
-  const [inlineEditInFlight, setInlineEditInFlight] = useState(false)
   const [pointerSelecting, setPointerSelecting] = useState(false)
   const [notice, setNotice] = useState<WriteNotice | null>(null)
 
@@ -252,6 +248,22 @@ export function SddDraftEditorView({
     })
   }, [activeDraftAbsolutePath, activeDraftId, activeDraftRelativePath, activeDraftWorkspaceRoot])
 
+  const frozen = useFrozenSelection(liveSelection, activeDraft?.id ?? '')
+  const selection = frozen.selection
+  const selectionEdit = useSelectionEdit({
+    documentKey: activeDraft?.id ?? '', filePath: activeDraft?.absolutePath ?? activeDraft?.relativePath ?? '',
+    workspaceRoot: activeDraft?.workspaceRoot ?? '', fileContent: content, selection,
+    readOnly: operationStatus === 'upgrading', model: inlineCompletion.model, recentEdits,
+    getHandle: () => richHandleRef.current ?? markdownHandleRef.current,
+    getEditContent: () => richHandleRef.current?.getProjectionText() ?? useSddDraftStore.getState().content,
+    setSelection, setError: (message) => setOperationStatus(message ? 'error' : 'idle', message ?? undefined),
+    recordEdits: recordRecentEdits,
+    toChat: (instruction, snapshot) => {
+      const quoted = quotedSelectionFromEditor(snapshot, activeDraft?.absolutePath ?? activeDraft?.relativePath ?? '', activeDraft?.workspaceRoot ?? '')
+      setSelection({ text: '', ranges: [], charCount: 0 }); onAssistantQuote(instruction, quoted ?? undefined)
+    }
+  })
+
   if (!activeDraft) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center text-[14px] text-ds-muted">
@@ -279,7 +291,7 @@ export function SddDraftEditorView({
   const imageSelectionActionReady = imageSelectionActive && (prototypeReady || imageGenReady) && !readOnly
   const selectionAction =
     (selection.charCount > 0 || imageSelectionActionReady) &&
-    !pointerSelecting
+    !pointerSelecting && !selectionEdit.session && !frozen.dismissed
       ? inlineAgentPosition(selection)
       : null
   // Edit-mode quick actions rewrite the document, so drop them while the doc
@@ -306,7 +318,7 @@ export function SddDraftEditorView({
 
   const runQuickAction = (quickAction: ResolvedWriteQuickAction): void => {
     if (quickAction.mode === 'edit') {
-      void submitInlineEdit(quickAction.prompt)
+      void selectionEdit.start({ instruction: quickAction.prompt, label: quickAction.label, source: { kind: 'skill', actionId: quickAction.id } })
       return
     }
     submitToAssistant(quickAction.prompt)
@@ -326,7 +338,8 @@ export function SddDraftEditorView({
     markdownHandleRef.current?.applyRangeReplacement(
       { from: range.from, to: range.to },
       range.text,
-      replacement
+      replacement,
+      kind === 'link' ? { from: replacement.lastIndexOf('https://'), to: replacement.lastIndexOf('https://') + 8 } : undefined
     )
   }
 
@@ -341,108 +354,6 @@ export function SddDraftEditorView({
     // Source mode has no toggle built in: re-selecting the active type clears it.
     const effective = selection.blockType === type && type !== 'paragraph' ? 'paragraph' : type
     markdownHandleRef.current?.setBlockType(effective)
-  }
-
-  const submitInlineEdit = async (prompt: string): Promise<void> => {
-    const trimmed = prompt.trim()
-    if (!trimmed || readOnly || inlineEditInFlight) return
-    if (selection.ranges.length !== 1) {
-      setOperationStatus('error', t(
-        selection.ranges.length > 1 ? 'writeInlineEditMultiSelection' : 'writeInlineEditNoSelection'
-      ))
-      return
-    }
-    if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') {
-      setOperationStatus('error', t('writeInlineEditUnavailable'))
-      return
-    }
-
-    // In rich mode the inline edit operates on the markdown projection: the
-    // selection ranges are projection offsets and the replacement is applied
-    // through the editor so undo history and node structure stay intact.
-    const richHandle = richHandleRef.current
-    const richProjectionText = richHandle?.getProjectionText() ?? null
-    const editContent = richProjectionText ?? content
-
-    const draft = buildWriteInlineEditDraft(editContent, selection.ranges[0], trimmed, {
-      workspaceRoot: draftWorkspaceRoot,
-      currentFilePath: editorFilePath,
-      model: inlineCompletion.model,
-      language: 'markdown',
-      recentEdits
-    })
-
-    setInlineEditInFlight(true)
-    try {
-      const result = await window.kunGui.requestWriteInlineCompletion(
-        buildWriteInlineEditCompletionRequest(draft.request)
-      )
-      if (!result.ok) {
-        setOperationStatus('error', t('writeInlineEditFailed', { message: result.message }))
-        return
-      }
-      const replacement = result.action?.kind === 'edit'
-        ? result.action.replacement
-        : result.completion
-
-      if (richHandle) {
-        const applied = richHandle.applyProjectedReplacement(
-          { from: draft.scope.from, to: draft.scope.to },
-          draft.scope.text,
-          replacement,
-          trimmed
-        )
-        if (!applied) {
-          setOperationStatus('error', t('writeInlineEditChanged'))
-          return
-        }
-        setSelection({ text: '', ranges: [], charCount: 0 })
-        setOperationStatus('idle')
-        setNotice({ tone: 'success', message: t('writeInlineEditApplied') })
-        return
-      }
-
-      const latest = useSddDraftStore.getState()
-      if (
-        latest.activeDraft?.id !== draftId ||
-        latest.content.slice(draft.scope.from, draft.scope.to) !== draft.scope.text
-      ) {
-        setOperationStatus('error', t('writeInlineEditChanged'))
-        return
-      }
-
-      const nextContent = applyWriteInlineEditReplacement(latest.content, draft.scope, replacement)
-      const inlineEditRecord = createWriteRecentEdit({
-        source: 'inline-edit',
-        filePath: editorFilePath,
-        from: draft.scope.from,
-        to: draft.scope.to,
-        deletedText: draft.scope.text,
-        insertedText: replacement,
-        beforeContext: latest.content.slice(
-          Math.max(0, draft.scope.from - INLINE_EDIT_RECENT_CONTEXT_CHARS),
-          draft.scope.from
-        ),
-        afterContext: nextContent.slice(
-          draft.scope.from + replacement.length,
-          Math.min(nextContent.length, draft.scope.from + replacement.length + INLINE_EDIT_RECENT_CONTEXT_CHARS)
-        ),
-        instruction: trimmed,
-        scopeKind: draft.scope.kind
-      })
-
-      setContent(nextContent)
-      if (inlineEditRecord) recordRecentEdits([inlineEditRecord])
-      setSelection({ text: '', ranges: [], charCount: 0 })
-      setOperationStatus('idle')
-      setNotice({ tone: 'success', message: t('writeInlineEditApplied') })
-    } catch (err) {
-      setOperationStatus('error', t('writeInlineEditFailed', {
-        message: err instanceof Error ? err.message : String(err)
-      }))
-    } finally {
-      setInlineEditInFlight(false)
-    }
   }
 
   const { generateImage, generatePrototype } = createSddDraftGenerationController({
@@ -466,7 +377,11 @@ export function SddDraftEditorView({
     setNotice
   })
   return (
+    <>
     <SddDraftEditorContent
+      menuProps={{ onAskEdit: (instruction) => { void selectionEdit.start({ instruction }) }, onAskChat: submitToAssistant,
+        onFreezeSelection: frozen.freeze, onReleaseSelection: frozen.release, onDismiss: frozen.dismiss,
+        onRestoreSelection: () => { if (selection.ranges[0]) (richHandleRef.current ?? markdownHandleRef.current)?.restoreSelection(selection.ranges[0]) } }}
       leftSidebarCollapsed={leftSidebarCollapsed}
       assistantOpen={assistantOpen}
       onToggleLeftSidebar={onToggleLeftSidebar}
@@ -511,5 +426,7 @@ export function SddDraftEditorView({
       generatePrototype={generatePrototype}
       imageSelectionActive={imageSelectionActive}
     />
+    <SelectionEditLayer controller={selectionEdit} />
+    </>
   )
 }

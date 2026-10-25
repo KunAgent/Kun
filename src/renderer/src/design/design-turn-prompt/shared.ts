@@ -1,4 +1,5 @@
 import { WRITE_PROTOTYPE_DEFAULT_PROMPT, WRITE_PROTOTYPE_MAX_TEXT_CHARS } from '@shared/write-prototype'
+import { PROTOTYPE_NAVIGATION_MARKUP_LINES } from '../../../../../kun/src/prompt/design-authoring-rules'
 import {
   DESIGN_CRAFT_LINES,
   DESIGN_DELIVERY_LINES,
@@ -54,6 +55,14 @@ export type DesignFrameContext = {
 export type DesignTurnOptions = {
   target: DesignTurnTarget
   mode: 'text' | 'image'
+  /**
+   * Kun attaches the stable rules for this turn as its mode policy: reserved
+   * HTML page turns (`guiDesignArtifact.kind === 'html'`) and Design-surface
+   * canvas turns. The prompt then carries only turn-specific context. Leave it
+   * unset for prompts Kun cannot attach a policy to, such as delegated page
+   * children, so they keep the rules inline.
+   */
+  runtimeModePolicy?: boolean
   /** Free-form description of the design to produce (text mode). */
   text?: string
   /** Workspace-relative path the agent must write the artifact to. */
@@ -181,6 +190,12 @@ export type ScreenManifestEntry = {
   fontFamily?: string
   /** Foundation role, so a page knows which sibling is the canonical style guide. */
   role?: 'design-system' | 'logo'
+  /**
+   * The page exists only as a placeholder: a sibling turn in the same batch is
+   * still going to build it. It is listed as a link target only — never with
+   * its generation brief, which reads like an instruction for the current turn.
+   */
+  planned?: boolean
 }
 
 export function normalizePrototypePath(path: string): string {
@@ -207,15 +222,6 @@ export function buildPrototypeHref(fromHtmlPath: string | undefined, toHtmlPath:
   return [...up, ...down].join('/') || './'
 }
 
-export const PROTOTYPE_NAVIGATION_MARKUP_LINES = [
-  'Prototype link markup contract:',
-  '- Use `<a href="...">` for navigation items that are semantically links.',
-  '- For button-like, card-like, form-submit, or tab-like controls that navigate to another screen, keep the right element and set `data-href="..."` / `data-prototype-href="..."` to the listed prototype href, or `data-prototype-target="Exact Screen Title"` when only the target page title is available; the prototype player intercepts those attributes.',
-  '- If a scripted router is necessary, call `history.pushState(...)` / `history.replaceState(...)` or `location.assign` / `location.replace` / `location.href` / `location.hash` with a prototype href or exact screen title; the prototype player intercepts those too.',
-  '- For Back / Previous controls that should return to the last prototype screen, call `history.back()` or `history.go(-1)`; the prototype player maps that to its own screen history.',
-  '- Prefer native `<a>` / `<button>` elements. If a whole card/tab must be a non-native clickable region, add `role="button"` or `role="tab"`, `tabindex="0"`, and the same `data-prototype-*` target so click and keyboard activation both work in prototype mode.',
-  '- Do not rely on text-only mentions, comments, or dead `href="#"` links for cross-screen navigation.'
-]
 
 export function formatDesignTargetFrameLines(ctx: DesignContext | undefined): string[] {
   const target = normalizeDesignTarget(ctx?.designTarget)
@@ -282,36 +288,62 @@ export type ParallelDesignPagesPromptOptions = {
  * Render the "other pages in this project" block shared by the HTML and screen
  * turn prompts. Lets a generated/iterated page align with its siblings.
  */
+/** Stands in for the page rules Kun attaches as the reserved page's mode policy. */
+export const RUNTIME_PAGE_POLICY_LINE =
+  '- Follow the Design page rules in the runtime mode policy: responsive frame layout, authoring discipline, prototype link markup, delivery checklist, and craft.'
+
 export function formatScreenManifestLines(
   manifest: ScreenManifestEntry[] | undefined,
-  currentHtmlPath?: string
+  currentHtmlPath?: string,
+  options: { runtimeModePolicy?: boolean } = {}
 ): string[] {
   if (!manifest || manifest.length === 0) return []
-  return [
-    'Other pages already in this project (keep ONE cohesive design system across them — shared palette, typography, spacing, components, and prototype navigation):',
-    ...manifest.map((s) => {
-      const dims = typeof s.width === 'number' && typeof s.height === 'number'
-        ? ` (${Math.round(s.width)}x${Math.round(s.height)})`
-        : ''
-      const tokenParts = [
-        s.accent ? `accent ${s.accent}` : '',
-        s.fontFamily ? `font ${s.fontFamily}` : ''
-      ].filter(Boolean)
-      const tokens = tokenParts.length > 0 ? ` [${tokenParts.join(', ')}]` : ''
-      const roleTag =
-        s.role === 'design-system'
-          ? ' [design system — the canonical style guide; follow it]'
-          : s.role === 'logo'
-            ? ' [logo]'
-            : ''
-      const summary = s.summary?.trim() ? ` — ${s.summary.trim().slice(0, 160)}` : ''
-      const prototypeHref = currentHtmlPath ? ` (prototype href: ${buildPrototypeHref(currentHtmlPath, s.htmlPath)})` : ''
-      return `- "${s.name}"${dims}${tokens}${roleTag} → ${s.htmlPath}${prototypeHref}${summary}`
-    }),
+  const built = manifest.filter((s) => !s.planned)
+  const planned = manifest.filter((s) => s.planned)
+  const hrefFor = (s: ScreenManifestEntry): string =>
+    currentHtmlPath ? ` (prototype href: ${buildPrototypeHref(currentHtmlPath, s.htmlPath)})` : ''
+  const lines: string[] = []
+  if (built.length > 0) {
+    lines.push(
+      'Other pages already in this project (keep ONE cohesive design system across them — shared palette, typography, spacing, components, and prototype navigation):',
+      ...built.map((s) => {
+        const dims = typeof s.width === 'number' && typeof s.height === 'number'
+          ? ` (${Math.round(s.width)}x${Math.round(s.height)})`
+          : ''
+        const tokenParts = [
+          s.accent ? `accent ${s.accent}` : '',
+          s.fontFamily ? `font ${s.fontFamily}` : ''
+        ].filter(Boolean)
+        const tokens = tokenParts.length > 0 ? ` [${tokenParts.join(', ')}]` : ''
+        const roleTag =
+          s.role === 'design-system'
+            ? ' [design system — the canonical style guide; follow it]'
+            : s.role === 'logo'
+              ? ' [logo]'
+              : ''
+        const summary = s.summary?.trim() ? ` — ${s.summary.trim().slice(0, 160)}` : ''
+        return `- "${s.name}"${dims}${tokens}${roleTag} → ${s.htmlPath}${hrefFor(s)}${summary}`
+      })
+    )
+  }
+  if (planned.length > 0) {
+    lines.push(
+      'Planned in this batch — another turn builds each of these pages, so do NOT read, write, or design them in this turn. They are listed only so prototype navigation can link to them:',
+      ...planned.map((s) => `- "${s.name}" → ${s.htmlPath}${hrefFor(s)}`)
+    )
+  }
+  lines.push(
     'Prototype navigation: turn relevant nav items, cards, tabs, and primary/secondary actions into clickable routes using the listed prototype hrefs; keep same-page controls as buttons and avoid dead `#` links.',
-    ...PROTOTYPE_NAVIGATION_MARKUP_LINES,
-    'Read a relevant sibling page if you need to match its exact styling. Do NOT modify sibling files — only the reserved file for this turn.'
-  ]
+    ...(options.runtimeModePolicy ? [] : PROTOTYPE_NAVIGATION_MARKUP_LINES)
+  )
+  if (built.length > 0) {
+    lines.push(
+      'Read a relevant sibling page if you need to match its exact styling. Do NOT modify sibling files — only the reserved file for this turn.'
+    )
+  } else {
+    lines.push('Do NOT modify sibling files — only the reserved file for this turn.')
+  }
+  return lines
 }
 
 export type ScreenTurnOptions = DesignTurnOptions & {

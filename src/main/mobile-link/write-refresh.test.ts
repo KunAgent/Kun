@@ -59,7 +59,7 @@ describe('desktop receipt path', () => {
     let socket!: Socket
     const frames: any[] = []
     const request = vi.fn(async () => ({ ok: true, status: 200, body: JSON.stringify(receipt) }))
-    const deps: LinkDependencies = { origin: 'https://relay.test', name: 'Host', platform: 'macos',
+    const deps: LinkDependencies = { requireMembership: async () => {}, origin: 'https://relay.test', name: 'Host', platform: 'macos',
       account: { getState: async () => ({ status: 'authenticated', error: null,
         user: { id: 'owner', name: 'Owner', email: 'owner@test.invalid', avatarUrl: null } }),
       onState: () => () => {}, accessToken: async () => 'token', expire: async () => {} },

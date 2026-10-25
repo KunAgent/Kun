@@ -284,6 +284,8 @@ export function deriveTurnSections({
     }
     if (isPendingRenderChartTool(block)) continue
     if (isPendingPaperReportTool(block)) continue
+    // The design card is the only view of a design_open call; its arguments carry whole screens of HTML.
+    if (isDesignOpenBlock(block)) continue
     if (isProcessBlock(block)) {
       processBlocks.push(block)
       processTimelineBlocks.push(block)

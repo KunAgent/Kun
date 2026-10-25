@@ -109,7 +109,6 @@
   "modelProviderRefKind_subagent": "하위 에이전트",
   "modelProviderRefKind_fastContext": "Fast Ctx",
   "modelProviderRefKind_graph": "Graph",
-  "modelProviderRefKind_pptAgent": "PPT",
   "modelProviderRefKind_promptOptimization": "프롬프트",
   "modelProviderRefKind_autoPlanBuild": "Plan",
   "modelProviderRefKind_contextCompaction": "압축",

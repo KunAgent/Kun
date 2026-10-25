@@ -63,5 +63,14 @@
   "artifactsNoScreens": "这个设计稿还没有 HTML 页面，打开画布查看。",
   "artifactsWhiteboardHint": "白板会在 Work 中打开，可以直接编辑。",
   "artifactsScreenVersions_one": "{{count}} 个版本",
-  "artifactsScreenVersions_other": "{{count}} 个版本"
+  "artifactsScreenVersions_other": "{{count}} 个版本",
+  "artifactsWorkTitle": "产物",
+  "artifactsWorkSubtitle": "当前空间的白板与文件，打开时再加载。",
+  "artifactsWorkNew": "新建白板",
+  "artifactsWorkNewWhiteboard": "新建白板",
+  "artifactsWorkScope": "当前空间：{{name}}",
+  "artifactsWorkNoSpace": "先选择一个空间，再查看产物。",
+  "artifactsWorkEmptyTitle": "这个空间还没有产物",
+  "artifactsWorkEmptyBody": "新建一块白板，或让 Kun 在对话里生成一份。",
+  "artifactsMoreActions": "更多操作"
 }

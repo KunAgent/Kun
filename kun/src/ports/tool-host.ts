@@ -75,11 +75,9 @@ export type GuiPlanContext = {
   turnId?: string
 }
 
-export type GuiDesignArtifactContext = {
-  kind: 'svg'
-  artifactId: string
-  relativePath: string
-}
+export type GuiDesignArtifactContext =
+  | { kind: 'svg'; artifactId: string; relativePath: string }
+  | { kind: 'html'; artifactId: string; relativePath: string; designMdPath?: string }
 
 export type ApprovedExternalWriteTarget = {
   /** Physical path shown in the approval prompt. */
@@ -107,53 +105,6 @@ export type KunActionApprovalGrant = {
   issuedAt: string
   expiresAt: string
 }
-
-/**
- * Host-minted capability for one managed PPT child execution. Models cannot
- * supply or persist this scope; PPT-only tools require it at discovery and
- * execution time so the main agent and unrelated children cannot bypass the
- * dedicated workflow host.
- */
-export type PptWorkflowScope = Readonly<{
-  action: 'start' | 'select_direction' | 'revise_directions' | 'revise_previews' | 'retry_failed' | 'approve_and_build'
-  /** Structured output the active child attempt must produce before stopping. */
-  stage?: 'direction' | 'review' | 'build'
-  workflowId: string
-  projectDir: string
-  parentThreadId: string
-  previewMode: 'image-first' | 'editable'
-  /** Work-originated source must be read before the child plans the deck. */
-  sourceReadRequired?: boolean
-  directionGate?: Readonly<{
-    required: boolean
-    reason: 'existing-presentation' | 'explicit-skip' | 'work-document' | 'design-reference' | 'complete-visual-system' | 'underspecified-new-deck'
-    basis: string
-    sourceHash: string
-  }>
-  directionContext?: Readonly<{
-    childId: string
-    directions: ReadonlyArray<{
-      directionId: string
-      revision: number
-    }>
-    authority: ReadonlyArray<{
-      directionId: string
-      revision: number
-      recommended: boolean
-      planFingerprint: string
-      candidateFingerprint: string
-    }>
-    slidesFingerprint: string
-  }>
-  reviewContext?: Readonly<{
-    childId: string
-    slides: ReadonlyArray<{
-      slideId: string
-      revision: number
-      annotations?: readonly string[]
-    }>
-  }>
-}>
 
 export type ToolHostContext = {
   /** Host-authored shared metadata snapshot. [] keeps the restricted fallback, undefined is an ordinary turn. */
@@ -304,8 +255,6 @@ export type ToolHostContext = {
   kunActionApprovalGrant?: Readonly<KunActionApprovalGrant>
   /** Host-injected active tool-call id. Callers cannot supply or persist it. */
   activeToolCallId?: string
-  /** Managed PPT authority injected only into the dedicated PPT child loop. */
-  pptWorkflowScope?: PptWorkflowScope
   /** Kun runtime data root; used to allow sandbox-safe reads of background shell output files. */
   runtimeDataDir?: string
   /** Store used to offload oversized tool results from model context. */

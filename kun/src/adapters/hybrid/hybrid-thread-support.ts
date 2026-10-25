@@ -77,7 +77,8 @@ export function usageRecordsFromRows(rows: UsageRow[]): SessionUsageRecord[] {
       ...(row.harness_id ? { harnessId: row.harness_id } : {}),
       ...(row.relation === 'primary' || row.relation === 'fork' || row.relation === 'side'
         ? { relation: row.relation }
-        : {}),
+        // Task sessions are user-visible conversations; usage scopes count them as primary.
+        : row.relation === 'task' ? { relation: 'primary' as const } : {}),
       completedAt: row.timestamp,
       usage: delta
     })

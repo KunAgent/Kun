@@ -1,5 +1,8 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { pickHighlights } from '@shared/release-notes-summary'
+import WhatsNewDialog from './WhatsNewDialog'
 import { loadWhatsNewContent } from './whats-new-content'
 import { SPOTLIGHT_HIGHLIGHT_LIMIT, whatsNewSpotlight } from './whats-new-spotlights'
 
@@ -17,16 +20,36 @@ describe('whatsNewSpotlight', () => {
   it.each(['zh', 'en'] as const)('lets the 0.4.2 card replace only the Artifacts highlight (%s)', async (language) => {
     const content = await loadWhatsNewContent({ version: '0.4.2', previousVersion: '0.4.1', changelogUrl: '' }, language)
     const summary = content.current
-    expect(summary?.features).toHaveLength(11)
-    expect(summary?.fixes).toHaveLength(9)
+    expect(summary?.features).toHaveLength(24)
+    expect(summary?.fixes).toHaveLength(14)
 
     const spotlight = whatsNewSpotlight(content.version)
     const picked = pickHighlights(summary!, { exclude: spotlight?.covers, limit: SPOTLIGHT_HIGHLIGHT_LIMIT })
     const shown = [...picked.highlights.map((item) => item.title), ...picked.alsoUpdated]
     expect(picked.highlights).toHaveLength(2)
+    expect(picked.highlights.map((item) => item.title)).toEqual(language === 'zh'
+      ? ['交互组件与 MCP Apps', '工作台与 Office 预览']
+      : ['Interactive widgets and MCP Apps', 'Workbench and Office previews'])
     expect(picked.alsoUpdated).toHaveLength(4)
     expect(summary!.features.filter((item) => spotlight!.covers.test(item.title))).toHaveLength(1)
     expect(shown.some((title) => /artifact|产物/i.test(title))).toBe(false)
+  })
+
+  it.each(['zh', 'en'] as const)('renders the 0.4.2 announcement with expandable remaining features (%s)', async (language) => {
+    const content = await loadWhatsNewContent({ version: '0.4.2', previousVersion: '0.4.1', changelogUrl: '' }, language)
+    const html = renderToStaticMarkup(createElement(WhatsNewDialog, { content, onClose: () => {} }))
+    expect(html).toContain('data-whats-new-spotlight="artifacts"')
+    expect(html).toContain('data-whats-new-more-features="true"')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).toContain(language === 'zh' ? 'GitHub 连接' : 'GitHub connection')
+    expect(html).toMatch(/class="kun-wn-feature-list" hidden=""/)
+  })
+
+  it('keeps the older release announcement compact', async () => {
+    const content = await loadWhatsNewContent({ version: '0.4.1', changelogUrl: '' }, 'en')
+    const html = renderToStaticMarkup(createElement(WhatsNewDialog, { content, onClose: () => {} }))
+    expect(html).not.toContain('data-whats-new-more-features')
+    expect(html).toContain('kun-wn-chips')
   })
 
   it.each(['zh', 'en'] as const)('turns the bundled 0.4.1 notes into a feature release (%s)', async (language) => {

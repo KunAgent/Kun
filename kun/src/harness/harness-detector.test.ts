@@ -50,6 +50,7 @@ function makeDetector(input: {
     clear(id: HarnessId): Promise<void>
   }
   login?: HarnessLoginState
+  nowMs?: () => number
 }) {
   return new HarnessDetector({
     definitions: () => input.defs,
@@ -65,7 +66,7 @@ function makeDetector(input: {
     probeReady: input.probeReady,
     ...(input.readinessCache ? { readinessCache: input.readinessCache } : {}),
     probeLogin: async () => input.login ?? 'unknown',
-    nowMs: () => Date.now(),
+    nowMs: input.nowMs ?? (() => Date.now()),
     nowIso: () => new Date().toISOString()
   })
 }
@@ -422,6 +423,18 @@ describe('safe current detection evidence', () => {
       secretEnv: [{ name: 'API_KEY', secretRef: 'rotating-ref' }] } })] })
     await detector.status('opencode')
     expect(detector.cachedStatus('opencode')).toBeUndefined()
+    expect(detector.lastKnownStatus('opencode')).toBeUndefined()
+  })
+
+  it('keeps the last settled verdict for advisory listings after the TTL', async () => {
+    let now = 1_000_000
+    const detector = makeDetector({ defs: [acpDef()], probeReady: async () => ({ ready: 'yes' }), nowMs: () => now })
+    expect(detector.lastKnownStatus('opencode')).toBeUndefined()
+    await detector.status('opencode')
+    expect(detector.cachedStatus('opencode')?.installed).toBe('yes')
+    now += 61_000
+    expect(detector.cachedStatus('opencode')).toBeUndefined()
+    expect(detector.lastKnownStatus('opencode')?.installed).toBe('yes')
   })
 
   it('honors pre-aborted detection without resolving or spawning', async () => {

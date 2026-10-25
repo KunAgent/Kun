@@ -1,4 +1,3 @@
-import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import {
   HARNESS_CAPABILITY_KEYS,
   unsupported,
@@ -18,6 +17,7 @@ import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import type { HarnessRoute } from '../contracts/harness.js'
 import type { HarnessRuntimeMap } from '../harness/harness-router.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
+import type { AgentRoster } from '../delegation/agent-roster.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import type { FileReviewStore } from '../ade/review-store.js'
 import { reanchorWorkspaceComments } from '../ade/review-reanchor.js'
@@ -118,7 +118,7 @@ export function createHarnessListDeps(input: {
 /**
  * ADE manager control plane wiring: assembles ManagerRuntime
  * deps from the composition composites. The runtime fills
- * isolated/unattended/recentFailures/managerRoute/language per call.
+ * isolated/unattended/routeHealth/managerRoute/language per call.
  */
 export function createManagerRuntime(input: {
   services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks' | 'attribution' | 'agentDispatchService'>
@@ -133,19 +133,21 @@ export function createManagerRuntime(input: {
   >
   delegationRuntime: DelegationRuntime | undefined
   harnessRuntimeMap: HarnessRuntimeMap
+  agentRoster: AgentRoster
   listQuota(): ReturnType<RuntimeServices['model']['providerQuotaService']['list']>
 } & Omit<
   ManagerRuntimeDeps,
   | 'teams' | 'dispatches' | 'questions' | 'taskWorkspaces' | 'activity' | 'catalog'
   | 'detector' | 'capabilitiesForRoute' | 'delegation' | 'selector'
   | 'allowUnattendedFullAccess' | 'teamLimits' | 'managerMayApprove'
-  | 'workerCallbacks' | 'language'
+  | 'workerCallbacks' | 'language' | 'roster'
 >): ManagerRuntime {
   const {
     services,
     core,
     delegationRuntime,
     harnessRuntimeMap,
+    agentRoster,
     listQuota,
     ...runtimeDeps
   } = input
@@ -154,9 +156,13 @@ export function createManagerRuntime(input: {
   return new ManagerRuntime({
     ...runtimeDeps,
     ...services.adeStores,
+    // The raw notice store in adeStores only persists; the caller's sink is
+    // the wake-up coordinator that actually tells the manager.
+    notices: runtimeDeps.notices,
     taskWorkspaces: core.taskWorkspaces,
     activity: core.activityStore,
     delegation: delegationRuntime,
+    roster: agentRoster,
     catalog: services.harnesses.catalog,
     detector: services.harnesses.detector,
     capabilitiesForRoute: createCapabilitiesForRoute(
@@ -185,8 +191,8 @@ export function createManagerRuntime(input: {
     selector: {
       configuredModel: (_harnessId, providerId) => providerId ? core.activeOptions.providers?.[providerId]?.selectedModel ?? core.activeOptions.providers?.[providerId]?.models?.[0] : undefined,
       gatewayAliasModel: (binding) => core.activeOptions.routePools?.find((pool) => pool.id === binding.main.routeId && pool.enabled)?.modelId,
-      profiles: (workspace) =>
-        delegationRuntime?.listRoutingProfiles(workspace) ?? Promise.resolve([]),
+      // The worker selector scores the same roster catalog every lane reads.
+      profiles: (workspace) => agentRoster.catalogDocuments({ workspace }),
       quota: createQuotaSnapshot({ list: listQuota }),
       agentOrder: () => core.activeOptions.harnesses?.agentOrder ?? [],
       modelCostTier: (route) =>
@@ -308,7 +314,6 @@ export function registerAdeManagerTooling(input: {
       checks: input.managerRuntime.checkRunnerDeps
     })
   input.registry.registerProvider(provider)
-  input.registry.registerProvider(createAgentDispatchToolProvider(input.services.agentDispatchService))
   wireTaskWorkspaceChange(
     input.core.taskWorkspaces,
     input.managerRuntime,

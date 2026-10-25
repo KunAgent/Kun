@@ -38,6 +38,9 @@ export const GRAPH_INCOMPATIBLE_TOOL_NAMES = [
   'design_component'
 ] as const
 
+/** Read-only roster listing a Graph Lead may call while planning. */
+export const GRAPH_LEAD_ROSTER_TOOL_NAME = 'list_subagent_profiles' as const
+
 const INCOMPATIBLE_TOOL_NAMES = new Set<string>(GRAPH_INCOMPATIBLE_TOOL_NAMES)
 const LEAD_TOOL_NAMES = new Set<string>(GRAPH_LEAD_TOOL_NAMES)
 const WORKER_TOOL_NAMES = new Set<string>(GRAPH_WORKER_TOOL_NAMES)
@@ -70,6 +73,9 @@ export function isToolAllowedInOrchestration(
   // Read-only Lab fast_context stays available on Graph Lead turns so planning can
   // gather repository facts without ordinary delegate_task / child fan-out.
   if (isFastContextTool(input)) return true
+  // The agent roster listing dispatches nothing; the Lead reads it to set a
+  // task's `profile`. Executors still never receive it (see INCOMPATIBLE).
+  if (input.toolName === GRAPH_LEAD_ROSTER_TOOL_NAME) return true
   if (input.providerKind === 'delegation' || input.providerId === 'delegation') {
     return false
   }

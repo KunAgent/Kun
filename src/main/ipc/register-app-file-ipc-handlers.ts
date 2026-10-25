@@ -81,6 +81,7 @@ import type {
   WorkspaceFileWatchPayload
 } from '../../shared/workspace-file'
 import { registerWorkspaceSpreadsheetIpcHandlers } from './register-workspace-spreadsheet-ipc-handlers'
+import { registerOfficeVersionIpcHandlers } from './register-office-version-ipc-handlers'
 import { registerExtensionArtifactIpcHandlers } from './register-extension-artifact-ipc-handlers'
 
 type WorkspaceFileWatchRecord = {
@@ -132,6 +133,7 @@ async function readWorkspaceFileSignal(
 export function registerAppFileIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const { getMainWindow, runtimeRequest, logError } = options
   registerWorkspaceSpreadsheetIpcHandlers({ getMainWindow, logError, logInfo: options.logInfo })
+  registerOfficeVersionIpcHandlers({ getMainWindow })
   registerExtensionArtifactIpcHandlers(options)
   const workspaceFileWatchers = new Map<string, WorkspaceFileWatchRecord>()
   const workspaceFileWatchSenders = new Map<number, WorkspaceFileWatchSenderRecord>()

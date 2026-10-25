@@ -1,5 +1,5 @@
 /*
- * Composer toolbar layout (Code, Work, side composers). The toolbar is one row
+ * Composer toolbar layout (Code and Work; branch overrides are below). The toolbar is one row
  * at every width. composer-toolbar-fit.ts measures it and sets data-fit-1..7
  * (cumulative) on .ds-composer-toolbar when the controls do not fit; each
  * level gives up a little more text, never an enabled action:
@@ -191,4 +191,32 @@
 
 .ds-composer-toolbar[data-fit-7] > .ds-composer-toolbar-actions {
   flex: 1 1 auto;
+}
+
+/* Branch panels wrap before hiding the Agent/model names. */
+[data-composer-variant='side'] .ds-composer-toolbar {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  overflow: visible;
+}
+[data-composer-variant='side'] .ds-composer-toolbar > .ds-composer-toolbar-start {
+  flex: 0 1 auto;
+}
+[data-composer-variant='side'] .ds-composer-toolbar > .ds-composer-toolbar-actions {
+  flex: 1 1 220px;
+  max-width: 100%;
+}
+[data-composer-variant='side'] .ds-composer-model-trigger {
+  min-width: 0;
+  max-width: 100%;
+}
+@container (min-width: 320px) {
+  [data-composer-variant='side'] .ds-composer-permission-label,
+  [data-composer-variant='side'] .ds-composer-permission-chevron {
+    display: inline;
+  }
+  [data-composer-variant='side'] .ds-composer-toolbar .ds-composer-permission-control .ds-composer-permission-button {
+    width: auto;
+    padding-inline: 0.625rem;
+  }
 }

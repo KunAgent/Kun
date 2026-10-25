@@ -18,7 +18,7 @@ import type { DesignArtifact } from '../design-types'
 import { currentDesignArtifactVersion } from '../design-types'
 import type { DesignWorkspaceState } from '../design-workspace-store-types'
 import type { DerivedTokens } from '../design-token-extract'
-import { buildHtmlSiblingManifest } from '../design-pages'
+import { buildHtmlSiblingManifest, isPlaceholderDesignArtifact } from '../design-pages'
 import { mergeDesignContextWithTokens } from '../design-context'
 import { buildDesignTurnPrompt } from './entry'
 import type { DesignFrameContext, DesignTurnTarget, ScreenManifestEntry } from './shared'
@@ -60,6 +60,8 @@ export type BuildDesignTurnPromptPayloadOptions = {
   selectedFrame?: CanvasShape | null
   previousOpErrors?: OpError[]
   imageEditReferencePath?: string
+  /** Kun attaches this turn's stable rules as its mode policy; see DesignTurnOptions. */
+  runtimeModePolicy?: boolean
 }
 
 export type DesignTurnPromptPayload = {
@@ -85,14 +87,17 @@ function buildScreenManifest(options: BuildDesignTurnPromptPayloadOptions): Scre
     if (!shape || !isHtmlFrame(shape) || shape.id === options.selectedFrame?.id) continue
     const linked = options.promptState.artifacts.find((artifact) => artifact.id === shape.htmlArtifactId)
     if (!linked) continue
-    const summary = currentDesignArtifactVersion(linked)?.summary?.trim()
+    // A placeholder's summary is its generation brief — keep it out of the prompt.
+    const planned = isPlaceholderDesignArtifact(linked)
+    const summary = planned ? '' : currentDesignArtifactVersion(linked)?.summary?.trim()
     screenManifest.push({
       name: shape.name,
       width: shape.width,
       height: shape.height,
       htmlPath: linked.relativePath,
+      ...(planned ? { planned: true } : {}),
       ...(summary ? { summary } : {}),
-      ...siblingTokenFields(options.tokensByArtifact, linked.relativePath)
+      ...(planned ? {} : siblingTokenFields(options.tokensByArtifact, linked.relativePath))
     })
   }
   return screenManifest
@@ -173,6 +178,7 @@ export async function buildDesignTurnPromptPayload(
   const prompt = buildDesignTurnPrompt({
     target: options.target,
     mode: options.mode,
+    ...(options.runtimeModePolicy ? { runtimeModePolicy: true } : {}),
     text: options.promptText,
     artifactRelativePath: options.artifactRelativePath,
     workspaceRoot: options.workspaceRoot,

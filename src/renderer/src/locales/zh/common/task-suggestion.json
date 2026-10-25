@@ -1,0 +1,107 @@
+{
+  "taskSuggestion": {
+    "loading": "正在加载建议任务…",
+    "kicker": "建议任务 · 可并行",
+    "title": "{{count}} 个后续任务，互不依赖",
+    "status": {
+      "pending": "待启动 {{count}} 项",
+      "progress": "已启动 {{started}} / {{total}}",
+      "countdown": "{{time}} 内无回应将全部启动",
+      "paused": "已暂停 · 不会自动启动",
+      "settled": "{{count}} 个建议任务已结束"
+    },
+    "summary": {
+      "done": "{{count}} 完成",
+      "live": "{{count}} 运行",
+      "failed": "{{count}} 未完成",
+      "startFailed": "{{count}} 无法启动",
+      "ignored": "{{count}} 已忽略"
+    },
+    "row": {
+      "suggested": "等待启动",
+      "starting": "正在启动…",
+      "running": "运行中",
+      "runningFor": "运行中 · {{minutes}} 分钟",
+      "waiting": "需要你处理",
+      "done": "已完成",
+      "failed": "未能完成",
+      "cancelled": "已停止",
+      "ignored": "已忽略",
+      "here": "已在此对话继续",
+      "start_failed": "无法启动"
+    },
+    "failure": {
+      "disk_space": "磁盘空间不足",
+      "worktree_conflict": "分支或工作树已被占用",
+      "agent_unavailable": "所选 Agent 尚未就绪",
+      "quota": "模型额度已用完",
+      "runtime": "Kun 无法启动会话"
+    },
+    "actions": {
+      "start": "启动",
+      "startAll": "全部启动 ({{count}})",
+      "startNow": "立即启动",
+      "pause": "暂停",
+      "resume": "继续倒计时",
+      "dismiss": "忽略",
+      "open": "打开",
+      "viewResult": "查看结果",
+      "retry": "重试",
+      "noWorktree": "不用工作树",
+      "more": "更多启动方式",
+      "details": "查看简报",
+      "hideDetails": "收起简报"
+    },
+    "menu": {
+      "session": "新会话启动",
+      "here": "在此对话继续",
+      "copy": "仅复制任务简报",
+      "ignore": "忽略此任务",
+      "default": "默认"
+    },
+    "brief": {
+      "goal": "目标",
+      "scope": "范围",
+      "done": "完成标准",
+      "edit": "编辑简报",
+      "save": "保存简报",
+      "cancel": "取消",
+      "copied": "已复制简报",
+      "listHint": "每行一项"
+    },
+    "options": {
+      "worktree": "独立工作树",
+      "inheritContext": "带上本对话上下文"
+    },
+    "meta": {
+      "worktreeOn": "每个任务用独立工作树",
+      "worktreeOff": "任务共用当前代码目录",
+      "hint": "启动后每个任务成为本对话下的子会话，第一条消息就是任务简报。",
+      "routeHint": "可为每个任务切换 Agent 和模型，修改后重新计时。",
+      "autoStarted": "无人回应，已按推荐自动启动"
+    },
+    "report": {
+      "done": "子任务 {{index}} 已完成 · {{title}}",
+      "failed": "子任务 {{index}} 未能完成 · {{title}}",
+      "cancelled": "子任务 {{index}} 已停止 · {{title}}",
+      "open": "打开子会话",
+      "dismiss": "收起",
+      "changedFiles": "{{count}} 个文件有改动",
+      "branch": "分支 {{branch}}",
+      "duration": "{{minutes}} 分钟",
+      "noSummary": "会话结束时没有留下总结。"
+    },
+    "session": {
+      "title": "子任务会话 {{index}} / {{total}}",
+      "from": "来自「{{title}}」",
+      "back": "返回主对话",
+      "detach": "脱离父会话",
+      "branch": "工作树 {{branch}}"
+    },
+    "sidebar": {
+      "count": "{{total}} 个建议任务已启动 {{started}} 个",
+      "expand": "展开任务子会话",
+      "collapse": "收起任务子会话"
+    }
+  }
+}

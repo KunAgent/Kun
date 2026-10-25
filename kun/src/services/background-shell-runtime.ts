@@ -78,6 +78,18 @@ export class BackgroundShellRuntime {
     return this.stopHandler(sessionId)
   }
 
+  private stdinHandler: ((sessionId: string, input: string) => Promise<boolean>) | null = null
+
+  bindStdinHandler(handler: (sessionId: string, input: string) => Promise<boolean>): void {
+    this.stdinHandler = handler
+  }
+
+  /** Write to a running shell's stdin; false when it is gone or finished. */
+  async writeStdin(sessionId: string, input: string): Promise<boolean> {
+    if (!this.stdinHandler || this.sessions.get(sessionId)?.status !== 'running') return false
+    return this.stdinHandler(sessionId, input)
+  }
+
   /**
    * Stop every live shell owned by one thread. Thread deletion uses this
    * before its lifecycle fence drains, so a detached command cannot outlive

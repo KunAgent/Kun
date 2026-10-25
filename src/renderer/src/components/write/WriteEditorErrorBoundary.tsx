@@ -58,7 +58,7 @@ export class WriteEditorErrorBoundary extends Component<Props, State> {
         <button
           type="button"
           onClick={this.retry}
-          className="mt-4 rounded-full bg-ds-surface-hover px-5 py-2 text-[13px] font-medium text-ds-ink"
+          className="mt-4 rounded-full bg-ds-hover px-5 py-2 text-[13px] font-medium text-ds-ink"
         >
           {i18n.t('writeEditorErrorRetry')}
         </button>

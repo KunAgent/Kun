@@ -1,0 +1,80 @@
+{
+  "workersEmptyTitle": "还没有协作成员",
+  "workersUnavailableTitle": "暂时读不到团队信息",
+  "workersRetry": "重试",
+  "workersHeader": {
+    "members": "{{n}} 位成员",
+    "usageTitle": "整个团队累计用量",
+    "success": "已完成",
+    "running": "进行中",
+    "warning": "等你处理",
+    "danger": "失败"
+  },
+  "workersSection": {
+    "needs-you": "需要你",
+    "working": "进行中",
+    "done": "已结束"
+  },
+  "workersStatus": {
+    "question": "等你回答",
+    "approval": "等你审批",
+    "waiting": "等待中",
+    "failed": "失败",
+    "working": "进行中",
+    "done": "已完成",
+    "released": "已释放",
+    "idle": "空闲"
+  },
+  "workersTool": {
+    "read": "正在读取文件",
+    "edit": "正在修改文件",
+    "search": "正在搜索代码",
+    "command": "正在运行命令",
+    "web": "正在查阅网页",
+    "delegate": "正在派发子任务",
+    "other": "正在调用 {{tool}}"
+  },
+  "workersPhase": {
+    "investigating": "正在调查",
+    "implementing": "正在实现",
+    "verifying": "正在验证",
+    "blocked": "受阻",
+    "compacting": "正在压缩上下文"
+  },
+  "workersTime": {
+    "justNow": "刚刚",
+    "minutes": "{{n}} 分钟前",
+    "hours": "{{n}} 小时前",
+    "days": "{{n}} 天前"
+  },
+  "workersRow": {
+    "files": "{{n}} 个文件"
+  },
+  "workersAction": {
+    "openInMain": "在主区域打开",
+    "more": "更多操作"
+  },
+  "workersQuestion": {
+    "waitingOn": "{{name}} 在等你回答",
+    "otherAnswer": "或输入其他回答…",
+    "answer": "回答",
+    "answerPlaceholder": "或者输入你的回答…",
+    "answerHint": "回答不会接管，总管照常派活"
+  },
+  "workerTab": {
+    "fallbackTitle": "成员",
+    "loadingConversation": "正在加载会话…",
+    "noConversation": "还没有对话。",
+    "missing": "这个成员已不在团队中。",
+    "childReadOnly": "这个 Agent 由总管调度，会话在这里只读。",
+    "releasedReadOnly": "这个成员已释放，会话只读。"
+  },
+  "workerComposer": {
+    "managed": "总管管理中",
+    "handBack": "你已接管 · 交还总管",
+    "takeOverTitle": "从总管手里接管这个成员",
+    "handBackTitle": "把控制权交还给总管",
+    "takeOverHint": "发送即接管，之后可随时交还总管"
+  },
+  "assignmentCardTask": "任务"
+}

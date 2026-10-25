@@ -134,6 +134,12 @@ function normalizeKunRuntimeEventPayload(
     case 'tool_call_started':
     case 'tool_call_finished': {
       const action = event.item ? normalizeKunTurnItem(event.item, event.child, deps) : null
+      if (action?.type === 'user_message_received' && event.kind === 'item_created') {
+        // Older promotion events lack turnStartedAt, but their durable event
+        // timestamp still records execution admission rather than queue time.
+        const startedAt = event.turnStartedAt ?? event.timestamp
+        if (startedAt) action.payload = { ...action.payload, startedAt }
+      }
       return action ? [action] : []
     }
     case 'turn_started': {

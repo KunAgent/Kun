@@ -1,3 +1,5 @@
+import type { WriteReviewOrigin } from '../../../components/write/write-document-editor-handle'
+import { closeHistory } from '@tiptap/pm/history'
 /**
  * Review session orchestration.
  *
@@ -30,7 +32,7 @@ export type WriteReviewSessionCallbacks = {
   /** Serialize + emit when the review finishes. */
   onFinish: (markdown: string) => void
   /** Review active state for React (bar visibility, autosave pause). */
-  onStateChange: (active: boolean) => void
+  onStateChange: (active: boolean, origin: WriteReviewOrigin) => void
   /** Chunk count changes so the review bar can show progress. */
   onChunksChange: (count: number) => void
 }
@@ -77,6 +79,9 @@ export class WriteReviewSession {
   private preReviewCtx: WorkDocContext | null = null
   private baseline = ''
   private active = false
+  private origin: WriteReviewOrigin = 'agent'
+
+  getOrigin(): WriteReviewOrigin { return this.origin }
 
   constructor(
     editor: Editor,
@@ -99,8 +104,9 @@ export class WriteReviewSession {
     return writeReviewPluginKey.getState(this.editor.state)?.chunks.length ?? 0
   }
 
-  begin(params: { original: string; nextDoc: string }): boolean {
+  begin(params: { original: string; nextDoc: string; origin?: WriteReviewOrigin }): boolean {
     const { original, nextDoc } = params
+    this.origin = params.origin ?? 'agent'
     if (nextDoc === original) return false
 
     const prev = this.parseSide(original)
@@ -130,14 +136,14 @@ export class WriteReviewSession {
     // One transaction: the new document and the chunks addressing it must
     // never be rendered apart (stale chunks over a swapped doc crash the view).
     const tr = this.swapTransaction(next.nodes) ?? this.editor.state.tr
-    tr.setMeta(writeReviewPluginKey, { type: 'start', chunks })
+    tr.setMeta(writeReviewPluginKey, { type: 'start', chunks, origin: this.origin })
     tr.setMeta(writeRichExternalSyncMeta, true)
     tr.setMeta('addToHistory', false)
     this.editor.view.dispatch(tr)
 
     this.active = true
-    this.editor.setEditable(false)
-    this.callbacks.onStateChange(true)
+    this.editor.setEditable(false, false)
+    this.callbacks.onStateChange(true, this.origin)
     this.callbacks.onChunksChange(chunks.length)
     return true
   }
@@ -337,7 +343,7 @@ export class WriteReviewSession {
       const applyTarget = editor.schema.topNodeType.create(null, Fragment.from(finalNodes))
       const applyReplacement = computeBlockSyncReplacement(editor.state.doc, applyTarget)
       if (applyReplacement) {
-        const apply = editor.state.tr
+        const apply = closeHistory(editor.state.tr)
         if (applyReplacement.nodes.length > 0) {
           apply.replaceWith(applyReplacement.from, applyReplacement.to, applyReplacement.nodes)
         } else {
@@ -348,18 +354,19 @@ export class WriteReviewSession {
     }
 
     const clear = editor.state.tr
+    closeHistory(clear)
     clear.setMeta(writeReviewPluginKey, { type: 'finish' })
     clear.setMeta(writeRichExternalSyncMeta, true)
     clear.setMeta('addToHistory', false)
     editor.view.dispatch(clear)
 
-    editor.setEditable(true)
+    editor.setEditable(true, false)
     // When every change was rejected the document equals the pre-review
     // doc; emit the baseline verbatim so a full reject is byte-exact.
     const markdown = preReview && editor.state.doc.eq(preReview)
       ? this.baseline
       : serializeWorkDocument(editor.state.doc.toJSON(), this.getCtx())
     this.callbacks.onFinish(markdown)
-    this.callbacks.onStateChange(false)
+    this.callbacks.onStateChange(false, this.origin)
   }
 }

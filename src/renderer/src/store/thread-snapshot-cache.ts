@@ -53,7 +53,7 @@ export type ThreadSnapshot = {
   turnDurationByUserId: Record<string, number>
   turnReasoningFirstAtByUserId: Record<string, number>
   turnReasoningLastAtByUserId: Record<string, number>
-  activeThreadRelation: 'primary' | 'fork' | 'side' | null
+  activeThreadRelation: 'primary' | 'fork' | 'side' | 'task' | null
   activeThreadParentId: string | null
   activeThreadGoal: ThreadGoal | null
   activeThreadTodos: ThreadTodoList | null

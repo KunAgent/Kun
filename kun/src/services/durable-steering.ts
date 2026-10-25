@@ -97,7 +97,10 @@ export async function admitDurableSteering(service: TurnService, input: DurableS
 export async function flushDurableSteering(service: TurnService, threadId: string, turnId: string): Promise<SteeringEntry[]> {
   const delivered: SteeringEntry[] = []
   await service['withQueueDataMutation'](threadId, async () => {
-    const thread = await service['deps'].threadStore.get(threadId)
+    // Every settle checks this; only steering fields are read, so avoid
+    // hydrating (and over Manager HTTP, downloading) the whole item history.
+    const store = service['deps'].threadStore
+    const thread = await (store.getMetadata?.(threadId) ?? store.get(threadId))
     const turn = thread?.turns.find((entry) => entry.id === turnId)
     if (!thread || !turn) { service['deps'].steering.clearDurablePending(turnId); return }
     for (const entry of turn.steeringDeliveries ?? []) {

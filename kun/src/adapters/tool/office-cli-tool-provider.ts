@@ -20,6 +20,7 @@ import {
   OFFICECLI_MAX_OPERATIONS,
   assertFileIdentityUnchanged,
   assertOfficeCliSuccess,
+  assertOfficeCliValidationSuccess,
   boundedLogValue,
   captureFileIdentity,
   errorMessage,
@@ -30,6 +31,7 @@ import {
   officeFormat,
   parseOfficeCliOutput,
   parseOfficeEditOperations,
+  repairOfficeSourceStructure,
   sha256File,
   stringArgument,
   type OfficeCliRunResult,
@@ -512,6 +514,7 @@ async function executeAtomicOfficeEdit(input: {
   )
   try {
     await copyFile(input.absolutePath, temporaryPath)
+    const sourceRepairs = await repairOfficeSourceStructure(temporaryPath, officeFormat(input.absolutePath))
     const commands = input.operations.map(toOfficeCliBatchItem)
     await writeFile(commandPath, JSON.stringify(commands), { encoding: 'utf8', mode: 0o600 })
 
@@ -525,7 +528,14 @@ async function executeAtomicOfficeEdit(input: {
       ['validate', temporaryPath, '--json'],
       input.context.abortSignal
     )
-    assertOfficeCliSuccess(validation, 'Edited Office document failed validation')
+    try {
+      assertOfficeCliValidationSuccess(validation, 'Office edit failed OpenXML validation')
+    } catch (error) {
+      const sourceState = sourceRepairs.length > 0
+        ? `the source document had pre-existing structure errors that were repaired first (${sourceRepairs.join('; ')})`
+        : 'no repairable pre-existing structure error was detected in the source document'
+      throw new Error(`${errorMessage(error)}. Note: ${sourceState}; the original file was not modified.`)
+    }
 
     const afterSha256 = await sha256File(temporaryPath, input.context.abortSignal)
     await assertFileIdentityUnchanged(input.absolutePath, identity)
@@ -543,6 +553,7 @@ async function executeAtomicOfficeEdit(input: {
         before_sha256: beforeSha256,
         after_sha256: afterSha256,
         validation: parseOfficeCliOutput(validation.stdout),
+        source_repairs: sourceRepairs,
         preview_invalidated: true
       }
     }

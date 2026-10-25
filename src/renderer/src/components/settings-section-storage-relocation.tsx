@@ -76,7 +76,7 @@ export function StorageRelocationSettingsSection(): React.JSX.Element {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-surface p-5">
+      <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-3">
             <div className="rounded-xl bg-blue-500/10 p-2.5 text-blue-600"><HardDrive className="h-5 w-5" /></div>
@@ -166,7 +166,7 @@ function PreflightCard(props: {
 
 function ProgressCard({ progress, t }: { progress: StorageRelocationProgress; t: (key: string) => string }): React.JSX.Element {
   const percent = progress.totalBytes ? Math.min(100, Math.round(progress.completedBytes / progress.totalBytes * 100)) : 0
-  return <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-surface p-5">
+  return <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card p-5">
     <div className="flex items-center gap-2 font-medium text-ds-ink"><LoaderCircle className="h-4 w-4 animate-spin text-blue-500" />{t(`storageRelocationPhase_${progress.phase}`)}</div>
     <div className="mt-4 h-2 overflow-hidden rounded-full bg-ds-border"><div className="h-full bg-blue-500" style={{ width: `${percent}%` }} /></div>
     <div className="mt-2 flex justify-between text-xs text-ds-muted"><span className="truncate">{progress.currentItem || progress.message}</span><span>{percent}%</span></div>
@@ -174,7 +174,7 @@ function ProgressCard({ progress, t }: { progress: StorageRelocationProgress; t:
 }
 
 function Summary({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return <div className="rounded-xl bg-ds-surface px-3 py-2"><dt className="text-ds-faint">{label}</dt><dd className="mt-1 break-all font-medium text-ds-ink">{value}</dd></div>
+  return <div className="rounded-xl bg-ds-subtle px-3 py-2"><dt className="text-ds-faint">{label}</dt><dd className="mt-1 break-all font-medium text-ds-ink">{value}</dd></div>
 }
 
 function formatBytes(bytes: number): string {

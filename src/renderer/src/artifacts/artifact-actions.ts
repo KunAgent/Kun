@@ -89,6 +89,11 @@ export async function openWhiteboard(artifact: LibraryArtifact): Promise<void> {
   if (normalizeWorkspaceRoot(write.workspaceRoot) !== normalizeWorkspaceRoot(artifact.workspaceRoot)) {
     await write.selectWriteWorkspace(artifact.workspaceRoot)
   }
+  const store = useWriteWorkspaceStore.getState()
+  // The library lists boards from the index, but the editor needs the board in
+  // memory; load it here rather than when Work starts up.
+  if (!(await store.ensureWhiteboards(artifact.workspaceRoot))) return
+  if (!useWriteWorkspaceStore.getState().whiteboards[artifact.whiteboardId]) return
   useWriteWorkspaceStore.getState().openWhiteboard(artifact.whiteboardId)
   useChatStore.getState().setRoute('write')
 }

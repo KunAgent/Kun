@@ -253,8 +253,7 @@ describe('runtime factory usage carryover', () => {
       expect((await listTools()).map((tool) => tool.name)).not.toEqual(expect.arrayContaining([
         'delegate_task',
         'list_subagent_profiles',
-        'fast_context',
-        'ppt_agent'
+        'fast_context'
       ]))
 
       expect(await runtime.applyConfig({
@@ -266,8 +265,7 @@ describe('runtime factory usage carryover', () => {
       expect((await listTools()).map((tool) => tool.name)).toEqual(expect.arrayContaining([
         'delegate_task',
         'list_subagent_profiles',
-        'fast_context',
-        'ppt_agent'
+        'fast_context'
       ]))
     } finally {
       await runtime.shutdown?.()
@@ -291,7 +289,7 @@ describe('runtime factory usage carryover', () => {
       insecure: false,
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
-      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false }, genUi: { enabled: false }, mcpApps: { enabled: false },
+      lab: { pptAgent: { enabled: true, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
@@ -343,7 +341,7 @@ describe('runtime factory usage carryover', () => {
     }
   })
 
-  it('keeps ppt_agent advertised across Lab hot-apply toggles', async () => {
+  it('keeps the PPT deck tools advertised across Lab hot-apply toggles', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-ppt-lab-'))
     tempDirs.push(dataDir)
     const runtime = await createKunServeRuntime({
@@ -360,7 +358,7 @@ describe('runtime factory usage carryover', () => {
       insecure: false,
       storage: { backend: 'file' },
       fastContext: { enabled: true, fast: false },
-      lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false }, genUi: { enabled: false }, mcpApps: { enabled: false },
+      lab: { pptAgent: { enabled: true, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } },
       capabilities: KunCapabilitiesConfig.parse({
         subagents: { enabled: true }
@@ -381,15 +379,15 @@ describe('runtime factory usage carryover', () => {
         abortSignal: new AbortController().signal,
         awaitApproval: async () => 'allow'
       })
-      return tools.some((tool) => tool.name === 'ppt_agent')
+      return tools.some((tool) => tool.name === 'ppt_preview')
     }
 
     try {
       const diagnostics = await runtime.toolDiagnostics?.()
-      expect(diagnostics?.providers.some((provider) => provider.id === 'ppt-agent')).toBe(true)
+      expect(diagnostics?.providers.some((provider) => provider.id === 'ppt-deck')).toBe(true)
       expect(await listPpt()).toBe(true)
 
-      // Any hot-apply previously dropped ppt_agent from the rebuilt registry.
+      // Any hot-apply must keep the PPT deck tools in the rebuilt registry.
       expect(await runtime.applyConfig({
         capabilities: KunCapabilitiesConfig.parse({
           subagents: { enabled: true },
@@ -399,13 +397,14 @@ describe('runtime factory usage carryover', () => {
       expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
-        lab: { pptAgent: { enabled: false, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false }, genUi: { enabled: false }, mcpApps: { enabled: false },
+        lab: { pptAgent: { enabled: false, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
-      expect(await listPpt()).toBe(false)
+      // PPT tools are built in; the legacy Lab enabled flag cannot hide them.
+      expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
-        lab: { pptAgent: { enabled: true, fast: false, imageFirst: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false }, genUi: { enabled: false }, mcpApps: { enabled: false },
+        lab: { pptAgent: { enabled: true, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
       expect(await listPpt()).toBe(true)

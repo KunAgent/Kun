@@ -1,0 +1,107 @@
+{
+  "taskSuggestion": {
+    "loading": "Loading suggested tasks…",
+    "kicker": "Suggested tasks · can run in parallel",
+    "title": "{{count}} follow-up tasks, independent of each other",
+    "status": {
+      "pending": "{{count}} to start",
+      "progress": "Started {{started}} / {{total}}",
+      "countdown": "Starts all in {{time}} without a reply",
+      "paused": "Paused · won't start on its own",
+      "settled": "{{count}} suggested tasks finished"
+    },
+    "summary": {
+      "done": "{{count}} done",
+      "live": "{{count}} running",
+      "failed": "{{count}} didn't finish",
+      "startFailed": "{{count}} couldn't start",
+      "ignored": "{{count}} skipped"
+    },
+    "row": {
+      "suggested": "Not started",
+      "starting": "Starting…",
+      "running": "Running",
+      "runningFor": "Running · {{minutes}} min",
+      "waiting": "Needs you",
+      "done": "Done",
+      "failed": "Didn't finish",
+      "cancelled": "Stopped",
+      "ignored": "Skipped",
+      "here": "Continued in this chat",
+      "start_failed": "Couldn't start"
+    },
+    "failure": {
+      "disk_space": "Not enough disk space",
+      "worktree_conflict": "The branch or worktree is already in use",
+      "agent_unavailable": "The selected Agent isn't ready",
+      "quota": "The model quota is used up",
+      "runtime": "Kun couldn't start the session"
+    },
+    "actions": {
+      "start": "Start",
+      "startAll": "Start all ({{count}})",
+      "startNow": "Start now",
+      "pause": "Pause",
+      "resume": "Resume countdown",
+      "dismiss": "Dismiss",
+      "open": "Open",
+      "viewResult": "View result",
+      "retry": "Retry",
+      "noWorktree": "Without worktree",
+      "more": "More start options",
+      "details": "Show brief",
+      "hideDetails": "Hide brief"
+    },
+    "menu": {
+      "session": "Start as a new session",
+      "here": "Continue in this chat",
+      "copy": "Copy brief",
+      "ignore": "Skip this task",
+      "default": "Default"
+    },
+    "brief": {
+      "goal": "Goal",
+      "scope": "Scope",
+      "done": "Done when",
+      "edit": "Edit brief",
+      "save": "Save brief",
+      "cancel": "Cancel",
+      "copied": "Brief copied",
+      "listHint": "One item per line"
+    },
+    "options": {
+      "worktree": "Isolated worktree",
+      "inheritContext": "Bring this chat's context"
+    },
+    "meta": {
+      "worktreeOn": "Each task gets its own worktree",
+      "worktreeOff": "Tasks share the current checkout",
+      "hint": "Each started task becomes a session under this chat, with the brief as its first message.",
+      "routeHint": "Change the Agent or model per task; every change restarts the countdown.",
+      "autoStarted": "No reply, started as suggested"
+    },
+    "report": {
+      "done": "Task {{index}} finished · {{title}}",
+      "failed": "Task {{index}} didn't finish · {{title}}",
+      "cancelled": "Task {{index}} was stopped · {{title}}",
+      "open": "Open session",
+      "dismiss": "Dismiss",
+      "changedFiles": "{{count}} files changed",
+      "branch": "Branch {{branch}}",
+      "duration": "{{minutes}} min",
+      "noSummary": "The session ended without a summary."
+    },
+    "session": {
+      "title": "Task session {{index}} / {{total}}",
+      "from": "From “{{title}}”",
+      "back": "Back to main chat",
+      "detach": "Detach from main chat",
+      "branch": "Worktree {{branch}}"
+    },
+    "sidebar": {
+      "count": "{{started}} of {{total}} suggested tasks started",
+      "expand": "Show task sessions",
+      "collapse": "Hide task sessions"
+    }
+  }
+}

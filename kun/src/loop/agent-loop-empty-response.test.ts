@@ -112,6 +112,8 @@ describe('AgentLoop empty model response safety net', () => {
     const items = await harness.sessionStore.loadItems('thr_empty')
     expect(items.some((item) => item.kind === 'error' && item.code === 'model_empty_response'))
       .toBe(true)
+    // The loop's own error item and turn settlement must not both render a card.
+    expect(items.filter((item) => item.kind === 'error' && item.turnId === started.turnId)).toHaveLength(1)
   })
 
   it('does not misclassify reasoning-only responses as empty', async () => {

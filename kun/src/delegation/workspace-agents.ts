@@ -26,9 +26,10 @@ import {
  *     allowedTools: [read, grep]
  *     omit_base_prompt: false # when true, role prompt replaces Kun base
  *     color: "#3b82f6"
- *     harness: claude-code    # optional ADE worker binding
+ *     harness: claude-code    # optional engine binding, honored by every dispatch lane
  *     credential-mode: native-login   # optional harness credential path
  *     delegation-notes: use for code review on changed files
+ *     owns: owns code review. Do not review diffs yourself.
  *     model: claude-sonnet-5        # optional harness model pin
  *     ---
  *     Body becomes the systemPrompt verbatim (kun's base prompt is
@@ -240,8 +241,8 @@ function parseAgentMarkdown(text: string, defaultId: string): {
     ...(parseListField(fields, 'blockedSkills') ? { blockedSkills: parseListField(fields, 'blockedSkills') } : {}),
     skillsEnabled: false
   }
-  // ADE worker binding: a workspace role may pin the harness and
-  // model it dispatches onto; the credential path defaults to the harness's.
+  // Engine binding: a workspace role may pin the harness and model every
+  // dispatch lane runs it on; the credential path defaults to the harness's.
   // `model` only applies alongside a harness pin — on the native Kun loop a
   // workspace role still cannot choose a model/provider/reasoning level.
   const harnessId = (fields.harness ?? fields.harnessId)?.trim()
@@ -255,6 +256,8 @@ function parseAgentMarkdown(text: string, defaultId: string): {
   if (gatewayBinding && harnessId) { try { raw.gatewayBinding = JSON.parse(gatewayBinding) } catch { raw.gatewayBinding = gatewayBinding } }
   const delegationNotes = (fields['delegation-notes'] ?? fields.delegationNotes)?.trim()
   if (delegationNotes) raw.delegationNotes = delegationNotes
+  const owns = fields.owns?.trim()
+  if (owns) raw.owns = owns
   const parsed = SubagentProfileConfig.safeParse(raw)
   if (!parsed.success) return null
   return { id, surfacesDeclared: Boolean(surfaceValues), profile: parsed.data }
