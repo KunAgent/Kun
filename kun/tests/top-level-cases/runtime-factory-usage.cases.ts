@@ -387,8 +387,7 @@ describe('runtime factory usage carryover', () => {
       expect(diagnostics?.providers.some((provider) => provider.id === 'ppt-deck')).toBe(true)
       expect(await listPpt()).toBe(true)
 
-      // Any hot-apply, including the retired lab.pptAgent.enabled switch, must
-      // keep the PPT deck tools in the rebuilt registry.
+      // Any hot-apply must keep the PPT deck tools in the rebuilt registry.
       expect(await runtime.applyConfig({
         capabilities: KunCapabilitiesConfig.parse({
           subagents: { enabled: true },
@@ -401,6 +400,7 @@ describe('runtime factory usage carryover', () => {
         lab: { pptAgent: { enabled: false, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
+      // PPT tools are built in; the legacy Lab enabled flag cannot hide them.
       expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
