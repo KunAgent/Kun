@@ -472,3 +472,14 @@ test('Code baseline selects the exact accessible tree item rather than a button 
   const rows = readFileSync(join(__dirname, '../src/renderer/src/components/chat/ChatFileTreeRowViews.tsx'), 'utf8')
   assert.match(rows, /<button\s+type="button"\s+role="treeitem"/)
 })
+
+
+test('long selected sidebar tabs fit their scroll viewport at both normal and compact caps', () => {
+  const css = readFileSync(join(__dirname, '../src/renderer/src/components/workbench/code-right-tabs.css'), 'utf8')
+  const rules = [...css.matchAll(/\.ds-right-tab\s*\{([^}]+)\}/g)].map((match) => match[1])
+  assert.equal(rules.length, 2, 'cover both default and compact-container tab widths')
+  for (const rule of rules) {
+    assert.match(rule, /max-width:\s*min\((?:180|150)px,\s*100%\)/,
+      'a fixed cap alone can exceed the narrow tablist, so scrolling cannot reveal the entire selected tab')
+  }
+})

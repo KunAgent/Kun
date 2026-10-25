@@ -149,6 +149,10 @@ function harness(input: {
     },
     close: vi.fn(),
     reload,
+    getUsage: async () => ({
+      usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 0 },
+      runs: []
+    }),
     listArtifacts: async () => [],
     downloadArtifact: async () => Buffer.alloc(0),
     [Symbol.asyncDispose]: dispose

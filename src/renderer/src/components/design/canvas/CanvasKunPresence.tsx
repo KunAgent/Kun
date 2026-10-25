@@ -49,7 +49,7 @@ function CanvasKunPresenceInner(): ReactElement | null {
       ) : null}
       {runTotal > 1 ? (
         <div
-          className="pointer-events-auto absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-ds-border bg-ds-surface px-3 py-1.5 text-[12px] text-ds-ink shadow-[0_2px_8px_rgba(20,20,19,0.08)]"
+          className="pointer-events-auto absolute left-1/2 z-30 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-ds-border bg-ds-card px-3 py-1.5 text-[12px] text-ds-ink shadow-[0_2px_8px_rgba(20,20,19,0.08)]"
           style={{ bottom: 'calc(var(--canvas-bottom-ui-inset, 16px) + 8px)' }}
           data-kun-presence="progress"
         >

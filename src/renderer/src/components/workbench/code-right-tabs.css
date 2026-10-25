@@ -18,7 +18,8 @@
   flex: 0 0 auto;
   align-items: center;
   min-width: 0;
-  max-width: 180px;
+  /* A single long tab must fit even when the whole strip is narrower than its cap. */
+  max-width: min(180px, 100%);
   height: 28px;
   border-radius: 6px;
   color: var(--ds-text-muted);
@@ -144,7 +145,7 @@
 
 @container (max-width: 420px) {
   .ds-right-tab {
-    max-width: 150px;
+    max-width: min(150px, 100%);
   }
 }
 
