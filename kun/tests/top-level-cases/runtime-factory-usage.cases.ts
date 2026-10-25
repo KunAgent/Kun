@@ -400,7 +400,8 @@ describe('runtime factory usage carryover', () => {
         lab: { pptAgent: { enabled: false, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },
         opencodeReferenceBranches: { enabled: false }, claudeCodeReferenceBranches: { enabled: false }, codexReferenceBranches: { enabled: false } }
       })).toEqual({ ok: true })
-      expect(await listPpt()).toBe(false)
+      // PPT tools are built in; the legacy Lab enabled flag cannot hide them.
+      expect(await listPpt()).toBe(true)
 
       expect(await runtime.applyConfig({
         lab: { pptAgent: { enabled: true, imageAssets: true }, conversationVisualization: { enabled: false }, projectBoard: { enabled: false },

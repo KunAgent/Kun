@@ -93,7 +93,7 @@ function SectionHeader({
         <input
           autoFocus
           defaultValue={section.title}
-          className="min-w-0 flex-1 rounded-[6px] border border-accent bg-ds-surface px-1.5 text-[18px] font-bold leading-7 text-ds-ink outline-none"
+          className="min-w-0 flex-1 rounded-[6px] border border-accent bg-ds-card px-1.5 text-[18px] font-bold leading-7 text-ds-ink outline-none"
           aria-label={t('canvasSectionRename')}
           onBlur={(event) => {
             renameSection(section.id, event.currentTarget.value)

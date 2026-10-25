@@ -10,7 +10,7 @@ const { tmpdir } = require('node:os')
 const { dirname, join, relative } = require('node:path')
 const test = require('node:test')
 const { deduplicatePackedJimpZod } = require('./after-pack-jimp.cjs')
-const { logicalBytes, MIB } = require('./check-package-size.cjs')
+const { logicalBytes } = require('./check-package-size.cjs')
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'kun-jimp-payload-'))
@@ -144,6 +144,7 @@ function copyJimpClosure(destination) {
   }
   copy(join(projectDir, 'kun', 'node_modules', 'jimp'))
   copy(join(projectDir, 'kun', 'node_modules', 'zod'))
+  copy(join(projectDir, 'kun', 'node_modules', 'semver'))
 }
 
 function runJimp(root) {
@@ -159,7 +160,8 @@ function runJimp(root) {
     import { Jimp as ESM } from 'jimp'
     const require = createRequire(import.meta.url)
     const { Jimp: CJS } = require('jimp')
-    assert.equal(require('zod/package.json').version, '4.4.3')
+    const zodVersion = require('zod/package.json').version
+    assert.ok(require('semver').satisfies(zodVersion, '>=4.6.6 <5'))
     const scope = join(process.cwd(), 'node_modules', '@jimp')
     const sharedManifest = join(scope, 'node_modules', 'zod', 'package.json')
     for (const name of readdirSync(scope)) {
@@ -168,7 +170,7 @@ function runJimp(root) {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
       if (!manifest.dependencies?.zod) continue
       const fromPlugin = createRequire(manifestPath)
-      assert.equal(fromPlugin('zod/package.json').version, '3.25.76')
+      assert.equal(fromPlugin('zod/package.json').version, zodVersion)
       if (existsSync(sharedManifest)) {
         assert.equal(fromPlugin.resolve('zod/package.json'), sharedManifest)
       }
@@ -198,25 +200,16 @@ function runJimp(root) {
   })
 }
 
-test('filtered Jimp keeps every Zod file and both image APIs while saving over 14 MiB', (t) => {
-  const { root, scope, shared, prune } = fixture(t)
+test('filtered Jimp uses patched Zod with both image APIs and no duplicate payload', (t) => {
+  const { root, scope, prune } = fixture(t)
   copyJimpClosure(root)
   const consumers = readdirSync(scope).filter((name) =>
     existsSync(join(scope, name, 'node_modules', 'zod', 'package.json'))
   )
-  const source = join(scope, consumers[0], 'node_modules', 'zod')
-  const files = readdirSync(source, { recursive: true })
-    .filter((path) => statSync(join(source, path)).isFile())
-    .map((path) => [path, readFileSync(join(source, path))])
+  assert.deepEqual(consumers, [], 'Jimp plugins should resolve the patched root Zod')
   const outputBefore = runJimp(root)
   const bytesBefore = logicalBytes(root)
-  const result = prune()
-  assert.ok(result.bytesRemoved > 14 * MIB)
-  assert.equal(bytesBefore - logicalBytes(root), result.bytesRemoved)
-  for (const [path, bytes] of files) assert.deepEqual(readFileSync(join(shared, path)), bytes, path)
-  for (const name of consumers) {
-    assert.equal(existsSync(join(scope, name, 'node_modules', 'zod')), false)
-  }
+  assert.equal(prune(), undefined)
+  assert.equal(logicalBytes(root), bytesBefore)
   assert.equal(runJimp(root), outputBefore)
-  t.diagnostic(`Removed ${result.copiesRemoved} duplicate packages: ${result.bytesRemoved} bytes`)
 })

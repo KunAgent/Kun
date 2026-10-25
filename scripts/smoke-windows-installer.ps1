@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
+. (Join-Path $PSScriptRoot 'windows-installer-registration.ps1')
 
 if (-not [Environment]::Is64BitOperatingSystem -or [Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   throw 'This smoke test requires 64-bit Windows.'
@@ -25,12 +26,6 @@ function Assert-True([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
 }
 
-function Test-PathEqual([string]$Left, [string]$Right) {
-  $leftPath = [IO.Path]::GetFullPath($Left).TrimEnd('\')
-  $rightPath = [IO.Path]::GetFullPath($Right).TrimEnd('\')
-  return [string]::Equals($leftPath, $rightPath, [StringComparison]::OrdinalIgnoreCase)
-}
-
 function Invoke-CheckedProcess(
   [string]$Scenario,
   [string]$Executable,
@@ -44,20 +39,6 @@ function Invoke-CheckedProcess(
     throw "[$Scenario] Process $($process.Id) timed out after $TimeoutSeconds seconds."
   }
   Assert-True ($process.ExitCode -eq 0) "[$Scenario] Process exited with $($process.ExitCode)."
-}
-
-function Find-KunRegistration {
-  $matches = @(Get-ChildItem 'HKCU:\Software' | ForEach-Object {
-    try {
-      $location = Get-ItemPropertyValue -LiteralPath $_.PSPath -Name InstallLocation -ErrorAction Stop
-      if (Test-PathEqual $location $script:installLocation) { $_ }
-    } catch {}
-  })
-  Assert-True ($matches.Count -eq 1) "Expected one Kun registration for $script:installLocation, found $($matches.Count)."
-  $script:installRegistryPath = $matches[0].PSPath
-  $script:uninstallRegistryPath = Join-Path `
-    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' $matches[0].PSChildName
-  Assert-True (Test-Path -LiteralPath $script:uninstallRegistryPath) 'The Kun uninstall registration is missing.'
 }
 
 function Invoke-SmokeUninstaller {

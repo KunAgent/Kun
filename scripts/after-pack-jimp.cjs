@@ -55,9 +55,9 @@ function deduplicatePackedJimpZod(context, { unpackedAppRoot }) {
     .sort()
   if (copies.length === 0 || (copies.length === 1 && !existsSync(shared))) return
 
-  // Jimp's plugins currently ship sixteen identical Zod 3 packages. Share one
-  // inside their scope, never with Kun's incompatible root Zod 4. Keep the whole
-  // package (including every CJS/ESM export and its license), not a reduced API.
+  // Older dependency trees can contain identical nested Zod packages. Share
+  // those only inside their scope, without changing root resolution. Keep the
+  // whole package, including every CJS/ESM export and its license.
   const source = existsSync(shared) ? shared : copies[0]
   const manifest = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'))
   if (manifest.name !== 'zod' || ['dependencies', 'optionalDependencies', 'peerDependencies']
