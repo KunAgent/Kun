@@ -1,3 +1,5 @@
+import { buildCanvasKunMcpServer, CANVAS_MCP_SERVER_ID } from '../canvas-mcp/canvas-mcp-config'
+import { ASSISTANT_MCP_SERVER_ID, assistantMailboxEnabled, buildAssistantKunMcpServer } from '../assistant-mailbox/mcp-config'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
@@ -156,6 +158,16 @@ export async function syncGuiManagedKunConfig(
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
   const retainedMcpServers = stripGeneratedProjectMcpServers(objectValue(mcp.servers))
+  // The built-in canvas MCP App is host-owned: rebuilt on every sync.
+  delete retainedMcpServers[CANVAS_MCP_SERVER_ID]
+  const canvasMcpServer = options?.scheduleMcp
+    ? { [CANVAS_MCP_SERVER_ID]: buildCanvasKunMcpServer(options.scheduleMcp.launch, dataDir) }
+    : {}
+  delete retainedMcpServers[ASSISTANT_MCP_SERVER_ID]
+  const userDataDir = options?.scheduleMcp?.launch.userDataDir
+  const assistantMcpServer = options?.scheduleMcp && userDataDir && assistantMailboxEnabled(appSettings)
+    ? { [ASSISTANT_MCP_SERVER_ID]: buildAssistantKunMcpServer({ ...options.scheduleMcp.launch, userDataDir }) }
+    : {}
   // Replace only the host-authored entry. Use the stable ownership marker and
   // transport identity here so legacy Kun entries missing githubPolicy are
   // rebuilt instead of being mistaken for user-owned `github` servers.
@@ -255,6 +267,7 @@ export async function syncGuiManagedKunConfig(
       memory: {
         ...objectValue(capabilities.memory),
         enabled: runtime.memoryEnabled,
+        relationContextEnabled: runtime.memoryRelationContextEnabled === true,
         distillation: {
           ...objectValue(objectValue(capabilities.memory).distillation),
           enabled: runtime.memoryDistillationEnabled
@@ -279,6 +292,8 @@ export async function syncGuiManagedKunConfig(
           ...retainedMcpServers,
           ...importedMcpServers,
           ...projectMcpServers,
+          ...canvasMcpServer,
+          ...assistantMcpServer,
           ...(options?.scheduleMcp ? {
             [GUI_SCHEDULE_MCP_SERVER_NAME]: buildGuiScheduleKunMcpServer(
               options.scheduleMcp.settings,
@@ -346,8 +361,8 @@ function fastContextConfigForRuntime(fastContext: KunFastContextSettingsV1 | und
 function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'] {
   return {
     pptAgent: {
-      ...labAgentConfigForRuntime(lab?.pptAgent),
-      imageFirst: lab?.pptAgent?.imageFirst !== false
+      enabled: true,
+      imageAssets: lab?.pptAgent?.imageAssets !== false
     },
     conversationVisualization: {
       enabled: lab?.conversationVisualization?.enabled === true
@@ -361,7 +376,7 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
   }
 }
 
-/** Shared Lab agent runtime config (fastContext / pptAgent). */
+/** Lab agent runtime config with an optional model override (fastContext). */
 function labAgentConfigForRuntime(
   agent: { enabled: boolean; model: string; providerId: string; reasoningEffort?: string; fast: boolean } | undefined
 ): { enabled: boolean; fast: boolean; model?: string; providerId?: string; reasoningEffort?: ModelReasoningEffort } {
@@ -400,7 +415,7 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'tokenEconomy' | 'toolOutputLimits' | 'storage' | 'contextCompaction' |
   'runtimeTuning' | 'llmDebug' | 'imageGeneration' | 'textToSpeech' | 'musicGeneration' |
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
-  'memoryDistillationEnabled' | 'memoryDirectivesEnabled' |
+  'memoryDistillationEnabled' | 'memoryDirectivesEnabled' | 'memoryRelationContextEnabled' |
   'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
   'harnesses' | 'ade' | 'worktrees' |
   'smallModelProviderId' | 'smallModelAccountId' |
@@ -439,6 +454,7 @@ export function buildManagedRuntimeHotApplyBody(
       memory: {
         ...config.capabilities?.memory,
         enabled: runtime.memoryEnabled,
+        relationContextEnabled: runtime.memoryRelationContextEnabled === true,
         distillation: {
           ...config.capabilities?.memory?.distillation,
           enabled: runtime.memoryDistillationEnabled

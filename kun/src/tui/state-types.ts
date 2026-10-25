@@ -9,6 +9,7 @@ import type {
 import type { Turn } from '../contracts/turns.js'
 import type { DelegationDiagnostics, ThreadDetail } from './client.js'
 import type { z } from 'zod'
+import type { ThreadUsageSummary, TurnTiming } from './turn-timing.js'
 
 export type PendingApproval = {
   approvalId: string
@@ -98,6 +99,10 @@ export type ThreadProjection = {
   pendingUserInput?: PendingUserInput
   usage?: UsageSnapshot
   contextSnapshot?: ContextSnapshotEvent
+  /** Average TTFT and tok/s per turn: settled turns' `modelTiming`, then live usage events. */
+  turnTiming?: Record<string, TurnTiming>
+  /** Thread usage totals read when the session opened; live `usage` supersedes them. */
+  usageSummary?: ThreadUsageSummary
   lastError?: string
   activity?: ProjectedTurnActivity
   childRuns: ProjectedChildRun[]

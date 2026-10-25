@@ -20,6 +20,30 @@ describe('desktop notification bridge', () => {
       await tick(); expect(f.request).toHaveBeenCalledOnce(); expect(f.fetcher).not.toHaveBeenCalled()
     } finally { f.bridge.stop() }
   })
+  it('rechecks capability after a failed request or until the server enables notifications', async () => {
+    vi.useFakeTimers()
+    const f = fixture(false)
+    f.request.mockImplementationOnce(async () => { throw new Error('offline') })
+    try {
+      f.bridge.start(f.api, () => true); await vi.advanceTimersByTimeAsync(0)
+      expect(f.request).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(5000); expect(f.request).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(599000); expect(f.request).toHaveBeenCalledTimes(2)
+      expect(f.fetcher).not.toHaveBeenCalled()
+      f.request.mockImplementation(async (path: string) => path === '/capabilities' ? { notifications: { available: true } } : { queued: 1 })
+      await vi.advanceTimersByTimeAsync(1000); expect(f.request).toHaveBeenCalledTimes(3)
+      expect(f.fetcher).toHaveBeenCalledOnce()
+    } finally { f.bridge.stop(); await vi.advanceTimersByTimeAsync(0) }
+  })
+  it('stops rechecking capability once the session is no longer eligible', async () => {
+    vi.useFakeTimers()
+    const f = fixture(false)
+    try {
+      f.bridge.start(f.api, () => true); await vi.advanceTimersByTimeAsync(0)
+      f.bridge.stop(); await vi.advanceTimersByTimeAsync(3600000)
+      expect(f.request).toHaveBeenCalledOnce(); expect(f.fetcher).not.toHaveBeenCalled()
+    } finally { f.bridge.stop() }
+  })
   it('has one subscription, sends only four opaque metadata fields, and deduplicates repeated intents', async () => {
     const f = fixture(), event = { eventId: 'event', resourceKind: 'code', resourceId: 'task', kind: 'completed' }
     try {

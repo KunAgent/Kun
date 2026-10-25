@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { constants } from 'node:fs'
 import { open, stat } from 'node:fs/promises'
 import type { ToolHostContext } from '../../ports/tool-host.js'
@@ -37,4 +38,19 @@ export async function fileWriteChanged(path: string, content: string, context: T
     // A missing in-scope destination is creation, not a read of another file.
     return (error as NodeJS.ErrnoException).code === 'ENOENT' ? true : undefined
   } finally { await handle?.close().catch(() => undefined) }
+}
+
+/**
+ * Client-only sideband describing a file's content right after a Kun file
+ * tool wrote it. The desktop uses the last value per path in a turn as the
+ * turn's end state, so a later per-turn undo can refuse files that changed
+ * after the turn. It lives in tool-result `meta` and never reaches the model.
+ */
+export function fileStateMeta(path: string, content: string): { fileState: { path: string; afterSha256: string } } {
+  return {
+    fileState: {
+      path,
+      afterSha256: createHash('sha256').update(Buffer.from(content, 'utf8')).digest('hex')
+    }
+  }
 }

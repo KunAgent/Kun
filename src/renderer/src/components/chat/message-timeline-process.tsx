@@ -1,4 +1,7 @@
-import { AgentDispatchGroup, isAgentDispatchBlock } from './AgentDispatchCard'
+import { githubToolThread } from './github-tool-card'
+import { useWorkPresentation } from '../../product-analytics/work-presentation'
+import { AgentDispatchGroup, isOutcomeCardBlock } from './AgentDispatchCard'
+import { ToolTerminalButton } from './message-timeline-terminal-action'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactElement, RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -89,6 +92,7 @@ export function ProcessSectionRow({
 }): ReactElement {
   const { t } = useTranslation('common')
   const [userExpanded, setUserExpanded] = useTimelineRowState<boolean | null>('expanded', null)
+  const workAnalytics = useWorkPresentation(section.blocks.find(block => block.kind === 'reasoning' || block.kind === 'tool'), false)
 
   const assistantBlocks =
     section.kind === 'output'
@@ -109,7 +113,7 @@ export function ProcessSectionRow({
     (processing && hasRuntimeError) ||
     sectionHasPendingApproval(section) ||
     (processing && section.kind === 'execution' && sectionHasRequestUserInput(section)) ||
-    section.blocks.some(isGmailConnectionTool)
+    section.blocks.some(isNativeConnectionTool)
   const forceExpanded = sectionHasPendingApproval(section)
   const expanded = hasDetails && (forceExpanded || (userExpanded ?? defaultExpanded))
   const title = describeProcessSection(section, t, {
@@ -128,7 +132,7 @@ export function ProcessSectionRow({
     root: viewportRef
   })
 
-  if (section.blocks.some(isAgentDispatchBlock)) return <AgentDispatchGroup blocks={section.blocks} readOnly={!allowThreadActions} />
+  if (section.blocks.some(isOutcomeCardBlock)) return <AgentDispatchGroup blocks={section.blocks} readOnly={!allowThreadActions} />
 
   if (section.kind === 'subagent') {
     return <SubagentGroup blocks={section.blocks} onOpenChildThread={onOpenChildThread} />
@@ -177,7 +181,7 @@ export function ProcessSectionRow({
   }
 
   return (
-    <div className="flex flex-col">
+    <div ref={workAnalytics.ref} className="flex flex-col">
       {canToggleSection ? (
         <button
           type="button"
@@ -289,7 +293,7 @@ function ProcessStackRows({
         const isError = errorTone !== null
         // Keep failed tool payloads tucked away while the turn continues. The
         // warning-toned row still surfaces the failure and remains expandable.
-        const defaultOpen = processing && isError && block.kind !== 'tool' || isGmailConnectionTool(block)
+        const defaultOpen = processing && isError && block.kind !== 'tool' || isNativeConnectionTool(block)
         const forceOpen = autoOpenPending || autoOpenRequestInput
         const userClosed = closedBlockIds.has(block.id)
         const userOpened = openBlockId === block.id
@@ -375,6 +379,7 @@ function ProcessStackRows({
                   )}
                 </button>
               ) : null}
+              <ToolTerminalButton block={block} />
               <ToolCancelButton block={block} processing={processing} onCancelToolCall={onCancelToolCall} />
             </div>
             {open ? (
@@ -427,6 +432,7 @@ function ProcessEntryRow({
 }): ReactElement {
   const { t } = useTranslation('common')
   const [userOpen, setUserOpen] = useTimelineRowState<boolean | null>('expanded', null)
+  const workAnalytics = useWorkPresentation(block, false)
   const summary = describeProcessBlock(block, t)
   const detail = getProcessDetail(block, summary)
   const canExpand = detail.kind !== 'none'
@@ -438,7 +444,7 @@ function ProcessEntryRow({
   const forceOpen = isAutoOpenPending || isAssistantProcessText || isStreamingAssistant
   // A tool failure should not interrupt the live process by expanding its
   // often verbose result. Runtime errors still open so they are not hidden.
-  const defaultOpen = processing && isError && block.kind !== 'tool' || isGmailConnectionTool(block)
+  const defaultOpen = processing && isError && block.kind !== 'tool' || isNativeConnectionTool(block)
   const open =
     canExpand &&
     (forceOpen || (userOpen ?? defaultOpen))
@@ -466,7 +472,7 @@ function ProcessEntryRow({
   }
 
   return (
-    <div className="flex flex-col" data-block-id={block.id}>
+    <div ref={workAnalytics.ref} className="flex flex-col" data-block-id={block.id}>
       <div
         role={canToggle ? 'button' : undefined}
         tabIndex={canToggle ? 0 : undefined}
@@ -565,6 +571,6 @@ function ProcessEntryRow({
   )
 }
 
-function isGmailConnectionTool(block: ChatBlock): boolean {
-  return block.kind === 'tool' && gmailToolThread(readToolPresentation(block)) !== null
+function isNativeConnectionTool(block: ChatBlock): boolean {
+  return block.kind === 'tool' && (gmailToolThread(readToolPresentation(block)) !== null || githubToolThread(readToolPresentation(block)) !== null)
 }

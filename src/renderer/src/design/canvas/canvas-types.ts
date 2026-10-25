@@ -159,6 +159,25 @@ export type CanvasAgentNote = {
   resolved?: boolean
 }
 
+/**
+ * A sticky note: a `text` shape drawn as a colored card. A note that mentions
+ * `@Kun` is an instruction for the design agent about the nearest board; its
+ * status follows the request (`draft` → `sent` → `done`).
+ */
+export type CanvasStickyStatus = 'draft' | 'sent' | 'done'
+export type CanvasStickyColor = 'yellow' | 'pink' | 'green' | 'blue' | 'violet'
+
+export type CanvasSticky = {
+  color: CanvasStickyColor
+  status: CanvasStickyStatus
+  /** Board the note points at; resolved from proximity when it was sent. */
+  targetId?: string
+  /** Element the note was attached to with "comment on this element". */
+  anchorId?: string
+  /** Short result line shown once the request is done. */
+  resultNote?: string
+}
+
 export type CanvasRunningAppFrameStatus = 'unknown' | 'reachable' | 'unreachable'
 
 export type CanvasRunningAppFrame = {
@@ -230,6 +249,10 @@ export type CanvasShape = {
   tokenBindings?: Record<string, string>
   /** Agent/critic/decision metadata for whiteboard text notes. */
   agentNote?: CanvasAgentNote
+  /** Present on sticky-note text shapes. */
+  sticky?: CanvasSticky
+  /** Root-level shapes only: the page this shape lives on (unset = first page). */
+  pageId?: string
   /**
    * Component instance back-reference (only on an instance's ROOT shape): which
    * component def it was stamped from, at what version, and the per-instance slot
@@ -286,6 +309,27 @@ export type CanvasShape = {
  * coords (one convention shared by render, hit-test, selection, the AI
  * snapshot). v1 docs are flattened on load — see canvas-persistence.
  */
+/**
+ * A section: a title over a set of root-level boards. Members are referenced by
+ * id (not reparented) because HTML/SVG artifact frames must stay root-level.
+ */
+export type CanvasSection = {
+  id: string
+  title: string
+  memberIds: string[]
+  collapsed?: boolean
+  /** Members hidden by collapsing, so expanding restores only those. */
+  hiddenByCollapse?: string[]
+  /** Frozen union bounds while collapsed (members are hidden then). */
+  collapsedBounds?: Rect
+}
+
+export type CanvasPage = {
+  id: string
+  /** Empty = show the default "Page N" label for this position. */
+  name: string
+}
+
 export type CanvasDocument = {
   version: 2
   rootId: string
@@ -298,6 +342,15 @@ export type CanvasDocument = {
   /** Last completed Design turn fully materialized into this document. */
   rendererReplayWatermarkTurnId?: string
   codeBindings?: DesignCodeBinding[]
+  sections?: CanvasSection[]
+  /**
+   * Pages are a view over one shape tree: shapes of other pages are hidden, so
+   * artifact sync, export and hit-testing keep seeing a single document.
+   */
+  pages?: CanvasPage[]
+  activePageId?: string
+  /** Shapes hidden only because their page is not active. */
+  pageHidden?: string[]
 }
 
 export type CanvasDocumentGraphMetadata = {
@@ -368,6 +421,7 @@ export type CanvasTool =
   | 'text'
   | 'frame'
   | 'screen'
+  | 'sticky'
   | 'image'
   | 'arrow'
   | 'line'
@@ -509,7 +563,7 @@ export function applyDiagramShapeDefaults(shape: CanvasShape): CanvasShape {
   return shape
 }
 
-const DEVICE_DIMENSIONS: Record<DevicePreset, { width: number; height: number }> = {
+export const DEVICE_DIMENSIONS: Record<DevicePreset, { width: number; height: number }> = {
   mobile: { width: 390, height: 844 },
   tablet: { width: 768, height: 1024 },
   desktop: { width: 1280, height: 800 }
@@ -583,64 +637,4 @@ export function createEmptyDocument(): CanvasDocument {
   }
 }
 
-export function shapeBounds(shape: CanvasShape): Rect {
-  return { x: shape.x, y: shape.y, width: shape.width, height: shape.height }
-}
-
-function rotatePoint(px: number, py: number, cx: number, cy: number, rad: number): Point {
-  const cos = Math.cos(rad)
-  const sin = Math.sin(rad)
-  const dx = px - cx
-  const dy = py - cy
-  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos }
-}
-
-/** Compute rotated geometry on the fly. ≤200 shapes × 60Hz is trivial; not worth caching. */
-export function shapeGeometry(shape: CanvasShape): ShapeGeometry {
-  const { x, y, width, height, rotation } = shape
-  if (!rotation) {
-    return {
-      selrect: { x, y, width, height },
-      points: [
-        { x, y },
-        { x: x + width, y },
-        { x: x + width, y: y + height },
-        { x, y: y + height }
-      ]
-    }
-  }
-  const cx = x + width / 2
-  const cy = y + height / 2
-  const rad = (rotation * Math.PI) / 180
-  const points: [Point, Point, Point, Point] = [
-    rotatePoint(x, y, cx, cy, rad),
-    rotatePoint(x + width, y, cx, cy, rad),
-    rotatePoint(x + width, y + height, cx, cy, rad),
-    rotatePoint(x, y + height, cx, cy, rad)
-  ]
-  let minX = points[0].x, minY = points[0].y, maxX = points[0].x, maxY = points[0].y
-  for (let i = 1; i < 4; i++) {
-    if (points[i].x < minX) minX = points[i].x
-    if (points[i].x > maxX) maxX = points[i].x
-    if (points[i].y < minY) minY = points[i].y
-    if (points[i].y > maxY) maxY = points[i].y
-  }
-  return {
-    points,
-    selrect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
-  }
-}
-
-/** Even-odd point-in-polygon (works for any simple polygon including the 4-point rotated bbox). */
-export function pointInPolygon(px: number, py: number, polygon: Point[]): boolean {
-  let inside = false
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x
-    const yi = polygon[i].y
-    const xj = polygon[j].x
-    const yj = polygon[j].y
-    const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi
-    if (intersect) inside = !inside
-  }
-  return inside
-}
+export { shapeBounds, shapeGeometry, pointInPolygon } from './canvas-geometry'

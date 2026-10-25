@@ -135,11 +135,9 @@ async function main() {
 
     captures.push(await capture({
       electronApplication, page, evidenceRoot, scenario: 'multi', theme: 'light',
-      bounds: WIDE, name: 'wide-multi-collapsed-light'
+      bounds: WIDE, name: 'wide-multi-light'
     }))
-    await assertNoReorderHandles(page, 'collapsed multi queue')
-    const disclosure = await assertMultiDisclosure(page)
-    await page.screenshot({ path: join(evidenceRoot, 'wide-multi-expanded-light.png') })
+    const multiRows = await assertMultiRowsInline(page)
     const reorder = await assertExpandedMultiReordering(page, evidenceRoot)
     const busyReorder = await assertBusyPreventsReordering(page, evidenceRoot)
 
@@ -147,19 +145,26 @@ async function main() {
       electronApplication, page, evidenceRoot, scenario: 'long', theme: 'dark',
       bounds: WIDE, name: 'wide-long-collapsed-dark'
     }))
-    await page.locator('[data-queued-message-header]').click()
+    const disclosure = await assertLongDisclosure(page)
     const longGeometry = await geometry(page)
     assertGeometry(longGeometry, { scenario: 'long', expanded: true })
     await page.screenshot({ path: join(evidenceRoot, 'wide-long-expanded-dark.png') })
 
     captures.push(await capture({
-      electronApplication, page, evidenceRoot, scenario: 'multi', theme: 'light',
-      bounds: NARROW, name: 'narrow-multi-collapsed-light'
+      electronApplication, page, evidenceRoot, scenario: 'long', theme: 'light',
+      bounds: NARROW, name: 'narrow-long-collapsed-light'
     }))
     await page.locator('[data-queued-message-header]').click()
     const narrowGeometry = await geometry(page)
-    assertGeometry(narrowGeometry, { scenario: 'multi', expanded: true, narrow: true })
-    await page.screenshot({ path: join(evidenceRoot, 'narrow-multi-expanded-light.png') })
+    assertGeometry(narrowGeometry, { scenario: 'long', expanded: true, narrow: true })
+    await page.screenshot({ path: join(evidenceRoot, 'narrow-long-expanded-light.png') })
+
+    captures.push(await capture({
+      electronApplication, page, evidenceRoot, scenario: 'paused', theme: 'light',
+      bounds: WIDE, name: 'wide-paused-light'
+    }))
+    const paused = await assertPausedResume(page)
+    await page.screenshot({ path: join(evidenceRoot, 'wide-paused-resumed-light.png') })
 
     captures.push(await capture({
       electronApplication, page, evidenceRoot, scenario: 'failed', theme: 'light',
@@ -185,7 +190,9 @@ async function main() {
       ok: true,
       evidenceRoot,
       captures,
+      multiRows,
       disclosure,
+      paused,
       reorder,
       busyReorder,
       longGeometry,
@@ -254,7 +261,7 @@ async function capture({ electronApplication, page, evidenceRoot, scenario, them
   await page.locator('[data-queue-dock]').waitFor({ state: 'visible' })
   await page.waitForTimeout(160)
   const snapshot = await geometry(page)
-  assertGeometry(snapshot, { scenario, expanded: scenario === 'single' || scenario === 'failed' })
+  assertGeometry(snapshot, { scenario, expanded: scenario !== 'long' })
   const path = join(evidenceRoot, `${name}.png`)
   await page.screenshot({ path })
   return { name, path, ...snapshot }
@@ -283,23 +290,49 @@ async function assertSingleAndEdit(page) {
   }
 }
 
-async function assertMultiDisclosure(page) {
-  const header = page.locator('[data-queued-message-header]')
-  if (await header.getAttribute('aria-expanded') !== 'false') {
-    throw new Error('Multi-row QueueDock did not start collapsed')
-  }
-  if (await page.locator('[data-queued-message-id]').count() !== 0) {
-    throw new Error('Collapsed QueueDock mounted visible rows')
-  }
-  await header.click()
-  if (await header.getAttribute('aria-expanded') !== 'true') {
-    throw new Error('QueueDock disclosure did not expand')
+async function assertMultiRowsInline(page) {
+  if (await page.locator('[data-queued-message-header]').count()) {
+    throw new Error('A two-message queue rendered the "n more" disclosure')
   }
   const rowCount = await page.locator('[data-queued-message-id]').count()
-  if (rowCount !== 2) throw new Error(`Expanded QueueDock rendered ${rowCount} rows`)
-  const expandedGeometry = await geometry(page)
-  assertGeometry(expandedGeometry, { scenario: 'multi', expanded: true })
-  return { rowCount, expandedGeometry }
+  if (rowCount !== 2) throw new Error(`Two-message queue rendered ${rowCount} rows`)
+  const caption = await page.locator('[data-queued-message-caption]').textContent()
+  if (!caption?.includes('Drag to reorder')) {
+    throw new Error(`Queue caption is missing the drag hint: ${JSON.stringify(caption)}`)
+  }
+  return { rowCount, caption }
+}
+
+async function assertLongDisclosure(page) {
+  const header = page.locator('[data-queued-message-header]')
+  if (await header.getAttribute('aria-expanded') !== 'false') {
+    throw new Error('Long queue did not start folded')
+  }
+  const foldedRows = await page.locator('[data-queued-message-id]').count()
+  if (foldedRows !== 3) throw new Error(`Folded long queue rendered ${foldedRows} rows`)
+  await header.click()
+  if (await header.getAttribute('aria-expanded') !== 'true') {
+    throw new Error('Queue disclosure did not expand')
+  }
+  const rowCount = await page.locator('[data-queued-message-id]').count()
+  if (rowCount !== 8) throw new Error(`Expanded long queue rendered ${rowCount} rows`)
+  return { foldedRows, rowCount }
+}
+
+async function assertPausedResume(page) {
+  const banner = page.locator('[data-queue-paused-banner]')
+  await banner.waitFor({ state: 'visible' })
+  if (await page.locator('[data-queued-message-caption]').count()) {
+    throw new Error('Paused queue kept the regular caption')
+  }
+  const rowRetries = await page.locator('[data-queued-message-action="guide"]:visible').count()
+  if (rowRetries !== 0) throw new Error(`Paused rows offered ${rowRetries} per-row retries`)
+  const resume = page.locator('[data-queue-resume]')
+  if (await resume.isDisabled()) throw new Error('Continue is disabled while no reply runs')
+  await resume.click()
+  await banner.waitFor({ state: 'detached' })
+  await page.locator('[data-queued-message-caption]').waitFor({ state: 'visible' })
+  return { rowRetries, resumed: true }
 }
 
 async function assertNoReorderHandles(page, label) {
@@ -313,8 +346,8 @@ async function assertExpandedMultiReordering(page, evidenceRoot) {
   const handles = page.locator('[data-queued-message-drag-handle]')
   if (await handles.count() !== 2) throw new Error('Expanded multi queue did not render two handles')
   const handleBox = await handles.first().boundingBox()
-  exact(handleBox?.width ?? null, 28, 'reorder handle width')
-  exact(handleBox?.height ?? null, 28, 'reorder handle height')
+  exact(handleBox?.width ?? null, 22, 'reorder handle width')
+  exact(handleBox?.height ?? null, 22, 'reorder handle height')
 
   const source = page.locator('[data-queued-message-drag-id="queue-second"]')
   const target = page.locator('[data-queued-message-id="queue-first"]')
@@ -483,71 +516,88 @@ function sameOrder(actual, expected, label) {
 }
 
 async function geometry(page) {
-  return page.evaluate(() => {
-    const box = (selector) => {
-      const element = document.querySelector(selector)
-      if (!element) return null
-      const value = element.getBoundingClientRect()
-      return {
-        x: value.x, y: value.y, width: value.width, height: value.height,
-        right: value.right, bottom: value.bottom
-      }
-    }
-    const css = (selector) => {
-      const element = document.querySelector(selector)
-      if (!element) return null
-      const style = getComputedStyle(element)
-      return {
-        maxHeight: style.maxHeight,
-        borderTopLeftRadius: style.borderTopLeftRadius,
-        borderTopRightRadius: style.borderTopRightRadius,
-        borderBottomLeftRadius: style.borderBottomLeftRadius,
-        borderBottomRightRadius: style.borderBottomRightRadius
-      }
-    }
-    const dock = document.querySelector('[data-queue-dock]')
-    const composer = document.querySelector('[data-floating-composer]')
+  return page.evaluate(readQueueGeometry)
+}
+
+/* Runs in the page: where the queue sits inside the activity tray, and how
+   the tray tucks behind the composer input slot. */
+function readQueueGeometry() {
+  const box = (element) => {
+    if (!element) return null
+    const value = element.getBoundingClientRect()
     return {
-      dock: box('[data-queue-dock]'), panel: box('[data-queue-dock] > div'),
-      panelStyle: css('[data-queue-dock] > div'),
-      composer: box('[data-floating-composer]'), shell: box('.ds-composer-shell'),
-      header: box('[data-queued-message-header]'),
-      firstRow: box('[data-queued-message-id]'),
-      firstHandle: box('[data-queued-message-drag-handle]'),
-      firstAction: box('[data-queued-message-action]'),
-      list: box('[data-queue-dock] ul'), listStyle: css('[data-queue-dock] ul'),
-      insideComposer: Boolean(dock && composer && composer.contains(dock)),
-      bodyQueueCount: document.body.querySelectorAll('[data-queue-dock]').length
+      x: value.x, y: value.y, width: value.width, height: value.height,
+      right: value.right, bottom: value.bottom
     }
-  })
+  }
+  const css = (element) => {
+    if (!element) return null
+    const style = getComputedStyle(element)
+    return {
+      maxHeight: style.maxHeight,
+      borderTopLeftRadius: style.borderTopLeftRadius,
+      borderTopRightRadius: style.borderTopRightRadius,
+      borderBottomLeftRadius: style.borderBottomLeftRadius,
+      borderBottomRightRadius: style.borderBottomRightRadius
+    }
+  }
+  const dock = document.querySelector('[data-queue-dock]')
+  const composer = document.querySelector('[data-floating-composer]')
+  const tray = document.querySelector('[data-composer-tray]')
+  const list = document.querySelector('[data-queue-dock] ul')
+  const firstAction = [...document.querySelectorAll('[data-queue-dock] [data-queued-message-action]')]
+    .find((element) => element.getClientRects().length > 0) ?? null
+  return {
+    dock: box(dock), tray: box(tray), trayStyle: css(tray),
+    traySlot: box(document.querySelector('[data-composer-tray-queue]')),
+    inputSlot: box(document.querySelector('[data-composer-input-slot]')),
+    composer: box(composer), shell: box(document.querySelector('.ds-composer-shell')),
+    caption: box(document.querySelector('[data-queued-message-caption], [data-queue-paused-banner]')),
+    header: box(document.querySelector('[data-queued-message-header]')),
+    firstRow: box(document.querySelector('[data-queued-message-id]')),
+    firstHandle: box(document.querySelector('[data-queued-message-drag-handle]')),
+    firstAction: box(firstAction),
+    rowCount: document.querySelectorAll('[data-queued-message-id]').length,
+    list: box(list), listStyle: css(list),
+    insideComposer: Boolean(dock && composer && composer.contains(dock)),
+    insideTray: Boolean(dock && tray && tray.contains(dock)),
+    bodyQueueCount: document.body.querySelectorAll('[data-queue-dock]').length
+  }
 }
 
 function assertGeometry(value, { scenario, expanded, narrow = false }) {
-  if (!value.insideComposer || value.bodyQueueCount !== 1) {
-    throw new Error(`${scenario}: QueueDock is detached or duplicated: ${JSON.stringify(value)}`)
+  if (!value.insideComposer || !value.insideTray || value.bodyQueueCount !== 1) {
+    throw new Error(`${scenario}: queue is outside the activity tray or duplicated: ${JSON.stringify(value)}`)
   }
-  const rowLike = scenario === 'single' || scenario === 'failed' ? value.firstRow : value.header
-  exact(rowLike?.height ?? null, 36, `${scenario} header/row height`)
-  if (expanded && value.firstRow) exact(value.firstRow.height, 36, `${scenario} row height`)
-  if (expanded && value.firstHandle) {
-    exact(value.firstHandle.width, 28, `${scenario} reorder handle width`)
-    exact(value.firstHandle.height, 28, `${scenario} reorder handle height`)
+  exact(value.caption?.height ?? null, scenario === 'paused' ? 36 : 30, `${scenario} caption height`)
+  exact(value.firstRow?.height ?? null, 36, `${scenario} row height`)
+  if (value.firstHandle) {
+    exact(value.firstHandle.width, 22, `${scenario} reorder handle width`)
+    exact(value.firstHandle.height, 22, `${scenario} reorder handle height`)
   }
-  if (expanded && value.firstAction) exact(value.firstAction.height, 28, `${scenario} action height`)
-  exact(number(value.panelStyle?.borderTopLeftRadius), 12, `${scenario} top radius`)
-  exact(number(value.panelStyle?.borderTopRightRadius), 12, `${scenario} top radius`)
-  exact(number(value.panelStyle?.borderBottomLeftRadius), 0, `${scenario} bottom radius`)
+  exact(value.firstAction?.height ?? null, 26, `${scenario} action height`)
+  if (scenario === 'long') {
+    exact(value.header?.height ?? null, 30, `${scenario} disclosure height`)
+    if (!expanded) exact(value.rowCount, 3, `${scenario} folded rows`)
+  } else if (value.header) {
+    throw new Error(`${scenario}: a short queue rendered the "n more" disclosure`)
+  }
+  exact(number(value.trayStyle?.borderTopLeftRadius), 16, `${scenario} tray top radius`)
+  exact(number(value.trayStyle?.borderTopRightRadius), 16, `${scenario} tray top radius`)
+  exact(number(value.trayStyle?.borderBottomLeftRadius), 0, `${scenario} tray bottom radius`)
   exact(number(value.listStyle?.maxHeight), 180, `${scenario} list max-height`)
-  const leftInset = (value.dock?.x ?? 0) - (value.shell?.x ?? 0)
-  const rightInset = (value.shell?.right ?? 0) - (value.dock?.right ?? 0)
-  exact(leftInset, 8, `${scenario} left composer inset`)
-  exact(rightInset, 8, `${scenario} right composer inset`)
-  const joinGap = (value.shell?.y ?? 0) - (value.panel?.bottom ?? 0)
-  exact(joinGap, -3, `${scenario} QueueDock/composer tuck`)
+  // The tray is inset 12px from the input slot and tucks 16px behind it; the
+  // queue is its last section, so it ends exactly at the input slot's edge.
+  const leftInset = (value.tray?.x ?? 0) - (value.inputSlot?.x ?? 0)
+  const rightInset = (value.inputSlot?.right ?? 0) - (value.tray?.right ?? 0)
+  exact(leftInset, 12, `${scenario} left tray inset`)
+  exact(rightInset, 12, `${scenario} right tray inset`)
+  exact((value.inputSlot?.y ?? 0) - (value.tray?.bottom ?? 0), -16, `${scenario} tray tuck behind the input`)
+  exact((value.inputSlot?.y ?? 0) - (value.traySlot?.bottom ?? 0), 0, `${scenario} queue/input join`)
   if (scenario === 'long' && expanded) {
     exact(value.list?.height ?? null, 180, 'long list height cap')
   }
-  if (narrow && (value.dock?.x ?? 0) < 0) throw new Error('Narrow QueueDock overflowed viewport')
+  if (narrow && (value.tray?.x ?? 0) < 0) throw new Error('Narrow tray overflowed viewport')
 }
 
 function exact(actual, expected, label) {
@@ -642,4 +692,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { assertGeometry }
+module.exports = { assertGeometry, readQueueGeometry }

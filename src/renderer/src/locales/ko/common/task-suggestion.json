@@ -1,0 +1,107 @@
+{
+  "taskSuggestion": {
+    "loading": "제안 작업을 불러오는 중…",
+    "kicker": "제안 작업 · 병렬 실행 가능",
+    "title": "서로 독립된 후속 작업 {{count}}개",
+    "status": {
+      "pending": "시작 대기 {{count}}개",
+      "progress": "{{started}} / {{total}} 시작됨",
+      "countdown": "{{time}} 안에 응답이 없으면 모두 시작",
+      "paused": "일시 중지됨 · 자동으로 시작하지 않음",
+      "settled": "제안 작업 {{count}}개가 끝났습니다"
+    },
+    "summary": {
+      "done": "{{count}} 완료",
+      "live": "{{count}} 실행 중",
+      "failed": "{{count}} 미완료",
+      "startFailed": "{{count}} 시작 실패",
+      "ignored": "{{count}} 건너뜀"
+    },
+    "row": {
+      "suggested": "시작 대기",
+      "starting": "시작하는 중…",
+      "running": "실행 중",
+      "runningFor": "실행 중 · {{minutes}}분",
+      "waiting": "확인 필요",
+      "done": "완료",
+      "failed": "완료하지 못함",
+      "cancelled": "중지됨",
+      "ignored": "건너뜀",
+      "here": "이 대화에서 계속함",
+      "start_failed": "시작할 수 없음"
+    },
+    "failure": {
+      "disk_space": "디스크 공간이 부족합니다",
+      "worktree_conflict": "브랜치나 워크트리가 이미 사용 중입니다",
+      "agent_unavailable": "선택한 Agent가 준비되지 않았습니다",
+      "quota": "모델 할당량을 모두 사용했습니다",
+      "runtime": "Kun이 세션을 시작하지 못했습니다"
+    },
+    "actions": {
+      "start": "시작",
+      "startAll": "모두 시작 ({{count}})",
+      "startNow": "지금 시작",
+      "pause": "일시 중지",
+      "resume": "카운트다운 다시 시작",
+      "dismiss": "무시",
+      "open": "열기",
+      "viewResult": "결과 보기",
+      "retry": "다시 시도",
+      "noWorktree": "워크트리 없이",
+      "more": "다른 시작 방법",
+      "details": "개요 보기",
+      "hideDetails": "개요 닫기"
+    },
+    "menu": {
+      "session": "새 세션으로 시작",
+      "here": "이 대화에서 계속",
+      "copy": "작업 개요만 복사",
+      "ignore": "이 작업 건너뛰기",
+      "default": "기본"
+    },
+    "brief": {
+      "goal": "목표",
+      "scope": "범위",
+      "done": "완료 기준",
+      "edit": "개요 편집",
+      "save": "개요 저장",
+      "cancel": "취소",
+      "copied": "개요를 복사했습니다",
+      "listHint": "한 줄에 하나씩"
+    },
+    "options": {
+      "worktree": "독립 워크트리",
+      "inheritContext": "이 대화의 컨텍스트 가져오기"
+    },
+    "meta": {
+      "worktreeOn": "작업마다 독립 워크트리 사용",
+      "worktreeOff": "작업이 현재 체크아웃을 공유",
+      "hint": "시작한 작업은 이 대화 아래의 세션이 되며, 첫 메시지가 작업 개요입니다.",
+      "routeHint": "작업마다 Agent와 모델을 바꿀 수 있으며, 바꾸면 카운트다운이 다시 시작됩니다.",
+      "autoStarted": "응답이 없어 제안대로 시작했습니다"
+    },
+    "report": {
+      "done": "작업 {{index}} 완료 · {{title}}",
+      "failed": "작업 {{index}}을(를) 완료하지 못함 · {{title}}",
+      "cancelled": "작업 {{index}} 중지됨 · {{title}}",
+      "open": "세션 열기",
+      "dismiss": "닫기",
+      "changedFiles": "파일 {{count}}개 변경",
+      "branch": "브랜치 {{branch}}",
+      "duration": "{{minutes}}분",
+      "noSummary": "세션이 요약 없이 끝났습니다."
+    },
+    "session": {
+      "title": "작업 세션 {{index}} / {{total}}",
+      "from": "“{{title}}”에서",
+      "back": "메인 대화로 돌아가기",
+      "detach": "상위 대화에서 분리",
+      "branch": "워크트리 {{branch}}"
+    },
+    "sidebar": {
+      "count": "제안 작업 {{total}}개 중 {{started}}개 시작됨",
+      "expand": "작업 세션 펼치기",
+      "collapse": "작업 세션 접기"
+    }
+  }
+}

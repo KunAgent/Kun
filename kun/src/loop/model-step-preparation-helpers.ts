@@ -11,7 +11,6 @@ export function graphPlanningStepTools(tools: readonly ModelToolSpec[], active: 
     tool.name === 'user_input' || tool.sideEffect === 'read-only') : [...tools]
 }
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type {
   KunTurnContextAuthority,
   KunTurnContextBlock
@@ -65,58 +64,15 @@ export function subagentResumeToolGate(
   }
 }
 
-/**
- * A Work presentation has an explicit Markdown source. Make the first child
- * round read it instead of allowing the model to spend a full round reasoning
- * about a path it never opened. The ordinary `read` tool remains available
- * after this one host-enforced source inspection.
- */
-export function pptSourceReadToolGate(
-  scope: PptWorkflowScope | undefined,
-  items: readonly TurnItem[],
-  turnId: string
-): { requiredToolName?: 'read'; instruction?: string } {
-  if (
-    !scope?.sourceReadRequired ||
-    (scope.action !== 'start' && scope.action !== 'retry_failed') ||
-    hasToolResult(items, turnId, 'read')
-  ) return {}
-  return {
-    requiredToolName: 'read',
-    instruction: 'This Work PPT request has a declared Markdown source. Call `read` on that source file first. Do not plan slides, generate images, or answer in prose before reading it.'
-  }
-}
-
-export function pptWorkflowCompletionToolGate(
-  scope: PptWorkflowScope | undefined,
-  items: readonly TurnItem[],
-  turnId: string
-): { expectedToolName?: string } {
-  if (!scope?.stage) return {}
-  const expectedToolName = scope.stage === 'direction'
-    ? 'ppt_create_direction_bundle'
-    : scope.stage === 'build'
-      ? 'ppt_export'
-      : scope.previewMode === 'image-first'
-        ? 'ppt_create_review_bundle'
-        : 'ppt_generate_previews'
-  return hasSuccessfulToolResult(items, turnId, expectedToolName)
-    ? {}
-    : { expectedToolName }
-}
-
 export function requiredWorkflowToolGate(
   turn: Pick<Turn, 'subagentResume'>,
-  scope: PptWorkflowScope | undefined,
   items: readonly TurnItem[],
   turnId: string,
   svgValidationToolName: string | undefined
 ): { requiredToolName?: string; subagentResumeInstruction?: string } {
   const subagentResumeGate = subagentResumeToolGate(turn, items, turnId)
-  const pptSourceReadGate = pptSourceReadToolGate(scope, items, turnId)
   return {
     requiredToolName: subagentResumeGate.requiredToolName ??
-      pptSourceReadGate.requiredToolName ??
       svgValidationToolName,
     ...(subagentResumeGate.instruction
       ? { subagentResumeInstruction: subagentResumeGate.instruction }
@@ -210,13 +166,19 @@ export async function graphHarnessContextBlock(
  * get a bounded runtime block with the delegation contract, live team state,
  * and the harness routing menu. Worker threads carry parentThreadId and are
  * excluded; external-harness managers skip the Kun-specific guidance.
+ *
+ * Unified workbench threads stay Code-owned while a Design pass runs on them,
+ * so the thread surface alone cannot tell a Design turn apart. A Design turn
+ * writes one reserved page or operates the canvas; delegation guidance there
+ * conflicts with that scope, so the turn's own surface gates the block too.
  */
 export async function adeManagerContextBlock(
   thread:
     | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext'>
     | undefined,
   threadId: string,
-  resolve?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
+  resolve?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>,
+  turnSurface?: Turn['agentSurface']
 ): Promise<KunTurnContextBlock | null> {
   const newWorkAllowed = thread?.collaboration?.enabled ?? thread?.workspaceMode === 'ade'
   const controlsAllowed = newWorkAllowed || thread?.collaboration?.everEnabled === true
@@ -228,6 +190,7 @@ export async function adeManagerContextBlock(
     thread.executionUnit?.kind === 'worker' ||
     thread.roomContext !== undefined ||
     (thread.agentSurface !== undefined && thread.agentSurface !== 'code') ||
+    (turnSurface !== undefined && turnSurface !== 'code') ||
     (thread.harnessId !== undefined && thread.harnessId !== 'kun')
   ) {
     return null
@@ -237,24 +200,71 @@ export async function adeManagerContextBlock(
 }
 
 /**
+ * Suggestion cards owned by a top-level native conversation: what started,
+ * what finished, and result summaries from the task sessions.
+ */
+export async function taskSuggestionContextBlock(
+  thread: Pick<ThreadRecord, 'relation' | 'harnessId' | 'agentSurface' | 'roomContext' | 'executionUnit'> | undefined,
+  threadId: string,
+  resolve?: (input: { threadId: string }) => Promise<string | undefined>
+): Promise<KunTurnContextBlock | null> {
+  const relation = thread?.relation ?? 'primary'
+  if (!resolve || !thread || relation === 'task' || relation === 'side' || thread.roomContext !== undefined ||
+    thread.executionUnit !== undefined || (thread.harnessId !== undefined && thread.harnessId !== 'kun') ||
+    (thread.agentSurface !== undefined && thread.agentSurface !== 'code')) return null
+  const content = (await resolve({ threadId }).catch(() => undefined)) ?? ''
+  return content ? kunContextBlock('task-suggestions', 'runtime', content) : null
+}
+
+/**
+ * The dispatch ladder and role ownership for top-level native conversations
+ * that can hand work over; Graph Leads, children, workers and rooms skip it.
+ */
+export async function delegationContextBlock(
+  orchestration: Turn['orchestration'],
+  thread: (Pick<ThreadRecord, 'relation' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'roomContext' | 'executionUnit'> &
+    { workspace?: string }) | undefined,
+  threadId: string,
+  resolve?: (input: { threadId: string; workspace?: string; surface?: 'code' | 'write' | 'design' }) => Promise<string | undefined>,
+  agentSurface?: Turn['agentSurface']
+): Promise<KunTurnContextBlock | null> {
+  if (!resolve || !thread || orchestration === 'graph' || thread.parentThreadId || thread.relation === 'side' ||
+    thread.roomContext !== undefined || thread.executionUnit !== undefined ||
+    (thread.harnessId !== undefined && thread.harnessId !== 'kun')) return null
+  const surface = agentSurface ?? thread.agentSurface
+  const content = (await resolve({
+    threadId,
+    workspace: thread.workspace,
+    ...(surface ? { surface } : {})
+  }).catch(() => undefined)) ?? ''
+  return content ? kunContextBlock('delegation', 'runtime', content) : null
+}
+
+/**
  * +: planning-mode runtime blocks — the Graph harness menu while
- * a plan is uncommitted and the bounded ADE manager block on manager turns.
+ * a plan is uncommitted, the bounded ADE manager block on manager turns,
+ * and the suggestion-card block on conversations that own cards.
  */
 export async function planningTeamContextBlocks(
-  orchestration: Turn['orchestration'],
+  turn: Pick<Turn, 'orchestration' | 'agentSurface'>,
   graphPlanCommitted: boolean,
   thread:
-    | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext'>
+    | (Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext' | 'relation'> &
+      { workspace?: string })
     | undefined,
   threadId: string,
   graphHarnessSummary?: () => Promise<string | undefined>,
-  adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
+  adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>,
+  taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>,
+  delegationContext?: (input: { threadId: string; workspace?: string; surface?: 'code' | 'write' | 'design' }) => Promise<string | undefined>
 ): Promise<KunTurnContextBlock[]> {
-  const [graph, ade] = await Promise.all([
-    graphHarnessContextBlock(orchestration, graphPlanCommitted, graphHarnessSummary),
-    adeManagerContextBlock(thread, threadId, adeManagerContext)
+  const [graph, ade, tasks, delegation] = await Promise.all([
+    graphHarnessContextBlock(turn.orchestration, graphPlanCommitted, graphHarnessSummary),
+    adeManagerContextBlock(thread, threadId, adeManagerContext, turn.agentSurface),
+    taskSuggestionContextBlock(thread, threadId, taskSuggestionContext),
+    delegationContextBlock(turn.orchestration, thread, threadId, delegationContext, turn.agentSurface)
   ])
-  return [graph, ade].filter(
+  return [graph, ade, tasks, delegation].filter(
     (block): block is KunTurnContextBlock => block !== null
   )
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { ServerRuntime } from '../../server/routes/server-runtime.js'
-import { validateModelProfiles } from '@kun/remote-protocol'
+import { validateModelInfo, validateModelProfiles } from '@kun/remote-protocol'
 import { codeAgents, resolveCodeRoute } from './model-catalog.js'
 
 const later = () => new Date(Date.now() + 60_000).toISOString()
@@ -17,14 +17,15 @@ const definition = (id: string, extra: Record<string, unknown> = {}) => ({
 type Options = { ready?: Record<string, unknown[]>; disabled?: string[]; providers?: unknown[]
   models?: Record<string, string[]>; info?: Record<string, unknown[]>
   /** Proofs a warm-up produces after `checks` polls; the Agent stays "checking" until then. */
-  warm?: Record<string, { checks: number; ready: unknown[] }>; warmed?: string[] }
+  warm?: Record<string, { checks: number; ready: unknown[] }>; warmed?: string[]; extra?: ReturnType<typeof definition>[] }
 function runtime(options: Options = {}) {
   const list = [
     definition('kun', { credentialModes: ['provider'] }),
     definition('claude-code'),
     definition('codex', { transport: 'codex-app-server' }),
     definition('shell-agent', { transport: 'terminal' }),
-    definition('old-agent', { availability: 'retired' })
+    definition('old-agent', { availability: 'retired' }),
+    ...(options.extra ?? [])
   ]
   return {
     defaultModel: 'deepseek-chat',
@@ -61,6 +62,7 @@ function runtime(options: Options = {}) {
         (entry.id === 'claude-code' ? ['claude-sonnet-4-5', 'claude-opus-4-1'] : undefined),
       agentSdkModels: { peekInfo: (entry: { id: string }) => options.info?.[entry.id] },
       codexModels: { peekInfo: (entry: { id: string }) => options.info?.[entry.id] },
+      acpModels: { peekInfo: (entry: { id: string }) => options.info?.[entry.id] },
       detector: {}
     }
   } as unknown as ServerRuntime
@@ -124,6 +126,23 @@ describe('mobile Code agent catalog', () => {
     // Legacy phones send only a model and keep the old Kun default route.
     await expect(resolveCodeRoute(live, { model: 'deepseek-chat' }, ['deepseek-chat']))
       .resolves.toEqual({ harnessId: 'kun', model: 'deepseek-chat' })
+  })
+})
+
+describe('mobile Code model names for ACP tuple ids', () => {
+  it('names each JSON tuple id with the option name the Agent gave it, keeping the tuple as the identity', async () => {
+    // DeepSeek Harness names a model by a ["provider","model"] option value; its picker shows the option's own name.
+    const flash = '["deepseek-official","deepseek-v4-flash"]', v41 = '["deepseek-official","deepseek-flash"]', bare = '["deepseek-official","unnamed"]'
+    const agents = await codeAgents(runtime({
+      extra: [definition('deepseek-harness', { displayName: 'DeepSeek Harness', transport: 'acp', credentialModes: ['native-login'], staticModels: [] })],
+      ready: { 'deepseek-harness': [{ harnessId: 'deepseek-harness', credentialMode: 'native-login', expiresAt: later() }] },
+      models: { 'deepseek-harness': [flash, v41, bare] },
+      info: { 'deepseek-harness': [{ id: flash, displayName: 'deepseek-v4-flash', isDefault: true }, { id: v41, displayName: 'DeepSeek-V41-Flash' }, { id: bare }] }
+    }), [])
+    const route = agents.find((agent) => agent.id === 'deepseek-harness')!.routes[0]
+    expect(route).toMatchObject({ credentialMode: 'native-login', models: [flash, v41, bare], defaultModel: flash })
+    expect(route.modelInfo).toEqual({ [flash]: { displayName: 'deepseek-v4-flash' }, [v41]: { displayName: 'DeepSeek-V41-Flash' } })
+    expect(() => validateModelInfo(route)).not.toThrow()
   })
 })
 

@@ -228,7 +228,7 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
                   {sessionLabel(session)}
                 </span>
                 {state !== 'idle' ? (
-                  <SidebarActivityIndicator activity={state} runningLabel={t('sidebarThreadRunning')}
+                  <SidebarActivityIndicator activity={state} className="work-session-activity" runningLabel={t('sidebarThreadRunning')}
                     failedLabel={t('sidebarThreadFailed')} unreadLabel={t('sidebarThreadUnread')}
                     awaitingInputLabel={t('sidebarThreadAwaitingInput')} />
                 ) : session.updatedAt ? (

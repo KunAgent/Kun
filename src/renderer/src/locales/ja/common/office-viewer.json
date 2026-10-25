@@ -1,0 +1,14 @@
+{
+  "officePptOpening": "プレゼンテーションを開いています…",
+  "officePptOpenFailed": "このプレゼンテーションを開けませんでした",
+  "officeZoomFitPage": "ページに合わせる",
+  "officeZoomFitWidth": "幅に合わせる",
+  "officeZoomAutomatic": "自動",
+  "officeZoomLevel": "ズーム倍率",
+  "officeDocxOpening": "ドキュメントを開いています…",
+  "officeDocxOpenFailed": "このドキュメントを開けませんでした",
+  "officeDocxRenderError": "この Word ドキュメントを表示できませんでした。",
+  "officeSheetOpenFailed": "このブックを開けませんでした",
+  "officeSheetRenderError": "このスプレッドシートを表示できませんでした。",
+  "officeCopyFailed": "選択範囲をコピーできませんでした"
+}

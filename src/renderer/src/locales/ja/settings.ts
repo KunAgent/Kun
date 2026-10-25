@@ -20,6 +20,8 @@ import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 import onboarding from './settings/onboarding.json'
+import assistantMailboxSettings from './settings/assistant-mailbox.json'
+import terminalDock from './settings/terminal-dock.json'
 
 const settings = {
   ...providerConfiguration,
@@ -43,7 +45,9 @@ const settings = {
   guiUpdateErrFeedUnavailable: '現在、利用できる更新元がありません。後でもう一度試すか、ダウンロードページを利用してください。',
   ...speak,
   ...ade,
-  ...onboarding
+  ...onboarding,
+  ...assistantMailboxSettings,
+  ...terminalDock
 }
 
 export default settings

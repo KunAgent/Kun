@@ -1,10 +1,10 @@
 import { appendHostMetadata } from './catalog-metadata'
-import type { SharedFileTransfer } from './share-files'
 import { MobileShareHosts } from './share-host'
 import { desktopScheduleDescriptors } from './desktop-schedules'
 import { MobileNotifications } from './notifications'
 import { MobileLinkAuthorities } from './authorities'
 import { mobileLinkScopes } from '../../shared/mobile-link-scopes'
+import { conditionalCall, conditionalResult } from './read-version'
 import { randomUUID } from 'node:crypto'
 import {
   RemoteApi,
@@ -13,15 +13,18 @@ import {
   validateCall,
   hasRemoteOperationScope,
   READ_METHODS,
+  HISTORY_LIVE_CAPABILITY,
+  READ_CONDITIONAL_CAPABILITY,
+  type RelayNotice,
   type DeviceIdentity,
-  type Frame,
-  type Socket
+  type Frame
 } from '@kun/remote-protocol'
-import type { AccountSessionEnding, ArtAccountAccess } from '../art-assets/account-access'
+import type { AccountSessionEnding } from '../art-assets/account-access'
 import { hasKunAccountSession } from '../../shared/kun-account'
 import type { MobileLinkStatus } from '../../shared/mobile-link'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
-import { MobileSubscriptions } from './subscriptions'
+import { MobileSubscriptions, type SubscriptionAuthority } from './subscriptions'
+import { refreshAfterWrite } from './write-refresh'
 import { disableHost, sessionOperation } from './lifecycle'
 // Kun refuses these before any receipt or mutation, so the phone may treat them as not applied.
 const CERTAIN_REJECTIONS = new Set([
@@ -30,33 +33,14 @@ const CERTAIN_REJECTIONS = new Set([
   'AGENT_NOT_AVAILABLE',
   'MODEL_NOT_AVAILABLE'
 ])
-export type LinkDependencies = {
-  account: ArtAccountAccess
-  identity(owner: string): Promise<DeviceIdentity>
-  origin: string
-  name: string
-  platform: string
-  appVersion?: string
-  fetch: typeof fetch
-  socket(url: string, headers: Record<string, string>): Socket
-  lease(): Promise<ProtectedRuntimeRequestLease>
-  diagnostic?(code: string, details?: { attempt?: number; elapsedMs?: number }): void
-  sharedFiles?: SharedFileTransfer
-  desktopSchedules?(method: string, params: unknown, scope: {
-    accountId: string; deviceId: string; authorizationId: string; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[]
-  }, lease: ProtectedRuntimeRequestLease): Promise<unknown>
-  files?(
-    scope: {
-      api: RemoteApi
-      peer: string
-      owner: string
-      authorizationId: string
-      current(): boolean
-      lease(): Promise<ProtectedRuntimeRequestLease>
-    },
-    call: any
-  ): Promise<unknown>
-}
+/**
+ * The relay enforces grants itself: each lease renewal re-reads the peer set into the lease, and a grant change
+ * closes this socket so the next ticket lists grants again. Renewal only refreshes local grant metadata, so it
+ * lists grants at most this often instead of on every 20 s renewal.
+ */
+export const PEER_LIST_INTERVAL_MS = 300000
+import type { LinkDependencies } from './service-dependencies'
+export type { LinkDependencies } from './service-dependencies'
 export class MobileLinkService {
   private authorities = new MobileLinkAuthorities()
   private notifications: MobileNotifications
@@ -105,7 +89,8 @@ export class MobileLinkService {
     this.subscriptions = new MobileSubscriptions({
       lease: deps.lease,
       fetch: deps.fetch,
-      send: (f) => this.client?.send(f)
+      send: (f) => this.client?.send(f),
+      read: (device, authority, method, params) => this.runtimeRead(device, authority, method, params)
     })
     this.unsubscribe = deps.account.onState((state) => {
       const next = hasKunAccountSession(state) ? state.user!.id : null
@@ -172,8 +157,10 @@ export class MobileLinkService {
     this.error = undefined
     this.authorizationExpiresAt = 0
   }
-  dispose() {
-    void this.endSession({ userId: this.owner ?? null, accessToken: this.lastToken ?? null })
+  /** App quit. Keeping access only closes the relay, so a remembered start can resume with its grants. */
+  dispose(keepAccess = false) {
+    if (keepAccess) this.stop()
+    else void this.endSession({ userId: this.owner ?? null, accessToken: this.lastToken ?? null })
     this.unsubscribe()
     this.unsubscribeEnding()
   }
@@ -227,6 +214,24 @@ export class MobileLinkService {
       if (this.authorizationExpiresAt === expiresAt) this.reconnect('LOCAL_LEASE_EXPIRED')
     }, Math.max(1, expiresAt - Date.now()))
   }
+  /** A read for one phone under its subscription's authority, as the runtime would answer its invoke. */
+  private async runtimeRead(device: string, authority: SubscriptionAuthority, method: string, params: Record<string, unknown>) {
+    const lease = await this.deps.lease()
+    const response = await lease.request('/v1/remote/invoke', 'POST', JSON.stringify({ accountId: authority.accountId,
+      deviceId: device, authorizationId: authority.authorizationId, scopes: authority.scopes,
+      call: { method, params, requestId: randomUUID(), expiresAt: Date.now() + 60000 } }))
+    const value = JSON.parse(response.body)
+    if (!response.ok) throw new Error(typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED')
+    return value as unknown
+  }
+  /** Relay notices: a phone that went away no longer needs its streams; changed grants are re-read now. */
+  private relayNotice(notice: RelayNotice, refresh: () => Promise<void>) {
+    if (notice.relay === 'presence') {
+      for (const peer of notice.peers) if (!peer.online) this.subscriptions.clear(peer.deviceId)
+    } else if (notice.relay === 'authorization') {
+      void refresh().catch(() => this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED'))
+    }
+  }
   private notifyReconnected() {
     // The phone may miss a sub-second host presence gap while its own WSS
     // remains open. Rebuild lost subscriptions; never replay business calls.
@@ -266,10 +271,10 @@ export class MobileLinkService {
           grants = g.grants
           this.pairingPeers = new Map(p.pairings.map((pairing: { id: string; controllerId: string }) => [pairing.id, pairing.controllerId]))
           this.updateGrants(g.grants)
-          this.error = undefined
+          if (!['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? '')) this.error = undefined
         }
       } catch {
-        if (generation === this.generation && grantsVersion === this.grantsVersion)
+        if (generation === this.generation && grantsVersion === this.grantsVersion && !['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? ''))
           this.error = 'CONNECTION_UNAVAILABLE'
       }
     }
@@ -283,7 +288,18 @@ export class MobileLinkService {
       grants: grants.map((grant) => ({ ...grant, scopes: this.authorities.scopes(grant.controllerId, grant.id) }))
     }
   }
-  async enable(value: boolean) {
+  async retryMembership() {
+    if (!['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? '')) throw new Error('INVALID_MEMBERSHIP_RETRY')
+    const client = this.client, api = this.api
+    if (!client || !api) return this.enable(true, true)
+    const value = await api.entitlements()
+    if (client !== this.client || api !== this.api || value.userId !== this.owner) throw new Error('ACCOUNT_CHANGED')
+    if (!value.features.mobileRemote) throw new Error('vip_mobile_remote_required')
+    client.start()
+    return this.status()
+  }
+
+  async enable(value: boolean, keepGrants = false) {
     if (!value) {
       ++this.enableOperation
       this.enabling = false
@@ -293,9 +309,11 @@ export class MobileLinkService {
     this.enabling = true
     const operation = ++this.enableOperation
     try {
-      return await this.setEnabled(value)
+      return await this.setEnabled(value, keepGrants)
     } catch (error) {
       if (operation === this.enableOperation && !this.enabled) this.stop()
+      if ((error as { code?: string })?.code === 'vip_mobile_remote_required') this.error = 'VIP_REQUIRED'
+      if ((error as { code?: string })?.code === 'ENTITLEMENTS_UNAVAILABLE') this.error = 'ENTITLEMENTS_UNAVAILABLE'
       throw error
     } finally {
       if (operation === this.enableOperation) this.enabling = false
@@ -307,7 +325,8 @@ export class MobileLinkService {
       token: async () => {
         const token = await sessionOperation(() => this.deps.account.accessToken(), signal)
         if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
-        if (!token) throw new Error('LOGIN_REQUIRED')
+        // RemoteApi maps a missing token to typed LOGIN_REQUIRED so the transport stops retrying.
+        if (!token) return null
         this.lastToken = token
         return token
       },
@@ -331,7 +350,9 @@ export class MobileLinkService {
   private updateGrants(grants: { id: string; controllerId: string }[]) {
     for (const grant of grants)
       if (this.deniedGrants.has(grant.id)) this.deniedGrants.set(grant.id, grant.controllerId)
+    const previous = this.peers
     this.peers = new Set(grants.filter((grant) => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id)).map((grant) => grant.controllerId))
+    for (const peer of previous) if (!this.peers.has(peer)) this.subscriptions.clear(peer)
     this.grantPeers = new Map(grants.map((grant) => [grant.id, grant.controllerId]))
     for (const peer of this.authorities.sync(grants)) this.permissionsChanged(peer)
     const api = this.api, generation = this.generation
@@ -340,7 +361,7 @@ export class MobileLinkService {
     if (api && eligible()) this.notifications.start(api, eligible)
     else this.notifications.stop()
   }
-  private async setEnabled(value: boolean) {
+  private async setEnabled(value: boolean, keepGrants = false) {
     if (!value) {
       const identity = this.identity
       const token = this.lastToken
@@ -361,6 +382,8 @@ export class MobileLinkService {
     if (!hasKunAccountSession(state) || !state.user)
       throw new Error('LOGIN_REQUIRED')
     if (this.sessionEnding) throw new Error('ACCOUNT_CHANGED')
+    await sessionOperation(() => this.deps.requireMembership(state.user!.id), control.signal)
+    if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     this.observedOwner = state.user.id
     const owner = state.user.id,
       identity = await sessionOperation(() => this.deps.identity(owner), control.signal)
@@ -374,9 +397,9 @@ export class MobileLinkService {
       platform: this.deps.platform,
       role: 'host'
     })
-    // Offline logout or a crashed app may not have completed cloud cleanup.
-    // Revoke previous grants before this session can obtain a relay ticket.
-    await api.request('/devices/enabled', 'PUT', { enabled: false })
+    // Offline logout or a crashed app may not have completed cloud cleanup, so a fresh start revokes
+    // previous grants before it can obtain a relay ticket. Resuming a start the user left on keeps them.
+    if (!keepGrants) await api.request('/devices/enabled', 'PUT', { enabled: false })
     const token = this.lastToken
     try {
       await api.request('/devices/enabled', 'PUT', { enabled: true })
@@ -384,19 +407,21 @@ export class MobileLinkService {
     } catch (error) {
       // An old enable request may finish after logout's disable request.
       // Repeat cleanup after that request settles, still with the old identity.
-      if (token)
+      if (token && (error as { code?: string })?.code !== 'vip_mobile_remote_required')
         await this.disable(identity, token)
       throw error
     }
     this.enabled = true
     this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
       current: () => this.enabled && generation === this.generation && !this.sessionEnding })
+    let peersListedAt = -Infinity
     const refreshPeers = async (epoch: number, signal?: AbortSignal) => {
       const grantsVersion = this.grantsVersion
       const { grants } = await api.request('/grants', 'GET', undefined, false, signal)
       this.transportCurrent(generation, epoch, signal)
       if (grantsVersion !== this.grantsVersion) return
       this.updateGrants(grants)
+      peersListedAt = Date.now()
     }
     const transport = {
       ticket: async (signal?: AbortSignal) => {
@@ -414,7 +439,9 @@ export class MobileLinkService {
         // Lease renewal must never wait behind noncritical grants/UI metadata.
         const result = await api.request('/relay-lease', 'POST', undefined, false, signal)
         this.transportCurrent(generation, epoch, signal)
-        this.authorizeUntil(started + 60000)
+        // The transport reports the server's membership-capped expiry through leaseChanged.
+        if (Date.now() - peersListedAt < PEER_LIST_INTERVAL_MS) return result
+        peersListedAt = Date.now()
         void refreshPeers(epoch, signal).catch(() => {
           if (generation === this.generation && epoch === this.transportEpoch)
             this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED')
@@ -423,9 +450,17 @@ export class MobileLinkService {
       },
       socket: this.deps.socket,
       budget: this.requestBudget,
-      state: (online: boolean) => {
+      leaseChanged: (expiresAt: number) => {
+        if (generation === this.generation && this.online) this.authorizeUntil(expiresAt)
+      },
+      relay: (notice: RelayNotice) => {
+        if (generation === this.generation) this.relayNotice(notice, () => refreshPeers(this.transportEpoch))
+      },
+      state: (online: boolean, reason?: string) => {
         if (generation === this.generation) {
           this.online = online
+          if (reason === 'VIP_REQUIRED') this.error = 'VIP_REQUIRED'
+          if (online) this.error = undefined
           if (online) {
             this.authorizationId = randomUUID()
             this.notifyReconnected()
@@ -451,6 +486,8 @@ export class MobileLinkService {
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
       throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)
+    await this.deps.requireMembership(this.owner!)
+    if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     await this.api.request('/pairings/' + id + '/confirm', 'POST')
     if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     ++this.grantsVersion
@@ -531,7 +568,8 @@ export class MobileLinkService {
       authority.id === this.peerAuthority(src).id &&
       this.peers.has(src)
     try {
-      const call = validateCall(frame.payload)
+      // An optional read version is answered here; the runtime envelope never sees it.
+      const { call, ifVersion } = conditionalCall(validateCall(frame.payload))
       if (call.requestId !== frame.id) throw new Error('INVALID_REQUEST')
       if (!hasRemoteOperationScope(call.method, authority.scopes)) throw new Error('REMOTE_SCOPE_REQUIRED')
       if (call.method.startsWith('attachment.')) {
@@ -595,6 +633,8 @@ export class MobileLinkService {
           )
         if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []),
           ...(this.deps.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...this.shared.descriptors(authority.scopes)]
+        if (call.method === 'catalog.get' && Array.isArray(value.capabilities))
+          value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY]
         result = call.method === 'catalog.get' ? appendHostMetadata(value, {
           deviceId: this.identity?.id, appVersion: this.deps.appVersion, platform: this.deps.platform }) : value
       }
@@ -603,8 +643,10 @@ export class MobileLinkService {
           kind: 'result',
           id: frame.id,
           dst: src,
-          payload: result
+          payload: conditionalResult(call.method, result, ifVersion)
         })
+      // The phone's own message should reach its live page now, not after the runtime's next event.
+      if (current()) refreshAfterWrite(this.subscriptions, src, call.method, call.params, result)
     } catch (error) {
       if (current()) {
         try {

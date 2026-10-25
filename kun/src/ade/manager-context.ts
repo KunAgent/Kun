@@ -11,6 +11,7 @@ import type {
   TeamRecord
 } from '../contracts/ade.js'
 import type { AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
+import { replacedWorkerIds } from './worker-dispatch-ids.js'
 
 export type AdeManagerContextDeps = {
   teams: { byManager(managerThreadId: string): Promise<TeamRecord | null> }
@@ -77,7 +78,9 @@ function workerLines(team: TeamRecord): string[] {
   return lines
 }
 
-function dispatchLines(dispatches: readonly DispatchRecord[], nowMs: number): string[] {
+function dispatchLines(
+  dispatches: readonly DispatchRecord[], nowMs: number, rerouted: ReadonlySet<string>
+): string[] {
   const open = dispatches.filter((d) => OPEN_DISPATCH_STATES.has(d.state))
   const reviewable = dispatches.filter(
     (d) => !OPEN_DISPATCH_STATES.has(d.state) && d.workerReport
@@ -93,7 +96,9 @@ function dispatchLines(dispatches: readonly DispatchRecord[], nowMs: number): st
       ? d.state
       : d.workerReport
         ? `${d.state}, report awaiting review`
-        : `${d.state}${d.failureReason ? `: ${compact(d.failureReason, 140)}` : ''}`
+        : d.state === 'failed' && rerouted.has(d.workerId)
+          ? 'failed, rerouted automatically to another Agent; do not redo it'
+          : `${d.state}${d.failureReason ? `: ${compact(d.failureReason, 140)}` : ''}`
     lines.push(`- ${d.dispatchId} [${state}] ${d.title} → ${d.workerId}`)
   }
   const rest = open.length + reviewable.length + failed.length - lines.length
@@ -177,7 +182,7 @@ export function createAdeManagerContext(
         deps.questions.listOpen(team.teamId).catch(() => [] as QuestionRecord[])
       ])
       const worker = workerLines(team)
-      const dispatch = dispatchLines(dispatches, nowMs)
+      const dispatch = dispatchLines(dispatches, nowMs, new Set(intents.flatMap(replacedWorkerIds)))
       const question = questionLines(openQuestions)
       sections.push(
         `Team ${team.teamId} state:`,

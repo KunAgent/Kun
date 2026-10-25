@@ -27,7 +27,7 @@ export function SidebarProjectsHeader({
       <button
         type="button"
         onClick={onToggle}
-        className="group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] font-semibold tracking-[0.02em] text-ds-faint transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-muted"
+        className="sidebar-projects-title group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] font-semibold tracking-[0.02em] text-ds-faint transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-muted"
         title={t('sidebarProjects')}
         aria-label={t('sidebarProjects')}
       >

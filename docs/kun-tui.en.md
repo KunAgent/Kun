@@ -1,14 +1,29 @@
 # Kun Terminal UI (TUI)
 
 After installing the Kun desktop app, run `kun` in a new terminal to enter the
-TUI. `kun tui` is an exact alias. The interface uses
-`@earendil-works/pi-tui` in inline mode and never switches to the terminal's
-alternate screen, so the transcript remains in native scrollback after exit.
+TUI. `kun tui` is an exact alias. The interface is built on opentui and runs
+inline: the composer and the in-progress reply occupy a fixed region at the
+bottom of the terminal, and every finished message, tool row, and Markdown
+block is printed above it into the terminal's native scrollback, where it stays
+after exit. Full-screen pages (commands, sessions, models, the full transcript,
+approvals) open on the alternate screen and return to the inline conversation
+when closed.
 
 ## Installation and release forms
 
 Kun desktop packages include the complete TUI and runtime. Install the desktop
-app to use `kun` / `kun tui`; no separate Node.js or TUI download is needed.
+app to use `kun` / `kun tui`.
+
+The terminal renderer drives a native library through Node.js FFI, which needs
+Node.js 26.4 or later. The Runtime keeps using the interpreter Kun ships with;
+only the TUI process moves to Node.js 26. Kun looks for it in this order:
+`KUN_TUI_NODE`, a copy next to the app (`<resources>/tui-node`) or in the
+repository's `.cache/tui-node`, the per-user cache `~/.kun/runtime/tui-node`,
+and finally `node` on `PATH`. When none qualifies, the first launch downloads
+the official Node.js 26.12.0 build into the per-user cache and verifies it
+against the release `SHASUMS256.txt` before running it. Set
+`KUN_TUI_NODE_DOWNLOAD=0` to disable the download and report the requirement
+instead.
 Starting with 0.3.8, Stable and Daily no longer build or publish standalone TUI
 archives or advance the standalone update manifest. The bundled TUI updates
 with the desktop app.
@@ -49,8 +64,15 @@ Default TUI startup elects under the data-directory/flavor lock and Manager
 fence, creates the token, chooses the port, and starts a Runtime owned by that
 TUI session. Discovery records its instance ID, PID, owner, version, start time,
 loopback URL, and log path. If the same slot already has a live or starting GUI,
-another TUI, or a foreground `kun serve` owner, startup reports an actionable
-conflict; it does not attach to, replace, or stop that owner. The default
+another TUI, or a foreground `kun serve` owner, the TUI does not replace or stop
+that owner. Instead it attaches to the owner's Runtime when that Runtime answers
+and is the same application build, and says so in the status row ("Attached to
+the running GUI Runtime"). An attached TUI never owns the Runtime: it ends when
+the owner exits, the TUI then reports the lost connection, and it never starts a
+Runtime of its own on reconnect. When the owner's Runtime is a different build
+(for example an older installed app next to a development build) or does not
+answer, startup reports the actionable ownership conflict instead. `--no-start`
+still forces this attach-only behavior. The default
 Manager profile binds one canonical data directory, while production and
 development flavors retain independent slots.
 
@@ -123,15 +145,26 @@ conversation, use `/connect` to configure a model, `Ctrl+X L` to browse
 sessions, and `Ctrl+P` to search every command. Exiting the TUI stops its exact
 Runtime but leaves Service Manager and all saved data intact.
 
-The welcome surface contains only the text identity `KUN`, one concise value
-statement, Workspace/Model/Mode/Version metadata, and three starts: type a task,
-`/connect`, or `/sessions`. It does not keep a large logo, runtime diagnostics,
-MCP counts, or a full shortcut menu on screen. In a session, every assistant
-turn is grouped under one `Kun` label, Thinking is collapsed by default, and
-tools and Subagents use compact status/object/duration rows. The composer has
-one input, provider/model · effort · mode metadata, and only actions valid in
-the current context. Narrow layouts preserve titles, selection, errors, and
-primary actions before secondary counts and descriptions.
+The welcome surface shows the pixel logo, the line the name comes from, the
+prompt panel, the three most recent sessions, and Workspace:branch plus the
+version at the foot. It does not keep runtime diagnostics, MCP counts, or a full
+shortcut menu on screen.
+
+The session view is full screen. Sessions opened in this TUI sit in a tab strip
+at the top (`Ctrl+X 1`-`9` switches; running, waiting and unread sessions carry
+a status glyph); at 180 columns or wider a session rail grouped by workspace
+replaces it. The right sidebar (docked at 120 columns or wider, otherwise an
+overlay toggled with `Ctrl+X B`) shows the context ring, Goal, Plan, Agents and
+`git diff` stats. The prompt panel's bar takes the mode's color
+(Agent/Plan/Graph/Goal), with mode, model, effort and context use beneath it.
+A finished turn folds its successful tool calls into one
+`▸ Worked 38s · read 4 · edit 2` line that expands on click, keeps failed steps
+visible, and ends with `◆ Kun · model · duration`. Thinking is a one-line
+summary (`Thinking:` / `Thought:`) that expands on click. Approvals and
+structured questions open where the prompt is; other pages are dialogs over the
+session. Colors follow the terminal's light or dark theme. Narrow layouts
+preserve titles, selection, errors, and primary actions before secondary counts
+and descriptions.
 
 Pressing Enter clears the composer immediately and shows an animated
 `Sending message` status before the runtime acknowledges the turn.
@@ -150,8 +183,9 @@ when idle. When runtime context and usage are known, the right edge shows
 `used / capacity · percent` as context occupancy, not generation progress.
 
 Tool calls default to a single action/object/duration row whose completed
-result terminates with `└`. `Ctrl+O` expands it into a `├ input` / `└ output`
-tree. Running, completed, and failed tools use motion, a solid dot, and an
+result terminates with `└`. `/details` expands new tool rows into a
+`├ input` / `└ output` tree, and the transcript page (`Ctrl+O`, then `D`)
+shows that view for the whole conversation. Running, completed, and failed tools use motion, a solid dot, and an
 error mark respectively, with color reserved for status meaning. These
 presentational changes retain inline mode and native terminal scrollback.
 
@@ -160,7 +194,7 @@ Consecutive read-only discovery calls in one phase are grouped into an
 and Web Search may stay in one group across collapsed Thinking rows; an
 answer, command, edit, delegation, approval, or structured input ends the
 group. The compact view shows the first 12 actions and the remaining count.
-`Ctrl+O` expands every action and its input/output. Failed actions remain in
+`/details` and the transcript page expand every action and its input/output. Failed actions remain in
 the group and contribute to its title. Grouping changes only the TUI
 presentation, not execution order, event history, or exports.
 
@@ -209,7 +243,13 @@ provider and account.
 
 Sessions, Commands, Reasoning, Mode, Connect, Subagents, Timeline, Skills,
 Help, Status, Context, Queue, MCP, Permissions, Approval, and structured input
-follow the same exclusive-route rule. Selectors use a breadcrumb, optional
+follow the same exclusive-route rule. Pages use the terminal's alternate
+screen, so the scrollback above the conversation is untouched while a page is
+open; closing it restores the conversation, composer draft, and focus. The
+Approval page highlights `Allow once`; `←`/`→` or Tab switches the choice,
+Enter confirms it (an Enter typed in the first moment after the page opens is
+ignored so a keystroke meant for the composer cannot approve), `y` allows,
+and `n`, Esc, or Ctrl+C deny. Selectors use a breadcrumb, optional
 search, flat groups, a cyan selection rail, and one contextual footer.
 Connection pages show one current step, while read-only inspection pages group
 fields and statuses instead of reusing a heavy generic modal.
@@ -235,6 +275,8 @@ directory, writes only a secret-free GUI compatibility projection, and
 | `Ctrl+P` | Open the searchable command palette |
 | `Ctrl+X L` | Open the session search/switch page |
 | `Ctrl+X N` | Create and open a session |
+| `Ctrl+X 1`-`9` | Switch to the session tab with that number |
+| `Ctrl+X B` | Show or hide the session sidebar |
 | `Ctrl+X P` | Enter or leave Pointer mode; only this mode lets Kun capture mouse clicks |
 | `Ctrl+T` | Cycle the current model's supported reasoning efforts |
 | `F2` / `Shift+F2` | Cycle recent models forward/backward |
@@ -243,12 +285,19 @@ directory, writes only a secret-free GUI compatibility projection, and
 | `Ctrl+D` | Forward-delete when non-empty; press twice to exit while idle and empty; request confirmation in Sessions |
 | `Backspace` / `Delete` | Remove the most recently queued attachment when composer text is empty; retain normal text editing while text is present |
 | `Esc` | Close autocomplete/the current page or interrupt the active turn; press twice while idle to safely undo the previous turn |
-| `Ctrl+O` | Expand or collapse tool-call details in the transcript |
+| `Ctrl+O` | Expand or collapse all tool details and folded `Worked` lines |
 | `Ctrl+G` | Edit the current composer draft with `$VISUAL`/`$EDITOR` |
 | `Ctrl+S` | Immediately steer a non-empty draft into the running turn |
 | macOS `Cmd+V` / `Ctrl+X V`; Windows/Linux `Ctrl+V` | Read a screenshot from the system clipboard and queue it; `Alt+V` and forwarded `Ctrl+Shift+V` / `Super+V` are also accepted |
 | `Ctrl+L` | Redraw |
 | `Shift+PgUp/PgDn` | Native terminal scrollback; not captured by Kun |
+
+Text already printed to the scrollback is never rewritten, so display toggles
+such as `/thinking` and `/details` apply to new output; the transcript page
+shows the whole conversation with the current settings. After the terminal
+width changes, Kun clears the screen and the terminal's saved lines and prints
+the conversation again at the new width, so wrapped tables and code blocks
+stay intact.
 
 Kun leaves terminal mouse reporting disabled by default. Drag to select any
 transcript text, then use the terminal's own copy shortcut.
@@ -325,12 +374,16 @@ GUI Code projects attach extra folders to the primary project (sidebar **Add fol
 Compatibility aliases: `/threads`, `/resume`, and `/continue` → `/sessions`, `/clear` →
 `/new`, `/title` → `/rename`, `/models` → `/model`, `/provider` → `/connect`,
 `/summarize` → `/compact`, and `/q` → `/quit`. The aliases are also present in
-pi-tui autocomplete.
+composer autocomplete.
 
-Assistant text uses pi-tui Markdown. Tool calls and results are compact by
+Assistant text is rendered as Markdown with highlighted code blocks and tables.
+While a reply streams, each paragraph, list, table, or code block is printed to
+the scrollback as soon as it is complete; only the growing tail stays in the
+live region. Tool calls and results are compact by
 default. Thinking starts as a one-line collapsed duration summary without its
-reasoning body. `/thinking` expands every body as muted italic text and toggles
-back to collapsed. In Pointer mode, primary-click one Thinking title to toggle
+reasoning body. `/thinking` expands Thinking bodies in new output as muted
+italic text and toggles back to collapsed; `Ctrl+O` shows them for earlier
+turns. In Pointer mode, primary-click one Thinking title to toggle
 only that segment; its body and neighboring messages are not click targets.
 Streaming fragments continue to accumulate while
 collapsed, so expanding restores the complete text. `Ctrl+T` prefers complete GUI/registry

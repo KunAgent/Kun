@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Socket } from '@kun/remote-protocol'
 import type { KunAccountState } from '../../shared/kun-account'
-import { MobileLinkService, type LinkDependencies } from './service'
+import { MobileLinkService, PEER_LIST_INTERVAL_MS, type LinkDependencies } from './service'
 import { MobileLinkRecovery } from './recovery'
 
 afterEach(() => vi.useRealTimers())
@@ -20,7 +20,7 @@ function fixture() {
         : path.endsWith('/relay-tickets') ? { url: 'wss://relay.test/ws', ticket: 'ticket' }
           : { ok: true })
   }) as unknown as ReturnType<typeof vi.fn<typeof fetch>>
-  const deps: LinkDependencies = {
+  const deps: LinkDependencies = { requireMembership: async () => {},
     account: { getState: async () => state, accessToken: async () => 'token',
       expire: async () => {}, onState: () => () => {} },
     identity: async () => ({ id: host, credential: 'a'.repeat(64) }),
@@ -49,6 +49,30 @@ async function cleanup(f: ReturnType<typeof fixture>) {
 }
 
 describe('desktop mobile link under network disruption', () => {
+  it('stops on a missing account token and recovers after explicit authorization repair', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    let authorized = true
+    f.deps.account.accessToken = async () => authorized ? 'token' : null
+    try {
+      await f.service.enable(true); await settle()
+      authorized = false
+      await vi.advanceTimersByTimeAsync(20000)
+      expect(f.sockets[0].close).toHaveBeenCalledOnce()
+      expect(f.deps.diagnostic).toHaveBeenCalledWith('AUTHORIZATION_REJECTED', undefined)
+      f.service.reconnect('NETWORK_ONLINE')
+      await vi.advanceTimersByTimeAsync(120000)
+      expect(f.sockets).toHaveLength(1)
+      authorized = true
+      await f.service.enable(false)
+      await f.service.enable(true); await settle()
+      expect(f.sockets).toHaveLength(2)
+      await vi.advanceTimersByTimeAsync(11000)
+      expect((f.service as any).online).toBe(true)
+      expect(vi.mocked(f.sockets[1].send).mock.calls.some(([raw]) => JSON.parse(raw).kind === 'ping')).toBe(true)
+    } finally { await cleanup(f) }
+  })
+
   it('keeps healthy WSS through sustained interface churn and recovers a genuinely dead route', async () => {
     vi.useFakeTimers()
     const f = fixture()
@@ -144,8 +168,9 @@ describe('desktop mobile link under network disruption', () => {
         return original(input, init)
       })
       f.fetcher.mockClear()
-      await vi.advanceTimersByTimeAsync(31000)
+      await vi.advanceTimersByTimeAsync(PEER_LIST_INTERVAL_MS + 11000)
       expect(f.fetcher.mock.calls.some(([url]) => String(url).endsWith('/relay-lease'))).toBe(true)
+      expect(f.fetcher.mock.calls.some(([url]) => String(url).endsWith('/grants'))).toBe(true)
       expect(socket.close).not.toHaveBeenCalled()
       expect((f.service as any).authorizationExpiresAt).toBeGreaterThan(Date.now() + 20000)
       await vi.advanceTimersByTimeAsync(15000)
@@ -163,10 +188,30 @@ describe('desktop mobile link under network disruption', () => {
       const original = f.fetcher.getMockImplementation()!
       f.fetcher.mockImplementation(async (input, init) => String(input).endsWith('/grants')
         ? Response.json({ error: 'data_unavailable' }, { status: 503 }) : original(input, init))
-      await vi.advanceTimersByTimeAsync(31000)
+      await vi.advanceTimersByTimeAsync(PEER_LIST_INTERVAL_MS + 21000)
       expect(f.sockets[0].close).not.toHaveBeenCalled()
       expect((f.service as any).online).toBe(true)
       expect(f.deps.diagnostic).toHaveBeenCalledWith('PEER_METADATA_REFRESH_FAILED')
+    } finally { await cleanup(f) }
+  })
+
+  it('lists grants on every connection but only every five minutes across lease renewals', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    try {
+      await f.service.enable(true)
+      await settle()
+      const count = (suffix: string) => f.fetcher.mock.calls.filter(([url]) => String(url).endsWith(suffix)).length
+      const renewals = count('/relay-lease'), listings = count('/grants')
+      await vi.advanceTimersByTimeAsync(2 * PEER_LIST_INTERVAL_MS)
+      // 30 renewals in ten minutes used to list grants 30 times.
+      expect(count('/relay-lease') - renewals).toBe(30)
+      expect(count('/grants') - listings).toBe(2)
+      expect(f.sockets[0].close).not.toHaveBeenCalled()
+      f.service.reconnect('HOST_RESUMED')
+      await settle()
+      expect(f.sockets).toHaveLength(2)
+      expect(count('/grants') - listings).toBe(3)
     } finally { await cleanup(f) }
   })
 

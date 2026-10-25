@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
@@ -42,15 +42,18 @@ const STRICT_RESOURCE_FILES = new Set([
   'src/renderer/src/components/ade/AgentSetupSteps.tsx',
   'src/renderer/src/components/ade/AgentVersionTab.tsx',
   'src/renderer/src/components/workbench/WorkbenchChatStage.tsx',
-  'src/renderer/src/components/chat/BackgroundShellOverlay.tsx',
+  'src/renderer/src/components/chat/composer-tray/shells-tray-sheet.tsx',
+  'src/renderer/src/components/chat/composer-tray/shells-tray-rows.tsx',
   'src/renderer/src/components/chat/FloatingComposerAgentPicker.tsx',
   'src/renderer/src/components/chat/StreamdownCode.tsx',
   'src/renderer/src/components/DiffView.tsx',
+  'src/renderer/src/components/WorkspaceDocxPages.tsx',
   'src/renderer/src/components/WorkspaceDocxPreview.tsx',
-  'src/renderer/src/components/WorkspaceOfficePreviewToolbar.tsx',
   'src/renderer/src/components/WorkspacePptxPreview.tsx',
-  'src/renderer/src/components/WorkspacePptxThumbnailRail.tsx',
+  'src/renderer/src/components/WorkspacePptxDeck.tsx',
+  'src/renderer/src/components/WorkspaceOfficeToolbar.tsx',
   'src/renderer/src/components/WorkspaceSpreadsheetPreview.tsx',
+  'src/renderer/src/components/WorkspaceXlsxGrid.tsx',
   'src/renderer/src/components/design/canvas/CanvasMotionKeyframeInspector.tsx',
   'src/renderer/src/components/design/canvas/SvgFrameOverlay.tsx',
   'src/renderer/src/extensions/ControlledContributionSurfaces.tsx'
@@ -102,6 +105,8 @@ function productionRendererFiles(): string[] {
     .split('\n')
     .filter(Boolean)
     .filter((file) => !file.includes('.test.') && !file.includes('/testing/'))
+    // git ls-files still lists tracked files deleted from the working tree.
+    .filter((file) => existsSync(resolve(REPOSITORY_ROOT, file)))
 }
 
 function stringLiteral(node: ts.Node | undefined): string | null {

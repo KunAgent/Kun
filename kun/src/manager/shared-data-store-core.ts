@@ -1,5 +1,6 @@
 import { ManagerMemoryDistillationPendingOwner } from './memory-distillation-pending-owner.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
+import { randomUUID } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import { readHistoryReservationKeys } from '../history/history-reference-reservations.js'
 import { join, relative, resolve, sep } from 'node:path'
@@ -93,6 +94,7 @@ export abstract class ManagerSharedDataStoreCore {
   protected readonly mutationQueues = new Map<string, Promise<unknown>>()
   protected readonly controlThreads = new Map<string, string>()
   protected readonly dataDir: string
+  private readonly atomicJsonEpoch = randomUUID()
   protected readonly atomicJsonDocuments = new Map<string, {
     revision: number
     loaded: boolean
@@ -137,6 +139,22 @@ export abstract class ManagerSharedDataStoreCore {
     const document = this.atomicJsonDocument(target)
     await this.loadAtomicJson(target, document)
     return { revision: document.revision, value: document.value }
+  }
+
+  /**
+   * Revisions restart with each Manager process, so the etag carries a
+   * per-process epoch: a client can never match a revision of another Manager.
+   */
+  async readAtomicJsonConditional(path: string, ifNoneMatch?: string): Promise<
+    | { revision: number; etag: string; unchanged: true }
+    | { revision: number; etag: string; value: unknown | null }
+  > {
+    const target = this.safeDataPath(path)
+    const document = this.atomicJsonDocument(target)
+    await this.loadAtomicJson(target, document)
+    const etag = `${this.atomicJsonEpoch}:${document.revision}`
+    if (ifNoneMatch === etag) return { revision: document.revision, etag, unchanged: true }
+    return { revision: document.revision, etag, value: document.value }
   }
 
   async writeAtomicJson(input: {

@@ -1,4 +1,5 @@
 import { createRuntimeAgentDispatch } from './runtime-composition-dispatch.js'
+import { createRuntimeTaskSuggestions } from './runtime-composition-tasks.js'
 import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { createReviewContextResolver } from '../services/review-composer-context.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
@@ -12,8 +13,6 @@ import {
   buildPptBoardLocalTools,
   buildDesignMotionLocalTools,
   buildDesignSvgLocalTools,
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID,
   LocalToolHost,
   buildDefaultLocalTools,
   buildExecutionTaskLocalTools,
@@ -45,7 +44,7 @@ import {
   InstructionRuntime,
   resolveConfiguredHooks,
   BackgroundShellRuntime,
-  stopBashSessionById,
+  stopBashSessionById, writeBashSessionStdin,
   createBashLocalTool,
   createBackgroundShellTool,
   type LocalTool,
@@ -56,6 +55,7 @@ import {
 import type { createRuntimeModelComposition } from './runtime-composition-model.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import {
+  buildPptDeckRuntimeProvider,
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   skillsConfigForRuntime,
@@ -68,6 +68,7 @@ import {
   seedUsageCarryover
 } from './runtime-factory-storage.js'
 import { createRuntimeBackgroundMaintenance } from './runtime-background-maintenance.js'
+import { createMaintenanceCompletionLog } from './runtime-maintenance-schedule.js'
 import { createRuntimeMaintenanceSlices } from './runtime-maintenance-slices.js'
 import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
@@ -102,12 +103,14 @@ import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { buildGitHubAppProvider } from '../adapters/tool/github-app-provider.js'
 import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
   const agentDispatchService = createRuntimeAgentDispatch(model)
+  const taskSuggestionService = createRuntimeTaskSuggestions(model)
   const { core } = model
   const gmail = model.gmail
   const { options } = core
@@ -179,6 +182,7 @@ export async function createRuntimeServices(
     // store at spawn/probe time; values never reach config or logs.
     revision: () => core.optionsRevision,
     readinessProofStorePath: join(core.activeOptions.dataDir, 'harness-readiness.json'),
+    modelCatalogStorePath: join(core.activeOptions.dataDir, 'harness-model-catalogs.json'),
     resolveProviderCredential: model.resolveLegacyRequestCredentials,
     resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding),
     resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)
@@ -280,6 +284,7 @@ export async function createRuntimeServices(
   )
   const supplyChainTrust = new InMemoryPublisherTrustStore()
   backgroundShellRuntime.bindStopHandler(stopBashSessionById)
+  backgroundShellRuntime.bindStdinHandler(async (id, input) => (await writeBashSessionStdin(id, input, 1)) !== null)
   const backgroundShellTool = createBackgroundShellTool({
     listBackgroundSessions: (threadId) => backgroundShellRuntime.listSessions(threadId)
   })
@@ -358,6 +363,7 @@ export async function createRuntimeServices(
     pruneAttachments: maintenanceSlices.runAttachmentSlice,
     inspectThreads: maintenanceSlices.runGuardianSlice,
     rebuildEventIndex: maintenanceSlices.runEventIndexSlice,
+    completions: createMaintenanceCompletionLog(core.activeOptions.dataDir),
     onError: (task, error) => {
       console.warn(`[kun] background ${task} failed:`, error)
     }
@@ -467,27 +473,7 @@ export async function createRuntimeServices(
       ...buildPptBoardLocalTools()
     ]
   }
-  const pptAgentProvider = {
-    id: PPT_AGENT_LOCAL_PROVIDER_ID,
-    kind: 'built-in' as const,
-    enabled: true,
-    available: true,
-    effects: {
-      network: false,
-      externalWrite: false,
-      processExecution: true,
-      guiAutomation: false
-    },
-    tools: [
-      ...buildPptAgentLocalTools({
-        enabled: () => core.activeOptions.lab?.pptAgent?.enabled !== false,
-        toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
-        governanceDirectory: () => join(core.activeOptions.dataDir, 'ppt-governance'),
-        resolveSourceRequest: async (context) =>
-          (await turnService.getTurn(context.threadId, context.turnId))?.prompt
-      })
-    ]
-  }
+  const pptDeckProvider = buildPptDeckRuntimeProvider(() => core.activeOptions, () => imageGenProviders.available)
   const officeCliProviders = buildOfficeCliToolProviders({
     binaryPath: process.env.KUN_OFFICECLI_BINARY,
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile'),
@@ -535,6 +521,7 @@ export async function createRuntimeServices(
     writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
     buildGmailToolProvider(gmail, core.threadStore, model.gmailDataPolicy),
+    ...(model.githubApp ? [buildGitHubAppProvider(model.githubApp.service, core.threadStore, model.githubApp.mcp)] : []),
     { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
       tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {
@@ -588,7 +575,7 @@ export async function createRuntimeServices(
     ...musicGenProviders.providers,
     ...videoGenProviders.providers,
     ...officeCliProviders,
-    pptAgentProvider,
+    pptDeckProvider,
     designCanvasProvider,
     // NOTE: computer_use is intentionally NOT in baseToolProviders — host
     // control must not be delegable to subagents. browser_use follows the
@@ -616,6 +603,7 @@ export async function createRuntimeServices(
     model,
     gmail,
     agentDispatchService,
+    taskSuggestionService,
     migrationMaintenance,
     executionLeases,
     turnService,

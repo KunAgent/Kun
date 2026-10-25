@@ -38,7 +38,7 @@ describe('Kun account and mobile service lifecycle integration', () => {
         : path.endsWith('/pairings') ? { pairings: [] }
           : path.endsWith('/relay-tickets') ? { url: 'wss://relay.test/ws', ticket: 'ticket' } : { ok: true })
     }) as typeof fetch
-    const service = new MobileLinkService({
+    const service = new MobileLinkService({ requireMembership: async () => {},
       account: access, origin: 'https://relay.test', name: 'host', platform: 'macos', fetch: fetcher,
       identity: async () => ({ id: '11111111-1111-4111-8111-111111111111', credential: 'a'.repeat(64) }),
       socket: () => (socket = { onopen: null, onmessage: null, onerror: null, onclose: null,

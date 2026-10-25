@@ -7,7 +7,7 @@ import { AgentArtifactQuery } from '../contracts/agent-artifacts.js'
 import { artifactReference } from './agent-artifact-library.js'
 import { freezeAgentPermissions } from './agent-permission-snapshot.js'
 import { realpath, stat } from 'node:fs/promises'
-import { relative, isAbsolute } from 'node:path'
+import { relative, isAbsolute, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { RoomRuntime } from '../rooms/room-runtime.js'
 import type { Room } from '../contracts/rooms.js'
@@ -83,8 +83,9 @@ export async function updateDirectWorkspace(rooms: RoomRuntime, roomId: string, 
     const agent = await rooms.agents.active(room.members[0].participantAgentId!)
     if (workspace && agent.allowedRepositoryRoots && !agent.allowedRepositoryRoots.includes(workspace)) throw new Error('Project is outside this Agent\'s allowed directories')
     if (workspace) {
-      const rel = relative(rooms.deps.dataDir, workspace)
-      if (!isAbsolute(rel) && rel !== '..' && !rel.startsWith('../')) throw new Error('Select a project outside Kun private data')
+      const dataRoot = await realpath(rooms.deps.dataDir)
+      const rel = relative(dataRoot, workspace)
+      if (!isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + sep)) throw new Error('Select a project outside Kun private data')
     }
   }
   await store.commit({ requestId: key, fingerprint: hash, checks: [{ kind: 'room', id: roomId, expectedRevision: input.expectedRevision }],

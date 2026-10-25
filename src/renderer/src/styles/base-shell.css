@@ -6,6 +6,7 @@
 @import './base-shell/thread-hydration-loading.css';
 @import './base-shell/process-media-panels.css';
 @import './base-shell/session-sidebar-shell.css';
+@import './base-shell/workbench-card.css';
 @import './base-shell/composer-toolbar-layout.css';
 @import './base-shell/composer-usage-footer.css';
 @import './base-shell/runtime-wake-state.css';

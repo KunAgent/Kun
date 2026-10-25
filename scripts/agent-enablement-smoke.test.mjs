@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { createContext, runInContext } from 'node:vm'
+import { setSmokeAppearance } from './agent-enablement-smoke-operation.mjs'
 
 const root = new URL('../', import.meta.url)
 const source = path => readFileSync(new URL(path, root), 'utf8')
@@ -54,7 +56,7 @@ test('theme evidence verifies persisted state and actual production backgrounds'
   assert.match(fixture, /host\.setSettings\(\{ \.\.\.host\.settings, theme \}\)/)
   assert.doesNotMatch(fixture, /classList\.toggle\('dark'/)
   assert.match(host, /emitRendererSettingsChanged\(clone\(settings\)\)/)
-  assert.match(smoke, /await window\.agentEnablementFixture\.language\(language\)/)
+  assert.match(smoke, /await setSmokeAppearance\(page, language, theme, report.appearanceOperations\)/)
   assert.match(smoke, /await assertTheme\(theme\)/)
   assert.match(smoke, /assert\.equal\(appearance\.savedTheme, theme/)
   assert.match(smoke, /assert\.equal\(appearance\.renderedTheme, theme/)
@@ -106,4 +108,121 @@ test('settings baseline copies the complete offline fixture without replacing pr
   const host = source('src/renderer/src/components/ade/agent-enablement-smoke-runtime.ts')
   assert.doesNotMatch(host, /from ['"]@shared\/harness-enablement['"]/)
   assert.ok(baseline.includes('github.event.pull_request.base.sha'))
+})
+
+test('native harnesses finish dependency optimization before serving or navigating', () => {
+  for (const file of ['scripts/smoke-agent-enablement.mjs', 'scripts/smoke-paper-evidence.mjs']) {
+    const harness = source(file)
+    const optimize = harness.indexOf('const optimized = await optimizeDeps(server.config, true, true)')
+    assert.ok(optimize > harness.indexOf('server = await createServer('), file)
+    assert.ok(optimize < harness.indexOf('await server.listen()'), file)
+    assert.ok(harness.indexOf('await server.listen()') < harness.indexOf('await page.goto('), file)
+    for (const dependency of ['react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime']) {
+      assert.ok(harness.includes(`'${dependency}'`), `${file}: ${dependency}`)
+    }
+    assert.match(harness, /Object.keys\(optimized.optimized\)/)
+    assert.match(harness, /page.on\('framenavigated'/)
+    assert.match(harness, /frame === page.mainFrame\(\)/)
+    assert.match(harness, /page.on\('console'/)
+    assert.match(harness, /message.text\(\).includes\('\[vite\]'\)/)
+    assert.doesNotMatch(harness, /waitForTimeout\(\d{4,}|noDiscovery: true/)
+  }
+})
+
+test('paper evidence optimizer scans the same real fixture that the browser loads', () => {
+  const paper = source('scripts/smoke-paper-evidence.mjs')
+  assert.match(paper, /mkdtemp\(join\(repository, 'out', '\.paper-evidence-smoke-'\)\)/)
+  assert.match(paper, /fixtureId = normalizePath\(join\(fixtureDirectory, 'fixture.tsx'\)\)/)
+  assert.ok(paper.indexOf('await writeFile(fixtureId, paperEvidenceFixture())') < paper.indexOf('server = await createServer('))
+  assert.match(paper, /entries: \[fixtureId\]/)
+  assert.match(paper, /id === fixtureUrl \|\| id === fixtureId\) return fixtureId/)
+  assert.doesNotMatch(paper, /load\(id\)/)
+  assert.match(paper, /await rm\(fixtureDirectory, \{ recursive: true, force: true \}\)/)
+  assert.match(paper, /await page.reload\(\)/)
+  assert.match(paper, /assert.deepEqual\(errors, \[\]/)
+})
+
+function deferredAppearancePage() {
+  const calls = []
+  let resolveLanguage, rejectLanguage, resumePoll, startedPoll
+  const language = new Promise((resolve, reject) => { resolveLanguage = resolve; rejectLanguage = reject })
+  const pollStarted = new Promise(resolve => { startedPoll = resolve })
+  const pollGate = new Promise(resolve => { resumePoll = resolve })
+  const context = createContext({ document: {}, window: { agentEnablementFixture: {
+    language: value => { calls.push(['language', value]); return language },
+    theme: value => { calls.push(['theme', value]) }
+  } } })
+  const evaluate = async (fn, arg) => runInContext(`(${fn.toString()})`, context)(arg)
+  const page = { evaluate, async waitForFunction(fn, arg) {
+    const pending = await evaluate(fn, arg)
+    assert.equal(pending, false, 'Must observe the unfinished operation, not declare early success')
+    startedPoll()
+    await pollGate
+    assert.equal(await evaluate(fn, arg), true)
+  } }
+  return { page, context, calls, pollStarted, resolveLanguage, rejectLanguage, resumePoll }
+}
+
+test('appearance retains its deferred operation and applies language/theme exactly once', async () => {
+  const fixture = deferredAppearancePage()
+  const diagnostics = []
+  const result = setSmokeAppearance(fixture.page, 'zh', 'dark', diagnostics)
+  await fixture.pollStarted
+  assert.deepEqual(fixture.calls, [['language', 'zh']])
+  const operation = fixture.context.window.agentEnablementAppearanceOperation
+  assert.equal(operation.document, fixture.context.document)
+  assert.equal(typeof operation.promise.then, 'function')
+  fixture.resolveLanguage()
+  await operation.promise
+  fixture.resumePoll()
+  await result
+  assert.deepEqual(fixture.calls, [['language', 'zh'], ['theme', 'dark']])
+  assert.equal(fixture.context.window.agentEnablementAppearanceOperation, undefined)
+  assert.equal(diagnostics[0].status, 'fulfilled')
+})
+
+test('appearance propagates deferred rejection without applying theme or retrying', async () => {
+  const fixture = deferredAppearancePage()
+  const diagnostics = []
+  const result = setSmokeAppearance(fixture.page, 'zh', 'dark', diagnostics)
+  const rejected = assert.rejects(result, /locale import failed/)
+  await fixture.pollStarted
+  fixture.rejectLanguage(new Error('locale import failed'))
+  await fixture.context.window.agentEnablementAppearanceOperation.promise
+  fixture.resumePoll()
+  await rejected
+  assert.equal(diagnostics[0].status, 'rejected')
+  assert.match(diagnostics[0].error, /locale import failed/)
+  assert.deepEqual(fixture.calls, [['language', 'zh']])
+})
+
+test('appearance fails if the document is replaced instead of replaying the operation', async () => {
+  const fixture = deferredAppearancePage()
+  const diagnostics = []
+  const result = setSmokeAppearance(fixture.page, 'zh', 'dark', diagnostics)
+  const rejected = assert.rejects(result, /document was replaced/)
+  await fixture.pollStarted
+  fixture.resolveLanguage()
+  await fixture.context.window.agentEnablementAppearanceOperation.promise
+  fixture.context.document = {}
+  fixture.resumePoll()
+  await rejected
+  assert.equal(diagnostics[0].status, 'boundary-failed')
+  assert.match(diagnostics[0].error, /document was replaced/)
+  assert.deepEqual(fixture.calls, [['language', 'zh'], ['theme', 'dark']])
+})
+
+test('appearance does not apply theme when document replacement interrupts locale loading', async () => {
+  const fixture = deferredAppearancePage()
+  const result = setSmokeAppearance(fixture.page, 'zh', 'dark')
+  const rejected = assert.rejects(result, /document was replaced/)
+  await fixture.pollStarted
+  const operation = fixture.context.window.agentEnablementAppearanceOperation
+  fixture.context.document = {}
+  fixture.resolveLanguage()
+  await operation.promise
+  fixture.resumePoll()
+  await rejected
+  assert.equal(operation.status, 'rejected')
+  assert.deepEqual(fixture.calls, [['language', 'zh']])
 })

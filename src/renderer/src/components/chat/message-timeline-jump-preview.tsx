@@ -24,8 +24,10 @@ export function timelineBottomPaddingClass(): string {
   return 'pb-10'
 }
 
+// Wraps so a long tool target (a full path) never squeezes the elapsed and
+// silence suffixes into a narrow column in side panels.
 export function liveTurnProgressClass(): string {
-  return 'flex w-fit max-w-full items-center gap-2 py-0.5 text-[14px] font-medium text-ds-muted'
+  return 'flex w-fit max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 py-0.5 text-[14px] font-medium text-ds-muted'
 }
 
 export function activeTimelineTurnKey(

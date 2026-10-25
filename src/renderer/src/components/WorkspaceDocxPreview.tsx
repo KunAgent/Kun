@@ -1,22 +1,44 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import i18n from '../i18n'
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
-import type { WorkspaceOfficePreviewSuccess, WorkspaceOfficeSelection } from '@shared/office-document'
-import { WorkspaceOfficePreviewToolbar } from './WorkspaceOfficePreviewToolbar'
-import { WorkspaceDocxSelectionToolbar } from './WorkspaceDocxSelectionToolbar'
-import type { WorkspaceDocumentQuoteDraft } from '../lib/workspace-document-quote'
 import {
-  openWorkspaceOfficeExternalLink,
-  secureWorkspaceOfficeLinks
-} from './workspace-office-external-link'
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement
+} from 'react'
+import type { ViewerZoomLevel, ViewerZoomState } from '@extend-ai/react-docx'
+import type { WorkspaceOfficePreviewSuccess, WorkspaceOfficeSelection } from '@shared/office-document'
+import {
+  OfficePageNav,
+  OfficeToolbarStatus,
+  OfficeZoomLevelControls,
+  WorkspaceOfficeToolbar
+} from './WorkspaceOfficeToolbar'
+import { WorkspaceDocxSelectionToolbar } from './WorkspaceDocxSelectionToolbar'
+import type { WorkspaceDocxPagesHandle } from './WorkspaceDocxPages'
+import type { WorkspaceDocumentQuoteDraft } from '../lib/workspace-document-quote'
+import { openWorkspaceOfficeExternalLink } from './workspace-office-external-link'
 import {
   emptyWorkspaceOfficeSelection,
   pageFromDocxNode,
   selectionFromOfficeDom
 } from './workspace-office-selection'
+import { attachDocxDragSelection } from './workspace-docx-drag-selection'
+import { registerDocxPreviewText } from './workspace-docx-text'
 import { subscribeKnowledgeSourceNavigation } from '../lib/knowledge-source-navigation'
 
-export const DOCX_PREVIEW_MIN_ZOOM = 0.25
+const WorkspaceDocxPages = lazy(() =>
+  import('./WorkspaceDocxPages').then((module) => ({ default: module.WorkspaceDocxPages }))
+)
+
+/**
+ * After a jump the viewer reports the page nearest the top while it scrolls, and
+ * pages near the end can never reach the top. Those reports are ignored briefly.
+ */
+const NAVIGATION_SETTLE_MS = 700
 
 export function WorkspaceDocxPreview({
   result,
@@ -31,84 +53,79 @@ export function WorkspaceDocxPreview({
   onSelectionChange?: (selection: WorkspaceOfficeSelection) => void
   onQuoteSelection?: (draft: WorkspaceDocumentQuoteDraft) => Promise<boolean> | boolean
 }): ReactElement {
-  const bodyRef = useRef<HTMLDivElement>(null)
-  const styleRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const renderIdRef = useRef(0)
-  const fitToWidthRef = useRef(true)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const pagesRef = useRef<WorkspaceDocxPagesHandle>(null)
+  const navigationRef = useRef<{ page: number; until: number } | null>(null)
   const [page, setPage] = useState(1)
-  const [pageCount, setPageCount] = useState(1)
-  const [zoom, setZoom] = useState(1)
+  const pageRef = useRef(1)
+  pageRef.current = page
+  const [pageCount, setPageCount] = useState(0)
+  const pageCountRef = useRef(0)
+  pageCountRef.current = pageCount
+  const [zoom, setZoom] = useState<ViewerZoomLevel>('automatic')
+  const [resolvedZoom, setResolvedZoom] = useState(100)
   const [error, setError] = useState<string | null>(null)
+  // A reload of the same file keeps the reader's page; another file starts at the top.
+  const loadedPathRef = useRef<string | null>(null)
+  // A re-read of unchanged bytes keeps the parsed document instead of parsing it again.
+  const sourceRef = useRef<{ key: string; data: Uint8Array } | null>(null)
+  const sourceKey = `${result.path}\n${result.sourceSha256}`
+  if (sourceRef.current?.key !== sourceKey) sourceRef.current = { key: sourceKey, data: result.data }
+  const source = sourceRef.current.data
 
-  const fitToWidth = useCallback((): void => {
-    if (!fitToWidthRef.current) return
-    const viewport = scrollRef.current
-    const firstPage = docxPages(bodyRef.current)[0]
-    if (!viewport || !firstPage) return
-    const viewportStyle = window.getComputedStyle(viewport)
-    const wrapper = firstPage.closest<HTMLElement>('.docx-wrapper')
-    const wrapperStyle = wrapper ? window.getComputedStyle(wrapper) : null
-    const viewportWidth = viewport.clientWidth
-      - numericCssValue(viewportStyle.paddingLeft)
-      - numericCssValue(viewportStyle.paddingRight)
-    const documentWidth = firstPage.offsetWidth
-      + numericCssValue(wrapperStyle?.paddingLeft)
-      + numericCssValue(wrapperStyle?.paddingRight)
-    const nextZoom = fittedDocxPreviewZoom(viewportWidth, documentWidth)
-    setZoom((current) => Math.abs(current - nextZoom) < 0.001 ? current : nextZoom)
+  useEffect(() => {
+    const content = contentRef.current
+    if (!content) return
+    return registerDocxPreviewText(content, () => pagesRef.current?.fullText() ?? '')
   }, [])
 
   useEffect(() => {
-    const body = bodyRef.current
-    const style = styleRef.current
-    if (!body || !style) return
-    const renderId = ++renderIdRef.current
-    const stagedBody = document.createElement('div')
-    const stagedStyle = document.createElement('div')
-    void import('docx-preview')
-      .then(async ({ renderAsync }) => {
-        await renderAsync(result.data, stagedBody, stagedStyle, {
-          breakPages: true,
-          ignoreLastRenderedPageBreak: false,
-          renderAltChunks: false,
-          useBase64URL: true
-        })
-        if (renderId !== renderIdRef.current) return
-        secureWorkspaceOfficeLinks(stagedBody)
-        body.replaceChildren(...Array.from(stagedBody.childNodes))
-        style.replaceChildren(...Array.from(stagedStyle.childNodes))
-        const count = Math.max(1, docxPages(body).length)
-        setPageCount(count)
-        setPage((current) => Math.min(current, count))
-        setError(null)
-        fitToWidth()
-      })
-      .catch((cause) => {
-        if (renderId === renderIdRef.current) setError(errorMessage(cause))
-      })
-    return () => {
-      renderIdRef.current += 1
-    }
-  }, [fitToWidth, result.data, result.sourceSha256])
+    const content = contentRef.current
+    return content ? attachDocxDragSelection(content, () => scrollRef.current) : undefined
+  }, [])
 
-  useEffect(() => {
-    fitToWidthRef.current = true
-    fitToWidth()
-  }, [fitToWidth, result.path])
+  const handlePageInfo = useCallback((nextPage: number, count: number): void => {
+    setPageCount(count)
+    const navigation = navigationRef.current
+    if (navigation && nextPage !== navigation.page && performance.now() < navigation.until) return
+    pageRef.current = nextPage
+    setPage(nextPage)
+  }, [])
 
-  useEffect(() => {
-    const viewport = scrollRef.current
-    if (!viewport) return
-    fitToWidth()
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', fitToWidth)
-      return () => window.removeEventListener('resize', fitToWidth)
+  const handleLoaded = useCallback((): void => {
+    setError(null)
+    if (loadedPathRef.current !== result.path) {
+      loadedPathRef.current = result.path
+      pageRef.current = 1
+      setPage(1)
     }
-    const observer = new ResizeObserver(fitToWidth)
-    observer.observe(viewport)
-    return () => observer.disconnect()
-  }, [fitToWidth])
+  }, [result.path])
+
+  const handleZoomChange = useCallback((state: ViewerZoomState): void => {
+    setResolvedZoom(state.resolvedZoom)
+  }, [])
+
+  const clearSelection = useCallback((): void => {
+    onSelectionChange?.(emptyWorkspaceOfficeSelection('word', result.sourceFormat))
+    window.getSelection()?.removeAllRanges()
+  }, [onSelectionChange, result.sourceFormat])
+
+  const goToPage = useCallback((next: number): void => {
+    const count = pageCountRef.current
+    if (count < 1) return
+    const safePage = Math.min(count, Math.max(1, next))
+    navigationRef.current = { page: safePage, until: performance.now() + NAVIGATION_SETTLE_MS }
+    pageRef.current = safePage
+    setPage(safePage)
+    clearSelection()
+    pagesRef.current?.goToPage(safePage)
+  }, [clearSelection])
+
+  useEffect(() => subscribeKnowledgeSourceNavigation(result.path, (location) => {
+    if (location.kind !== 'word') return false
+    return pagesRef.current?.revealParagraph(location.paragraphStart) ?? false
+  }), [result.path])
 
   useEffect(() => {
     if (!onSelectionChange) return
@@ -116,14 +133,14 @@ export function WorkspaceDocxPreview({
       emptyWorkspaceOfficeSelection('word', result.sourceFormat)
     )
     const sync = (): void => {
-      const body = bodyRef.current
+      const content = contentRef.current
       const selection = window.getSelection()
-      if (!body || !selection?.anchorNode || !body.contains(selection.anchorNode)) return
+      if (!content || !selection?.anchorNode || !content.contains(selection.anchorNode)) return
       onSelectionChange(selectionFromOfficeDom(
-        body,
+        content,
         'word',
         result.sourceFormat,
-        (node) => ({ page: pageFromDocxNode(node, body) })
+        (node) => ({ page: pageFromDocxNode(node, content) })
       ))
     }
     empty()
@@ -132,91 +149,54 @@ export function WorkspaceDocxPreview({
       document.removeEventListener('selectionchange', sync)
       empty()
     }
-  }, [onSelectionChange, result.sourceFormat, result.sourceSha256, zoom])
+  }, [onSelectionChange, result.sourceFormat, result.sourceSha256])
 
-  useEffect(() => () => {
-    renderIdRef.current += 1
-    bodyRef.current?.replaceChildren()
-    styleRef.current?.replaceChildren()
-  }, [])
-
-  const goToPage = (next: number): void => {
-    const safePage = Math.min(pageCount, Math.max(1, next))
-    onSelectionChange?.(emptyWorkspaceOfficeSelection('word', result.sourceFormat))
-    window.getSelection()?.removeAllRanges()
-    setPage(safePage)
-    docxPages(bodyRef.current)[safePage - 1]?.scrollIntoView({ block: 'start' })
-  }
-
-  useEffect(() => subscribeKnowledgeSourceNavigation(result.path, (location) => {
-    if (location.kind !== 'word') return false
-    const paragraphs = bodyRef.current?.querySelectorAll<HTMLElement>('p')
-    const target = paragraphs?.[Math.max(0, location.paragraphStart - 1)]
-    if (!target) return false
-    target.scrollIntoView({ block: 'center' })
-    return true
-  }), [pageCount, result.path])
-
-  const onScroll = (): void => {
-    const viewport = scrollRef.current
-    if (!viewport) return
-    const viewportTop = viewport.getBoundingClientRect().top
-    let nearestPage = 1
-    let nearestDistance = Number.POSITIVE_INFINITY
-    docxPages(bodyRef.current).forEach((section, index) => {
-      const distance = Math.abs(section.getBoundingClientRect().top - viewportTop)
-      if (distance < nearestDistance) {
-        nearestPage = index + 1
-        nearestDistance = distance
-      }
-    })
-    setPage(nearestPage)
-  }
-
-  const changeZoom = (nextZoom: number): void => {
-    fitToWidthRef.current = false
-    setZoom(nextZoom)
-  }
-
-  const resetZoom = (): void => {
-    fitToWidthRef.current = true
-    fitToWidth()
+  const openLink = (event: ReactMouseEvent<HTMLElement>): void => {
+    if (event.button > 1) return
+    openWorkspaceOfficeExternalLink(event)
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-ds-surface-subtle">
-      <WorkspaceOfficePreviewToolbar
-        result={result}
-        loading={loading}
-        refreshError={refreshError}
-        viewerError={error}
-        zoom={zoom}
-        minZoom={DOCX_PREVIEW_MIN_ZOOM}
-        onZoomChange={changeZoom}
-        onResetZoom={resetZoom}
-      >
-        <div className="flex items-center gap-1 rounded border border-ds-border-muted px-1 py-0.5">
-          <button type="button" aria-label={i18n.t('officePreviousPage')} disabled={page <= 1} className="rounded p-0.5 hover:bg-ds-hover disabled:opacity-40" onClick={() => goToPage(page - 1)}>
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-          <span aria-label={i18n.t('officePageSummary', { page, count: pageCount })}>{i18n.t('officePageSummary', { page, count: pageCount })}</span>
-          <button type="button" aria-label={i18n.t('officeNextPage')} disabled={page >= pageCount} className="rounded p-0.5 hover:bg-ds-hover disabled:opacity-40" onClick={() => goToPage(page + 1)}>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </WorkspaceOfficePreviewToolbar>
-      <div ref={styleRef} className="hidden" />
-      <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-auto p-4" style={{ position: 'relative' }}>
+    <div className="kun-docx flex min-h-0 flex-1 flex-col">
+      <WorkspaceOfficeToolbar
+        leading={(
+          <OfficePageNav
+            summary={i18n.t('officePageSummary', { page, count: Math.max(pageCount, 1) })}
+            prevLabel={i18n.t('officePreviousPage')}
+            nextLabel={i18n.t('officeNextPage')}
+            canPrev={page > 1}
+            canNext={page < pageCount}
+            onPrev={() => goToPage(page - 1)}
+            onNext={() => goToPage(page + 1)}
+          />
+        )}
+        status={<OfficeToolbarStatus loading={loading} message={error || refreshError} />}
+        trailing={<OfficeZoomLevelControls zoom={zoom} resolvedZoom={resolvedZoom} disabled={pageCount === 0} onChange={setZoom} />}
+      />
+      <div ref={scrollRef} className="kun-office-scroll relative min-h-0 flex-1 overflow-auto">
         <div
-          className="origin-top-left"
-          style={{ width: `${100 / zoom}%`, transform: `scale(${zoom})` }}
-          onClick={openWorkspaceOfficeExternalLink}
+          ref={contentRef}
+          className="workspace-docx-preview select-text"
+          onClickCapture={openLink}
+          onAuxClickCapture={openLink}
         >
-          <div ref={bodyRef} className="workspace-docx-preview select-text" />
+          <Suspense fallback={<div className="kun-office-state" role="status">{i18n.t('officeDocxOpening')}</div>}>
+            <WorkspaceDocxPages
+              source={source}
+              fileName={result.name}
+              zoom={zoom}
+              scrollRef={scrollRef}
+              handleRef={pagesRef}
+              onPageInfo={handlePageInfo}
+              onZoomChange={handleZoomChange}
+              onLoaded={handleLoaded}
+              onError={setError}
+            />
+          </Suspense>
         </div>
         {onQuoteSelection ? (
           <WorkspaceDocxSelectionToolbar
-            bodyRef={bodyRef}
+            bodyRef={contentRef}
             scrollRef={scrollRef}
             sourceName={result.name}
             sourceSha256={result.sourceSha256}
@@ -226,26 +206,4 @@ export function WorkspaceDocxPreview({
       </div>
     </div>
   )
-}
-
-function docxPages(container: HTMLElement | null): HTMLElement[] {
-  return container ? Array.from(container.querySelectorAll<HTMLElement>('section.docx')) : []
-}
-
-export function fittedDocxPreviewZoom(viewportWidth: number, documentWidth: number): number {
-  if (!Number.isFinite(viewportWidth) || !Number.isFinite(documentWidth) || viewportWidth <= 0 || documentWidth <= 0) {
-    return 1
-  }
-  const fitted = Math.floor((viewportWidth / documentWidth) * 100) / 100
-  return Math.max(DOCX_PREVIEW_MIN_ZOOM, Math.min(1, fitted))
-}
-
-function numericCssValue(value: string | undefined): number {
-  const parsed = Number.parseFloat(value ?? '')
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function errorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return message || 'This Word document could not be rendered.'
 }

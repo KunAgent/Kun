@@ -6,7 +6,6 @@ import {
   type ReactElement
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { modelSupportsImageInput } from '@shared/app-settings-provider-core'
 import { useShallow } from 'zustand/react/shallow'
 import {
   ArrowDownToLine,
@@ -19,15 +18,14 @@ import {
   X
 } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
-import type { AttachmentReference } from '../../agent/types'
-import { uploadRuntimePastedText } from '../../lib/runtime-attachment'
+import type { KunToolPermissionMode } from '@shared/app-settings'
+import { useHarnessStore } from '../../store/harness-store'
+import { nativePermissionPreview } from '../../lib/harness-native-permission'
 import { FloatingComposer } from './FloatingComposer'
-import { modelProfileForComposerSelection } from '../workbench/useWorkbenchComposerCapabilities'
-import {
-  runtimeImagePreviewUrl,
-  runtimeImageSourceForFile,
-  uploadRuntimeImageAttachment
-} from '../../lib/runtime-image-attachment'
+import { useSideConversationQuotes } from './use-side-conversation-quotes'
+import { useSideComposerControls } from './use-side-composer-controls'
+import { useSideConversationComposerConfig } from './use-side-conversation-composer-config'
+import { useSideConversationAttachments } from './use-side-conversation-attachments'
 
 type Props = {
   className?: string
@@ -60,13 +58,8 @@ export function SideConversationPanel({
 }: Props): ReactElement | null {
   const { t, i18n } = useTranslation('common')
   const [draftInput, setDraftInput] = useState('')
-  const [draftModel, setDraftModel] = useState('')
-  const [draftProviderId, setDraftProviderId] = useState('')
-  const [draftReasoningEffort, setDraftReasoningEffort] = useState('max')
-  const [draftFastMode, setDraftFastMode] = useState(false)
-  const [draftAttachments, setDraftAttachments] = useState<AttachmentReference[]>([])
-  const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
-  const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
+  const [preparingSend, setPreparingSend] = useState(false)
+  const sendPending = useRef(false)
   const [minimized, setMinimized] = useState(false)
   const [switchMenuOpen, setSwitchMenuOpen] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
@@ -74,7 +67,6 @@ export function SideConversationPanel({
   const moreMenuRef = useRef<HTMLDivElement | null>(null)
   const previousParentRef = useRef<string | null>(null)
   const previousActiveRef = useRef<string | null | undefined>(undefined)
-  const draftAttachmentGenerationRef = useRef(0)
 
   const sideData = useChatStore(
     useShallow((s) => ({
@@ -84,21 +76,14 @@ export function SideConversationPanel({
       threads: s.threads,
       workspaceRoot: s.workspaceRoot,
       runtimeConnection: s.runtimeConnection,
-      composerModel: s.composerModel,
-      composerProviderId: s.composerProviderId,
       composerPickList: s.composerPickList,
       composerModelGroups: s.composerModelGroups,
-      composerReasoningEffort: s.composerReasoningEffort,
-      composerFastMode: s.composerFastMode,
+      composerExecutionSettings: s.composerExecutionSettings,
       spawnSideConversation: s.spawnSideConversation,
       sendSideMessage: s.sendSideMessage,
       interruptSide: s.interruptSide,
       resolveSideUserInput: s.resolveSideUserInput,
       setSideInput: s.setSideInput,
-      setSideModel: s.setSideModel,
-      setSideReasoningEffort: s.setSideReasoningEffort,
-      setSideFastMode: s.setSideFastMode,
-      setSideAttachments: s.setSideAttachments,
       selectSideConversation: s.selectSideConversation,
       setSidePanelOpen: s.setSidePanelOpen,
       openSideConversationDraft: s.openSideConversationDraft,
@@ -106,6 +91,7 @@ export function SideConversationPanel({
       promoteSideConversation: s.promoteSideConversation
     }))
   )
+  const openSettings = useChatStore((s) => s.openSettings)
 
   const currentSides = useMemo(
     () =>
@@ -126,60 +112,73 @@ export function SideConversationPanel({
     : null
   const docked = variant === 'docked'
   const shouldRender = Boolean(sideData.parentThreadId && (docked || sideData.panel.open))
+  const runtimeReady = sideData.runtimeConnection === 'ready'
+  const attachmentWorkspace = (parentThread?.workspace || sideData.workspaceRoot).trim()
+  const sideQuotes = useSideConversationQuotes({
+    parentThreadId: sideData.parentThreadId,
+    activeSideId: activeSide?.threadId ?? null,
+    workspaceRoot: attachmentWorkspace
+  })
+
+  const composerConfig = useSideConversationComposerConfig({
+    parentThreadId: sideData.parentThreadId,
+    activeSide
+  })
+  const sideControls = useSideComposerControls({
+    ...composerConfig.config,
+    enabled: shouldRender && runtimeReady,
+    threadId: activeSide?.threadId ?? null,
+    workspaceRoot: attachmentWorkspace,
+    harnessId: composerConfig.config.harnessId,
+    credentialMode: composerConfig.config.credentialMode,
+    gatewayBinding: composerConfig.config.gatewayBinding,
+    model: composerConfig.config.model,
+    providerId: composerConfig.config.providerId,
+    hasUserMessages: Boolean(activeSide),
+    onApply: composerConfig.apply
+  })
+  const attachments = useSideConversationAttachments({
+    attachmentStoreAvailable, attachmentWorkspace, runtimeReady, activeSide,
+    model: composerConfig.config.model,
+    providerId: sideControls.modelProviderId,
+    modelGroups: sideControls.modelGroups,
+    defaultModelSupportsImageInput, t
+  })
+
   const showDraft = shouldRender && !activeSide
   const ordinal = activeSideConversationOrdinal(currentSides, activeId)
   const reportedTitle = activeSide
     ? t('sidePanelTabTitle', { index: ordinal })
     : t('sidePanelNewTabTitle')
-  const effectiveDraftModel = draftModel || sideData.composerModel
-  const effectiveDraftProviderId = draftModel
-    ? draftProviderId
-    : sideData.composerProviderId
-  const effectiveDraftReasoningEffort =
-    draftReasoningEffort || sideData.composerReasoningEffort || 'max'
+
+  const resetDraftState = (): void => {
+    setDraftInput('')
+    composerConfig.resetDraft()
+    attachments.resetDraftAttachments()
+  }
 
   useEffect(() => {
     if (previousParentRef.current === sideData.parentThreadId) return
     previousParentRef.current = sideData.parentThreadId
     setDraftInput('')
-    setDraftModel(sideData.composerModel)
-    setDraftProviderId(sideData.composerProviderId)
-    setDraftReasoningEffort(sideData.composerReasoningEffort || 'max')
-    setDraftFastMode(sideData.composerFastMode)
-    setDraftAttachments([])
-    setAttachmentUploadError(null)
-    draftAttachmentGenerationRef.current += 1
-  }, [
-    sideData.composerFastMode,
-    sideData.composerModel,
-    sideData.composerProviderId,
-    sideData.composerReasoningEffort,
-    sideData.parentThreadId
-  ])
+    composerConfig.resetDraft()
+    attachments.resetDraftAttachments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sideData.parentThreadId])
 
   useEffect(() => {
     const previous = previousActiveRef.current
     previousActiveRef.current = activeId
     if (!showDraft || previous === undefined || previous === null) return
     setDraftInput('')
-    setDraftModel(sideData.composerModel)
-    setDraftProviderId(sideData.composerProviderId)
-    setDraftReasoningEffort(sideData.composerReasoningEffort || 'max')
-    setDraftFastMode(sideData.composerFastMode)
-    setDraftAttachments([])
-    setAttachmentUploadError(null)
-    draftAttachmentGenerationRef.current += 1
-  }, [
-    activeId,
-    showDraft,
-    sideData.composerFastMode,
-    sideData.composerModel,
-    sideData.composerProviderId,
-    sideData.composerReasoningEffort
-  ])
+    composerConfig.resetDraft()
+    attachments.resetDraftAttachments()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, showDraft])
 
   useEffect(() => {
-    setAttachmentUploadError(null)
+    attachments.clearUploadError()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
 
   useEffect(() => {
@@ -236,25 +235,64 @@ export function SideConversationPanel({
 
   const sendDraft = (): void => {
     const text = draftInput.trim()
-    if (!text && draftAttachments.length === 0) return
+    if (sendPending.current || !sideControls.selectionReady) return
+    if (!text && attachments.attachments.length === 0) return
+    const config = structuredClone(composerConfig.config)
+    sendPending.current = true
+    setPreparingSend(true)
     void (async () => {
+      try {
+      const quoted = await sideQuotes.prepareSend()
+      if (useChatStore.getState().activeThreadId !== sideData.parentThreadId || useChatStore.getState().sidePanel.activeSideId !== null) return
       const sideId = await sideData.spawnSideConversation(text, {
-        model: effectiveDraftModel,
-        providerId: effectiveDraftProviderId,
-        reasoningEffort: effectiveDraftReasoningEffort,
-        fastMode: draftFastMode,
-        attachments: draftAttachments
+        harnessId: config.harnessId,
+        credentialMode: config.credentialMode,
+        gatewayBinding: config.gatewayBinding,
+        ...(config.approvalPolicy ? { approvalPolicy: config.approvalPolicy } : {}),
+        ...(config.sandboxMode ? { sandboxMode: config.sandboxMode } : {}),
+        ...(config.approvalReviewer ? { approvalReviewer: config.approvalReviewer } : {}),
+        model: config.model,
+        providerId: config.providerId,
+        reasoningEffort: config.reasoningEffort,
+        fastMode: config.fastMode,
+        attachments: attachments.attachments,
+        ...(quoted ? { composerContexts: quoted.composerContexts } : {})
       })
       if (!sideId) return
+      if (useChatStore.getState().sideConversations[sideId]?.error) return
+      quoted?.consume()
       setDraftInput('')
-      setDraftAttachments([])
-      setAttachmentUploadError(null)
+      attachments.resetDraftAttachments()
+      } catch (error) {
+        attachments.reportError(error instanceof Error ? error.message : String(error))
+      } finally {
+        sendPending.current = false
+        setPreparingSend(false)
+      }
     })()
   }
 
   const sendActiveSide = (): void => {
-    if (!activeSide) return
-    void sideData.sendSideMessage(activeSide.threadId, activeSide.input)
+    if (!activeSide || !composerConfig.editable || sendPending.current || !sideControls.selectionReady) return
+    const { threadId, input } = activeSide
+    const config = structuredClone(composerConfig.config)
+    sendPending.current = true
+    setPreparingSend(true)
+    void (async () => {
+      try {
+        const quoted = await sideQuotes.prepareSend()
+        const sent = await sideData.sendSideMessage(threadId, input, {
+          config,
+          ...(quoted ? { composerContexts: quoted.composerContexts } : {})
+        })
+        if (sent) quoted?.consume()
+      } catch (error) {
+        attachments.reportError(error instanceof Error ? error.message : String(error))
+      } finally {
+        sendPending.current = false
+        setPreparingSend(false)
+      }
+    })()
   }
 
   const discardActiveSide = (): void => {
@@ -285,152 +323,27 @@ export function SideConversationPanel({
     )
   }
 
-  const composerInput = activeSide?.input ?? draftInput
-  const composerModel = activeSide?.model ?? effectiveDraftModel
-  const composerProviderId = activeSide?.providerId ?? effectiveDraftProviderId
-  const composerReasoningEffort =
-    activeSide?.reasoningEffort ?? effectiveDraftReasoningEffort
-  const composerFastMode = activeSide?.fastMode ?? draftFastMode
-  const composerAttachments = activeSide?.attachments ?? draftAttachments
-  const runtimeReady = sideData.runtimeConnection === 'ready'
-  const attachmentWorkspace = (parentThread?.workspace || sideData.workspaceRoot).trim()
-  const selectedProviderId = composerProviderId.trim()
-  const selectedProviderGroup = selectedProviderId
-    ? sideData.composerModelGroups.find((group) => group.providerId === selectedProviderId)
-    : undefined
-  const selectedModelProfile = selectedProviderId
-    ? selectedProviderGroup
-      ? modelProfileForComposerSelection(
-          [selectedProviderGroup],
-          composerModel,
-          selectedProviderId
-        )
-      : undefined
-    : modelProfileForComposerSelection(
-        sideData.composerModelGroups,
-        composerModel
-      )
-  const selectedModelSupportsImages = composerModel.trim().toLowerCase() === 'auto'
-    ? defaultModelSupportsImageInput
-    : selectedModelProfile
-      ? modelSupportsImageInput(selectedModelProfile)
-      : false
-  const attachmentUploadEnabled = runtimeReady && attachmentStoreAvailable
-
-  const appendUploadedAttachment = (
-    targetSideId: string | null,
-    draftGeneration: number,
-    attachment: AttachmentReference
-  ): void => {
-    if (targetSideId) {
-      const target = useChatStore.getState().sideConversations[targetSideId]
-      if (!target) return
-      const byId = new Map(target.attachments.map((item) => [item.id, item]))
-      byId.set(attachment.id, attachment)
-      useChatStore.getState().setSideAttachments(targetSideId, [...byId.values()])
-      return
-    }
-    if (draftAttachmentGenerationRef.current !== draftGeneration) return
-    setDraftAttachments((current) => {
-      const byId = new Map(current.map((item) => [item.id, item]))
-      byId.set(attachment.id, attachment)
-      return [...byId.values()]
-    })
-  }
-
-  const uploadImages = async (
-    files?: File[],
-    options: { clipboard?: boolean; silentNoImage?: boolean } = {}
-  ): Promise<void> => {
-    if (!attachmentUploadEnabled || !attachmentWorkspace) {
-      setAttachmentUploadError(t('composerAttachmentUnavailable'))
-      return
-    }
-    if (!selectedModelSupportsImages) {
-      setAttachmentUploadError(t('composerAttachmentModelUnsupported'))
-      return
-    }
-    const imageFiles = files?.filter((file) => file.type.startsWith('image/')) ?? []
-    if (!options.clipboard && imageFiles.length !== (files?.length ?? 0)) {
-      setAttachmentUploadError(t('composerAttachmentUnsupportedType'))
-      return
-    }
-    const targetSideId = activeSide?.threadId ?? null
-    const draftGeneration = draftAttachmentGenerationRef.current
-    const targetIsCurrent = (): boolean => targetSideId
-      ? useChatStore.getState().sidePanel.activeSideId === targetSideId
-      : useChatStore.getState().sidePanel.activeSideId === null &&
-        draftAttachmentGenerationRef.current === draftGeneration
-    setAttachmentUploadBusy(true)
-    setAttachmentUploadError(null)
-    try {
-      const sources = options.clipboard ? [null] : imageFiles
-      for (const file of sources) {
-        const localFilePath = file && typeof window.kunGui?.getPathForFile === 'function'
-          ? window.kunGui.getPathForFile(file)
-          : ''
-        const result = await uploadRuntimeImageAttachment({
-          source: file
-            ? await runtimeImageSourceForFile(file, localFilePath)
-            : { kind: 'clipboard' },
-          ...(file?.name ? { name: file.name } : {}),
-          ...(targetSideId ? { threadId: targetSideId } : { workspace: attachmentWorkspace })
-        })
-        appendUploadedAttachment(targetSideId, draftGeneration, {
-          id: result.attachment.id,
-          kind: 'image',
-          name: result.attachment.name,
-          mimeType: result.attachment.mimeType,
-          width: result.attachment.width,
-          height: result.attachment.height,
-          previewUrl: runtimeImagePreviewUrl(result)
-        })
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (
-        targetIsCurrent() &&
-        (!options.silentNoImage || !/clipboard does not currently contain an image/i.test(message))
-      ) {
-        setAttachmentUploadError(message)
-      }
-    } finally {
-      setAttachmentUploadBusy(false)
-    }
-  }
-
-  const uploadPastedText = async (text: string): Promise<void> => {
-    if (!attachmentUploadEnabled || !attachmentWorkspace) {
-      setAttachmentUploadError(t('composerAttachmentUnavailable'))
-      return
-    }
-    const targetSideId = activeSide?.threadId ?? null
-    const draftGeneration = draftAttachmentGenerationRef.current
-    setAttachmentUploadBusy(true)
-    setAttachmentUploadError(null)
-    try {
-      const attachment = await uploadRuntimePastedText({
-        text,
-        ...(targetSideId ? { threadId: targetSideId } : { workspace: attachmentWorkspace })
-      })
-      appendUploadedAttachment(targetSideId, draftGeneration, attachment)
-    } catch (error) {
-      setAttachmentUploadError(error instanceof Error ? error.message : String(error))
-    } finally {
-      setAttachmentUploadBusy(false)
-    }
-  }
-
-  const removeAttachment = (id: string): void => {
-    if (activeSide) {
-      sideData.setSideAttachments(
-        activeSide.threadId,
-        activeSide.attachments.filter((attachment) => attachment.id !== id)
-      )
-      return
-    }
-    setDraftAttachments((current) => current.filter((attachment) => attachment.id !== id))
-  }
+  const config = composerConfig.config
+  const approvalPolicy = config.approvalPolicy
+  const sandboxMode = config.sandboxMode
+  const approvalReviewer = config.approvalReviewer
+  const executionSettings = approvalPolicy && sandboxMode && approvalReviewer
+    ? { approvalPolicy, sandboxMode, approvalReviewer }
+    : null
+  const externalAgentId = sideControls.isExternalAgent ? sideControls.harnessId : ''
+  const agentPermission = externalAgentId ? {
+    agentName: sideControls.harnessLabel,
+    preview: (mode: KunToolPermissionMode) => nativePermissionPreview(
+      externalAgentId,
+      sideControls.permissionModes,
+      mode,
+      undefined,
+      sideControls.transport
+    )
+  } : undefined
+  const composerModelGroups = sideControls.modelGroups ?? sideData.composerModelGroups
+  const composerPickList = sideControls.pickList ?? sideData.composerPickList
+  const configLocked = !composerConfig.editable || preparingSend
 
   return (
     <aside
@@ -502,7 +415,10 @@ export function SideConversationPanel({
         {!docked ? (
           <button
             type="button"
-            onClick={() => sideData.openSideConversationDraft()}
+            onClick={() => {
+              sideData.openSideConversationDraft()
+              resetDraftState()
+            }}
             className="flex h-7 w-7 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
             aria-label={t('sidePanelNew')}
             title={t('sidePanelNew')}
@@ -588,7 +504,7 @@ export function SideConversationPanel({
             if (!activeSide) return
             await sideData.resolveSideUserInput(activeSide.threadId, blockId, action)
           }}
-          input={composerInput}
+          input={activeSide?.input ?? draftInput}
           setInput={(value) => {
             if (activeSide) sideData.setSideInput(activeSide.threadId, value)
             else setDraftInput(value)
@@ -596,41 +512,68 @@ export function SideConversationPanel({
           mode="agent"
           setMode={noop}
           busy={activeSide?.busy ?? false}
+          disabled={preparingSend || activeSide?.submitting === true}
           runtimeReady={runtimeReady}
           hasActiveThread={Boolean(sideData.parentThreadId)}
-          composerModel={composerModel}
-          composerProviderId={composerProviderId}
-          composerPickList={sideData.composerPickList}
-          composerModelGroups={sideData.composerModelGroups}
-          composerReasoningEffort={composerReasoningEffort}
-          composerFastMode={composerFastMode}
-          attachments={composerAttachments}
-          attachmentUploadEnabled={attachmentUploadEnabled}
-          attachmentUploadBusy={attachmentUploadBusy}
-          attachmentUploadError={attachmentUploadError}
-          onPickAttachments={(files) => void uploadImages(files)}
-          onPasteClipboardImage={(options) => uploadImages(undefined, {
-            clipboard: true,
-            silentNoImage: options?.silentNoImage
-          })}
-          onPasteLongText={uploadPastedText}
-          onRemoveAttachment={removeAttachment}
+          composerModel={config.model}
+          composerProviderId={sideControls.modelProviderId}
+          composerPickList={composerPickList}
+          composerModelGroups={composerModelGroups}
+          composerReasoningEffort={config.reasoningEffort}
+          composerFastMode={config.fastMode}
+          attachments={attachments.attachments}
+          contextChips={sideQuotes.contextChips}
+          onRemoveContextChip={sideQuotes.removeQuote}
+          attachmentUploadEnabled={attachments.uploadEnabled}
+          attachmentUploadBusy={attachments.uploadBusy}
+          attachmentUploadError={attachments.uploadError}
+          onPickAttachments={(files) => void attachments.pickImages(files)}
+          onPasteClipboardImage={attachments.pasteClipboardImage}
+          onPasteLongText={attachments.pasteLongText}
+          onRemoveAttachment={attachments.removeAttachment}
           modelControlVariant="split"
-          onComposerModelChange={(model, providerId) => {
-            if (activeSide) {
-              sideData.setSideModel(activeSide.threadId, model, providerId)
-            } else {
-              setDraftModel(model)
-              setDraftProviderId(providerId?.trim() ?? '')
+          executionSettings={executionSettings}
+          onExecutionSettingsChange={composerConfig.apply}
+          sideAgentControls={{
+            contextKey: activeSide?.threadId ?? `draft:${sideData.parentThreadId}`,
+            selectionReady: sideControls.selectionReady,
+            credentialMode: config.credentialMode,
+            modelsLoading: sideControls.modelsLoading,
+            nativeProfileReady: sideControls.nativeProfileReady,
+            modelsError: sideControls.modelsError,
+            rows: sideControls.rows,
+            loading: sideControls.rowsLoading,
+            harnessId: sideControls.harnessId,
+            harnessLabel: sideControls.harnessLabel,
+            needsConfirm: sideControls.needsConfirm,
+            onSelect: (harnessId) => sideControls.selectHarness(harnessId),
+            onOpen: sideControls.refreshRows,
+            onManage: (harnessId, configureProvider) => {
+              if (configureProvider) {
+                openSettings('providers')
+                return
+              }
+              useHarnessStore.setState({ settingsHarnessId: harnessId ?? sideControls.harnessId })
+              openSettings('agentsHarnesses')
+            },
+            ...(agentPermission ? { agentPermission } : {}),
+            disabled: configLocked || !runtimeReady
+          }}
+          onComposerModelChange={(nextModel, nextProviderId) => {
+            if (sideControls.onModelChange) {
+              sideControls.onModelChange(nextModel, nextProviderId)
+              return
             }
+            composerConfig.apply({
+              model: nextModel,
+              providerId: nextProviderId?.trim() ?? ''
+            })
           }}
           onComposerReasoningEffortChange={(effort) => {
-            if (activeSide) sideData.setSideReasoningEffort(activeSide.threadId, effort)
-            else setDraftReasoningEffort(effort)
+            composerConfig.apply({ reasoningEffort: effort })
           }}
           onComposerFastModeChange={(enabled) => {
-            if (activeSide) sideData.setSideFastMode(activeSide.threadId, enabled)
-            else setDraftFastMode(enabled)
+            composerConfig.apply({ fastMode: enabled })
           }}
           queuedMessages={EMPTY_QUEUED_MESSAGES}
           onRemoveQueuedMessage={noop}
@@ -640,6 +583,9 @@ export function SideConversationPanel({
           }}
           hideBtwCommand
         />
+        <p className="px-2 pt-2 text-[11px] text-ds-muted" role="status">
+          {t(configLocked ? 'sideComposerLocked' : !sideControls.selectionReady ? 'sideComposerUnavailable' : 'sideComposerScope')}
+        </p>
       </footer>
     </aside>
   )

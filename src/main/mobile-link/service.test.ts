@@ -24,7 +24,7 @@ function fixture() {
       receipt: { status: 'applied', result: { ok: true } }
     })
   }))
-  const deps: LinkDependencies = {
+  const deps: LinkDependencies = { requireMembership: async () => {},
     account: {
       getState: async () => accountState,
       accessToken: async () => 'token',
@@ -276,6 +276,24 @@ describe('desktop phone boundary', () => {
       const calls = vi.mocked(f.deps.fetch).mock.calls.map(([url]) => String(url))
       expect(calls.indexOf('https://relay.test/api/remote/v1/relay-tickets'))
         .toBeGreaterThan(calls.lastIndexOf('https://relay.test/api/remote/v1/devices/enabled'))
+    } finally { service.dispose() }
+  })
+  it('resumes a remembered start with its grants and quits without revoking them', async () => {
+    const f = fixture(), service = new MobileLinkService(f.deps)
+    const updates = () => vi.mocked(f.deps.fetch).mock.calls
+      .filter(([url]) => String(url).endsWith('/devices/enabled'))
+      .map(([, init]) => JSON.parse(String(init?.body)))
+    try {
+      await service.enable(true, true)
+      await tick()
+      expect(updates()).toEqual([{ enabled: true }])
+      expect((await service.status()).enabled).toBe(true)
+      const socket = f.socket
+      service.dispose(true)
+      await tick()
+      expect(socket.close).toHaveBeenCalled()
+      expect((await service.status()).enabled).toBe(false)
+      expect(updates()).toEqual([{ enabled: true }])
     } finally { service.dispose() }
   })
   it('refuses to start when stale authorization cannot be invalidated', async () => {

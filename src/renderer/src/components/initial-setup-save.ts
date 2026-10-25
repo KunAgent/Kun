@@ -18,6 +18,7 @@ import {
 } from '@shared/app-settings'
 import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
 import { applyKunRuntimePatch } from '@shared/app-settings-kun-migration'
+import { MAGPIE_TOKEN } from '@shared/magpie-import'
 import { getModelProviderSettings } from '@shared/app-settings-provider-core'
 import { defaultModelRequestRetrySettings } from '@shared/app-settings-provider-profiles'
 import {
@@ -125,6 +126,9 @@ export function initialSetupDrafts(settings: AppSettingsV1): InitialSetupDrafts 
 
 /** The draft shown for a profile id, falling back to the preset defaults. */
 export function initialSetupDraftFor(drafts: InitialSetupDrafts, profileId: string): InitialSetupDraft {
+  if (profileId === 'magpie' && !drafts[profileId]) {
+    return { apiKey: MAGPIE_TOKEN, baseUrl: presetDefaultBaseUrl(profileId) }
+  }
   return drafts[profileId] ?? { apiKey: '', baseUrl: presetDefaultBaseUrl(profileId) }
 }
 

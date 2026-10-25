@@ -326,9 +326,10 @@ export class DispatchDeliverer {
       ...(worker.reviewOf
         ? { toolPolicyCeiling: 'readOnly' as const, sandboxMode: 'read-only' as const }
         : {}),
+      // An explicitly chosen roster role applies with or without selector rationale.
+      ...(worker.profileId ? { profile: worker.profileId } : {}),
       ...(worker.selection
         ? {
-            ...(worker.profileId ? { profile: worker.profileId } : {}),
             routing: {
               method: 'worker-selector' as const,
               selectedKind: (worker.profileId ? 'profile' : 'harness') as 'profile' | 'harness',

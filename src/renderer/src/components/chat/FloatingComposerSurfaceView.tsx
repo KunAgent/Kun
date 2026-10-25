@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { nativePermissionPreview } from '../../lib/harness-native-permission'
 import { selectedNativeAgentPreview, useHarnessNativeAgentStore } from '../../lib/harness-native-agent'
 import type { KunToolPermissionMode } from '@shared/app-settings'
@@ -9,6 +9,7 @@ import { useHarnessStore } from '../../store/harness-store'
 import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ComposerInlineError } from './ComposerInlineError'
+import { ComposerPromptEnhanceButton, ComposerPromptEnhanceStatus } from './ComposerPromptEnhance'
 import { FloatingComposerFooterView } from './FloatingComposerFooterView'
 import { FloatingComposerContextChips } from './FloatingComposerContextChips'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
@@ -16,46 +17,59 @@ import { KnowledgeBasePicker } from './KnowledgeBasePicker'
 import { composerAgentPickerSurface } from '../../lib/subagent-profile-surface'
 import { AdeWorkspaceProjectPicker } from './AdeWorkspaceProjectPicker'
 import { AdeWorktreeStartPicker } from './AdeWorktreeStartPicker'
-import { FloatingComposerAgentModePicker } from './FloatingComposerAgentModePicker'
+import { FloatingComposerAgentModePicker, type AgentModeSurface } from './FloatingComposerAgentModePicker'
+import { ComposerAgentOnlyProviders } from './ComposerAgentOnlyProviders'
 import { FloatingComposerNativeAgentPicker } from './FloatingComposerNativeAgentPicker'
 import { FloatingComposerAgentSettings } from './FloatingComposerAgentSettings'
 import { composerToolbarFitRef } from './composer-toolbar-fit'
 import { composerSubscriptionSelection } from './composer-subscription-selection'
+import { FloatingComposerPrimaryAction } from './FloatingComposerPrimaryAction'
+import { FloatingComposerInterruptSlot } from './FloatingComposerInterruptSlot'
+import type { ComposerInterrupt } from './use-composer-interrupt'
 
+/**
+ * Composer controls rows, then `aboveInput` (flow panels + the activity tray,
+ * which tucks behind what follows), then the input slot: the interrupt card
+ * when one is active, and the shell + footer, kept mounted but hidden and
+ * inert while a card holds the slot.
+ */
 export function FloatingComposerSurfaceView({
-  context
+  context,
+  aboveInput
 }: {
   context: FloatingComposerRenderContext
+  aboveInput?: ReactNode
 }): ReactElement {
   const {
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
     FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerIsolationPicker, FloatingComposerModelPicker,
-    FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
-    Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
+    FloatingComposerTaskProfile,
+    Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread, activeThreadGoal,
     activeThreadId, adeComposer, adeComposerEnabled, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
     collaborationError, dismissCollaborationError,
-    canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
+    canChangeModel, canCompose, canEditComposer, canOpenComposerMenu,
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
     composerReasoningEffort, contextChips, designTaskProfile, designProfileLocked, dictation, draft, effectiveWorkspaceRoot,
-    executionSettings, executionSettingsApplying, fileInputRef, fileMentions, fileReferences,
+    executionSettings, executionSettingsApplying, sideAgentControls, fileInputRef, fileMentions, fileReferences,
     goalInputMode, graphEnabled, graphPlanningNeedsCorrection, handleAttachmentInput,
     handleComposerDragOver, handleComposerDrop, handleComposerKeyDown, handleComposerMenuButtonClick,
     handleComposerPaste, handleComposerShellMouseDown, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, handlePrimaryAction,
-    handlePromptOptimizationClick, hideModelPicker, input, isComposerDirectoryReference, mode,
+    hideModelPicker, input, isComposerDirectoryReference, mode,
     imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, modelPickerMode, onComposerFastModeChange, onComposerModelChange,
     onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange, onInterrupt,
-    onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onDismissPromptOptimizationError, onToggleWorktreeMode,
+    onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onToggleWorktreeMode,
     onWorktreeBranchChange, openSettings, orchestration, placeholder, primaryActionDisabled,
-    primaryActionKind, primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError, queuedMessages,
-    promptOptimizationSettings, route, runningGraphTurn, runtimeReady, setGoalInputMode, showComposerMenuButton,
+    primaryActionKind, primaryActionLabel, primaryActionLoading, promptEnhance, queuedMessages,
+    route, runningGraphTurn, runtimeReady, setGoalInputMode, showComposerMenuButton,
     showCodeExecutionControls, showExecutionSettingsPicker, showProviderInModelLabel, showToolbarStartControls,
     showVoiceDictation, showWorkspaceControls, side, stretchModelPicker, t, useWorktreePool,
     taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement,
-    agentSwitcher, worktreeBranch
+    agentSwitcher, worktreeBranch, composerSendKey
   } = context
+  const interrupt = (context.composerInterrupt ?? null) as ComposerInterrupt | null
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
   const rawProviderId = useChatStore((state) => state.composerProviderId)
   const rawModelGroups = useChatStore((state) => state.composerModelGroups)
@@ -74,10 +88,24 @@ export function FloatingComposerSurfaceView({
   useHarnessNativeAgentStore((state) => state.selected)
   const kunComposer = adeComposerEnabled && !side && adeComposer?.harnessId === 'kun'
   const modelGroups: ModelProviderModelGroup[] = kunComposer ? composerModelGroups.filter(isKunModelProviderGroup) : composerModelGroups
+  const agentOnlyGroups = kunComposer ? composerModelGroups.filter((group: ModelProviderModelGroup) => !isKunModelProviderGroup(group)) : []
+  const selectAgent = (harnessId: string, surface: AgentModeSurface): void => {
+    if (!adeComposer) return
+    if (harnessId !== adeComposer.harnessId) adeComposer.selectHarness(harnessId)
+    else if (harnessId === 'kun' && !composerHarnessId) useChatStore.getState().setComposerHarness('kun', '')
+    if (surface !== 'write' && (harnessId !== adeComposer.harnessId || surface !== taskSurface)) onTaskSurfaceChange?.(surface)
+  }
+  const manageAgent = (harnessId?: string, configureProvider?: boolean): void => {
+    if (configureProvider) return openSettings('providers')
+    useHarnessStore.setState({ settingsHarnessId: harnessId ?? adeComposer?.harnessId })
+    openSettings('agentsHarnesses')
+  }
   const modelPickList = kunComposer && (composerModelGroups.length || modelCatalogStatus !== 'ready')
     ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
   const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
+  const modelAgent = sideAgentControls ?? (externalAgent ? adeComposer : undefined)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
+  const messageQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'message-quote')
   // "continue local session" is offered only on a fresh thread when
   // the picked harness exposes a matching historySource + lab flag.
   const [continueDialogOpen, setContinueDialogOpen] = useState(false)
@@ -184,6 +212,11 @@ export function FloatingComposerSurfaceView({
           </div>
         ) : null}
 
+        {aboveInput}
+        <div className="ds-composer-input-slot" data-composer-input-slot data-interrupt={interrupt?.kind}>
+        {interrupt ? <FloatingComposerInterruptSlot interrupt={interrupt} compact={compact} t={t} /> : null}
+        <div hidden={interrupt ? true : undefined} inert={interrupt ? true : undefined}
+          aria-hidden={interrupt ? true : undefined} data-composer-editor>
         <div
           ref={composerShellRef}
           className={`ds-composer-shell ds-chat-composer ds-frosted ds-no-drag flex flex-col gap-1 transition ${
@@ -206,10 +239,14 @@ export function FloatingComposerSurfaceView({
             rows={1}
             className={`ds-composer-textarea ds-no-drag block w-full min-w-0 resize-none break-words bg-transparent px-1 py-2.5 text-[15px] leading-[1.45] text-ds-ink placeholder:text-ds-faint focus:outline-none [overflow-wrap:anywhere] ${
               canEditComposer ? '' : 'opacity-80'
-            } ${compact ? 'text-[14px] py-2' : emptyTaskLayout ? 'min-h-[64px]' : 'min-h-[40px]'}`}
-            placeholder={documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : placeholder}
+            } ${promptEnhance?.running ? 'text-ds-muted' : ''} ${compact ? 'text-[14px] py-2' : emptyTaskLayout ? 'min-h-[64px]' : 'min-h-[40px]'}`}
+            placeholder={messageQuoteAttached
+              ? t(side ? 'messageQuoteSidePlaceholder' : 'messageQuoteComposerPlaceholder')
+              : documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : placeholder}
             value={input}
             disabled={!canEditComposer}
+            readOnly={promptEnhance?.running === true}
+            aria-busy={promptEnhance?.running === true || undefined}
             onChange={(e) => {
               fileMentions.updateInput(
                 e.target.value,
@@ -285,21 +322,34 @@ export function FloatingComposerSurfaceView({
               dismissLabel={t('composerDismissError')}
             />
           ) : null}
-          {promptOptimizationError && onDismissPromptOptimizationError ? (
-            <ComposerInlineError
-              message={promptOptimizationError}
-              onDismiss={onDismissPromptOptimizationError}
-              dismissLabel={t('composerDismissError')}
-            />
+          {promptEnhance?.visible ? (
+            <ComposerPromptEnhanceStatus enhance={promptEnhance} t={t} onOpenSettings={() => openSettings('agents')} />
           ) : null}
           {runtimeReady ? <div
-            ref={composerToolbarFitRef}
+            ref={side ? undefined : composerToolbarFitRef}
             className={`ds-composer-toolbar flex min-h-9 min-w-0 items-center gap-2 ${
               showToolbarStartControls ? 'justify-between' : 'justify-end'
             }`}
           >
             {showToolbarStartControls ? (
               <div className="ds-composer-toolbar-start flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden">
+                {sideAgentControls ? (
+                  <FloatingComposerAgentModePicker
+                    surface="code"
+                    disabled={sideAgentControls.disabled === true}
+                    controls={{
+                      contextKey: sideAgentControls.contextKey,
+                      harnessId: sideAgentControls.harnessId,
+                      harnessLabel: sideAgentControls.harnessLabel,
+                      rows: sideAgentControls.rows,
+                      loading: sideAgentControls.loading,
+                      needsConfirm: sideAgentControls.needsConfirm,
+                      onSelect: (harnessId: string) => sideAgentControls.onSelect(harnessId),
+                      onOpen: sideAgentControls.onOpen,
+                      onManage: sideAgentControls.onManage
+                    }}
+                  />
+                ) : null}
                 {showComposerMenuButton ? (
                   <>
                     <button
@@ -330,29 +380,13 @@ export function FloatingComposerSurfaceView({
                             rows: adeComposer.rows,
                             loading: adeComposer.rowsLoading,
                             needsConfirm: adeComposer.needsSwitchConfirm,
-                            onSelect: (harnessId, surface) => {
-                              if (harnessId !== adeComposer.harnessId) adeComposer.selectHarness(harnessId)
-                              else if (harnessId === 'kun' && !composerHarnessId) useChatStore.getState().setComposerHarness('kun', '')
-                              if (surface !== 'write' && (harnessId !== adeComposer.harnessId || surface !== taskSurface)) onTaskSurfaceChange?.(surface)
-                            },
+                            onSelect: selectAgent,
                             onOpen: adeComposer.refreshRows,
-                            onManage: (harnessId, configureProvider) => {
-                              if (configureProvider) openSettings('providers')
-                              else {
-                                useHarnessStore.setState({ settingsHarnessId: harnessId ?? adeComposer.harnessId })
-                                openSettings('agentsHarnesses')
-                              }
-                            },
+                            onManage: manageAgent,
                             onContinueLocalSession: openContinueLocalSession
                           }}
                         />
-                      ) : (
-                        <FloatingComposerTaskSurfacePicker
-                          surface={taskSurface}
-                          disabled={!canCompose || busy}
-                          onSurfaceChange={onTaskSurfaceChange}
-                        />
-                      )
+                      ) : null
                     ) : null}
                     {showCodeExecutionControls && mode === 'plan' ? (
                       <button
@@ -450,15 +484,15 @@ export function FloatingComposerSurfaceView({
                 ) : null}
                 {showExecutionSettingsPicker && executionSettings && onExecutionSettingsChange ? (
                   <FloatingComposerExecutionPicker
-                    agentPermission={externalAgent && adeComposer ? {
+                    agentPermission={sideAgentControls?.agentPermission ?? (externalAgent && adeComposer ? {
                       agentName: adeComposer.harnessLabel,
                       preview: (mode: KunToolPermissionMode) => selectedNativeAgentPreview(harnessRows.find((row) => row.definition.id === adeComposer.harnessId)) ??
                         nativePermissionPreview(adeComposer.harnessId, adeComposer.permissionModes, mode,
                           adeComposer.requestedPermissionMode, adeComposer.transport)
-                    } : undefined}
+                    } : undefined)}
                     value={executionSettings}
                     applying={executionSettingsApplying}
-                    disabled={!canCompose || busy}
+                    disabled={!canCompose || busy || sideAgentControls?.disabled === true}
                     onChange={onExecutionSettingsChange}
                     onOpenPermissionSettings={() => openSettings('agents')}
                   />
@@ -481,7 +515,7 @@ export function FloatingComposerSurfaceView({
                   <button
                     type="button"
                     onClick={() => dictation.stop('insert')}
-                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-ink transition hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-ink transition hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/30"
                     aria-label={t('composerVoiceStop')}
                     title={t('composerVoiceStop')}
                   >
@@ -490,7 +524,7 @@ export function FloatingComposerSurfaceView({
                   <button
                     type="button"
                     onClick={() => dictation.stop('send')}
-                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+                    className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/30"
                     aria-label={t('composerVoiceSend')}
                     title={t('composerVoiceSend')}
                   >
@@ -526,19 +560,19 @@ export function FloatingComposerSurfaceView({
                   ) : null}
                   {hideModelPicker ? null : (
                     <FloatingComposerModelPicker
-                      agentHarnessId={externalAgent && adeComposer?.credentialMode === 'native-login' ? adeComposer.harnessId : undefined}
+                      agentHarnessId={modelAgent?.credentialMode === 'native-login' ? modelAgent.harnessId : undefined}
                       compact={compact}
                       mode={modelPickerMode}
                       composerModel={composerModel}
                       composerProviderId={composerProviderId}
                       composerPickList={modelPickList}
                       composerModelGroups={modelGroups}
-                      emptyModelState={externalAgent && adeComposer?.credentialMode === 'native-login'
-                        ? nativeAgentEmptyModelState(adeComposer)
+                      emptyModelState={modelAgent?.credentialMode === 'native-login'
+                        ? nativeAgentEmptyModelState(modelAgent)
                         : kunComposer && modelCatalogStatus !== 'ready'
                           ? modelCatalogStatus === 'error' ? 'unavailable' : 'loading' : undefined}
-                      emptyModelReason={externalAgent ? adeComposer?.modelsError : undefined}
-                      allowedReasoningEfforts={adeComposer?.harnessId === 'claude-code' && adeComposer.credentialMode === 'kun-gateway' ? ['off'] : undefined}
+                      emptyModelReason={modelAgent?.modelsError}
+                      allowedReasoningEfforts={modelAgent?.harnessId === 'claude-code' && modelAgent.credentialMode === 'kun-gateway' ? ['off'] : undefined}
                       composerReasoningEffort={composerReasoningEffort}
                       composerFastMode={composerFastMode}
                       showProviderInModelLabel={showProviderInModelLabel}
@@ -548,6 +582,10 @@ export function FloatingComposerSurfaceView({
                       onComposerReasoningEffortChange={onComposerReasoningEffortChange}
                       onComposerFastModeChange={onComposerFastModeChange}
                       onConfigureProviders={onConfigureProviders}
+                      renderNotice={agentOnlyGroups.length && adeComposer ? (close: () => void) => (
+                        <ComposerAgentOnlyProviders groups={agentOnlyGroups} needsConfirm={adeComposer.needsSwitchConfirm} close={close}
+                          onSwitch={(harnessId) => selectAgent(harnessId, agentSwitcher ? 'write' : 'code')} onManage={manageAgent} />
+                      ) : undefined}
                     />
                   )}
                   {hideModelPicker || side || externalAgent ? null : (
@@ -589,40 +627,15 @@ export function FloatingComposerSurfaceView({
                       )}
                     </button>
                   ) : null}
-                  {!side && promptOptimizationSettings?.enabled === true ? (
-                    <button
-                      type="button"
-                      disabled={!canOptimizePrompt}
-                      onClick={handlePromptOptimizationClick}
-                      className="ds-composer-optional-action ds-composer-prompt-optimize-action ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
-                      aria-label={promptOptimizationBusy ? t('composerPromptOptimizing') : t('composerPromptOptimize')}
-                      title={promptOptimizationBusy ? t('composerPromptOptimizing') : t('composerPromptOptimize')}
-                    >
-                      {promptOptimizationBusy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
-                      ) : (
-                        <Sparkles className="h-4 w-4" strokeWidth={2} />
-                      )}
-                    </button>
+                  {!side && promptEnhance?.visible ? <ComposerPromptEnhanceButton enhance={promptEnhance} t={t} /> : null}
+                  {primaryActionKind === 'queue' && !compact && composerSendKey !== 'shiftEnter' ? (
+                    <span className="ds-composer-queue-hint shrink-0 whitespace-nowrap px-1 text-[12px] text-ds-faint">
+                      {t('composerDock.enterToQueue')}
+                    </span>
                   ) : null}
-                  <button
-                    type="button"
-                    disabled={primaryActionKind === 'submit' && primaryActionDisabled}
-                    onClick={primaryActionKind === 'interrupt'
-                      ? () => onInterrupt()
-                      : handlePrimaryAction}
-                    className="ds-composer-primary-action ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-control text-control-foreground transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:bg-ds-card disabled:text-ds-faint"
-                    aria-label={primaryActionKind === 'interrupt' ? t('interrupt') : primaryActionLabel}
-                    title={primaryActionKind === 'interrupt' ? t('interrupt') : primaryActionLabel}
-                  >
-                    {primaryActionKind === 'interrupt' ? (
-                      <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.4} />
-                    ) : primaryActionLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
-                    ) : (
-                      <Send className="h-4 w-4" strokeWidth={2.2} />
-                    )}
-                  </button>
+                  <FloatingComposerPrimaryAction kind={primaryActionKind ?? 'submit'} label={primaryActionLabel}
+                    disabled={primaryActionDisabled === true} loading={primaryActionLoading === true}
+                    onInterrupt={() => onInterrupt()} onSubmit={handlePrimaryAction} t={t} />
                 </>
               )}
             </div>
@@ -637,6 +650,8 @@ export function FloatingComposerSurfaceView({
           </div>}
         </div>
         {runtimeReady ? <FloatingComposerFooterView context={context} /> : null}
+        </div>
+        </div>
         {continueDialogOpen && adeComposer?.continuation ? (
           <CodexReferenceDialog
             workspaceRoot={effectiveWorkspaceRoot}

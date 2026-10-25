@@ -68,7 +68,40 @@ test('diagnostic redaction remains bounded and removes credentials nested in err
   assert(result.output.long.length < 17000)
 })
 
-const { dragSidebar, sidebarGeometryIssues } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+const { dragSidebar, sidebarGeometryIssues, captureCodeSidebarBaseline } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+
+test('Code baseline waits for a file treeitem rather than its overridden button role', async () => {
+  const workspaceRoot = '/synthetic/workspace', ready = new Error('file tree ready')
+  const evaluations = [true, { id: 'code-test' }, { route: 'chat', activeThreadId: 'code-test', workspaceRoot }]
+  const selected = []
+  const page = {
+    evaluate: async () => evaluations.shift(),
+    locator: (selector) => ({
+      waitFor: async () => {},
+      getByRole: (role, options = {}) => {
+        if (selector === '.ds-workbench-side-rail:visible') {
+          assert.equal(role, 'button'); assert.equal(options.name, 'Files')
+          return { click: async () => {} }
+        }
+        assert.equal(selector, '[data-workbench-right-panel]:visible')
+        assert.equal(role, 'tree', 'file rows live inside an explicit tree container')
+        return {
+          getByRole: (innerRole, { name, exact }) => {
+            assert.equal(innerRole, 'treeitem', 'file rows have an explicit treeitem role')
+            assert.equal(name, 'baseline.txt'); assert.equal(exact, true)
+            return { waitFor: async () => selected.push('baseline.txt') }
+          }
+        }
+      }
+    })
+  }
+  await assert.rejects(captureCodeSidebarBaseline({ page, workspaceRoot,
+    fixture: { snapshot: () => ({ real: false, mainCalls: 0 }) },
+    poll: async (predicate) => assert(await predicate()),
+    sidebar: { codeCapture: async () => { throw ready } }
+  }), error => error === ready)
+  assert.deepEqual(selected, ['baseline.txt'])
+})
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const bounds = (x, y, width, height) => ({ x, y, width, height, right: x + width, bottom: y + height })
@@ -387,6 +420,20 @@ test('native smoke measures stopped and restart recovery controls wide and narro
   assert.doesNotMatch(recovery, /\.click\(|dispatchEvent\(|force:/)
 })
 
+test('restart recovery geometry precedes reload suppression of the acknowledged failure', () => {
+  const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
+  const acknowledged = smoke.indexOf('renderer acknowledged the interrupted request before recovery geometry')
+  const wide = smoke.indexOf("await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay'")
+  const narrow = smoke.indexOf("await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow'")
+  const reload = smoke.indexOf("await page.reload({ waitUntil: 'domcontentloaded' })")
+  const hidden = smoke.indexOf('Reload must not raise an already acknowledged failure again')
+  assert(acknowledged >= 0 && acknowledged < wide && wide < narrow && narrow < reload && reload < hidden)
+  assert.match(smoke.slice(smoke.lastIndexOf("if (recovered.status === 'failed')", acknowledged), wide),
+    /item.id === restarting.requestId\)\?\.failureAcknowledged === true/)
+  assert.match(smoke.slice(reload, hidden), /Runtime restart and renderer reload must not replay an interrupted request/)
+  assert.match(smoke.slice(reload, hidden), /Runtime restart destroys transient browser authority/)
+})
+
 test('recovery action row wins span flex specificity and wraps labels within its container', () => {
   const css = readFileSync(join(__dirname, '../src/renderer/src/components/rooms/rooms-direct.css'), 'utf8')
   const row = css.match(/\.direct-failed\s*>\s*\.direct-failed-actions\s*\{([^}]+)\}/)?.[1]
@@ -448,4 +495,24 @@ test('approval smoke asserts the personal default and deliberately changes it th
   assert.equal(mode, 'ask-for-approval')
   assert(actions.includes('wait:[data-permission-mode="full-access"]'))
   assert(actions.includes('wait:[data-permission-mode="ask-for-approval"]'))
+})
+
+
+test('Code baseline selects the exact accessible tree item rather than a button or recent-file duplicate', () => {
+  const helper = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  assert(helper.includes("panel.getByRole('tree').getByRole('treeitem', { name: 'baseline.txt', exact: true })"))
+  assert.doesNotMatch(helper, /getByRole\('button', \{ name: \/\^baseline/)
+  const rows = readFileSync(join(__dirname, '../src/renderer/src/components/chat/ChatFileTreeRowViews.tsx'), 'utf8')
+  assert.match(rows, /<button\s+type="button"\s+role="treeitem"/)
+})
+
+
+test('long selected sidebar tabs fit their scroll viewport at both normal and compact caps', () => {
+  const css = readFileSync(join(__dirname, '../src/renderer/src/components/workbench/code-right-tabs.css'), 'utf8')
+  const rules = [...css.matchAll(/\.ds-right-tab\s*\{([^}]+)\}/g)].map((match) => match[1])
+  assert.equal(rules.length, 2, 'cover both default and compact-container tab widths')
+  for (const rule of rules) {
+    assert.match(rule, /max-width:\s*min\((?:180|150)px,\s*100%\)/,
+      'a fixed cap alone can exceed the narrow tablist, so scrolling cannot reveal the entire selected tab')
+  }
 })

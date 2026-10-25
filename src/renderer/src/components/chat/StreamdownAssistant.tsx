@@ -1,4 +1,4 @@
-import type { ComponentPropsWithRef, MouseEvent, ReactElement } from 'react'
+import { useEffect, useState, type ComponentPropsWithRef, type MouseEvent, type ReactElement } from 'react'
 import { Streamdown, type StreamdownProps } from 'streamdown'
 import remarkGfm from 'remark-gfm'
 import { harden } from 'rehype-harden'
@@ -6,18 +6,24 @@ import 'streamdown/styles.css'
 import { parseFileReferenceHref, rehypeFileReferences } from '../../lib/file-references'
 import { useValidatedFileReference } from '../../lib/file-reference-validation'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
+import { loadKatexCopyTex } from '../../lib/katex-copy-tex'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import { sanitizeAssistantCanvasToolDisplay } from '../../design/canvas/strip-canvas-tool-display'
+import { ResolvedPreviewImage } from '../workspace-file-preview-support'
+import { localImageSource, LOCAL_IMAGE_SCHEME, rehypeLocalImages } from './rehype-local-images'
 import { StreamdownCode } from './StreamdownCode'
+import { StreamFadeChar } from './StreamFadeChar'
+import { createStreamFadeSource, rehypeStreamFade, STREAM_FADE_TAG } from './rehype-stream-fade'
 import { useAssistantTextReveal } from './use-assistant-text-reveal'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { createMathPlugin } from '@streamdown/math'
 import 'katex/dist/katex.min.css'
 
-export { nextVisibleLength, visibleTextForTypewriter } from './assistant-text-reveal'
+export { visibleTextForTypewriter } from './assistant-text-reveal'
 
 const rehypePlugins = [
   rehypeFileReferences,
+  rehypeLocalImages,
   [
     harden,
     {
@@ -25,7 +31,10 @@ const rehypePlugins = [
       // Internal scheme synthesized by rehypeFileReferences; StreamdownLink
       // re-validates every target against the workspace before any click
       // handling, so allowing this protocol does not widen access.
-      allowedProtocols: ['deepseek-file:'],
+      allowedProtocols: ['deepseek-file:', LOCAL_IMAGE_SCHEME],
+      // Local image references are wrapped by rehypeLocalImages and loaded
+      // through the workspace image bridge in StreamdownImage.
+      allowedImagePrefixes: ['*'],
       // Harden's default "indicator" policy appends " [blocked]" after every
       // denied link; that internal security state must not leak into chat.
       linkBlockPolicy: 'text-only'
@@ -63,8 +72,32 @@ const math = createMathPlugin({
 
 const components = {
   code: StreamdownCode,
-  a: StreamdownLink
-} satisfies StreamdownProps['components']
+  a: StreamdownLink,
+  img: StreamdownImage,
+  [STREAM_FADE_TAG]: StreamFadeChar
+} as StreamdownProps['components']
+
+type StreamdownImageProps = ComponentPropsWithRef<'img'> & { node?: unknown }
+
+/** Workspace images load through the image bridge; remote ones render as-is. */
+function StreamdownImage({ src, alt, title }: StreamdownImageProps): ReactElement {
+  const workspaceRoot = useTimelineFilePreviewWorkspaceRoot()
+  const local = typeof src === 'string' ? localImageSource(src) : null
+  const className = 'my-2 block max-h-[480px] max-w-full rounded-lg object-contain'
+  if (local === null) {
+    return <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} title={title} className={className} loading="lazy" />
+  }
+  // Relative paths resolve against the conversation's workspace.
+  return (
+    <ResolvedPreviewImage
+      src={local}
+      alt={alt}
+      title={title}
+      className={className}
+      filePath={workspaceRoot ? `${workspaceRoot.replace(/[\\/]+$/, '')}/.chat.md` : null}
+    />
+  )
+}
 
 type StreamdownLinkProps = ComponentPropsWithRef<'a'> & { node?: unknown }
 
@@ -141,8 +174,9 @@ type Props = {
   /** Markdown source */
   text: string
   /**
-   * When true (live SSE chunking), uses Streamdown `streaming` mode with a
-   * char-level blur-in on newly appended content.
+   * When true (live SSE chunking), paces the text and fades in only the
+   * in-flight tail. A settled renderer that takes over an unfinished reveal
+   * finishes that tail before showing static text.
    */
   streaming: boolean
   className?: string
@@ -157,7 +191,16 @@ export function StreamdownAssistant({
   hideHtmlComments = false
 }: Props): ReactElement {
   const displayText = sanitizeAssistantCanvasToolDisplay(text)
-  const pacedText = useAssistantTextReveal(displayText, streaming)
+  const { text: pacedText, fade } = useAssistantTextReveal(displayText, streaming)
+  useEffect(() => {
+    void loadKatexCopyTex()
+  }, [])
+  const [fadeSource] = useState(createStreamFadeSource)
+  const [fadingRehypePlugins] = useState(
+    () => [...rehypePlugins, [rehypeStreamFade, fadeSource]] as StreamdownProps['rehypePlugins']
+  )
+  // Read by the plugin while Streamdown renders below in this same pass.
+  fadeSource.current = fade
   const remarkPlugins = hideHtmlComments
     ? [remarkGfm, remarkHideHtmlComments]
     : [remarkGfm]
@@ -177,14 +220,16 @@ export function StreamdownAssistant({
       mode="static"
       parseIncompleteMarkdown={false}
       isAnimating={false}
-      // The pacing hook above is the typewriter. Keep Streamdown's own
-      // streaming/remend pipeline disabled here: in long Markdown responses
-      // with GFM tables, its block repair path can leave stale text fragments
-      // next to the repaired block, producing copied DOM text such as
-      // "Work Workstreamstream".
+      // The pacing hook above is the typewriter and rehypeStreamFade the
+      // fade. Keep Streamdown's own streaming/remend pipeline disabled here:
+      // in long Markdown responses with GFM tables, its block repair path can
+      // leave stale text fragments next to the repaired block, producing
+      // copied DOM text such as "Work Workstreamstream".
       animated={false}
       remarkPlugins={remarkPlugins}
-      rehypePlugins={rehypePlugins}
+      // Settled text shares the default processor; only a reply that is
+      // still fading uses its own.
+      rehypePlugins={fade ? fadingRehypePlugins : rehypePlugins}
       components={components}
       plugins={{ math }}
     >

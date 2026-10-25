@@ -1,6 +1,6 @@
 {
   "name": "kun",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Kun local HTTP/SSE agent runtime",
   "engines": {
     "node": ">=22.19.0"
@@ -64,9 +64,10 @@
     "kun-dv": "./dist/cli/serve-entry.js"
   },
   "scripts": {
-    "build": "node ./scripts/clean-build-output.mjs && tsc -p tsconfig.build.json && node ./scripts/write-runtime-build-manifest.mjs",
+    "build": "node ./scripts/clean-build-output.mjs && tsc -p tsconfig.build.json && vite build -c vite.tui.config.ts && node ./scripts/check-tui-import-graph.mjs && node ./scripts/write-runtime-build-manifest.mjs",
+    "build:tui-app": "vite build -c vite.tui.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test ./scripts/runtime-build-manifest.test.mjs && node ./scripts/run-tests.mjs",
+    "test": "node --test ./scripts/runtime-build-manifest.test.mjs ./scripts/test-execution-plan.test.mjs ./scripts/run-tests.test.mjs && node ./scripts/run-tests.mjs",
     "test:memory-growth": "node ./scripts/run-memory-growth-regression.mjs",
     "bench:fast-context": "node ./scripts/fast-context-benchmark.mjs",
     "eval:memory-retrieval": "vitest run src/memory/memory-retrieval-evaluation.test.ts src/memory/semantic-memory-evaluation-dataset.test.ts src/memory/semantic-memory-evaluation-v2-dataset.test.ts src/memory/semantic-memory-evaluation.test.ts src/memory/semantic-memory-evaluation-comparison.test.ts src/memory/semantic-memory-terminology-candidate.test.ts src/memory/semantic-memory-evaluation-v2-workflow.test.ts src/memory/semantic-memory-evaluation-v2-evidence.test.ts src/memory/semantic-memory-vector-candidate.test.ts src/memory/semantic-memory-candidate-fallback.test.ts src/memory/semantic-memory-evaluation-decision.test.ts src/memory/semantic-memory-evaluation-evidence.test.ts --reporter=verbose",
@@ -84,14 +85,15 @@
     "@agentclientprotocol/sdk": "1.4.0",
     "@anthropic-ai/claude-agent-sdk": "0.3.220",
     "@computer-use/nut-js": "^4.2.0",
-    "@cursor/sdk": "1.0.24",
-    "@earendil-works/pi-tui": "0.81.1",
+    "@cursor/sdk": "1.0.40",
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
-    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.18.0.tgz",
-    "@modelcontextprotocol/client": "^2.2.0",
+    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.22.0.tgz",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@opentui/core": "0.6.6",
+    "@opentui/solid": "0.6.6",
     "@xmldom/xmldom": "^0.9.12",
     "ajv": "^8.20.0",
     "better-sqlite3": "^12.10.0",
@@ -105,33 +107,42 @@
     "safe-regex2": "5.1.1",
     "semver": "^7.8.5",
     "smol-toml": "1.9.1",
+    "solid-js": "1.9.12",
     "typescript": "5.9.3",
     "typescript-language-server": "5.3.0",
-    "undici": "^7.29.1",
+    "undici": "^7.30.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yaml": "^2.9.0",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/semver": "^7.7.1",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
+    "@xterm/headless": "5.5.0",
     "selfsigned": "5.5.0",
+    "vite": "^8.3.4",
+    "vite-plugin-solid": "2.11.14",
     "vitest": "^4.1.7"
   },
   "overrides": {
     "@hono/node-server": "2.0.11",
     "basic-ftp": "6.2.1",
-    "fast-uri": "3.1.8",
-    "hono": "4.13.7",
-    "ip-address": "10.7.2",
+    "body-parser": "2.4.0",
+    "fast-uri": "3.1.9",
+    "hono": "4.13.11",
+    "ip-address": "10.7.4",
     "proxy-addr": "2.0.8",
-    "qs": "6.16.0",
+    "qs": "6.16.1",
     "@connectrpc/connect-node": {
-      "undici": "6.28.1"
-    }
+      "undici": "6.29.1"
+    },
+    "solid-js@1.9.12": {
+      "seroval": "1.6.4"
+    },
+    "zod": "$zod"
   }
 }

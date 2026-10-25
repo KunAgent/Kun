@@ -1,3 +1,4 @@
+import { buildGitHubAppProvider } from '../adapters/tool/github-app-provider.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
@@ -20,6 +21,7 @@ import {
   buildDiagramVisualizationToolProvider,
   buildConversationVisualizationToolProvider,
   buildChartToolProvider,
+  buildGenUiToolProvider,
   buildWebToolProviders,
   buildImageGenToolProviders,
   protocolSupportsImageEdit,
@@ -38,7 +40,6 @@ import {
   buildBuiltinHooks,
   mergeBuiltinSubagentProfiles,
   buildFastContextToolProvider,
-  buildPptAgentToolProvider,
   type RuntimeConfigApplyRequest,
   type RuntimeConfigApplyResponse,
   type RuntimeConfigApplyRejectedSection,
@@ -52,7 +53,7 @@ import type { createRuntimeExtensionComposition } from './runtime-composition-ex
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { composeDelegatedTurnRuntimes } from '../runtime/delegated-turn-runtime.js'
 import {
-  buildPptAgentRuntimeProvider,
+  buildPptDeckRuntimeProvider,
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   llmDebugCaptureEnabled,
@@ -108,8 +109,6 @@ export function createRuntimeConfigController(
     modelClient,
     timedModelClient,
     subagentRouter,
-    antigravityProviderIds,
-    cursorSdkProviderIds,
     resolveCapabilityProviderCredential,
     gatewayCredentials,
     oauthEncryptor
@@ -120,9 +119,7 @@ export function createRuntimeConfigController(
     reviewService,
     pruneUnsentAttachments,
     designCanvasProvider,
-    childToolHost,
-    defaultIsAntigravity,
-    defaultIsCursorSdk
+    childToolHost
   } = services
   const { delegationRuntime } = registryComposition
   const {
@@ -341,7 +338,7 @@ export function createRuntimeConfigController(
 	    })
 	    const nextComputerUseProviders = await buildComputerUseToolProviders(nextOptions.capabilities?.computerUse)
 	    const nextBrowserUseProviders = buildBrowserUseToolProviders(nextOptions.capabilities?.browserUse)
-    const nextPptAgentProvider = buildPptAgentRuntimeProvider(nextOptions, turnService)
+    const nextPptDeckProvider = buildPptDeckRuntimeProvider(() => nextOptions, () => nextImageGenProviders.available)
 	    const nextResolvedHooks = [
 	      ...buildBuiltinHooks({ quality: nextOptions.quality ?? DEFAULT_QUALITY_CONFIG }),
 	      ...resolveConfiguredHooks(nextOptions.hooks)
@@ -357,6 +354,7 @@ export function createRuntimeConfigController(
 	    )
 	    const nextBaseToolProviders = [
 	      buildGmailToolProvider(services.gmail, core.threadStore, model.gmailDataPolicy),
+        ...(model.githubApp ? [buildGitHubAppProvider(model.githubApp.service, core.threadStore, model.githubApp.mcp)] : []),
 	      builtinProvider('execution-tasks', buildExecutionTaskLocalTools(threadService.executionTasks)),
 	      builtinProvider('builtin', withBackgroundShellTools(
 	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),
@@ -380,12 +378,12 @@ export function createRuntimeConfigController(
 	      ...nextMusicGenProviders.providers,
 	      ...nextVideoGenProviders.providers,
 	      ...nextOfficeCliProviders,
-      nextPptAgentProvider,
+      nextPptDeckProvider,
 	      designCanvasProvider
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
     const nextRegistry = new CapabilityRegistry([
-      agent.managerToolProvider,
+      agent.managerToolProvider, agent.taskSuggestionToolProvider, agent.agentDispatchToolProvider,
       buildHistoryReferenceToolProvider(services.model.core.historyReferences),
       roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,
@@ -397,20 +395,6 @@ export function createRuntimeConfigController(
 	        nextDelegationRuntime,
 	        () => activeOptions.fastContext
 	      ),
-	      ...buildPptAgentToolProvider(
-	        nextDelegationRuntime,
-	        () => ({
-	          ...nextOptions.lab?.pptAgent,
-	          imageGenAvailable: nextImageGenProviders.available,
-	          imageGenReason: nextImageGenProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason,
-	          imageGenSupportsReferenceEdit: protocolSupportsImageEdit(nextOptions.capabilities?.imageGen?.protocol),
-	          toolIncompatibleProviderIds: [
-	            ...new Set([...antigravityProviderIds, ...cursorSdkProviderIds])
-	          ],
-	          defaultProviderLacksManagedTools: defaultIsAntigravity || defaultIsCursorSdk
-	        }),
-	        turnService
-	      ),
 	      ...buildComponentDesignToolProviders(delegationRuntime),
 	      ...buildDiagramVisualizationToolProvider(
 	        () => activeOptions.lab?.conversationVisualization,
@@ -420,6 +404,7 @@ export function createRuntimeConfigController(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
 	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization),
+	      ...buildGenUiToolProvider(() => core.genUiStore),
 	      ...buildPaperSearchToolProvider({
 	        proxyUrl: () => activeOptions.modelProxyUrl,
 	        enabledSources: () => activeOptions.capabilities?.paperSearch?.enabledSources,
@@ -533,6 +518,7 @@ export function createRuntimeConfigController(
 	    tokenEconomy = nextTokenEconomy
     core.modelProfiles = modelProfiles
     core.providerModelProfiles = providerModelProfiles
+    modelConnections.invalidateSnapshotCache?.() // Registry projections derive capabilities from these profiles.
     core.tokenEconomy = tokenEconomy
 	    refreshDelegatedProviderIds()
 	    directModelClient.replace(nextModelClients)

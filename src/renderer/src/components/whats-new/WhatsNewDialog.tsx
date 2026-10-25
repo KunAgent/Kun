@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, Sparkles, Wrench, X } from 'lucide-react'
-import { firstSentence, pickHighlights, type ReleaseNoteItem } from '@shared/release-notes-summary'
+import { firstSentence, isCatchAllItem, pickHighlights, type ReleaseNoteItem } from '@shared/release-notes-summary'
 import kunCheerUrl from '../../../../asset/img/kun_cheer.png'
 import kunMagicUrl from '../../../../asset/img/kun_magic.png'
+import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 import { pulseFocusModeSwitch } from '../../lib/focus-mode'
 import type { WhatsNewContent } from './whats-new-content'
+import { WhatsNewArtifactsSpotlight } from './WhatsNewArtifactsSpotlight'
 import { WhatsNewFocusSpotlight } from './WhatsNewFocusSpotlight'
 import { WhatsNewOlderVersions } from './WhatsNewOlderVersions'
 import { SPOTLIGHT_HIGHLIGHT_LIMIT, whatsNewSpotlight } from './whats-new-spotlights'
@@ -35,6 +37,7 @@ function FixRow({ item }: { item: ReleaseNoteItem }): ReactElement {
 export default function WhatsNewDialog({ content, onClose: dismiss }: Props): ReactElement {
   const { t } = useTranslation('common')
   const titleId = useId()
+  const featuresId = useId()
   const dialogRef = useRef<HTMLElement>(null)
   const primaryRef = useRef<HTMLButtonElement>(null)
   const summary = content.current
@@ -43,7 +46,11 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
     ? pickHighlights(summary, spotlight ? { exclude: spotlight.covers, limit: SPOTLIGHT_HIGHLIGHT_LIMIT } : {})
     : null), [spotlight, summary])
   const fixesOnly = Boolean(summary && !spotlight && !picked?.highlights.length && summary.fixes.length)
+  const [featuresOpen, setFeaturesOpen] = useState(false)
   const [fixesOpen, setFixesOpen] = useState(fixesOnly)
+  const otherFeatures = spotlight?.id === 'artifacts' && summary
+    ? summary.features.filter((item) => !spotlight.covers.test(item.title) && !isCatchAllItem(item)).slice(SPOTLIGHT_HIGHLIGHT_LIMIT)
+    : []
   const fixesRef = useRef<HTMLDivElement>(null)
   const skipped = content.older.length
   // Closing after the Focus card rings the sidebar switch, so the user sees where it lives.
@@ -51,6 +58,10 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
     if (spotlight?.id === 'focus-mode') pulseFocusModeSwitch()
     dismiss()
   }, [dismiss, spotlight])
+  const openArtifacts = useCallback((): void => {
+    dismiss()
+    openArtifactsPage()
+  }, [dismiss])
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -170,6 +181,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
           {summary.intro && !fixesOnly ? <p className="kun-wn-intro">{summary.intro}</p> : null}
 
           {spotlight?.id === 'focus-mode' ? <WhatsNewFocusSpotlight /> : null}
+          {spotlight?.id === 'artifacts' ? <WhatsNewArtifactsSpotlight onOpen={openArtifacts} /> : null}
 
           {highlights.length ? (
             <>
@@ -190,7 +202,31 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
             </>
           ) : null}
 
-          {alsoUpdated.length ? (
+          {otherFeatures.length ? (
+            <div className="kun-wn-more-features">
+              <button
+                type="button"
+                className="kun-wn-disclosure"
+                data-whats-new-more-features
+                aria-expanded={featuresOpen}
+                aria-controls={featuresId}
+                onClick={() => setFeaturesOpen((value) => !value)}
+              >
+                <Sparkles className="h-4 w-4" strokeWidth={2} aria-hidden />
+                <span className="kun-wn-disclosure-label">{t('whatsNewAlsoUpdated')}</span>
+                <span className="kun-wn-count">{otherFeatures.length}</span>
+                <ChevronDown className="kun-wn-chevron h-4 w-4" strokeWidth={2} aria-hidden />
+              </button>
+              <ul id={featuresId} className="kun-wn-feature-list" hidden={!featuresOpen}>
+                {otherFeatures.map((item, index) => (
+                  <li key={`${item.title}-${index}`}>
+                    <strong>{item.title}</strong>
+                    <span>{firstSentence(item.body, 140)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : alsoUpdated.length ? (
             <div className="kun-wn-chips">
               <span className="kun-wn-chips-label">{t('whatsNewAlsoUpdated')}</span>
               {alsoUpdated.map((title) => <span key={title} className="kun-wn-chip">{title}</span>)}

@@ -63,6 +63,7 @@ import {
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
 import { buildArchivedActiveHistory } from './archive-history-commit.js'
+import { clearAppliedTurnErrors, turnErrorAlreadyApplied } from './turn-error-item-dedupe.js'
 
 export const turnServiceCompactionOperations = {
 async compact(this: TurnService, input: {
@@ -479,6 +480,9 @@ async finishTurn(this: TurnService, input: {
             ...(turn.error ? { error: turn.error } : {})
           }
         }
+        // Read before endTurn below releases the in-memory fold: the turn
+        // keeps the averages its live usage events carried.
+        const modelTiming = this['deps'].usage?.turnModelTiming(input.threadId, input.turnId)
         const turns = current.turns.map((candidate) => {
           if (candidate.id !== input.turnId) return candidate
           const finished = this['finalizeOpenItems'](finishTurn(candidate, input.status), input.status)
@@ -486,7 +490,8 @@ async finishTurn(this: TurnService, input: {
           return {
             ...finished,
             ...(input.error ? { error: input.error } : {}),
-            ...(terminalCode ? { terminalCode } : {})
+            ...(terminalCode ? { terminalCode } : {}),
+            ...(modelTiming ? { modelTiming } : {})
           }
         })
         await this['deps'].threadStore.upsert({
@@ -521,7 +526,7 @@ async finishTurn(this: TurnService, input: {
     // The turn's usage metrics are now stable; release per-turn aggregation
     // so long-lived threads do not accumulate one entry per historical turn.
       this['deps'].usage?.endTurn(input.threadId, input.turnId)
-      const errorItem = input.error
+      const errorItem = input.error && !turnErrorAlreadyApplied(input.threadId, input.turnId, input.error)
       ? makeErrorItem({
           id: input.code === 'owner_lease_expired'
             ? `item_${input.turnId}_owner_lease_expired`
@@ -551,6 +556,7 @@ async finishTurn(this: TurnService, input: {
       }
       return settlement
     } finally {
+      clearAppliedTurnErrors(input.threadId, input.turnId)
       this['clearRuntimeTurnState'](input.threadId, input.turnId)
       // Every terminal status frees a global admission slot, so the
       // scheduler is always notified. Aborted turns still pause their own

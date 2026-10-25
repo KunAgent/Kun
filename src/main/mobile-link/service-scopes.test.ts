@@ -12,7 +12,7 @@ function fixture() {
     if (body) calls.push(JSON.parse(body))
     return response ? response() : { ok: true, status: 200, body: '{"ok":true}' }
   })
-  const deps: LinkDependencies = { origin: 'https://relay.test', name: 'Host', platform: 'macos',
+  const deps: LinkDependencies = { requireMembership: async () => {}, origin: 'https://relay.test', name: 'Host', platform: 'macos',
     account: { getState: async () => ({ status: 'authenticated', error: null,
       user: { id: 'owner', name: 'Owner', email: 'owner@test.invalid', avatarUrl: null } }),
     onState: () => () => {}, accessToken: async () => 'token', expire: async () => {} },
@@ -66,7 +66,8 @@ describe('trusted desktop permission dispatch', () => {
       f.invoke('catalog.get', {}, 'catalog'); await tick()
       expect(f.calls.at(-1).scopes).toEqual(['personal'])
       expect(f.calls.at(-1).authorizationId).not.toBe(priorAuthority)
-      expect(f.frames.some((frame) => frame.kind === 'resync_required' && frame.payload.reason === 'permissions_changed')).toBe(true)
+      // Control frames are paced 5 ms apart, so the notice may follow a batched acknowledgement.
+      await vi.waitFor(() => expect(f.frames.some((frame) => frame.kind === 'resync_required' && frame.payload.reason === 'permissions_changed')).toBe(true))
       await f.service.setScopes(grant, ['groups.read'])
       f.grants([{ id: '55555555-5555-4555-8555-555555555555', controllerId: phone }])
       expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])

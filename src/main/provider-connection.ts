@@ -77,6 +77,7 @@ export function providerProbeHeaders(
 ): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const key = apiKey.trim()
+  if (key === 'magpie-kun') headers['User-Agent'] = 'Kun'
   if (endpointFormat === 'messages') {
     headers['anthropic-version'] = ANTHROPIC_VERSION
     if (key) headers['x-api-key'] = key

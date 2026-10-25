@@ -27,6 +27,8 @@
   "subagentsRuntimePolicyDesc": "Set delegation concurrency; excess tasks wait in the queue.",
   "subagentsUseExistingAgents": "Use existing agents",
   "subagentsUseExistingAgentsDesc": "On: delegate_task routes to configured profiles. Off: the main agent defines a one-run role for each task.",
+  "subagentsHonorEngineBinding": "Run roles on their bound engine",
+  "subagentsHonorEngineBindingDesc": "On: delegate_task runs a role bound to Claude Code, Codex or another engine on that engine, and refuses when that engine is unavailable. Off: every delegate_task child runs on the main route.",
   "subagentsMaxParallel": "Maximum parallel subagents",
   "subagentsMaxParallelDesc": "New tasks wait in the queue after this many subagents are running at once.",
   "subagentsProactiveRetry": "Main agent retries failed subagents",

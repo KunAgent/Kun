@@ -59,12 +59,13 @@ describe('delegatedContextProfile', () => {
     const profile = resolve('claude-haiku-4-5', CLAUDE_PROVIDER)
 
     expect(profile.contextWindowTokens).toBe(200_000)
-    // Thresholds follow the declared window, not the 32k conservative default.
-    expect(profile.softThresholdTokens).toBeGreaterThan(DEFAULT_CONTEXT_THRESHOLDS.softThreshold)
+    // Thresholds follow the declared window, not the assumed default window.
+    expect(profile.softThresholdTokens).toBeLessThan(DEFAULT_CONTEXT_THRESHOLDS.softThreshold)
+    expect(profile.softThresholdTokens).toBe(150_000)
     expect(profile.hardThresholdTokens).toBeLessThanOrEqual(200_000)
   })
 
-  it('keeps the conservative estimate when no provider scope is known', () => {
+  it('falls back to the assumed default window when no provider scope is known', () => {
     const profile = resolve('claude-haiku-4-5')
 
     expect(profile.contextWindowTokens).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS)

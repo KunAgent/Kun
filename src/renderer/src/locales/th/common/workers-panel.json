@@ -1,0 +1,80 @@
+{
+  "workersEmptyTitle": "ยังไม่มีสมาชิก",
+  "workersUnavailableTitle": "ยังอ่านข้อมูลทีมไม่ได้",
+  "workersRetry": "ลองอีกครั้ง",
+  "workersHeader": {
+    "members": "สมาชิก {{n}} คน",
+    "usageTitle": "โทเค็นที่ทั้งทีมใช้",
+    "success": "เสร็จแล้ว",
+    "running": "กำลังทำงาน",
+    "warning": "รอคุณ",
+    "danger": "ล้มเหลว"
+  },
+  "workersSection": {
+    "needs-you": "ต้องการคุณ",
+    "working": "กำลังทำงาน",
+    "done": "สิ้นสุดแล้ว"
+  },
+  "workersStatus": {
+    "question": "รอคำตอบจากคุณ",
+    "approval": "รอการอนุมัติ",
+    "waiting": "กำลังรอ",
+    "failed": "ล้มเหลว",
+    "working": "กำลังทำงาน",
+    "done": "เสร็จแล้ว",
+    "released": "ปล่อยแล้ว",
+    "idle": "ว่าง"
+  },
+  "workersTool": {
+    "read": "กำลังอ่านไฟล์",
+    "edit": "กำลังแก้ไขไฟล์",
+    "search": "กำลังค้นหาโค้ด",
+    "command": "กำลังรันคำสั่ง",
+    "web": "กำลังค้นข้อมูลบนเว็บ",
+    "delegate": "กำลังมอบหมายงานย่อย",
+    "other": "กำลังเรียก {{tool}}"
+  },
+  "workersPhase": {
+    "investigating": "กำลังตรวจสอบ",
+    "implementing": "กำลังพัฒนา",
+    "verifying": "กำลังยืนยัน",
+    "blocked": "ติดขัด",
+    "compacting": "กำลังย่อบริบท"
+  },
+  "workersTime": {
+    "justNow": "เมื่อสักครู่",
+    "minutes": "{{n}} นาทีที่แล้ว",
+    "hours": "{{n}} ชั่วโมงที่แล้ว",
+    "days": "{{n}} วันที่แล้ว"
+  },
+  "workersRow": {
+    "files": "{{n}} ไฟล์"
+  },
+  "workersAction": {
+    "openInMain": "เปิดในมุมมองหลัก",
+    "more": "การทำงานเพิ่มเติม"
+  },
+  "workersQuestion": {
+    "waitingOn": "{{name}} กำลังรอคำตอบจากคุณ",
+    "otherAnswer": "หรือพิมพ์คำตอบอื่น…",
+    "answer": "ตอบ",
+    "answerPlaceholder": "หรือพิมพ์คำตอบของคุณ…",
+    "answerHint": "การตอบไม่ใช่การรับช่วงควบคุม"
+  },
+  "workerTab": {
+    "fallbackTitle": "สมาชิก",
+    "loadingConversation": "กำลังโหลดบทสนทนา…",
+    "noConversation": "ยังไม่มีบทสนทนา",
+    "missing": "สมาชิกนี้ไม่อยู่ในทีมแล้ว",
+    "childReadOnly": "เอเจนต์นี้ทำงานโดยผู้จัดการ บทสนทนาที่นี่อ่านได้อย่างเดียว",
+    "releasedReadOnly": "สมาชิกนี้ถูกปล่อยแล้ว บทสนทนาอ่านได้อย่างเดียว"
+  },
+  "workerComposer": {
+    "managed": "ผู้จัดการควบคุมอยู่",
+    "handBack": "คุณควบคุมอยู่ · คืนให้ผู้จัดการ",
+    "takeOverTitle": "รับช่วงสมาชิกนี้จากผู้จัดการ",
+    "handBackTitle": "คืนการควบคุมให้ผู้จัดการ",
+    "takeOverHint": "การส่งจะรับช่วงควบคุม คืนให้ผู้จัดการได้ทุกเมื่อ"
+  },
+  "assignmentCardTask": "งาน"
+}

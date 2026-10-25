@@ -23,6 +23,8 @@ import {
   type ReactElement
 } from 'react'
 import { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
+import { useChatStore } from '../store/chat-store'
+import { useHarnessStore } from '../store/harness-store'
 import { ClaudeSubscriptionSection } from './claude-subscription-section'
 import {
   SecretInput,
@@ -171,6 +173,20 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                             <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.9} />
                           </button>
                         ) : null}
+                      </div>
+                      <div className="grid gap-2 rounded-lg border border-ds-border bg-ds-main/30 px-3 py-2 text-[12px] leading-5 text-ds-muted sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                        data-cursor-subscription-agent-hint>
+                        <p>{t('cursorSubscriptionAgentHint')}</p>
+                        <button
+                          type="button"
+                          className={settingsButtonClass({ className: 'w-fit shrink-0' })}
+                          onClick={() => {
+                            useHarnessStore.setState({ settingsHarnessId: 'cursor' })
+                            useChatStore.getState().openSettings('agentsHarnesses')
+                          }}
+                        >
+                          {t('cursorSubscriptionOpenAgent')}
+                        </button>
                       </div>
                       <label className={fieldLabelClass}>
                         {t('modelProviderApiKey')}

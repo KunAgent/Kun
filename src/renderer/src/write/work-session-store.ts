@@ -14,6 +14,9 @@ type WorkSessionState = {
   current: Record<string, string>
   /** Selection/creation in flight; the runtime effect waits for it. */
   transitions: number
+  /** Thread id → the title the sessions list shows, for views whose own thread list lacks it. */
+  titles: Record<string, string>
+  rememberTitles: (entries: ReadonlyArray<{ id: string; title: string }>) => void
   select: (workspaceRoot: string, threadId: string) => void
   startDraft: (workspaceRoot: string) => void
   /** A session that went away (archived/deleted) leaves its space on a draft. */
@@ -23,6 +26,19 @@ type WorkSessionState = {
 export const useWorkSessionStore = create<WorkSessionState>((set) => ({
   current: {},
   transitions: 0,
+  titles: {},
+  rememberTitles: (entries) => {
+    set((state) => {
+      let changed = false
+      const titles = { ...state.titles }
+      for (const { id, title } of entries) {
+        if (!id || !title || titles[id] === title) continue
+        titles[id] = title
+        changed = true
+      }
+      return changed ? { titles } : state
+    })
+  },
   select: (workspaceRoot, threadId) => {
     const key = writeWorkspaceKey(workspaceRoot)
     const id = threadId.trim()

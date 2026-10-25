@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+import { trackProduct } from '../../product-analytics/client'
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -70,6 +72,9 @@ export type OnboardingShellProps = {
 
 export function OnboardingShell(props: OnboardingShellProps): ReactElement {
   const { t } = useTranslation('settings')
+  useEffect(() => {
+    if (!props.preview) trackProduct({ name: 'onboarding_step', properties: { step: props.step, action: 'entered' } })
+  }, [props.step, props.preview])
   const currentIndex = onboardingStepIndex(props.step)
   const mascot = MASCOTS[props.step]
   return (

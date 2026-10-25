@@ -181,8 +181,9 @@ describe('collectPaletteSources', () => {
       .map((entry) => entry.activation.kind === 'route' ? entry.activation.route : null)
       .filter((route): route is AppRoute => Boolean(route))
     expect(routes.sort()).toEqual([
-      'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'wardrobe', 'workflow', 'write'
+      'artifacts', 'board', 'chat', 'claw', 'design', 'extensions', 'plugins', 'schedule', 'settings', 'wardrobe', 'workflow', 'write'
     ])
+    expect(entries.find((entry) => entry.id === 'route:artifacts')?.title).toBe('artifactsNav')
     expect(entries.find((entry) => entry.id === 'route:workflow')?.title).toBe('workflowCreate')
     expect(entries.find((entry) => entry.id === 'route:wardrobe')?.title).toBe('roomsWardrobeMine')
   })

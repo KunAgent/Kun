@@ -177,10 +177,20 @@ export class HarnessDetector {
    * is not confused with a known-missing one.
    */
   cachedStatus(id: HarnessId): HarnessStatus | undefined {
+    const status = this.lastKnownStatus(id)
+    return status && (this.cache.get(id)?.expiresAt ?? 0) > this.deps.nowMs() ? status : undefined
+  }
+
+  /**
+   * The latest settled verdict for the current configuration, kept after its
+   * TTL. Advisory listings use it so they do not flicker while a refresh is in
+   * flight; launches still re-check readiness. Undefined until a probe lands.
+   */
+  lastKnownStatus(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)
     const def = this.deps.definitions().find((candidate) => candidate.id === id)
     return !def?.launch?.secretEnv?.length && cached && cached.identity === this.identity(id) &&
-      cached.binary === fileIdentity(cached.status.resolvedCommand) && cached.expiresAt > this.deps.nowMs()
+      cached.binary === fileIdentity(cached.status.resolvedCommand)
       ? cached.status
       : undefined
   }

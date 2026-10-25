@@ -124,9 +124,11 @@ app.whenReady().then(()=>{const win=new BrowserWindow({width:1100,height:920,sho
   await page.screenshot({ path: join(evidence, 'resources.png') })
 
   await scenario('approval')
-  await hasText('$ npm test')
+  await hasText('npm test')
   await hasText('Run this time'); await hasText('Trust this operation')
-  await page.getByRole('button', { name: /Trust this operation/ }).click()
+  // The approval card ignores clicks for its first 500 ms (arming).
+  await page.waitForTimeout(600)
+  await page.getByRole('option', { name: /Trust this operation/ }).click()
   assert.deepEqual(await page.evaluate(() => window.toolFixture.actions.at(-1)), {
     type: 'approval', id: 'approval-fixture', decision: 'allow', choice: { optionId: 'always' }
   })
@@ -155,7 +157,7 @@ app.whenReady().then(()=>{const win=new BrowserWindow({width:1100,height:920,sho
   assert.ok(approvalLayout.height <= approvalLayout.viewport * 0.7 + 2)
   assert.ok(approvalLayout.footerBottom <= approvalLayout.viewport)
   assert.ok(approvalLayout.bodyScrollHeight > approvalLayout.bodyHeight, 'Long approval evidence must scroll independently')
-  await page.getByRole('button', { name: /Review option 12/ }).scrollIntoViewIfNeeded()
+  await page.getByRole('option', { name: /Review option 12/ }).scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(evidence, 'long-approval-narrow.png') })
   checks.push('long multi-file approvals keep all choices reachable in a narrow window')
   assert.deepEqual(errors, [])

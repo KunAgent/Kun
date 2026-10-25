@@ -65,7 +65,9 @@ export function RoomComposerToolbar({ room, tasks, taskId, repositoryId, rootReq
       {privateChat ? modelControl : null}
       {voiceControl}
       {uploading ? <LoaderCircle size={16} className="animate-spin" aria-label={t('roomsUploading')} /> : null}
-      {responding && onStop ? <button type="button" className="rooms-composer-send direct-stop" aria-label={t('directStop')} title={t('directStop')} onClick={onStop}><Square size={15} fill="currentColor" /></button> : null}
+      {responding && onStop ? <button type="button" className={'rooms-composer-send direct-stop' + (privateChat ? ' has-label' : '')}
+        aria-label={t('directStop')} title={t('directStop')} onClick={onStop}><Square size={privateChat ? 11 : 15} fill="currentColor" />
+        {privateChat ? <span aria-hidden="true">{t('directStopShort')}</span> : null}</button> : null}
       {canSend || !responding ? <button type="submit" className="rooms-composer-send" disabled={disabled || !canSend} aria-label={t('roomsSend')} title={t('directSendShortcut')}><ArrowUp size={19} /></button> : null}
     </div>
   </div>

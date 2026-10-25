@@ -25,7 +25,6 @@ import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
 import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
 import type { ThreadExecutionUnit } from '../contracts/threads.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import { ChildProviderFallbackSchema, ChildRunFailureSchema } from '../contracts/subagent-retry.js'
 import { MAX_TURN_ATTACHMENT_IDS } from '../contracts/attachments.js'
 import {
@@ -91,6 +90,7 @@ export const ChildRunLauncher = z.preprocess(
   z.enum([
     'delegate_task',
     'fast_context',
+    // Retired PPT sub-agent; kept so persisted child runs still load.
     'ppt_agent',
     'component_design',
     'diagram_design',
@@ -99,26 +99,6 @@ export const ChildRunLauncher = z.preprocess(
   ])
 )
 export type ChildRunLauncher = z.infer<typeof ChildRunLauncher>
-
-export const ChildPptWorkflow = z.object({
-  workflowId: z.string().min(1),
-  stage: z.enum(['direction', 'review', 'build']),
-  previewMode: z.enum(['image-first', 'editable']),
-  directionGate: z.object({
-    required: z.boolean(),
-    reason: z.enum([
-      'existing-presentation',
-      'explicit-skip',
-      'work-document',
-      'design-reference',
-      'complete-visual-system',
-      'underspecified-new-deck'
-    ]),
-    basis: z.string().trim().min(1).max(240),
-    sourceHash: z.string().regex(/^[a-f0-9]{64}$/)
-  }).strict().optional()
-}).strict()
-export type ChildPptWorkflow = z.infer<typeof ChildPptWorkflow>
 
 export const ChildRunTerminationReason = z.enum([
   'user_stop',
@@ -286,8 +266,8 @@ export const ChildRunRecord = z.object({
   fastContextTasks: z.array(FastContextTaskSchema).min(1).max(4).optional(),
   /** Workspace-relative paths the parent marked as likely relevant. */
   fastContextHintPaths: z.array(z.string().min(1).max(1_024)).max(16).optional(),
-  /** Durable host-owned PPT phase identity, including attempts that fail before producing a bundle. */
-  pptWorkflow: ChildPptWorkflow.optional(),
+  /** Legacy persisted field of the retired PPT sub-agent; never written. */
+  pptWorkflow: z.unknown().optional(),
   status: z.enum(['queued', 'running', 'completed', 'failed', 'aborted']),
   /** Why the latest attempt ended; cleared when another attempt starts. */
   terminationReason: ChildRunTerminationReason.optional(),
@@ -302,17 +282,12 @@ export const ChildRunRecord = z.object({
   resultRef: ChildResultRef.optional(),
   /** Safe reason the full result could not be externalized. */
   resultUnavailableReason: z.string().min(1).max(500).optional(),
-  /** Structured PPT review result captured from the child tool stream. */
+  /** Legacy persisted fields of the retired PPT sub-agent; never written. */
   reviewBundle: z.unknown().optional(),
-  /** Parent turn that produced reviewBundle; distinguishes a fresh bundle from the preserved prior revision. */
   reviewBundleParentTurnId: z.string().min(1).optional(),
-  /** Structured pre-review visual directions captured independently from slide review. */
   directionBundle: z.unknown().optional(),
-  /** Parent turn that produced directionBundle. */
   directionBundleParentTurnId: z.string().min(1).optional(),
-  /** Structured validated PPT export captured from the child tool stream. */
   deckArtifact: z.unknown().optional(),
-  /** Parent turn that produced deckArtifact. */
   deckArtifactParentTurnId: z.string().min(1).optional(),
   evidence: z.array(z.string().min(1).max(2_000)).max(32).optional(),
   /** Compact structured evidence returned to the parent instead of raw child history. */
@@ -389,8 +364,6 @@ export type ChildRunExecutor = (input: {
   executionUnit?: ThreadExecutionUnit
   /** Trusted host control emitted as private chronological model context. */
   controlPrompt?: string
-  /** Host-minted PPT capability for this execution only. */
-  pptWorkflowScope?: PptWorkflowScope
   workspace?: string
   model?: string
   providerId?: string
@@ -443,9 +416,6 @@ export type ChildRunExecutor = (input: {
   toolInvocations?: number
   prefixReused?: boolean
   inheritedHistoryItems?: number
-  reviewBundle?: unknown
-  directionBundle?: unknown
-  deckArtifact?: unknown
   evidence?: string[]
   evidencePack?: FastContextEvidencePack
 }>

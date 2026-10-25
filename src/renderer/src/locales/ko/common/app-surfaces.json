@@ -1,0 +1,21 @@
+{
+  "appSurfaceDesktopOnly": "인터랙티브 페이지는 Kun 데스크톱 앱에서 사용할 수 있습니다.",
+  "appSurfaceRetry": "다시 시도",
+  "appSurfacePageError": "페이지 오류: {{message}}",
+  "appSurfaceWidgetAria": "인터랙티브 위젯: {{title}}",
+  "appSurfaceCopyImage": "이미지로 복사",
+  "appSurfaceCopied": "복사됨",
+  "appSurfaceExpand": "앱 패널에서 열기",
+  "appSurfaceOpenInPanel": "앱 패널에 표시되었습니다. 다시 열려면 클릭하세요.",
+  "appSurfaceFollowUpConfirm": "\"{{app}}\"에서 이 메시지를 보낼까요?",
+  "appSurfaceOpenLinkConfirm": "\"{{app}}\"이(가) 이 링크를 브라우저에서 열려고 합니다.",
+  "appSurfaceToolConsent": "이 대화에서 \"{{app}}\"이(가) 자체 도구를 실행하도록 허용할까요?",
+  "appSurfaceToolConsentDetail": "페이지는 자체 MCP 서버의 도구를 호출할 수 있습니다(예: 자체 문서 저장 또는 변경). 다른 서버, 파일, 대화 기록에는 접근할 수 없습니다.",
+  "appSurfaceWidgetStateChip": "{{title}} 상태",
+  "appSurfaceWidgetStateSummary": "인터랙티브 위젯에 저장된 선택",
+  "appSurfaceAppContextChip": "{{title}} 컨텍스트",
+  "appSurfaceAppContextSummary": "앱에서 선택한 컨텍스트",
+  "appSurfaceDownloadConfirm": "\"{{app}}\"이(가) 파일을 컴퓨터에 저장하려고 합니다.",
+  "appSurfacePanelTab": "앱",
+  "appSurfacePanelEmpty": "열린 앱이 없습니다. 대화의 인터랙티브 카드에서 여세요."
+}

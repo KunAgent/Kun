@@ -29,5 +29,10 @@
   "whatsNewFocusWhere": "以后在侧栏底部的「专注」开关随时切换",
   "whatsNewFocusPreviewLogo": "Kun 标志",
   "whatsNewFocusPreviewAccount": "账号卡",
-  "whatsNewFocusPreviewCalm": "只留下对话"
+  "whatsNewFocusPreviewCalm": "只留下对话",
+  "whatsNewArtifactsTag": "产物库",
+  "whatsNewArtifactsTitle": "Kun 做出的东西，都收在一处",
+  "whatsNewArtifactsBody": "设计稿、文档、幻灯片、表格、白板和生成图片按项目和类型整理。点开即可预览，或回到原会话让 Kun 继续修改。",
+  "whatsNewArtifactsOpen": "打开产物库",
+  "whatsNewArtifactsWhere": "以后在侧栏的「产物」入口随时打开"
 }

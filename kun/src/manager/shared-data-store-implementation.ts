@@ -1,4 +1,6 @@
 import { writeThreadMetadata } from './thread-metadata-write.js'
+import { MemoryRelationCommand } from '../contracts/memory-relations.js'
+import { MemoryRelationContextRequest } from '../contracts/memory-working-context.js'
 import { rewriteSessionHistory } from './session-history-rewrite.js'
 import { executeMemoryLifecycleOperation } from './memory-lifecycle-owner.js'
 import { AgentMemoryAccessSchema } from '../memory/agent-memory-scope.js'
@@ -190,7 +192,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     return executeArtifactStoreOperation(this.artifactStore, operation, value)
   }
 
-  async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown): Promise<unknown> {
+  async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown, signal?: AbortSignal): Promise<unknown> {
     if (operation === 'distillationPending') {
       const body = z.object({ value: z.unknown() }).strict().parse(value)
       const run = this.memoryQueue.catch(() => undefined)
@@ -210,6 +212,12 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     const store = this.memoryStore(body.config)
     const run = this.memoryQueue.catch(() => undefined).then(async () => {
       switch (operation) {
+        case 'relationContext':
+          if (!store.relationContext) throw new Error('Memory relation context is unavailable')
+          return store.relationContext(MemoryRelationContextRequest.parse(body.value), body.config)
+        case 'relations':
+          if (!store.relations) throw new Error('Memory relations are unavailable')
+          return store.relations(MemoryRelationCommand.parse(body.value), signal)
         case 'erasureReceipt':
         case 'history':
         case 'isForgotten': return executeMemoryLifecycleOperation(store, operation, body.value)
@@ -291,7 +299,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             project: z.string().optional(), projectIdentity: z.string().optional(),
             limit: z.number().int().positive(),
             promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional(),
-            purpose: z.enum(['injection', 'tool']).optional(),
+            purpose: z.enum(['injection', 'tool', 'preview']).optional(),
             filter: z.object({
               scope: MemoryScope.optional(),
               type: MemoryType.optional(),
@@ -430,6 +438,9 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             request.expiresBeforeIso
           ) ?? { deleted: 0, released: 0 }
         }
+        case 'expiredLeaseCandidates':
+          return store.expiredLeaseCandidates?.(z.object({ expiresBeforeIso: z.string() }).strict()
+            .parse(body.value).expiresBeforeIso) ?? []
         case 'replaceMetadata': {
           await store.replaceMetadata?.(AttachmentMetadata.parse(body.value))
           return null

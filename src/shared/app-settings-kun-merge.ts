@@ -1,4 +1,4 @@
-import { defaultKunLabSettings } from './app-settings-kun-lab-defaults'
+import { defaultKunLabSettings, normalizeStoredPptAgentSettings } from './app-settings-kun-lab-defaults'
 export { defaultKunLabSettings } from './app-settings-kun-lab-defaults'
 import {
   DEFAULT_APPROVAL_REVIEWER,
@@ -102,6 +102,7 @@ import {
   normalizeKunComputerUseSettings,
   normalizeKunImageGenerationSettings,
   normalizeKunMusicGenerationSettings,
+  migrateKunPromptOptimizationDefaults,
   normalizeKunPromptOptimizationSettings,
   normalizeKunSpeakSettings,
   normalizeKunSpeechToTextSettings,
@@ -218,7 +219,7 @@ export function mergeKunRuntimeSettings(
   const currentPromptOptimization = normalizeKunPromptOptimizationSettings(current.promptOptimization)
   const nextPromptOptimization = normalizeKunPromptOptimizationSettings({
     ...currentPromptOptimization,
-    ...(patch?.promptOptimization ?? {})
+    ...migrateKunPromptOptimizationDefaults(patch?.promptOptimization)
   })
   const currentMusicGeneration = normalizeKunMusicGenerationSettings(current.musicGeneration)
   const nextMusicGeneration = normalizeKunMusicGenerationSettings({
@@ -421,6 +422,8 @@ export function mergeKunRuntimeSettings(
       patch?.memoryDistillationEnabled ?? current.memoryDistillationEnabled ?? false,
     memoryDirectivesEnabled:
       patch?.memoryDirectivesEnabled ?? current.memoryDirectivesEnabled ?? true,
+    memoryRelationContextEnabled:
+      (patch?.memoryRelationContextEnabled ?? current.memoryRelationContextEnabled) === true,
     instructions: nextInstructions,
     computerUse: nextComputerUse,
     browserUse: nextBrowserUse,
@@ -503,7 +506,7 @@ export function mergeKunLabSettings(
   const legacyAutomatic = legacyCurrent?.autoPlanBuild
   const legacyScheduled = legacyAutomatic?.scheduledDefaults
   const base: KunLabSettingsV1 = {
-    pptAgent: legacyCurrent?.pptAgent ?? defaults.pptAgent,
+    pptAgent: normalizeStoredPptAgentSettings(legacyCurrent?.pptAgent, defaults.pptAgent),
     conversationVisualization:
       legacyCurrent?.conversationVisualization ?? defaults.conversationVisualization,
     autoPlanBuild: {
@@ -526,13 +529,14 @@ export function mergeKunLabSettings(
     codexReferenceBranches: { enabled: legacyCurrent?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: legacyCurrent?.projectBoard?.enabled ?? defaults.projectBoard.enabled
-    }
+    },
+    assistantMailbox: { enabled: legacyCurrent?.assistantMailbox?.enabled === true }
   }
   if (!patch) return base
   return {
     pptAgent: {
-      ...mergeLabAgentSettings(base.pptAgent, patch.pptAgent),
-      imageFirst: patch.pptAgent?.imageFirst ?? base.pptAgent.imageFirst
+      enabled: true,
+      imageAssets: patch.pptAgent?.imageAssets ?? base.pptAgent.imageAssets
     },
     conversationVisualization: {
       enabled: patch.conversationVisualization?.enabled
@@ -581,7 +585,8 @@ export function mergeKunLabSettings(
     },
     projectBoard: {
       enabled: patch.projectBoard?.enabled ?? base.projectBoard.enabled
-    }
+    },
+    assistantMailbox: { enabled: patch.assistantMailbox?.enabled ?? base.assistantMailbox.enabled }
   }
 }
 

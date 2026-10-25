@@ -40,6 +40,8 @@ export type MessageTimelineProps = {
    * touch action sheet and a floating back-to-latest button.
    */
   surface?: 'desktop' | 'mobile'
+  /** Reply / side-conversation toolbar over selected message text (Code conversation). */
+  messageSelectionToolbar?: boolean
   onOpenChildThread?: OpenChildThreadHandler
   onComponentPrototypePrompt?: (prompt: string) => void
   extensionMessageActions?: readonly RegisteredContribution<'actions.message'>[]

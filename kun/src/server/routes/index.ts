@@ -18,7 +18,10 @@ import { registerReviewRoutes } from './register-review-routes.js'
 import { registerHandoffRoutes } from './register-handoff-routes.js'
 import { registerExecutionUnitRoutes } from './register-execution-unit-routes.js'
 import { registerWorkerCallbackRoutes } from './register-worker-callback-routes.js'
+import { registerGitHubAppRoutes } from './github-app.js'
 import { registerGmailRoutes } from './gmail.js'
+import { registerGenUiRoutes } from './register-gen-ui-routes.js'
+import { registerMcpAppsRoutes } from './register-mcp-apps-routes.js'
 
 /** Build the full HTTP router while preserving first-match registration order. */
 export function buildRouter(runtime: ServerRuntime): Router {
@@ -26,6 +29,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   const approvalConsent = new ApprovalConsentVerifier(runtime.runtimeToken)
   registerCoreRoutes(router, runtime)
   registerGmailRoutes(router, runtime)
+  registerGitHubAppRoutes(router, runtime)
   registerHarnessRoutes(router, runtime)
   registerActivityRoutes(router, runtime)
   registerTaskWorkspaceRoutes(router, runtime)
@@ -40,6 +44,8 @@ export function buildRouter(runtime: ServerRuntime): Router {
   registerRoomRoutes(router, runtime)
   registerWorkbenchDirectoryRoutes(router, runtime)
   registerHistoryReferenceRoutes(router, runtime)
+  registerGenUiRoutes(router, runtime)
+  registerMcpAppsRoutes(router, runtime)
   registerThreadRoutes(router, runtime, approvalConsent)
   registerRemoteRoutes(router, runtime)
   return router

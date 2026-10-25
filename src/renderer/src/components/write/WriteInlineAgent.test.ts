@@ -16,7 +16,7 @@ vi.mock('react-i18next', () => ({
 describe('WriteInlineAgent', () => {
   const action = {
     left: 200,
-    width: 520,
+    width: 280,
     anchorLeft: 300,
     anchorRight: 500,
     coordinateScale: 1,
@@ -37,16 +37,25 @@ describe('WriteInlineAgent', () => {
     vi.unstubAllGlobals()
   })
 
-  it('does not render a second AI composer beside the assistant sidebar', async () => {
+  it('renders the selection instruction field and routes Enter to review and Mod-Enter to chat', async () => {
+    const edit = vi.fn(), chat = vi.fn()
+    vi.stubGlobal('navigator', { platform: 'MacIntel' })
     let renderer: ReactTestRenderer
-    await act(async () => {
-      renderer = create(createElement(WriteInlineAgent, {
-        action
-      }))
-    })
-
-    expect(renderer!.root.findAllByType('textarea')).toHaveLength(0)
-    expect(renderer!.root.findAllByProps({ className: 'write-inline-agent-edit' })).toHaveLength(0)
+    await act(async () => { renderer = create(createElement(WriteInlineAgent, {
+      action, editEnabled: true, onAskEdit: edit, onAskChat: chat
+    })) })
+    const input = () => renderer!.root.findByType('input')
+    await act(async () => { input().props.onChange({ target: { value: 'Make it clearer' } }) })
+    const key = (metaKey = false, isComposing = false) => ({ key: 'Enter', metaKey, ctrlKey: false,
+      nativeEvent: { isComposing }, preventDefault: vi.fn(), stopPropagation: vi.fn() })
+    await act(async () => { input().props.onKeyDown(key(false, true)) })
+    expect(edit).not.toHaveBeenCalled()
+    await act(async () => { input().props.onKeyDown(key()) })
+    expect(edit).toHaveBeenCalledWith('Make it clearer')
+    await act(async () => { input().props.onChange({ target: { value: 'Explain' } }) })
+    await act(async () => { input().props.onKeyDown(key(true)) })
+    expect(chat).toHaveBeenCalledWith('Explain')
+    await act(async () => renderer!.unmount())
   })
 
   it('keeps quote and configured selection actions available', async () => {
@@ -68,8 +77,8 @@ describe('WriteInlineAgent', () => {
       }))
     })
 
-    renderer!.root.findByProps({ 'aria-label': 'writeSelectionQuote' }).props.onClick()
-    renderer!.root.findByProps({ 'aria-label': quickAction.label }).props.onClick()
+    renderer!.root.findByProps({ 'aria-label': 'writeSelectionQuote' }).props.onClick({ nativeEvent: {} })
+    renderer!.root.findByProps({ 'aria-label': quickAction.label }).props.onClick({ nativeEvent: {} })
 
     expect(onQuoteSelection).toHaveBeenCalledOnce()
     expect(onQuickAction).toHaveBeenCalledWith(quickAction)

@@ -1,3 +1,5 @@
+import { captureWorkSubmissionIntent, submitExplicitWorkRequest, type WorkSubmissionIntent } from '../product-analytics/work-submission'
+import { turnAdmissionOutcomeMayBeUnknown } from '../store/chat-store-thread-actions-support'
 import { create } from 'zustand'
 import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
 import { createPaperTurnContext, PAPER_CONTEXT_MAX_CHARS } from '@shared/paper/paper-turn-context'
@@ -114,6 +116,7 @@ async function waitForTurn(threadId: string, turnId: string, jobId: string): Pro
 
 async function interpretOne(input: {
   job: PaperBatchJob
+  analyticsIntent: WorkSubmissionIntent
   paper: PaperBatchPaper
   providerId: string
   model: string
@@ -176,14 +179,15 @@ async function interpretOne(input: {
     return
   }
   const question = paperReadingQuestion(job.purpose, { background: '', goal: '', question: '', limited })
-  const accepted = await provider.sendUserMessage(thread.id, `${question}\n\nInterface language: ${input.language}`, {
+  const accepted = await submitExplicitWorkRequest(thread.id, clientRequestId => provider.sendUserMessage(thread.id, `${question}\n\nInterface language: ${input.language}`, {
     mode: 'agent',
     agentSurface: 'write',
+    ...(clientRequestId ? { clientRequestId } : {}),
     paperContext: context,
     providerId: input.providerId,
     model: input.model,
     displayText: t('paperBatchDisplay', { purpose: t(`paperReading_${job.purpose}`) })
-  })
+  }), turnAdmissionOutcomeMayBeUnknown, input.analyticsIntent)
   activeTurn = { threadId: thread.id, turnId: accepted.turnId }
   const outcome = await waitForTurn(thread.id, accepted.turnId, job.id)
   activeTurn = null
@@ -210,6 +214,7 @@ export async function startPaperBatchInterpret(input: {
   t: Translate
   onOpenSession?: (threadId: string, unitDir: string) => void
 }): Promise<void> {
+  const analyticsIntent = captureWorkSubmissionIntent()
   if (usePaperBatchInterpret.getState().job?.running) return
   const root = normalizePath(input.workspaceRoot)
   const items: PaperBatchItem[] = input.papers.map((paper) => {
@@ -235,7 +240,7 @@ export async function startPaperBatchInterpret(input: {
     const item = usePaperBatchInterpret.getState().job?.items.find((candidate) => candidate.unitDir === paper.unitDir)
     if (item?.status !== 'waiting') continue
     try {
-      await interpretOne({ job, paper, providerId: input.providerId, model: input.model, language: input.language, t: input.t })
+      await interpretOne({ job, analyticsIntent, paper, providerId: input.providerId, model: input.model, language: input.language, t: input.t })
     } catch (error) {
       patchItem(job.id, paper.unitDir, { status: 'failed', detail: error instanceof Error ? error.message : String(error) })
     }

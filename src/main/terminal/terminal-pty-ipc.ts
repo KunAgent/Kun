@@ -17,6 +17,7 @@
 import { homedir } from 'node:os'
 import { isAbsolute } from 'node:path'
 import { spawnPtyBehindGate } from './pty-launch-gate'
+import { applyShellIntegration, detectTerminalShells } from './terminal-shell-integration'
 import { registerOwnedProcessGroup } from '../../../kun/src/process/owned-process.js'
 import type { BrowserWindow, IpcMain, WebContents } from 'electron'
 import type { IPty } from 'node-pty'
@@ -36,6 +37,7 @@ import {
   TERMINAL_RING_BUFFER_BYTES
 } from '../../shared/terminal'
 import type { TerminalColorMode } from '../../shared/app-settings-terminal'
+import type { TerminalProcessInfo } from '../../shared/terminal'
 import {
   terminalCreatePayloadSchema,
   terminalResizePayloadSchema,
@@ -57,6 +59,8 @@ type TerminalSession = {
   agent?: { unitId: string }
   /** Last interrupt-hint report; Esc bursts in TUIs would spam otherwise. */
   lastInterruptHintAt?: number
+  /** Base name of the program the PTY started (shell or agent CLI). */
+  program: string
 }
 
 let nodePty: typeof import('node-pty') | null | undefined
@@ -190,6 +194,7 @@ async function resolveAgentLaunch(
     taskWorkspaceId?: string
     parentThreadId?: string
     workspaceKind?: 'worktree' | 'local' | 'directory'
+    report?: boolean
   },
   cwd: string,
   runtimeFetch: RuntimeFetch,
@@ -238,7 +243,7 @@ async function resolveAgentLaunch(
     // `argv` injection is the design-doc default; a harness may also declare
     // a flag that carries the initial task. The callback appendix
     // rides along only when the credentials it relies on exist.
-    if (env.KUN_WORKER_ENDPOINT && env.KUN_WORKER_TOKEN) {
+    if (agent.report !== false && env.KUN_WORKER_ENDPOINT && env.KUN_WORKER_TOKEN) {
       task += TERMINAL_AGENT_CALLBACK_APPENDIX
     }
     if (typeof launch.taskFlag === 'string' && launch.taskFlag) {
@@ -306,10 +311,13 @@ export type RegisterTerminalPtyIpcOptions = {
   resolveKunCli?: () => Promise<KunCliLaunch | null>
   /** Test seam for native PTY and setup cancellation. */
   loadPty?: () => Promise<Pick<typeof import('node-pty'), 'spawn'> | null>
+  /** Directory for the shell-integration hook files (OSC 633 command marks). */
+  shellIntegrationDir?: string
 }
 
 export type TerminalPtyController = {
   listSessionIds: () => string[]
+  processInfo: (sessionId: string) => TerminalProcessInfo | null
   disposeAll: () => void
   disposeAllAndWait: () => Promise<void>
 }
@@ -448,9 +456,15 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
     let pty: IPty | undefined
     let launch: Awaited<ReturnType<typeof spawnPtyBehindGate>> | undefined
     const spawnAttempts: Array<{ file: string; message: string }> = []
+    // A requested shell is honoured only when it is one this machine lists.
+    const requestedShell = request.shell && !agentPlan
+      ? detectTerminalShells().find((shell) => shell.path === request.shell)
+      : undefined
     const candidates = agentPlan
       ? [{ file: agentPlan.file, args: agentPlan.args, gitBash: false }]
-      : resolveTerminalShellCandidates()
+      : requestedShell ? [{ file: requestedShell.path, args: [], gitBash: false }] : resolveTerminalShellCandidates()
+    let integrated = false
+    let spawnedFile = ''
     for (const candidate of candidates) {
       try {
         const env = buildShellEnv(colorMode)
@@ -458,8 +472,15 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         if (agentPlan) {
           Object.assign(env, agentPlan.env)
           if (agentPlan.kunCli) applyKunCliEnv(env, agentPlan.kunCli)
+        } else if (request.env) {
+          Object.assign(env, request.env)
         }
-        launch = await spawnPtyBehindGate(ptyModule, candidate.file, candidate.args, {
+        const integration = !agentPlan && request.shellIntegration
+          ? await applyShellIntegration(candidate.file, options.shellIntegrationDir, env)
+          : null
+        if (integration) Object.assign(env, integration.env)
+        integrated = integration !== null
+        launch = await spawnPtyBehindGate(ptyModule, candidate.file, integration ? [...candidate.args, ...integration.args] : candidate.args, {
           name: 'xterm-256color',
           cols,
           rows,
@@ -469,6 +490,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
           useConpty: true
         }, cancelled, agentPlan ? () => validateAgentLaunch(agentPlan!, options.runtimeFetch!) : undefined)
         pty = launch.pty
+        spawnedFile = candidate.file
         break
       } catch (error) {
         spawnAttempts.push({
@@ -501,6 +523,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         cleanupPromise: null,
         exitPromise: launch!.exited,
         ownership: launch?.ownership,
+        program: spawnedFile.split(/[\\/]/).pop() ?? '',
         ...(agentPlan ? { agent: { unitId: agentPlan.unitId } } : {})
       }
       sessions.set(request.sessionId, session)
@@ -541,7 +564,12 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
       if (agentPlan) await validateAgentLaunch(agentPlan, options.runtimeFetch!)
       launch?.release()
       session.ready = true
-      return { ok: true as const, sessionId: request.sessionId }
+      return {
+        ok: true as const,
+        sessionId: request.sessionId,
+        ...(agentPlan ? { unitId: agentPlan.unitId } : {}),
+        ...(integrated ? { shellIntegration: true } : {})
+      }
     } catch (error) {
       try {
         await disposeSession(request.sessionId, true)
@@ -630,6 +658,15 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
   }
   return {
     listSessionIds: () => [...sessions.keys()],
+    processInfo: (sessionId) => {
+      const session = sessions.get(sessionId)
+      if (!session || session.exited || !session.ready) return null
+      let foreground: string | null = null
+      try { foreground = session.pty.process || null } catch { /* PTY already closed. */ }
+      const shell = session.program.replace(/^-/, '')
+      const current = foreground?.split(/[\\/]/).pop()?.replace(/^-/, '') ?? null
+      return { process: current, shell, busy: Boolean(session.agent) || (current !== null && current !== shell) }
+    },
     disposeAllAndWait,
     disposeAll: () => { void disposeAllAndWait().catch((error) => logCleanupFailure('all', error)) }
   }

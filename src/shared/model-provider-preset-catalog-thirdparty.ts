@@ -241,5 +241,22 @@ export const MODEL_PROVIDER_PRESETS_THIRDPARTY: ModelProviderPreset[] = [
     models: [],
     docsUrl: 'https://docs.vllm.ai/',
     apiKeyUrl: 'https://docs.vllm.ai/'
+  },
+  {
+    id: 'magpie',
+    name: 'Magpie',
+    origin: 'local',
+    note: 'Local gateway; models follow Magpie',
+    keyOptional: true,
+    baseUrl: 'http://127.0.0.1:3425/v1',
+    endpointFormat: 'chat_completions',
+    endpoints: {
+      chat_completions: 'http://127.0.0.1:3425/v1',
+      responses: 'http://127.0.0.1:3425/v1',
+      messages: 'http://127.0.0.1:3425'
+    },
+    models: [],
+    docsUrl: 'https://usemagpie.ai/docs',
+    apiKeyUrl: 'https://usemagpie.ai/docs'
   }
 ]

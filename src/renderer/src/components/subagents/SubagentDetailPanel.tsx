@@ -10,6 +10,10 @@ import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { emitRendererSettingsChanged } from '../../lib/keyboard-shortcut-settings'
 import { SubagentPanelHeader, SubagentSettingsEditor } from './SubagentSettingsEditor'
 import { ConversationSubagentList } from './ConversationSubagentList'
+import { useChatStore } from '../../store/chat-store'
+import { isSubagentBlock } from '../chat/message-timeline-process-grouping'
+
+type PanelTab = 'run' | 'roles'
 
 type Props = {
   className?: string
@@ -26,6 +30,8 @@ export function SubagentDetailPanel({ className, onCollapse }: Props): ReactElem
   const { t } = useTranslation('common')
   const [kun, setKun] = useState<KunRuntimeSettingsV1 | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<PanelTab>('run')
+  const runCount = useChatStore((s) => s.blocks.filter(isSubagentBlock).length)
   const mountedRef = useRef(true)
   const revisionRef = useRef(0)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
@@ -79,7 +85,33 @@ export function SubagentDetailPanel({ className, onCollapse }: Props): ReactElem
   return (
     <div className={`ds-no-drag flex h-full min-h-0 flex-col overflow-hidden bg-ds-sidebar ${className ?? ''}`}>
       <SubagentPanelHeader onCollapse={onCollapse} />
-      <ConversationSubagentList />
+      <div role="tablist" aria-label={t('subagents', 'Subagents')} className="mx-4 mb-3 mt-1 grid shrink-0 grid-cols-2 gap-0.5 rounded-[10px] bg-ds-card-muted p-[3px]">
+        {([
+          ['run', t('subagentsPanel.tab.run', 'This chat'), runCount],
+          ['roles', t('subagentsPanel.tab.roles', 'Roles'), null]
+        ] as const).map(([id, label, count]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`flex h-[30px] items-center justify-center gap-1.5 rounded-[8px] text-[13px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+              tab === id ? 'bg-ds-card font-semibold text-ds-ink shadow-sm shadow-black/10' : 'font-medium text-ds-muted hover:text-ds-ink'
+            }`}
+          >
+            {label}
+            {count ? <span className="font-medium tabular-nums text-ds-muted">{count}</span> : null}
+          </button>
+        ))}
+      </div>
+      {tab === 'run' ? (
+        runCount > 0 ? <ConversationSubagentList /> : (
+          <div className="mx-4 mt-2 rounded-[12px] border border-dashed border-ds-border px-4 py-6 text-center text-[12.5px] leading-6 text-ds-muted">
+            {t('subagentsPanel.runEmpty', 'No subagents have run in this chat yet. Pick which roles the main agent may delegate to under Roles.')}
+          </div>
+        )
+      ) : null}
       {error ? (
         <div role="alert" className="mx-3 mt-3 flex items-start gap-2 rounded-lg border border-red-300/70 bg-red-50 px-3 py-2 text-[12px] leading-5 text-red-800 dark:border-red-700/60 dark:bg-red-950/30 dark:text-red-200">
           <span className="min-w-0 flex-1 break-words">{error}</span>
@@ -92,16 +124,16 @@ export function SubagentDetailPanel({ className, onCollapse }: Props): ReactElem
           </button>
         </div>
       ) : null}
-      {kun ? (
+      {tab === 'roles' && kun ? (
         <SubagentSettingsEditor
           kun={kun}
           onPatch={persistPatch}
           variant="panel"
           className="min-h-0 flex-1"
         />
-      ) : (
+      ) : tab === 'roles' ? (
         <div className="flex flex-1 items-center justify-center text-sm text-ds-muted">{t('loading', 'Loading')}</div>
-      )}
+      ) : null}
     </div>
   )
 }

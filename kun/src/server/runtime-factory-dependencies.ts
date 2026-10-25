@@ -81,10 +81,7 @@ export { buildDesignCanvasLocalTools } from '../adapters/tool/design-canvas-tool
 export { buildPptBoardLocalTools } from '../adapters/tool/ppt-board-tool.js'
 export { buildDesignMotionLocalTools } from '../adapters/tool/design-motion-tool.js'
 export { buildDesignSvgLocalTools } from '../adapters/tool/design-svg-tool.js'
-export {
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID
-} from '../adapters/tool/ppt-agent-local-tools.js'
+export { buildPptDeckTools, PPT_DECK_PROVIDER_ID } from '../adapters/tool/ppt-deck-tools.js'
 export { LocalToolHost, buildDefaultLocalTools } from '../adapters/tool/local-tool-host.js'
 export { ExtensionToolRegistry } from '../adapters/tool/extension-tool-provider.js'
 export { shutdownAllLspSessions } from '../adapters/tool/lsp-client.js'
@@ -100,6 +97,7 @@ export { buildComponentDesignToolProviders } from '../adapters/tool/component-de
 export { buildDiagramVisualizationToolProvider } from '../adapters/tool/diagram-visualization-tool-provider.js'
 export { buildConversationVisualizationToolProvider } from '../adapters/tool/conversation-visualization-tool-provider.js'
 export { buildChartToolProvider } from '../adapters/tool/chart-tool-provider.js'
+export { buildGenUiToolProvider } from '../adapters/tool/gen-ui-tool-provider.js'
 export { buildWebToolProviders } from '../adapters/tool/web-tool-provider.js'
 export { buildImageGenToolProviders, protocolSupportsImageEdit } from '../adapters/tool/image-gen-tool-provider.js'
 export { buildComputerUseToolProviders } from '../adapters/tool/computer-use-tool-provider.js'
@@ -168,7 +166,6 @@ export { buildApprovalReviewModelRouterInput } from '../services/approval-review
 export { buildBuiltinHooks } from '../hooks/builtins/index.js'
 export { mergeBuiltinSubagentProfiles } from '../delegation/builtin-profiles.js'
 export { buildFastContextToolProvider } from '../adapters/tool/fast-context-tool-provider.js'
-export { buildPptAgentToolProvider } from '../adapters/tool/ppt-agent-tool-provider.js'
 export { InflightTracker } from '../loop/inflight-tracker.js'
 export { ToolCancellationRegistry } from '../loop/tool-cancellation-registry.js'
 export { SteeringQueue } from '../loop/steering-queue.js'
@@ -279,7 +276,7 @@ export {
 } from '../delegation/child-agent-executor.js'
 export { SubagentRouter } from '../delegation/subagent-router.js'
 export { BackgroundShellRuntime } from '../services/background-shell-runtime.js'
-export { stopBashSessionById, createBashLocalTool } from '../adapters/tool/builtin-bash-tool.js'
+export { stopBashSessionById, writeBashSessionStdin, createBashLocalTool } from '../adapters/tool/builtin-bash-tool.js'
 export { createBackgroundShellTool } from '../adapters/tool/background-shell-tool.js'
 export {
   createSecretEncryptor,

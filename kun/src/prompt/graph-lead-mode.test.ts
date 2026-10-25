@@ -111,7 +111,10 @@ describe('Graph Lead mode system contract', () => {
     expect(GRAPH_LEAD_MODE_INSTRUCTION).toContain('Prefer `fast_context` when it is advertised')
     expect(GRAPH_LEAD_MODE_INSTRUCTION).toContain('or use ordinary `delegate_task` during planning')
     expect(GRAPH_LEAD_MODE_INSTRUCTION).toContain(
-      'Do not use ordinary `delegate_task` / reusable-profile delegation'
+      'Do not use ordinary `delegate_task`, legacy task_graph fields'
+    )
+    expect(GRAPH_LEAD_MODE_INSTRUCTION).toContain(
+      'set its `profile` to an id returned by `list_subagent_profiles`'
     )
     expect(GRAPH_LEAD_MODE_INSTRUCTION).toContain(
       'Read-only `fast_context` remains allowed for repository investigation'

@@ -48,6 +48,17 @@ describe('classifyModelFailure', () => {
     [{ status: 401, body: 'invalid api key' }, 'auth'],
     [{ status: 403, body: 'forbidden' }, 'auth'],
     [{ status: 404, body: 'model not found' }, 'model'],
+    // A model this account cannot use fails identically on every retry.
+    [{ status: 400, body: '{"detail":"The \'gpt-5.3-codex-spark\' model is not supported when using Codex with a ChatGPT account."}' }, 'model'],
+    [{ status: 400, body: '{"error":{"message":"The model `gpt-9` does not exist or you do not have access to it."}}' }, 'model'],
+    [{ status: 400, body: '{"error":{"code":"model_not_found","message":"no access"}}' }, 'model'],
+    [{ status: 422, body: 'Unsupported model: deepseek-v9' }, 'model'],
+    [{ status: 400, body: '模型 qwen-max-x 不存在或未开通' }, 'model'],
+    [{ providerCode: 'invalid_request', body: 'unknown model glm-9' }, 'model'],
+    // Capability and size errors that mention a model stay request failures.
+    [{ status: 400, body: 'This model is not supported for image input' }, 'request'],
+    [{ status: 400, body: '该模型不支持图片输入' }, 'request'],
+    [{ status: 400, body: "This model's maximum context length is 128000 tokens" }, 'request'],
     [{ status: 400, body: 'bad request' }, 'request'],
     [{ status: 422, body: 'unprocessable' }, 'request'],
     [{ status: 500, body: 'internal error' }, 'other'],

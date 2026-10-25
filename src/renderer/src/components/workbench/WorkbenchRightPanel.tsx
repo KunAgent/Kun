@@ -4,6 +4,8 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type PointerEventHandler,
@@ -21,6 +23,7 @@ import { ExtensionViewOutlet } from '../../extensions/ControlledContributionSurf
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   isExtensionContributionId,
+  workerIdFromSessionTab,
   type RightPanelContributionId
 } from '../../extensions/contribution-ids'
 import type { CodeRightTabsState } from './code-right-tabs-state'
@@ -35,6 +38,11 @@ import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { X } from 'lucide-react'
 import type { WriteRightPanelContentProps } from '../write/WriteRightPanelContent'
+import type {
+  FilePreviewHostTabActions,
+  FilePreviewHostTabs,
+  FilePreviewHostTabsBridge
+} from '../workspace-file-preview-host-tabs'
 
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
@@ -44,6 +52,9 @@ const CodeChangesPanel = lazy(() =>
 )
 const WorkersPanel = lazy(() =>
   import('../workers/WorkersPanel').then((module) => ({ default: module.WorkersPanel }))
+)
+const WorkerSessionPanel = lazy(() =>
+  import('../workers/WorkerSessionPanel').then((module) => ({ default: module.WorkerSessionPanel }))
 )
 const DevBrowserPanel = lazy(() =>
   import('../DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
@@ -64,6 +75,9 @@ const WriteRightPanelContent = lazy(() =>
 )
 const SddAssistantPanel = lazy(() =>
   import('../sdd/SddAssistantPanel').then((module) => ({ default: module.SddAssistantPanel }))
+)
+const AppSurfacePanelContent = lazy(() =>
+  import('../../app-surfaces/AppSurfacePanelContent').then((module) => ({ default: module.AppSurfacePanelContent }))
 )
 const SideConversationPanel = lazy(() =>
   import('../chat/SideConversationPanel').then((module) => ({ default: module.SideConversationPanel }))
@@ -276,6 +290,12 @@ function CodeRightPanelWorkspace({
   const [visited, setVisited] = useState<Set<RightPanelContributionId>>(() =>
     new Set(code.state.activeId ? [code.state.activeId] : []))
   const [dynamicTitles, setDynamicTitles] = useState<Record<string, string>>({})
+  const [fileTabs, setFileTabs] = useState<FilePreviewHostTabs | null>(null)
+  const fileTabActionsRef = useRef<FilePreviewHostTabActions | null>(null)
+  const fileTabsBridge = useMemo<FilePreviewHostTabsBridge>(
+    () => ({ publish: setFileTabs, actionsRef: fileTabActionsRef }),
+    []
+  )
 
   useEffect(() => {
     setDynamicTitles({})
@@ -311,6 +331,10 @@ function CodeRightPanelWorkspace({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.workers) {
       return <WorkersPanel active={visible && code.state.activeId === id} className="h-full max-h-full w-full" />
+    }
+    const workerId = workerIdFromSessionTab(id)
+    if (workerId) {
+      return <WorkerSessionPanel workerId={workerId} active={visible && code.state.activeId === id} className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (
@@ -348,6 +372,7 @@ function CodeRightPanelWorkspace({
           ) : null}
           <WorkspaceFilePreviewPanel
             {...file}
+            hostTabs={fileTabsBridge}
             fileTreeOpen={code.files.open}
             onToggleFileTree={code.onToggleFiles}
             className="h-full max-h-full min-w-0 flex-1 border-l-0"
@@ -376,6 +401,9 @@ function CodeRightPanelWorkspace({
           active={visible && code.state.activeId === id}
         />
       )
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.appSurface) {
+      return <AppSurfacePanelContent onTitleChange={(title) => updateTitle(id, title)} />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.wardrobe) {
       return <RoomWardrobePanel active={visible && code.state.activeId === id} />
@@ -419,6 +447,8 @@ function CodeRightPanelWorkspace({
         onClose={code.onClose}
         onNewSideConversation={code.onNewSideConversation}
         onCollapse={onCollapse}
+        fileTabs={code.state.tabs.includes(BUILTIN_RIGHT_PANEL_IDS.file) ? fileTabs : null}
+        fileTabActions={fileTabActionsRef}
       />}>
       <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
         {code.state.tabs.map((id) => {

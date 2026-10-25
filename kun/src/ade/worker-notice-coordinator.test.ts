@@ -11,6 +11,8 @@ import { FileDispatchStore } from './dispatch-store.js'
 import { FileTeamStore } from './team-store.js'
 import { FileWorkerNoticeStore } from './worker-notice-store.js'
 import { WorkerNoticeCoordinator } from './worker-notice-coordinator.js'
+import { workerDispatchIds } from './worker-dispatch-ids.js'
+import type { AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
 
 let dataDir: string
 let teams: FileTeamStore
@@ -78,7 +80,10 @@ function managerThread(turns: Array<{ status: string }> = []) {
 
 type StartCall = { request: { prompt: string; clientRequestId: string; messageSource?: string } }
 
-function harness(input: { startImpl?: (call: StartCall) => Promise<StartTurnResponse> } = {}) {
+function harness(input: {
+  startImpl?: (call: StartCall) => Promise<StartTurnResponse>
+  intent?: AgentDispatchIntent
+} = {}) {
   // Emulate the real contract: onAdmitted fires only for a newly admitted
   // turn; a repeated clientRequestId replays the stored response instead.
   const admitted = new Set<string>()
@@ -99,6 +104,7 @@ function harness(input: { startImpl?: (call: StartCall) => Promise<StartTurnResp
     teams,
     threads,
     dispatches: new FileDispatchStore(dataDir, () => NOW),
+    ...(input.intent ? { agentDispatchService: { get: async () => input.intent! } } : {}),
     turns: { startTurn: startTurn as never },
     runTurn: () => runTurn,
     nowIso: () => NOW,
@@ -125,6 +131,40 @@ describe('WorkerNoticeCoordinator', () => {
     expect(call.request.prompt).toContain('dispatch ntc_1')
     expect(call.request.prompt).toContain('dispatch ntc_3')
     expect(runTurn).toHaveBeenCalledWith(MANAGER, 'turn_new')
+  })
+
+  it('lets informational notices ride the next wake-up instead of starting one', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn } = harness()
+    await coordinator.enqueue(notice('ntc_released', { kind: 'worker_released' }))
+    await vi.advanceTimersByTimeAsync(3_000)
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).not.toHaveBeenCalled()
+    expect(await notices.pending(MANAGER)).toHaveLength(1)
+    await coordinator.enqueue(notice('ntc_done'))
+    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+    const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
+    expect(call.request.prompt).toContain('dispatch ntc_released')
+    expect(call.request.prompt).toContain('dispatch ntc_done')
+  })
+
+  it('drops a failure its dispatch card already rerouted to another Agent', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const intent = { intentId: 'dispatch_1', startRequestId: 'dispatch_1:start', replacementCount: 0,
+      takenOver: false, cancellationRequested: false, payload: { items: [{ fallbackCount: 1 }, {}] } } as unknown as AgentDispatchIntent
+    const { coordinator, startTurn } = harness({ intent })
+    await coordinator.enqueue(notice('ntc_rerouted', { kind: 'dispatch_failed', dispatchIntentId: 'dispatch_1',
+      workerId: workerDispatchIds(intent, 0).workerId }))
+    await coordinator.enqueue(notice('ntc_sibling', { dispatchIntentId: 'dispatch_1', workerId: workerDispatchIds(intent, 1).workerId }))
+    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+    const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
+    expect(call.request.prompt).toContain('dispatch ntc_sibling')
+    expect(call.request.prompt).not.toContain('dispatch ntc_rerouted')
   })
 
   it('waits for durable acknowledgement after admission while a write is still pending', async () => {

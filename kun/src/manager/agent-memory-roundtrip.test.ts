@@ -7,11 +7,15 @@ import { ManagerRemoteMemoryStore } from './remote-data-stores.js'
 import type { ServiceManagerConnection } from './manager-client.js'
 import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { AgentMemoryOwnershipSchema } from '../memory/agent-memory-scope.js'
+import { z } from 'zod'
+import { ServiceManagerHttpError } from './usage-errors.js'
+import { AgentMemoryService } from '../agents/agent-memory-service.js'
+import type { MemoryCreateRequest, MemorySourceEvidence } from '../contracts/memory.js'
 
 const bridge = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('./remote-data-store-request.js', () => ({ callManagerStore: bridge.call }))
 const roots: string[] = []
-afterEach(async () => { bridge.call.mockReset(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
+afterEach(async () => { bridge.call.mockReset(); vi.restoreAllMocks(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
 
 it('preserves Agent visibility across the real Manager store, remote validation and reopening', async () => {
   const root = await mkdtemp(join(tmpdir(), 'kun-manager-agent-memory-')); roots.push(root)
@@ -69,5 +73,56 @@ it('carries lifecycle revisions, forgetting checks, and erasure through the real
       confirmation: { memoryId: memory.id, irreversible: true } }, access)
     await expect(remote.getById(memory.id, access)).rejects.toThrow('not found')
     expect(await remote.list({ ...access, includeDeleted: true })).toEqual([])
+  } finally { await shared.close() }
+})
+
+it('scrubs a legacy empty-excerpt snapshot through Manager validation and skips a rejected job', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-manager-agent-memory-scrub-')); roots.push(root)
+  const shared = await ManagerSharedDataStore.create(root)
+  bridge.call.mockImplementation(async (_connection, _entity, operation, value) => {
+    try { return await shared.executeMemory(operation, value) }
+    catch (error) {
+      // The Manager route answers request validation failures with HTTP 400.
+      if (error instanceof z.ZodError) throw new ServiceManagerHttpError(400, 'validation_error', 'invalid memory-store request')
+      throw error
+    }
+  })
+  const remote = new ManagerRemoteMemoryStore({} as ServiceManagerConnection,
+    MemoryCapabilityConfig.parse({ enabled: true }))
+  const checked: MemoryCreateRequest[] = []
+  const isForgotten = remote.isForgotten.bind(remote)
+  vi.spyOn(remote, 'isForgotten').mockImplementation(async (input, id) => { checked.push(input); return isForgotten(input, id) })
+  const at = '2026-10-21T06:13:19.000Z'
+  const job = (id: string, source: MemorySourceEvidence, seq: number) => ({ id, roomId: 'room', revision: 1, seq, value: {
+    id, phase: 'capture', roomId: 'room', rootRequestId: 'root', participantAgentId: 'agent', memberId: 'member',
+    status: 'deferred', attempts: 2, messageIds: [], taskIds: [], sourceSeq: 1, snapshot: { sources: [source],
+      comparisonRecords: [], input: 'Capture input for ' + id, messageIds: [], taskIds: [], model: 'fixture', observedAt: at, sourceSeq: 1 } } })
+  const rows = [
+    job('legacy', { id: 'image-only', kind: 'user', locator: 'room:room/message:image-only', excerpt: '', trust: 'explicit-user' }, 1),
+    job('invalid', { id: '', kind: 'user', trust: 'explicit-user' }, 2),
+    job('later', { id: 'reply', kind: 'inference', excerpt: 'Reports use Chinese.', trust: 'inferred' }, 3)
+  ]
+  const values = new Map(rows.map((row) => [row.id, row]))
+  const agents = { store: {
+    list: async (_kind: string, filter: { phase: string; afterSeq?: number }) =>
+      [...values.values()].filter((row) => row.value.phase === filter.phase && row.seq > (filter.afterSeq ?? 0))
+        .sort((a, b) => a.seq - b.seq),
+    get: async (_kind: string, id: string) => values.get(id) ?? null,
+    commit: async (request: { puts: Array<{ id: string; value: unknown }> }) => {
+      for (const put of request.puts) {
+        const current = values.get(put.id)!
+        values.set(put.id, { ...current, revision: current.revision + 1, value: put.value as typeof current.value })
+      }
+    } } }
+  const service = new AgentMemoryService(agents as never, () => remote)
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    await service.scrubForgotten()
+    expect(checked.map((input) => input.content)).toEqual(rows.map((row) => row.value.snapshot.input))
+    expect(checked[0]!.sources?.[0]).not.toHaveProperty('excerpt', '')
+    const skipped = warn.mock.calls.filter((call) => String(call[0]) === '[kun] agent memory scrub:')
+    expect(skipped).toHaveLength(1)
+    expect(skipped[0]![1]).toMatchObject({ roomId: 'room', requestId: 'root', jobId: 'invalid', stopped: true })
+    expect((values.get('invalid')!.value as { scrubFailure?: { attempts: number } }).scrubFailure?.attempts).toBe(1)
   } finally { await shared.close() }
 })

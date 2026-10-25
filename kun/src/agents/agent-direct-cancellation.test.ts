@@ -352,3 +352,25 @@ it.each([new Error('interrupt persistence failed'), new TurnConflictError('targe
     expect((await f.row()).value.status).toBe('stopping')
     expect((await f.h.threads.getMetadata(f.request.threadId))?.turns.find((turn) => turn.id === f.request.turnId)?.status).toBe('running')
   })
+
+it('settles Stop and admits the queued message through the room tick while memory capture keeps failing', async () => {
+  const f = await fixture()
+  await f.stop()
+  expect((await f.row()).value.status).toBe('stopping')
+  const next = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'after-stop', body: 'Why did it not stop?' })
+  vi.spyOn(f.runtime['memoryCapture'], 'tick').mockRejectedValue(new Error(
+    'Kun Service Manager request failed with HTTP 400: invalid memory-store request'))
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const driver = f.runtime as unknown as { stopped: boolean; tick(): Promise<{ active: boolean }> }
+  let memoryWarnings: unknown[][] = []
+  driver.stopped = false
+  try {
+    await driver.tick()
+    await driver.tick()
+    memoryWarnings = warn.mock.calls.filter((call) => call[0] === '[kun] room memory capture:')
+  } finally { driver.stopped = true; warn.mockRestore() }
+  expect((await f.row()).value.status).toBe('cancelled')
+  expect((await f.row(next.requestId)).value.turnId).toBeDefined()
+  // The second identical failure is throttled instead of logged on every tick.
+  expect(memoryWarnings).toHaveLength(1)
+})

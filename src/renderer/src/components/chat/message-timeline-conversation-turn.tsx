@@ -1,7 +1,8 @@
+import { GitHubRequestedCards } from './github-tool-card'
 import { memo, useMemo, useState, type ReactElement, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock, RuntimeChildActivity, ToolBlock } from '../../agent/types'
-import { formatChildActivityLabel } from './explore-peek-summary'
+import { childActivityLiveAction } from './message-timeline-tool-action'
 import { useChatStore } from '../../store/chat-store'
 import { deriveTurnSections, groupTurnProcessTimeline } from './derive-turn-sections'
 import { OrderedTurnTimeline } from './message-timeline-ordered-timeline'
@@ -19,7 +20,9 @@ import {
 } from './message-timeline-process'
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
+import { DesignOpenCard } from './DesignOpenCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
+import { AppSurfaceBlocks } from '../../app-surfaces/AppSurfaceBlocks'
 import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
 import { PaperListCard, PaperListSkeleton } from './PaperListCard'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
@@ -35,6 +38,9 @@ import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
 import { useTimelineSurface } from './timeline-surface'
 import { LiveTurnProgressRow } from './message-timeline-live-progress'
 import { GmailRequestedCards } from './gmail-tool-card'
+import { AgentDispatchGroup } from './AgentDispatchCard'
+import { PptDeckCards } from './PptDeckCard'
+import { useTurnUndo } from './turn-undo-controls'
 import {
   parseDelegateDetail,
   readChildMeta,
@@ -111,12 +117,10 @@ export function ConversationTurn({
   const { t } = useTranslation('common')
   const surface = useTimelineSurface()
   const forkThreadFromTurn = useChatStore((s) => s.forkThreadFromTurn)
-  const rollbackWorkspaceToCheckpoint = useChatStore((s) => s.rollbackWorkspaceToCheckpoint)
   const { continueInterruptedTask } = useTurnRuntimeErrorActions()
   const archiveActiveThreadToTurn = useChatStore((s) => s.archiveActiveThreadToTurn)
   const [forking, setForking] = useState(false)
   const [archiving, setArchiving] = useState(false)
-  const [rollingBackCheckpointId, setRollingBackCheckpointId] = useState<string | null>(null)
   // Inline Review Plan card: surfaced under a turn that produced a
   // successful `create_plan` result so the user can open/build the plan
   // without leaving the conversation.
@@ -142,8 +146,10 @@ export function ConversationTurn({
     runtimeErrorsBeforeFinalContent,
     runtimeErrorsAfterFinalContent,
     componentPrototypeBlocks,
+    designOpenBlocks,
     diagramPrototypeBlocks,
     conversationVisualizationBlocks,
+    appSurfaceBlocks,
     generatedFileBlocks,
     turnFileChanges,
     chartBlocks,
@@ -221,11 +227,15 @@ export function ConversationTurn({
     allowMainThreadActions && !isProcessing && forkTurnId
       ? lastActionBlockId
       : undefined
-  const rollbackCheckpointId = turn.user?.meta?.workspaceCheckpointId?.trim() ?? ''
+  const turnUndo = useTurnUndo({
+    enabled: allowMainThreadActions && !isProcessing,
+    user: turn.user,
+    turnBlocks: turn.blocks
+  })
+  // Turns with a file card undo from the card; the message row only covers
+  // turns whose changes came from shell commands.
   const rollbackActionBlockId =
-    allowMainThreadActions && !isProcessing && rollbackCheckpointId
-      ? lastActionBlockId
-      : undefined
+    turnUndo && turnFileChanges.length === 0 ? lastActionBlockId : undefined
 
   // During a live turn, assistant text, reasoning, and tools share one ordered
   // process timeline. Once complete, that timeline folds by default and only
@@ -250,17 +260,13 @@ export function ConversationTurn({
     const child = liveToolBlock.meta?.child
     if (!child || typeof child !== 'object' || Array.isArray(child)) return undefined
     const activity = (child as {
-      activity?: { phase?: RuntimeChildActivity['phase']; label?: string; toolName?: string; startedAt?: string; updatedAt?: string }
+      activity?: { phase?: RuntimeChildActivity['phase']; toolName?: string }
     }).activity
-    if (!activity?.label?.trim()) return undefined
-    return formatChildActivityLabel({
-      phase: activity.phase ?? 'tool',
-      label: activity.label.trim(),
-      ...(activity.toolName?.trim() ? { toolName: activity.toolName.trim() } : {}),
-      startedAt: activity.startedAt ?? '',
-      updatedAt: activity.updatedAt ?? ''
-    })
-  }, [liveToolBlock])
+    if (!activity) return undefined
+    // Only the nested tool's action word: the child's own label can carry paths
+    // and command text that would bloat the parent turn's one-line status.
+    return childActivityLiveAction({ phase: activity.phase, toolName: activity.toolName }, t)
+  }, [liveToolBlock, t])
   // A live user_input gate means the turn is parked waiting for the user, not
   // computing. Surface that instead of the generic "thinking" label.
   const awaitingUserInput = isProcessing && hasLivePendingUserInput(turn.blocks)
@@ -286,8 +292,10 @@ export function ConversationTurn({
     planResult ||
     turnFileChanges.length > 0 ||
     componentPrototypeBlocks.length > 0 ||
+    designOpenBlocks.length > 0 ||
     diagramPrototypeBlocks.length > 0 ||
     conversationVisualizationBlocks.length > 0 ||
+    appSurfaceBlocks.length > 0 ||
     pendingChartBlocks.length > 0 ||
     chartBlocks.length > 0 ||
     pendingPaperListBlocks.length > 0 ||
@@ -311,16 +319,6 @@ export function ConversationTurn({
       await archiveActiveThreadToTurn(forkTurnId)
     } finally {
       setArchiving(false)
-    }
-  }
-  const rollbackWorkspace = async (checkpointId: string): Promise<void> => {
-    const targetCheckpointId = checkpointId.trim()
-    if (!allowMainThreadActions || !targetCheckpointId || rollingBackCheckpointId) return
-    setRollingBackCheckpointId(targetCheckpointId)
-    try {
-      await rollbackWorkspaceToCheckpoint(targetCheckpointId)
-    } finally {
-      setRollingBackCheckpointId(null)
     }
   }
 
@@ -360,10 +358,8 @@ export function ConversationTurn({
             rollbackActionBlockId
               ? {
                   blockId: rollbackActionBlockId,
-                  busy: rollingBackCheckpointId === rollbackCheckpointId,
-                  onRollback: () => {
-                    void rollbackWorkspace(rollbackCheckpointId)
-                  }
+                  busy: turnUndo?.pending === true,
+                  onRollback: () => turnUndo?.openDialog()
                 }
               : undefined
           }
@@ -398,7 +394,16 @@ export function ConversationTurn({
       ) : null}
 
       {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
-        <GmailRequestedCards blocks={workProcessBlocks} />
+        <><GmailRequestedCards blocks={workProcessBlocks} />
+        <GitHubRequestedCards blocks={workProcessBlocks} /></>
+      ) : null}
+
+      {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
+        <AgentDispatchGroup blocks={workProcessBlocks} readOnly={!allowMainThreadActions} />
+      ) : null}
+
+      {!hasOrderedTimeline && !isProcessing ? (
+        <PptDeckCards blocks={workProcessBlocks} readOnly={!allowMainThreadActions} />
       ) : null}
 
       {!hasOrderedTimeline
@@ -424,6 +429,10 @@ export function ConversationTurn({
         />
       ))}
 
+      {designOpenBlocks.map((block) => (
+        <DesignOpenCard key={block.id} block={block} threadId={threadId} requestTurnLive={isProcessing} />
+      ))}
+
       {assistantContentBlocks.map((block) => (
         <MessageBubble
           key={block.id}
@@ -444,10 +453,8 @@ export function ConversationTurn({
           rollbackAction={
             block.id === rollbackActionBlockId
               ? {
-                  busy: rollingBackCheckpointId === rollbackCheckpointId,
-                  onRollback: () => {
-                    void rollbackWorkspace(rollbackCheckpointId)
-                  }
+                  busy: turnUndo?.pending === true,
+                  onRollback: () => turnUndo?.openDialog()
                 }
               : undefined
           }
@@ -457,6 +464,8 @@ export function ConversationTurn({
       {conversationVisualizationBlocks.map((block) => (
         <ConversationVisualizationCard key={block.id} block={block} />
       ))}
+
+      <AppSurfaceBlocks threadId={threadId} blocks={appSurfaceBlocks} />
 
       {pendingChartBlocks.map((block) => (
         <ChartSkeleton key={block.id} title={block.summary} />
@@ -542,6 +551,7 @@ export function ConversationTurn({
           onOpenChanges={allowMainThreadActions ? onOpenChanges : undefined}
           onReviewChanges={allowMainThreadActions ? onReviewChanges : undefined}
           reviewChangesDisabled={reviewChangesDisabled}
+          undo={turnUndo}
         />
       ) : null}
 
@@ -567,6 +577,7 @@ export function ConversationTurn({
           awaitingUserInput={awaitingUserInput}
           durationMs={durationMs}
           liveStartedAtMs={liveStartedAtMs}
+          threadId={threadId}
         />
       ) : null}
     </div>

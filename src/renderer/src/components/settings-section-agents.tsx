@@ -363,7 +363,7 @@ export function AgentsSettingsSection({
   const activeProvider = modelProviders.find((item) => item.id === activeProviderId) ?? modelProviders[0]
   const activeProviderModels = activeProvider?.models ?? []
   const promptOptimization = {
-    enabled: false,
+    enabled: true,
     providerId: '',
     model: '',
     prompt: '',

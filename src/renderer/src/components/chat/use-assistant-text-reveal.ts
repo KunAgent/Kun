@@ -1,30 +1,53 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   advanceTextReveal,
   completeTextReveal,
   createTextReveal,
+  isTextRevealActive,
   retargetTextReveal,
-  visibleTextForTypewriter
+  STREAM_FADE_MS,
+  visibleTextForTypewriter,
+  type TextRevealState
 } from './assistant-text-reveal'
+import { adoptRevealHandoff, registerRevealSource } from './assistant-reveal-handoff'
+import type { StreamFadeSnapshot } from './rehype-stream-fade'
 
 const FRAME_FALLBACK_MS = 48
+
+export type AssistantTextReveal = {
+  text: string
+  /** In-flight graphemes for the fade plugin; null when nothing is fading. */
+  fade: StreamFadeSnapshot | null
+}
 
 function isDocumentHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden'
 }
 
-export function useAssistantTextReveal(text: string, streaming: boolean): string {
-  const [state, setState] = useState(() => createTextReveal(text, streaming))
+function fadeSnapshot(state: TextRevealState, now: number): StreamFadeSnapshot | null {
+  if (state.fading.length === 0) return null
+  const births = new Map<number, number>()
+  for (const entry of state.fading) births.set(entry.offset, entry.birth)
+  return { fadeFrom: state.fading[0].offset, births, now, fadeMs: STREAM_FADE_MS }
+}
+
+export function useAssistantTextReveal(text: string, streaming: boolean): AssistantTextReveal {
+  const [state, setState] = useState(() => {
+    const now = performance.now()
+    return adoptRevealHandoff(text, streaming, now, isDocumentHidden()) ??
+      createTextReveal(text, streaming, now)
+  })
   const current = retargetTextReveal(state, text, streaming, performance.now(), isDocumentHidden())
   // Reconcile before painting: a phase change, replacement or background update
   // must never flash the previous cursor's truncated text, even for one frame.
   if (current !== state) setState(current)
   const currentRef = useRef(current)
   currentRef.current = current
-  const revealing = current.pendingSince !== null
+  const revealing = isTextRevealActive(current)
 
   useEffect(() => {
     if (!revealing) return
+    const release = registerRevealSource(() => currentRef.current)
     let cancelled = false
     let frame: number | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -36,12 +59,17 @@ export function useAssistantTextReveal(text: string, streaming: boolean): string
       if (cancelled) return
       cancelScheduled()
       const now = performance.now()
+      const previous = currentRef.current
       const next = isDocumentHidden()
-        ? completeTextReveal(currentRef.current)
-        : advanceTextReveal(currentRef.current, now)
-      currentRef.current = next
-      setState(next)
-      if (next.pendingSince !== null) schedule()
+        ? completeTextReveal(previous)
+        : advanceTextReveal(previous, now)
+      // Most frames only wait for the commit clock or a running CSS fade;
+      // re-render (and re-parse the Markdown) only when the reveal moved.
+      if (next !== previous) {
+        currentRef.current = next
+        setState(next)
+      }
+      if (isTextRevealActive(next)) schedule()
     }
     // rAF can stop in a minimized window. The timer provides bounded catch-up
     // without retaining an idle frame loop once the received text is visible.
@@ -53,11 +81,12 @@ export function useAssistantTextReveal(text: string, streaming: boolean): string
     return () => {
       cancelled = true
       cancelScheduled()
+      release(performance.now())
     }
   }, [revealing])
 
   useEffect(() => {
-    if (!streaming || typeof document === 'undefined') return
+    if (!revealing || typeof document === 'undefined') return
     const settle = () => {
       const next = completeTextReveal(currentRef.current)
       currentRef.current = next
@@ -65,7 +94,8 @@ export function useAssistantTextReveal(text: string, streaming: boolean): string
     }
     document.addEventListener('visibilitychange', settle)
     return () => document.removeEventListener('visibilitychange', settle)
-  }, [streaming])
+  }, [revealing])
 
-  return visibleTextForTypewriter(current.text, current.visibleLength)
+  const fade = useMemo(() => fadeSnapshot(current, performance.now()), [current])
+  return { text: visibleTextForTypewriter(current.text, current.visibleLength), fade }
 }

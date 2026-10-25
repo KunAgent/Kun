@@ -27,6 +27,8 @@
   "subagentsRuntimePolicyDesc": "प्रत्यायोजन की समवर्ती सीमा तय करें; अतिरिक्त कार्य कतार में प्रतीक्षा करते हैं।",
   "subagentsUseExistingAgents": "मौजूदा एजेंट उपयोग करें",
   "subagentsUseExistingAgentsDesc": "चालू होने पर delegate_task कॉन्फ़िगर किए गए प्रोफ़ाइल चुनता है। बंद होने पर मुख्य एजेंट हर कार्य के लिए एक बार उपयोग होने वाली भूमिका बनाता है।",
+  "subagentsHonorEngineBinding": "भूमिकाओं को उनके जुड़े इंजन पर चलाएँ",
+  "subagentsHonorEngineBindingDesc": "चालू: Claude Code, Codex या किसी अन्य इंजन से जुड़ी भूमिका को delegate_task उसी इंजन पर चलाता है और इंजन उपलब्ध न होने पर मना कर देता है। बंद: हर delegate_task चाइल्ड मुख्य रूट पर चलता है।",
   "subagentsMaxParallel": "अधिकतम समानांतर उप-एजेंट",
   "subagentsMaxParallelDesc": "इसके बाद कई उप-एजेंट एक साथ चलने पर नए कार्य कतार में प्रतीक्षा करते हैं।",
   "subagentsProactiveRetry": "मुख्य एजेंट विफल उप-एजेंटों को पुनः आज़माए",

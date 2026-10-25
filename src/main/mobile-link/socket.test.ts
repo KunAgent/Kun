@@ -4,6 +4,7 @@ import net from 'node:net'
 import type { Duplex } from 'node:stream'
 import { once } from 'node:events'
 import WebSocket, { WebSocketServer } from 'ws'
+import { proxies } from 'proxy-agent'
 import { MobileLinkSockets, mobileSocketProxy } from './socket'
 
 vi.mock('electron', () => ({ session: { defaultSession: { resolveProxy: vi.fn(async () => 'DIRECT') } } }))
@@ -15,8 +16,9 @@ async function listen(server: http.Server) {
   return (server.address() as net.AddressInfo).port
 }
 async function localRelay() {
-  let upgrades = 0, connects = 0, proxySawTicket = false, originSawTicket = false
+  let upgrades = 0, connects = 0, tcpConnections = 0, proxySawTicket = false, originSawTicket = false
   const origin = http.createServer(), proxy = http.createServer()
+  origin.on('connection', () => { tcpConnections++ })
   const relay = new WebSocketServer({ noServer: true })
   const pipes = new Set<Duplex>()
   const originPort = await listen(origin), proxyPort = await listen(proxy)
@@ -47,6 +49,7 @@ async function localRelay() {
   })
   return { url: 'ws://127.0.0.1:' + originPort + '/relay',
     rule: 'PROXY 127.0.0.1:' + proxyPort,
+    tcpConnections: () => tcpConnections,
     counts: () => ({ upgrades, connects, proxySawTicket, originSawTicket }) }
 }
 async function exchange(ws: WebSocket) {
@@ -111,6 +114,32 @@ describe('mobile WSS follows the Electron HTTP proxy policy', () => {
     release('DIRECT')
     await new Promise((resolve) => setImmediate(resolve))
     expect(relay.counts().upgrades).toBe(0)
+    expect(relay.tcpConnections()).toBe(0)
+  })
+  it.each(['socket', 'factory'])('fences %s cancellation while an uncached proxy constructor is loading', async (cancel) => {
+    const relay = await localRelay()
+    let release!: () => void, loading!: () => void, loaded!: () => void
+    const imported = new Promise<void>((resolve) => { loaded = resolve })
+    const started = new Promise<void>((resolve) => { loading = resolve })
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const load = proxies.http[1]
+    const loader = vi.spyOn(proxies.http, '1').mockImplementation(async () => {
+      loading(); await gate
+      const ctor = await load(); loaded(); return ctor
+    })
+    cleanups.push(() => loader.mockRestore())
+    const sockets = new MobileLinkSockets(async () => relay.rule)
+    cleanups.push(() => sockets.dispose())
+    const socket = sockets.open(relay.url, {}) as unknown as WebSocket
+    await started
+    const closed = new Promise<void>((resolve) => socket.once('close', () => resolve()))
+    if (cancel === 'factory') sockets.dispose()
+    else socket.close()
+    await closed
+    release(); await imported
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(relay.counts().connects).toBe(0)
+    expect(relay.tcpConnections()).toBe(0)
   })
   it('uses HTTPS proxy rules for secure upgrades and keeps supported SOCKS/HTTPS routes', async () => {
     for (const [rule, expected] of [

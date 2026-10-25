@@ -1,10 +1,11 @@
 import {
-  CombinedAutocompleteProvider,
+  SlashPathAutocompleteProvider,
   type AutocompleteItem,
   type AutocompleteProvider,
+  type AutocompleteResult,
   type AutocompleteSuggestions,
   type SlashCommand
-} from '@earendil-works/pi-tui'
+} from './autocomplete.js'
 import { spawn } from 'node:child_process'
 import { readdir } from 'node:fs/promises'
 import { basename, posix } from 'node:path'
@@ -136,23 +137,23 @@ export type WorkspaceFileAutocompleteOptions = {
 }
 
 /**
- * Keep pi-tui's slash/skill and completion-application behavior, replacing
- * only its fd-dependent @ discovery with Kun's standalone-safe index.
+ * Slash/skill and path completion with Kun's standalone-safe `@` file index
+ * (no fd/fzf dependency).
  */
 export class WorkspaceFileAutocompleteProvider implements AutocompleteProvider {
   readonly triggerCharacters = ['@']
-  private readonly delegate: CombinedAutocompleteProvider
+  private readonly delegate: SlashPathAutocompleteProvider
   private readonly listFiles: WorkspaceFileLister
   private readonly cacheTtlMs: number
   private readonly maxSuggestions: number
   private cache?: { expiresAt: number; entries: WorkspaceFileEntry[] }
 
   constructor(
-    commands: (AutocompleteItem | SlashCommand)[],
+    commands: readonly SlashCommand[],
     private readonly workspace: string,
     options: WorkspaceFileAutocompleteOptions = {}
   ) {
-    this.delegate = new CombinedAutocompleteProvider(commands, workspace, null)
+    this.delegate = new SlashPathAutocompleteProvider(commands, workspace)
     this.listFiles = options.listFiles ?? listWorkspaceFiles
     this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
     this.maxSuggestions = options.maxSuggestions ?? MAX_SUGGESTIONS
@@ -185,12 +186,8 @@ export class WorkspaceFileAutocompleteProvider implements AutocompleteProvider {
     cursorCol: number,
     item: AutocompleteItem,
     prefix: string
-  ): { lines: string[]; cursorLine: number; cursorCol: number } {
+  ): AutocompleteResult {
     return this.delegate.applyCompletion(lines, cursorLine, cursorCol, item, prefix)
-  }
-
-  shouldTriggerFileCompletion(lines: string[], cursorLine: number, cursorCol: number): boolean {
-    return this.delegate.shouldTriggerFileCompletion(lines, cursorLine, cursorCol)
   }
 
   private async entries(signal: AbortSignal): Promise<WorkspaceFileEntry[]> {

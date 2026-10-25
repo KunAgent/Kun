@@ -1,5 +1,6 @@
 import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { beginQueueAdmission } from './queue-admission-fence'
+import { bindWorkAnalyticsTurn, noteWorkSubmissionOutcome } from '../product-analytics/work'
 import { confirmQueueAdmission } from './queue-admission-recovery'
 import type { AgentProvider } from '../agent/types'
 import type { AttachmentReference } from '../agent/types'
@@ -222,6 +223,8 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     })
     // Update the already-persisted starting row to in_flight with the
     // runtime-admitted turn identity.
+    noteWorkSubmissionOutcome(clientRequestId, 'accepted')
+    bindWorkAnalyticsTurn(clientRequestId, activeThreadId, accepted.turnId)
     set((s) => {
       const existingIndex = s.queuedMessages.findIndex((message) =>
         message.id === queuedRow.id ||
@@ -269,6 +272,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     }
     return true
   } catch (error) {
+    noteWorkSubmissionOutcome(clientRequestId, turnAdmissionOutcomeMayBeUnknown(error) ? 'unknown' : 'failed')
     const view = describeRuntimeError(error)
     // Do not fall back to a normal send or use another active turn as an
     // acknowledgement. Retain the exact request for an explicit retry.

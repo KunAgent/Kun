@@ -1,0 +1,48 @@
+{
+  "composerTrayWorkers": {
+    "title": "สมาชิก",
+    "ariaLabel": "สมาชิก: {{status}}",
+    "ariaLabelUnfinished": "สมาชิก: {{status}} · ยังค้างอยู่ {{remaining}}",
+    "segment": {
+      "waiting_one": "{{count}} ตัวต้องการคุณ",
+      "waiting_other": "{{count}} ตัวต้องการคุณ",
+      "failed_one": "ล้มเหลว {{count}} ตัว",
+      "failed_other": "ล้มเหลว {{count}} ตัว",
+      "review_one": "รอตรวจสอบ {{count}} ตัว",
+      "review_other": "รอตรวจสอบ {{count}} ตัว",
+      "working_one": "กำลังทำงาน {{count}} ตัว",
+      "working_other": "กำลังทำงาน {{count}} ตัว",
+      "done": "ทำงานร่วมกันเสร็จแล้ว",
+      "unknown": "ยังไม่ยืนยันสถานะ"
+    },
+    "summary": {
+      "inBackground_one": "ทำงานอยู่เบื้องหลัง {{count}} ตัว",
+      "inBackground_other": "ทำงานอยู่เบื้องหลัง {{count}} ตัว",
+      "done_one": "เสร็จแล้ว {{count}} ตัว",
+      "done_other": "เสร็จแล้ว {{count}} ตัว",
+      "unconfirmed_one": "ยังไม่ยืนยัน {{count}} ตัว",
+      "unconfirmed_other": "ยังไม่ยืนยัน {{count}} ตัว"
+    },
+    "openPanel": "เปิดในแผงสมาชิก",
+    "openWorker": "เปิด {{title}}",
+    "runningFor": "กำลังทำงานมาแล้ว {{duration}}",
+    "starting": "กำลังเริ่ม…",
+    "reviewPending": "รอการตรวจสอบ",
+    "status": {
+      "waiting": "ต้องการคุณ",
+      "failed": "ล้มเหลว",
+      "review": "รอตรวจสอบ",
+      "done": "เสร็จแล้ว",
+      "cancelled": "ยกเลิกแล้ว",
+      "unconfirmed": "ยังไม่ยืนยัน"
+    },
+    "answer": "ตอบ",
+    "resolve": "จัดการ",
+    "stopWorker": "หยุด {{title}}",
+    "dispatchFooter": "ยังส่งต่อให้ได้ด้วย: {{names}}",
+    "manageAgents": "จัดการเอเจนต์",
+    "dispatchable_one": "เอเจนต์ที่ส่งต่อได้ {{count}} ตัว",
+    "dispatchable_other": "เอเจนต์ที่ส่งต่อได้ {{count}} ตัว",
+    "dispatchableAria": "{{label}}: {{names}}"
+  }
+}

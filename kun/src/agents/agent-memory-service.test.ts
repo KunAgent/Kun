@@ -31,6 +31,18 @@ afterEach(async () => {
   for (const { store, root } of resources.splice(0)) { await store.close(); await rm(root, { recursive: true, force: true }) }
 })
 describe('agent memory service', () => {
+  it('retains image-only source identity without an invalid empty excerpt for explicit memory', async () => {
+    const f = await fixture()
+    const original = (await f.store.get('message', f.message.id))!
+    await f.store.commit({ requestId: 'image-only-message',
+      checks: [{ kind: 'message', id: f.message.id, expectedRevision: original.revision }],
+      puts: [{ kind: 'message', id: f.message.id, roomId: f.room.id,
+        value: { ...f.message, body: '', attachmentIds: ['image'] } }] })
+    const saved = await f.service.create(f.agent.id, f.input)
+    expect(saved.memory.sources[0]).toMatchObject({ id: f.message.id })
+    expect(saved.memory.sources[0].excerpt).toBeUndefined()
+  })
+
   it('binds real conversation evidence and keeps explicit preferences local until shared', async () => {
     const f = await fixture()
     const saved = await f.service.create(f.agent.id, f.input)
@@ -45,6 +57,16 @@ describe('agent memory service', () => {
     expect((await f.service.context(f.agent.id, f.room.id, 'Reports Chinese')).records).toHaveLength(0)
     await expect(f.service.create(f.agent.id, f.input)).rejects.toThrow('forgotten')
     expect((await f.service.list(f.agent.id, {})).memories).toHaveLength(0)
+  })
+
+  it('saves a memory sourced from an attachment-only message without an empty excerpt', async () => {
+    const f = await fixture()
+    const row = (await f.store.get<typeof f.message>('message', f.message.id))!
+    await f.store.commit({ requestId: 'attachment-only', checks: [{ kind: 'message', id: row.id, expectedRevision: row.revision }],
+      puts: [{ kind: 'message', id: row.id, roomId: f.room.id, value: { ...row.value, body: '', status: 'final' } }] })
+    const saved = await f.service.create(f.agent.id, f.input)
+    expect(saved.memory.sources).toHaveLength(1)
+    expect(saved.memory.sources[0]).not.toHaveProperty('excerpt')
   })
 
   it('recovers a committed canonical edit after losing its room receipt without applying twice', async () => {

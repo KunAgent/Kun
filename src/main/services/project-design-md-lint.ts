@@ -6,11 +6,19 @@ export function lintProjectDesignMd(content: string): ProjectDesignMdOfficialLin
     const report = lint(content)
     return {
       ok: true,
-      findings: report.findings.map((finding) => ({
-        severity: finding.severity,
-        message: finding.message,
-        ...(finding.path ? { path: finding.path } : {})
-      })),
+      findings: report.findings.map((finding) => {
+        // The upstream declarations still infer this enum through Zod 3 types.
+        // Validate the boundary explicitly when resolving against patched Zod 4.
+        const severity = finding.severity
+        if (severity !== 'error' && severity !== 'warning' && severity !== 'info') {
+          throw new Error('Invalid Google DESIGN.md finding severity.')
+        }
+        return {
+          severity,
+          message: finding.message,
+          ...(finding.path ? { path: finding.path } : {})
+        }
+      }),
       colors: Object.fromEntries([...report.designSystem.colors].map(([name, value]) => [name, { hex: value.hex, luminance: value.luminance }])),
       typography: Object.fromEntries([...report.designSystem.typography].map(([name, value]) => [name, {
         ...(value.fontFamily ? { fontFamily: value.fontFamily } : {}),

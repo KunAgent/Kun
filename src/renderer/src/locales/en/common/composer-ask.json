@@ -1,0 +1,31 @@
+{
+  "composerAsk": {
+    "cardLabel": "Kun's question",
+    "previousQuestion": "Previous question",
+    "nextQuestion": "Next question",
+    "freeTextPlaceholder": "Type your own answer…",
+    "otherPlaceholder": "Other — type your own answer…",
+    "ruleAny": "Choose any that apply",
+    "ruleMax_one": "Choose up to {{count}}",
+    "ruleMax_other": "Choose up to {{count}}",
+    "ruleMin_one": "Choose at least {{count}}",
+    "ruleMin_other": "Choose at least {{count}}",
+    "ruleExact_one": "Choose {{count}}",
+    "ruleExact_other": "Choose {{count}}",
+    "ruleRange": "Choose {{min}}–{{max}}",
+    "hintSingle": "↑↓ or number keys to choose, Enter {{enter}}, Esc {{escape}}",
+    "hintMulti": "↑↓ to move, Space to toggle, Enter {{enter}}",
+    "hintText": "Enter {{enter}}, Shift+Enter for a new line",
+    "hintTextOnly": "Enter {{enter}}, Shift+Enter for a new line, Esc {{escape}}",
+    "hintEnterSubmit": "to submit",
+    "hintEnterNext": "for next",
+    "hintEscapeSkip": "to skip",
+    "hintEscapeBack": "to go back",
+    "skip": "Skip",
+    "submit": "Submit",
+    "next": "Next",
+    "submitting": "Submitting…",
+    "submitFailed": "Answer not delivered: {{message}}",
+    "submitFailedGeneric": "Answer not delivered. Try again."
+  }
+}

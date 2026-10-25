@@ -36,7 +36,10 @@ vi.mock('react-i18next', async (importOriginal) => {
     filePreviewRevealInFolder: 'Show in file manager',
     filePreviewCopyContent: 'Copy file',
     filePreviewRenderHtml: 'Render HTML',
+    filePreviewRendered: 'Preview',
     filePreviewShowSource: 'Show source',
+    filePreviewOpenWith: 'Open with',
+    filePreviewMoreActions: 'More actions',
     fileTreeOpen: 'Show file tree',
     fileTreeClose: 'Hide file tree',
     rightPanelCollapse: 'Collapse'
@@ -91,14 +94,16 @@ describe('HTML workspace preview', () => {
 
     expect(renderer.root.findAllByType('iframe')).toHaveLength(0)
     expect(renderer.root.findAllByProps({ className: 'ds-file-preview-code-html' })).toHaveLength(1)
+    expect(renderer.root.findByProps({ 'aria-label': 'Show source' }).props['aria-pressed']).toBe(true)
 
-    const renderButton = renderer.root.findByProps({ 'aria-label': 'Render HTML' })
+    const renderButton = renderer.root.findByProps({ 'aria-label': 'Preview' })
     expect(renderButton.props['aria-pressed']).toBe(false)
 
     await act(async () => renderButton.props.onClick())
 
     expect(renderer.root.findAllByType('iframe')).toHaveLength(1)
-    expect(renderer.root.findByProps({ 'aria-label': 'Show source' }).props['aria-pressed']).toBe(true)
+    expect(renderer.root.findByProps({ 'aria-label': 'Preview' }).props['aria-pressed']).toBe(true)
+    expect(renderer.root.findByProps({ 'aria-label': 'Show source' }).props['aria-pressed']).toBe(false)
     await act(async () => renderer.unmount())
   })
 })
@@ -172,8 +177,11 @@ describe('WorkspaceFilePreviewPanel toolbar', () => {
     expect(html).toContain('role="tablist"')
     expect(html).toContain('role="tab" tabindex="0" aria-selected="true"')
     expect(html).toContain('role="tab" tabindex="-1" aria-selected="false"')
-    expect(html).toContain('aria-pressed="true"')
+    expect(html).toContain('aria-label="More actions"')
+    expect(html).toContain('aria-haspopup="menu"')
     expect(html).toContain('lucide-pin')
+    expect(html).toContain('data-file-icon=')
+    expect(html).not.toContain('ds-code-sidebar-file-badge')
     expect(html).not.toMatch(/role="tab"[^>]*>[^<]*<button/)
   })
 
@@ -197,6 +205,34 @@ describe('WorkspaceFilePreviewPanel toolbar', () => {
     await act(async () => toggle.props.onClick())
     expect(onToggleFileTree).toHaveBeenCalledTimes(1)
     await act(async () => renderer.unmount())
+  })
+
+  it('hands its open files to a hosting tab strip and keeps only the file toolbar', async () => {
+    const publish = vi.fn()
+    const actionsRef: { current: import('./workspace-file-preview-host-tabs').FilePreviewHostTabActions | null } = { current: null }
+    const onSelectTarget = vi.fn()
+    const onToggleFileTree = vi.fn()
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(WorkspaceFilePreviewPanel, {
+        target: null,
+        openTargets: [],
+        workspaceRoot: '/repo',
+        hostTabs: { publish, actionsRef },
+        onSelectTarget,
+        onToggleFileTree,
+        onClose: () => undefined
+      }))
+    })
+    expect(renderer.root.findAll((node) => node.props.role === 'tablist')).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ 'aria-label': 'Collapse' })).toHaveLength(0)
+    expect(renderer.root.findByProps({ 'aria-label': 'Show file tree' })).toBeTruthy()
+    expect(publish).toHaveBeenLastCalledWith({ activeKey: '', tabs: [] })
+
+    actionsRef.current?.select(openTargets[1])
+    expect(onSelectTarget).toHaveBeenCalledWith(openTargets[1])
+    await act(async () => renderer.unmount())
+    expect(publish).toHaveBeenLastCalledWith(null)
   })
 
   it('reveals the selected file in its workspace file manager', async () => {
@@ -223,7 +259,10 @@ describe('WorkspaceFilePreviewPanel toolbar', () => {
     })
 
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Show in file manager' }).props.onClick()
+      renderer.root.findByProps({ 'aria-label': 'Open with' }).props.onClick()
+    })
+    await act(async () => {
+      renderer.root.findByProps({ 'aria-label': 'Show in file manager', role: 'menuitem' }).props.onClick()
     })
 
     expect(revealWorkspaceFileInFolder).toHaveBeenCalledWith({
@@ -285,9 +324,7 @@ describe('WorkspaceFilePreviewPanel interactions', () => {
     expect(preventDefault).toHaveBeenCalled()
     expect(onSelectTarget).toHaveBeenCalledWith(openTargets[1])
 
-    const readingButton = renderer.root.findAllByType('button').find(
-      (button) => button.props['aria-pressed'] === false
-    )!
+    const readingButton = renderer.root.findByProps({ 'aria-label': 'Expand reading view' })
     await act(async () => readingButton.props.onClick())
     expect(renderer.root.findByType('aside').props['data-reading-mode']).toBe('true')
 

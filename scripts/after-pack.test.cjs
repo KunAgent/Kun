@@ -20,6 +20,7 @@ const {
 const { tmpdir } = require('node:os')
 const { dirname, join } = require('node:path')
 const test = require('node:test')
+require('./after-pack-jimp.test.cjs')
 const {
   KUN_RUNTIME_REQUIRED_PATHS,
   LINUX_SANDBOX_LAUNCHER_FLAG,
@@ -148,12 +149,9 @@ function writeFixture(path, contents = 'fixture') {
   writeFileSync(path, contents)
 }
 
-test('excludes gifwrap test images while preserving its licensed GIF runtime', async (t) => {
+function packagedFileFilter(projectDir, destination) {
   const { getMainFileMatchers } = require('app-builder-lib/out/fileMatcher')
   const builderConfig = require('../electron-builder.config.cjs')
-  const projectDir = join(__dirname, '..')
-  const destination = mkdtempSync(join(tmpdir(), 'kun-gifwrap-payload-test-'))
-  t.after(() => rmSync(destination, { recursive: true, force: true }))
   const [matcher] = getMainFileMatchers(projectDir, destination, (value) => value, {}, {
     info: {
       projectDir,
@@ -163,7 +161,29 @@ test('excludes gifwrap test images while preserving its licensed GIF runtime', a
       debugLogger: { isEnabled: false }
     }
   }, join(projectDir, 'dist'), false)
-  const filter = matcher.createFilter()
+  return matcher.createFilter()
+}
+
+test('excludes Jimp image snapshots that push Windows update paths past MAX_PATH', (t) => {
+  const projectDir = join(__dirname, '..')
+  const destination = mkdtempSync(join(tmpdir(), 'kun-jimp-payload-test-'))
+  t.after(() => rmSync(destination, { recursive: true, force: true }))
+  const filter = packagedFileFilter(projectDir, destination)
+  const source = join(projectDir, 'kun', 'node_modules', '@jimp', 'plugin-print')
+  const packed = join(destination, 'kun', 'node_modules', '@jimp', 'plugin-print')
+  cpSync(source, packed, { recursive: true, filter: (path) => filter(path, statSync(path)) })
+  assert.equal(readdirSync(join(source, 'src', '__image_snapshots__')).length > 0, true)
+  assert.equal(existsSync(join(packed, 'src', '__image_snapshots__')), false)
+  for (const relativePath of ['package.json', 'LICENSE', 'dist/commonjs/index.js']) {
+    assert.deepEqual(readFileSync(join(packed, relativePath)), readFileSync(join(source, relativePath)))
+  }
+})
+
+test('excludes gifwrap test images while preserving its licensed GIF runtime', async (t) => {
+  const projectDir = join(__dirname, '..')
+  const destination = mkdtempSync(join(tmpdir(), 'kun-gifwrap-payload-test-'))
+  t.after(() => rmSync(destination, { recursive: true, force: true }))
+  const filter = packagedFileFilter(projectDir, destination)
   for (const name of ['gifwrap', 'image-q', 'omggif']) {
     cpSync(
       join(projectDir, 'kun', 'node_modules', name),

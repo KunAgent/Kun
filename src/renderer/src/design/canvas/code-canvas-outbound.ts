@@ -1,5 +1,8 @@
+import { validateHtmlElementReference } from '../html-element-reference-validation'
 import { defaultFrameSizeForDesignTarget, type DesignContext } from '../design-context'
 import { buildCodeCanvasTurnPrompt } from '../design-turn-prompt'
+import { formatHtmlElementContextLines } from '../design-turn-prompt/html-and-canvas'
+import type { DesignHtmlElementContext } from '../design-composer-context'
 import { peekLastCanvasOpErrors } from './apply-shape-ops'
 import type { CanvasSnapshot } from './canvas-snapshot'
 import type { CanvasDocument, ViewBox } from './canvas-types'
@@ -32,6 +35,7 @@ export type BuildCodeCanvasOutboundTextOptions = CodeCanvasOutboundDeps & {
   selectedIds: ReadonlySet<string>
   viewBox: ViewBox
   designContext: DesignContext
+  htmlElementContext?: DesignHtmlElementContext | null
 }
 
 async function readCodeCanvasSnapshot(
@@ -101,5 +105,8 @@ export async function buildCodeCanvasOutboundText(
     ...(canvasDesignSystem ? { canvasDesignSystem } : {}),
     ...(snapshot ? { canvasSnapshot: snapshot } : {})
   })
-  return `${options.baseText}\n\n${canvasPrompt}`
+  await validateHtmlElementReference(options.htmlElementContext)
+  const elementLines = formatHtmlElementContextLines(options.htmlElementContext ?? undefined)
+  const elementBlock = elementLines.length > 0 ? `\n\n${elementLines.join('\n')}` : ''
+  return `${options.baseText}\n\n${canvasPrompt}${elementBlock}`
 }

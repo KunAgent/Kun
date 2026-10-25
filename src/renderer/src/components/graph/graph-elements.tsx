@@ -180,7 +180,7 @@ export function graphElements(
           : critical.has(node.id) && status !== 'blocked' && status !== 'pending'
             ? '1px solid rgb(245 158 11 / 0.5)'
             : '1px solid var(--ds-border-muted)',
-        background: 'color-mix(in srgb, var(--ds-card) 96%, transparent)',
+        background: 'color-mix(in srgb, var(--ds-surface-card) 96%, transparent)',
         boxShadow: selected
           ? '0 0 0 4px rgb(79 70 229 / 0.12), 0 14px 32px rgb(15 23 42 / 0.12)'
           : status === 'running'

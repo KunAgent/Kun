@@ -194,6 +194,10 @@ export type WriteWorkspaceState = {
   documentsByPath: Record<string, WriteDocumentSession>
   whiteboards: Record<string, WorkWhiteboard>
   whiteboardsLoading: boolean
+  /** Workspace whose whiteboard index is in memory; null until loaded on demand. */
+  whiteboardsLoadedRoot: string | null
+  /** Set when the index could not be read, so callers never treat it as empty. */
+  whiteboardsLoadError: string | null
   editorLayout: WriteEditorLayoutV1
   presentationViewByGroup: Partial<Record<WriteEditorGroupId, WorkspacePresentationViewReference>>
   activeFilePath: string | null
@@ -256,6 +260,8 @@ export type WriteWorkspaceState = {
     options?: { groupId?: WriteEditorGroupId; viewMode?: WritePreviewMode }
   ) => Promise<void>
   loadWhiteboards: (workspaceRoot: string) => Promise<void>
+  /** Reads the whiteboard index once per workspace; false when it cannot be read. */
+  ensureWhiteboards: (workspaceRoot: string) => Promise<boolean>
   createWhiteboard: (workspaceRoot: string, options: {
     title: string
     id?: string

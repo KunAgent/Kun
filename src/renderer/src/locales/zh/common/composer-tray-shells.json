@@ -1,0 +1,29 @@
+{
+  "composerTrayShells": {
+    "title": "后台命令",
+    "ariaLabel": "后台命令：{{detail}}",
+    "segmentCount_other": "{{count}} 个后台命令",
+    "inBackground_other": "{{count}} 个在后台",
+    "failedCount_other": "{{count}} 个失败",
+    "runningFor": "已运行 {{duration}}",
+    "exitCode": "退出码 {{code}}",
+    "stopped": "已停止",
+    "endedBySignal": "被信号终止",
+    "failed": "失败",
+    "copyOutput": "复制输出",
+    "copied": "已复制",
+    "sendToKun": "发给 Kun",
+    "sendToKunTitle": "把这段输出附加到输入框",
+    "sendCopiedInstead": "已改为复制",
+    "sendUnavailable": "无法附加",
+    "sendUnavailableTitle": "没能把这段输出附加到输入框",
+    "dismiss": "移除",
+    "showOutput": "查看 {{command}} 的输出",
+    "hideOutput": "收起 {{command}} 的输出",
+    "outputLabel": "{{command}} 的输出",
+    "outputFile": "完整输出：{{path}}",
+    "outputTruncated": "预览已截断",
+    "noOutput": "（暂无输出）",
+    "empty": "没有后台命令。"
+  }
+}

@@ -100,6 +100,12 @@ Pre-existing usage events persisted before optimization cannot be rewritten beca
 provider-native cache fields were not recorded then; they only reflect old behavior and
 should not be treated as evidence that current hit rates are lower.
 
+Every dispatch entry (`delegate_task`, `worker_create`, a Graph task `profile`, `suggest_tasks`, conversation members) reads one
+agent roster (`kun/src/delegation/agent-roster.ts`, read-only `GET /v1/agent-roster`): a role, its engine binding, and per-lane admission.
+A role's bound engine is honored on every lane (`capabilities.subagents.honorEngineBinding` turns it off for `delegate_task`); a lane
+that cannot run the role refuses at selection with a shared reason code instead of silently using the native loop. The roster
+appears only in tool results and dynamic context. Design and implementation notes: `docs/agent-roster-dispatch-ladder.zh-CN.md`.
+
 Cache capabilities still worth pursuing next:
 
 - Tool-collection mutation policy: adding tools should be append-only; edit/reorder/remove

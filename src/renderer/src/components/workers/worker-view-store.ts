@@ -1,39 +1,50 @@
 import { create } from 'zustand'
-import type { WorkerDraft } from './WorkerInspector'
+import type { AttachmentReference } from '../../agent/types'
 
-type WorkerView = {
-  selectedWorkerId: string | null
+export type WorkerDraft = {
+  text: string
+  attachments: AttachmentReference[]
+  /** Reused if admission was uncertain, so a retry cannot duplicate the turn. */
+  requestId: string | null
+}
+
+export const EMPTY_WORKER_DRAFT: WorkerDraft = { text: '', attachments: [], requestId: null }
+
+/** The workbench opens (or focuses) the worker's own right-panel tab. */
+export const OPEN_WORKER_SESSION_EVENT = 'kun:open-worker-session'
+
+type WorkerViewState = {
   drafts: Record<string, WorkerDraft>
-  scrollPositions: Map<string, number>
-}
-const emptyView = (): WorkerView => ({ selectedWorkerId: null, drafts: {}, scrollPositions: new Map() })
-
-/** Local inspector state survives opening a worker or closing the tool panel. */
-export const useWorkerViewStore = create<{ managers: Record<string, WorkerView> }>(() => ({ managers: {} }))
-
-export function ensureWorkerView(managerId: string): WorkerView {
-  const existing = useWorkerViewStore.getState().managers[managerId]
-  if (existing) return existing
-  const view = emptyView()
-  useWorkerViewStore.setState((state) => ({ managers: { ...state.managers, [managerId]: view } }))
-  return view
+  /** Last known label per worker, so its tab has a title before data loads. */
+  labels: Record<string, string>
 }
 
-export function selectWorkerPreview(managerId: string, workerId: string | null): void {
-  const view = ensureWorkerView(managerId)
-  useWorkerViewStore.setState((state) => ({
-    managers: { ...state.managers, [managerId]: { ...view, selectedWorkerId: workerId } }
-  }))
-}
+/**
+ * Per-worker view state that outlives a worker tab: unsent input, the tab
+ * title and the transcript scroll offset. Worker ids are thread ids, so one
+ * flat map serves every manager thread.
+ */
+export const useWorkerViewStore = create<WorkerViewState>(() => ({ drafts: {}, labels: {} }))
+
+export const workerScrollPositions = new Map<string, number>()
 
 export function updateWorkerViewDraft(
-  managerId: string,
   workerId: string,
   update: (current: WorkerDraft) => WorkerDraft
 ): void {
-  const view = ensureWorkerView(managerId)
-  const draft = update(view.drafts[workerId] ?? { text: '', attachments: [], requestId: null })
-  useWorkerViewStore.setState((state) => ({ managers: {
-    ...state.managers, [managerId]: { ...view, drafts: { ...view.drafts, [workerId]: draft } }
-  } }))
+  useWorkerViewStore.setState((state) => ({
+    drafts: { ...state.drafts, [workerId]: update(state.drafts[workerId] ?? EMPTY_WORKER_DRAFT) }
+  }))
+}
+
+export function rememberWorkerLabel(workerId: string, label: string): void {
+  const trimmed = label.trim()
+  if (!trimmed || useWorkerViewStore.getState().labels[workerId] === trimmed) return
+  useWorkerViewStore.setState((state) => ({ labels: { ...state.labels, [workerId]: trimmed } }))
+}
+
+export function openWorkerSession(workerId: string, label?: string): void {
+  if (label) rememberWorkerLabel(workerId, label)
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(OPEN_WORKER_SESSION_EVENT, { detail: { workerId } }))
 }

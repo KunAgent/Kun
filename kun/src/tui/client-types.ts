@@ -78,6 +78,12 @@ export type TuiConnection = {
   legacyGui?: boolean
   /** Present only when this TUI invocation started and owns the Runtime. */
   ownedRuntime?: ClientOwnedRuntimeHandle
+  /**
+   * Set when another live client already owned this profile and the TUI
+   * attached to that client's Runtime instead of starting one. The TUI never
+   * stops it; it ends when the owner exits.
+   */
+  attached?: { ownerKind?: string; pid: number }
 }
 
 /**

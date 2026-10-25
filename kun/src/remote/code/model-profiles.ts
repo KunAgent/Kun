@@ -23,8 +23,14 @@ export function routeProfiles(models: string[], profileOf: (model: string) => Re
   return entries.length ? { profiles: Object.fromEntries(entries) as ModelProfiles } : {}
 }
 
-/** Spawn-free cached native facts from the same probe `probedModels` reads. */
+/** Spawn-free cached native facts from the same sources `probedModels` reads. */
 export function probedModelInfo(runtime: ServerRuntime, definition: HarnessDefinition): HarnessModelInfo[] | undefined {
+  const harnesses = runtime.harnesses
+  return liveModelInfo(runtime, definition) ??
+    (harnesses?.liveProbedModels?.(definition) ? undefined : harnesses?.modelCatalogs?.get(definition)?.catalog.modelInfo)
+}
+
+function liveModelInfo(runtime: ServerRuntime, definition: HarnessDefinition): HarnessModelInfo[] | undefined {
   const harnesses = runtime.harnesses
   switch (definition.transport) {
     case 'acp': return harnesses?.acpModels?.peekInfo(definition)

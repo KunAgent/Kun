@@ -27,8 +27,8 @@ export * from './spawn-capture.js'
 
 
 export async function withToolBoundary(
-  run: () => Promise<{ output: unknown; isError?: boolean }>
-): Promise<{ output: unknown; isError?: boolean }> {
+  run: () => Promise<{ output: unknown; isError?: boolean; meta?: Record<string, unknown> }>
+): Promise<{ output: unknown; isError?: boolean; meta?: Record<string, unknown> }> {
   try {
     return await run()
   } catch (error) {

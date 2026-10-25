@@ -15,6 +15,7 @@ const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation }
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
 const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
+const { exerciseWorkSelectionMenu } = require('./smoke-work-selection-menu.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
 const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
@@ -128,6 +129,18 @@ async function main() {
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
+    // The loopback fixture stands in for the official DeepSeek API, but a
+    // deepseek-* model on any other host is an unproven relay and falls back to
+    // a 32k window. That is below a private chat's own prompt and tool overhead,
+    // so every step force-compacts the turn away and the scripted model never
+    // sees its own start message. Declare the official window on the built-in
+    // connection, as a user does for a relay in the model editor.
+    const declared = { source: 'user', status: 'declared', observedAt: new Date().toISOString() }
+    const fixtureModels = ['deepseek-v4-flash', 'deepseek-v4-pro']
+    settings.provider = { apiKey: settings.agents.kun.apiKey, baseUrl: modelFixture.baseUrl,
+      providers: [{ id: 'deepseek', models: fixtureModels, modelProfiles: Object.fromEntries(fixtureModels.map((id) => [id,
+        { metadata: { schemaVersion: 1, overrides: { contextWindowTokens: 1_000_000 },
+          overrideEvidence: { contextWindowTokens: declared }, observations: [] } }])) }] }
     if (process.argv.includes('--personal-workspace-only')) {
       // Existing exact-origin local-development policy; public SSRF rules stay unchanged.
       settings.agents.kun.browserUse = { ...settings.agents.kun.browserUse, enabled: true, mode: 'local-development' }
@@ -189,6 +202,7 @@ async function main() {
       : process.argv.includes('--wardrobe-only') ? exerciseWardrobeDrops
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
+      : process.argv.includes('--work-selection-only') ? exerciseWorkSelectionMenu
       : process.argv.includes('--work-only') ? exerciseWorkLayout
       : process.argv.includes('--work-assistant-only') ? exerciseWorkAssistantAgent
       : process.argv.includes('--approvals') ? exerciseRoomApprovals

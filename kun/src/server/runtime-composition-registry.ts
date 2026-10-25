@@ -12,12 +12,12 @@ import {
   buildDiagramVisualizationToolProvider,
   buildConversationVisualizationToolProvider,
   buildChartToolProvider,
+  buildGenUiToolProvider,
   protocolSupportsImageEdit,
   buildRuntimeCapabilityManifest,
   DEFAULT_APPROVAL_REVIEWER,
   mergeBuiltinSubagentProfiles,
   buildFastContextToolProvider,
-  buildPptAgentToolProvider,
   DelegationRuntime,
   FileDelegationStore,
   createChildAgentExecutor,
@@ -124,7 +124,6 @@ export function createRuntimeRegistry(
             ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
-            ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
             ...(child.blockedProviderIds ? { blockedProviderIds: child.blockedProviderIds } : {}),
             ...(child.blockedToolNames ? { blockedToolNames: child.blockedToolNames } : {}),
             ...(child.blockedSkillIds ? { blockedSkillIds: child.blockedSkillIds } : {})
@@ -224,7 +223,6 @@ export function createRuntimeRegistry(
             ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
-            ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
             ...(child.blockedProviderIds ? { blockedProviderIds: child.blockedProviderIds } : {}),
             ...(child.blockedToolNames ? { blockedToolNames: child.blockedToolNames } : {}),
             ...(child.blockedSkillIds ? { blockedSkillIds: child.blockedSkillIds } : {})
@@ -313,6 +311,8 @@ export function createRuntimeRegistry(
 	        turns: turnService,
 	        artifactStore,
 	        nowIso,
+	        // Background siblings that settle together (a failed batch) wake the parent once.
+	        detachedNoticeMergeMs: 2_000,
 	        executor: createChildAgentExecutor({
             providerKinds: services.providerKinds, harnessCatalog: services.harnesses.catalog,
 	          model: timedModelClient,
@@ -452,20 +452,6 @@ export function createRuntimeRegistry(
       delegationRuntime,
       () => core.activeOptions.fastContext
     ),
-    ...buildPptAgentToolProvider(
-      delegationRuntime,
-      () => ({
-        ...core.activeOptions.lab?.pptAgent,
-        imageGenAvailable: services.imageGenProviders.available,
-        imageGenReason: services.imageGenProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason,
-        imageGenSupportsReferenceEdit: protocolSupportsImageEdit(core.activeOptions.capabilities?.imageGen?.protocol),
-        toolIncompatibleProviderIds: [
-          ...new Set([...antigravityProviderIds, ...cursorSdkProviderIds])
-        ],
-        defaultProviderLacksManagedTools: defaultIsAntigravity || defaultIsCursorSdk
-      }),
-      turnService
-    ),
     ...buildComponentDesignToolProviders(delegationRuntime),
     ...buildDiagramVisualizationToolProvider(
       () => core.activeOptions.lab?.conversationVisualization,
@@ -477,6 +463,7 @@ export function createRuntimeRegistry(
     ...buildChartToolProvider(
       () => core.activeOptions.lab?.conversationVisualization
     ),
+    ...buildGenUiToolProvider(() => core.genUiStore),
     ...buildPaperSearchToolProvider({
       proxyUrl: () => core.activeOptions.modelProxyUrl,
       enabledSources: () => core.activeOptions.capabilities?.paperSearch?.enabledSources,

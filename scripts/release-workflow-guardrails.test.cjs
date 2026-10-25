@@ -98,7 +98,7 @@ test('PR quality catches production advisories before the stable release merge',
   assert.equal(audit.run, 'npm run audit:production')
 })
 
-test('native Windows recovery runs early and fails closed before packaging and PR acceptance', () => {
+test('native Windows recovery, speech and path boundaries run early and fail closed before packaging and PR acceptance', () => {
   const workflow = readWorkflow('pr-checks.yml')
   const recovery = workflow.jobs['windows-recovery']
   assert.equal(recovery['runs-on'], 'windows-latest')
@@ -114,9 +114,40 @@ test('native Windows recovery runs early and fails closed before packaging and P
     ['Test Windows installer recovery safety', 'recovery-safety']
   ]) {
     const step = stepByName(recovery, name)
-    assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts`)
+    const extra = file === 'recovery-safety' ? ' src/main/windows-installer-migration.payload-backup.test.ts' : ''
+    assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts${extra}`)
     assert.equal(step.if, undefined)
   }
+  const boundaryName = 'Test native Windows file path boundaries'
+  const boundary = stepByName(recovery, boundaryName)
+  assert.equal(boundary['working-directory'], 'kun')
+  assert.equal(boundary.if, undefined)
+  assert.equal(boundary.run, 'node node_modules/vitest/vitest.mjs run ' + [
+    'src/attachments/shared-attachment-paths.test.ts',
+    'src/attachments/shared-attachment-workspace-tools.test.ts',
+    'src/attachments/shared-attachment-content.test.ts',
+    'src/remote/files/path-containment.test.ts',
+    'src/agents/agent-direct-workspace-paths.test.ts'
+  ].join(' '))
+  const install = recovery.steps.findIndex(step => step.run === 'npm ci')
+  assert.ok(install >= 0 && recovery.steps.indexOf(boundary) > install)
+  assert.equal(Object.values(workflow.jobs).flatMap(job => job.steps ?? [])
+    .filter(step => step.run === boundary.run).length, 1)
+  const speech = stepByName(recovery, 'Test local speech downloads and worker paths')
+  const speechCommand = 'npx vitest run src/main/services/local-sanotts src/shared/local-sanotts'
+  assert.equal(speech.run, `${speechCommand} --silent=false --reporter=verbose`)
+  assert.equal(speech.if, undefined)
+  assert.equal(speech['working-directory'], undefined)
+  assert.ok(recovery.steps.indexOf(speech) > install)
+  const windowsJobs = Object.values(workflow.jobs).filter(job => job['runs-on'] === 'windows-latest')
+  assert.equal(windowsJobs.flatMap(job => job.steps ?? []).filter(step => step.run?.startsWith(speechCommand)).length, 1)
+  assert.equal(stepByName(workflow.jobs['package-macos'],
+    'Test local speech downloads and worker paths').run, speechCommand)
+  const identity = stepByName(recovery, 'Test Windows process identity and owned startup')
+  assert.equal(identity['working-directory'], 'kun')
+  assert.equal(identity.if, undefined)
+  assert.equal(identity.run, 'node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts')
+  assert.ok(recovery.steps.indexOf(identity) > recovery.steps.indexOf(stepByName(recovery, 'Install root dependencies')))
   assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
     const job = workflow.jobs[name]
@@ -268,4 +299,13 @@ test('real personal IM OS verification is explicit opt-in and retains failing as
     'legacyRoundTrip', 'legacyBytesUnchanged', 'syncReadable']) {
     assert.ok(source.includes(`assert(storage.${proof})`), proof)
   }
+})
+
+test('macOS PR packaging uses the established renderer heap budget without removing native gates', () => {
+  const job = readWorkflow('pr-checks.yml').jobs['package-macos']
+  assert.equal(job['runs-on'], 'macos-latest')
+  assert.equal(job.env.NODE_OPTIONS, '--max-old-space-size=6144')
+  assert.equal(stepByName(job, 'Build ad-hoc macOS packages (x64 and arm64)').run, 'npm run dist:mac')
+  assert.ok(stepByName(job, 'Smoke packaged update handoff (host-native macOS)'))
+  assert.ok(stepByName(job, 'Upload ad-hoc macOS PR packages'))
 })

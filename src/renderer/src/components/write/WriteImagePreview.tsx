@@ -96,7 +96,7 @@ export function WriteImagePreview({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-ds-card px-3 pb-3 sm:px-4 sm:pb-4">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-ds-card px-3 pb-3 sm:px-4 sm:pb-4">
       <div className="flex min-h-[72px] shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-1 py-3 sm:px-2">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">

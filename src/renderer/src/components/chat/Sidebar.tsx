@@ -5,6 +5,7 @@ import {
   Clock3,
   Columns3,
   LayoutGrid,
+  Layers,
   Puzzle,
   Workflow,
   Zap
@@ -21,6 +22,7 @@ import type { ClawImDialogMode, ClawInstallTarget } from './SidebarClawDialogHel
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarAttentionPanel } from './SidebarAttentionPanel'
+import { useSidebarBackgroundActivity } from './useSidebarBackgroundActivity'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarAgentChatsSection } from './SidebarAgentChatsSection'
@@ -32,6 +34,7 @@ import { useProjectBoardEnabled } from '../../project-board/use-project-board-en
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import { SidebarFrame } from '../sidebar/SidebarPrimitives'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
+import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 
 type Props = {
   threads: NormalizedThread[]
@@ -112,6 +115,7 @@ export function Sidebar({
   useEffect(() => registerSidebarDragAutoScroll(document), [])
 
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
+  const artifactsActive = useChatStore((s) => s.route === 'artifacts')
   const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const codeWorkspaceRoots = useChatStore((s) => s.codeWorkspaceRoots)
   const threadListStatus = useChatStore((s) => s.threadListStatus)
@@ -127,6 +131,7 @@ export function Sidebar({
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
   const awaitingUserInputThreadIds = useChatStore((s) => s.awaitingUserInputThreadIds)
+  const backgroundActivityByThread = useSidebarBackgroundActivity()
   const clawChannels = useChatStore((s) => s.clawChannels)
   const activeClawChannelId = useChatStore((s) => s.activeClawChannelId)
   const selectClawChannel = useChatStore((s) => s.selectClawChannel)
@@ -152,7 +157,8 @@ export function Sidebar({
       watchTurnCompletion,
       unreadThreadIds,
       scheduledThreadActivities,
-      awaitingUserInputThreadIds
+      awaitingUserInputThreadIds,
+      backgroundActivityByThread
     }),
     [
       activeThreadId,
@@ -160,7 +166,8 @@ export function Sidebar({
       watchTurnCompletion,
       unreadThreadIds,
       scheduledThreadActivities,
-      awaitingUserInputThreadIds
+      awaitingUserInputThreadIds,
+      backgroundActivityByThread
     ]
   )
 
@@ -218,6 +225,12 @@ export function Sidebar({
               { id: 'plugins', label: t('plugins'), icon: <LayoutGrid {...iconProps} />, active: pluginsActive, onSelect: onOpenPlugins },
               { id: 'extensions', label: i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions', icon: <Puzzle {...iconProps} />, active: extensionsActive, onSelect: onOpenExtensions }
             ]}
+          />
+          <SidebarNavRow
+            icon={<Layers {...iconProps} />}
+            label={t('artifactsNav')}
+            onClick={openArtifactsPage}
+            active={artifactsActive}
           />
           {projectBoardEnabled ? (
             <SidebarNavRow

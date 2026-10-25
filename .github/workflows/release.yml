@@ -271,7 +271,7 @@ jobs:
             artifacts/windows-installer-transaction/**/fixture-summary.json
 
       - name: Test Windows installer recovery safety
-        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts
+        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts src/main/windows-installer-migration.payload-backup.test.ts
 
       - name: Build Windows installer
         run: npm run dist:win
@@ -279,6 +279,12 @@ jobs:
       - name: Smoke Windows installer
         timeout-minutes: 180
         run: npm run smoke:windows-installer -- -InstallerPath (Get-ChildItem dist/Kun-*-win-x64.exe | Select-Object -First 1 -ExpandProperty FullName)
+
+      # the installer smoke covers the installed directory; this covers the
+      # unpacked payload that electron-updater stages before switching.
+      - name: Verify packaged runtime integrity (Windows)
+        timeout-minutes: 10
+        run: node ./scripts/verify-packaged-runtime-integrity.cjs --resources dist/win-unpacked/resources --mode hash
 
       - name: Smoke packaged update handoff (Windows)
         timeout-minutes: 20

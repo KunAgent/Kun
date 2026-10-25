@@ -31,21 +31,33 @@ export function approvalEmail(action: CoreApprovalActionJson | undefined): Appro
   }
 }
 
-/** The exact message the user is approving, laid out like a mail header instead of a text dump. */
-export function ApprovalEmailPreview({ email, t, compact = false }: {
+/**
+ * The exact message the user is approving, laid out like a mail header instead
+ * of a text dump. `embedded` drops the frame for the approval card's preview
+ * box (which draws its own); `clamped` cuts a long body to six lines until the
+ * card's "Show all" expands it.
+ */
+export function ApprovalEmailPreview({ email, t, compact = false, embedded = false, clamped = false }: {
   email: ApprovalEmail
   t: Translate
   compact?: boolean
+  embedded?: boolean
+  clamped?: boolean
 }): ReactElement {
   const rows: Array<[string, string]> = [
-    ...(email.from ? [[t('approvalEmailFrom'), email.from] as [string, string]] : []),
+    ...(email.from && !embedded ? [[t('approvalEmailFrom'), email.from] as [string, string]] : []),
     [t('approvalEmailTo'), email.to.join(', ')],
     ...(email.cc.length ? [[t('approvalEmailCc'), email.cc.join(', ')] as [string, string]] : []),
     ...(email.bcc.length ? [[t('approvalEmailBcc'), email.bcc.join(', ')] as [string, string]] : [])
   ]
+  const inset = embedded ? 'px-3' : 'px-3.5'
+  const bodyFrame = clamped ? 'line-clamp-6' : embedded ? '' : `overflow-y-auto ${compact ? 'max-h-32' : 'max-h-56'}`
   return (
-    <div className="overflow-hidden rounded-[12px] border border-ds-border-muted" data-testid="approval-email-preview">
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-3.5 pt-3 text-[12.5px] leading-5">
+    <div
+      className={embedded ? '' : 'overflow-hidden rounded-[12px] border border-ds-border-muted'}
+      data-testid="approval-email-preview"
+    >
+      <dl className={`grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12.5px] leading-5 ${inset} ${embedded ? 'pt-2.5' : 'pt-3'}`}>
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
             <dt className="text-ds-faint">{label}</dt>
@@ -53,16 +65,14 @@ export function ApprovalEmailPreview({ email, t, compact = false }: {
           </div>
         ))}
       </dl>
-      <div className="mx-3.5 mt-2.5 border-t border-ds-border-muted pb-1 pt-2.5">
+      <div className={`mt-2.5 border-t border-ds-border-muted pb-1 pt-2.5 ${embedded ? 'mx-3' : 'mx-3.5'}`}>
         <p className="break-words text-[14px] font-semibold leading-5 text-ds-ink [overflow-wrap:anywhere]">
           {email.subject || <span className="font-normal text-ds-faint">{t('approvalEmailNoSubject')}</span>}
         </p>
       </div>
       <div
-        tabIndex={0}
-        className={`overflow-y-auto whitespace-pre-wrap break-words px-3.5 pb-3 pt-1 text-[13px] leading-[1.6] text-ds-ink [overflow-wrap:anywhere] ${
-          compact ? 'max-h-32' : 'max-h-56'
-        }`}
+        tabIndex={clamped || embedded ? undefined : 0}
+        className={`whitespace-pre-wrap break-words pb-3 pt-1 text-[13px] leading-[1.6] text-ds-ink [overflow-wrap:anywhere] ${inset} ${bodyFrame}`}
       >
         {email.body}
       </div>

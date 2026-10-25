@@ -1,4 +1,5 @@
 import { AcpToolDetail } from './AcpToolDetail'
+import { useWorkPresentation } from '../../product-analytics/work-presentation'
 import { ToolBlockDetails } from './ToolBlockDetails'
 import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
@@ -123,6 +124,8 @@ export function builtInToolLabel(
       return t('toolBuiltinDelegate')
     case 'design_component':
       return t('toolBuiltinDesignComponent')
+    case 'design_open':
+      return t('toolBuiltinDesignOpen')
     default:
       return undefined
   }
@@ -415,17 +418,18 @@ export function ProcessEntryDetail({
   processing: boolean
   allowThreadActions?: boolean
 }): ReactElement | null {
+  const workAnalytics = useWorkPresentation(block, false)
   if (detail.kind === 'reasoning') {
     const streamReason = block.id === 'live-reasoning' && processing
     return (
-      <div className="ds-markdown text-[13.5px] leading-6 text-ds-muted">
+      <div ref={workAnalytics.ref} className="ds-markdown text-[13.5px] leading-6 text-ds-muted">
         <AssistantMarkdown plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'} text={detail.text} streaming={streamReason} hideHtmlComments />
       </div>
     )
   }
   if (detail.kind === 'assistant') {
     return (
-      <div className="ds-markdown text-[13.5px] leading-6 text-ds-ink">
+      <div ref={workAnalytics.ref} className="ds-markdown text-[13.5px] leading-6 text-ds-ink">
         <AssistantMarkdown
           text={detail.text}
           plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'}

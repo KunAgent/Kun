@@ -47,8 +47,10 @@ import {
   type ManagerResourceLease
 } from './resource-lease-state.js'
 import {
+  FENCE_FLOOR_KEY,
   ServiceManagerStateSnapshotSchema,
-  type ServiceManagerStateSnapshot
+  ServiceManagerStateSnapshotV5Schema,
+  type CurrentServiceManagerStateSnapshot
 } from './service-manager-state-snapshot.js'
 import type { ManagerStateWriteQueueStats } from './service-manager-state-write-queue.js'
 import {
@@ -101,6 +103,8 @@ export const ArtifactStoreOperationSchema = z.enum([
   'put', 'releaseOwner', 'delete', 'list', 'get', 'readRange', 'stat'
 ])
 export const MemoryStoreOperationSchema = z.enum([
+  'relationContext',
+  'relations',
   'distillationPending', 'commitDistillation', 'getById', 'history', 'lifecycle', 'isForgotten', 'erasureReceipt',
   'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'listDirectives', 'retrieve', 'diagnostics',
   'feedbackReady', 'feedbackAppend', 'feedbackEvent', 'feedbackAggregate',
@@ -111,7 +115,7 @@ export const GraphStoreOperationSchema = z.enum([
 ])
 export const AttachmentStoreOperationSchema = z.enum([
   'create', 'get', 'bindScope', 'bindScopes', 'delete', 'releaseLease',
-  'pruneExpiredLeases', 'replaceMetadata', 'resolveContent', 'diagnostics'
+  'pruneExpiredLeases', 'expiredLeaseCandidates', 'replaceMetadata', 'resolveContent', 'diagnostics'
 ])
 export const MAX_MANAGER_DATA_BODY_BYTES = 64 * 1024 * 1024
 
@@ -155,6 +159,8 @@ export class ServiceManagerState {
   private readonly slots = new Map<RuntimeFlavor, RuntimeSlot>()
   private readonly leases = new Map<string, ThreadExecutionLease>()
   private readonly threadLeaseFenceHighWater = new Map<string, number>()
+  /** Highest token of every thread without a live or pending lease; see FENCE_FLOOR_KEY. */
+  private threadLeaseFenceFloor = 0
   private readonly pendingExpiredLeases = new Map<string, ThreadExecutionLease>()
   private resourceLeaseRegistry = new ManagerResourceLeaseRegistry()
   private mutationListener: (() => void) | undefined
@@ -183,6 +189,10 @@ export class ServiceManagerState {
     }
     if (snapshot.version !== 1 && snapshot.version !== 2) {
       for (const [threadId, token] of Object.entries(threadFenceHighWater)) {
+        if (threadId === FENCE_FLOOR_KEY) {
+          state.threadLeaseFenceFloor = Math.max(state.threadLeaseFenceFloor, token)
+          continue
+        }
         state.threadLeaseFenceHighWater.set(
           threadId,
           Math.max(token, state.threadLeaseFenceHighWater.get(threadId) ?? 0)
@@ -210,17 +220,35 @@ export class ServiceManagerState {
     this.mutationListener = listener
   }
 
-  durableSnapshot(): ServiceManagerStateSnapshot {
-    return ServiceManagerStateSnapshotSchema.parse({
+  /**
+   * Built once per durable write (the write queue asks for it lazily), never
+   * per mutation. Validation uses the current layout only.
+   */
+  durableSnapshot(): CurrentServiceManagerStateSnapshot {
+    this.retireIdleFences()
+    const threadFences = Object.fromEntries(this.threadLeaseFenceHighWater)
+    return ServiceManagerStateSnapshotV5Schema.parse({
       version: 5,
       slots: this.snapshot(),
       leases: [...this.leases.values()],
       pendingExpiredLeases: [...this.pendingExpiredLeases.values()],
-      threadLeaseFenceHighWater: Object.fromEntries(this.threadLeaseFenceHighWater),
+      threadLeaseFenceHighWater: this.threadLeaseFenceFloor > 0
+        ? { [FENCE_FLOOR_KEY]: this.threadLeaseFenceFloor, ...threadFences }
+        : threadFences,
       resourceLeases: this.resourceLeaseRegistry.snapshot(),
       resourceFenceHighWater: this.resourceLeaseRegistry.highWaterSnapshot(),
       hostLiveness: this.hostLiveness.snapshot()
     })
+  }
+
+  private retireIdleFences(): void {
+    const pendingThreads = new Set([...this.pendingExpiredLeases.values()].map((lease) => lease.threadId))
+    for (const [threadId, token] of this.threadLeaseFenceHighWater) {
+      if (this.leases.has(threadId) || pendingThreads.has(threadId)) continue
+      if (token > this.threadLeaseFenceFloor) this.threadLeaseFenceFloor = token
+      this.threadLeaseFenceHighWater.delete(threadId)
+    }
+    this.resourceLeaseRegistry.retireIdleFences()
   }
 
   register(registration: RuntimeRegistration, now = new Date()): RuntimeRegistration {
@@ -314,7 +342,7 @@ export class ServiceManagerState {
     }
     const acquiredAt = existing?.acquiredAt ?? now.toISOString()
     const fencingToken = existing?.fencingToken ??
-      (this.threadLeaseFenceHighWater.get(input.threadId) ?? 0) + 1
+      (this.threadLeaseFenceHighWater.get(input.threadId) ?? this.threadLeaseFenceFloor) + 1
     const lease = ThreadExecutionLeaseSchema.parse({
       ...input,
       fencingToken,

@@ -199,6 +199,7 @@ describe('harness/ade settings bridge', () => {
       limits: { softWorkers: 4, hardWorkers: 8 },
       hibernation: { enabled: true, idleMinutes: 30 },
       stall: { structuredMinutes: 10, terminalMinutes: 20 },
+      dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true },
       approvedWorktreeConfigs: [],
       worktreeSharedPaths: {}
     })

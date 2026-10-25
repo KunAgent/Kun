@@ -1,3 +1,4 @@
+import { ProductAnalyticsObserver } from '../analytics/observer.js'
 import { join } from 'node:path'
 import { RoomNotificationObserver } from '../rooms/room-notification-observer.js'
 import { GatewayMiddlewareHost } from './routes/gateway-middleware.js'
@@ -39,6 +40,7 @@ import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/ow
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
 import { workbenchExecutionControl } from './runtime-workbench-execution.js'
 import { loadExtensionAgentProviders } from './extension-agent-provider-loader.js'
+import { TaskSuggestionLauncher } from '../delegation/task-suggestion-launcher.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -174,6 +176,10 @@ export function createServerRuntimeComposition(
       memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
+      workspaceProfile: async (presetId, workspace) => {
+        const resolution = await agent.agentRoster.resolve(presetId, { lane: 'conversation', workspace, engineOverridden: true })
+        return resolution.ok ? resolution.profile : undefined
+      },
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
       activeBackgroundTurns: () => backgroundShellRuntime.listSessions().filter(item => item.status === 'running')
         .map(item => ({ threadId: item.threadId, turnId: item.turnId })),
@@ -184,6 +190,7 @@ export function createServerRuntimeComposition(
   events.addObserver(new RoomNotificationObserver({ threadStore: stores.threadStore, store: roomComposition.rooms.deps.store }))
   // Code task turns roll wardrobe bottles too; Agent conversation turns are counted by their room runs.
   events.addObserver(new CodeWardrobeObserver({ threadStore: stores.threadStore, turns: turnService, store: roomComposition.rooms.deps.store }))
+  events.addObserver(new ProductAnalyticsObserver({ store: roomComposition.rooms.deps.store, threads: stores.threadStore, turns: turnService }))
   bindAgentCommitmentService(core.threadStore, roomComposition.rooms.commitments)
   bindAgentArtifactLibrary(core.threadStore, roomComposition.rooms.artifactLibrary)
   bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)
@@ -194,7 +201,8 @@ export function createServerRuntimeComposition(
   bindRoomAppAccess(core.threadStore, async (scopeId) => ({
     servers: (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp.servers,
     statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status])),
-    gmail: await services.gmail.status(scopeId)
+    gmail: await services.gmail.status(scopeId),
+    github: await model.githubApp?.service.status(scopeId)
   }))
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
@@ -203,25 +211,29 @@ export function createServerRuntimeComposition(
   events.addObserver({ record: (event) => {
     if (event.kind === 'agent_dispatch_intent' && event.dispatchIntent.kind === 'workbench') roomComposition.rooms.workbench.wake()
   } })
+  services.taskSuggestionService.attach(new TaskSuggestionLauncher({
+    threads: threadService, turns: turnService, taskWorkspaces, roster: agent.agentRoster }))
+  events.addObserver({ record: (event) => services.taskSuggestionService.observe(event) })
   roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService, agentDispatch: services.agentDispatchService,
     harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector, readiness: services.harnesses.readiness,
       runtimes: agent.harnessRuntimeMap, router: agent.harnessRouter,
       probedModels: (definition) => services.harnesses.probedModels(definition),
-      probeModels: (definition) => definition.transport === 'acp' ? services.harnesses.acpModels.probe(definition)
-        : definition.transport === 'agent-sdk' ? services.harnesses.agentSdkModels.probe(definition)
-          : definition.transport === 'codex-app-server' ? services.harnesses.codexModels.probe(definition)
-            : definition.transport === 'pi-rpc' ? services.harnesses.piModels.probe(definition)
-              : definition.transport === 'antigravity-cli' ? services.harnesses.antigravityModels.probe(definition) : Promise.resolve([]),
+      probeModels: (definition) => services.harnesses.probeModelsInBackground(definition),
       snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
     threadService,
     gmail: services.gmail,
+    githubApp: model.githubApp?.service,
     gmailDataPolicy: model.gmailDataPolicy,
     gmailLocalModel: model.gmailLocalModel,
     agentDispatchService: services.agentDispatchService,
+    taskSuggestionService: services.taskSuggestionService,
+    agentRoster: agent.agentRoster,
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,
+    genUi: { store: core.genUiStore },
+    mcpApps: () => services.mcpProviders.apps,
     turnService,
     threadStore: stores.threadStore,
     toolCancellationService,
@@ -256,10 +268,12 @@ export function createServerRuntimeComposition(
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
     }),
+    setManagerHeartbeatAuthority: (state) => executionLeases?.setRuntimeAuthority(state),
     startBackgroundMaintenance: () => {
       backgroundMaintenance.start()
       roomComposition.start()
       void services.agentDispatchService.start().catch((error) => console.warn('[kun] Agent dispatch startup failed:', error))
+      void services.taskSuggestionService.start().catch((error) => console.warn('[kun] Task suggestion startup failed:', error))
     },
     prepareForRequests: async () => {
       await prepareUsageCarryover()
@@ -557,6 +571,7 @@ export function createServerRuntimeComposition(
               await Promise.allSettled([...remoteCleanups].map((cleanup) => cleanup()))
               remoteCleanups.clear()
               await services.agentDispatchService.stop()
+              services.taskSuggestionService.stop()
               await roomComposition.close()
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()
@@ -577,6 +592,7 @@ export function createServerRuntimeComposition(
         async () => { await services.memoryDistillation.shutdown() },
         () => services.harnesses.updates.dispose(),
         () => services.harnesses.acpModels.dispose(),
+        () => services.harnesses.modelCatalogs.flush(),
         () => backgroundShellRuntime.shutdown(),
         () => extensionJobs.handleRuntimeShutdown(),
         () => { extensionMediaJobs.dispose() },
@@ -593,6 +609,7 @@ export function createServerRuntimeComposition(
         () => shutdownAllLspSessions(),
         () => services.mcpProviders.close(),
         () => services.gmail.dispose(),
+        () => model.githubApp?.service.dispose(),
         () => model.gmailLocalModel?.dispose(),
         () => migrationService.shutdown(),
         () => migrationImportService.shutdown(),

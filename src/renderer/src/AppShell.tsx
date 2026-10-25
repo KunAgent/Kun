@@ -1,3 +1,4 @@
+import { useProductAnalyticsLifecycle } from './product-analytics/lifecycle'
 import { lazy, Suspense, useEffect } from 'react'
 import { useQuotaReminderNotifications } from './hooks/useQuotaReminderNotifications'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
@@ -27,7 +28,7 @@ import {
   startActivityNotifications,
   stopActivityNotifications
 } from './store/activity-notifications'
-import { syncAppBadgeCount } from './store/app-badge'
+import { appBadgeInputFromChatState, syncAppBadgeCount } from './store/app-badge'
 import { useAdeEnabled } from './components/ade/use-ade-enabled'
 import { KunLoader } from './components/KunLoader'
 
@@ -93,6 +94,7 @@ function RouteFallback(): React.ReactElement {
 }
 
 export default function AppShell(): React.ReactElement {
+  useProductAnalyticsLifecycle()
   useRoomEvents()
   useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)
@@ -132,10 +134,18 @@ export default function AppShell(): React.ReactElement {
   }, [adeEnabled, surface])
 
   useEffect(() => {
-    let previousUnread = useChatStore.getState().unreadThreadIds
-    const syncBadge = (unread: typeof previousUnread): void => {
-      // Dock badge = unread completions + ADE "needs you" rows.
-      syncAppBadgeCount(unread, useActivityStore.getState().rows)
+    // Streaming updates touch unrelated state many times a second; only the
+    // inputs that can change the attention list are worth a recompute.
+    let lastInputs: unknown[] = []
+    const syncBadge = (): void => {
+      const state = useChatStore.getState()
+      const rows = useActivityStore.getState().rows
+      const inputs = [state.threads, state.unreadThreadIds, state.awaitingUserInputThreadIds,
+        state.watchTurnCompletion, state.scheduledThreadActivities, state.activeThreadId, state.busy, rows]
+      if (inputs.length === lastInputs.length && inputs.every((value, index) => value === lastInputs[index])) return
+      lastInputs = inputs
+      // Dock badge = the same "needs you" list the sidebar panel renders.
+      syncAppBadgeCount(appBadgeInputFromChatState(state, rows))
     }
     const clearVisible = (): void => {
       const state = useChatStore.getState()
@@ -143,26 +153,26 @@ export default function AppShell(): React.ReactElement {
       if (unreadThreadIds !== state.unreadThreadIds) useChatStore.setState({ unreadThreadIds })
     }
     const onAttentionChanged = (): void => clearVisible()
+    // Threads, archive flags, pending inputs and background work can all change
+    // the list without touching the unread registry, so recompute on any store
+    // change; the badge itself skips duplicate writes.
     const unsubscribe = useChatStore.subscribe((state) => {
       const visibleCleared = clearCurrentlyVisibleUnreadCompletions(state.unreadThreadIds, state)
       if (visibleCleared !== state.unreadThreadIds) {
         useChatStore.setState({ unreadThreadIds: visibleCleared })
         return
       }
-      if (state.unreadThreadIds === previousUnread) return
-      previousUnread = state.unreadThreadIds
-      syncBadge(previousUnread)
+      syncBadge()
     })
     const unsubscribeActivity = useActivityStore.subscribe(
       (state, prevState) => {
         if (state.rows === prevState.rows) return
-        syncBadge(previousUnread)
+        syncBadge()
       }
     )
 
     clearVisible()
-    previousUnread = useChatStore.getState().unreadThreadIds
-    syncBadge(previousUnread)
+    syncBadge()
     window.addEventListener('focus', onAttentionChanged)
     window.addEventListener('blur', onAttentionChanged)
     document.addEventListener('visibilitychange', onAttentionChanged)

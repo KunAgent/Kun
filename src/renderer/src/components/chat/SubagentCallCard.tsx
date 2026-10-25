@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, ChevronRight, Eye, Hourglass, Loader2, RotateCcw } from 'lucide-react'
+import { ArrowUpRight, ChevronDown, ChevronRight, Eye, Loader2, RotateCcw } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { BUILTIN_AGENT_CATALOG_BY_ID } from '../../../../../kun/src/delegation/builtin-agent-catalog'
-import {
-  SubagentLiveAvatar as AvatarDisc,
-  SubagentLivenessLane as LaneHairline,
-  useSubagentElapsed,
-  useSubagentReducedMotion
-} from '../subagents/SubagentLiveness'
-import { AssistantMarkdown } from './AssistantMarkdown'
+import { useSubagentElapsed, useSubagentReducedMotion } from '../subagents/SubagentLiveness'
+import { SubagentRoleTile } from '../subagents/SubagentRoleTile'
 import { ExplorePeekPopover } from './ExplorePeekPopover'
-import { FastContextEvidenceDetail, FastContextEvidencePill } from './FastContextEvidenceDetail'
+import { FastContextEvidencePill } from './FastContextEvidenceDetail'
+import { SubagentConclusionBody } from './SubagentConclusionBody'
+import { expandExploreBatchBlock } from './subagent-card-batch'
 import {
   firstUsefulLine,
   isBareSubagentToolName,
@@ -36,25 +33,23 @@ import {
 import {
   AgentModelMetadata,
   BackgroundPill,
-  ExploreKindBadge,
   GeneratedPill,
   KNOWN_POSE_IDS,
-  MetaChip,
   ProactiveRetryBadge,
   StatusPill,
   hashHue,
   isTerminal,
   parseDelegateDetail,
-  parseExploreBatchChildren,
   parseFastContextEvidencePack,
   readChildMeta,
   resolveStatus,
   subagentStatusText,
   subagentResumeRequestId,
   useOnScreen,
+  type CardStatus,
   type OpenChildThreadHandler
 } from './subagent-call-card-support'
-import { SubagentStopControl } from './SubagentStopControl'
+import { SubagentStopAllButton, SubagentStopControl } from './SubagentStopControl'
 
 export { parseDelegateDetail } from './subagent-call-card-support'
 export type { OpenChildThreadHandler } from './subagent-call-card-support'
@@ -255,9 +250,21 @@ export function SubagentCallCard({
   const staggerDelay = typeof child.childSeq === 'number' ? `${(child.childSeq % 6) * 0.18}s` : '0s'
 
   const shellClass = inGroup
-    ? 'overflow-hidden border-t border-ds-border-muted first:border-t-0'
-    : 'ds-subagent-mount overflow-hidden rounded-[20px] border border-ds-border bg-ds-card/80 shadow-[0_16px_40px_rgba(86,103,136,0.08)] backdrop-blur-xl'
+    ? `border-t border-ds-border-muted first:border-t-0 ${status === 'running' ? 'bg-gradient-to-r from-accent/[0.07] to-transparent' : ''}`
+    : 'ds-subagent-mount overflow-hidden rounded-[14px] border border-ds-border bg-ds-card'
   const failBorder = !inGroup && status === 'failed' ? ' border-ds-danger/60' : ''
+  const failedLine = status === 'failed' ? firstUsefulLine(detail.error, 120) : undefined
+  const sublineText = failedLine || taskLine
+  const live = status === 'running' || status === 'awaiting-permission'
+  // Actions stay out of the way until the row is hovered, focused or expanded;
+  // a run that needs attention keeps them visible.
+  const actionsVisible = expanded || live || canResume || resuming
+    ? ''
+    : 'opacity-0 transition group-hover/subagent:opacity-100 group-focus-within/subagent:opacity-100 [@media(hover:none)]:opacity-100'
+  const ghostButton = 'flex h-7 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink'
+  const openLabel = isFastContext
+    ? t('exploreViewProcess', { defaultValue: 'View explore process' })
+    : t('subagentOpenSession')
 
   return (
     <section
@@ -284,19 +291,18 @@ export function SubagentCallCard({
             toggleConclusion()
           }
         }}
-        className={`flex items-center gap-3 px-4 ${compact ? 'py-2.5' : 'py-3'} text-left ${
+        className={`group/subagent flex items-center gap-3 px-3 ${compact ? 'py-2' : 'py-2.5'} text-left ${
           hasBody ? 'cursor-pointer transition hover:bg-ds-hover/30' : ''
         }`} data-subagent-header
       >
         <span className="ds-subagent-focus-decoration contents">
-          {external ? <ExternalSubagentAvatar view={external} compact={compact} running={animate} />
-            : <AvatarDisc poseId={poseId} status={status} hue={hue} compact={compact} animate={animate} />}
+          {external ? <ExternalSubagentAvatar view={external} status={status} compact={compact} animate={animate} />
+            : <SubagentRoleTile profileId={poseId} status={status} hue={hue} size={compact ? 'sm' : 'md'} animate={animate} />}
         </span>
         <div className="min-w-0 flex-1" data-subagent-title>
-          <div className="flex min-w-0 items-center gap-2">
-            {isFastContext ? <ExploreKindBadge t={t} /> : null}
-            {isFastContext ? <FastContextEvidencePill pack={evidencePack} status={status} t={t} /> : null}
-            <span className="truncate text-[14px] font-semibold text-ds-ink" title={taskTitle} data-subagent-name>{taskTitle}</span>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-[13.5px] font-semibold text-ds-ink" title={taskTitle} data-subagent-name>{taskTitle}</span>
+            <AgentModelMetadata agentIdentity={agentIdentity} profileId={profileId} model={model} compact={compact} t={t} />
             {generated ? <GeneratedPill t={t} /> : null}
             {detached ? <BackgroundPill t={t} /> : null}
             {proactiveRetry && proactiveRetry.count > 0
@@ -304,50 +310,42 @@ export function SubagentCallCard({
               : null}
             {resultExternalized ? (
               <span
-                className="whitespace-nowrap rounded-full bg-amber-500/10 px-2 py-[2px] text-[10.5px] font-semibold text-amber-700 dark:text-amber-300"
+                className="whitespace-nowrap rounded-[5px] bg-amber-500/10 px-1.5 py-px text-[10.5px] font-semibold text-amber-700 dark:text-amber-300"
                 title={resultRef?.artifactId}
                 data-testid="subagent-result-externalized"
               >
                 {t('subagentResultExternalized', { defaultValue: 'Externalized' })}
               </span>
             ) : null}
-            {!compact || !inGroup ? <StatusPill status={status} t={t} /> : null}
+            {status === 'awaiting-permission'
+              ? <StatusPill status={status} t={t} />
+              : <span className="sr-only">{subagentStatusText(status, t)}</span>}
           </div>
-          <AgentModelMetadata
-            agentIdentity={agentIdentity}
-            profileId={profileId}
-            model={model}
-            compact={compact}
-            t={t}
-          />
-          {taskLine && !expanded ? (
+          {sublineText && !expanded ? (
             <span
               className={`mt-0.5 block truncate text-[12.5px] ${
-                activityLine ? 'text-accent' : 'text-ds-muted'
+                failedLine ? 'text-ds-danger' : activityLine ? 'text-accent' : 'text-ds-muted'
               }`}
-              title={taskLine}
+              title={sublineText}
               data-testid="subagent-activity-line"
             >
-              {taskLine}
+              {sublineText}
             </span>
           ) : null}
           <ExternalSubagentNotice view={external} t={t} />
-          {hasBody && !expanded ? (
-            <span className="mt-0.5 block text-[11.5px] font-semibold text-accent">
-              {t('exploreExpandConclusion', { defaultValue: 'Show conclusion' })}
+          {hasBody && !expanded ? <span className="sr-only">{t('exploreExpandConclusion', { defaultValue: 'Show conclusion' })}</span> : null}
+        </div>
+        {isFastContext ? <FastContextEvidencePill pack={evidencePack} status={status} t={t} /> : null}
+        <span className="shrink-0 text-right tabular-nums" data-subagent-trailing>
+          <span className="block text-[12.5px] font-medium text-ds-ink">{elapsed}</span>
+          {typeof steps === 'number' || (status === 'queued' && typeof (child.queuedMs ?? detail.queuedMs) === 'number') ? (
+            <span className="mt-px block text-[11px] text-ds-muted">
+              {typeof steps === 'number' ? t('subagentSteps', { count: steps }) : t('subagentQueuedHint')}
             </span>
           ) : null}
-        </div>
-        <span className="shrink-0 text-right tabular-nums" data-subagent-trailing>
-          <span className="block text-[13px] font-semibold text-ds-ink">{elapsed}</span>
-          <span className="mt-px block text-[10.5px] text-ds-faint">
-            {typeof steps === 'number' ? t('subagentSteps', { count: steps })
-              : status === 'queued' && typeof (child.queuedMs ?? detail.queuedMs) === 'number'
-                ? t('subagentQueuedHint') : ''}
-          </span>
         </span>
         {/* Mobile wraps the actions onto a second row via the container query. */}
-        <span className="flex shrink-0 items-center gap-1.5" data-subagent-actions>
+        <span className={`flex shrink-0 items-center gap-0.5 ${actionsVisible}`} data-subagent-actions>
           {canResume ? (
             <button
               type="button"
@@ -356,7 +354,7 @@ export function SubagentCallCard({
                 e.stopPropagation()
                 void resumeChild()
               }}
-              className="flex h-7 shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
+              className="flex h-7 shrink-0 items-center gap-1 rounded-md bg-accent/10 px-2 text-[11.5px] font-semibold text-accent transition hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={t('subagentResumeAction', { defaultValue: 'Continue subagent' })}
               title={t('subagentResumeAction', { defaultValue: 'Continue subagent' })}
               data-testid="subagent-resume-button"
@@ -379,13 +377,13 @@ export function SubagentCallCard({
                 e.stopPropagation()
                 setPeekOpen((value) => !value)
               }}
-              className="flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+              className={ghostButton}
               aria-label={t('explorePeekPreview', { defaultValue: 'Preview' })}
               title={t('explorePeekPreview', { defaultValue: 'Preview' })}
               data-testid="explore-peek-button"
             >
               <Eye className="h-3.5 w-3.5" strokeWidth={2} />
-              <span className="hidden sm:inline">{t('explorePeekPreview', { defaultValue: 'Preview' })}</span>
+              <span className="sr-only">{t('explorePeekPreview', { defaultValue: 'Preview' })}</span>
             </button>
           ) : null}
           {childId ? (
@@ -395,96 +393,39 @@ export function SubagentCallCard({
                 e.stopPropagation()
                 openChild()
               }}
-              className="flex h-7 shrink-0 items-center gap-1 rounded-md bg-accent/10 px-2 text-[11px] font-semibold text-accent transition hover:bg-accent/15"
-              aria-label={
-                isFastContext
-                  ? t('exploreViewProcess', { defaultValue: 'View explore process' })
-                  : t('subagentOpenSession')
-              }
-              title={
-                isFastContext
-                  ? t('exploreViewProcess', { defaultValue: 'View explore process' })
-                  : t('subagentOpenSession')
-              }
+              className={`${ghostButton} text-accent hover:text-accent`}
+              aria-label={openLabel}
+              title={openLabel}
               data-testid="explore-open-process-button"
             >
-              {isFastContext
-                ? t('exploreViewProcessShort', { defaultValue: 'Open' })
-                : t('subagentOpenSessionShort', { defaultValue: 'Open' })}
-              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+              <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2} />
+              <span className="sr-only">
+                {isFastContext
+                  ? t('exploreViewProcessShort', { defaultValue: 'Open' })
+                  : t('subagentOpenSessionShort', { defaultValue: 'Open' })}
+              </span>
             </button>
           ) : null}
-          {hasBody && expanded ? (
-            <ChevronDown className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
-          ) : (
-            <ChevronRight className={`h-4 w-4 shrink-0 ${hasBody ? 'text-ds-faint' : 'text-ds-faint/40'}`} strokeWidth={1.8} />
-          )}
         </span>
+        {hasBody ? (
+          expanded
+            ? <ChevronDown className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
+            : <ChevronRight className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
+        ) : null}
       </div>
 
-      <LaneHairline status={status} animate={animate} />
-
       {expanded ? (
-        <div
-          className="border-t border-ds-border-muted/70 px-4 py-3.5"
-          data-testid="subagent-conclusion-body"
-        >
-          {detail.error?.trim() ? (
-            <pre className="max-h-[320px] overflow-y-auto whitespace-pre-wrap break-words rounded-[10px] border border-red-200/80 bg-red-50/80 px-3 py-2.5 font-mono text-[12px] leading-5 text-ds-danger dark:border-red-800/40 dark:bg-red-500/10">
-              {detail.error}
-            </pre>
-          ) : detail.summary?.trim() ? (
-            isFastContext ? (
-              <div className="max-h-[360px] overflow-y-auto text-[14px] leading-6 text-ds-ink">
-                <AssistantMarkdown
-                  text={detail.summary}
-                  streaming={false}
-                  className="ds-markdown text-[14px] leading-6 text-ds-ink"
-                />
-              </div>
-            ) : (
-              <p className="max-h-[320px] overflow-y-auto whitespace-pre-wrap text-[14px] leading-6 text-ds-muted">
-                {detail.summary}
-              </p>
-            )
-          ) : null}
-          <FastContextEvidenceDetail pack={evidencePack} t={t} />
-
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {launcher === 'manager-worker' && detail.harnessId ? (
-              <MetaChip title={detail.harnessId}>{detail.harnessId}</MetaChip>
-            ) : null}
-            {launcher === 'manager-worker' && detail.taskWorkspaceId ? (
-              <MetaChip title={detail.taskWorkspaceId}>{t('subagentWorktreeBadge', { defaultValue: 'worktree' })}</MetaChip>
-            ) : null}
-            {detail.profile ? <MetaChip title={detail.profile}>{detail.profile}</MetaChip> : null}
-            {typeof (child.totalTokens ?? detail.totalTokens) === 'number' && (child.totalTokens ?? detail.totalTokens ?? 0) > 0 ? (
-              <MetaChip>{t('subagentTokensChip', { count: child.totalTokens ?? detail.totalTokens })}</MetaChip>
-            ) : null}
-            {detail.toolPolicy ? (
-              <MetaChip>
-                {detail.toolPolicy === 'readOnly' ? t('subagentPolicyReadOnly') : t('subagentPolicyFull')}
-              </MetaChip>
-            ) : null}
-            {proactiveRetry
-              ? <ProactiveRetryBadge retry={proactiveRetry} t={t} remaining />
-              : null}
-            {resultRef ? (
-              <MetaChip title={resultRef.artifactId}>
-                {t('subagentResultSize', {
-                  defaultValue: '{{lines}} lines · {{bytes}} bytes',
-                  lines: resultRef.lineCount,
-                  bytes: resultRef.byteSize
-                })}
-              </MetaChip>
-            ) : null}
-            {resultUnavailableReason ? (
-              <MetaChip title={resultUnavailableReason}>
-                {t('subagentResultUnavailable', { defaultValue: 'Full result unavailable' })}
-              </MetaChip>
-            ) : null}
-          </div>
-        </div>
+        <SubagentConclusionBody
+          detail={detail}
+          evidencePack={evidencePack}
+          isFastContext={isFastContext}
+          launcher={launcher}
+          totalTokens={child.totalTokens ?? detail.totalTokens}
+          proactiveRetry={proactiveRetry}
+          resultRef={resultRef}
+          resultUnavailableReason={resultUnavailableReason}
+          t={t}
+        />
       ) : null}
 
       {childId ? (
@@ -536,16 +477,16 @@ export function SubagentGroup({
     return sa - sb
   })
 
-  let running = 0
-  let queued = 0
-  let done = 0
-  for (const b of sorted) {
+  const members = sorted.map((b) => {
+    const meta = readChildMeta(b)
     const detail = parseDelegateDetail(b.kind === 'tool' ? (b as ToolBlock).detail : undefined)
-    const s = resolveStatus(b, readChildMeta(b), detail)
-    if (s === 'running' || s === 'awaiting-permission') running += 1
-    else if (s === 'queued') queued += 1
-    else if (s === 'done') done += 1
-  }
+    return { status: resolveStatus(b, meta, detail), childId: readExternalSubagentView(b) ? undefined : meta.childId || detail.childId }
+  })
+  const count = (...statuses: CardStatus[]): number => members.filter((m) => statuses.includes(m.status)).length
+  const running = count('running', 'awaiting-permission')
+  const queued = count('queued')
+  const done = count('done')
+  const activeChildIds = members.filter((m) => !isTerminal(m.status) && m.childId).map((m) => m.childId as string)
   const anyRunning = running > 0 || queued > 0
   useEffect(() => {
     if (!anyRunning) return
@@ -588,45 +529,48 @@ export function SubagentGroup({
   if (done > 0) summaryParts.push(t('subagentSwarmDone', { count: done }))
 
   return (
-    <section className="ds-subagent-mount overflow-hidden rounded-[20px] border border-ds-border bg-ds-card/80 shadow-[0_16px_40px_rgba(86,103,136,0.08)] backdrop-blur-xl">
-      <button
-        type="button"
-        onClick={() => setCollapsed((v) => !v)}
-        aria-expanded={!collapsed}
-        className="flex w-full items-center gap-3 border-b border-ds-border-muted bg-gradient-to-b from-ds-card to-ds-card-muted/40 px-4 py-3 text-left transition hover:bg-ds-hover/30"
-      >
-        {anyRunning && !reducedMotion ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" strokeWidth={2.2} />
-        ) : anyRunning ? (
-          <Hourglass className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
-        ) : (
-          <Check className="h-4 w-4 shrink-0 text-ds-success" strokeWidth={2.4} />
-        )}
-        <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-ds-heading">
-          {t('subagentSwarmTitle', { count: sorted.length })}
-          {summaryParts.length > 0 ? (
-            <span className="font-normal text-ds-muted"> · {summaryParts.join(' · ')}</span>
-          ) : null}
-        </span>
-        <span className="ds-subagent-focus-decoration flex shrink-0">
-          {clusterBlocks.map((b, i) => <SwarmClusterAvatar key={b.id} block={b} index={i} />)}
-          {overflow > 0 ? (
-            <span
-              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-ds-card bg-ds-card-muted text-[9px] font-semibold text-ds-muted"
-              style={{ marginLeft: -8 }}
-            >
-              +{overflow}
+    <section className="ds-subagent-mount overflow-hidden rounded-[14px] border border-ds-border bg-ds-card">
+      <div className="flex items-center gap-2 py-2.5 pl-3.5 pr-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-expanded={!collapsed}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left"
+        >
+          <span className="ds-subagent-focus-decoration flex shrink-0">
+            {clusterBlocks.map((b, i) => <SwarmClusterAvatar key={b.id} block={b} index={i} />)}
+            {overflow > 0 ? (
+              <span
+                className="flex h-[22px] w-[22px] items-center justify-center rounded-[7px] border-2 border-ds-card bg-ds-card-muted text-[9px] font-semibold text-ds-muted"
+                style={{ marginLeft: -6 }}
+              >
+                +{overflow}
+              </span>
+            ) : null}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <span className="truncate text-[13.5px] font-semibold text-ds-ink">
+              {t('subagentSwarmTitle', { count: sorted.length })}
+              {summaryParts.length > 0 ? (
+                <span className="ml-2 text-[12px] font-normal text-ds-muted">{summaryParts.join(' · ')}</span>
+              ) : null}
             </span>
-          ) : null}
-        </span>
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
-        ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
-        )}
-      </button>
+            <span className="flex h-[3px] gap-[3px]" aria-hidden="true">
+              {members.map((m, i) => (
+                <span key={i} className={`flex-1 rounded-sm ${SEGMENT_TONE[m.status]}`} />
+              ))}
+            </span>
+          </span>
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
+          )}
+        </button>
+        <SubagentStopAllButton childIds={activeChildIds} t={t} />
+      </div>
       {!collapsed ? (
-        <div>
+        <div className="border-t border-ds-border-muted">
           {sorted.map((b) => (
             <SubagentCallCard
               key={b.id}
@@ -642,44 +586,12 @@ export function SubagentGroup({
     </section>
   )
 }
-function expandExploreBatchBlock(block: ChatBlock): ChatBlock[] {
-  if (block.kind !== 'tool' || !isFastContextToolBlock(block as ToolBlock)) return [block]
-  const tool = block as ToolBlock
-  const children = parseExploreBatchChildren(tool.detail)
-  if (children.length === 0) return [block]
-  return children.map((child) => ({
-    ...tool,
-    id: `${tool.id}:explore:${child.index}`,
-    summary: child.title,
-    status: child.status === 'completed'
-      ? 'success'
-      : child.status === 'failed' || child.status === 'aborted'
-        ? 'error'
-        : 'running',
-    detail: JSON.stringify({
-      ...child,
-      ...(typeof child.totalTokens === 'number'
-        ? { usage: { totalTokens: child.totalTokens } }
-        : {})
-    }),
-    meta: {
-      ...tool.meta,
-      toolName: 'fast_context',
-      child: {
-        childId: child.childId,
-        childLabel: child.title,
-        childProfile: 'explore',
-        childProfileName: child.profileName,
-        childModel: child.model,
-        childStatus: child.status,
-        childSeq: child.index,
-        parentTurnId: tool.turnId,
-        toolInvocations: child.toolInvocations,
-        attemptStartedAt: child.attemptStartedAt,
-        attemptDurationMs: child.attemptDurationMs,
-        durationMs: child.durationMs,
-        totalTokens: child.totalTokens
-      }
-    }
-  }))
+
+const SEGMENT_TONE: Record<CardStatus, string> = {
+  done: 'bg-emerald-600 dark:bg-emerald-400',
+  running: 'bg-accent',
+  'awaiting-permission': 'bg-amber-500',
+  queued: 'bg-ds-border-muted',
+  failed: 'bg-red-500',
+  stopped: 'bg-slate-400 dark:bg-slate-500'
 }

@@ -51,6 +51,8 @@ import {
   waitForStartingSharedRuntime
 } from './shared-runtime-launch.js'
 import { createSharedRuntimeReadiness } from './shared-runtime-readiness.js'
+import { hostNodeLaunch } from '../process/host-node.js'
+import { resolveSharedRuntimeStartTimeoutMs } from './shared-runtime-start-timeout.js'
 import { KUN_NODE_CHILD_V8_FLAGS } from '../process/node-child-v8-flags.js'
 import {
   assertOneShotRuntimeControlAllowed,
@@ -60,7 +62,6 @@ import {
 
 export { probeRuntimeDiscovery } from './shared-runtime-launch.js'
 
-const START_TIMEOUT_MS = process.platform === 'win32' ? 90_000 : 60_000
 const STOP_TIMEOUT_MS = 15_000
 const POLL_MS = 100
 
@@ -273,7 +274,7 @@ export async function ensureSharedRuntime(input: {
     assertRuntimeCanBeReplaced(existing)
   }
   const launch = async () => {
-    const deadline = Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
+    const deadline = Date.now() + (input.timeoutMs ?? resolveSharedRuntimeStartTimeoutMs(input.env ?? process.env))
     let elected = await inspectSharedRuntime(input.dataDir, fetchImpl, scope)
     if (input.clientOwnerKind && elected) throw clientOwnedConflict(elected, input.dataDir)
     const electedReusable = input.forceReplace || input.clientOwnerKind ? null : await readiness.published()
@@ -329,12 +330,11 @@ export async function ensureSharedRuntime(input: {
     const { logPath, logFd } = await prepareLog()
     const runtimeToken = randomBytes(32).toString('base64url')
     const entry = fileURLToPath(new URL('./serve-entry.js', import.meta.url))
-    const packagedRuntimeExecutable = input.launch
-      ? undefined
-      : process.env.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()
-    const command = input.launch?.command ?? packagedRuntimeExecutable ?? process.execPath
+    const host = hostNodeLaunch()
+    const command = input.launch?.command ?? host.command
     const args = input.launch?.args ?? [
-      ...(command === process.execPath ? KUN_NODE_CHILD_V8_FLAGS : []),
+      // An external packaged executable keeps its own defaults, as before.
+      ...(input.launch || (host.runAsNode && !host.isCurrentProcess) ? [] : KUN_NODE_CHILD_V8_FLAGS),
       entry,
       'serve',
       '--host', '127.0.0.1',
@@ -364,9 +364,7 @@ export async function ensureSharedRuntime(input: {
         : {}),
       ...(sourceBuildId ? { KUN_RUNTIME_BUILD_ID: sourceBuildId } : {})
     }
-    const runAsNode = input.launch?.runAsNode ?? Boolean(
-      packagedRuntimeExecutable || process.versions.electron
-    )
+    const runAsNode = input.launch?.runAsNode ?? host.runAsNode
     if (runAsNode) env.ELECTRON_RUN_AS_NODE = '1'
     else delete env.ELECTRON_RUN_AS_NODE
     let child

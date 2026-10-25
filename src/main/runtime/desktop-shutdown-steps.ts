@@ -2,6 +2,7 @@ export type DesktopShutdownStep = { name: string; run: () => void | Promise<unkn
 
 export class DesktopShutdownSteps {
   readonly errors: Error[] = []
+  private readonly failureDetails: string[] = []
 
   constructor(
     readonly startedAt = Date.now(),
@@ -26,6 +27,7 @@ export class DesktopShutdownSteps {
     } catch (cause) {
       const error = cause instanceof Error ? cause : new Error(String(cause))
       this.errors.push(error)
+      this.failureDetails.push(`${step.name}: ${shutdownErrorDetail(error)}`)
       this.warn(step.name, error)
       return false
     } finally {
@@ -38,6 +40,15 @@ export class DesktopShutdownSteps {
   }
 
   assertComplete(): void {
-    if (this.errors.length) throw new AggregateError(this.errors, 'Kun application shutdown was incomplete')
+    if (this.errors.length) throw new AggregateError(this.errors,
+      `Kun application shutdown was incomplete: ${this.failureDetails.join('; ')}`)
   }
+}
+
+function shutdownErrorDetail(error: Error, depth = 0): string {
+  if (error instanceof AggregateError && depth < 3) {
+    return error.errors.slice(0, 4).map((cause) =>
+      shutdownErrorDetail(cause instanceof Error ? cause : new Error(String(cause)), depth + 1)).join('; ')
+  }
+  return error.message.slice(0, 400)
 }

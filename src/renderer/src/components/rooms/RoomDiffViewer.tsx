@@ -32,7 +32,7 @@ export function RoomDiffViewer({ roomId, path }: { roomId: string; path: string 
     } catch (cause) { setError(String(cause)) }
     finally { setBusy(false) }
   }
-  const row = (file: string) => <button className={'w-full truncate px-2 text-left text-xs ' + (selected === file ? 'text-ds-accent' : 'text-ds-ink')}
+  const row = (file: string) => <button className={'w-full truncate px-2 text-left text-xs ' + (selected === file ? 'text-accent' : 'text-ds-ink')}
     title={file} onClick={() => setSelected(file)}>{file}</button>
   return <details onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary className="cursor-pointer text-sm text-ds-ink">{t('roomsDiff')}{resource.data ? ' (' + resource.data.total + ')' : ''}</summary>

@@ -35,7 +35,7 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
   // An Agent's bare total is one figure; only its own split earns category rows.
   const agentTotalOnly = capacity.agentReported && !capacity.agentBreakdown
   const accent = occupancyUnknown
-    ? 'var(--ds-muted)'
+    ? 'var(--ds-text-muted)'
     : stateColor(capacity.usedRatio, thresholdRatio)
 
   const labelFor = (key: ContextCategoryKey): string =>

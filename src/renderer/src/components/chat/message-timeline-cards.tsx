@@ -16,6 +16,7 @@ import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import type { GuiPlanToolMeta } from '../../plan/plan-tool'
 import { PlanBuildActions } from '../plan/PlanBuildActions'
 import { WritePromptOfficeDocumentCard } from './WritePromptOfficeDocumentCard'
+import { TurnUndoCardButton, type TurnChangeUndoState } from './turn-undo-controls'
 
 /**
  * Inline "Review Plan" card rendered under a turn whose `create_plan`
@@ -194,7 +195,8 @@ export function TurnChangeSummary({
   compact = false,
   onOpenChanges,
   onReviewChanges,
-  reviewChangesDisabled = false
+  reviewChangesDisabled = false,
+  undo
 }: {
   changes: ToolBlock[]
   viewportRef: RefObject<HTMLDivElement | null>
@@ -202,6 +204,7 @@ export function TurnChangeSummary({
   onOpenChanges?: () => void
   onReviewChanges?: () => void
   reviewChangesDisabled?: boolean
+  undo?: TurnChangeUndoState
 }): ReactElement {
   const { t } = useTranslation('common')
   const [showAllFiles, setShowAllFiles] = useState(false)
@@ -221,12 +224,13 @@ export function TurnChangeSummary({
   }, [changes])
 
   const totals = useMemo(() => sumDiffStats(changes.map((change) => change.detail)), [changes])
+  const undone = undo?.undone === true
+  const undoneCount = undo?.undoneFileCount ?? changes.length
   const title = useMemo(
-    () =>
-      changes.length === 1
-        ? t('turnChangeFilesOne')
-        : t('turnChangeFilesMany', { count: changes.length }),
-    [changes.length, t]
+    () => undone
+      ? undoneCount === 1 ? t('turnUndoUndoneTitleOne') : t('turnUndoUndoneTitleMany', { count: undoneCount })
+      : changes.length === 1 ? t('turnChangeFilesOne') : t('turnChangeFilesMany', { count: changes.length }),
+    [changes.length, t, undone, undoneCount]
   )
   const visibleChanges = showAllFiles ? changes : changes.slice(0, 3)
   const hiddenFileCount = Math.max(0, changes.length - 3)
@@ -263,7 +267,11 @@ export function TurnChangeSummary({
             >
               {title}
             </span>
-            {totals ? (
+            {undone ? (
+              <span className={`block text-ds-muted ${compact ? 'mt-0.5 text-[11px]' : 'mt-1 text-[12px]'}`}>
+                {t('turnUndoUndoneSubtitle')}
+              </span>
+            ) : totals ? (
               <span className={`block font-mono ${compact ? 'mt-0.5 text-[11px]' : 'mt-1 text-[12px]'}`}>
                 <span className="text-ds-diff-added">+{totals.added}</span>
                 <span className="mx-1.5 text-ds-faint">·</span>
@@ -272,7 +280,7 @@ export function TurnChangeSummary({
             ) : null}
           </span>
         </div>
-        {onOpenChanges || onReviewChanges ? (
+        {onOpenChanges || onReviewChanges || undo ? (
           <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
             {onOpenChanges ? (
               <button
@@ -283,7 +291,7 @@ export function TurnChangeSummary({
                 {t('composerOpenChanges')}
               </button>
             ) : null}
-            {onReviewChanges ? (
+            {onReviewChanges && !undone ? (
               <button
                 type="button"
                 disabled={reviewChangesDisabled}
@@ -294,6 +302,7 @@ export function TurnChangeSummary({
                 {t('composerReviewChanges')}
               </button>
             ) : null}
+            {undo ? <TurnUndoCardButton undo={undo} /> : null}
           </div>
         ) : null}
       </div>
@@ -317,7 +326,7 @@ export function TurnChangeSummary({
                 <span
                   className={`min-w-0 flex-1 truncate font-medium text-ds-muted ${
                     compact ? 'text-[12px]' : 'text-[13px]'
-                  }`}
+                  } ${undone ? 'line-through' : ''}`}
                   title={primary}
                 >
                   {primary}
@@ -402,9 +411,13 @@ export function WorkMetaRow({
 }): ReactElement {
   const { t } = useTranslation('common')
 
+  // The row describes this turn's process log, not the whole task: a finished
+  // reply can still leave background work running.
   const mainLabel = processing
     ? `${t('processing')}${typeof durationMs === 'number' ? ` · ${formatDuration(durationMs)}` : ''}`
-    : `${t('processed')}${typeof durationMs === 'number' ? ` ${formatDuration(durationMs)}` : ''}`
+    : typeof durationMs === 'number'
+      ? t('turnRecordDuration', { duration: formatDuration(durationMs) })
+      : t('turnRecord')
 
   const content = (
     <>

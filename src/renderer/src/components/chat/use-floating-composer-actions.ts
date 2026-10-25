@@ -18,6 +18,9 @@ import { useChatStore } from '../../store/chat-store'
 import type { ComposerFileDropOptions } from './composer-file-drop'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
+/** An open popup (picker, menu) whose trigger lives inside the composer. */
+export const OPEN_POPUP_TRIGGER_SELECTOR = '[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]'
+
 /**
  * True when a keydown should open the attachment picker: `Ctrl+U` on
  * Windows/Linux or `Cmd+U` on macOS. IME composition, Alt/Shift modifiers, or
@@ -48,10 +51,11 @@ export function useFloatingComposerActions(
     activeThreadId, archiveThread, attachments, buildResearchPrompt, busy,
     canAcceptComposerFileDrop,
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
-    canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
+    canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode,
-    clearActiveThreadGoal, compact, compactActiveThread, composerRootRef, composerSendKey,
-    dictationPrimaryActionRef, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
+    clearActiveThreadGoal, compact, compactActiveThread, composerInterrupt, composerMenuOpen,
+    composerRootRef, composerSendKey, dictationPrimaryActionRef, draft, goalPanelOpen, onInterrupt,
+    primaryActionKind, effectiveWorkspaceRoot, fileInputRef, fileMentions,
     forkActiveThread, goalInputMode, goalPanelDraftObjective, handleComposerImagePaste,
     fileReferences, hideBtwCommand, highlightedSlashCommand, input, inputHistory,
     isComposerSendHotkey,
@@ -63,8 +67,8 @@ export function useFloatingComposerActions(
     parseResearchCommand, parseReviewCommand, parsedGoalCommand, primaryActionDisabled,
     route, routeComposerFileDrop, runtimeReady, setActiveThreadGoal, setActiveThreadGoalStatus,
     setComposerMenuOpen, setGoalInputMode, setGoalPanelOpen, setInput, setMode,
-    setPromptOptimizationBusy, setPromptOptimizationError, slashCommandMenu, slashCommands,
-    t, userInput
+    promptEnhance, slashCommandMenu, slashCommands,
+    t
   } = context
   const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
   const extraWorkspaceRoots = extraRootsForWorkspace(effectiveWorkspaceRoot, folderSets)
@@ -310,50 +314,12 @@ export function useFloatingComposerActions(
     draft.focusComposer()
   }
 
-  const handlePromptOptimizationClick = (): void => {
-    if (!canOptimizePrompt) return
-    const sourceText = input
-    setPromptOptimizationBusy(true)
-    setPromptOptimizationError(null)
-    void window.kunGui.optimizePrompt({ text: sourceText })
-      .then((result) => {
-        if (!result.ok) {
-          setPromptOptimizationError(result.message)
-          return
-        }
-        setInput(result.text)
-        window.requestAnimationFrame(() => {
-          const textarea = draft.textareaRef.current
-          if (!textarea) return
-          textarea.focus()
-          const cursor = result.text.length
-          textarea.setSelectionRange(cursor, cursor)
-          fileMentions.setCursor(cursor)
-        })
-      })
-      .catch((error) => {
-        setPromptOptimizationError(error instanceof Error ? error.message : String(error))
-      })
-      .finally(() => setPromptOptimizationBusy(false))
-  }
-
   const handlePrimaryAction = (): void => {
-    // While an ask-user request is pending, a plain text reply answers the
-    // current question instead of being sent/queued as a chat message. Routing
-    // through resolveUserInput (not onSend) bypasses the busy-turn queue. Slash
-    // commands (input starting with "/") fall through so they stay escape
-    // hatches; an empty composer is a no-op (chips still work via the panel).
-    if (userInput.active) {
-      const trimmed = input.trim()
-      if (!trimmed.startsWith('/')) {
-        if (trimmed && userInput.submitTypedText(input)) {
-          inputHistory.push(input)
-          setInput('')
-          draft.focusComposer()
-        }
-        return
-      }
-    }
+    // The draft is being rewritten; sending now would race the replacement.
+    if (promptEnhance?.running) return
+    // An approval / ask-user card holds the input slot; the hidden editor (and
+    // voice "send") must not submit underneath it. Answers go through the card.
+    if (composerInterrupt) return
     if (highlightedSlashCommand) {
       if (highlightedSlashCommand.disabled) return
       applySlashCommand(highlightedSlashCommand.id)
@@ -415,15 +381,6 @@ export function useFloatingComposerActions(
         return
       }
     }
-    // Trailing fallback for a pending ask: text that began with "/" but matched
-    // no real command (e.g. a free-form answer like "/usr/local/bin") still
-    // answers the current question instead of leaking into chat via onSend.
-    if (userInput.active && input.trim() && userInput.submitTypedText(input)) {
-      inputHistory.push(input)
-      setInput('')
-      draft.focusComposer()
-      return
-    }
     if (primaryActionDisabled) return
     inputHistory.push(input)
     onSend()
@@ -433,6 +390,8 @@ export function useFloatingComposerActions(
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
     const sendByHotkey = isComposerSendHotkey(event, composerSendKey)
     const composing = draft.isComposingEvent(event)
+
+    if (!composing && promptEnhance?.handleKeyDown(event)) return
 
     if (fileMentions.handleKeyDown(event, composing)) return
 
@@ -446,12 +405,18 @@ export function useFloatingComposerActions(
       return
     }
 
-    // Esc cancels a pending ask-user request. (Option picking is click-only:
-    // a bare-digit accelerator would hijack the first character of a
-    // digit-leading custom answer, which the type-to-answer design must allow.)
-    if (!composing && userInput.active && event.key === 'Escape') {
+    // Esc stops the running turn while the draft is empty (the Stop button's
+    // tooltip advertises it). Menus, pickers and an open tray sheet handle Esc
+    // first: they either consume it above, mark it handled, or show an open
+    // popup trigger. Only popup triggers count: persistent disclosures (an
+    // expanded queue list, a document-quote chip) must not disable Esc.
+    if (
+      !composing && event.key === 'Escape' && !event.defaultPrevented &&
+      primaryActionKind === 'interrupt' && !composerMenuOpen && !goalPanelOpen &&
+      !composerRootRef.current?.querySelector(OPEN_POPUP_TRIGGER_SELECTOR)
+    ) {
       event.preventDefault()
-      userInput.cancel()
+      onInterrupt()
       return
     }
 
@@ -459,7 +424,7 @@ export function useFloatingComposerActions(
 
     event.preventDefault()
     // Empty-composer Enter is a dead keypress while a turn runs (send rejects
-    // empty input and the interrupt path is pointer-only). Repurpose it for
+    // empty input; stopping is Esc or the Stop button). Repurpose it for
     // the double-Enter steer gesture while the window from a fresh queue
     // entry is still open.
     if (
@@ -577,7 +542,6 @@ export function useFloatingComposerActions(
     handleAutoPlanBuildToolbarClick,
     handlePlanToolbarClick,
     handlePrimaryAction,
-    handlePromptOptimizationClick,
     setGoalFromComposerInput
   }
 }

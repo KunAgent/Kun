@@ -61,7 +61,7 @@ app.on('window-all-closed',()=>app.quit());`)
     ? route.continue() : route.abort('blockedbyclient'))
   page.setDefaultTimeout(15_000)
   await page.goto(origin + '/__chat_rendering', { timeout: 60_000 })
-  await page.waitForFunction(() => window.chatRenderingFixture?.ready, null, { timeout: 60_000 })
+  await page.waitForFunction(() => window.chatRenderingFixture?.ready, null, { timeout: 120_000 })
   const scroll = page.locator('.fixture-stage .overflow-y-auto').first()
   const settle = () => page.evaluate(() => new Promise(resolve =>
     requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 150)))))
@@ -106,6 +106,45 @@ app.on('window-all-closed',()=>app.quit());`)
   await page.evaluate(() => window.chatRenderingFixture.load(540, 'chat-a'))
   await settle()
   assert.equal(await page.locator('[data-timeline-block-id^="chat-b-"]').count(), 0)
+
+  // Keep the same mounted list when changing zoom, then verify coverage at
+  // both the middle and tail. Scroll extent alone misses blank virtual rows.
+  for (const scale of [0.82, 1, 1.2]) {
+    await page.evaluate(scale => window.chatRenderingFixture.zoom(scale), scale)
+    const viewport = page.getByTestId('zoom-viewport')
+    await viewport.waitFor()
+    await settle()
+    for (const position of ['middle', 'tail']) {
+      await viewport.evaluate((element, position) => {
+        element.scrollTop = position === 'tail' ? element.scrollHeight : element.scrollHeight / 2
+      }, position)
+      await settle()
+      const layout = await viewport.evaluate(element => {
+        const list = element.querySelector('[data-timeline-virtual-list]')
+        const rows = [...list.children]
+        const bounds = element.getBoundingClientRect(), listBounds = list.getBoundingClientRect()
+        const first = rows[0]?.getBoundingClientRect(), last = rows.at(-1)?.getBoundingClientRect()
+        return {
+          scale: Number.parseFloat(getComputedStyle(document.body).zoom),
+          rows: rows.length, firstIndex: rows[0]?.dataset.index, lastIndex: rows.at(-1)?.dataset.index,
+          startGap: first ? Math.max(0, first.top - Math.max(bounds.top, listBounds.top)) : Infinity,
+          endGap: last ? Math.max(0, Math.min(bounds.bottom, listBounds.bottom) - last.bottom) : Infinity,
+          statusGap: last ? element.querySelector('[data-testid="zoom-status"]').getBoundingClientRect().top - last.bottom : Infinity
+        }
+      })
+      const context = `${scale} zoom ${position}: ${JSON.stringify(layout)}`
+      assert.equal(layout.scale, scale, context)
+      assert.ok(layout.rows > 0 && layout.rows < 80, `Virtual rows must stay bounded: ${context}`)
+      assert.ok(layout.startGap < 2 && layout.endGap < 2, `Rows must cover the visible list: ${context}`)
+      if (position === 'tail') {
+        assert.equal(layout.lastIndex, '149', `The final record must be mounted: ${context}`)
+        assert.ok(Math.abs(layout.statusGap) < 2, `No blank space before live status: ${context}`)
+      }
+      metrics.push({ scenario: `zoom-${position}`, ...layout })
+      await page.screenshot({ path: join(evidence, `zoom-${scale}-${position}.png`) })
+    }
+  }
+  await page.evaluate(() => window.chatRenderingFixture.zoom(1))
 
   await page.evaluate(() => window.chatRenderingFixture.text('Live start.'))
   await page.getByTestId('reveal-output').waitFor()

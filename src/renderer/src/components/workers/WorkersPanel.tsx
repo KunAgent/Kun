@@ -1,21 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useMemo, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Users } from 'lucide-react'
-import type { AdeTeamOverview } from '@shared/ade-teams'
-import { useActivityStore } from '../../store/activity-store'
+import { AlertCircle, RefreshCw } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
-import { selectWorkerRowsForParent } from '../../store/activity-selectors'
-import { getProvider } from '../../agent/registry'
-import { mergeWorkerRows, summarizeWorkerRows } from './worker-row-data'
+import { summarizeWorkerRows, type WorkerRowData } from './worker-row-data'
+import { formatWorkerTokens, groupWorkerRows, workerIsLive, type WorkerTone } from './worker-presentation'
 import { WorkerRow } from './WorkerRow'
-import { ensureWorkerView, selectWorkerPreview, updateWorkerViewDraft, useWorkerViewStore } from './worker-view-store'
-import { EMPTY_WORKER_DRAFT, WorkerInspector, type WorkerDraft } from './WorkerInspector'
+import { WorkerAvatar } from './WorkerParts'
+import { workerSeatMap } from './worker-seat'
+import { CollaborationIcon } from './CollaborationIcon'
+import { openWorkerSession } from './worker-view-store'
+import { useTeamWorkers } from './use-team-workers'
+import { busyActionFor, useWorkerActions } from './use-worker-actions'
+import { useWorkerClock } from './use-worker-clock'
+import { WorkerActionError } from './WorkerActionError'
+import './workers-panel.css'
+
+/** Overlapping seats shown in the summary before the rest are only counted. */
+const SEAT_STACK_MAX = 5
 
 /**
- * Right-panel Workers surface: team summary on top, one WorkerRow
- * per team worker. Data = `GET /v1/teams/by-manager/:threadId` merged with
- * live ActivityStore rows; the overview refetches (debounced) whenever a
- * worker row's `updatedAt` advances so the panel tracks ongoing work.
+ * Right-panel Collaboration tab: team progress on top, then the members
+ * grouped by what they need — waiting on you, working, finished. A member
+ * opens in its own right-panel tab; this tab stays the list.
  */
 export function WorkersPanel({
   className,
@@ -24,222 +30,178 @@ export function WorkersPanel({
 }: {
   className?: string
   active?: boolean
-  /** Lets the host retain the manager context while a worker is inspected. */
+  /** Lets the host keep the manager scope when another thread is active. */
   managerThreadId?: string
 }): ReactElement {
   const { t } = useTranslation('common')
   const activeThreadId = useChatStore((s) => s.activeThreadId)
   const managerThreadId = explicitManagerThreadId ?? activeThreadId
-  const managerThreadRef = useRef(managerThreadId)
-  managerThreadRef.current = managerThreadId
   const selectThread = useChatStore((s) => s.selectThread)
-  const activityRows = useActivityStore((s) => s.rows)
-  const workerRows = useMemo(
-    () => (managerThreadId ? selectWorkerRowsForParent(activityRows, managerThreadId) : []),
-    [activityRows, managerThreadId]
-  )
-  // `null` overview means the thread owns no team (the runtime answers 404);
-  // `loaded` tells that apart from a request that has not settled yet.
-  const [overview, setOverview] = useState<AdeTeamOverview | null>(null)
-  const [loaded, setLoaded] = useState(false)
-  const view = useWorkerViewStore((s) => managerThreadId ? s.managers[managerThreadId] : undefined)
-  const selectedWorkerId = view?.selectedWorkerId ?? null
-  const workerDrafts = view?.drafts ?? {}
-  const [loadFailed, setLoadFailed] = useState(false)
-  const [busy, setBusy] = useState<{ workerId: string; action: 'stop' | 'detach' | 'answer' } | null>(null)
-  const loadGeneration = useRef(0)
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const reload = useCallback(async (threadId: string): Promise<void> => {
-    const request = ++loadGeneration.current
-    const provider = getProvider()
-    if (!provider.getTeamOverview) {
-      if (managerThreadRef.current === threadId && request === loadGeneration.current) setLoaded(true)
-      return
-    }
-    try {
-      const next = await provider.getTeamOverview(threadId)
-      if (managerThreadRef.current !== threadId || request !== loadGeneration.current) return
-      setOverview(next)
-      setLoaded(true)
-      setLoadFailed(false)
-    } catch {
-      if (managerThreadRef.current === threadId && request === loadGeneration.current) setLoadFailed(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!active) return
-    setOverview(null)
-    setLoaded(false)
-    setLoadFailed(false)
-    if (managerThreadId) {
-      ensureWorkerView(managerThreadId)
-      void reload(managerThreadId)
-    }
-    return () => { loadGeneration.current += 1 }
-  }, [managerThreadId, active, reload])
-
-  // Debounced refetch when worker activity rows move.
-  // A thread without a team still refetches so a team created later shows up.
-  const rowStamp = workerRows.map((row) => `${row.unitId}:${row.updatedAt}`).join('|')
-  useEffect(() => {
-    if (!active || !managerThreadId || !loaded) return
-    if (refreshTimer.current) clearTimeout(refreshTimer.current)
-    refreshTimer.current = setTimeout(() => void reload(managerThreadId), 800)
-    return () => {
-      if (refreshTimer.current) clearTimeout(refreshTimer.current)
-    }
-  }, [rowStamp, managerThreadId, loaded, active, reload])
-
-  const rows = useMemo(
-    () => (overview ? mergeWorkerRows(overview, workerRows) : []),
-    [overview, workerRows]
-  )
+  const { overview, rows, loaded, loadFailed, reload } = useTeamWorkers(managerThreadId, active)
+  const { busy, error, dismissError, stop, detach, answer } = useWorkerActions(reload)
   const summary = useMemo(() => summarizeWorkerRows(rows), [rows])
-  const selectedRow = rows.find((row) => row.workerId === selectedWorkerId)
+  const groups = useMemo(() => groupWorkerRows(rows), [rows])
+  const seats = useMemo(() => workerSeatMap(
+    rows.map((row) => row.workerId),
+    rows.filter((row) => row.activityRow).map((row) => row.workerId)
+  ), [rows])
+  const now = useWorkerClock(active && rows.some(workerIsLive))
 
-  const runAction = useCallback(
-    (workerId: string, action: 'stop' | 'detach', run: () => Promise<void>): void => {
-      setBusy({ workerId, action })
-      void run()
-        .then(() => (managerThreadId ? reload(managerThreadId) : undefined))
-        .catch(() => setLoadFailed(true))
-        .finally(() => setBusy(null))
-    },
-    [managerThreadId, reload]
-  )
-
-  const onOpen = useCallback(
-    (workerId: string) => {
-      if (managerThreadId) selectWorkerPreview(managerThreadId, workerId)
-    },
-    [managerThreadId]
-  )
-  const onFullOpen = useCallback((workerId: string): void => {
-    void selectThread(workerId).catch(() => undefined)
+  const onOpen = useCallback((row: WorkerRowData): void => openWorkerSession(row.workerId, row.label), [])
+  const onFullOpen = useCallback((row: WorkerRowData): void => {
+    void selectThread(row.child?.threadId ?? row.workerId).catch(() => undefined)
   }, [selectThread])
-  const updateWorkerDraft = useCallback((workerId: string, update: (current: WorkerDraft) => WorkerDraft): void => {
-    if (managerThreadId) updateWorkerViewDraft(managerThreadId, workerId, update)
-  }, [managerThreadId])
-  const onStop = useCallback(
-    (workerId: string) =>
-      runAction(workerId, 'stop', async () => {
-        const provider = getProvider()
-        if (!provider.controlTeamWorker) return
-        await provider.controlTeamWorker(workerId, 'stop')
-      }),
-    [runAction]
-  )
-  const onDetach = useCallback(
-    (workerId: string) =>
-      runAction(workerId, 'detach', async () => {
-        const provider = getProvider()
-        if (!provider.controlTeamWorker) return
-        await provider.controlTeamWorker(workerId, 'detach')
-      }),
-    [runAction]
-  )
-  const onAnswer = useCallback(
-    (questionId: string, answer: string): void => {
-      const provider = getProvider()
-      if (!provider.answerTeamQuestion) return
-      setBusy({ workerId: questionId, action: 'answer' })
-      void provider.answerTeamQuestion(questionId, answer)
-        .then(() => (managerThreadId ? reload(managerThreadId) : undefined))
-        .catch(() => setLoadFailed(true))
-        .finally(() => setBusy(null))
-    },
-    [managerThreadId, reload]
-  )
 
   if (!active) return <div className={className} data-workers-panel data-workers-inactive />
 
+  const usage = overview?.usage
+  const segments: Array<{ tone: WorkerTone; count: number }> = [
+    { tone: 'success', count: summary.done },
+    { tone: 'running', count: summary.running },
+    { tone: 'warning', count: summary.waiting },
+    { tone: 'danger', count: summary.failed }
+  ]
+
   return (
-    <div className={`flex h-full min-h-0 min-w-0 flex-col ${className ?? ''}`} data-workers-panel>
-      <div className="flex items-center gap-2 border-b border-ds-border px-4 py-3">
-        <Users className="h-4 w-4 text-ds-muted" strokeWidth={1.9} aria-hidden />
-        <h2 className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ds-ink">
-          {t('workersPanelTitle')}
-        </h2>
-        {overview ? (
-          <span className="shrink-0 text-[11px] text-ds-faint" data-workers-summary>
-            {t('workersSummary', {
-              running: summary.running,
-              waiting: summary.waiting,
-              done: summary.done,
-              failed: summary.failed
-            })}
-            {overview.usage ? (
+    <div className={`ds-no-drag flex h-full min-h-0 min-w-0 flex-col ${className ?? ''}`} data-workers-panel>
+      {rows.length > 0 ? (
+        <div className="flex shrink-0 flex-col gap-3 border-b border-ds-border-muted px-4 pb-3.5 pt-4" data-workers-summary>
+          <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center" aria-hidden>
+              {rows.slice(0, SEAT_STACK_MAX).map((row, index) => (
+                <span
+                  key={row.workerId}
+                  className={index ? '-ml-1.5' : ''}
+                  style={{ borderRadius: 999, boxShadow: '0 0 0 2px var(--ds-surface-card)' }}
+                >
+                  <WorkerAvatar workerId={row.workerId} seat={seats.get(row.workerId) ?? 0} size={24} />
+                </span>
+              ))}
+            </div>
+            <span className="min-w-0 flex-1 text-[14px] font-semibold text-ds-ink">{t('workersHeader.members', { n: rows.length })}</span>
+            {usage && usage.totalTokens > 0 ? (
               <span
                 data-workers-usage
-                data-budget-exceeded={
-                  overview.usage.hardExceeded ? 'hard'
-                    : overview.usage.softExceeded ? 'soft' : undefined
-                }
-                className={
-                  overview.usage.hardExceeded
-                    ? 'text-ds-status-danger'
-                    : overview.usage.softExceeded
-                      ? 'text-ds-status-warning'
-                      : undefined
-                }
+                data-budget-exceeded={usage.hardExceeded ? 'hard' : usage.softExceeded ? 'soft' : undefined}
+                title={t('workersHeader.usageTitle')}
+                className={`shrink-0 font-mono text-[11.5px] tabular-nums ${
+                  usage.hardExceeded ? 'text-ds-status-danger' : usage.softExceeded ? 'text-ds-status-warning' : 'text-ds-faint'
+                }`}
               >
-                {' '}· {overview.usage.totalTokens.toLocaleString()}
-                {overview.usage.hardTokens !== undefined
-                  ? `/${overview.usage.hardTokens.toLocaleString()}`
-                  : ''}{' '}tok
+                {formatWorkerTokens(usage.totalTokens)}
+                {usage.hardTokens !== undefined ? ` / ${formatWorkerTokens(usage.hardTokens)}` : ''} tokens
               </span>
             ) : null}
-          </span>
-        ) : null}
-      </div>
-      <div className={`${selectedRow ? 'max-h-[45%] shrink-0' : 'min-h-0 flex-1'} overflow-y-auto px-3 py-3`}>
-        {rows.map((row) => (
-          <div key={row.workerId} className="mb-2">
-            <WorkerRow
-              row={row}
-              selected={row.workerId === selectedWorkerId}
-              busyAction={
-                busy && (busy.workerId === row.workerId || busy.workerId === row.openQuestion?.questionId)
-                  ? busy.action
-                  : null
-              }
-              onOpen={onOpen}
-              onAnswer={onAnswer}
-              onStop={onStop}
-              onDetach={onDetach}
-            />
           </div>
+          <div className="flex flex-wrap gap-1.5 text-[11.5px] text-ds-muted">
+            {segments.filter((segment) => segment.count > 0).map((segment) => (
+              <span key={segment.tone} className="inline-flex h-6 items-center gap-1.5 rounded-full bg-ds-subtle px-2.5">
+                <span className="ds-worker-tone ds-worker-tone-dot h-1.5 w-1.5 rounded-full" data-tone={segment.tone} />
+                <b className="font-semibold text-ds-ink">{segment.count}</b>
+                {t(`workersHeader.${segment.tone}`)}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-0.5" data-workers-scroll>
+        {error ? <div className="px-0.5 pt-2"><WorkerActionError message={error} onDismiss={dismissError} /></div> : null}
+        {groups.map((group) => (
+          <section
+            key={group.section}
+            data-workers-section={group.section}
+            className={group.section === 'needs-you' ? 'ds-worker-section-alert mx-1 mb-1.5 rounded-2xl px-1 pb-1' : undefined}
+          >
+            <h3 className="px-2.5 pb-1.5 pt-3.5 text-[11.5px] font-semibold text-ds-faint">
+              {t(`workersSection.${group.section}`)} · {group.rows.length}
+            </h3>
+            {group.rows.map((row) => (
+              <WorkerRow
+                key={row.workerId}
+                row={row}
+                seat={seats.get(row.workerId) ?? 0}
+                now={now}
+                busyAction={busyActionFor(busy, row)}
+                onOpen={onOpen}
+                onFullOpen={onFullOpen}
+                onAnswer={answer}
+                onStop={stop}
+                onDetach={detach}
+              />
+            ))}
+          </section>
         ))}
-        {loaded && rows.length === 0 ? (
-          <p className="px-1 py-6 text-center text-[12.5px] text-ds-faint" data-workers-empty>
-            {t('workersEmpty')}
-          </p>
+        {loaded && rows.length === 0 && !loadFailed ? (
+          <PanelNotice icon={<CollaborationIcon className="h-5 w-5" strokeWidth={1.8} />} title={t('workersEmptyTitle')} body={t('workersEmpty')} data-workers-empty />
         ) : null}
-        {!loaded && !loadFailed ? (
-          <p className="px-1 py-6 text-center text-[12.5px] text-ds-faint">
-            {t('workersLoading')}
-          </p>
-        ) : null}
-        {loadFailed ? (
-          <p className="px-1 py-6 text-center text-[12.5px] text-ds-faint" data-workers-error>
-            {t('workersUnavailable')}
-          </p>
+        {!loaded && !loadFailed ? <WorkersSkeleton label={t('workersLoading')} /> : null}
+        {loadFailed && rows.length === 0 ? (
+          <PanelNotice
+            danger
+            icon={<AlertCircle className="h-5 w-5" strokeWidth={1.9} />}
+            title={t('workersUnavailableTitle')}
+            body={t('workersUnavailable')}
+            action={(
+              <button
+                type="button"
+                onClick={() => void reload()}
+                className="mt-1 inline-flex h-[30px] items-center gap-1.5 rounded-[9px] border border-ds-border bg-ds-card px-3.5 text-[12.5px] font-semibold text-ds-ink transition hover:bg-ds-hover"
+              >
+                <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                {t('workersRetry')}
+              </button>
+            )}
+            data-workers-error
+          />
         ) : null}
       </div>
-      {active && selectedRow ? (
-        <WorkerInspector
-          key={selectedRow.workerId}
-          row={selectedRow}
-          draft={workerDrafts[selectedRow.workerId] ?? EMPTY_WORKER_DRAFT}
-          updateDraft={updateWorkerDraft}
-          onRefreshTeam={() => managerThreadId ? reload(managerThreadId) : Promise.resolve()}
-          onClose={() => managerThreadId && selectWorkerPreview(managerThreadId, null)}
-          onFullOpen={onFullOpen}
-          scrollPositions={view!.scrollPositions}
-        />
-      ) : null}
+    </div>
+  )
+}
+
+function PanelNotice({
+  icon,
+  title,
+  body,
+  action,
+  danger = false,
+  ...data
+}: {
+  icon: ReactElement
+  title: string
+  body: string
+  action?: ReactElement
+  danger?: boolean
+} & Record<`data-${string}`, boolean>): ReactElement {
+  return (
+    <div {...data} className="flex flex-col items-center gap-2.5 px-6 py-14 text-center">
+      <span
+        className={`grid h-11 w-11 place-items-center rounded-[14px] ${danger ? 'bg-ds-danger-soft text-ds-status-danger' : 'bg-ds-subtle text-ds-muted'}`}
+        aria-hidden
+      >
+        {icon}
+      </span>
+      <span className="text-[13.5px] font-semibold text-ds-ink">{title}</span>
+      <span className="max-w-[240px] text-[12px] leading-[1.6] text-ds-faint">{body}</span>
+      {action}
+    </div>
+  )
+}
+
+function WorkersSkeleton({ label }: { label: string }): ReactElement {
+  return (
+    <div role="status" aria-label={label} className="flex flex-col gap-[18px] px-2.5 py-4" data-workers-loading>
+      {[60, 48, 55].map((width) => (
+        <div key={width} className="flex gap-[11px]">
+          <span className="h-8 w-8 animate-pulse rounded-[10px] bg-ds-subtle" />
+          <span className="flex flex-1 flex-col gap-[7px] pt-0.5">
+            <span className="h-[11px] animate-pulse rounded bg-ds-subtle" style={{ width: `${width}%` }} />
+            <span className="h-[9px] animate-pulse rounded bg-ds-subtle" style={{ width: `${width + 22}%` }} />
+          </span>
+        </div>
+      ))}
+      <span className="sr-only">{label}</span>
     </div>
   )
 }

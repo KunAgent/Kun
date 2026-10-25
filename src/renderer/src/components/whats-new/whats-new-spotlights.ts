@@ -4,13 +4,14 @@
  * version rather than parsed from `release/release-v<version>.md`.
  */
 export type WhatsNewSpotlight = {
-  id: 'focus-mode'
+  id: 'focus-mode' | 'artifacts'
   /** Feature titles the card already tells; they leave the highlight rows. */
   covers: RegExp
 }
 
 const SPOTLIGHTS: Record<string, WhatsNewSpotlight> = {
-  '0.4.1': { id: 'focus-mode', covers: /focus|专注/i }
+  '0.4.1': { id: 'focus-mode', covers: /focus|专注/i },
+  '0.4.2': { id: 'artifacts', covers: /^(artifacts library|产物库)$/i }
 }
 
 /** With a card, two highlight rows keep the dialog at its usual height. */

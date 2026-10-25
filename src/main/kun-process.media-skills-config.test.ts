@@ -388,6 +388,7 @@ describe('syncGuiManagedKunConfig', () => {
     const settings = createSettings('/tmp/fake-kun-child.js')
     settings.schedule.internal.port = 19788
     settings.schedule.internal.secret = 'top-secret'
+    settings.workflow = { ...settings.workflow, enabled: true }
 
     await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), {
       scheduleMcp: {

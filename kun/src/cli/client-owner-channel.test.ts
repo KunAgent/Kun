@@ -32,6 +32,7 @@ describe('runtime client owner IPC channel', () => {
     await monitor.disconnected
 
     expect(shutdown).toHaveBeenCalledOnce()
+    expect(monitor.reason).toBe('client_owner_disconnected')
     monitor.dispose()
     expect(channel.listenerCount('disconnect')).toBe(0)
   })
@@ -41,6 +42,8 @@ describe('runtime client owner IPC channel', () => {
     const monitor = monitorRuntimeClientOwnerChannel('gui', channel)
     channel.emit('message', { type: 'kun-runtime-stop' })
     await expect(monitor.disconnected).resolves.toBeUndefined()
+    channel.emit('disconnect')
+    expect(monitor.reason).toBe('client_owner_stop_requested')
     monitor.dispose()
     expect(channel.listenerCount('message')).toBe(0)
   })

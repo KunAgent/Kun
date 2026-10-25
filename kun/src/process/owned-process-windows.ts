@@ -91,7 +91,11 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
     ]).join('\n'), { mode: 0o600 })
   const { ownerLossGraceMs: _ownerLossGraceMs, beforeLaunch, ...spawnOptions } = options
   const launcherOptions: SpawnOptions = {
-    ...spawnOptions, shell: false, windowsVerbatimArguments: false, detached: false, windowsHide: true,
+    // The supervisor must outlive an abrupt owner exit long enough to enforce
+    // its drain grace. Node's non-detached Windows Job would kill it immediately.
+    // Keep the handle referenced; the supervisor still owns a kill-on-close Job
+    // and monitors the exact owner handle before bounded forced cleanup.
+    ...spawnOptions, shell: false, windowsVerbatimArguments: false, detached: true, windowsHide: true,
     env: { ...environment, KUN_OWNED_LAUNCH_CONFIG: configPath }
   }
   return { launcher, launcherOptions, directory, statusPath, stopPath, startPath, beforeLaunch }

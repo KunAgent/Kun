@@ -2,7 +2,8 @@ import {
   AgentDispatchIntentPublicSchema,
   agentDispatchPath,
   type AgentDispatchAction,
-  type AgentDispatchIntentView
+  type AgentDispatchIntentView,
+  type AgentDispatchRecommendationEdit
 } from '@shared/agent-dispatch'
 import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
@@ -15,7 +16,7 @@ export const agentDispatchClient = {
     return AgentDispatchIntentPublicSchema.parse(readRuntimeJson<{ intent: unknown }>(response.body, 'Invalid Agent task').intent)
   },
   async act(intent: Pick<AgentDispatchIntentView, 'intentId' | 'revision'>, action: AgentDispatchAction,
-    changes?: { recommendation?: Partial<AgentDispatchIntentView['recommendation']> },
+    changes?: { recommendation?: AgentDispatchRecommendationEdit },
     requestId = crypto.randomUUID()): Promise<AgentDispatchIntentView> {
     const response = await rendererRuntimeClient.runtimeRequest(`${agentDispatchPath(intent.intentId)}/actions`, 'POST',
       JSON.stringify({ action, expectedRevision: intent.revision, requestId, ...changes }))

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, readFile, realpath, rename, rm, rmdir, writeFile } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { AttachmentContent } from './attachment-store.js'
 import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
@@ -8,7 +8,8 @@ const root = join(tmpdir(), 'kun-shared-attachments-' + randomUUID())
 const maximumBytes = 128 * 1024 * 1024, maximumFiles = 128
 const files = new Map<string, { size: number; hash: string }>()
 let physicalRoot: string | undefined, mutation = Promise.resolve()
-const inside = (base: string, path: string) => { const rel = relative(base, resolve(path)); return !rel || !isAbsolute(rel) && rel !== '..' && !rel.startsWith('../') }
+// relative() uses the host separator, including backslashes on Windows.
+const inside = (base: string, path: string) => { const rel = relative(base, resolve(path)); return !rel || !isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + sep) }
 const extensions: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif',
   'application/pdf': '.pdf', 'text/plain': '.txt', 'text/markdown': '.md', 'text/csv': '.csv', 'application/json': '.json',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',

@@ -125,3 +125,18 @@ test('task outcome continuation still publishes its result without rediscovery',
   assert.equal(toolName(final), 'send_im_message')
   assert.equal(args(final).phase, 'final')
 })
+
+// Both native workflows build the same production renderer on macos-latest.
+test('Rooms native build keeps the validated workspace heap budget and full flow', () => {
+  const { readFileSync } = require('node:fs')
+  const { join } = require('node:path')
+  const read = name => readFileSync(join(__dirname, '../.github/workflows', name), 'utf8')
+  const rooms = read('rooms-harness-smoke.yml')
+  const workspace = read('personal-agent-workspace-smoke.yml')
+  const heap = source => source.match(/--max-old-space-size=(\d+)/)?.[1]
+  assert.equal(heap(rooms), heap(workspace))
+  assert.equal(heap(rooms), '6144')
+  assert.match(rooms, /timeout-minutes: 35/)
+  assert.match(rooms, /run: npm run build/)
+  assert.match(rooms, /--rooms-harness-only --evidence dist\/rooms-agent-smoke/)
+})

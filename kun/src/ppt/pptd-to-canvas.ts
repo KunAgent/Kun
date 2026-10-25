@@ -1,6 +1,16 @@
-import { readFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { parse as parseYaml } from 'yaml'
+import { isAbsolute, relative, resolve } from 'node:path'
+import {
+  asBoolean,
+  asNumber,
+  asRecord,
+  asString,
+  loadPptdDeck,
+  resolveBounds,
+  resolveTokenColor,
+  splitColorAlpha,
+  stripRichText,
+  type PptdRect
+} from './pptd-deck.js'
 
 /**
  * Deterministic PPTD → whiteboard converter.
@@ -87,94 +97,7 @@ export type PptdToCanvasOptions = {
   pageGap?: number
 }
 
-type Rect = { x: number; y: number; width: number; height: number }
-
-function err(message: string, cause?: unknown): Error {
-  const error = new Error(`pptd-to-canvas: ${message}`)
-  if (cause !== undefined) (error as { cause?: unknown }).cause = cause
-  return error
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-  return undefined
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function asBoolean(value: unknown): boolean | undefined {
-  return typeof value === 'boolean' ? value : undefined
-}
-
-/** Parse "#RRGGBBAA" into [color, opacity]. Falls back to [color, 1]. */
-function splitColorAlpha(raw: string): { color: string; opacity: number } {
-  const trimmed = raw.trim()
-  const match = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})$/.exec(trimmed)
-  if (match) {
-    const alpha = Number.parseInt(match[2], 16) / 255
-    return { color: `#${match[1].toUpperCase()}`, opacity: Math.round(alpha * 1000) / 1000 }
-  }
-  return { color: trimmed, opacity: 1 }
-}
-
-function stripRichText(raw: unknown): string {
-  if (typeof raw !== 'string') return ''
-  // Strip HTML-ish tags from PPTD rich text blocks; keep text and newlines.
-  return raw
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div)>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .trim()
-}
-
-function resolveBounds(value: unknown): Rect | undefined {
-  if (Array.isArray(value) && value.length >= 4) {
-    const [x, y, width, height] = value
-    if ([x, y, width, height].every((n) => typeof n === 'number' && Number.isFinite(n))) {
-      return { x, y, width, height }
-    }
-  }
-  const record = asRecord(value)
-  if (record) {
-    const x = asNumber(record.x)
-    const y = asNumber(record.y)
-    const width = asNumber(record.width)
-    const height = asNumber(record.height)
-    if (x !== undefined && y !== undefined && width !== undefined && height !== undefined) {
-      return { x, y, width, height }
-    }
-  }
-  return undefined
-}
-
-function resolveTokenColor(value: unknown, colors: Record<string, unknown>): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  if (trimmed.startsWith('$')) {
-    const token = trimmed.slice(1)
-    const resolved = asString(colors[token])
-    if (resolved === undefined) {
-      // Unknown token: keep the reference so it degrades visibly on the board.
-      return trimmed
-    }
-    return resolved
-  }
-  return trimmed
-}
+type Rect = PptdRect
 
 function toFill(
   value: unknown,
@@ -562,21 +485,6 @@ function mapPageBackground(
   return []
 }
 
-async function readYamlFile(filePath: string): Promise<Record<string, unknown>> {
-  let source: string
-  try {
-    source = await readFile(filePath, 'utf8')
-  } catch (cause) {
-    throw err(`无法读取 ${filePath}: ${(cause as Error).message}`, cause)
-  }
-  const parsed = parseYaml(source, { prettyErrors: true })
-  const record = asRecord(parsed)
-  if (!record) {
-    throw err(`不是有效的 YAML 映射: ${filePath}`)
-  }
-  return record
-}
-
 /**
  * Convert a PPTD deck project into whiteboard ShapeOps.
  *
@@ -589,48 +497,12 @@ export async function convertPptdToCanvas(
   const layout = options.layout ?? 'grid'
   const pageGap = options.pageGap ?? 80
   const workspaceRoot = options.workspaceRoot
-  const deckDir = dirname(pptdPath)
-  const deck = await readYamlFile(pptdPath)
-
-  const sizeValue = deck.size
-  const sizeRecord = asRecord(sizeValue)
-  let pageSize: { width: number; height: number }
-  if (Array.isArray(sizeValue) && sizeValue.length >= 2) {
-    const width = asNumber(sizeValue[0])
-    const height = asNumber(sizeValue[1])
-    if (width === undefined || height === undefined) {
-      throw err(`deck.pptd size 非法: ${JSON.stringify(sizeValue)}`)
-    }
-    pageSize = { width, height }
-  } else if (sizeRecord) {
-    const width = asNumber(sizeRecord.width)
-    const height = asNumber(sizeRecord.height)
-    if (width === undefined || height === undefined) {
-      throw err(`deck.pptd size 非法: ${JSON.stringify(sizeValue)}`)
-    }
-    pageSize = { width, height }
-  } else {
-    // Default 16:9 like the PPTD spec.
-    pageSize = { width: 960, height: 540 }
-  }
-
-  const theme = asRecord(deck.theme) ?? {}
-  const rawPages = Array.isArray(deck.pages) ? deck.pages : []
-  const pageFiles = rawPages
-    .map((p) => asString(p))
-    .filter((p): p is string => p !== undefined)
-  if (pageFiles.length === 0) {
-    throw err(`deck.pptd 没有 pages 列表`)
-  }
-
+  const deck = await loadPptdDeck(pptdPath)
+  const { deckDir, pageSize, theme } = deck
   const ops: PptBoardOp[] = []
-  const columns = layout === 'row' ? pageFiles.length : 2
+  const columns = layout === 'row' ? deck.pages.length : 2
 
-  for (let index = 0; index < pageFiles.length; index += 1) {
-    const pageFile = pageFiles[index]
-    const pagePath = isAbsolute(pageFile) ? pageFile : join(deckDir, pageFile)
-    const page = await readYamlFile(pagePath)
-
+  for (const { index, record: page } of deck.pages) {
     const column = layout === 'row' ? index : index % columns
     const row = layout === 'row' ? 0 : Math.floor(index / columns)
     const origin = {
@@ -668,10 +540,10 @@ export async function convertPptdToCanvas(
     }
   }
 
-  const deckTitle = stripRichText(deck.title) || 'PPT 白板'
+  const deckTitle = deck.title || 'PPT 白板'
   return {
-    boardTitle: `${deckTitle}（${pageFiles.length} 页）`,
-    pageCount: pageFiles.length,
+    boardTitle: `${deckTitle}（${deck.pages.length} 页）`,
+    pageCount: deck.pages.length,
     ops
   }
 }

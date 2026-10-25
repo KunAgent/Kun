@@ -1,5 +1,8 @@
+import { GitHubToolCard, githubToolThread } from './github-tool-card'
+import { useResultPresented } from '../../product-analytics/presentation'
+import { useWorkPresentation } from '../../product-analytics/work-presentation'
 import { TimelineApprovalCard } from './TimelineApprovalCard'
-import { memo, useEffect, useState, type ReactElement } from 'react'
+import { memo, useEffect, useState, type ReactElement, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
@@ -25,9 +28,9 @@ import {
   AssistantExportButton,
   CopyFeedbackButton,
   RuntimeMetaChips,
-  UserInputBubble,
   formatMessageDateTime
 } from './message-timeline-bubble-support'
+import { UserInputRecord } from './timeline-user-input-record'
 import { AssistantSpeakButton } from './AssistantSpeakButton'
 import { AssistantSpeakTrackButton } from './AssistantSpeakTrackButton'
 import { useSpeakStore } from '../../stores/speak-store'
@@ -72,6 +75,13 @@ type TurnMetricsLike = {
   avgTtftMs: number | null
   avgTokensPerSecond: number | null
 }
+/** The settled turn's stamped timing, when the runtime measured any. */
+export function settledTurnMetrics(usage: TurnUsageSummary | undefined): TurnMetricsLike | undefined {
+  const avgTtftMs = usage?.avgTtftMs ?? null
+  const avgTokensPerSecond = usage?.avgTokensPerSecond ?? null
+  return avgTtftMs === null && avgTokensPerSecond === null ? undefined : { avgTtftMs, avgTokensPerSecond }
+}
+
 /**
  * Renders a turn's average TTFT/TPS as a compact footer label. Segments with
  * no data are omitted so legacy turns show nothing at all.
@@ -112,6 +122,8 @@ function MessageBubbleImpl({
   turnUsageStale?: boolean
   allowThreadActions?: boolean
 }): ReactElement {
+  useResultPresented(block)
+  const workAnalytics = useWorkPresentation(block)
   const { t, i18n } = useTranslation('common')
   const turnTimingMetrics = useChatStore((s) => s.turnTimingMetrics)
   const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
@@ -150,13 +162,15 @@ function MessageBubbleImpl({
     const createdAtLabel = block.createdAt
       ? formatMessageDateTime(block.createdAt, i18n.language)
       : null
+    // Live usage events cover turns that ran in this view; the runtime
+    // stamps the same averages on settled turns for reopened history.
     const turnMetrics =
       !streaming && block.turnId
-        ? turnTimingMetrics.get(block.turnId)
+        ? turnTimingMetrics.get(block.turnId) ?? settledTurnMetrics(turnUsage)
         : undefined
     return (
       <LiveAssistantStreamingProvider streaming={effectiveStreaming}>
-        <div className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
+        <div ref={workAnalytics.ref} className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
           <div className="ds-markdown ds-chat-answer min-w-0 max-w-full text-ds-ink">
             <AssistantMarkdown plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'} text={block.text} streaming={effectiveStreaming} />
           </div>
@@ -180,12 +194,12 @@ function MessageBubbleImpl({
                   onClick={() => rollbackAction.onRollback()}
                   disabled={rollbackAction.busy}
                   className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:opacity-60"
-                  title={t('rollbackWorkspaceFromAssistantResponse')}
-                  aria-label={t('rollbackWorkspaceFromAssistantResponse')}
+                  title={t('turnUndoMessageActionTitle')}
+                  aria-label={t('turnUndoMessageActionTitle')}
                   data-assistant-action="rollback"
                 >
                   <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
-                  <span>{rollbackAction.busy ? t('rollingBackWorkspace') : t('rollbackWorkspace')}</span>
+                  <span>{rollbackAction.busy ? t('turnUndoWorking') : t('turnUndoMessageAction')}</span>
                 </button>
               ) : null}
               {forkAction ? (
@@ -204,8 +218,9 @@ function MessageBubbleImpl({
               ) : null}
               <AssistantSpeakButton blockId={block.id} text={block.text} />
               <AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} />
-              <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode} />
-              <CopyFeedbackButton text={block.text} />
+              <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode}
+                onExportStarted={() => workAnalytics.captureAction('export')} />
+              <CopyFeedbackButton text={block.text} onCopyStarted={() => workAnalytics.captureAction('copy')} />
               {surface === 'mobile' ? (
                 <button
                   type="button"
@@ -226,6 +241,7 @@ function MessageBubbleImpl({
   if (block.kind === 'reasoning') {
     return (
       <div
+        ref={workAnalytics.ref}
         className="ds-card-soft rounded-[20px] px-4 py-3 text-[13.5px] leading-6 text-ds-muted"
         data-timeline-block-id={block.id}
       >
@@ -236,11 +252,11 @@ function MessageBubbleImpl({
     )
   }
   if (block.kind === 'tool') {
-    return <ToolEntry block={block} nested={nested} />
+    return <ToolEntry block={block} nested={nested} analyticsRef={workAnalytics.ref} />
   }
   if (block.kind === 'user_input') {
     return (
-      <UserInputBubble
+      <UserInputRecord
         block={block}
         nested={nested}
       />
@@ -355,7 +371,9 @@ function MessageBubbleImpl({
   return <></>
 }
 
-function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boolean }): ReactElement {
+function ToolEntry({ block, nested = false, analyticsRef }: {
+  block: ToolBlock; nested?: boolean; analyticsRef?: RefObject<HTMLDivElement | null>
+}): ReactElement {
   const { t } = useTranslation('common')
   const presentation = readToolPresentation(block)
   const running = presentation.state === 'running'
@@ -401,11 +419,13 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
 
   const hasDetail = Boolean(block.meta?.toolPresentation || block.meta?.acpKind || block.detail?.trim())
   const canExpand = hasDetail || running
+  const githubThread = githubToolThread(presentation)
+  if (githubThread) return <GitHubToolCard threadId={githubThread} presentation={presentation} />
   const gmailThread = gmailToolThread(presentation)
   if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
 
   return (
-    <div className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
+    <div ref={analyticsRef} className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
       <button
         type="button"
         onClick={() => {

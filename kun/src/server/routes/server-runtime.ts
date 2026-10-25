@@ -184,14 +184,22 @@ export type ExtensionPlatformRuntime = {
  */
 export type ServerRuntime = {
   /** Native installed-app Gmail connection; credentials remain in the local encrypted store. */
+  githubApp?: import('../../github-app/service.js').GitHubAppServicePort
   gmail?: import('../../gmail/ports.js').GmailServicePort
   gmailDataPolicy?: import('../../gmail/model-data-policy.js').GmailModelDataPolicyPort
   gmailLocalModel?: Pick<import('../../gmail/local-ollama-service.js').ManagedLocalGmailOllama, 'status' | 'prepare'>
   agentDispatchService?: AgentDispatchService
+  taskSuggestionService?: import('../../delegation/task-suggestion-service.js').TaskSuggestionService
+  /** The one list of dispatchable roles shared by every dispatch lane. */
+  agentRoster?: import('../../delegation/agent-roster.js').AgentRoster
   historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
   rooms?: RoomRuntime
   projectBoardService?: ProjectBoardService
+  /** Generated conversation UI storage served to the desktop sandbox host. */
+  genUi?: { store: import('../../gen-ui/gen-ui-store.js').GenUiStore }
+  /** Live MCP Apps access; reads the current MCP provider build. */
+  mcpApps?: () => import('../../adapters/tool/mcp-apps-access.js').McpAppsAccess | undefined
   turnService: TurnService
   toolCancellationService?: ToolCancellationService
   usageService: UsageService
@@ -224,6 +232,8 @@ export type ServerRuntime = {
    * Must never touch the filesystem or await persistence.
    */
   liveCounters?: () => { inflight: number; activeCaptures: number }
+  /** Local liveness control; uncertain Manager ownership parks new side effects. */
+  setManagerHeartbeatAuthority?: (state: import('../../ports/thread-execution-lease.js').ThreadLeaseAuthorityState) => void
   approvalGate: ApprovalGate
   userInputGate: UserInputGate
   workspaceInspector: WorkspaceInspector
@@ -279,12 +289,18 @@ export type ServerRuntime = {
     codexModels?: CodexModelProbe
     piModels?: import('../../harness/pi-model-probe.js').PiModelProbe
     antigravityModels?: import('../../harness/antigravity-model-probe.js').AntigravityModelProbe
+    /** Account catalog for Cursor provider mode. Absent in tests that keep saved model ids. */
+    cursorModels?: import('../../harness/cursor-subscription-catalog.js').CursorSubscriptionCatalogSource
     installNetwork?: () => import('../../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
     /**
-     * Spawn-free read of the freshest probed model list, dispatched by
-     * transport; `undefined` means no fresh successful probe is cached.
+     * Spawn-free model list: this process's fresh probe, else the catalog the
+     * Agent listed before a restart; `undefined` means neither is known.
      */
     probedModels?: (definition: HarnessDefinition) => string[] | undefined
+    /** Spawn-free read of this process's fresh probe only. */
+    liveProbedModels?: (definition: HarnessDefinition) => string[] | undefined
+    /** Agent model catalogs kept across restarts (display-only, identity-checked). */
+    modelCatalogs?: import('../../harness/harness-runtime.js').HarnessRuntimeComposition['modelCatalogs']
     /**
      * Loopback `kun serve` endpoint shared with harness env injection; the
      * serve layer fills `baseUrl` once the listener binds.

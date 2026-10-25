@@ -16,6 +16,8 @@ export type ClawScheduleMcpLaunchConfig = {
   appPath: string
   execPath: string
   isPackaged: boolean
+  /** Electron userData; host-managed servers that call back into Main need it. */
+  userDataDir?: string
 }
 
 type ClawScheduleMcpConfigPaths = {
@@ -57,13 +59,18 @@ export function buildClawScheduleMcpArgs(
   if (secret) {
     args.push('--secret', secret)
   }
-  // Also advertise the workflow tools (list_workflows / run_workflow), which the
-  // same bridge serves by calling the WorkflowRuntime's local /workflow/internal/*
-  // endpoints (hosted on the workflow webhook port + secret).
-  args.push('--workflow-base-url', `http://127.0.0.1:${settings.workflow.webhookPort}`)
-  const workflowSecret = settings.workflow.webhookSecret.trim()
-  if (workflowSecret) {
-    args.push('--workflow-secret', workflowSecret)
+  // Advertise the workflow tools (list_workflows / run_workflow) only while the
+  // Workflow listener exists. The same bridge serves them by calling the
+  // WorkflowRuntime's local /workflow/internal/* endpoints (hosted on the
+  // workflow webhook port + secret), and that listener stops whenever Workflow
+  // is disabled. Advertising them regardless left every call failing inside a
+  // child process that could never reach a listener.
+  if (settings.workflow.enabled) {
+    args.push('--workflow-base-url', `http://127.0.0.1:${settings.workflow.webhookPort}`)
+    const workflowSecret = settings.workflow.webhookSecret.trim()
+    if (workflowSecret) {
+      args.push('--workflow-secret', workflowSecret)
+    }
   }
   return args
 }
@@ -224,6 +231,7 @@ export function clawScheduleMcpSettingsChanged(prev: AppSettingsV1, next: AppSet
   return (
     prev.schedule.internal.port !== next.schedule.internal.port ||
     prev.schedule.internal.secret.trim() !== next.schedule.internal.secret.trim() ||
+    prev.workflow.enabled !== next.workflow.enabled ||
     prev.workflow.webhookPort !== next.workflow.webhookPort ||
     prev.workflow.webhookSecret.trim() !== next.workflow.webhookSecret.trim()
   )

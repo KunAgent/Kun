@@ -132,6 +132,9 @@ describe('which sends follow the composer Agent', () => {
     expect(sendFollowsComposerAgent('chat', undefined)).toBe(true)
     expect(sendFollowsComposerAgent('ade', undefined)).toBe(true)
     expect(sendFollowsComposerAgent('write', { useComposerAgent: true })).toBe(true)
+    // The artifact chat panel's composer has the same Agent switcher as Work.
+    expect(sendFollowsComposerAgent('artifacts', { useComposerAgent: true })).toBe(true)
+    expect(sendFollowsComposerAgent('artifacts', undefined)).toBe(false)
     // Work's own Kun flows (batch reading, mobile) keep the native loop.
     expect(sendFollowsComposerAgent('write', undefined)).toBe(false)
     expect(sendFollowsComposerAgent('design', { useComposerAgent: true })).toBe(false)

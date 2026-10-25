@@ -30,7 +30,11 @@ export class AgentMemoryCoordinator {
   async tick(): Promise<boolean> {
     if (this.closed || !this.deps.agentMemory || !this.deps.memoryStore) return false
     await this.deps.agentMemory.recoverEdits()
-    await this.deps.agentMemory.scrubForgotten()
+    // Applying a capture re-checks forgetting, so a failed pass only delays cleanup
+    // and retries on its own backoff; it must not stop capture or the room loop.
+    await this.deps.agentMemory.scrubForgotten().catch((error: unknown) => {
+      console.warn('[kun] agent memory scrub:', error instanceof Error ? error.message : String(error))
+    })
     await this.discover()
     if (this.active) {
       const row = await this.deps.store.get<AgentMemoryCapture>('agent_memory_job', this.active.jobId)

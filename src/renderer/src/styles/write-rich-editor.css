@@ -259,7 +259,7 @@
   min-width: 8rem;
   min-height: 2rem;
   border: 1px solid color-mix(in srgb, #dc2626 38%, var(--ds-border-muted));
-  background: color-mix(in srgb, #dc2626 8%, var(--ds-card));
+  background: color-mix(in srgb, #dc2626 8%, var(--ds-surface-card));
 }
 
 .write-rich-editor img.write-rich-image.ProseMirror-selectednode {

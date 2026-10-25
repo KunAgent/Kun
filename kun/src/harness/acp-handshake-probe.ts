@@ -167,7 +167,7 @@ async function explainFailure(input: {
       : requiresLogin
         ? 'The Agent requires login. Sign in with its native CLI, then check and enable this profile again.'
         : timedOut
-          ? `probe timed out after ${input.timeoutMs}ms`
+          ? `The Agent did not answer the ACP handshake within ${Math.round(input.timeoutMs / 1000)}s. Update its CLI (an older build may not support ACP) or sign in with it, then test again.`
           : detail
   }
 }

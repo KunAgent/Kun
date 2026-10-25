@@ -31,6 +31,13 @@ export type ModelCatalogEntry = {
   lastAttemptStatus?: 'success' | 'failed' | 'fallback'
 }
 
+let catalogWriteGeneration = 0
+
+/** Bumped after every catalog write in this process; projections key on it. */
+export function modelCatalogWriteGeneration(): number {
+  return catalogWriteGeneration
+}
+
 function catalogPath(dataDir: string, providerId: string): string {
   const name = createHash('sha256').update(providerId).digest('hex')
   return join(dataDir, 'model-catalog', 'v2', `${name}.json`)
@@ -69,7 +76,7 @@ export async function writeModelCatalog(dataDir: string, providerId: string, ent
       safe.modelVerification = { ...previous.modelVerification, ...safe.modelVerification }
     }
     return safe
-  })
+  }).finally(() => { catalogWriteGeneration += 1 })
 }
 
 export async function readModelCatalog(dataDir: string, providerId: string, expectedIdentity?: string): Promise<ModelCatalogEntry | null> {
@@ -99,5 +106,5 @@ export async function patchModelCatalog(dataDir: string, providerId: string, fal
   await file.update(() => fallback, (current) => {
     if (current.identity !== fallback.identity || (current.configurationRevision ?? -1) > (fallback.configurationRevision ?? -1)) return current
     return mutate(current)
-  })
+  }).finally(() => { catalogWriteGeneration += 1 })
 }

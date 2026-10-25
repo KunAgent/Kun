@@ -11,6 +11,7 @@ import {
 } from '../lib/thread-right-panel-expansion'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
 import { TERMINAL_OPEN_AT_EVENT, hasPendingTerminalRequest } from './terminal/terminal-open'
+import { DEV_PREVIEW_OPEN_URL_EVENT } from '../lib/dev-preview-request'
 import { isNarrowViewportNow, isRemoteWeb } from '../lib/remote-mobile'
 import {
   CODE_CANVAS_OPEN_REQUEST_EVENT,
@@ -589,6 +590,13 @@ export function useWorkbenchLayout({
     window.addEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
     return () => window.removeEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
   }, [])
+  // The terminal asks for a URL in the preview panel; the URL itself flows
+  // through useDevPreviewRequestStore into the panel's preferred URL.
+  useEffect(() => {
+    const onOpenUrl = (): void => openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.browser)
+    window.addEventListener(DEV_PREVIEW_OPEN_URL_EVENT, onOpenUrl)
+    return () => window.removeEventListener(DEV_PREVIEW_OPEN_URL_EVENT, onOpenUrl)
+  }, [openRightPanelTab])
 
   return {
     beginLeftResize,

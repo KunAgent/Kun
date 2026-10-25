@@ -94,7 +94,7 @@ describe('model changes within one Agent session', () => {
       .toMatchObject({ resumed: true, nativeSessionId: 'codex_thread_1' })
   })
 
-  test('pinned routes (Claude, Cursor, Antigravity) keep treating a model change as a new session', async () => {
+  test('a route without a model scope still treats a model change as a new session', async () => {
     const pinned = codexRoute({ providerKind: 'cursor-sdk', providerId: 'cursor', modelScope: undefined })
     const { coordinator, items } = await committed(pinned)
     const next = await coordinator.prepare({ threadId: 'thread_1', route: { ...pinned, model: 'model-b' }, priorItems: items })

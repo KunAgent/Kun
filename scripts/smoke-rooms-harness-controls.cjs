@@ -57,9 +57,17 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   assertRoomsHarnessDiscoveryOrder(modelFixture.snapshot().observations)
   await card.locator('[data-workbench-agent="devin"]').waitFor()
   await poll(async () => !(await page.locator('.rooms-composer .rooms-rich-input').innerText()).trim(), 20_000, 'acknowledged composer cleared')
+  const dispatchControls = card.locator('[data-agent-dispatch-controls]')
+  await poll(async () => ['countdown', 'pending_confirmation'].includes(await dispatchControls.getAttribute('data-state')),
+    20_000, 'host dispatch ready before editing the proposal')
   await capture('rooms-01-agent-proposal')
 
   await card.locator('.rooms-workbench-option-summary').click()
+  await card.locator('[data-composer-harness-picker]').waitFor()
+  const editingLink = (await runtimeRequest(page, `/v1/rooms/${entry.roomId}/workbench-links/${proposed.id}`)).link
+  assert(editingLink.dispatchIntentId, 'The proposal must have a host dispatch before editing')
+  assert.equal((await runtimeRequest(page, `/v1/agent-dispatch-intents/${editingLink.dispatchIntentId}`)).intent.state,
+    'paused', 'Opening the editor must pause the host dispatch')
   await card.locator('[data-composer-harness-picker]').click()
   const menu = page.locator('[data-harness-picker-menu]')
   await menu.waitFor()
@@ -76,7 +84,6 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   await card.getByRole('button', { name: /^(Cancel editing|Cancel|取消编辑)$/u }).click()
   await card.locator('.rooms-workbench-edit').waitFor({ state: 'hidden' })
   const before = await roomWorkbenchSnapshot(page)
-  const dispatchControls = card.locator('[data-agent-dispatch-controls]')
   await poll(async () => ['countdown', 'pending_confirmation'].includes(await dispatchControls.getAttribute('data-state')),
     20_000, 'host dispatch resumed after cancelling edits')
   await dispatchControls.getByRole('button').first().click()

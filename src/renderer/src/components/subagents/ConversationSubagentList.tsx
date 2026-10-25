@@ -19,6 +19,8 @@ import {
   readExternalSubagentView
 } from '../chat/subagent-external-card'
 import { AgentIcon } from '../agent-icon'
+import { formatSubagentElapsed } from './SubagentLiveness'
+import { SubagentRoleTile } from './SubagentRoleTile'
 
 type Row = {
   id: string
@@ -26,7 +28,9 @@ type Row = {
   title: string
   meta: string
   status: CardStatus
-  letter: string
+  profile: string
+  durationMs?: number
+  tokens?: number
   background: boolean
   source?: ExternalSubagentSource
 }
@@ -45,7 +49,9 @@ function toRow(block: ChatBlock): Row {
     title: child.childLabel || detail.title || (block.kind === 'tool' ? (block as ToolBlock).summary : '') || profile,
     meta: model ? `${identity} · ${model}` : identity,
     status,
-    letter: profile.charAt(0).toUpperCase(),
+    profile,
+    ...(typeof (child.durationMs ?? detail.durationMs) === 'number' ? { durationMs: child.durationMs ?? detail.durationMs } : {}),
+    ...(typeof (child.totalTokens ?? detail.totalTokens) === 'number' ? { tokens: child.totalTokens ?? detail.totalTokens } : {}),
     background: child.detached === true || detail.detached === true,
     ...(external ? { source: external.source } : {})
   }
@@ -66,53 +72,62 @@ export function ConversationSubagentList(): ReactElement | null {
   const finished = rows.filter((row) => isTerminal(row.status))
   const sources = [...new Set(rows.map((row) => row.source).filter(Boolean))] as ExternalSubagentSource[]
   const section = (label: string, list: Row[]): ReactElement | null => list.length ? (
-    <section aria-label={label} className="flex flex-col gap-1.5">
-      <span className="px-1 text-[12px] font-medium text-ds-faint">{label}</span>
-      <div className="flex flex-col overflow-hidden rounded-[14px] border border-ds-border bg-ds-card">
-        {list.map((row) => (
-          <button
-            key={row.id}
-            type="button"
-            disabled={!row.childId}
-            onClick={() => { if (row.childId) void selectThread(row.childId).catch(() => undefined) }}
-            className="flex min-w-0 items-center gap-2.5 border-t border-ds-border-muted px-3 py-2.5 text-left transition first:border-t-0 enabled:hover:bg-ds-hover/40 disabled:cursor-default"
-            data-testid="conversation-subagent-row"
-          >
-            <span
-              aria-hidden="true"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] border border-ds-border-muted bg-ds-card text-[12px] font-bold text-ds-ink"
-            >
-              {row.source ? <AgentIcon harnessId={row.source} size={16} /> : row.letter}
+    <section aria-label={label} className="flex flex-col gap-0.5">
+      <span className="px-2.5 pb-1 pt-3 text-[11.5px] font-semibold text-ds-muted">{label}</span>
+      {list.map((row) => (
+        <button
+          key={row.id}
+          type="button"
+          disabled={!row.childId}
+          onClick={() => { if (row.childId) void selectThread(row.childId).catch(() => undefined) }}
+          className="flex min-w-0 items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition enabled:hover:bg-ds-hover/60 disabled:cursor-default"
+          data-testid="conversation-subagent-row"
+        >
+          <span aria-hidden="true" className="shrink-0">
+            <SubagentRoleTile profileId={row.profile} status={row.status} size="sm" neutral={Boolean(row.source)}>
+              {row.source ? <AgentIcon harnessId={row.source} size={14} /> : undefined}
+            </SubagentRoleTile>
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-px">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className={`truncate text-[13px] font-semibold ${row.status === 'stopped' ? 'text-ds-muted' : 'text-ds-ink'}`}>{row.title}</span>
+              {row.background ? (
+                <span className="shrink-0 rounded-[5px] bg-ds-card-muted px-1.5 text-[10.5px] font-semibold text-ds-muted">
+                  {t('subagentDetachedBadge')}
+                </span>
+              ) : null}
             </span>
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-[13px] font-medium text-ds-ink">{row.title}</span>
-                {row.background ? (
-                  <span className="shrink-0 rounded-full bg-ds-card-muted px-1.5 text-[10.5px] font-semibold text-ds-muted">
-                    {t('subagentDetachedBadge')}
-                  </span>
-                ) : null}
-              </span>
-              <span className="truncate text-[11.5px] text-ds-muted">{row.meta}</span>
+            <span className={`truncate text-[12px] ${row.status === 'failed' ? 'text-ds-danger' : row.status === 'running' ? 'text-accent' : 'text-ds-muted'}`}>
+              {row.meta}
             </span>
-            <StatusPill status={row.status} t={t} />
-          </button>
-        ))}
-      </div>
+          </span>
+          <span className="shrink-0 text-[12px] tabular-nums text-ds-muted">
+            {row.durationMs !== undefined ? formatSubagentElapsed(row.durationMs) : ''}
+          </span>
+          <span className="sr-only"><StatusPill status={row.status} t={t} /></span>
+        </button>
+      ))}
     </section>
   ) : null
+  const totalMs = rows.reduce((sum, row) => sum + (row.durationMs ?? 0), 0)
+  const totalTokens = rows.reduce((sum, row) => sum + (row.tokens ?? 0), 0)
+  const stat = (label: string, value: string, tone = ''): ReactElement => (
+    <div className="min-w-0 px-3 py-2.5">
+      <div className="truncate text-[11.5px] text-ds-muted">{label}</div>
+      <div className={`text-[17px] font-semibold tabular-nums ${tone || 'text-ds-ink'}`}>{value}</div>
+    </div>
+  )
   return (
-    <div className="flex max-h-[45%] shrink-0 flex-col gap-3 overflow-y-auto border-b border-ds-border px-3 py-3" data-testid="conversation-subagent-list">
-      <div className="flex items-center gap-2 px-1">
-        <strong className="text-[14px] font-semibold text-ds-ink">
-          {t('conversationSubagentsTitle', { defaultValue: 'Subagents in this chat' })}
-        </strong>
-        <span className="rounded-full bg-accent/10 px-1.5 text-[11px] font-semibold text-accent">{rows.length}</span>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-4 pt-1" data-testid="conversation-subagent-list">
+      <div className="grid grid-cols-3 divide-x divide-ds-border-muted rounded-[12px] border border-ds-border bg-ds-card">
+        {stat(t('conversationSubagentsRunningLabel', { defaultValue: 'Running' }), String(running.length), running.length ? 'text-accent' : '')}
+        {stat(t('conversationSubagentsTime', { defaultValue: 'Total time' }), formatSubagentElapsed(totalMs))}
+        {stat('tokens', totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : String(totalTokens))}
       </div>
       {section(t('conversationSubagentsRunning', { count: running.length, defaultValue: 'Running · {{count}}' }), running)}
       {section(t('conversationSubagentsFinished', { count: finished.length, defaultValue: 'Finished · {{count}}' }), finished)}
       {sources.length ? (
-        <p className="flex gap-2 rounded-[12px] bg-ds-hover/60 px-3 py-2 text-[11.5px] leading-5 text-ds-muted">
+        <p className="mt-4 flex gap-2 rounded-[12px] bg-ds-hover/60 px-3 py-2 text-[11.5px] leading-5 text-ds-muted">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
           {t('conversationSubagentsExternalNote', {
             agent: sources.map((source) => EXTERNAL_SUBAGENT_SOURCE_LABELS[source]).join(' / '),

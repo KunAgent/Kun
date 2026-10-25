@@ -22,4 +22,14 @@ describe('desktop shutdown steps', () => {
     expect(await cleanup.settle({ name: 'manager', run: () => { stopped = true } }, cleanup.deadline(1000))).toBe(true)
     expect(stopped).toBe(true)
   })
+
+  it('includes the failed cleanup step and nested process error in the retry diagnostic', async () => {
+    const cleanup = new DesktopShutdownSteps()
+    await cleanup.settle({ name: 'worker-processes', run: async () => {
+      throw new AggregateError([new Error('Could not verify owned process group: process listing timed out')],
+        'Owned processes failed to exit')
+    } }, cleanup.deadline(1000))
+    expect(() => cleanup.assertComplete()).toThrow(
+      'worker-processes: Could not verify owned process group: process listing timed out')
+  })
 })

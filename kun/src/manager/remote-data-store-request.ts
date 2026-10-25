@@ -13,13 +13,15 @@ export async function callManagerStore(
   manager: ServiceManagerConnection,
   store: ManagerStore,
   operation: string,
-  value?: unknown
+  value?: unknown,
+  signal?: AbortSignal
 ): Promise<unknown> {
   const turnFence = shouldFenceManagerStoreMutation(store, operation)
     ? mutationFenceForValue(value)
     : undefined
   const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
     method: 'POST',
+    signal,
     retrySafe: isManagerStoreRead(store, operation),
     body: store === 'thread' || store === 'session'
       ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}) }
@@ -60,6 +62,7 @@ export function isManagerStoreRead(store: ManagerStore, operation: string): bool
       'loadUsageRecords', 'aggregateUsage', 'loadLatestContextSnapshot', 'loadLatestUsageSnapshots'],
     artifact: ['list', 'get', 'readRange', 'stat'],
     memory: [
+      'relationContext',
       'list', 'listDirectives', 'retrieve', 'diagnostics', 'distillationPending', 'getById', 'history', 'isForgotten', 'erasureReceipt',
       'feedbackEvent', 'feedbackAggregate', 'feedbackAggregates', 'feedbackDiagnostics'
     ],

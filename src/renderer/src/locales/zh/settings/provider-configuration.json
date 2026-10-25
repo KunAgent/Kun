@@ -262,5 +262,7 @@
     "default": "仍是默认模型，请在默认模型设置中更换",
     "keptRoutes": "{{names}} 删除后将没有成员，因此保留原样；请到路由页面修改。",
     "review": "预览删除"
-  }
+  },
+  "cursorSubscriptionAgentHint": "Cursor 订阅由 Cursor Agent 执行，不会出现在 Kun 的模型列表中。请在「Agent 接入」中检查并启用 Cursor，然后在输入框的 Agent 菜单中切换到 Cursor。",
+  "cursorSubscriptionOpenAgent": "前往 Cursor Agent 设置"
 }

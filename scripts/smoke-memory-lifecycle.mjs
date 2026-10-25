@@ -10,6 +10,7 @@ import tailwindcss from 'tailwindcss'
 import autoprefixer from 'autoprefixer'
 import tailwindConfig from '../tailwind.config.js'
 import { inspectCjkFonts } from './memory-cjk-fonts.mjs'
+import { smokeUrlAssets, writeSmokeAssets } from './smoke-url-assets.mjs'
 import { chromium, _electron } from 'playwright-core'
 
 // Production memory components/styles and real stores; isolated synthetic data only.
@@ -35,7 +36,7 @@ try {
     format: 'esm', platform: 'browser', jsx: 'automatic', write: false, outdir: temporary,
     loader: { '.woff2': 'dataurl', '.woff': 'dataurl', '.ttf': 'dataurl' },
     alias: { '@shared': join(root, 'src/shared') },
-    plugins: [{ name: 'synthetic-memory-transport', setup(builder) {
+    plugins: [smokeUrlAssets(), { name: 'synthetic-memory-transport', setup(builder) {
       builder.onLoad({ filter: /agent\/registry\.ts$/ }, () => ({ contents: `export const getProvider = () => ({
         listMemories: async ({workspace}) => (await window.memoryFixture.api('/v1/memory?workspace='+encodeURIComponent(workspace))).memories,
         updateMemory: async (id,patch,access) => (await window.memoryFixture.api('/v1/memory/'+encodeURIComponent(id)+'?project='+encodeURIComponent(access.project), 'PATCH', patch)).memory
@@ -52,6 +53,8 @@ try {
         }`, loader: 'js' }))
     } }]
   })
+  // Retain emitted URL assets next to the fixture for file:// and Electron loads.
+  await writeSmokeAssets(compiled.outputFiles)
   const javascript = compiled.outputFiles.find((file) => file.path.endsWith('.js')).text
   const rawCss = compiled.outputFiles.find((file) => file.path.endsWith('.css'))?.text ?? ''
   const css = (await postcss([tailwindcss(tailwindConfig), autoprefixer]).process(rawCss, { from: join(root, 'src/renderer/src/index.css') })).css

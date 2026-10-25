@@ -2,7 +2,8 @@
  * New-conversation starters shared by Code and ADE sidebars. Extracted from
  * useWorkbenchNavigationController so the creation variants (plain, manager
  * session, harness-pinned one-to-one, workspace-picked) live in one cohesive
- * hook. ADE starters open a local draft; Code starters guard async activation.
+ * hook. ADE starters open a local draft; Code starters show the blank page
+ * first and guard async activation.
  */
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useChatStore } from '../../store/chat-store'
@@ -137,16 +138,24 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     setRoute('chat')
-    const threadId = await createThread({
+    const activeBefore = useChatStore.getState().activeThreadId
+    let leftForBlankPage = false
+    const creation = createThread({
       workspaceRoot: targetWorkspaceRoot,
       forceNew: options?.forceNew,
       agentSurface: 'code',
       useWorktreePool,
       worktreeBranch,
-      activationGuard: () => navigationIsCurrent(requestId)
+      // A message sent from the blank page creates its own thread; this one
+      // must not take over the view after that.
+      activationGuard: () => navigationIsCurrent(requestId) &&
+        useChatStore.getState().activeThreadId === (leftForBlankPage ? null : activeBefore)
     })
+    // createThread captured its source state synchronously, so the blank page
+    // for the clicked project shows now instead of after the runtime round trips.
+    leftForBlankPage = useChatStore.getState().leaveThreadForNewTask({ workspaceRoot: targetWorkspaceRoot })
     if (useWorktreePool) setUseWorktreePool(false)
-    return threadId
+    return creation
   }, [
     activeSddDraft,
     beginNavigation,

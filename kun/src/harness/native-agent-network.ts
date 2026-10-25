@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { NativeAgentNetworkPolicy, NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
 import { withLoopbackProxyBypass } from '../runtime/agent-sdk/sdk-process-environment.js'
@@ -38,7 +38,7 @@ export function hasNativeProxyEnvironment(env: Record<string, string | undefined
   return Object.keys(env).some((key) => proxyKeys.has(key.toUpperCase()) && env[key] !== undefined)
 }
 
-export function nativeAgentNetworkStatus(definition: HarnessDefinition, base: NodeJS.ProcessEnv = process.env) {
+function networkMaterial(definition: HarnessDefinition, base: NodeJS.ProcessEnv) {
   const explicit = hasNativeProxyEnvironment({ ...base, ...definition.launch?.env }) ||
     definition.launch?.secretEnv?.some((entry) => proxyKeys.has(entry.name.toUpperCase()))
   const policy = networkPolicy(definition)
@@ -46,7 +46,22 @@ export function nativeAgentNetworkStatus(definition: HarnessDefinition, base: No
   const fingerprint = JSON.stringify({ launch: definition.launch, policy: explicit ? undefined : policy ?? { source: 'direct' },
     environment: Object.entries({ ...base, ...definition.launch?.env }).filter(([key]) =>
       proxyKeys.has(key.toUpperCase()) || key.toUpperCase() === 'NO_PROXY').sort(([a], [b]) => a.localeCompare(b)) })
+  return { networkSource, fingerprint }
+}
+
+/** The per-process salt keeps a fingerprint sent to clients from becoming a proxy-credential oracle. */
+export function nativeAgentNetworkStatus(definition: HarnessDefinition, base: NodeJS.ProcessEnv = process.env) {
+  const { networkSource, fingerprint } = networkMaterial(definition, base)
   return { networkSource, networkFingerprint: createHmac('sha256', fingerprintSalt).update(fingerprint).digest('hex') }
+}
+
+/**
+ * Stable across processes, for digests that are persisted and never returned:
+ * readiness proofs restored after a restart must still match an unchanged
+ * network setup, or every launch re-spawns every Agent CLI to prove it again.
+ */
+export function nativeAgentNetworkIdentity(definition: HarnessDefinition, base: NodeJS.ProcessEnv = process.env): string {
+  return createHash('sha256').update(networkMaterial(definition, base).fingerprint).digest('hex')
 }
 
 /** Only fill absent native networking; deliberate process/launch env always wins. */

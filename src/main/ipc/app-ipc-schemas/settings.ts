@@ -213,7 +213,7 @@ const writeSettingsPatchSchema = z.object({
 }).strict()
 
 const terminalColorPatchSchema = z.object({
-  colorMode: z.enum(['native', 'none', 'custom']).optional(),
+  colorMode: z.enum(['native', 'none', 'contrast', 'custom']).optional(),
   foreground: z.string().max(64).optional(),
   background: z.string().max(64).optional(),
   cursor: z.string().max(64).optional(),
@@ -236,8 +236,44 @@ const terminalColorPatchSchema = z.object({
   brightWhite: z.string().max(64).optional()
 }).strict()
 
+const terminalAppearancePatchSchema = z.object({
+  fontFamily: z.string().max(200).optional(),
+  fontSize: z.number().min(6).max(48).optional(),
+  lineHeight: z.number().min(0.8).max(3).optional(),
+  cursorStyle: z.enum(['block', 'bar', 'underline']).optional(),
+  cursorBlink: z.boolean().optional()
+}).strict()
+
+const terminalBehaviorPatchSchema = z.object({
+  shell: z.string().max(1_024).optional(),
+  startDirectory: z.enum(['workspace', 'home']).optional(),
+  scrollback: z.number().int().min(0).max(1_000_000).optional(),
+  shellIntegration: z.boolean().optional(),
+  restoreSessions: z.boolean().optional(),
+  showKunProcesses: z.boolean().optional(),
+  statusAlerts: z.boolean().optional(),
+  confirmClose: z.boolean().optional(),
+  copyOnSelect: z.boolean().optional(),
+  macOptionIsMeta: z.boolean().optional()
+}).strict()
+
+const terminalProfileSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(80),
+  command: z.string().min(1).max(1_024),
+  args: z.string().max(4_096),
+  icon: z.string().max(64),
+  cwd: z.string().max(4_096),
+  env: z.array(z.object({ key: z.string().max(64), value: z.string().max(4_096) }).strict()).max(16)
+}).strict()
+
 const terminalSettingsPatchSchema = z.object({
-  colors: terminalColorPatchSchema.optional()
+  colors: terminalColorPatchSchema.optional(),
+  appearance: terminalAppearancePatchSchema.optional(),
+  behavior: terminalBehaviorPatchSchema.optional(),
+  profiles: z.array(terminalProfileSchema).max(24).optional(),
+  hiddenAgentIds: z.array(z.string().max(128)).max(64).optional(),
+  agentOrder: z.array(z.string().max(128)).max(64).optional()
 }).strict()
 
 const remoteAccessSettingsPatchSchema = z.object({

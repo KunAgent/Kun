@@ -5,6 +5,8 @@ import type { ChatBlock, RuntimeDisclosureMetadata } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
 import { writePromptQuotesFromComposerContexts } from '../../write/write-composer-context-quotes'
+import { messageQuotesFromComposerContexts } from '../../lib/message-quote'
+import { SentMessageQuotes } from './MessageQuoteViews'
 import { parseClawUserPromptForDisplay, type ClawUserPromptDisplay } from '@shared/app-settings'
 import { parseBackgroundShellCompletionNotice } from '@shared/background-shell-notice'
 import { parseBackgroundSubagentCompletionNotice } from '@shared/background-subagent-notice'
@@ -15,6 +17,10 @@ import { UserAttachmentPreviews } from './message-timeline-media-views'
 import { CopyFeedbackButton, RuntimeMetaChips } from './message-timeline-bubble-support'
 import { metaUserFileReferences } from './message-timeline-bubble-meta'
 import { useTimelineSurface } from './timeline-surface'
+import { RewindFileResetChoice } from './rewind-file-reset-choice'
+import { editedFileReferences, userToComposerFileReferences, UserMessageEditField } from './UserMessageEditField'
+import type { ComposerFileReference } from '../../lib/composer-file-references'
+import { isPendingSteerUserBlock, PendingSteerStatus } from './timeline-pending-steer-record'
 
 export function BackgroundShellNoticeBubble({
   block,
@@ -334,9 +340,13 @@ export function UserMessageBubble({
   const busy = useChatStore((s) => s.busy)
   const route = useChatStore((s) => s.route)
   const rewindAndResend = useChatStore((s) => s.rewindAndResend)
+  // A guided message the runtime accepted but has not folded into the turn yet.
+  const pendingSteer = useChatStore((s) => isPendingSteerUserBlock(block, s))
   const surface = useTimelineSurface()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(block.text)
+  const [resetFiles, setResetFiles] = useState(false)
+  const [editReferences, setEditReferences] = useState<ComposerFileReference[]>([])
   const [writeMetaOpen, setWriteMetaOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const parsedWritePrompt = useMemo(() => {
@@ -346,6 +356,10 @@ export function UserMessageBubble({
   }, [block.text, route])
   const composerQuotes = useMemo(
     () => writePromptQuotesFromComposerContexts(block.meta?.composerContexts),
+    [block.meta?.composerContexts]
+  )
+  const messageQuotes = useMemo(
+    () => messageQuotesFromComposerContexts(block.meta?.composerContexts),
     [block.meta?.composerContexts]
   )
   const parsedClawPrompt = useMemo(() => {
@@ -380,6 +394,7 @@ export function UserMessageBubble({
   const startEdit = (): void => {
     if (busy || !canEdit) return
     setDraft(displayText)
+    setEditReferences(userToComposerFileReferences(metaUserFileReferences(block.meta)))
     setEditing(true)
   }
 
@@ -392,7 +407,10 @@ export function UserMessageBubble({
     const trimmed = draft.trim()
     if (!trimmed || busy) return
     setEditing(false)
-    await rewindAndResend(block.id, trimmed)
+    await rewindAndResend(block.id, trimmed, {
+      resetFiles,
+      fileReferences: editedFileReferences(trimmed, editReferences)
+    })
   }
 
   if (editing) {
@@ -400,26 +418,14 @@ export function UserMessageBubble({
       <div className="ds-user-message">
         <UserAttachmentPreviews meta={block.meta} />
         <div className="ds-user-message-bubble min-w-0 border border-accent/35 ring-1 ring-accent/15">
-          <textarea
-            ref={textareaRef}
+          <UserMessageEditField
             value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value)
-              const el = e.currentTarget
-              el.style.height = 'auto'
-              el.style.height = `${Math.min(el.scrollHeight, 360)}px`
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault()
-                cancelEdit()
-              } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault()
-                void submit()
-              }
-            }}
-            rows={2}
-            className="block w-full min-w-0 resize-none break-words bg-transparent text-[15px] font-medium leading-[1.58] text-ds-ink outline-none [overflow-wrap:anywhere]"
+            onChange={setDraft}
+            references={editReferences}
+            onReferencesChange={setEditReferences}
+            textareaRef={textareaRef}
+            onSubmit={() => void submit()}
+            onCancel={cancelEdit}
           />
           <div className="mt-2 flex items-center justify-between gap-3">
             <span className="text-[12px] text-ds-faint">{t('rewindHint')}</span>
@@ -435,6 +441,7 @@ export function UserMessageBubble({
                 type="button"
                 onClick={() => void submit()}
                 disabled={!draft.trim() || busy}
+                data-rewind-resend
                 className="rounded-md bg-accent px-3 py-1 text-[13px] font-medium text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('rewindResend')}
@@ -442,14 +449,11 @@ export function UserMessageBubble({
             </div>
           </div>
         </div>
+        {block.meta?.workspaceCheckpointId ? (
+          <RewindFileResetChoice blockId={block.id} resetFiles={resetFiles} onChange={setResetFiles} />
+        ) : null}
         <div className="mt-2 flex min-w-0 items-center justify-between gap-3">
-          {block.meta?.workspaceCheckpointId ? (
-            <span className="min-w-0 flex-1 text-left text-[12px] font-medium leading-5 text-ds-faint">
-              {t('rewindFileRollbackNotice')}
-            </span>
-          ) : (
-            <span className="min-w-0 flex-1" />
-          )}
+          <span className="min-w-0 flex-1" />
           <ModelMetaTag label={block.modelLabel} />
         </div>
       </div>
@@ -458,6 +462,7 @@ export function UserMessageBubble({
 
   return (
     <div className="ds-user-message group relative" data-timeline-block-id={block.id}
+      data-pending-steer={pendingSteer ? 'true' : undefined}
       // Mobile: tapping the bubble focuses the group so the focus-within
       // action row below becomes reachable without hover.
       tabIndex={surface === 'mobile' ? 0 : undefined}>
@@ -467,6 +472,7 @@ export function UserMessageBubble({
           <ClawInboundMessageCard display={parsedClawPrompt} text={displayText} />
         ) : (
           <>
+          <SentMessageQuotes quotes={messageQuotes} />
           <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-left">
             {displayText}
           </div>
@@ -493,6 +499,7 @@ export function UserMessageBubble({
           </>
         )}
       </div>
+      {pendingSteer ? <PendingSteerStatus /> : null}
       <div
         data-user-message-actions="inline"
         className="invisible flex min-h-7 min-w-0 max-w-full items-center justify-end pt-1 text-ds-faint opacity-0 transition-[opacity,visibility] duration-150 motion-reduce:transition-none group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
@@ -505,6 +512,7 @@ export function UserMessageBubble({
               type="button"
               onClick={startEdit}
               disabled={busy}
+              data-user-message-edit
               title={t('rewindEditMessage')}
               aria-label={t('rewindEditMessage')}
               className="rounded-full p-1.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:hover:text-ds-faint"

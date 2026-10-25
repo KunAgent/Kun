@@ -6,6 +6,7 @@ import { WriteSideRail } from '../write/WriteSideRail'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
 import { useAgentChatPicker } from '../rooms/agent-chat-picker'
+import { closeAddAssistantDialog, openAssistantConversation, useAssistantNavigationStore } from '../assistants/assistant-navigation'
 import { closeWardrobePage } from '../wardrobe/wardrobe-route'
 
 const PluginMarketplaceView = lazy(() =>
@@ -35,8 +36,14 @@ const AgentChatStage = lazy(() =>
 const AgentChatPickerHost = lazy(() =>
   import('../rooms/AgentChatPickerHost').then((module) => ({ default: module.AgentChatPickerHost }))
 )
+const AddAssistantDialog = lazy(() =>
+  import('../assistants/AddAssistantDialog').then((module) => ({ default: module.AddAssistantDialog }))
+)
 const WardrobePageView = lazy(() =>
   import('../wardrobe/WardrobePageView').then((module) => ({ default: module.WardrobePageView }))
+)
+const ArtifactsPage = lazy(() =>
+  import('../../artifacts/ArtifactsPage').then((module) => ({ default: module.ArtifactsPage }))
 )
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
@@ -136,6 +143,7 @@ export function WorkbenchStageRouter({
 }: WorkbenchStageRouterProps): ReactElement {
   const normalizedRoute = normalizeWorkbenchRoute(route)
   const agentChatDialogOpen = useAgentChatPicker((state) => state.dialog !== null)
+  const addingAssistant = useAssistantNavigationStore((state) => state.connecting)
   return (
     <main
       className={`ds-drag ds-stage-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
@@ -194,6 +202,10 @@ export function WorkbenchStageRouter({
           <Suspense fallback={<WorkbenchPaneFallback />}>
             <WardrobePageView leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} onClose={closeWardrobePage} />
           </Suspense>
+        ) : normalizedRoute === 'artifacts' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <ArtifactsPage leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={conversation.chat} />
+          </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
             {write.runtimeBanner}
@@ -207,6 +219,11 @@ export function WorkbenchStageRouter({
       {imageAnnotationHost}
       {planOverlay}
       {agentChatDialogOpen ? <Suspense fallback={null}><AgentChatPickerHost /></Suspense> : null}
+      {addingAssistant ? <Suspense fallback={null}><AddAssistantDialog onClose={closeAddAssistantDialog}
+        onCreated={(enrollmentId) => {
+          closeAddAssistantDialog()
+          openAssistantConversation({ kind: 'enrollment', id: enrollmentId })
+        }} /></Suspense> : null}
       {normalizedRoute === 'chat' ? (
         <Suspense fallback={null}>
           <WorkflowRunPanel enabled />

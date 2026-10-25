@@ -1,4 +1,7 @@
 import { createPaperTurnContext } from '@shared/paper/paper-turn-context'
+import { webcrypto } from 'node:crypto'
+import { setProductCapture } from '../product-analytics/client'
+import { beginWorkSubmission, clearWorkAnalytics, noteWorkTurnCompleted, noteWorkVisibleFeedback } from '../product-analytics/work'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultClawSettings } from '@shared/app-settings'
 import type { AgentProvider } from '../agent/types'
@@ -62,9 +65,31 @@ describe('background queued message delivery', () => {
   })
 
   afterEach(() => {
+    setProductCapture(false); clearWorkAnalytics()
     rendererRuntimeClient.invalidateSettings()
     vi.unstubAllGlobals()
     threadActionSharedState.drainingQueuedMessageThreadIds.clear()
+  })
+
+  it('keeps Work request attribution on the admitted background thread after navigation', async () => {
+    const track = vi.fn(async (_event: unknown, _epoch?: string) => {})
+    Object.assign(window.kunGui!, { productAnalytics: { track } })
+    vi.stubGlobal('crypto', webcrypto)
+    setProductCapture(true, '0a937dda-cee5-462d-9fca-5abc6f514efd')
+    const submission = beginWorkSubmission()!
+    saveQueuedMessagesForThread('thread-a', [{ id: 'q-work', text: 'Private prompt', deliveryState: 'pending',
+      agentSurface: 'write', clientRequestId: submission.clientRequestId }])
+    const h = harness()
+    const sendUserMessage = vi.fn(async () => ({ threadId: 'thread-a', turnId: 'work-turn' }))
+    await drainBackgroundQueuedMessage({ threadId: 'thread-a', provider: provider(sendUserMessage), set: h.set, get: h.get })
+    noteWorkVisibleFeedback('thread-b', 'work-turn', 'text', true)
+    noteWorkTurnCompleted('thread-a', 'work-turn')
+    noteWorkVisibleFeedback('thread-a', 'work-turn', 'text', true)
+    await vi.waitFor(() => expect(track).toHaveBeenCalledTimes(4))
+    expect(sendUserMessage).toHaveBeenCalledWith('thread-a', 'Private prompt', expect.objectContaining({ clientRequestId: submission.clientRequestId }))
+    expect(h.get().activeThreadId).toBe('thread-b')
+    expect(track.mock.calls.map(([event]) => (event as { name: string }).name)).toEqual(['work_task_submitted', 'work_submission_finished', 'work_feedback_presented', 'result_presented'])
+    expect(JSON.stringify(track.mock.calls)).not.toContain('Private prompt')
   })
 
   it('keeps frozen paper policy when draining an inactive conversation', async () => {

@@ -1,9 +1,12 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { createContext, useContext, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ClipboardList } from 'lucide-react'
 import { parseAssignmentCard } from '@shared/assignment-card'
 import type { ChatBlock } from '../../agent/types'
 import { AssistantMarkdown } from '../chat/AssistantMarkdown'
+
+/** Worker tabs render the brief as one slim, expandable "Task" strip. */
+export const AssignmentCardCompactContext = createContext(false)
 
 /**
  * First-turn task assignment card for ADE worker threads: folds
@@ -20,6 +23,7 @@ export function AssignmentCard({
 }): ReactElement {
   const { t } = useTranslation('common')
   const [expanded, setExpanded] = useState(false)
+  const compact = useContext(AssignmentCardCompactContext)
   const parsed = useMemo(() => parseAssignmentCard(block.text), [block.text])
 
   if (!parsed) {
@@ -28,6 +32,41 @@ export function AssignmentCard({
         <pre className="whitespace-pre-wrap break-words rounded-2xl border border-ds-border bg-ds-card px-4 py-3 text-[13px] leading-6 text-ds-ink">
           {block.text}
         </pre>
+      </div>
+    )
+  }
+
+  if (compact) {
+    return (
+      <div
+        data-assignment-card="compact"
+        className="w-full min-w-0 overflow-hidden rounded-[10px] bg-ds-subtle"
+      >
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          aria-expanded={expanded}
+          className="flex w-full min-w-0 items-center gap-[9px] py-[9px] pl-[11px] pr-2.5 text-left"
+        >
+          <ClipboardList className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={2} aria-hidden />
+          <span className="shrink-0 text-[11.5px] font-semibold text-ds-faint">{t('assignmentCardTask')}</span>
+          <span className="min-w-0 flex-1 truncate text-[12.5px] text-ds-ink" title={parsed.title}>
+            {parsed.title || t('assignmentCardTitle')}
+          </span>
+          <ChevronDown
+            className={`h-[13px] w-[13px] shrink-0 text-ds-faint transition-transform ${expanded ? 'rotate-180' : ''}`}
+            strokeWidth={2.2}
+            aria-hidden
+          />
+        </button>
+        {expanded ? (
+          <div className="ds-markdown border-t border-ds-border-muted px-3 pb-3 pt-2.5 text-ds-ink">
+            <div className="mb-1.5 text-[11.5px] text-ds-faint">
+              {t('assignmentCardFrom', { from: parsed.from || t('assignmentCardManager') })}
+            </div>
+            <AssistantMarkdown text={parsed.body} streaming={false} />
+          </div>
+        ) : null}
       </div>
     )
   }

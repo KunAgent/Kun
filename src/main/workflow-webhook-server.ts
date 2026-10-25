@@ -54,8 +54,11 @@ export class WorkflowWebhookServer {
 
   sync(settings: AppSettingsV1): void {
     // The same local server hosts webhook-trigger paths, /workflow/internal/* (agent
-    // tool) and the public POST /workflow/run, so listen whenever workflows are on.
-    const shouldListen = settings.workflow.enabled && settings.workflow.workflows.length > 0
+    // tool) and the public POST /workflow/run, so listen whenever Workflow is on.
+    // It must not additionally require a saved workflow: the agent tools read an
+    // empty list from here, and requiring one turned "enabled but empty" into an
+    // unreachable port and a network error instead of "no workflows".
+    const shouldListen = settings.workflow.enabled
     if (!shouldListen) {
       this.close()
       return

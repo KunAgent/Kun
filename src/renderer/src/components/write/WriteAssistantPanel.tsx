@@ -46,6 +46,7 @@ import { focusedPaperViewId, paperResearchStageActive } from '../../paper/paper-
 import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { workSessionDisplayTitle } from '../../write/work-sessions-model'
+import { useWorkSessionStore } from '../../write/work-session-store'
 import { prepareWorkSessionForSend } from '../../write/work-session-actions'
 import { workAssistantHarnessId } from '../../write/work-assistant-agent'
 import { AgentIcon } from '../agent-icon'
@@ -89,6 +90,7 @@ type Props = {
   attachmentUploadError?: string | null
   onPickAttachments?: (files: File[]) => void
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
+  onPasteLongText?: (text: string) => void
   onRemoveAttachment?: (id: string) => void
   onSend: () => void
   onInterrupt: (options?: { discard?: boolean }) => void
@@ -146,6 +148,7 @@ export function WriteAssistantPanel({
   attachmentUploadError = null,
   onPickAttachments,
   onPasteClipboardImage,
+  onPasteLongText,
   onRemoveAttachment,
   onSend,
   onInterrupt,
@@ -190,8 +193,10 @@ export function WriteAssistantPanel({
   useEffect(() => {
     if (detachedKey && detachedKey !== contextKey) useWorkContextStore.getState().attach()
   }, [contextKey, detachedKey])
+  const listedTitle = useWorkSessionStore((s) => s.titles)
   const sessionTitle = useChatStore((s) =>
-    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title))
+    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title)) ||
+    (activeThreadId ? listedTitle[activeThreadId] ?? '' : '')
   const agentHarnessId = useChatStore(workAssistantHarnessId)
   const paperEntries = usePaperModeStore((s) => s.entries)
   const readerPage = usePaperModeStore((s) => s.readerPage)
@@ -575,6 +580,7 @@ export function WriteAssistantPanel({
             attachmentUploadError={attachmentUploadError}
             onPickAttachments={onPickAttachments}
             onPasteClipboardImage={onPasteClipboardImage}
+            onPasteLongText={onPasteLongText}
             onRemoveAttachment={onRemoveAttachment}
             // A draft or empty home becomes a new session before the turn; the
             // open document or paper travels with it as context, never a dialog.

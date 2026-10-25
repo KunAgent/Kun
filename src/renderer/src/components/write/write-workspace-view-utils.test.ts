@@ -86,14 +86,13 @@ describe('inlineAgentPosition', () => {
         width: 200 * coordinateScale
       }
     }, {
-      compact: true,
       coordinateScale,
       viewportWidth
     })
 
     expect(position).toMatchObject({
-      left: 300,
-      width: 400,
+      left: 360,
+      width: 280,
       coordinateScale
     })
     expect(position?.anchorLeft).toBeCloseTo(400)
@@ -102,7 +101,7 @@ describe('inlineAgentPosition', () => {
     expect(position?.anchorBottom).toBeCloseTo(340)
   })
 
-  it('gives the selection composer enough width for multiline instructions', () => {
+  it('uses the fixed design width', () => {
     expect(inlineAgentPosition({
       anchorRect: {
         left: 400,
@@ -115,8 +114,8 @@ describe('inlineAgentPosition', () => {
       coordinateScale: 1,
       viewportWidth: 1000
     })).toMatchObject({
-      left: 270,
-      width: 460
+      left: 360,
+      width: 280
     })
   })
 
@@ -131,10 +130,10 @@ describe('inlineAgentPosition', () => {
       }
     }, {
       coordinateScale: 1,
-      viewportWidth: 360
+      viewportWidth: 300
     })).toMatchObject({
       left: 16,
-      width: 328
+      width: 268
     })
   })
 })

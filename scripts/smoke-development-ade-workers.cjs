@@ -16,16 +16,24 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
   await composer.fill('[ade-smoke-create-worker] Create one isolated Smoke worker that writes a fixture file.')
   await page.locator('.ds-composer-primary-action').click()
   let overview
+  let dispatchCard = false
   await poll(async () => {
     try { overview = await runtimeRequest(page, `/v1/teams/by-manager/${managerId}`) }
     catch { overview = null }
     if (overview?.team.workers.length === 1) return true
+    // Under "Ask for approval" worker_create waits on its dispatch card.
+    const confirm = page.getByRole('button', { name: 'Confirm dispatch', exact: true })
+    if (await confirm.isVisible().catch(() => false)) {
+      dispatchCard = true
+      await confirm.click()
+      return false
+    }
     const detail = await runtimeRequest(page, `/v1/threads/${managerId}`)
     const last = detail.turns.at(-1)
-    assert(!(last?.status === 'completed' && JSON.stringify(last).includes('[ade-smoke-create-worker]')),
+    assert(dispatchCard || !(last?.status === 'completed' && JSON.stringify(last).includes('[ade-smoke-create-worker]')),
       'The manager completed the fixture request without creating its worker; inspect model observations and thread snapshot')
     return false
-  }, 60_000, 'real worker_create tool creating a team worker')
+  }, 90_000, 'real worker_create tool creating a team worker')
   const worker = overview.team.workers[0]
   assert(worker.taskWorkspaceId, 'The worker must have an isolated task workspace')
   const owned = await runtimeRequest(page, `/v1/task-workspaces?ownerThreadId=${managerId}`)
@@ -36,9 +44,18 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
   await composer.fill(parentDraft)
   await page.locator('[data-workers-pill]').click()
   const panel = page.locator('[data-workers-panel]')
-  await panel.locator(`[data-worker-row="${worker.workerId}"]`).getByRole('button', { name: 'Smoke worker', exact: true }).click()
+  await panel.locator(`[data-worker-row="${worker.workerId}"]`).waitFor()
+  await capture('14a-collaboration-list')
+  // A member opens in its own right-panel tab; the Collaboration tab stays the list.
+  const openWorkerTab = async () => {
+    await panel.locator(`[data-worker-open="${worker.workerId}"]`).click()
+    await page.getByRole('tab', { name: 'Smoke worker', exact: true }).waitFor()
+  }
+  await openWorkerTab()
   const inspector = page.locator(`[data-worker-inspector="${worker.workerId}"]`)
   await inspector.waitFor()
+  assert.equal(await page.getByRole('tab', { name: 'Collaboration', exact: true }).count(), 1,
+    'Opening a member must keep the Collaboration list in its own tab')
   await inspector.locator('[data-worker-preview-timeline]').getByText(/smoke-worker\.txt/u).first().waitFor()
   assert.equal(await page.locator('[data-worktree-prep="failed"]').count(), 0,
     'Worker workspace events must not invalidate the parent workspace')
@@ -64,9 +81,9 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
     const allow = page.getByRole('button', { name: 'Allow', exact: true })
     await allow.waitFor()
     assert.equal(await allow.count(), 1, 'Only the fixture write may be approved')
-    const approval = allow.locator('..').locator('..')
-    assert.match(await approval.innerText(), /Approval required/u)
-    assert.match(await approval.innerText(), /smoke-worker\.txt/u)
+    // The innermost element holding both the decision and the file it covers.
+    const approval = page.locator('div').filter({ has: allow }).filter({ hasText: /smoke-worker\.txt/u }).last()
+    await approval.waitFor()
     await capture('15-worker-file-approval')
     await confirmFixtureApproval({ application, page, capture, poll, runtimeRequest, allow,
       approvalId: pending.approvals[0].approvalId, workerId: worker.workerId,
@@ -84,8 +101,11 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
     .find((item) => item.kind === 'tool_result' && item.callId === 'smoke-worker-write')
   assert(writeResult && writeResult.isError !== true && writeResult.output?.bytes_written > 0,
     `Worker write must actually succeed: ${JSON.stringify(writeResult?.output)}`)
-  if (!(await panel.isVisible().catch(() => false))) await page.locator('[data-workers-pill]').click()
-  await panel.locator(`[data-worker-row="${worker.workerId}"]`).getByRole('button', { name: 'Smoke worker', exact: true }).click()
+  if (!(await inspector.isVisible().catch(() => false))) {
+    if (!(await panel.isVisible().catch(() => false))) await page.locator('[data-workers-pill]').click()
+    await openWorkerTab()
+  }
+  await capture('15a-worker-tab-completed')
   assert.equal(await composer.inputValue(), parentDraft, 'Returning from the worker must restore the parent draft')
   const message = '[ade-smoke-worker-message] Confirm receipt of this worker-only follow-up.'
   await inspector.locator('[data-worker-draft]').fill(message)
@@ -107,7 +127,8 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
 
   await page.getByRole('button', { name: 'Changes', exact: true }).click()
   const changes = page.locator('[data-code-changes-panel]')
-  await changes.getByRole('combobox').selectOption(worker.taskWorkspaceId)
+  await changes.locator('[data-change-source-picker]').click()
+  await changes.locator(`[data-change-source-option="${worker.taskWorkspaceId}"]`).click()
   await changes.locator(`[data-review-workspace-id="${worker.taskWorkspaceId}"]`).waitFor()
   await changes.getByText('smoke-worker.txt', { exact: true }).first().waitFor()
   await poll(async () => (await changes.innerText()).includes('Worker smoke ready'),
@@ -129,7 +150,7 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
   await capture('18-parent-continues-after-worker')
   return [
     'Real worker_create tool creates an isolated worker without auto-opening the team panel',
-    'Worker preview preserves the parent thread and unsent parent draft; full-open is explicit',
+    'A member opens in its own tab beside Collaboration, preserving the parent thread and draft; full-open is explicit',
     'The protected app dialog ignores synthetic clicks, keeps cancellation pending, and allows one real worker file write',
     'Explicit takeover and local send target only the worker while preserving the parent draft',
     'The existing Changes panel reviews the selected worker workspace without changing the main conversation',
@@ -137,4 +158,45 @@ async function runWorkerFlow({ page, capture, poll, runtimeRequest, application,
   ]
 }
 
-module.exports = { runWorkerFlow }
+/**
+ * Minimal Code task with collaboration enabled on a managed worktree, then
+ * the worker flow. Backs `--workers-only` for Collaboration UI work.
+ */
+async function runWorkersOnlyFlow({ page, capture, poll, runtimeRequest, application, nativeApprovalTimeoutMs }) {
+  const composer = page.locator('.ds-composer-textarea')
+  await composer.waitFor()
+  const agents = page.locator('[data-agent-mode-menu]')
+  if (!(await agents.isVisible().catch(() => false))) await page.locator('[data-agent-mode-trigger]').click()
+  await agents.locator('[data-agent-mode-option="kun-code"]').click()
+  const before = await runtimeRequest(page, '/v1/threads?limit=100')
+  const workspaceTrigger = page.locator('[data-composer-launch-settings-trigger]')
+  if (await workspaceTrigger.getAttribute('data-composer-launch-mode') !== 'worktree') {
+    await workspaceTrigger.click()
+    await page.locator('[data-composer-worktree-mode-toggle]').click()
+  }
+  await page.keyboard.press('Escape')
+  await composer.fill('Reply with a brief hello.')
+  await page.locator('.ds-composer-primary-action').click()
+  await poll(async () => (await runtimeRequest(page, '/v1/threads?limit=100')).threads.length === before.threads.length + 1,
+    60_000, 'first send creating the Code task')
+  const threadId = await page.locator('[data-active-thread-id]').first().getAttribute('data-active-thread-id')
+  await poll(async () => {
+    const { records } = await runtimeRequest(page, `/v1/task-workspaces?ownerThreadId=${threadId}`)
+    return records.some((record) => record.state === 'ready')
+  }, 60_000, 'the managed worktree becoming ready')
+  // Collaboration is a task setting; enable it on the created task.
+  await page.locator('button[aria-controls="floating-composer-action-menu"]').click()
+  await page.locator('#floating-composer-action-menu [data-composer-collaboration-menu-item]').click()
+  await poll(async () => (await runtimeRequest(page, `/v1/threads/${threadId}`)).collaboration?.enabled === true,
+    30_000, 'collaboration enabled on the Code task')
+  await page.getByRole('button', { name: 'Task settings' }).click()
+  const taskDrawer = page.getByRole('dialog', { name: 'Task settings' })
+  await taskDrawer.getByRole('spinbutton', { name: 'Maximum workers' }).fill('4')
+  await taskDrawer.getByRole('button', { name: 'Save changes' }).click()
+  await poll(async () => (await taskDrawer.innerText()).includes('Saved for this task'),
+    30_000, 'task settings allowing workers')
+  await taskDrawer.getByRole('button', { name: 'Close' }).click()
+  return runWorkerFlow({ page, capture, poll, runtimeRequest, application, nativeApprovalTimeoutMs })
+}
+
+module.exports = { runWorkerFlow, runWorkersOnlyFlow }

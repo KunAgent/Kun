@@ -1,4 +1,5 @@
 import { eraseRoomMemoryProjections, type RoomMemoryErasure } from './room-memory-erasure.js'
+import { notifyRoomStoreCommit } from './room-commit-signal.js'
 import { roomAttentionPredicateSql, roomCurrentAttentionRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
 import { queryRoomSidebar } from './room-sidebar-sqlite.js'
 import type { RoomSidebarQuery } from '../contracts/room-sidebar.js'
@@ -306,6 +307,12 @@ export class SqliteRoomStore implements RoomStore {
   }
 
   async commit(input: RoomStoreCommit, assertCurrent?: () => void): Promise<RoomStoreCommitResult> {
+    const result = await this.commitNow(input, assertCurrent)
+    notifyRoomStoreCommit(input)
+    return result
+  }
+
+  private async commitNow(input: RoomStoreCommit, assertCurrent?: () => void): Promise<RoomStoreCommitResult> {
     // Snapshot caller-owned values before asynchronous initialization can yield.
     const parsed = RoomStoreCommitSchema.parse(JSON.parse(JSON.stringify(input)))
     const fingerprint = parsed.fingerprint ?? createHash('sha256')

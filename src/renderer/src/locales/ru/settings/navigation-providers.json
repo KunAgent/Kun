@@ -27,6 +27,8 @@
   "subagentsRuntimePolicyDesc": "Настройте параллельность делегирования; лишние задачи ожидают в очереди.",
   "subagentsUseExistingAgents": "Использовать существующих агентов",
   "subagentsUseExistingAgentsDesc": "Если включено, delegate_task выбирает настроенные профили. Если выключено, главный агент задаёт одноразовую роль для каждой задачи.",
+  "subagentsHonorEngineBinding": "Запускать роли на их движке",
+  "subagentsHonorEngineBindingDesc": "Вкл.: delegate_task запускает роль, привязанную к Claude Code, Codex или другому движку, на этом движке и отказывает, если он недоступен. Выкл.: все дочерние задачи delegate_task идут по основному маршруту.",
   "subagentsMaxParallel": "Максимум параллельных суб-агентов",
   "subagentsMaxParallelDesc": "Новые задачи ожидают в очереди, когда одновременно запущено это количество суб-агентов.",
   "subagentsProactiveRetry": "Главный агент повторяет сбойные задачи",

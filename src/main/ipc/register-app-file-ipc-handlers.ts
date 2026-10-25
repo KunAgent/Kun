@@ -27,6 +27,7 @@ import {
   workspaceEntryDeletePayloadSchema,
   workspaceEntryRenamePayloadSchema,
   workspaceFileCreatePayloadSchema,
+  workspaceFileReadPayloadSchema,
   workspaceFileRevealTargetPayloadSchema,
   workspaceFileTargetPayloadSchema,
   workspaceFileWatchPayloadSchema,
@@ -53,6 +54,7 @@ import {
   saveWorkspaceImageBytes,
   writeWorkspaceFile
 } from '../services/workspace-service'
+import { listWorkspaceFiles } from '../services/workspace-file-listing'
 import {
   readLocalPdfText
 } from '../services/write-pdf-text-service'
@@ -79,6 +81,7 @@ import type {
   WorkspaceFileWatchPayload
 } from '../../shared/workspace-file'
 import { registerWorkspaceSpreadsheetIpcHandlers } from './register-workspace-spreadsheet-ipc-handlers'
+import { registerOfficeVersionIpcHandlers } from './register-office-version-ipc-handlers'
 import { registerExtensionArtifactIpcHandlers } from './register-extension-artifact-ipc-handlers'
 
 type WorkspaceFileWatchRecord = {
@@ -130,6 +133,7 @@ async function readWorkspaceFileSignal(
 export function registerAppFileIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const { getMainWindow, runtimeRequest, logError } = options
   registerWorkspaceSpreadsheetIpcHandlers({ getMainWindow, logError, logInfo: options.logInfo })
+  registerOfficeVersionIpcHandlers({ getMainWindow })
   registerExtensionArtifactIpcHandlers(options)
   const workspaceFileWatchers = new Map<string, WorkspaceFileWatchRecord>()
   const workspaceFileWatchSenders = new Map<number, WorkspaceFileWatchSenderRecord>()
@@ -300,9 +304,16 @@ export function registerAppFileIpcHandlers(options: RegisterAppIpcHandlersOption
       parseIpcPayload('file:list-workspace-directory', workspaceDirectoryTargetPayloadSchema, payload)
     )
   )
+  ipcMain.handle('file:list-workspace-files', async (_, payload: unknown) =>
+    listWorkspaceFiles(parseIpcPayload(
+      'file:list-workspace-files',
+      workspaceDirectoryTargetPayloadSchema.pick({ workspaceRoot: true }).strict(),
+      payload
+    ))
+  )
   ipcMain.handle('file:read-workspace', async (_, payload: unknown) =>
     readWorkspaceFile(
-      parseIpcPayload('file:read-workspace', workspaceFileTargetPayloadSchema, payload)
+      parseIpcPayload('file:read-workspace', workspaceFileReadPayloadSchema, payload)
     )
   )
   ipcMain.handle('file:read-workspace-image', async (_, payload: unknown) =>

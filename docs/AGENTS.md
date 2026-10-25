@@ -47,6 +47,11 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   default data location and existing history; never silently select another.
 - A live or starting foreign owner fails closed with actionable guidance. Do
   not reuse it because its build matches, or replace it because builds differ.
+- Explicit startup Recover can stop recorded orphan Runtime participants, then
+  their Manager, after verifying the dead application owner, all canonical
+  profile claims, matching participant records and process birth identities.
+  Keep Manager alive until consumers exit. Recheck identity before each signal
+  and escalation; never infer shutdown authority from an HTTP timeout.
 - Main-window close, platform Quit, updater exit, and storage relocation use
   the same shutdown barrier. Close admission and restart/recovery timers before
   awaiting cleanup; collect each failure without skipping remaining resources.
@@ -58,6 +63,15 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   stays in the same application session. Manager failure recovery belongs to
   the application owner and must stop old consumers before rebinding a new
   Manager generation; app-owned Runtime must never independently elect one.
+- Steady Manager heartbeats are single-flight. Transport failures park new
+  side-effecting tools and retry the same Manager with capped backoff; reads
+  may continue. Resume only after both the heartbeat and thread lease are
+  confirmed. Only an explicit slot rejection proves Runtime ownership loss;
+  prolonged outages still obey thread lease deadlines and app-owned recovery.
+- Log the first shutdown reason, Runtime instance and PID before cleanup,
+  then its completion, failure or deadline. Distinguish ownership loss,
+  host stop requests, IPC disconnects and signals. Heartbeat logs must omit
+  credentials and raw response bodies.
 - Owned launchers register processes before user commands can run. POSIX uses
   a dedicated process group and owner-loss guard; Windows uses a native Job
   launcher that assigns suspended children before resuming them. PTY, daemon,
@@ -109,8 +123,12 @@ Ordinary new Code tasks can delegate without the advanced ADE switch. External
 main Agents require a functioning scoped Kun tool bridge; workers and delegated
 children must never create recursive teams. Both worker tools and private assistant
 Code handoffs use the shared host-owned dispatch intent: user confirmation,
-immediate automatic review, or a 60-second full-access intervention window.
-Renderer timers display deadlines only. Do not implement auto-click or create
+immediate automatic review, or a full-access intervention window. The
+no-response window is `agents.kun.ade.dispatch.autoStartSeconds` (default 60,
+0 = always wait); `autoStartWhenConfirmationRequired` extends it to
+ask-for-approval cards, and every user adjustment restarts it. Worker cards carry
+per-worker routes (`recommendation.assignments`) that stay switchable until
+admission. Renderer timers display deadlines only. Do not implement auto-click or create
 workspaces/processes before host admission. Controls use revisions and replay IDs;
 source authority only narrows, and completion preserves the source main route.
 

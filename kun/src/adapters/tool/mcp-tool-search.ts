@@ -2,9 +2,11 @@ import type {
   McpSearchConfig,
   McpServerConfig
 } from '../../contracts/capabilities.js'
+import { mcpAppToolOutputMeta } from '../../contracts/mcp-apps.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
+import { mcpCallTimeoutMs } from './mcp-call-budget.js'
 import {
   describeRecord,
   formatSearchResult,
@@ -251,8 +253,9 @@ function createMcpSearchTools(
         const callArgs = objectArg(args.arguments)
         const result = await record.client.callTool(
           { name: record.descriptor.name, arguments: callArgs },
-          { signal: context.abortSignal, timeout: record.server.timeoutMs, context }
+          { signal: context.abortSignal, timeout: mcpCallTimeoutMs(record.server), context }
         )
+        const mcpApp = mcpAppToolOutputMeta(record.serverId, record.descriptor)
         return {
           output: {
             serverId: record.serverId,
@@ -260,6 +263,7 @@ function createMcpSearchTools(
             toolId: record.toolId,
             result
           },
+          ...(mcpApp ? { meta: { mcpApp } } : {}),
           isError: typeof result === 'object' && result !== null && (result as { isError?: boolean }).isError === true
         }
       }
@@ -284,8 +288,9 @@ function createMcpSearchTools(
         const callArgs = objectArg(args.arguments)
         const result = await record.client.callTool(
           { name: record.descriptor.name, arguments: callArgs },
-          { signal: context.abortSignal, timeout: record.server.timeoutMs, context }
+          { signal: context.abortSignal, timeout: mcpCallTimeoutMs(record.server), context }
         )
+        const mcpApp = mcpAppToolOutputMeta(record.serverId, record.descriptor)
         return {
           output: {
             serverId: record.serverId,
@@ -293,6 +298,7 @@ function createMcpSearchTools(
             toolId: record.toolId,
             result
           },
+          ...(mcpApp ? { meta: { mcpApp } } : {}),
           isError: typeof result === 'object' && result !== null && (result as { isError?: boolean }).isError === true
         }
       }

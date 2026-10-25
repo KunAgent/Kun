@@ -19,12 +19,16 @@ export const BUILTIN_RIGHT_PANEL_IDS = {
   review: 'builtin:right-panel-review',
   workers: 'builtin:right-panel-workers',
   conversationInfo: 'builtin:right-panel-conversation-info',
-  wardrobe: 'builtin:right-panel-wardrobe'
+  wardrobe: 'builtin:right-panel-wardrobe',
+  appSurface: 'builtin:right-panel-app-surface'
 } as const
 
 export type BuiltinRightPanelId = (typeof BUILTIN_RIGHT_PANEL_IDS)[keyof typeof BUILTIN_RIGHT_PANEL_IDS]
 export type ExtensionContributionId = `extension:${string}/${string}`
-export type RightPanelContributionId = BuiltinRightPanelId | ExtensionContributionId
+/** One right-panel tab per opened ADE worker (or child agent) conversation. */
+export const WORKER_SESSION_TAB_PREFIX = 'builtin:right-panel-worker:'
+export type WorkerSessionTabId = `${typeof WORKER_SESSION_TAB_PREFIX}${string}`
+export type RightPanelContributionId = BuiltinRightPanelId | ExtensionContributionId | WorkerSessionTabId
 export type RightPanelMode = RightPanelContributionId | null
 
 const BUILTIN_RIGHT_PANEL_ID_SET = new Set<string>(Object.values(BUILTIN_RIGHT_PANEL_IDS))
@@ -52,9 +56,24 @@ export function isExtensionContributionId(value: string): value is ExtensionCont
   return value.startsWith('extension:') && ContributionIdSchema.safeParse(value).success
 }
 
+const WORKER_SESSION_ID = /^[A-Za-z0-9_.:-]{1,200}$/
+
+export function workerSessionTabId(workerId: string): WorkerSessionTabId {
+  return `${WORKER_SESSION_TAB_PREFIX}${workerId}`
+}
+
+export function isWorkerSessionTabId(value: string): value is WorkerSessionTabId {
+  return value.startsWith(WORKER_SESSION_TAB_PREFIX) &&
+    WORKER_SESSION_ID.test(value.slice(WORKER_SESSION_TAB_PREFIX.length))
+}
+
+export function workerIdFromSessionTab(value: string): string | null {
+  return isWorkerSessionTabId(value) ? value.slice(WORKER_SESSION_TAB_PREFIX.length) : null
+}
+
 export function isRightPanelContributionId(value: unknown): value is RightPanelContributionId {
   return typeof value === 'string' &&
-    (BUILTIN_RIGHT_PANEL_ID_SET.has(value) || isExtensionContributionId(value))
+    (BUILTIN_RIGHT_PANEL_ID_SET.has(value) || isExtensionContributionId(value) || isWorkerSessionTabId(value))
 }
 
 /**
@@ -69,7 +88,7 @@ export function normalizeStoredRightPanelId(value: unknown): RightPanelMode {
 }
 
 export function legacyRightPanelId(value: RightPanelMode): string | null {
-  if (value === null || isExtensionContributionId(value)) return null
+  if (value === null || isExtensionContributionId(value) || isWorkerSessionTabId(value)) return null
   const entry = Object.entries(LEGACY_RIGHT_PANEL_IDS).find(([, id]) => id === value)
   return entry?.[0] ?? null
 }

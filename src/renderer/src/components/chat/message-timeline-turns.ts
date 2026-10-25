@@ -127,12 +127,14 @@ export function activeTimelineTurnIndex(
 ): number {
   const normalizedTurnId = currentTurnId?.trim()
   if (normalizedTurnId) {
-    const index = turns.findIndex((turn) => turn.turnId === normalizedTurnId)
+    const index = turns.findIndex((turn) => turn.turnId === normalizedTurnId ||
+      turn.blocks.some((block) => block.turnId === normalizedTurnId))
     if (index >= 0) return index
   }
   const normalizedUserId = currentTurnUserId?.trim()
   if (normalizedUserId) {
-    const index = turns.findIndex((turn) => turn.user?.id === normalizedUserId)
+    const index = turns.findIndex((turn) => turn.user?.id === normalizedUserId ||
+      turn.blocks.some((block) => block.kind === 'user' && block.id === normalizedUserId))
     if (index >= 0) return index
   }
   return turns.length - 1

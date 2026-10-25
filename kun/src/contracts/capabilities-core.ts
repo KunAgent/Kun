@@ -255,7 +255,13 @@ export const McpServerConfig = z
     trustedWorkspaceRoots: z.array(z.string().min(1)).default([]),
     /** MCP tool names explicitly trusted by the host as read-only in Plan mode. */
     planModeReadOnlyTools: z.array(z.string().min(1)).default([]),
-    timeoutMs: z.number().int().positive().default(30_000)
+    timeoutMs: z.number().int().positive().default(30_000),
+    /**
+     * Per-call budget when it differs from the connect/list budget. A tool whose
+     * server waits on long-running work needs this to outlive `timeoutMs`;
+     * unset keeps the historical single-budget behaviour.
+     */
+    callTimeoutMs: z.number().int().positive().optional()
   })
   .strict()
   .superRefine((server, ctx) => {
@@ -431,13 +437,22 @@ export const SubagentProfileConfig = z
     model: z.string().min(1).optional(),
     /** Routes this role's child to a specific provider id (falls back to the runtime default provider). */
     providerId: z.string().min(1).optional(),
-    /** ADE worker harness binding; omitted means the native Kun loop. */
+    /**
+     * Engine binding honored by every dispatch lane (delegate_task, workers,
+     * Graph tasks); omitted means the lane's default engine.
+     */
     harnessId: HarnessIdSchema.optional(),
     /** Credential path on the bound harness; omitted uses the harness default. */
     credentialMode: HarnessCredentialModeSchema.optional(),
     gatewayBinding: HarnessGatewayBindingSchema.optional(),
     /** "Best for / not for" notes for the manager selector; participates in recall. */
     delegationNotes: z.string().min(1).max(1_000).optional(),
+    /**
+     * The kind of work this role owns, completing "<name> ...". Dispatching
+     * turns are told to hand that work over instead of doing it themselves.
+     * Distinct from `description`, which is read while choosing between roles.
+     */
+    owns: z.string().trim().min(1).max(300).optional(),
     /** Persona/instructions appended to the base system prompt for this role (not a full replace). */
     systemPrompt: z.string().min(1).optional(),
     /**
@@ -499,6 +514,11 @@ export type ProactiveSubagentRetryConfig = z.infer<typeof ProactiveSubagentRetry
 export const SubagentsCapabilityConfig = CapabilityToggleConfig.extend({
   /** Reuse configured profiles instead of requiring the parent to define a one-run role. */
   useExistingAgents: z.boolean().default(true),
+  /**
+   * Run delegate_task children on the engine a profile is bound to (absent =
+   * on). Off keeps every delegate_task child on the main route.
+   */
+  honorEngineBinding: z.boolean().optional(),
   /** Max children running at once; extra spawns queue instead of erroring. */
   maxParallel: z.number().int().nonnegative().default(256),
   /** Bounded main-agent continuation policy for failed ordinary children. */

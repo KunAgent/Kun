@@ -10,6 +10,7 @@ import type { Turn } from '../contracts/turns.js'
 import type { DelegationDiagnostics, ThreadDetail } from './client.js'
 import type { z } from 'zod'
 import type { ProjectedApprovalReview, ThreadProjection } from './state-types.js'
+import { turnTimingFromUsageEvent } from './turn-timing.js'
 import {
   activityFor,
   appendDeltaItem,
@@ -321,9 +322,15 @@ export function applyRuntimeEvent(
           : item)
       }
       break
-    case 'usage':
-      next = { ...next, usage: event.usage }
+    case 'usage': {
+      const live = turnTimingFromUsageEvent(event)
+      next = {
+        ...next,
+        usage: event.usage,
+        ...(live ? { turnTiming: { ...next.turnTiming, [live.turnId]: live.timing } } : {})
+      }
       break
+    }
     case 'context_snapshot':
       next = { ...next, contextSnapshot: event }
       break

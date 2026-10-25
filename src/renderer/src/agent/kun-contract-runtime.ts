@@ -1,4 +1,5 @@
 import type { CoreChildRuntimeMetadataJson } from './kun-contract-child'
+import type { MemoryRelationAnnotation } from '@shared/memory-working-context'
 export type { CoreChildRunActivityJson, CoreChildLauncher, CoreChildRuntimeMetadataJson } from './kun-contract-child'
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
 import type { AdeDelegatedTransport } from '@shared/ade-harnesses'
@@ -185,6 +186,7 @@ export type CoreTurnJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
   injectedDirectiveIds?: string[]
   injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
@@ -282,6 +284,7 @@ export type CoreTurnItemJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
   injectedDirectiveIds?: string[]
   injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
@@ -468,6 +471,8 @@ export type CoreRuntimeEventJson = {
   /** UTF-16 offset of this incremental assistant delta within its item text. */
   deltaOffset?: number
   timestamp?: string
+  /** Execution start of a queued user item published when its turn is promoted. */
+  turnStartedAt?: string
   threadId?: string
   turnId?: string
   itemId?: string
@@ -486,6 +491,7 @@ export type CoreRuntimeEventJson = {
   toolResultCount?: number
   /** Public Agent dispatch intent, replayed through the parent thread stream. */
   dispatchIntent?: unknown
+  taskSuggestion?: unknown
   /** Durable Graph domain event projected through the existing thread SSE. */
   graph?: unknown
   /** Durable pre-run Graph planning lifecycle projected through thread SSE. */

@@ -220,7 +220,7 @@ export function AdeSidebar({
         <button
           type="button"
           data-ade-worker-toggle={thread.id}
-          className="flex w-full items-center gap-1 rounded-sm px-3 py-0.5 text-left text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-text"
+          className="flex w-full items-center gap-1 rounded-sm px-3 py-0.5 text-left text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
           onClick={() =>
             setExpandedParents((prev) => {
               const next = new Set(prev)
@@ -385,7 +385,7 @@ export function AdeSidebar({
           type="button"
           data-ade-group-toggle
           title={t('adeGroupToggleHint')}
-          className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-text"
+          className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
           onClick={() => setGroupMode((m) => (m === 'status' ? 'project' : 'status'))}
         >
           <Folder className="h-3 w-3" strokeWidth={1.75} />

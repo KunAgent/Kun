@@ -1,6 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
+import { postJson, WorkflowBridgeError, type BridgeEndpoint } from './claw-schedule-bridge-client'
+import { WORKFLOW_TOOL_QUERY_TIMEOUT_MS, WORKFLOW_TOOL_WAIT_TIMEOUT_MS } from './claw-schedule-mcp-timeouts'
+import {
+  createWorkflowCatalogRefresher,
+  type WorkflowCatalogRefresher
+} from './claw-schedule-workflow-catalog'
 
 type McpLaunchOptions = {
   baseUrl: string
@@ -8,6 +14,9 @@ type McpLaunchOptions = {
   workflowBaseUrl: string
   workflowSecret: string
 }
+
+/** Schedule endpoints are local and fast; keep the previous 15s ceiling. */
+const SCHEDULE_REQUEST_TIMEOUT_MS = 15_000
 
 function parseArgValue(argv: string[], flag: string): string {
   const index = argv.indexOf(flag)
@@ -24,36 +33,8 @@ function parseLaunchOptions(argv: string[]): McpLaunchOptions | null {
   return { baseUrl, secret, workflowBaseUrl, workflowSecret }
 }
 
-async function postJson(
-  options: { baseUrl: string; secret: string },
-  path: string,
-  body: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (options.secret) {
-    headers.Authorization = `Bearer ${options.secret}`
-  }
-  const response = await fetch(`${options.baseUrl}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15_000)
-  })
-  const text = await response.text()
-  let parsed: Record<string, unknown> = {}
-  try {
-    parsed = JSON.parse(text) as Record<string, unknown>
-  } catch {
-    parsed = { message: text.trim() || `HTTP ${response.status}` }
-  }
-  if (!response.ok) {
-    const message =
-      (typeof parsed.message === 'string' && parsed.message.trim()) ||
-      (typeof parsed.error === 'string' && parsed.error.trim()) ||
-      `HTTP ${response.status}`
-    throw new Error(message)
-  }
-  return parsed
+function failureText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function textResult(text: string, structuredContent?: Record<string, unknown>) {
@@ -63,16 +44,36 @@ function textResult(text: string, structuredContent?: Record<string, unknown>) {
   }
 }
 
-function errorResult(message: string) {
+function errorResult(message: string, structuredContent?: Record<string, unknown>) {
   return {
     content: [{ type: 'text' as const, text: message }],
+    ...(structuredContent ? { structuredContent } : {}),
     isError: true
   }
 }
 
-export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<boolean> {
+export type ClawScheduleMcpServerBudgets = {
+  /** How long `run_workflow` waits before reporting an unknown outcome. */
+  workflowWaitMs?: number
+}
+
+export type ClawScheduleMcpServerHandle = {
+  server: McpServer
+  catalogRefresher?: WorkflowCatalogRefresher
+}
+
+/**
+ * Builds the MCP server without binding it to a transport, so the registration
+ * and its failure behaviour can be exercised over an in-memory transport.
+ * Returns null when the argv did not ask for this server.
+ */
+export function createClawScheduleMcpServerFromArgv(
+  argv: string[],
+  budgets: ClawScheduleMcpServerBudgets = {}
+): ClawScheduleMcpServerHandle | null {
   const options = parseLaunchOptions(argv)
-  if (!options) return false
+  if (!options) return null
+  const workflowWaitMs = budgets.workflowWaitMs ?? WORKFLOW_TOOL_WAIT_TIMEOUT_MS
 
   const server = new McpServer(
     { name: 'kun-schedule', version: '0.1.0' },
@@ -84,9 +85,12 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
       description: name.startsWith('claw_')
         ? 'Legacy alias. List scheduled tasks managed by the currently running Kun app.'
         : 'List scheduled tasks managed by the currently running Kun app.'
-    }, async () => {
+    }, async (extra) => {
       try {
-        const result = await postJson(options, '/schedule/internal/list', {})
+        const result = await postJson(options, '/schedule/internal/list', {}, {
+          timeoutMs: SCHEDULE_REQUEST_TIMEOUT_MS,
+          signal: extra.signal
+        })
         const tasks = Array.isArray(result.tasks) ? result.tasks : []
         return textResult(
           tasks.length
@@ -95,7 +99,7 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
           { tasks }
         )
       } catch (error) {
-        return errorResult(`Failed to list scheduled tasks: ${error instanceof Error ? error.message : String(error)}`)
+        return errorResult(`Failed to list scheduled tasks: ${failureText(error)}`)
       }
     })
   }
@@ -122,7 +126,7 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
         mode: z.enum(['agent', 'plan']).optional().describe('Execution mode'),
         enabled: z.boolean().optional().describe('Whether the task should be enabled immediately')
       }
-    }, async (args) => {
+    }, async (args, extra) => {
       try {
         const result = await postJson(options, '/schedule/internal/create', {
           input: {
@@ -142,14 +146,14 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
               everyMinutes: args.every_minutes
             }
           }
-        })
+        }, { timeoutMs: SCHEDULE_REQUEST_TIMEOUT_MS, signal: extra.signal })
         const task = (result.task ?? null) as Record<string, unknown> | null
         return textResult(
           `Scheduled task created: ${typeof task?.title === 'string' ? task.title : args.title}`,
           task ? { task } : undefined
         )
       } catch (error) {
-        return errorResult(`Failed to create scheduled task: ${error instanceof Error ? error.message : String(error)}`)
+        return errorResult(`Failed to create scheduled task: ${failureText(error)}`)
       }
     })
   }
@@ -177,7 +181,7 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
         time_of_day: z.string().optional(),
         every_minutes: z.number().int().min(1).max(10080).optional()
       }
-    }, async (args) => {
+    }, async (args, extra) => {
       try {
         const patch: Record<string, unknown> = {}
         if (args.title !== undefined) patch.title = args.title
@@ -205,14 +209,14 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
         const result = await postJson(options, '/schedule/internal/update', {
           taskId: args.task_id,
           patch
-        })
+        }, { timeoutMs: SCHEDULE_REQUEST_TIMEOUT_MS, signal: extra.signal })
         const task = (result.task ?? null) as Record<string, unknown> | null
         return textResult(
           `Scheduled task updated: ${typeof task?.title === 'string' ? task.title : args.task_id}`,
           task ? { task } : undefined
         )
       } catch (error) {
-        return errorResult(`Failed to update scheduled task: ${error instanceof Error ? error.message : String(error)}`)
+        return errorResult(`Failed to update scheduled task: ${failureText(error)}`)
       }
     })
   }
@@ -227,12 +231,15 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
       inputSchema: {
         task_id: z.string().min(1).describe('Task id returned by gui_schedule_list or gui_schedule_create')
       }
-    }, async ({ task_id }) => {
+    }, async ({ task_id }, extra) => {
       try {
-        await postJson(options, '/schedule/internal/delete', { taskId: task_id })
+        await postJson(options, '/schedule/internal/delete', { taskId: task_id }, {
+          timeoutMs: SCHEDULE_REQUEST_TIMEOUT_MS,
+          signal: extra.signal
+        })
         return textResult(`Scheduled task deleted: ${task_id}`)
       } catch (error) {
-        return errorResult(`Failed to delete scheduled task: ${error instanceof Error ? error.message : String(error)}`)
+        return errorResult(`Failed to delete scheduled task: ${failureText(error)}`)
       }
     })
   }
@@ -245,9 +252,12 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
 
   // Workflow tools — the same bridge exposes the GUI's node-based workflows that
   // the user marked "callable by agent", by calling the WorkflowRuntime's local
-  // /workflow/internal/* endpoints.
+  // /workflow/internal/* endpoints. The GUI only passes --workflow-base-url when
+  // Workflow is enabled, so these tools stay hidden instead of failing on a
+  // listener that was never started.
+  let catalogRefresher: WorkflowCatalogRefresher | undefined
   if (options.workflowBaseUrl) {
-    const wf = { baseUrl: options.workflowBaseUrl, secret: options.workflowSecret }
+    const wf: BridgeEndpoint = { baseUrl: options.workflowBaseUrl, secret: options.workflowSecret }
     const RUN_WORKFLOW_BASE_DESC =
       "Run one of the user's saved \"Create Loop\" workflows by name (or id) and wait for it to finish; returns its final output. When the user's request matches a saved workflow below, prefer running it over doing the steps manually."
 
@@ -268,9 +278,12 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
     server.registerTool('list_workflows', {
       description:
         'List the GUI "Create Loop" workflows the user marked callable by the agent. Returns each workflow id, name, a short description, and its required inputs. Check this whenever a request might be satisfied by a saved workflow.'
-    }, async () => {
+    }, async (extra) => {
       try {
-        const result = await postJson(wf, '/workflow/internal/list', {})
+        const result = await postJson(wf, '/workflow/internal/list', {}, {
+          timeoutMs: WORKFLOW_TOOL_QUERY_TIMEOUT_MS,
+          signal: extra.signal
+        })
         const workflows = Array.isArray(result.workflows) ? result.workflows : []
         return textResult(
           workflows.length
@@ -279,7 +292,7 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
           { workflows }
         )
       } catch (error) {
-        return errorResult(`Failed to list workflows: ${error instanceof Error ? error.message : String(error)}`)
+        return errorResult(`Failed to list workflows: ${failureText(error)}`)
       }
     })
 
@@ -290,13 +303,13 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
         input: z.string().optional().describe('Optional input passed to the trigger; available to nodes as {{text}}'),
         workspace_root: z.string().optional().describe('Optional working directory override for this run')
       }
-    }, async (args) => {
+    }, async (args, extra) => {
       try {
         const result = await postJson(wf, '/workflow/internal/run', {
           workflow: args.workflow,
           input: args.input,
           workspaceRoot: args.workspace_root
-        })
+        }, { timeoutMs: workflowWaitMs, signal: extra.signal })
         const status = typeof result.status === 'string' ? result.status : 'done'
         const output = typeof result.output === 'string' ? result.output : ''
         const message = typeof result.message === 'string' ? result.message : ''
@@ -305,32 +318,58 @@ export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<
           { status, output, message }
         )
       } catch (error) {
-        return errorResult(`Failed to run workflow: ${error instanceof Error ? error.message : String(error)}`)
+        // The bridge stopping its wait is not proof the run failed: the run keeps
+        // going inside Kun. Report the unknown outcome instead of a false failure
+        // (and never retry a side-effecting run automatically).
+        if (error instanceof WorkflowBridgeError && error.code === 'timeout') {
+          const budget =
+            workflowWaitMs >= 60_000
+              ? `${Math.round(workflowWaitMs / 60_000)} minutes`
+              : `${Math.round(workflowWaitMs / 1_000)} seconds`
+          return errorResult(
+            `Workflow "${args.workflow}" did not report back within ${budget}. It may still be running in Kun: the result is unknown, and it was not started again.`,
+            { status: 'unknown', output: '', message: 'wait timed out' }
+          )
+        }
+        return errorResult(`Failed to run workflow: ${failureText(error)}`)
       }
     })
 
-    // Keep run_workflow's description (the workflow catalog the agent sees) fresh:
-    // without needing a kun restart: re-fetch on an interval and update the tool
-    // only when the list actually changes. update() emits tools/list_changed, so
-    // the agent re-reads the current catalog on its next turn.
-    let lastCatalog = ' '
-    const refreshCatalog = async (): Promise<void> => {
-      try {
-        const catalog = buildCatalog(await postJson(wf, '/workflow/internal/list', {}))
-        if (catalog === lastCatalog) return
-        lastCatalog = catalog
-        runWorkflowTool.update({ description: RUN_WORKFLOW_BASE_DESC + catalog })
-      } catch {
-        /* ignore — list_workflows still works live */
+    catalogRefresher = createWorkflowCatalogRefresher({
+      readCatalog: async () => buildCatalog(await postJson(wf, '/workflow/internal/list', {}, {
+        timeoutMs: WORKFLOW_TOOL_QUERY_TIMEOUT_MS
+      })),
+      // Keeping run_workflow's description (the workflow catalog the agent sees)
+      // fresh requires no kun restart: re-fetch on an interval and update the
+      // tool only when the list actually changes. update() emits
+      // tools/list_changed, so the agent re-reads the catalog on its next turn.
+      updateDescription: (catalog) => runWorkflowTool.update({ description: RUN_WORKFLOW_BASE_DESC + catalog }),
+      logError: (message) => {
+        process.stderr.write(`kun mcp[gui_schedule]: workflow catalog refresh failed: ${message}\n`)
       }
-    }
-    await refreshCatalog() // seed the catalog before connect so the first tools/list carries it
-    const catalogTimer = setInterval(() => void refreshCatalog(), 30_000)
-    catalogTimer.unref?.()
+    })
   }
 
+  return { server, ...(catalogRefresher ? { catalogRefresher } : {}) }
+}
+
+/**
+ * Entry point used by the Electron child process. Initialize happens before any
+ * workflow catalog fetch, so an unreachable WorkflowRuntime cannot delay the
+ * schedule tools.
+ */
+export async function runClawScheduleMcpServerFromArgv(argv: string[]): Promise<boolean> {
+  const handle = createClawScheduleMcpServerFromArgv(argv)
+  if (!handle) return false
+
   const transport = new StdioServerTransport()
-  await server.connect(transport)
+  // connect() chains the handler we set here, so a closed transport stops the
+  // catalog timer without losing the SDK's own close handling.
+  transport.onclose = () => handle.catalogRefresher?.stop()
+  await handle.server.connect(transport)
+  // Seeding the catalog only starts after initialize: a slow or unreachable
+  // WorkflowRuntime must never block the schedule tools from coming up.
+  handle.catalogRefresher?.start()
   return true
 }
 

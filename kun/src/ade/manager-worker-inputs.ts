@@ -6,6 +6,8 @@ export const WorkerCreateInputSchema = z
   .object({
     label: z.string().min(1).max(64),
     role: z.string().max(64).optional(),
+    /** Agent roster id: the role this worker plays (and its bound engine). */
+    profile: z.string().min(1).max(128).optional(),
     task: z.string().min(1).max(32_000),
     context: z
       .object({

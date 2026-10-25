@@ -1,0 +1,21 @@
+{
+  "composerQueue": {
+    "caption_one": "อยู่ในคิว {{count}} รายการ · จะส่งหลังเทิร์นนี้",
+    "caption_other": "อยู่ในคิว {{count}} รายการ · จะส่งตามลำดับหลังเทิร์นนี้",
+    "dragHint": "ลากเพื่อจัดลำดับใหม่",
+    "showMore_one": "อีก {{count}} รายการ",
+    "showMore_other": "อีก {{count}} รายการ",
+    "showLess": "แสดงน้อยลง",
+    "now": "ทันที",
+    "nowLabel": "แทรกทันที",
+    "pausedTitle": "คิวถูกหยุดชั่วคราวเพราะคุณหยุดการตอบกลับ",
+    "pausedCount_one": "{{count}} ข้อความ",
+    "pausedCount_other": "{{count}} ข้อความ",
+    "resume": "ดำเนินการต่อ",
+    "resumeHint": "ส่งข้อความในคิวตามลำดับ",
+    "images_one": "{{count}} รูป",
+    "images_other": "{{count}} รูป",
+    "files_one": "{{count}} ไฟล์",
+    "files_other": "{{count}} ไฟล์"
+  }
+}

@@ -19,6 +19,8 @@ import {
 } from '../../graph/index.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
+import type { GraphPlanHarnessAdmission } from './graph-plan-admission.js'
+import { resolveGraphPlanRoles } from './graph-plan-roles.js'
 
 const MAX_GRAPH_CREATE_RUN_ISSUES = 64
 
@@ -80,6 +82,8 @@ export function buildGraphCreateRunTool(options: {
   nowIso: () => string
   nextId: (prefix: string) => string
   config?: () => GraphRuntimeConfig
+  /** Late-bound harness services; carries the agent roster for task roles. */
+  harnesses?: () => GraphPlanHarnessAdmission | undefined
 }): LocalTool {
   return LocalToolHost.defineTool({
     name: 'graph_create_run',
@@ -119,6 +123,24 @@ export function buildGraphCreateRunTool(options: {
         const modelBudget = parsedIntent.success
           ? parsedIntent.data.intent.budget ?? {}
           : legacy!.plan.budget ?? {}
+        const roles = parsedIntent.success
+          ? await resolveGraphPlanRoles({
+              tasks: parsedIntent.data.intent.tasks,
+              roster: options.harnesses?.()?.roster,
+              workspace: context.workspace,
+              ...(context.agentSurface ? { surface: context.agentSurface } : {}),
+              tasksPath: ['intent', 'tasks']
+            })
+          : undefined
+        if (roles?.issues.length) {
+          return graphCreateRunError({
+            code: 'graph_create_run_validation_failed',
+            error: 'A task profile cannot run as a Graph executor.',
+            issues: roles.issues.map((issue) => ({ code: issue.code, path: issue.path, message: issue.message })),
+            guidance: roles.issues[0]!.repairHint,
+            retryable: true
+          })
+        }
         const plan = parsedIntent.success
           ? compileGraphIntent({
               intent: parsedIntent.data.intent,
@@ -126,7 +148,8 @@ export function buildGraphCreateRunTool(options: {
               start,
               nowIso: options.nowIso(),
               budgetDefaults,
-              config: runtimeConfig
+              config: runtimeConfig,
+              ...(roles ? { roles: roles.roles } : {})
             })
           : GraphPlanV1Schema.parse({
               ...legacy!.plan,

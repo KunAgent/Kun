@@ -17,6 +17,7 @@ import {
   GeneratedFilesPanel,
   MessageBubble,
   generatedMediaScrollAvailability,
+  settledTurnMetrics,
   turnMetricsLabel
 } from './message-timeline-bubbles'
 import { WorkMetaRow } from './message-timeline-cards'
@@ -142,10 +143,10 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       onToggle: () => undefined
     }))
     expect(html).toMatch(/Processing|处理中|processing/)
-    expect(html).not.toMatch(/Processed|已处理/)
+    expect(html).not.toMatch(/This turn|本轮记录/)
   })
 
-  it('renders a completed collapsed turn as processed with duration only', () => {
+  it('renders a completed collapsed turn as the turn record with duration only', () => {
     const html = renderToStaticMarkup(createElement(WorkMetaRow, {
       processing: false,
       durationMs: 101_000,
@@ -153,7 +154,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       onToggle: () => undefined
     }))
 
-    expect(html).toMatch(/Processed 1m 41s|已处理 1m 41s/)
+    expect(html).toMatch(/This turn · 1m 41s|本轮记录 · 1m 41s/)
     expect(html).not.toMatch(/Work process|工作过程|steps|步|Read|读取|Thought|思考/)
     expect(html).toContain('aria-expanded="false"')
   })
@@ -165,7 +166,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       onToggle: () => undefined
     }))
 
-    expect(html).toMatch(/Processed|已处理/)
+    expect(html).toMatch(/This turn|本轮记录/)
     expect(html).not.toMatch(/Work process|工作过程|steps|步/)
   })
 
@@ -252,6 +253,24 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     }
   })
 
+  it('shows a reopened turn\'s stamped TTFT/TPS from its turn usage', () => {
+    const turnUsage = {
+      turnId: 'turn_1', requests: 1, inputTokens: 10, outputTokens: 5, reasoningTokens: 0,
+      cachedTokens: 0, cacheWriteTokens: 0, totalTokens: 15, actualCost: null,
+      referenceEstimateUsd: null, referencePriceBreakdown: null, estimateCoverage: 'unavailable' as const,
+      providerIds: [], models: [], avgTtftMs: 640, avgTokensPerSecond: 52.4
+    }
+    const html = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'hello' },
+        turnUsage
+      })
+    )
+    expect(html).toContain('Avg TTFT 0.6s · Avg 52.4 tok/s')
+    expect(settledTurnMetrics({ ...turnUsage, avgTtftMs: null, avgTokensPerSecond: null })).toBeUndefined()
+    expect(settledTurnMetrics(undefined)).toBeUndefined()
+  })
+
   it('omits segments without timing data from the footer label', () => {
     expect(turnMetricsLabel(t, { avgTtftMs: null, avgTokensPerSecond: null })).toBe('')
     expect(turnMetricsLabel(t, { avgTtftMs: 800, avgTokensPerSecond: null }))
@@ -260,7 +279,8 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       .toBe('Avg 38.5 tok/s')
   })
 
-  it('renders the workspace rollback action with fork in completed assistant response actions', () => {
+  it('offers per-turn undo from the response actions when the turn has no file card', () => {
+    vi.stubGlobal('window', { kunGui: { preflightTurnUndo: vi.fn(), getTurnUndoStatus: vi.fn() } })
     const blocks: ChatBlock[] = [
       {
         kind: 'user',
@@ -277,26 +297,64 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       }
     ]
 
-    const html = renderToStaticMarkup(
-      createElement(MessageTimeline, {
-        blocks,
-        liveReasoning: '',
-        live: '',
-        activeThreadId: 'thr_1',
-        runtimeConnection: 'ready',
-        onRetryConnection: () => undefined,
-        onOpenSettings: () => undefined
-      })
-    )
+    try {
+      const html = renderToStaticMarkup(
+        createElement(MessageTimeline, {
+          blocks,
+          liveReasoning: '',
+          live: '',
+          activeThreadId: 'thr_1',
+          runtimeConnection: 'ready',
+          onRetryConnection: () => undefined,
+          onOpenSettings: () => undefined
+        })
+      )
 
-    expect(html).toMatch(/rollbackWorkspace|Rollback commit|回滚提交/)
-    expect(html).toMatch(/rollbackWorkspaceFromAssistantResponse|Rollback this response&#x27;s Git commit|只回滚这条回答对应的 Git 提交/)
-    const rollbackIndex = html.search(/rollbackWorkspaceFromAssistantResponse|Rollback this response&#x27;s Git commit|只回滚这条回答对应的 Git 提交/)
-    const forkIndex = html.slice(rollbackIndex).search(/forkFromAssistantResponse|Fork a new thread from this response|从这条回答分叉新会话/)
-    const copyIndex = html.slice(rollbackIndex + Math.max(forkIndex, 0)).search(/copyMessage|Copy message|复制消息/)
-    expect(rollbackIndex).toBeGreaterThanOrEqual(0)
-    expect(forkIndex).toBeGreaterThan(0)
-    expect(copyIndex).toBeGreaterThan(0)
+      expect(html).toMatch(/turnUndoMessageAction|Undo file changes|撤销文件改动/)
+      const rollbackIndex = html.search(/turnUndoMessageActionTitle|Undo this response&#x27;s file changes|撤销这条回答对文件的改动/)
+      const forkIndex = html.slice(rollbackIndex).search(/forkFromAssistantResponse|Fork a new thread from this response|从这条回答分叉新会话/)
+      const copyIndex = html.slice(rollbackIndex + Math.max(forkIndex, 0)).search(/copyMessage|Copy message|复制消息/)
+      expect(rollbackIndex).toBeGreaterThanOrEqual(0)
+      expect(forkIndex).toBeGreaterThan(0)
+      expect(copyIndex).toBeGreaterThan(0)
+      expect(html).not.toMatch(/Rollback commit|回滚提交/)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('moves per-turn undo onto the file card when the turn edited files', () => {
+    vi.stubGlobal('window', { kunGui: { preflightTurnUndo: vi.fn(), getTurnUndoStatus: vi.fn() } })
+    const blocks: ChatBlock[] = [
+      { kind: 'user', id: 'user_1', turnId: 'turn_1', text: 'change alpha', meta: { workspaceCheckpointId: 'gcp_1' } },
+      {
+        kind: 'tool',
+        id: 'tool_1',
+        summary: 'edit alpha',
+        status: 'success',
+        toolKind: 'file_change',
+        filePath: '/tmp/project/src/alpha.ts',
+        detail: ['--- a/src/alpha.ts', '+++ b/src/alpha.ts', '@@ -1 +1 @@', '-old', '+new'].join('\n')
+      },
+      { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'alpha done' }
+    ]
+    try {
+      const html = renderToStaticMarkup(
+        createElement(MessageTimeline, {
+          blocks,
+          liveReasoning: '',
+          live: '',
+          activeThreadId: 'thr_1',
+          runtimeConnection: 'ready',
+          onRetryConnection: () => undefined,
+          onOpenSettings: () => undefined
+        })
+      )
+      expect(html).toContain('data-turn-undo-action="undo"')
+      expect(html).not.toContain('data-assistant-action="rollback"')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('renders each file-change summary after the turn that produced it', () => {

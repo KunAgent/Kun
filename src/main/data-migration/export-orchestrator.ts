@@ -33,7 +33,7 @@ export type RuntimeThreadForMigration = {
   title: string
   workspace?: string
   status?: 'idle' | 'archived' | 'running'
-  relation?: 'primary' | 'fork' | 'side'
+  relation?: 'primary' | 'fork' | 'side' | 'task'
   parentThreadId?: string
   model?: string
   providerId?: string

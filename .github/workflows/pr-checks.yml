@@ -170,10 +170,10 @@ jobs:
       # PR validation intentionally uses the afterPack ad-hoc signature only.
       # It never consumes Developer ID or notarization secrets.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      # The 0.3.11 renderer build peaks just above 4 GiB of live heap. 5 GiB
-      # clears it while leaving ~2 GiB of the 7 GB macOS ARM runner for the OS
-      # and esbuild; do not raise further without shrinking the renderer.
-      NODE_OPTIONS: '--max-old-space-size=5120'
+      # Renderer chunk generation now exceeds the former 5 GiB heap ceiling.
+      # Match the 6 GiB budget already exercised by native macOS workspace
+      # builds; retain the same runner, serial packaging and all smoke gates.
+      NODE_OPTIONS: '--max-old-space-size=6144'
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -240,6 +240,17 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Test local speech downloads and worker paths
+        run: npx vitest run src/main/services/local-sanotts src/shared/local-sanotts --silent=false --reporter=verbose
+
+      - name: Test native Windows file path boundaries
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/attachments/shared-attachment-paths.test.ts src/attachments/shared-attachment-workspace-tools.test.ts src/attachments/shared-attachment-content.test.ts src/remote/files/path-containment.test.ts src/agents/agent-direct-workspace-paths.test.ts
+
+      - name: Test Windows process identity and owned startup
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts
+
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
@@ -260,7 +271,7 @@ jobs:
             artifacts/windows-installer-transaction/**/fixture-summary.json
 
       - name: Test Windows installer recovery safety
-        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts
+        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts src/main/windows-installer-migration.payload-backup.test.ts
 
   package-windows:
     name: Build Windows NSIS installer (PR)
@@ -284,9 +295,6 @@ jobs:
 
       - name: Install root dependencies
         run: npm ci
-
-      - name: Test local speech downloads and worker paths
-        run: npx vitest run src/main/services/local-sanotts src/shared/local-sanotts
 
       - name: Smoke Windows mini window interaction and restoration
         timeout-minutes: 5

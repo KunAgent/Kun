@@ -8,7 +8,7 @@ import { RoomRuntime } from '../../rooms/room-runtime.js'
 import { ensureRoomThread, enqueueRoomTurn } from '../../rooms/room-execution.js'
 import { roomRunId, prepareRoomRun } from '../../rooms/room-run-recording.js'
 import { decodeRunCursor } from '../../rooms/room-run-query.js'
-import type { RoomRunDetail, RoomRunItemsPage } from '../../contracts/room-run-query.js'
+import type { RoomRunDetail, RoomRunItemsPage, RoomRunSteps } from '../../contracts/room-run-query.js'
 import type { RoomRequestState } from '../../rooms/room-runtime-types.js'
 import type { TurnItem } from '../../contracts/items.js'
 import { defaultRoomMembers, putRoomDocument } from '../../rooms/room-service.js'
@@ -85,6 +85,27 @@ describe('room run read-only scoped API', () => {
     expect(enqueue).not.toHaveBeenCalled()
     expect(loadAll).not.toHaveBeenCalled()
     expect(rewrite).not.toHaveBeenCalled()
+  })
+
+  it('lists a run as compact steps without tool outputs or published messages', async () => {
+    const f = await fixture()
+    const run = await f.admit('steps')
+    const base = { ...run, role: 'tool' as const, status: 'completed' as const, createdAt: '2026-10-18T00:11:00.000Z' }
+    for (const item of [
+      { ...base, id: 'call-df', kind: 'tool_call', toolName: 'bash', callId: 'df', toolKind: 'command_execution', arguments: { command: 'df -h /' } },
+      { ...base, id: 'result-df', kind: 'tool_result', toolName: 'bash', callId: 'df', toolKind: 'command_execution', output: 'x'.repeat(50000), isError: false },
+      { ...base, id: 'call-im', kind: 'tool_call', toolName: 'send_im_message', callId: 'im', toolKind: 'tool_call', arguments: { body: 'hi' } },
+      { ...base, id: 'approval-rm', kind: 'approval', approvalId: 'a1', toolName: 'bash', summary: 'Delete caches', status: 'allowed' }
+    ]) await f.h.sessionStore.appendItem(run.threadId, item as TurnItem)
+    const response = await f.call<RoomRunSteps>(`${f.base}/runs/${run.runId}/steps`)
+    expect(response.status).toBe(200)
+    expect(response.body.run.id).toBe(run.runId)
+    expect(response.body.steps).toEqual([
+      expect.objectContaining({ id: 'call-df', kind: 'tool', target: 'df -h /', status: 'done' }),
+      expect.objectContaining({ id: 'approval-rm', kind: 'approval', label: 'Delete caches', status: 'allowed' })
+    ])
+    expect(JSON.stringify(response.body)).not.toContain('xxxxxxxx')
+    expect((await f.call(`/v1/rooms/missing-room/runs/${run.runId}/steps`)).status).toBe(404)
   })
 
   it('validates room/member/turn scope and refuses client identity substitution', async () => {

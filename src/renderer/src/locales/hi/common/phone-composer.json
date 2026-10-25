@@ -326,8 +326,6 @@
   "composerVoiceStop": "रिकॉर्डिंग बंद करो",
   "composerVoiceSend": "रुको और भेजो",
   "composerVoiceTranscribing": "प्रतिलेखन...",
-  "composerPromptOptimize": "शीघ्र अनुकूलन करें",
-  "composerPromptOptimizing": "प्रॉम्प्ट को अनुकूलित किया जा रहा है...",
   "composerVoiceMicDenied": "माइक्रोफ़ोन पहुंच अस्वीकृत कर दी गई थी. इसे सिस्टम सेटिंग्स में अनुमति दें और पुनः प्रयास करें।",
   "composerVoiceTooShort": "रिकॉर्डिंग बहुत छोटी थी. थोड़ी देर और रुकें.",
   "composerVoiceFailed": "Voice transcription failed: {{message}}",

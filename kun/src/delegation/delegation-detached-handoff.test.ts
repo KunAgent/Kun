@@ -65,6 +65,42 @@ describe('detached child handoff', () => {
     } finally { unbind() }
   })
 
+  it('wakes the parent once for every obligation that waited on it', async () => {
+    const fixture = await createFixture()
+    await fixture.first.prepare(childRecord())
+    await fixture.first.prepare(childRecord({ id: 'child-2', label: 'review', status: 'failed' }))
+
+    await expect(fixture.second.replayPending()).resolves.toBe(2)
+
+    expect(fixture.startTurn).toHaveBeenCalledOnce()
+    const request = fixture.startTurn.mock.calls[0][0].request as { prompt: string; displayText: string }
+    expect(request.prompt).toContain('<child_id>child-1</child_id>')
+    expect(request.prompt).toContain('<child_id>child-2</child_id>')
+    expect(request.displayText).toBe('Background subagent research completed\nBackground subagent review failed')
+    expect(fixture.runTurn).toHaveBeenCalledOnce()
+    expect(await fixture.store.list()).toEqual([])
+  })
+
+  it('shares one parent turn between siblings that settle inside the merge window', async () => {
+    const fixture = await createFixture(() => 'idle', 50)
+    const first = childRecord()
+    const second = childRecord({ id: 'child-2', label: 'review' })
+    await fixture.first.prepare(first)
+    const delivering = fixture.first.deliverRecord(first)
+    await fixture.first.prepare(second)
+    await Promise.all([delivering, fixture.first.deliverRecord(second)])
+
+    expect(fixture.startTurn).toHaveBeenCalledOnce()
+    expect(fixture.startTurn.mock.calls[0][0].request.clientRequestId).toMatch(/^child_handoff_batch_/)
+    expect(await fixture.store.list()).toEqual([])
+  })
+
+  it('leaves ADE workers to the manager worker-notice coordinator', async () => {
+    const fixture = await createFixture()
+    await expect(fixture.first.prepare(childRecord({ launcher: 'manager-worker' }))).resolves.toBeUndefined()
+    expect(await fixture.store.list()).toEqual([])
+  })
+
   it('uses one clientRequestId when ack fails after durable admission', async () => {
     const fixture = await createFixture()
     const originalAck = fixture.store.ack.bind(fixture.store)
@@ -90,7 +126,7 @@ describe('detached child handoff', () => {
   })
 })
 
-async function createFixture(status: () => 'running' | 'idle' = () => 'idle') {
+async function createFixture(status: () => 'running' | 'idle' = () => 'idle', mergeWindowMs?: number) {
   const root = await mkdtemp(join(tmpdir(), 'kun-child-handoff-'))
   roots.push(root)
   const store = new DetachedChildHandoffStore(root)
@@ -121,7 +157,8 @@ async function createFixture(status: () => 'running' | 'idle' = () => 'idle') {
     turns: { startTurn } as unknown as TurnService,
     runTurn: () => runTurn,
     proactiveRetry: () => ({ enabled: true, maxAttempts: 3 }),
-    nowIso: () => '2026-08-30T00:00:00.000Z'
+    nowIso: () => '2026-08-30T00:00:00.000Z',
+    mergeWindowMs
   }
   return {
     threadStore,
@@ -133,7 +170,7 @@ async function createFixture(status: () => 'running' | 'idle' = () => 'idle') {
   }
 }
 
-function childRecord() {
+function childRecord(overrides: Partial<ChildRunRecord> = {}) {
   return ChildRunRecord.parse({
     id: 'child-1',
     parentThreadId: 'parent-thread',
@@ -146,6 +183,7 @@ function childRecord() {
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     returnFormat: 'summary',
     createdAt: '2026-08-30T00:00:00.000Z',
-    updatedAt: '2026-08-30T00:01:00.000Z'
+    updatedAt: '2026-08-30T00:01:00.000Z',
+    ...overrides
   })
 }

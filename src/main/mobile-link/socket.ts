@@ -29,6 +29,24 @@ export async function mobileSocketProxy(
   return proxy
 }
 
+// ProxyAgent may await a proxy constructor after resolving the system policy.
+// Fence the final handoff too, before agent-base can open a late connection.
+class MobileProxyAgent extends ProxyAgent {
+  private closed = false
+  override async connect(...args: Parameters<ProxyAgent['connect']>) {
+    const agent = await super.connect(...args)
+    if (this.closed || args[0].destroyed) {
+      if (this.closed) agent.destroy()
+      throw new Error('SOCKET_CLOSED')
+    }
+    return agent
+  }
+  override destroy() {
+    this.closed = true
+    super.destroy()
+  }
+}
+
 export class MobileLinkSockets {
   private agent: ProxyAgent
   private sockets = new Set<WebSocket>()
@@ -38,14 +56,18 @@ export class MobileLinkSockets {
     diagnostic: (code: string) => void = () => {}
   ) {
     const note = (code: string) => { try { diagnostic(code) } catch { /* diagnostics never break the socket */ } }
-    this.agent = new ProxyAgent({
+    this.agent = new MobileProxyAgent({
       keepAlive: true,
-      getProxyForUrl: async (url) => {
+      getProxyForUrl: async (url, request) => {
         try {
           const proxy = await mobileSocketProxy(url, resolveRules)
+          // Proxy resolution can outlive a cancelled WebSocket handshake.
+          // Do not let ProxyAgent open a late TCP connection for the dead request.
+          if (this.closed || request.destroyed) throw new Error('SOCKET_CLOSED')
           note(proxy ? 'WSS_PROXY' : 'WSS_DIRECT')
           return proxy
         } catch {
+          if (this.closed || request.destroyed) throw new Error('SOCKET_CLOSED')
           note('WSS_PROXY_RESOLUTION_FAILED')
           throw new Error('PROXY_RESOLUTION_FAILED')
         }

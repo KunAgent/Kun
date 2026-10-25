@@ -1,4 +1,5 @@
 import { publishAgentDispatchIntent } from './agent-dispatch-client'
+import { publishTaskSuggestion } from './task-suggestion-client'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -580,6 +581,7 @@ export async function dispatchKunRuntimeEvent(
   handleApprovalRequest: (event: CoreRuntimeEventJson, sink: ThreadEventSink) => Promise<void>
 ): Promise<void> {
   if (event.kind === 'agent_dispatch_intent') publishAgentDispatchIntent(event.dispatchIntent)
+  if (event.kind === 'task_suggestion') publishTaskSuggestion(event.taskSuggestion)
   const child = normalizeChildMetadata(event.child)
   if (child) {
     sink.onChildRuntimeEvent?.({

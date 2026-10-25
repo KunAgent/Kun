@@ -36,6 +36,7 @@ import { activeWritePaperReference } from '../../write/write-paper-reference'
 import { useWorkComposerReferences } from '../../write/work-composer-references'
 import { retrieveWorkbenchWriteContext } from './workbench-write-retrieval'
 import { readWriteDocumentSha256 } from './read-write-document-sha256'
+import { beginWorkSubmission, observeWorkSubmission } from '../../product-analytics/work'
 
 export type WorkbenchWriteSendDeps = {
   activeThreadId: string | null
@@ -87,13 +88,16 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
   // Clearing the input drops the @ tokens, and with them the references; keep the snapshot.
   const fileReferences = [...useWorkComposerReferences.getState().references]
   if (!v && attachmentIds.length === 0 && documentAttachments.length === 0 && fileReferences.length === 0) return
+  const analytics = beginWorkSubmission()
   if (attachmentIds.length > 0 && !attachmentUploadEnabled) {
+    analytics?.finish('failed')
     setAttachmentUploadError(t('composerAttachmentModelUnsupported'))
     return
   }
   const writeState = useWriteWorkspaceStore.getState()
   const activeWhiteboard = activeWorkWhiteboardForSend(writeState)
   if (activeWhiteboard === undefined) {
+    analytics?.finish('failed')
     setError(t('writeWhiteboardAssistantPreparing'))
     return
   }
@@ -184,7 +188,7 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
     return writeDraftStillMatches()
   }
   setInput('')
-  void (async () => {
+  void observeWorkSubmission(analytics, async () => {
     if (!await saveActiveDraft()) {
       restorePrompt()
       return
@@ -304,6 +308,7 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
       externalAgent || writeActiveDocument?.kind === 'office' ? 'agent' : composerMode === 'plan' ? 'plan' : 'agent',
       {
         agentSurface: 'write',
+        ...(analytics ? { clientRequestId: analytics.clientRequestId } : {}),
         useComposerAgent: true,
         ...(v
           ? promptText !== v ? { displayText: v } : {}
@@ -344,5 +349,6 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
     } else {
       restorePrompt()
     }
-  })()
+    return sent ? 'accepted' : 'failed'
+  })
 }

@@ -9,7 +9,7 @@ import { WorkerCreateInputSchema, type WorkerCreateInput } from './manager-worke
 import { newManagerWorkRefusal } from './new-work-admission.js'
 import { budgetHardRefusal } from './team-budget.js'
 import { resolveManagerWorkerRoute } from './worker-route.js'
-import { countRecentWorkerFailures } from './worker-selector.js'
+import { workerRouteHealth } from './worker-route-health.js'
 import { clampPermission } from './permission-clamp.js'
 import { checkHarnessAdmission } from '../harness/harness-admission.js'
 import { requestUserOnlyEscalation } from './escalation-approval.js'
@@ -26,8 +26,8 @@ export class ManagerWorkerCreator {
   private reportLanguage() { return reportLanguage(this.deps.language?.()) }
   private workerSecurity = workerWorkspaceSecurity
   private resolveRoute(ctx: ManagerToolContext, input: WorkerCreateInput, isolated: boolean) {
-    return resolveManagerWorkerRoute(this.deps, ctx, input, isolated, (teamId, harnessId: HarnessId) =>
-      countRecentWorkerFailures({ teams: this.deps.teams, dispatches: this.deps.dispatches }, teamId, harnessId))
+    return resolveManagerWorkerRoute(this.deps, ctx, input, isolated, (teamId, route) =>
+      workerRouteHealth(this.deps, teamId, route))
   }
 
   async create(

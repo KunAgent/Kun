@@ -37,7 +37,7 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
           <button
             type="button"
             className={REMOTE_PRIMARY_BUTTON_CLASS}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || !link.mobileAllowed}
             onClick={(event) => runTrustedUserActivation(event, () => confirm(pairing.id, choices[pairing.id] ?? PERSONAL_SCOPES))}
           >
             {zh ? '允许访问' : 'Allow access'}
@@ -57,7 +57,7 @@ function mobileSubtitle(link: MobileLink): string {
   if (signedIn && state?.online) return zh ? '中继已连接 · 聊天记录留在电脑' : 'Relay connected · history stays here'
   if (signedIn && state?.enabled) return zh ? '连接中' : 'Connecting'
   if (!signedIn) return zh ? '官方中继需登录 Kun 账号后使用' : 'The official relay needs a Kun account sign-in'
-  return zh ? '已关闭 · 每次打开 Kun 默认关闭' : 'Off · off each time Kun opens'
+  return zh ? '已关闭 · 开启后会记住，下次打开 Kun 自动连接' : 'Off · once on, it reconnects whenever Kun opens'
 }
 
 /** The Kun iOS row in the access-method list. */
@@ -76,14 +76,16 @@ export function MobileChannelRow({ link }: { link: MobileLink }): ReactElement |
         <Smartphone size={15} />
       </RemoteIconTile>
       <RemoteRowText
-        title={zh ? 'Kun iOS · 中继' : 'Kun iOS · relay'}
+        title={zh ? 'Kun iOS · Plus 及以上' : 'Kun iOS · Plus or higher'}
         subtitle={mobileSubtitle(link)}
       />
+      {signedIn && !link.mobileAllowed ? <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={link.refreshMembership}>{zh ? '刷新会员状态' : 'Refresh membership'}</button>
+        : ['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(state?.error ?? '') ? <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={link.retryVip}>{zh ? '会员已更新，重新连接' : 'Membership updated · reconnect'}</button> : null}
       {signedIn ? (
         <RemoteSwitch
           checked={on}
           label={label}
-          disabled={!state || busy === 'stop' || (Boolean(busy) && !canStop)}
+          disabled={!state || busy === 'stop' || (!canStop && (!link.mobileAllowed || Boolean(busy)))}
           onToggle={toggle}
         />
       ) : account.state.status === 'authorizing' ? (
@@ -124,7 +126,7 @@ function MobileGrantRow({ link, grant }: { link: MobileLink; grant: MobileLinkSt
   const dirty = [...draft].sort().join(',') !== [...(grant.scopes ?? PERSONAL_SCOPES)].sort().join(',')
   return <RemoteRow className="flex-wrap">
     <RemoteStatusDot on />
-    <RemoteRowText title={grant.name ?? grant.controllerId} subtitle={zh ? 'Kun iOS · 中继' : 'Kun iOS · relay'} />
+    <RemoteRowText title={grant.name ?? grant.controllerId} subtitle={zh ? 'Kun iOS · Plus 及以上' : 'Kun iOS · Plus or higher'} />
     <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={() => revoke(grant.id)}>
       {zh ? '撤销' : 'Revoke'}
     </button>

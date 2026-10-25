@@ -181,13 +181,9 @@ describe('write selection assist settings', () => {
     const write = defaultWriteSettings()
     expect(write.selectionAssist.infographicPrompt).toBe('')
     expect(write.selectionAssist.quickActions).toEqual([
-      { id: 'polish', label: '', prompt: '', mode: 'chat' },
+      { id: 'polish', label: '', prompt: '', mode: 'edit' },
       { id: 'explain', label: '', prompt: '', mode: 'chat' },
-      { id: 'reformat', label: '', prompt: '', mode: 'edit' },
-      { id: 'distill', label: '', prompt: '', mode: 'chat' },
-      { id: 'bolder', label: '', prompt: '', mode: 'chat' },
-      { id: 'quieter', label: '', prompt: '', mode: 'chat' },
-      { id: 'critique', label: '', prompt: '', mode: 'chat' }
+      { id: 'reformat', label: '', prompt: '', mode: 'edit' }
     ])
   })
 
@@ -204,7 +200,7 @@ describe('write selection assist settings', () => {
       }
     })
     expect(next.selectionAssist.quickActions).toEqual([
-      { id: 'polish', label: '提升写作', prompt: '改写得更好', mode: 'chat' }
+      { id: 'polish', label: '提升写作', prompt: '改写得更好', mode: 'edit' }
     ])
     expect(next.selectionAssist.infographicPrompt).toBe('')
   })
@@ -268,7 +264,7 @@ describe('write selection assist settings', () => {
       }
     })
     expect(write.selectionAssist.quickActions).toEqual([
-      { id: 'polish', label: '', prompt: '', mode: 'chat' },
+      { id: 'polish', label: '', prompt: '', mode: 'edit' },
       { id: 'custom-1', label: '', prompt: '', mode: 'chat' }
     ])
   })
@@ -283,23 +279,24 @@ describe('write selection assist settings', () => {
       id: 'polish',
       label: 'hello ',
       prompt: 'world ',
-      mode: 'chat'
+      mode: 'edit'
     })
   })
 
-  it('drops pristine retired built-ins and migrates pristine polish to the sidebar mode', () => {
-    // Stored rows from before proofread was retired and polish moved to chat.
+  it('drops pristine retired built-ins and migrates pristine polish to selection review', () => {
+    // Stored rows from before selection rewrites gained explicit review.
     const write = normalizeWriteSettings({
       selectionAssist: {
         quickActions: [
-          { id: 'polish', label: '', prompt: '', mode: 'edit' },
+          { id: 'polish', label: '', prompt: '', mode: 'chat' },
           { id: 'proofread', label: '', prompt: '', mode: 'edit' },
+          ...['distill', 'bolder', 'quieter', 'critique'].map((id) => ({ id, label: '', prompt: '', mode: 'chat' as const })),
           { id: 'explain', label: '', prompt: '', mode: 'chat' }
         ]
       }
     })
     expect(write.selectionAssist.quickActions).toEqual([
-      { id: 'polish', label: '', prompt: '', mode: 'chat' },
+      { id: 'polish', label: '', prompt: '', mode: 'edit' },
       { id: 'explain', label: '', prompt: '', mode: 'chat' }
     ])
   })
@@ -309,13 +306,17 @@ describe('write selection assist settings', () => {
       selectionAssist: {
         quickActions: [
           { id: 'proofread', label: '校对', prompt: '修正错别字', mode: 'edit' },
-          { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' }
+          { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' },
+          { id: 'distill', label: '我的精简', prompt: '', mode: 'chat' },
+          { id: 'critique', label: '', prompt: '检查论证逻辑', mode: 'edit' }
         ]
       }
     })
     expect(write.selectionAssist.quickActions).toEqual([
       { id: 'proofread', label: '校对', prompt: '修正错别字', mode: 'edit' },
-      { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' }
+      { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' },
+      { id: 'distill', label: '我的精简', prompt: '', mode: 'chat' },
+      { id: 'critique', label: '', prompt: '检查论证逻辑', mode: 'edit' }
     ])
   })
 })

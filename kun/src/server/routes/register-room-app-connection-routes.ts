@@ -1,3 +1,5 @@
+import { githubReady } from '../../contracts/github-app.js'
+import { githubRequestScope } from './github-app.js'
 import { isRoomImApp } from '../../rooms/room-app-connection-tools.js'
 import { z } from 'zod'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
@@ -32,6 +34,7 @@ export function registerRoomAppConnectionRoutes(add: Add, runtime: ServerRuntime
       const serverId = before.row.value.appConnection!.serverId
       const hiddenGoogleApp = isHiddenRoomGoogleApp(serverId)
       const nativeGmail = serverId === 'google_gmail'
+      const nativeGitHub = serverId === 'github'
       if (action === 'complete' && isRoomImApp(serverId)) throw new RoomStoreConflictError('Complete the official IM setup from the native connection card')
       if (action === 'complete') {
         if (hiddenGoogleApp && before.row.value.appConnection!.status === 'requested') {
@@ -48,10 +51,16 @@ export function registerRoomAppConnectionRoutes(add: Add, runtime: ServerRuntime
             throw new RoomStoreConflictError('Connect Gmail and allow this conversation’s model to use mail before continuing')
           }
         }
-        if (!nativeGmail && !hiddenGoogleApp && (!runtime.mcpConfig || !runtime.mcpOAuth || !runtime.toolDiagnostics)) {
+        if (nativeGitHub) {
+          const scope = await githubRequestScope(runtime, { roomId: params.roomId, messageId })
+          if (!runtime.githubApp || !githubReady(await runtime.githubApp.status(scope, true))) {
+            throw new RoomStoreConflictError('Connect GitHub and allow this conversation before continuing')
+          }
+        }
+        if (!nativeGmail && !nativeGitHub && !hiddenGoogleApp && (!runtime.mcpConfig || !runtime.mcpOAuth || !runtime.toolDiagnostics)) {
           throw new RoomStoreConflictError('app connection status is unavailable')
         }
-        if (!nativeGmail && !hiddenGoogleApp) {
+        if (!nativeGmail && !nativeGitHub && !hiddenGoogleApp) {
           if (!runtime.mcpConfig!().servers[serverId]?.enabled) throw new RoomStoreConflictError('app is not enabled in Kun')
           const oauth = await runtime.mcpOAuth!()
           if (!oauth.some((item) => item.serverId === serverId && item.status === 'authorized')) {

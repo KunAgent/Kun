@@ -89,11 +89,11 @@ export function useWorkbenchShellRuntime(context: Context): {
   } = context
   const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
   const extraWorkspaceRoots = extraRootsForWorkspace(fileTreeWorkspaceRoot, folderSets)
-  const mainComposerContextChips = taskSurface === 'design'
-    ? [...designContextChips, ...extensionComposerContextChips]
-    : extensionComposerContextChips
+  // In Code mode designContextChips only carries the picked HTML element, so
+  // merging it always keeps the composer chip visible on both surfaces.
+  const mainComposerContextChips = [...designContextChips, ...extensionComposerContextChips]
   const removeMainComposerContext = (id: string): void => {
-    if (taskSurface === 'design' && designContextChips.some((chip: { id: string }) => chip.id === id)) {
+    if (designContextChips.some((chip: { id: string }) => chip.id === id)) {
       removeDesignContextChip(id)
     } else removeComposerContextWithLinkedImage(id)
   }

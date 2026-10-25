@@ -148,7 +148,7 @@ kun exec --data-dir ~/.kun/data --workspace "$PWD" read --args '{"path":"README.
 
 - `kun run` creates a thread, runs one turn, streams assistant text, and exits.
 - `kun chat` starts a line-oriented REPL. Use `/exit`, `/quit`, or an empty line to stop.
-- Bare `kun` (or its `kun tui` alias) starts a Runtime owned by that TUI session when the slot is free. Use `kun tui --no-start` to share live HTTP/SSE state with a Runtime already owned by the GUI. Its inline pi-tui interface preserves terminal scrollback. See [the TUI guide](../docs/kun-tui.en.md).
+- Bare `kun` (or its `kun tui` alias) starts a Runtime owned by that TUI session when the slot is free. Use `kun tui --no-start` to share live HTTP/SSE state with a Runtime already owned by the GUI. Its inline opentui interface keeps the conversation in terminal scrollback. See [the TUI guide](../docs/kun-tui.en.md).
 - `kun exec --list-tools` prints the effective dynamic tool registry for the chosen config/workspace.
 - `kun exec <tool> --args <json>` invokes one tool directly. Use `--json` on `run` or `exec` for machine-readable output.
 

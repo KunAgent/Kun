@@ -24,8 +24,9 @@ Object.assign(window, { kunGui: {
   getSettings: async () => settings,
   optimizePrompt: async ({ text }: { text: string }) => {
     calls.optimized.push(text)
-    return { ok: true, text: `Optimized: ${text}` }
+    return { ok: true, text: `Optimized: ${text}`, model: 'deepseek-v4-pro', providerId: 'deepseek' }
   },
+  cancelPromptOptimization: async () => undefined,
   transcribeSpeech: async () => {
     calls.transcribed++
     return { ok: true, text: 'Recorded fixture text' }

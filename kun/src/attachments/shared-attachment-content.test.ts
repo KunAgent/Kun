@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AttachmentContent } from './attachment-store.js'
 import { projectSharedAttachment, sharedAttachmentDirectory, sharedAttachmentName, sharedAttachmentReadPath } from './shared-attachment-content.js'
@@ -31,9 +31,14 @@ describe('shared-only attachment metadata and private copies', () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-shared-alias-policy-')), thread = 'policy-' + Date.now()
     const otherThread = thread + '-other'
     try {
+      const ordinaryFile = join(workspace, 'ordinary.txt')
+      await writeFile(ordinaryFile, 'workspace bytes')
       const own = await projectSharedAttachment(content(), thread, []), foreign = await projectSharedAttachment(content(), otherThread, [])
       const context: ToolHostContext = { threadId: thread, turnId: 'turn', workspace, attachmentAliases: [], clientSurface: 'api',
         sandboxMode: 'workspace-write', approvalPolicy: 'auto', abortSignal: new AbortController().signal, awaitApproval: async () => 'deny' }
+      expect((await resolveWorkspacePath(ordinaryFile, context)).absolutePath).toBe(resolve(ordinaryFile))
+      expect((await resolveWorkspacePath(ordinaryFile, { ...context, attachmentAliases: undefined })).absolutePath).toBe(resolve(ordinaryFile))
+      expect(canWritePath(ordinaryFile, context).ok).toBe(true)
       expect((await resolveWorkspacePath(own.localFilePath!, context)).absolutePath).toBe(await sharedAttachmentReadPath(own.localFilePath!, context))
       expect((await resolveWorkspacePath(dirname(own.localFilePath!), context)).absolutePath).toBeTruthy()
       expect(canWritePath(own.localFilePath!, { ...context, sandboxMode: 'danger-full-access' }).ok).toBe(false)
@@ -44,6 +49,30 @@ describe('shared-only attachment metadata and private copies', () => {
       const ordinary = { ...context, attachmentAliases: undefined }
       await expect(resolveWorkspacePath(own.localFilePath!, ordinary)).rejects.toThrow('SHARED_ATTACHMENT_PATH_REJECTED')
     } finally { await rm(workspace, { recursive: true, force: true }); await rm(sharedAttachmentDirectory(thread), { recursive: true, force: true }); await rm(sharedAttachmentDirectory(otherThread), { recursive: true, force: true }) }
+  })
+  it('preserves lexical workspace aliases for ordinary files with and without shared attachment policy', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'kun-shared-workspace-alias-'))
+    const physicalWorkspace = join(base, 'physical-workspace'), workspace = join(base, 'workspace-alias')
+    try {
+      await mkdir(physicalWorkspace)
+      await writeFile(join(physicalWorkspace, 'ordinary.txt'), 'workspace bytes')
+      await symlink(physicalWorkspace, workspace, process.platform === 'win32' ? 'junction' : 'dir')
+      const ordinaryFile = join(workspace, 'ordinary.txt')
+      const physicalFile = await realpath(join(physicalWorkspace, 'ordinary.txt'))
+      // Keep this distinct on every platform, including runners without Windows short-path aliases.
+      expect(resolve(ordinaryFile)).not.toBe(physicalFile)
+      for (const attachmentAliases of [[], undefined]) {
+        const context: ToolHostContext = { threadId: 'workspace-alias', turnId: 'turn', workspace, attachmentAliases,
+          sandboxMode: 'workspace-write', approvalPolicy: 'auto', abortSignal: new AbortController().signal, awaitApproval: async () => 'deny' }
+        for (const inputPath of [ordinaryFile, 'ordinary.txt']) {
+          const resolved = await resolveWorkspacePath(inputPath, context)
+          expect(resolved).toEqual({ workspaceRoot: resolve(workspace), absolutePath: resolve(ordinaryFile), relativePath: 'ordinary.txt' })
+          expect(await realpath(resolved.absolutePath)).toBe(physicalFile)
+          expect(await readFile(resolved.absolutePath, 'utf8')).toBe('workspace bytes')
+          expect(canWritePath(resolved.absolutePath, context).ok).toBe(true)
+        }
+      }
+    } finally { await rm(base, { recursive: true, force: true }) }
   })
   it('does not follow a private-copy symlink and repairs corrupted same-size cached bytes', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-shared-alias-links-')), thread = 'links-' + Date.now()

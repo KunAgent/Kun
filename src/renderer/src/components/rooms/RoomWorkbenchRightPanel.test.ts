@@ -11,7 +11,10 @@ import { RoomDirectFiles } from './RoomDirectChat'
 import { RoomWorkbenchRightPanel } from './RoomWorkbenchRightPanel'
 import { useRoomWorkbenchPanel, type RoomWorkbenchPanel } from './useRoomWorkbenchPanel'
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+  initReactI18next: { type: '3rdParty', init: vi.fn() }
+}))
 vi.mock('./RoomAgentBrowser', () => ({ RoomAgentBrowser: () => null }))
 vi.mock('./RoomDirectChat', () => ({ RoomDirectFiles: () => null }))
 vi.mock('../workbench/WorkbenchFileTreeSidePanel', () => ({ WorkbenchFileTreeSidePanel: () => null }))
@@ -70,5 +73,13 @@ describe('private Agent Code sidebar', () => {
     act(() => workspace.props.onClick())
     expect(renderer.root.findByType(WorkbenchFileTreeSidePanel).props.showViewTabs).toBe(false)
     expect(renderer.root.findByType(WorkbenchFileTreeSidePanel).props.view).toBe('workspace')
+  })
+  it('opens the wardrobe from the rail without an unread badge', async () => {
+    await act(async () => { renderer = create(createElement(Harness)) })
+    const wardrobe = rail().findByProps({ 'data-room-tool': 'wardrobe' })
+    expect(wardrobe.findAll((node) => node.props['data-rail-badge'] !== undefined)).toHaveLength(0)
+    act(() => wardrobe.props.onClick())
+    expect(panel.state.activeId).toBe(BUILTIN_RIGHT_PANEL_IDS.wardrobe)
+    expect(panel.state.expanded).toBe(true)
   })
 })

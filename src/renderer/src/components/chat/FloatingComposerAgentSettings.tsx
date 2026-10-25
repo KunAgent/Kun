@@ -110,7 +110,7 @@ export function FloatingComposerAgentSettings({ harnessId, threadId, compact = f
       <div className="ds-composer-agent-picker ds-no-drag relative" data-agent-settings-picker={harnessId}>
         <button ref={triggerRef} type="button" disabled={disabled} aria-haspopup="menu" aria-controls={menuId}
           aria-expanded={open} aria-label={title} title={title} onClick={() => setOpen((current) => !current)}
-          className={`flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-raised px-2 text-xs transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-elevated px-2 text-xs transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60 ${
             changed ? 'text-ds-ink' : 'text-ds-muted'}`}>
           <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
           {!compact ? <span className="max-w-[120px] truncate">{t('agentSettingsPicker.title')}</span> : null}

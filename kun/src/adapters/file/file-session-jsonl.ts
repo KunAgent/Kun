@@ -5,6 +5,7 @@ import { RuntimeEvent as RuntimeEventSchema, type RuntimeEvent } from '../../con
 import { type TurnItem } from '../../contracts/items.js'
 import { yieldToEventLoop } from '../hybrid/hybrid-thread-support.js'
 import { renameFileWithRetry } from './atomic-write.js'
+import { scanJsonlLines, type JsonlLine } from './jsonl-line-scanner.js'
 import { writeJsonlLines, type CreateJsonlWriteStream } from './jsonl-write-stream.js'
 
 const MS_PER_DAY = 86_400_000
@@ -389,18 +390,27 @@ export async function* iterateRuntimeEventsJsonl(
 export async function readJsonlTail(
   path: string,
   startByte: number,
-  options: { maxRecordBytes?: number } = {}
+  options: { maxRecordBytes?: number; chunkBytes?: number } = {}
 ): Promise<{ lines: string[]; endOffset: number }> {
   const maxRecordBytes = Math.max(
     1,
     Math.floor(options.maxRecordBytes ?? DEFAULT_ITEM_HISTORY_MAX_RECORD_BYTES)
   )
   const start = Math.max(0, Math.floor(startByte))
-  const chunks: Buffer[] = []
+  const lines: string[] = []
+  let endOffset = start
   try {
-    const stream = createReadStream(path, { start })
-    for await (const chunk of stream) {
-      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk)
+    for await (const { line, bytes, trailing } of scanJsonlLines(path, {
+      start,
+      chunkBytes: options.chunkBytes,
+      // A partial trailing record is left unconsumed, whatever its size.
+      maxPendingBytes: Number.POSITIVE_INFINITY,
+      pendingTooLarge: () => new Error('unreachable')
+    })) {
+      if (trailing) break
+      if (bytes > maxRecordBytes) throw new Error(`jsonl record exceeds ${maxRecordBytes} bytes`)
+      lines.push(line)
+      endOffset += bytes + 1
     }
   } catch (error) {
     if ((error as { code?: string }).code === 'ENOENT') {
@@ -408,21 +418,7 @@ export async function readJsonlTail(
     }
     throw error
   }
-  const buffer = Buffer.concat(chunks)
-  const lastNewline = buffer.lastIndexOf(0x0a)
-  if (lastNewline < 0) return { lines: [], endOffset: start }
-  const complete = buffer.subarray(0, lastNewline + 1)
-  const lines: string[] = []
-  let lineStart = 0
-  for (let index = 0; index < complete.length; index += 1) {
-    if (complete[index] !== 0x0a) continue
-    if (index - lineStart > maxRecordBytes) {
-      throw new Error(`jsonl record exceeds ${maxRecordBytes} bytes`)
-    }
-    lines.push(complete.toString('utf-8', lineStart, index))
-    lineStart = index + 1
-  }
-  return { lines, endOffset: start + lastNewline + 1 }
+  return { lines, endOffset }
 }
 
 export async function readLatestItemsFromJsonl(
@@ -430,6 +426,8 @@ export async function readLatestItemsFromJsonl(
   options: {
     maxRecordBytes?: number
     rejectMalformed?: boolean
+    /** Read size; tests shrink it to make records span many reads. */
+    chunkBytes?: number
   } = {}
 ): Promise<{
   items: TurnItem[]
@@ -443,17 +441,15 @@ export async function readLatestItemsFromJsonl(
   )
   const latestById = new Map<string, TurnItem>()
   const firstSeenIds: string[] = []
-  let remainder = ''
   let rawCount = 0
   let malformedCount = 0
   let incompleteTrailingRecord = false
   let linesSinceYield = 0
 
-  const acceptLine = async (line: string, trailing = false): Promise<void> => {
+  const tooLarge = () => new Error(`item history record exceeds ${maxRecordBytes} bytes`)
+  const acceptLine = async ({ line, bytes, trailing }: JsonlLine): Promise<void> => {
     if (!line.trim()) return
-    if (Buffer.byteLength(line, 'utf-8') > maxRecordBytes) {
-      throw new Error(`item history record exceeds ${maxRecordBytes} bytes`)
-    }
+    if (bytes > maxRecordBytes) throw tooLarge()
     try {
       const item = JSON.parse(line) as TurnItem
       if (!item || typeof item !== 'object' || typeof item.id !== 'string' || !item.id) {
@@ -475,23 +471,13 @@ export async function readLatestItemsFromJsonl(
   }
 
   try {
-    const stream = createReadStream(path, {
-      encoding: 'utf-8',
-      highWaterMark: Math.min(maxRecordBytes, 64 * 1024)
-    })
-    for await (const chunk of stream) {
-      remainder += typeof chunk === 'string' ? chunk : chunk.toString('utf-8')
-      let newline = remainder.indexOf('\n')
-      while (newline >= 0) {
-        await acceptLine(remainder.slice(0, newline))
-        remainder = remainder.slice(newline + 1)
-        newline = remainder.indexOf('\n')
-      }
-      if (Buffer.byteLength(remainder, 'utf-8') > maxRecordBytes) {
-        throw new Error(`item history record exceeds ${maxRecordBytes} bytes`)
-      }
+    for await (const line of scanJsonlLines(path, {
+      chunkBytes: options.chunkBytes,
+      maxPendingBytes: maxRecordBytes,
+      pendingTooLarge: tooLarge
+    })) {
+      await acceptLine(line)
     }
-    await acceptLine(remainder, true)
   } catch (error) {
     if ((error as { code?: string }).code !== 'ENOENT') throw error
   }
@@ -512,4 +498,18 @@ export { readItemPageFromJsonl } from './file-session-item-page-scan.js'
 
 export function serializedBytes(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), 'utf-8')
+}
+
+/**
+ * JSON byte size of `values` as an array, exact while it stays within
+ * `limit`. Once over it returns early, so a size-capped cache can reject a
+ * large history without serializing all of it.
+ */
+export function serializedArrayBytesUpTo(values: readonly unknown[], limit: number): number {
+  let bytes = 2 + Math.max(0, values.length - 1)
+  for (const value of values) {
+    if (bytes > limit) return bytes
+    bytes += serializedBytes(value)
+  }
+  return bytes
 }

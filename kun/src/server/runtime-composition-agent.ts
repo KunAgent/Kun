@@ -43,6 +43,12 @@ import {
 } from './runtime-composition-manager.js'
 import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { createAdeManagerContext } from '../ade/manager-context.js'
+import { createTaskSuggestionContext } from '../delegation/task-suggestion-context.js'
+import { createTaskSuggestionToolProvider } from '../adapters/tool/task-suggestion-tool-provider.js'
+import { createRuntimeAgentRoster } from './runtime-composition-roster.js'
+import { createDelegationContext } from '../delegation/delegation-context.js'
+import { createLearnedRosterProfiles } from '../graph/graph-learned-roster.js'
+import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { providerModelIds } from './routes/model-gateway-core.js'
 import { FileDelegationStore } from './runtime-factory-dependencies.js'
@@ -240,6 +246,14 @@ export async function createRuntimeAgentComposition(
       })
     )
   )
+  // One roster for delegate_task, workers, Graph tasks and conversation members.
+  const agentRoster = createRuntimeAgentRoster({
+    options: () => core.activeOptions,
+    harnesses: services.harnesses,
+    harnessRuntimeMap,
+    learned: createLearnedRosterProfiles(graphRuntime.registry)
+  })
+  delegationRuntime?.attachRoster(agentRoster)
   // Legacy provider-inference view kept in sync with the router's map so the
   // disabled-router path behaves exactly as before.
   const sdkRuntime = new ReplaceableDelegatedTurnRuntime(
@@ -293,6 +307,7 @@ export async function createRuntimeAgentComposition(
     core,
     delegationRuntime,
     harnessRuntimeMap,
+    agentRoster,
     listQuota: () => model.providerQuotaService.list(),
     notices: workerNoticeCoordinator,
     providerPool: providerPool.poolEntry,
@@ -320,6 +335,11 @@ export async function createRuntimeAgentComposition(
     providerPool,
     core
   })
+  // Like the manager provider, config apply re-lists these card tools in the rebuilt registry.
+  const taskSuggestionToolProvider = createTaskSuggestionToolProvider(services.taskSuggestionService)
+  const agentDispatchToolProvider = createAgentDispatchToolProvider(services.agentDispatchService)
+  registryComposition.registry.registerProvider(taskSuggestionToolProvider)
+  registryComposition.registry.registerProvider(agentDispatchToolProvider)
   model.refreshModelConnectionDelegatedDeps = () => {
     const next = buildHarnessRuntimes(
       buildMainDelegatedRuntime({
@@ -379,6 +399,11 @@ export async function createRuntimeAgentComposition(
     sdkRuntime,
     harnessRouter,
     graphHarnessSummary, adeManagerContext,
+    taskSuggestionContext: createTaskSuggestionContext(services.taskSuggestionService),
+    delegationContext: createDelegationContext({
+      roster: agentRoster,
+      enabled: () => core.activeOptions.capabilities?.subagents?.enabled !== false
+    }),
     usage: usageService,
     events,
     turns: turnService,
@@ -442,7 +467,8 @@ export async function createRuntimeAgentComposition(
 	    detector: services.harnesses.detector,
 	    capabilitiesForRoute: createCapabilitiesForRoute(services.harnesses.catalog, harnessRuntimeMap),
 	    allowUnattendedFullAccess: () =>
-	      core.activeOptions.ade?.allowUnattendedFullAccess === true
+	      core.activeOptions.ade?.allowUnattendedFullAccess === true,
+	    roster: agentRoster
 	  }
 	  await graphRuntime.start(createGraphRuntimeStartOptions({
 	    delegation: () => delegationRuntime,
@@ -521,6 +547,7 @@ export async function createRuntimeAgentComposition(
     harnessRouter,
     harnessRuntimeMap,
     harnesses: services.harnesses,
+    agentRoster,
     activeRuntimeRuns,
     trackRuntimeRun,
     runAgentTurn,
@@ -528,6 +555,8 @@ export async function createRuntimeAgentComposition(
     queuedTurnDispatcher,
     managerRuntime,
     managerToolProvider,
+    taskSuggestionToolProvider,
+    agentDispatchToolProvider,
     activityHibernation,
     dispatchDeliverer,
     workerNoticeCoordinator,

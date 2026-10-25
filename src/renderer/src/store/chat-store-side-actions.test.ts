@@ -6,6 +6,7 @@ import {
 import { DEFAULT_KUN_MODEL } from '@shared/app-settings'
 import type { ChatState } from './chat-store-types'
 import type { AgentProvider, NormalizedThread, ThreadEventSink } from '../agent/types'
+import { createMessageQuoteAttachment } from '../lib/message-quote'
 
 type Harness = {
   state: ChatState
@@ -660,6 +661,20 @@ describe('chat-store-side-actions', () => {
         reasoningEffort: 'low'
       })
     )
+  })
+
+  it('sends quoted composer contexts with the turn they were attached to only', async () => {
+    const { actions, provider, set } = buildHarness()
+    const quote = await createMessageQuoteAttachment({
+      workspaceRoot: '/tmp',
+      quote: { id: 'q', text: 'host scheduling', role: 'assistant', charCount: 15, truncated: false }
+    })
+    const id = await actions.spawnSideConversation('why is this risky?', { composerContexts: [quote] })
+    expect(provider.sendMock).toHaveBeenLastCalledWith(id, 'why is this risky?',
+      expect.objectContaining({ composerContexts: [quote] }))
+    set((s) => ({ sideConversations: { ...s.sideConversations, [id!]: { ...s.sideConversations[id!]!, busy: false } } }))
+    await actions.sendSideMessage(id!, 'and then?')
+    expect(provider.sendMock.mock.lastCall?.[2]).not.toHaveProperty('composerContexts')
   })
 
 })

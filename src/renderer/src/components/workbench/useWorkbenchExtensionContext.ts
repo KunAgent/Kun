@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { terminalOutputFromComposerContext } from '../../lib/terminal-output-attachment'
 import { workspaceRootScopeKey } from '../../lib/workspace-path'
 import { resolveActiveExtensionWorkspaceRoot } from '../../extensions/active-extension-workspace'
 import {
@@ -7,6 +8,7 @@ import {
 import type { ExtensionContributionLoadContext } from '../../extensions/contribution-load-coordinator'
 import type { useWorkbenchChatStoreState } from './useWorkbenchChatStoreState'
 import type { DesignComposerContext } from '../../design/design-composer-context'
+import { messageQuoteFromComposerContext } from '../../lib/message-quote'
 
 type WorkbenchState = ReturnType<typeof useWorkbenchChatStoreState>
 
@@ -80,6 +82,29 @@ export function composerContextChip(
   event: WorkbenchState['extensionComposerContexts'][number]
 ): DesignComposerContext {
   const { attachment } = event
+  const messageQuote = 'source' in attachment.provenance &&
+    attachment.provenance.source === 'workspace-selection'
+    ? messageQuoteFromComposerContext(attachment)
+    : null
+  if (messageQuote) {
+    return {
+      id: attachment.attachmentId,
+      kind: 'message-quote',
+      label: attachment.title,
+      removable: true,
+      messageQuote: {
+        text: messageQuote.text,
+        role: messageQuote.role,
+        truncated: messageQuote.truncated
+      }
+    }
+  }
+  const terminalOutput = 'source' in attachment.provenance && attachment.provenance.source === 'workspace-selection'
+    ? terminalOutputFromComposerContext(attachment)
+    : null
+  if (terminalOutput) {
+    return { id: attachment.attachmentId, kind: 'terminal-output', label: attachment.title, removable: true, terminalOutput }
+  }
   if (
     'source' in attachment.provenance &&
     attachment.provenance.source === 'workspace-selection' &&

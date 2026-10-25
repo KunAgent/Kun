@@ -1,0 +1,38 @@
+{
+  "composerTray": {
+    "regionLabel": "กิจกรรมปัจจุบัน",
+    "queueLabel": "ข้อความในคิว",
+    "collapse": "ย่อ",
+    "stop": "หยุด",
+    "duration": {
+      "seconds": "{{seconds}} วิ",
+      "minutes": "{{minutes}} นาที",
+      "minutesSeconds": "{{minutes}} นาที {{seconds}} วิ",
+      "hours": "{{hours}} ชม.",
+      "hoursMinutes": "{{hours}} ชม. {{minutes}} นาที",
+      "underMinute": "ไม่ถึง 1 นาที",
+      "minutesRounded": "{{minutes}} นาที",
+      "hoursRounded": "{{hours}} ชม.",
+      "hoursMinutesRounded": "{{hours}} ชม. {{minutes}} นาที",
+      "justNow": "เมื่อสักครู่",
+      "ago": "{{duration}}ที่แล้ว"
+    }
+  },
+  "composerInterrupt": {
+    "previous": "ก่อนหน้า",
+    "next": "ถัดไป",
+    "pagerPosition": "{{index}} จาก {{total}}",
+    "countdown": "{{seconds}} วิ",
+    "countdownTitle": "Kun จะดำเนินการต่อเองใน {{seconds}} วินาที",
+    "deciding": "Kun กำลังตัดสินใจเอง…",
+    "recommended": "แนะนำ",
+    "optionsLabel": "ตัวเลือก",
+    "freeTextLabel": "คำตอบของคุณเอง"
+  },
+  "composerDock": {
+    "runningPlaceholder": "พิมพ์ต่อเพื่อเข้าคิวการแก้ไขถัดไป…",
+    "queueMessage": "เข้าคิว",
+    "stopWithShortcut": "หยุด (Esc)",
+    "enterToQueue": "Enter เพื่อเข้าคิว"
+  }
+}

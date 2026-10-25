@@ -6,6 +6,7 @@ import type {
   ReactNode
 } from 'react'
 import { ChevronRight, Command, PanelLeft, Search, X } from 'lucide-react'
+import './sidebar-lean-rows.css'
 
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -57,7 +58,7 @@ export function SidebarFrame({
   return (
     <aside
       className={cx(
-        'ds-drag ds-sidebar-shell relative flex h-full w-full shrink-0 flex-col overflow-hidden px-4 pb-3',
+        'ds-drag ds-sidebar-shell relative flex h-full w-full shrink-0 flex-col overflow-hidden px-2.5 pb-2',
         className
       )}
     >
@@ -78,7 +79,7 @@ export function SidebarFrame({
       {children}
 
       {footer ? (
-        <div className="ds-sidebar-footer ds-no-drag mt-2 border-t border-[var(--ds-sidebar-divider)] px-1.5 pt-3">
+        <div className="ds-sidebar-footer ds-no-drag mt-2 border-t border-[var(--ds-sidebar-divider)] px-1 pt-3">
           {footer}
         </div>
       ) : null}
@@ -97,6 +98,8 @@ type SidebarCommandRowProps = {
   trailing?: ReactNode
   active?: boolean
   showChevron?: boolean
+  /** Drop the whole label (keep the icon) instead of truncating it when the row gets too narrow. */
+  collapseLabel?: boolean
 }
 
 export function SidebarCommandRow({
@@ -109,7 +112,8 @@ export function SidebarCommandRow({
   variant = 'flat',
   trailing,
   active = false,
-  showChevron = false
+  showChevron = false,
+  collapseLabel = false
 }: SidebarCommandRowProps): ReactElement {
   const accent = variant === 'accent'
   const footer = variant === 'footer'
@@ -120,10 +124,12 @@ export function SidebarCommandRow({
       data-active={active ? 'true' : 'false'}
       data-variant={variant}
       disabled={disabled}
-      title={disabled ? disabledHint : undefined}
+      title={disabled ? disabledHint : collapseLabel ? label : undefined}
       onClick={onClick}
       className={cx(
-        'ds-sidebar-command-row flex min-h-9 w-full items-center gap-2.5 rounded-full border px-3 py-1.5 text-[13px] font-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
+        'ds-sidebar-command-row flex w-full items-center gap-2.5 rounded-full border px-3 text-[13px] font-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30',
+        // A label that does not fit wraps onto a second line the fixed height clips away.
+        collapseLabel ? 'h-9 flex-wrap content-start gap-y-4 overflow-hidden py-[7px]' : 'min-h-9 py-1.5',
         disabled
           ? 'cursor-not-allowed border-transparent text-ds-faint opacity-55'
           : active
@@ -143,7 +149,7 @@ export function SidebarCommandRow({
       >
         {icon}
       </span>
-      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+      <span className={collapseLabel ? 'flex-none whitespace-nowrap text-left leading-5' : 'min-w-0 flex-1 truncate text-left'}>{label}</span>
       {shortcut ? (
         <kbd className="ds-kbd hidden items-center gap-0.5 rounded-md px-1.5 py-0.5 font-mono text-[11.5px] font-medium text-ds-faint sm:inline-flex">
           <Command className="h-2.5 w-2.5" strokeWidth={2} />

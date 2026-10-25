@@ -9,6 +9,7 @@ import {
   WriteRichEditor,
   type WriteRichEditorHandle
 } from '../../write/tiptap/WriteRichEditor'
+import { WriteEditorErrorBoundary } from './WriteEditorErrorBoundary'
 import type { WriteEditorSelectionState, WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
 import { WriteMarkdownEditor } from './WriteMarkdownEditor'
 import { WriteWorkspaceStart } from './WriteWorkspaceStart'
@@ -213,7 +214,7 @@ export function WriteWorkspaceDocumentPane({
   if (!activeFilePath) {
     if (workspaceLoading) {
       return (
-        <div className="flex h-full min-h-[320px] items-center justify-center text-[14px] text-ds-muted">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center text-[14px] text-ds-muted">
           {t('writeWorkspaceLoading')}
         </div>
       )
@@ -236,7 +237,7 @@ export function WriteWorkspaceDocumentPane({
 
   if (fileLoading) {
     return (
-      <div className="flex h-full min-h-[320px] items-center justify-center text-[14px] text-ds-muted">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center text-[14px] text-ds-muted">
         {t('filePreviewLoading')}
       </div>
     )
@@ -275,7 +276,7 @@ export function WriteWorkspaceDocumentPane({
       onSpreadsheetMutations
     ) {
       return (
-        <div ref={editorPaneRef} className="flex h-full min-h-0 min-w-0 flex-col">
+        <div ref={editorPaneRef} className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
           {spreadsheetUnsupportedReason || spreadsheetConflict || spreadsheetSaveError ? (
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[12px] text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
               <span>{spreadsheetUnsupportedReason || officeRefreshError || spreadsheetSaveError}</span>
@@ -330,7 +331,7 @@ export function WriteWorkspaceDocumentPane({
       )
     }
     return (
-      <div ref={editorPaneRef} className="flex h-full min-h-0 min-w-0 flex-col">
+      <div ref={editorPaneRef} className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
         {officePreview.sourceFormat === 'xls' && onConvertSpreadsheet ? (
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-ds-border bg-ds-surface-subtle px-4 py-2 text-[12px] text-ds-muted">
             <span>{t('writeSpreadsheetLegacyReadOnly')}</span>
@@ -358,7 +359,7 @@ export function WriteWorkspaceDocumentPane({
 
   if (activeFileIsOffice) {
     return (
-      <div className="flex h-full min-h-[320px] items-center justify-center px-8 text-center text-[13px] leading-6 text-ds-muted">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center px-8 text-center text-[13px] leading-6 text-ds-muted">
         {officeRefreshError ?? t('filePreviewLoading')}
       </div>
     )
@@ -366,7 +367,7 @@ export function WriteWorkspaceDocumentPane({
 
   if (activeFileIsCode) {
     return (
-      <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
         {renderSafety.notice !== 'none' ? (
           <div className="shrink-0 border-b border-amber-200/80 bg-amber-50/90 px-5 py-3 text-[12.5px] leading-5 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100 sm:px-6">
             <div className="font-semibold">{fileGuardMessage}</div>
@@ -389,14 +390,14 @@ export function WriteWorkspaceDocumentPane({
 
   if (!activeFileIsText) {
     return (
-      <div className="flex h-full min-h-[320px] items-center justify-center text-[14px] text-ds-muted">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center text-[14px] text-ds-muted">
         {t('writeUnsupportedFileType')}
       </div>
     )
   }
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-col">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <button
         type="button"
         onClick={() => onFocusModeChange(!focusMode)}
@@ -419,9 +420,11 @@ export function WriteWorkspaceDocumentPane({
         </div>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1">
-        <div ref={editorPaneRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div ref={editorPaneRef} className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {editorSurface === 'document' ? (
+            <WriteEditorErrorBoundary resetKey={activeFilePath ?? ''}>
             <WriteRichEditor
+              key={`${workspaceRoot}:${activeFilePath}`}
               value={fileContent}
               workspaceRoot={workspaceRoot}
               filePath={activeFilePath}
@@ -445,8 +448,10 @@ export function WriteWorkspaceDocumentPane({
               handleRef={richHandleRef}
               publishToPanels={focused}
             />
+            </WriteEditorErrorBoundary>
           ) : (
             <WriteMarkdownEditor
+              key={`${workspaceRoot}:${activeFilePath}`}
               value={fileContent}
               workspaceRoot={workspaceRoot}
               filePath={activeFilePath}

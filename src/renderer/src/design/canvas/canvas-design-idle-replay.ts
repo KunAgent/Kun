@@ -18,6 +18,7 @@ import { useCanvasSelectionStore } from './canvas-selection-store'
 import { useCanvasShapeStore } from './canvas-shape-store'
 import type { ExecuteOpsOptions, OpError } from './shape-ops'
 import { isDesignMotionRendererToolName } from './motion-ops'
+import { isPptBoardToolName } from './ppt-tool-results'
 import {
   replayDurableCodeCanvasToolBlocks,
   replayDurablePptCanvasToolBlocks
@@ -37,7 +38,7 @@ type IdleChatState = {
 
 export function shouldReplayIdleCanvasToolBlock(block: ToolBlock): boolean {
   return block.meta?.toolName === 'design_svg_create' ||
-    block.meta?.toolName === 'ppt_agent' ||
+    isPptBoardToolName(block.meta?.toolName) ||
     isDesignMotionRendererToolName(block.meta?.toolName)
 }
 
@@ -48,7 +49,7 @@ export function replayIdleCanvasToolBlocks(
 ): void {
   for (const block of blocks) {
     if (block.kind !== 'tool' || !shouldReplayIdleCanvasToolBlock(block)) continue
-    if (isDesignMotionRendererToolName(block.meta?.toolName) || block.meta?.toolName === 'ppt_agent') {
+    if (isDesignMotionRendererToolName(block.meta?.toolName) || isPptBoardToolName(block.meta?.toolName)) {
       applyToolBlock(block)
     } else applySvgBlock(block)
   }

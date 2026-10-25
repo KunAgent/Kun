@@ -360,8 +360,6 @@
   "composerVoiceStop": "Stop recording",
   "composerVoiceSend": "Stop and send",
   "composerVoiceTranscribing": "Transcribing…",
-  "composerPromptOptimize": "Optimize prompt",
-  "composerPromptOptimizing": "Optimizing prompt…",
   "composerVoiceMicDenied": "Microphone access was denied. Allow it in system settings and try again.",
   "composerVoiceTooShort": "Recording was too short. Hold on a bit longer.",
   "composerVoiceFailed": "Voice transcription failed: {{message}}",

@@ -141,12 +141,20 @@ inflight cleanup、steering queue、context compaction、usage/cache telemetry�
   初始化失败的 finally 中按先 Runtime 后 Manager 的顺序清理。`--url` 和
   `--no-start` 仅连接外部服务，不能停止或延长目标 owner 的生命周期。
 - 同一 canonical `dataDir`、settingsPath 已有 live/starting 应用 session 时，
-  第二个正常 GUI/TUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  第二个正常 GUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  第二个 TUI 同样不能 steal 或 kill，但在 owner 的 Runtime 经 discovery 验证存活
+  且 build 一致时附着到它（`attached`，不持有生命周期，重连强制 `noStart`）；
+  验证失败则保持原 ownership conflict。
   production/development 不能共享同一数据 owner；并行实例必须显式隔离
   dataDir、Manager controlDir 和 settingsPath，不能自动换历史目录。
 - GUI Runtime 重启只替换本次 Runtime，Manager 保持本次 session。Manager
   崩溃恢复由应用 owner 决定：先停旧 Runtime 与消费者，再启动下一 generation
   并统一重绑。app-owned Runtime 不能因 Manager 断连自行 ensure 或 re-election。
+- 启动失败页的 Recover 在确认旧应用已退出、三个规范化 profile 的所有权与
+  进程登记一致后，先停止残留 Runtime，确认退出后再停止 Manager。每次发送
+  信号及升级终止都重新核对登记和进程出生身份；未知归属或 PID 复用不能成为
+  终止依据。恢复保留原有会话与设置，不能只清理 Manager 而让残留 Runtime
+  永久阻塞恢复按钮。
 - 旧版常驻实例只有在认证身份、规范化目录、原子冻结新接入和空闲状态均可证明时
   才允许退休。discovery、PID、endpoint、owner 或 Manager registration 存在歧义，
   或旧协议不能证明无活跃外部工作时，必须停止接管并提示关闭旧应用。同版本
@@ -389,6 +397,9 @@ model/provider/reasoning 选择。升级前已经持久化的 `custom:*` child r
 custom agent 都禁用 Skills 自动激活。child record 持久化 route method、Top 5、
 选择理由、置信度及临时角色快照；router usage 计入父 thread。
 
+所有派活入口（`delegate_task`、`worker_create`、Graph 任务的 `profile`、`suggest_tasks`、对话成员）共用一份Agent 名册（`kun/src/delegation/agent-roster.ts`，只读接口 `GET /v1/agent-roster`）：角色 + 引擎绑定 + 各档准入状态。
+角色绑定的引擎在每一档都兑现（`capabilities.subagents.honorEngineBinding` 可关闭 `delegate_task` 的兑现），跑不了就在选人时按统一原因码拒绝，不静默退回原生 loop。名册只出现在工具结果和动态上下文里，设计与实现记录见 [agent-roster-dispatch-ladder.zh-CN.md](./agent-roster-dispatch-ladder.zh-CN.md)。
+
 下一阶段仍值得推进的缓存能力：
 
 - 工具集合 mutation gate：新增工具允许 append，编辑、重排、删除工具时要求
@@ -509,8 +520,9 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
   账号，不按模型名或供应商 preset 猜账号，不将 API 余额当成订阅额度。没有可靠额度时
   不显示该区域；只有额度、没有上下文数据时仍可单独打开。每次打开重新确认账号，
   切换路线立即移除旧值。探测是只读的，不启动 Agent，也不替模型登录刷新或改写凭据。
-- Design 任务：与 Code 任务共用工作台、会话列表、输入框、模型、权限和工作区控制；
-  设计稿、原型和设计流程图落在 `.kun-design/`，在右侧白板中预览和迭代。
+- Design：Code 会话的能力而不是输入框模式。Code agent 用 `design_open` 提交设计需求，
+  本轮回复结束后工作台在同一会话里启动一次 Design pass；设计稿、原型和设计流程图落在
+  `.kun-design/`，在右侧白板中预览和迭代。
 - Work：办公助手和 inline completion 读取同一份 Kun API key /
   base URL 配置。内部 Write thread registry 只把办公线程识别为 Kun
   thread，不再区分旧运行时会话。白板只缓存其绑定 thread 的 session title：
@@ -649,7 +661,7 @@ Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：�
 - Code 与历史 ADE 根任务使用统一服务端分页和搜索；旧 `ade` 路由重定向 Code，
   原 thread ID 和持久字段保留。worker 预览与审查目标不修改主会话选择。
 
-普通对话派工使用三档权限、60 秒干预窗口、持久化恢复与卡片控制。
+普通对话派工使用三档权限、可配置的无人响应窗口（`ade.dispatch`，默认 60 秒，0 为一直等待，可覆盖需要审批的卡片）、持久化恢复与卡片控制；启动前可逐个 worker 切换 Agent 与模型。
 新 Code 任务默认可派工，高级协作开关继续控制赛马等高级能力；用户显式限制和历史不明设置仍保留。
 
 ## 验证清单

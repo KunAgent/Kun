@@ -2,42 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
-  nextVisibleLength,
   StreamdownAssistant,
   visibleTextForTypewriter
 } from './StreamdownAssistant'
-
-describe('nextVisibleLength', () => {
-  it('stays put when caught up', () => {
-    expect(nextVisibleLength(120, 120)).toBe(120)
-  })
-
-  it('snaps down instantly when the live text resets', () => {
-    expect(nextVisibleLength(120, 40)).toBe(40)
-    expect(nextVisibleLength(120, 0)).toBe(0)
-  })
-
-  it('advances at least one char per frame on a small backlog', () => {
-    expect(nextVisibleLength(100, 101)).toBe(101)
-    expect(nextVisibleLength(100, 104)).toBe(101)
-  })
-
-  it('paces small deltas and immediately catches up a large burst', () => {
-    expect(nextVisibleLength(0, 80)).toBeGreaterThan(0)
-    expect(nextVisibleLength(0, 80)).toBeLessThan(80)
-    expect(nextVisibleLength(0, 100_000)).toBe(100_000)
-  })
-
-  it('never overshoots the target', () => {
-    let current = 0
-    const target = 1234
-    for (let i = 0; i < 10_000 && current < target; i += 1) {
-      current = nextVisibleLength(current, target)
-      expect(current).toBeLessThanOrEqual(target)
-    }
-    expect(current).toBe(target)
-  })
-})
 
 describe('visibleTextForTypewriter', () => {
   it('does not split decomposed Vietnamese accents mid-stream', () => {

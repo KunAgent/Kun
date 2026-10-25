@@ -31,7 +31,7 @@
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
-  color: var(--ds-muted);
+  color: var(--ds-text-muted);
   font-size: 0.8125rem;
   font-weight: 500;
   line-height: 1.25rem;
@@ -40,8 +40,8 @@
 }
 
 .ds-composer-usage:hover {
-  background: var(--ds-hover);
-  color: var(--ds-ink);
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
 }
 
 .ds-composer-usage:focus-visible {
@@ -51,7 +51,7 @@
 
 .ds-composer-usage-label {
   margin-left: 0.375rem;
-  color: var(--ds-muted);
+  color: var(--ds-text-muted);
 }
 
 .ds-composer-usage-metric {
@@ -61,12 +61,12 @@
   margin-left: 0.75rem;
   padding-left: 0.75rem;
   border-left: 1px solid color-mix(in srgb, var(--ds-border-muted) 88%, transparent);
-  color: var(--ds-ink);
+  color: var(--ds-text);
 }
 
 .ds-composer-usage-money-estimate {
   margin-left: 0.5rem;
-  color: var(--ds-muted);
+  color: var(--ds-text-muted);
   font-weight: 500;
 }
 
@@ -132,7 +132,7 @@
   min-width: 0;
   max-width: min(22rem, 38%);
   overflow: hidden;
-  color: var(--ds-faint);
+  color: var(--ds-text-faint);
   font-size: 0.78125rem;
   font-weight: 500;
   text-align: right;

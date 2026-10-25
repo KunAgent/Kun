@@ -17,7 +17,9 @@ const installerHelperPaths = [
   'windows-installer-migration-paths.ps1',
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
+  'windows-installer-migration-payload-copy.ps1',
   'windows-installer-migration-actions.ps1',
+  'windows-installer-migration-runtime-integrity.ps1',
   'windows-installer-migration-recovery-env.ps1',
   'windows-installer-migration-transaction.ps1'
 ].map((path) => isAbsolute(path) ? path : join(__dirname, '..', 'build', path))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeToolResultItem, makeUserItem } from '../domain/item.js'
+import { makeAssistantTextItem, makeToolResultItem, makeUserItem } from '../domain/item.js'
 import type { TurnItem } from '../contracts/items.js'
 import { buildPublicItemHistoryPage } from './item-history-page.js'
 
@@ -173,6 +173,29 @@ describe('buildPublicItemHistoryPage', () => {
       'item_05', 'item_06', 'item_07', 'item_08', 'item_09'
     ])
     expect(page).toMatchObject({ hasMore: true, nextCursor: 'item_05' })
+  })
+
+  it('keeps the newest turn reply on the first page when tool results fill the byte budget', () => {
+    const tool = (index: number): TurnItem => makeToolResultItem({
+      id: `tool_${String(index).padStart(2, '0')}`,
+      threadId: 'thr_reply',
+      turnId: 'turn_latest',
+      callId: `call_${index}`,
+      toolName: 'bash',
+      output: { text: 'x'.repeat(20 * 1024) },
+      status: 'completed'
+    })
+    const items: TurnItem[] = [
+      makeUserItem({ id: 'user_1', threadId: 'thr_reply', turnId: 'turn_latest', text: 'continue' }),
+      makeAssistantTextItem({ id: 'reply_1', threadId: 'thr_reply', turnId: 'turn_latest', text: 'the answer', status: 'completed' }),
+      ...Array.from({ length: 20 }, (_, index) => tool(index))
+    ]
+    const page = buildPublicItemHistoryPage(items, { maxItems: 300, maxBytes: 100 * 1024 })
+    expect(page.items.map((item) => item.id)).toContain('reply_1')
+    expect(page.items.at(-1)?.id).toBe('tool_19')
+    expect(page.hasMore).toBe(true)
+    const older = buildPublicItemHistoryPage(items, { before: page.nextCursor, maxItems: 300, maxBytes: 100 * 1024 })
+    expect(older.items.length).toBeGreaterThan(0)
   })
 })
 

@@ -89,3 +89,43 @@ export function SubagentStopControl({
     </span>
   )
 }
+
+/** Stops every still-active child of a swarm group in one click. */
+export function SubagentStopAllButton({
+  childIds,
+  t
+}: {
+  childIds: string[]
+  t: TFunction<'common'>
+}): ReactElement | null {
+  const [stopping, setStopping] = useState(false)
+  useEffect(() => {
+    if (childIds.length === 0) setStopping(false)
+  }, [childIds.length])
+  if (childIds.length === 0) return null
+  const stopAll = async (): Promise<void> => {
+    if (stopping) return
+    setStopping(true)
+    const results = await Promise.all(childIds.map((childId) =>
+      rendererRuntimeClient.runtimeRequest(kunDelegationAbortPath(childId), 'POST').then(
+        (response) => response.ok,
+        () => false
+      )
+    ))
+    if (results.some((ok) => !ok)) setStopping(false)
+  }
+  return (
+    <button
+      type="button"
+      disabled={stopping}
+      onClick={() => void stopAll()}
+      className="flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-ds-muted transition hover:bg-red-500/10 hover:text-ds-danger disabled:cursor-wait disabled:opacity-60"
+      data-testid="subagent-stop-all-button"
+    >
+      {stopping
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+        : <Square className="h-3 w-3 fill-current" strokeWidth={2} />}
+      {t('subagentStopAll', { defaultValue: 'Stop all' })}
+    </button>
+  )
+}

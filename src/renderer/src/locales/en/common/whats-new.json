@@ -29,5 +29,10 @@
   "whatsNewFocusWhere": "Switch it anytime with Focus at the bottom of the sidebar",
   "whatsNewFocusPreviewLogo": "Kun logo",
   "whatsNewFocusPreviewAccount": "Account",
-  "whatsNewFocusPreviewCalm": "Just the chat"
+  "whatsNewFocusPreviewCalm": "Just the chat",
+  "whatsNewArtifactsTag": "Artifacts library",
+  "whatsNewArtifactsTitle": "Everything Kun makes, in one place",
+  "whatsNewArtifactsBody": "Design drafts, documents, slides, spreadsheets, whiteboards and generated images, sorted by project and type. Open one to preview it, or ask Kun to revise it in its conversation.",
+  "whatsNewArtifactsOpen": "Open Artifacts",
+  "whatsNewArtifactsWhere": "Find it anytime under Artifacts in the sidebar"
 }

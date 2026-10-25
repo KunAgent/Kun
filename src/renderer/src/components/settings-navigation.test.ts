@@ -22,7 +22,8 @@ const labels: Record<string, string> = {
   keyboardShortcuts: 'Keyboard shortcuts',
   settingsNavShortcuts: 'Shortcuts',
   shortcutsDesc: 'Review and customize global keyboard shortcuts.',
-  providersDesc: 'Connect model APIs with keys and base URLs.'
+  providersDesc: 'Connect model APIs with keys and base URLs.',
+  labPptTitle: 'PPT skill'
 }
 const t = (key: string): string => labels[key] ?? key
 
@@ -67,6 +68,11 @@ describe('settings navigation model', () => {
     expect(categories(filterSettingsNavigationGroups(groups, 'service port', t))).toEqual(['agentRuntime'])
     // Search keys without copy fall back to the raw key; that must never match.
     expect(categories(filterSettingsNavigationGroups(groups, 'kunMaxConcurrentTurns', t))).toEqual([])
+  })
+
+  it('routes PPT search to Skills, not Laboratory', () => {
+    const groups = visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' })
+    expect(categories(filterSettingsNavigationGroups(groups, 'PPT', t))).toEqual(['skills'])
   })
 
   it('keeps every page to one topic, with no more than seven per group', () => {

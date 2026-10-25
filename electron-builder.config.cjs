@@ -216,6 +216,8 @@ module.exports = {
     '!kun/node_modules/@anthropic-ai/claude-agent-sdk-*/**',
     '!**/*.map',
     '!**/*.d.ts',
+    // ESM/CJS-specific declaration twins are compile-time only as well.
+    '!**/*.d.{mts,cts}',
     '!**/*.ts',
     '!**/tsconfig*.json',
     '!**/README*',
@@ -224,6 +226,9 @@ module.exports = {
     // dependency test exclusions do not apply. gifwrap's ~6 MiB of test images
     // are not used by its src/ runtime; keep the runtime and LICENSE intact.
     '!**/node_modules/gifwrap/test{,/**/*}',
+    // Jimp's jest image snapshots are never loaded and carry ~200-character
+    // paths; on Windows they push update backup/stage copies past MAX_PATH.
+    '!**/node_modules/**/__image_snapshots__{,/**/*}',
     // Lark SDK ships an ESM (`es/`) build for bundlers alongside its CJS `main`
     // (`lib/`). The main process resolves `@larksuiteoapi/node-sdk` through
     // Node's `main` field, so the ESM copy is dead weight at runtime.
@@ -244,6 +249,14 @@ module.exports = {
     // DOCX export requires html-to-docx's Node entry. Its two browser bundles
     // duplicate the converter and are never loaded by the application.
     '!**/node_modules/html-to-docx/dist/html-to-docx.browser{,.esm}.js',
+    // The Kun TUI always runs on Node (see kun/src/tui/tui-node.ts), so
+    // opentui's Bun-only entry points never load. Node resolves the `node`
+    // export conditions, which import only the `chunk-node-*` files.
+    '!**/node_modules/@opentui/*/{index,testing,yoga}.bun.js',
+    '!**/node_modules/@opentui/core/chunk-bun-*.js',
+    // opentui loads web-tree-sitter's root `tree-sitter.js` + `.wasm`. The
+    // `./debug` build and the C sources under lib/ are never imported.
+    '!**/node_modules/web-tree-sitter/{debug,lib}{,/**/*}',
     'packages/create-kun-extension/templates/**/*',
     // @computer-use/libnut-linux currently publishes an x86-64 libnut.node
     // even though its npm metadata also declares arm64. Keep that incompatible
@@ -278,6 +291,11 @@ module.exports = {
       to: 'bundled-skills',
       filter: ['**/*']
     },
+    // Offline copies of the libraries Gen UI widgets may reference by their
+    // pinned CDN URLs (see src/main/app-sandbox/app-sandbox-vendor.ts).
+    { from: 'node_modules/d3/dist/d3.min.js', to: 'gen-ui-vendor/d3.min.js' },
+    { from: 'node_modules/echarts/dist/echarts.min.js', to: 'gen-ui-vendor/echarts.min.js' },
+    { from: 'node_modules/lucide/dist/umd/lucide.min.js', to: 'gen-ui-vendor/lucide.min.js' },
     {
       from: 'resources/whisper',
       to: 'whisper',
@@ -310,6 +328,9 @@ module.exports = {
         publish: [
           {
             provider: 'generic',
+            // Stable/frontier is selected by the URL; both feeds use latest*.yml.
+            // Do not derive a new manifest name from each daily prerelease version.
+            channel: 'latest',
             url: genericUpdateUrl
           }
         ]

@@ -8,12 +8,14 @@ import {
   startupFailureHtml
 } from './startup-failure-content'
 
+export const STARTUP_RECOVERY_TIMEOUT_MS = 45_000
+
 export function showStartupFailureWindow(
   error: unknown,
   logDir: string,
   options: {
-    recoverHandoff?: () => Promise<void>
-    recoverRetry?: () => Promise<void>
+    recoverHandoff?: (signal: AbortSignal) => Promise<void>
+    recoverRetry?: (signal: AbortSignal) => Promise<void>
     replaceWindow?: BrowserWindow | null
   } = {}
 ): BrowserWindow | null {
@@ -50,10 +52,12 @@ export function showStartupFailureWindow(
       execPath: process.execPath
     }
     let recoveryInFlight = false
+    let recoveryController: AbortController | undefined
     const htmlOptions = (busy = false) => ({
       handoff: presentation.handoff,
       retryable: presentation.handoff ? canRecoverHandoff : presentation.retryable,
       recheck: presentation.recheck,
+      orphaned: presentation.orphaned,
       busy,
       ...launchIdentity
     })
@@ -69,6 +73,38 @@ export function showStartupFailureWindow(
         })
       })
     }
+    const recover = async (operation: (signal: AbortSignal) => Promise<void>): Promise<void> => {
+      recoveryInFlight = true
+      const controller = new AbortController()
+      recoveryController = controller
+      render(message, true)
+      let rejectAborted!: (error: unknown) => void
+      const aborted = new Promise<never>((_resolve, reject) => { rejectAborted = reject })
+      const onAbort = () => rejectAborted(controller.signal.reason)
+      controller.signal.addEventListener('abort', onAbort, { once: true })
+      const timer = presentation.handoff ? undefined : setTimeout(() => controller.abort(new Error(
+        'Recovery timed out after 45 seconds. Kun has not restarted. Retry to recheck the remaining processes, or quit and reopen the app.'
+      )), STARTUP_RECOVERY_TIMEOUT_MS)
+      try {
+        // Catch synchronous failures too, and never relaunch on a late result
+        // after timeout, window close, or an explicit Quit.
+        await Promise.race([operation(controller.signal), aborted])
+        controller.signal.throwIfAborted()
+        if (window.isDestroyed()) return
+        app.relaunch()
+        app.quit()
+      } catch (recoveryError) {
+        const detail = sanitizeStartupFailureMessage(recoveryError)
+        logWarn('startup', 'Kun startup retry cleanup failed.', { message: detail })
+        render(`${message}\n\nRetry failed: ${detail}`)
+      } finally {
+        if (timer) clearTimeout(timer)
+        controller.signal.removeEventListener('abort', onAbort)
+        recoveryInFlight = false
+        recoveryController = undefined
+      }
+    }
+    window.once('closed', () => recoveryController?.abort(new Error('Recovery window closed')))
     window.webContents.on('will-navigate', (event, targetUrl) => {
       const action = parseStartupFailureAction(targetUrl)
       if (!action) {
@@ -78,34 +114,15 @@ export function showStartupFailureWindow(
       event.preventDefault()
       if (action === 'retry') {
         if (recoveryInFlight || !presentation.retryable) return
-        if (presentation.recheck && !options.recoverRetry) return
+        if ((presentation.recheck || presentation.orphaned) && !options.recoverRetry) return
         if (!presentation.handoff) {
-          recoveryInFlight = true
-          render(message, true)
-          void (options.recoverRetry?.() ?? Promise.resolve()).then(() => {
-            app.relaunch()
-            app.quit()
-          }).catch((recoveryError) => {
-            recoveryInFlight = false
-            const detail = sanitizeStartupFailureMessage(recoveryError)
-            logWarn('startup', 'Kun startup retry cleanup failed.', { message: detail })
-            render(`${message}\n\nRetry failed: ${detail}`)
-          })
+          void recover(options.recoverRetry ?? (async () => undefined))
           return
         }
         if (!canRecoverHandoff || !options.recoverHandoff) return
-        recoveryInFlight = true
-        render(message, true)
-        void options.recoverHandoff().then(() => {
-          app.relaunch()
-          app.quit()
-        }).catch((recoveryError) => {
-          recoveryInFlight = false
-          const detail = sanitizeStartupFailureMessage(recoveryError)
-          logWarn('startup', 'Safe Kun handoff retry failed.', { message: detail })
-          render(`${message}\n\nRetry failed: ${detail}`)
-        })
+        void recover(options.recoverHandoff)
       } else if (action === 'quit') {
+        recoveryController?.abort(new Error('Recovery cancelled by Quit'))
         app.quit()
       } else {
         void shell.openPath(logDir).then((openError) => {

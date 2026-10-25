@@ -1,14 +1,23 @@
 # Kun 终端界面（TUI）
 
 安装 Kun 桌面应用后，在新终端中直接运行 `kun` 即可进入 TUI；`kun tui` 是完全
-等价的显式别名。TUI 基于 `@earendil-works/pi-tui`，使用内联会话流，不切换
-Alternate Screen，因此退出后对话仍保留在终端原生 scrollback 中。
+等价的显式别名。TUI 基于 opentui，以内联方式运行：composer 和正在生成的回复占据
+终端底部的固定区域，已经完成的消息、工具行和 Markdown 段落逐条打印到它上方的终端
+原生 scrollback 中，退出后仍然保留。命令面板、会话、模型、完整 transcript、审批等
+全屏页面在 Alternate Screen 中打开，关闭后回到内联对话。
 
 ## 安装与发布形态
 
 Kun GUI 安装包内置完整的 TUI 和运行时，安装桌面应用后即可使用 `kun` / `kun tui`。
 从 0.3.8 起，Stable 和 Daily 不再构建或发布独立 TUI 压缩包，也不再推进独立
-TUI 更新清单。GUI 内置 TUI 随桌面应用统一更新，不需要另外下载 Node.js 或 TUI。
+TUI 更新清单。GUI 内置 TUI 随桌面应用统一更新。
+
+终端渲染器通过 Node.js FFI 调用原生库，需要 Node.js 26.4 及以上版本。Runtime 仍使用
+Kun 自带的解释器，只有 TUI 进程切换到 Node.js 26。Kun 依次查找：`KUN_TUI_NODE`、
+应用旁的 `<resources>/tui-node` 或仓库内的 `.cache/tui-node`、用户缓存
+`~/.kun/runtime/tui-node`，最后是 `PATH` 中的 `node`。都不满足时，首次启动会把官方
+Node.js 26.12.0 下载到用户缓存，并在运行前用发布页的 `SHASUMS256.txt` 校验；设置
+`KUN_TUI_NODE_DOWNLOAD=0` 可禁止下载，改为提示安装要求。
 
 已发布的历史独立包和用户数据不会因此删除；仍使用 0.3.7 独立包的用户需要安装
 桌面应用，才能获得 0.3.8 及后续版本。旧包的 `kun update` 不会升级到 GUI 安装包。
@@ -43,8 +52,12 @@ kun tui
 默认 TUI 会在 data-dir/flavor 启动锁与 Manager fence 下选主，生成运行时 token、
 选择端口并拉起该 TUI 会话持有的 Runtime。发现文件记录实例 ID、PID、owner、版本、
 启动时间、loopback URL 和日志路径。若同一 Manager profile/flavor 槽位已有
-live/starting GUI、另一 TUI 或前台 `kun serve` owner，默认启动会明确报冲突并
-提示关闭 owner；它不会附加、替换或停止外部 owner。默认 Manager profile 只绑定
+live/starting GUI、另一 TUI 或前台 `kun serve` owner，TUI 不会替换或停止该 owner，
+而是在对方 Runtime 能正常应答且属于同一应用 build 时附着到它，并在状态行提示
+"Attached to the running GUI Runtime"。附着的 TUI 不持有该 Runtime：owner 退出后
+Runtime 随之结束，TUI 报告连接丢失，重连时也绝不会自行拉起 Runtime。若对方 Runtime
+是不同 build（例如旧版已安装应用与开发构建并存）或没有应答，则仍然报可操作的
+ownership 冲突。`--no-start` 仍强制只附着。默认 Manager profile 只绑定
 一个 canonical data-dir，production 与 development flavor 仍是独立槽位。
 
 TUI 在 `/quit`、终端/信号退出、初始化失败或其他命令退出路径中，只关闭并等待自己
@@ -108,11 +121,18 @@ conflict；请真实退出该 owner（仅最小化到托盘不算退出），或
 会话；`/connect` 配置模型，`Ctrl+X L` 打开已有会话，`Ctrl+P` 搜索全部命令。退出
 TUI 会停止该会话持有的精确 Runtime，但不会停止 Service Manager 或删除已保存数据。
 
-欢迎页只显示文字 `KUN`、一句用途说明、Workspace/Model/Mode/Version 元数据，以及
-“直接输入任务”、`/connect`、`/sessions` 三个起点；不再放大 Logo、运行时诊断、
-MCP 数量或整套快捷键。进入会话后，每个 assistant turn 统一收在一个 `Kun` 分组下，
-Thinking 默认折叠，工具与 Subagent 使用紧凑的状态/对象/耗时行。composer 只保留
-一个输入框、provider/model · effort · mode 元数据和当前上下文真正可用的操作。
+欢迎页显示像素 Logo、一句出处、输入面板、最近 3 个会话，以及底部的
+Workspace:branch 与版本；不放运行时诊断、MCP 数量或整套快捷键。
+
+会话视图是全屏布局：顶部是本 TUI 打开过的会话标签（`Ctrl+X 1`–`9` 直接切换，
+运行中、等待审批和有未读回复的会话分别带状态符号），终端宽度不小于 180 列时改为
+左侧按工作区分组的会话栏。右侧栏（不小于 120 列时常驻，否则 `Ctrl+X B` 以浮层打开）
+显示上下文环、Goal、Plan、Agents 和 `git diff` 统计。输入面板左侧色条随模式变化
+（Agent/Plan/Graph/Goal），下方一行显示模式、模型、推理强度和上下文占用。
+已结束的 turn 会把成功的工具调用折叠成一行 `▸ Worked 38s · read 4 · edit 2`，点击
+展开，失败步骤始终保留；turn 末尾显示 `◆ Kun · 模型 · 耗时`。Thinking 显示为一行
+摘要（`Thinking:` / `Thought:`），点击展开全文。审批与结构化问答在输入面板的位置
+弹出，其余页面以对话框形式覆盖在会话之上。配色随终端的深浅色主题自动切换。
 窄终端优先保留标题、选择、错误和主操作，次要计数与描述会先隐藏或截短。
 
 按 Enter 后 composer 会立即清空，状态行在服务端确认 turn 前先显示带动画的
@@ -127,14 +147,15 @@ Thinking 默认折叠，工具与 Subagent 使用紧凑的状态/对象/耗时�
 所以不会长期占据注意力。运行时提供上下文窗口且已有 usage 时，右侧显示
 `已用 / 总量 · 百分比`，而不是把 token 数伪装成生成进度。
 
-工具调用默认显示一行动作、对象和耗时，完成结果以 `└` 收束；按 `Ctrl+O` 后用
-`├ input` / `└ output` 展开为树状详情。执行中、完成、失败分别使用动画、实心圆点和
+工具调用默认显示一行动作、对象和耗时，完成结果以 `└` 收束；执行 `/details` 后，
+新的工具行用 `├ input` / `└ output` 展开为树状详情，完整 transcript 页（`Ctrl+O`
+后按 `D`）可以对整段对话使用这种视图。执行中、完成、失败分别使用动画、实心圆点和
 错误标记，颜色只承担状态语义。所有这些展示继续使用内联模式和终端原生 scrollback。
 
 同一阶段连续发生的只读发现调用会聚合成 `Exploring` / `Explored` 摘要。Read、View、
 Search、Grep、Find、List、Fetch 和 Web Search 可以跨越中间折叠的 Thinking 进入同一
 组；回答、命令、编辑、委派、审批或结构化输入会结束该组。默认显示前 12 个精简动作
-和剩余数量，`Ctrl+O` 展开全部动作及各自的 input/output；失败动作留在组内并计入标题。
+和剩余数量，`/details` 与 transcript 页展开全部动作及各自的 input/output；失败动作留在组内并计入标题。
 这个分组只改变 TUI 展示，不改变工具执行顺序、事件记录或导出内容。
 
 ## 模型连接
@@ -176,6 +197,10 @@ composer 草稿与焦点。页面展示 GUI 配置和共享 registry 中全部�
 Timeline、Skills、Help、Status、Context、Queue、MCP、Permissions、Approval 和结构化
 问答。选择页统一使用路径、可选搜索、扁平分组列表、青色选择轨和单行上下文操作；
 连接流程每次只展示当前步骤；只读检查页按字段与状态组织，不复用笨重的通用弹窗。
+这些页面使用终端的 Alternate Screen，打开期间不会改动对话上方的 scrollback；关闭后
+恢复对话、composer 草稿与焦点。审批页默认高亮 `Allow once`，`←`/`→` 或 Tab 切换
+选项，Enter 确认（页面刚打开的一瞬间按下的 Enter 会被忽略，避免原本输入给 composer
+的按键误批准），`y` 允许，`n`、Esc 或 Ctrl+C 拒绝。
 
 如果 `/model` 只显示 DeepSeek，先运行 `kun runtime status` 检查输出的 data-dir 是否
 与 GUI 设置一致。升级前遗留的、身份精确且已认证的无 owner shared daemon 可以在
@@ -195,6 +220,8 @@ Timeline、Skills、Help、Status、Context、Queue、MCP、Permissions、Approv
 | `Ctrl+P` | 打开可搜索命令面板 |
 | `Ctrl+X L` | 打开会话搜索/切换页面 |
 | `Ctrl+X N` | 新建并打开会话 |
+| `Ctrl+X 1`–`9` | 切换到对应编号的会话标签 |
+| `Ctrl+X B` | 显示/隐藏会话侧栏 |
 | `Ctrl+X P` | 进入/退出 Pointer 模式；仅在该模式下由 Kun 接管鼠标点击 |
 | `Ctrl+T` | 循环当前模型支持的推理强度 |
 | `F2` / `Shift+F2` | 正向/反向切换最近使用模型 |
@@ -203,12 +230,16 @@ Timeline、Skills、Help、Status、Context、Queue、MCP、Permissions、Approv
 | `Ctrl+D` | composer 非空时向前删除；空闲且输入为空时连续按两次退出；会话列表中打开永久删除确认 |
 | `Backspace` / `Delete` | composer 文字为空且有待发送附件时，删除最后加入的附件；有文字时保持正常文字编辑 |
 | `Esc` | 依次关闭补全/当前页面，或中止运行中的 turn；空闲时连续按两次安全撤销上一轮 |
-| `Ctrl+O` | 展开/折叠 transcript 中的工具调用详情 |
+| `Ctrl+O` | 展开/折叠所有工具详情与已折叠的 `Worked` 行 |
 | `Ctrl+G` | 用 `$VISUAL`/`$EDITOR` 编辑当前 composer 草稿 |
 | `Ctrl+S` | turn 运行中立即 steer 当前非空草稿 |
 | macOS `Cmd+V` / `Ctrl+X V`；Windows/Linux `Ctrl+V` | 从系统剪贴板读取截图并加入当前 composer；也接受 `Alt+V`、终端转发的 `Ctrl+Shift+V` / `Super+V` |
 | `Ctrl+L` | 强制重绘 |
 | `Shift+PgUp/PgDn` | 使用终端原生 scrollback（应用不会截获） |
+
+已经打印到 scrollback 的内容不会被改写，因此 `/thinking`、`/details` 等显示开关作用于
+之后的新输出；transcript 页按当前设置展示整段对话。终端宽度变化后，Kun 会清空屏幕
+和终端已保存的行，再按新宽度重新打印对话，避免表格和代码块被折行打乱。
 
 默认状态不开启终端鼠标上报：直接拖动即可框选任意 transcript
 文本，再使用终端自己的复制快捷键。Codex/VS Code 集成终端通常会在已有选区时让
@@ -280,11 +311,13 @@ GUI 打开该线程时会把 TUI extras 并入项目 folder set（只加不减�
 
 兼容别名：`/threads`、`/resume`、`/continue` → `/sessions`，`/clear` → `/new`，
 `/title` → `/rename`，`/models` → `/model`，`/provider` → `/connect`，
-`/summarize` → `/compact`，`/q` → `/quit`。这些别名也出现在 pi-tui 自动补全中。
+`/summarize` → `/compact`，`/q` → `/quit`。这些别名也出现在 composer 自动补全中。
 
-assistant 文本使用 pi-tui Markdown，tool call/result 默认显示紧凑摘要。Thinking
-默认只显示一行带耗时的折叠摘要，不展示推理正文；执行 `/thinking` 会展开全部低对比度
-斜体正文，再次执行会收起。在 Pointer 模式中，也可以单击某一条 Thinking 标题，
+assistant 文本按 Markdown 渲染，代码块带高亮，表格保持对齐。回复流式生成时，每个
+段落、列表、表格或代码块一旦完整就打印到 scrollback，只有仍在增长的尾部留在实时区域。
+tool call/result 默认显示紧凑摘要。Thinking
+默认只显示一行带耗时的折叠摘要，不展示推理正文；执行 `/thinking` 会把之后输出中的
+Thinking 正文以低对比度斜体展开，再次执行会收起；更早的轮次可以在 `Ctrl+O` 中查看。在 Pointer 模式中，也可以单击某一条 Thinking 标题，
 只展开或收起该条内容；正文和相邻消息不会响应这个点击。折叠期间仍持续积累
 流式片段，重新展开会恢复完整内容。
 `Ctrl+T` 优先使用 GUI/registry 中完整的 `modelProfiles`

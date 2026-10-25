@@ -1,5 +1,8 @@
+import { productAnalyticsApi } from './product-analytics'
 import { USER_ATTENTION_CHANNEL } from '../shared/user-attention'
 import { mobileLink } from './mobile-link'
+import { assistantMailboxApi } from './assistant-mailbox'
+import { subscriptionPreloadApi } from './subscription-bridge'
 import { kunArtApi } from './kun-art'
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { KunGuiApi } from '../shared/kun-gui-api'
@@ -16,23 +19,25 @@ import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
 import { quotaReminderPreloadApi } from './quota-reminder-bridge'
 import { worktreePreloadApi } from './worktree-bridge'
+import { gitTurnUndoPreloadApi } from './git-turn-undo-api'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { marketApi } from './market-api'
+import { gitCommitApi } from './git-commit-api'
+import { terminalDockApi } from './terminal-dock-api'
 import { kunAccountApi } from './kun-account'
+import { appSandboxPreloadApi } from './app-sandbox-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
 // process via additionalArguments and read off process.argv instead.
 const HOME_DIR_ARG = '--kun-home-dir='
 const homeDirFromArgs = process.argv.find((arg) => arg.startsWith(HOME_DIR_ARG))?.slice(HOME_DIR_ARG.length) ?? ''
-
 const APP_ENVIRONMENT_ARG = '--kun-app-environment='
 const appEnvironment = parseAppEnvironment(process.argv
   .find((arg) => arg.startsWith(APP_ENVIRONMENT_ARG))?.slice(APP_ENVIRONMENT_ARG.length))
-
 const DESKTOP_TITLE_BAR_MODE_ARG = '--kun-desktop-title-bar-mode='
 const desktopTitleBarMode = normalizeDesktopTitleBarMode(
   process.platform, // Per-window additionalArguments are appended; prefer the last occurrence.
@@ -44,6 +49,8 @@ const desktopTitleBarMode = normalizeDesktopTitleBarMode(
 
 const api = {
   mobileLink,
+  assistantMailbox: assistantMailboxApi,
+  productAnalytics: productAnalyticsApi,
   kunAccount: kunAccountApi,
   kunArt: kunArtApi,
   platform: process.platform,
@@ -75,39 +82,7 @@ const api = {
   resetUnreadableCredentials: () => ipcRenderer.invoke('credentials:reset-unreadable'),
   cliInstallStatus: () => ipcRenderer.invoke('cli-install:status'),
   cliInstallAction: (action) => ipcRenderer.invoke('cli-install:action', action),
-  claudeSubscriptionStatus: () => ipcRenderer.invoke('claude-subscription:status'),
-  claudeSubscriptionLogin: () => ipcRenderer.invoke('claude-subscription:login'),
-  claudeSubscriptionProbe: (token, providerId) =>
-    ipcRenderer.invoke('claude-subscription:probe', token, providerId),
-  claudeSubscriptionModels: (token, providerId) =>
-    ipcRenderer.invoke('claude-subscription:models', token, providerId),
-  claudeSubscriptionModelCatalog: (token, providerId) =>
-    ipcRenderer.invoke('claude-subscription:model-catalog', token, providerId),
-  claudeSubscriptionSdkStatus: () => ipcRenderer.invoke('claude-subscription:sdk-status'),
-  claudeSubscriptionSdkInstall: () => ipcRenderer.invoke('claude-subscription:sdk-install'),
-  onClaudeSubscriptionSdkProgress: (handler) => {
-    const wrapped = (
-      _: Electron.IpcRendererEvent,
-      payload: Parameters<typeof handler>[0]
-    ) => handler(payload)
-    ipcRenderer.on('claude-subscription:sdk-progress', wrapped)
-    return () => ipcRenderer.removeListener('claude-subscription:sdk-progress', wrapped)
-  },
-  geminiSubscriptionCliStatus: () => ipcRenderer.invoke('gemini-subscription:cli-status'),
-  geminiSubscriptionCliInstall: () => ipcRenderer.invoke('gemini-subscription:cli-install'),
-  onGeminiSubscriptionCliProgress: (handler) => {
-    const wrapped = (
-      _: Electron.IpcRendererEvent,
-      payload: Parameters<typeof handler>[0]
-    ) => handler(payload)
-    ipcRenderer.on('gemini-subscription:cli-progress', wrapped)
-    return () => ipcRenderer.removeListener('gemini-subscription:cli-progress', wrapped)
-  },
-  geminiSubscriptionModels: () => ipcRenderer.invoke('gemini-subscription:models'),
-  geminiCliSubscriptionStatus: () => ipcRenderer.invoke('gemini-cli-subscription:status'),
-  geminiCliSubscriptionModels: (providerId) => ipcRenderer.invoke('gemini-cli-subscription:models', providerId),
-  cursorSubscriptionDiscover: (apiKey, providerId) =>
-    ipcRenderer.invoke('cursor-subscription:discover', { apiKey, providerId }),
+  ...subscriptionPreloadApi,
   setSettings: (partial) =>
     ipcRenderer.invoke('settings:set', partial),
   saveAdeCollaborationSettings: (request) =>
@@ -135,12 +110,17 @@ const api = {
   readWorkspaceOfficeSemantic: (options) => ipcRenderer.invoke('file:read-workspace-office-semantic', options),
   saveWorkspaceSpreadsheet: (payload) => ipcRenderer.invoke('file:save-workspace-spreadsheet', payload),
   convertWorkspaceSpreadsheet: (payload) => ipcRenderer.invoke('file:convert-workspace-spreadsheet', payload),
+  recordOfficeVersion: (payload) => ipcRenderer.invoke('file:office-version-record', payload),
+  listOfficeVersions: (payload) => ipcRenderer.invoke('file:office-version-list', payload),
+  readOfficeVersion: (payload) => ipcRenderer.invoke('file:office-version-read', payload),
+  restoreOfficeVersion: (payload) => ipcRenderer.invoke('file:office-version-restore', payload),
   resolveKunApproval: (request) => ipcRenderer.invoke('approval:decide', request),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   restartKunServe: () => ipcRenderer.invoke('runtime:restart-serve'),
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
   ...providerBridge,
   optimizePrompt: (payload) => ipcRenderer.invoke('prompt:optimize', payload),
+  cancelPromptOptimization: (payload) => ipcRenderer.invoke('prompt:optimize-cancel', payload),
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) => ipcRenderer.invoke('claw:task:run', taskId),
   getScheduleStatus: () => ipcRenderer.invoke('schedule:status'),
@@ -246,6 +226,7 @@ const api = {
     ipcRenderer.invoke('kun:project-config:open-dir', { workspaceRoot }),
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
+  getGitFileStatus: (workspaceRoot) => ipcRenderer.invoke('git:status-files', workspaceRoot),
   getWorkspaceCreationTimes,
   switchGitBranch: (workspaceRoot, branch) =>
     ipcRenderer.invoke('git:switch-branch', { workspaceRoot, branch }),
@@ -264,11 +245,13 @@ const api = {
   removeGitBranchWorktree: (params) =>
     ipcRenderer.invoke('git:remove-branch-worktree', params),
   ...worktreePreloadApi,
+  ...gitTurnUndoPreloadApi,
   listEditors: () => ipcRenderer.invoke('editor:list'),
   openEditorPath: (options) =>
     ipcRenderer.invoke('editor:open-path', options),
   listWorkspaceDirectory: (options) =>
     ipcRenderer.invoke('file:list-workspace-directory', options),
+  listWorkspaceFiles: (options) => ipcRenderer.invoke('file:list-workspace-files', options),
   resolveWorkspaceFile: (options) =>
     ipcRenderer.invoke('file:resolve-workspace', options),
   openWorkspaceFileInSystem: (options) =>
@@ -685,6 +668,9 @@ const api = {
     return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
   },
   ...paperApi,
-  ...marketApi
+  ...marketApi,
+  ...gitCommitApi,
+  ...terminalDockApi,
+  ...appSandboxPreloadApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

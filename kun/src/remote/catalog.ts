@@ -1,4 +1,4 @@
-import { VERSION as REMOTE_PROTOCOL_VERSION, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
+import { VERSION as REMOTE_PROTOCOL_VERSION, DIRECTORY_LIVE_CAPABILITY, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
 import { KUN_VERSION, KUN_RELEASE_CHANNEL } from '../version.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Envelope } from './contracts.js'
@@ -75,16 +75,36 @@ export async function remoteCapabilityDescriptors(
   }).sort((left, right) => order.get(left.operation)! - order.get(right.operation)!)
 }
 
+/**
+ * Catalog refreshes scan Code threads for projects and model choices. Concurrent and repeated
+ * reads share one scan until a directory invalidation or this TTL. Task creation and other
+ * mutations keep reading the directory directly.
+ */
+export const CATALOG_SCAN_TTL_MS = 10000
+const scans = new WeakMap<object, Map<string, { at: number; value: Promise<unknown> }>>()
+/** A push must never be followed by the old directory snapshot from the scan cache. */
+export function invalidateRemoteCatalog(runtime: object): void { scans.delete(runtime) }
+function scanned<T>(runtime: object, key: string, read: () => Promise<T>): Promise<T> {
+  let entries = scans.get(runtime)
+  if (!entries) scans.set(runtime, entries = new Map())
+  const hit = entries.get(key)
+  if (hit && Date.now() - hit.at < CATALOG_SCAN_TTL_MS) return hit.value as Promise<T>
+  const value = read(), owner = entries
+  owner.set(key, { at: Date.now(), value })
+  value.catch(() => { if (owner.get(key)?.value === value) owner.delete(key) })
+  return value
+}
+
 export async function remoteCatalog(runtime: ServerRuntime, scope: Envelope, models: () => Promise<string[]>, descriptors: () => Promise<unknown[]>) {
-  const list = await projects(runtime)
-  const availableModels = await models()
+  const [list, availableModels] = await Promise.all([scanned(runtime, 'projects', () => projects(runtime)), scanned(runtime, 'models', models)])
   return {
     host: { runtimeVersion: KUN_VERSION, protocolVersion: REMOTE_PROTOCOL_VERSION,
       releaseChannel: KUN_RELEASE_CHANNEL, confirmedAt: Date.now() },
     projects: list.map(({ id, name }) => ({ id, name })), models: availableModels,
     defaultModel: runtime.defaultModel,
     agents: await codeAgents(runtime, availableModels),
-    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, 'approvals', 'attachments'],
+    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, 'approvals', 'attachments',
+      ...(runtime.threadActivity ? [DIRECTORY_LIVE_CAPABILITY] : [])],
     scopes: scope.scopes, capabilityDescriptors: await descriptors(), attachmentMaxBytes: 10 * 1024 * 1024
   }
 }

@@ -66,6 +66,7 @@ export type ModelProviderPresetId =
   | 'ollama-local'
   | 'lmstudio'
   | 'local-openai'
+  | 'magpie'
   | 'baidu-qianfan'
   | 'huaweicloud-maas'
   | 'tencent-tokenhub'

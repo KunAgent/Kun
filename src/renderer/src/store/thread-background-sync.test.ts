@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread, ThreadDetail } from '../agent/types'
-import { createBackgroundThreadSync, BACKGROUND_THREAD_SYNC_HEARTBEAT_MS } from './thread-background-sync'
+import type { ThreadRuntimeStateBatchResult } from '../agent/provider-types'
+import {
+  createBackgroundThreadSync,
+  BACKGROUND_THREAD_SYNC_HEARTBEAT_MS,
+  BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS
+} from './thread-background-sync'
 import { buildPrefetchedThreadSnapshot, cacheThreadSnapshot, clearThreadSnapshotCache, getThreadSnapshot, invalidateThreadSnapshot, threadSnapshotCacheStats } from './thread-snapshot-cache'
 import { useCodexReferenceState } from '../history-reference/codex-reference-state'
 import type { ChatState } from './chat-store-types'
@@ -28,12 +33,18 @@ function deferred<T>() {
 }
 
 let stop: (() => void) | undefined
-function setup(threads = [thread('active'), thread('background')], read = vi.fn(async (id: string) => detail(id))) {
+function runningState(latestSeq: number, running = true) {
+  return { status: running ? 'running' : 'idle', updatedAt: '2026-10-11T00:00:00Z', latestSeq,
+    latestTurnId: 'background-turn', latestTurnStatus: running ? 'running' : 'completed' }
+}
+
+function setup(threads = [thread('active'), thread('background')], read = vi.fn(async (id: string) => detail(id)),
+  getThreadStates?: (ids: string[]) => Promise<ThreadRuntimeStateBatchResult[]>) {
   let changed = () => undefined as void
   const state: Pick<ChatState, 'activeThreadId' | 'threads' | 'adeThreads' | 'runtimeConnection'> = {
     activeThreadId: 'active', threads, adeThreads: [], runtimeConnection: 'ready'
   }
-  const provider = { getThreadDetail: read }
+  const provider = { getThreadDetail: read, ...(getThreadStates ? { getThreadStates } : {}) }
   stop = createBackgroundThreadSync({ getState: () => state, getProvider: () => provider,
     subscribe: (listener) => { changed = listener; return () => { changed = () => undefined } } })
   return { state, read, changed: () => changed() }
@@ -57,17 +68,46 @@ describe('background thread checkpoints', () => {
     expect(getThreadSnapshot('active')).toBeNull()
   })
 
-  it('refreshes dirty running checkpoints but does not repeatedly fetch an unchanged timeline', async () => {
+  it('re-reads a progressing running owner at most once per refresh window', async () => {
     const h = setup()
     await flush()
     await vi.advanceTimersByTimeAsync(6_000)
-    expect(h.read).toHaveBeenCalledTimes(1)
     h.state.threads[1] = { ...h.state.threads[1], latestSeq: 40 }
     h.changed()
     await flush()
+    // Sidebar progress alone no longer costs the runtime a page per interval.
+    expect(h.read).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS)
     expect(h.read).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_HEARTBEAT_MS + 2_000)
+    // Without a state API the window alone paces an unchanged running owner.
+    await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS + 2_000)
     expect(h.read).toHaveBeenCalledTimes(3)
+  })
+
+  it('probes a quiet running owner cheaply and re-reads its page only on progress', async () => {
+    const states = vi.fn(async (ids: string[]): Promise<ThreadRuntimeStateBatchResult[]> =>
+      ids.map((id) => ({ id, ok: true, state: runningState(10) })))
+    const h = setup(undefined, undefined, states)
+    await flush()
+    expect(h.read).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS)
+    expect(states).toHaveBeenCalledTimes(1)
+    expect(states).toHaveBeenCalledWith(['background'])
+    expect(h.read).toHaveBeenCalledTimes(1)
+    states.mockImplementation(async (ids) => ids.map((id) => ({ id, ok: true, state: runningState(25) })))
+    await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_HEARTBEAT_MS + 2_000)
+    expect(states).toHaveBeenCalledTimes(2)
+    expect(h.read).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-reads at once when a probe reports the running turn ended', async () => {
+    const states = vi.fn(async (ids: string[]): Promise<ThreadRuntimeStateBatchResult[]> =>
+      ids.map((id) => ({ id, ok: true, state: runningState(10, false) })))
+    const h = setup(undefined, undefined, states)
+    await flush()
+    await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS)
+    expect(states).toHaveBeenCalledTimes(1)
+    expect(h.read).toHaveBeenCalledTimes(2)
   })
 
   it('refreshes completed background turns immediately and repairs a later completion invalidation', async () => {
@@ -202,7 +242,7 @@ describe('background thread checkpoints', () => {
     h.changed(); await flush()
     first.resolve(detail('background')); await flush()
     expect(getThreadSnapshot('background')?.lastSeq).toBe(8)
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS)
     expect(read).toHaveBeenCalledTimes(2)
   })
 
@@ -228,7 +268,7 @@ describe('background thread checkpoints', () => {
     h.state.threads = [h.state.threads[0]]
     cacheThreadSnapshot(buildPrefetchedThreadSnapshot(thread('background'),
       { ...detail('background'), latestSeq: 100 }, { allowRunning: true })!)
-    h.changed(); await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_HEARTBEAT_MS + 2_000)
+    h.changed(); await vi.advanceTimersByTimeAsync(BACKGROUND_THREAD_SYNC_RUNNING_REFRESH_MS + 2_000)
     expect(h.read).toHaveBeenCalledTimes(2)
   })
 

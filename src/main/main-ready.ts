@@ -1,4 +1,5 @@
 import { registerArtProtocol } from './art-assets/protocol'
+import { sharedWorkspacePreviewProtocols } from './services/workspace-preview-protocol'
 import { app, dialog, protocol, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
 import { disposeProxyAgents } from './proxy-fetch'
@@ -195,7 +196,7 @@ export function startMainApp(): Promise<void> {
       mainState.logDir,
       {
         ...(recoverHandoff ? { recoverHandoff } : {}),
-        recoverRetry: () => prepareGuiRuntimeForStartupRetry(error),
+        recoverRetry: (signal) => prepareGuiRuntimeForStartupRetry(error, signal),
         replaceWindow: earlyWindow
       }
     )
@@ -229,6 +230,7 @@ export function startMainApp(): Promise<void> {
   return app.whenReady().then(async () => {
     traceStartup('app.whenReady:start')
     registerArtProtocol(protocol)
+    sharedWorkspacePreviewProtocols().register(protocol)
     if (!gotSingleInstanceLock) {
       await explainConflictingDesktopInstance()
       return

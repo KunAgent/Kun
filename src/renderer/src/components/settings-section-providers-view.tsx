@@ -63,7 +63,7 @@ import { ProviderModelsCapabilitiesPanels } from './settings-section-providers-m
 
 export function ProvidersSettingsView({ view }: { view: Record<string, any> }): ReactElement {
   const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
-    externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink,
+    externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink, confirmStagedImport,
     importLinkInput, setImportLinkInput, importLinkError, setImportLinkError, stageImportLinkInput } = view
   const activeProvider = view.activeProvider as ModelProviderProfileV1 | undefined
   const freeProviders = (view.freeProviders as ModelProviderProfileV1[] | undefined) ?? []
@@ -511,9 +511,8 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
         staged={stagedImportLink}
         t={t}
         onCancel={() => setStagedImportLink(null)}
-        onConfirm={(providerId) => {
-          setStagedImportLink(null)
-          setSelectedProviderId(providerId)
+        onConfirm={(providerId, unchanged) => {
+          void confirmStagedImport(providerId, unchanged === true)
         }}
       />
     ) : null}

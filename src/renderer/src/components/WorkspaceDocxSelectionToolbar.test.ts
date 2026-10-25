@@ -8,6 +8,14 @@ import {
   selectedDocxPageRange
 } from './WorkspaceDocxSelectionToolbar'
 
+function docxPage(index: number, text: string): HTMLElement {
+  const page = document.createElement('div')
+  page.setAttribute('data-docx-page-wrapper', 'true')
+  page.dataset.docxPageIndex = String(index)
+  page.textContent = text
+  return page
+}
+
 describe('WorkspaceDocxSelectionToolbar', () => {
   let dom: JSDOM
   let renderer: ReactTestRenderer | undefined
@@ -39,9 +47,7 @@ describe('WorkspaceDocxSelectionToolbar', () => {
   })
 
   it('offers quote and copy actions for selected Word text', async () => {
-    const page = document.createElement('section')
-    page.className = 'docx'
-    page.textContent = 'First page text'
+    const page = docxPage(0, 'First page text')
     body.append(page)
     const range = document.createRange()
     range.setStart(page.firstChild!, 0)
@@ -89,12 +95,8 @@ describe('WorkspaceDocxSelectionToolbar', () => {
   })
 
   it('computes cross-page metadata and clamps the toolbar to its viewport', () => {
-    const first = document.createElement('section')
-    const second = document.createElement('section')
-    first.className = 'docx'
-    second.className = 'docx'
-    first.textContent = 'First'
-    second.textContent = 'Second'
+    const first = docxPage(0, 'First')
+    const second = docxPage(1, 'Second')
     body.append(first, second)
     const range = document.createRange()
     range.setStart(first.firstChild!, 1)
@@ -106,5 +108,19 @@ describe('WorkspaceDocxSelectionToolbar', () => {
       { left: 0, top: 0 },
       { scrollLeft: 20, scrollTop: 40, viewportWidth: 360 }
     )).toEqual({ left: 124, top: 70, placement: 'below' })
+  })
+
+  it('converts screen-pixel rects to layout pixels when the app is zoomed', () => {
+    // Body zoom 0.5: a rect 100px from the pane's left is 200 layout px in.
+    expect(documentSelectionToolbarPosition(
+      { left: 100, right: 160, top: 100, bottom: 112, width: 60 },
+      { left: 0, top: 0 },
+      { scrollLeft: 0, scrollTop: 30, viewportWidth: 800, scale: 0.5 }
+    )).toEqual({ left: 260, top: 230, placement: 'above' })
+    expect(documentSelectionToolbarPosition(
+      { left: 100, right: 160, top: 20, bottom: 32, width: 60 },
+      { left: 0, top: 0 },
+      { scrollLeft: 0, scrollTop: 30, viewportWidth: 800, scale: 0.5 }
+    )).toEqual({ left: 260, top: 94, placement: 'below' })
   })
 })

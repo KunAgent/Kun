@@ -73,6 +73,7 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
       collaboration: thread.collaboration,
       executionConfig: thread.executionConfig,
       workbenchOrigin: thread.workbenchOrigin,
+      taskOrigin: thread.taskOrigin,
       planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint,
       planBuildAdmissionCapabilityHash: thread.planBuildAdmissionCapabilityHash,
       planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen,
@@ -116,7 +117,7 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
 
 type ExtensionThreadMetadata = Pick<ThreadRecord,
   'providerId' | 'harnessId' | 'taskWorkspaceId' | 'executionUnit' | 'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
-  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin'
+  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin' | 'taskOrigin'
   | 'collaboration' | 'executionConfig'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
   | 'planBuildAdmissionFrozen'> & { turnCount?: number }

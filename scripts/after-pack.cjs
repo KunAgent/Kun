@@ -16,7 +16,11 @@ const {
 } = require('node:fs')
 const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
-const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
+const { writeRuntimeIntegrityManifest } = require('./after-pack-runtime-integrity.cjs')
+const { trimPackedNodePtyPayload, ensureNodePtyHelpersExecutable } = require('./after-pack-node-pty.cjs')
+const { deduplicatePackedJimpZod } = require('./after-pack-jimp.cjs')
+const macho = require('./after-pack-thin-macho.cjs')
+const scopeDedupe = require('./after-pack-scope-dedupe.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
   assertElfExecutable,
@@ -53,9 +57,10 @@ const KUN_RUNTIME_REQUIRED_PATHS = [
   'kun/node_modules/@cursor/sdk/package.json',
   'kun/node_modules/@anthropic-ai/claude-agent-sdk/package.json',
   'kun/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs',
-  'kun/node_modules/@earendil-works/pi-tui/package.json',
-  'kun/node_modules/marked/package.json',
-  'kun/node_modules/get-east-asian-width/package.json',
+  'kun/dist/tui/app/main.js',
+  'kun/node_modules/@opentui/core/package.json',
+  'kun/node_modules/@opentui/solid/package.json',
+  'kun/node_modules/solid-js/dist/solid.js',
   'kun/node_modules/@modelcontextprotocol/sdk/package.json',
   'kun/node_modules/@kun/extension-api/package.json',
   'kun/node_modules/@kun/extension-api/dist/index.js',
@@ -279,7 +284,10 @@ function prunePackedHoistedKunDependencies(context) {
     const rootManifest = join(modules, relativeManifest)
     const duplicateManifest = join(kunModules, relativeManifest)
     assertExists(rootManifest, `root-hoisted package manifest ${packageName}`)
-    assertExists(duplicateManifest, `duplicate Kun package manifest ${packageName}`)
+    // npm prune may already have removed a duplicate production dependency.
+    // Kun resolves it from the app-root node_modules after hoisting, so only
+    // compare versions when the duplicate is still present.
+    if (!existsSync(duplicateManifest)) continue
     const rootVersion = JSON.parse(readFileSync(rootManifest, 'utf8')).version
     const duplicateVersion = JSON.parse(readFileSync(duplicateManifest, 'utf8')).version
     if (!rootVersion || rootVersion !== duplicateVersion) {
@@ -306,6 +314,9 @@ function prunePackedApplicationPayload(context) {
   checkPackedSanottsRuntime(context, { unpackedAppRoot })
   trimPackedNodePtyPayload(context, { unpackedAppRoot, normalizePlatform, normalizeArch })
   prunePackedHoistedKunDependencies(context)
+  deduplicatePackedJimpZod(context, { unpackedAppRoot })
+  scopeDedupe.sharePackedScopeNestedPackages(context, { unpackedAppRoot })
+  macho.thinPackedUniversalMachOFiles(context, { packedResourcesDir, normalizePlatform, normalizeArch })
 }
 
 function assertMissing(path, label) {
@@ -372,6 +383,8 @@ function validatePackedApplicationPayload(context) {
   }
   validatePackedKunBinLinks(kunModules)
   validateRootHoistedDependencyClosure(root)
+  scopeDedupe.validatePackedScopeNestedPackages(context, { unpackedAppRoot })
+  macho.validatePackedMachOArchitecture(context, { packedResourcesDir, normalizePlatform })
 }
 
 function validateBundledKunRuntime(context) {
@@ -384,6 +397,14 @@ function validateBundledKunRuntime(context) {
   assertExists(
     join(root, cursorPlatformPackage, 'package.json'),
     `${cursorPlatformPackage}/package.json`
+  )
+  // The terminal UI renders through opentui's native library, shipped as a
+  // per-platform optional dependency of @opentui/core.
+  const opentuiPlatformPackage =
+    `kun/node_modules/@opentui/core-${normalizePlatform(context.electronPlatformName)}-${normalizeArch(context.arch)}`
+  assertExists(
+    join(root, opentuiPlatformPackage, 'package.json'),
+    `${opentuiPlatformPackage}/package.json`
   )
   assertExists(
     join(root, 'node_modules', 'better-sqlite3', 'package.json'),
@@ -580,25 +601,6 @@ function maybeAdhocSignMacApp(context) {
   )
 }
 
-// node-pty execs a bundled `spawn-helper` binary to fork the child shell.
-// asar unpacking can drop the executable bit, which makes every PTY spawn
-// fail with `posix_spawnp`. Re-chmod every bundled helper after packing so
-// the built-in terminal works in the shipped app. Non-fatal: best effort.
-function ensureNodePtyHelpersExecutable(context) {
-  const root = unpackedAppRoot(context)
-  const prebuildsDir = join(root, 'node_modules', 'node-pty', 'prebuilds')
-  if (!existsSync(prebuildsDir)) return
-  for (const folder of readdirSync(prebuildsDir)) {
-    const helper = join(prebuildsDir, folder, 'spawn-helper')
-    if (!existsSync(helper)) continue
-    try {
-      chmodSync(helper, 0o755)
-    } catch (error) {
-      console.warn(`[after-pack] could not chmod node-pty spawn-helper (${folder}):`, error.message)
-    }
-  }
-}
-
 function normalizeArch(arch) {
   if (arch === 'x64' || arch === 1) return 'x64'
   if (arch === 'arm64' || arch === 3) return 'arm64'
@@ -627,7 +629,8 @@ async function afterPack(context) {
   validateBundledOfficeCli(context)
   await maybeSignBundledOfficeCli(context)
   prunePackedWhisperResources(context)
-  ensureNodePtyHelpersExecutable(context)
+  ensureNodePtyHelpersExecutable(unpackedAppRoot(context))
+  writeRuntimeIntegrityManifest(context, packedResourcesDir(context))
   installCliLaunchers(context)
   installLinuxElectronLauncher(context)
   maybeAdhocSignMacApp(context)
@@ -661,7 +664,7 @@ exports._internals = {
   normalizePlatform,
   checkPackedSanottsRuntime,
   prunePackedWhisperResources,
-  ensureNodePtyHelpersExecutable,
+  ensureNodePtyHelpersExecutable: (context) => ensureNodePtyHelpersExecutable(unpackedAppRoot(context)),
   assertElfExecutable,
   installLinuxElectronLauncher,
   installCliLaunchers,

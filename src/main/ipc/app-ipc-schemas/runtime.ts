@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { ApprovalChoiceSchema } from '../../../../kun/src/contracts/approval-choice'
-import { KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, KUN_AGENT_DISPATCH_INTENT_TEMPLATE, KUN_AGENT_DISPATCH_ACTION_TEMPLATE } from '../../../shared/kun-endpoints'
+import { KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, KUN_AGENT_DISPATCH_INTENT_TEMPLATE, KUN_AGENT_DISPATCH_ACTION_TEMPLATE,
+  KUN_TASK_SUGGESTIONS_TEMPLATE, KUN_TASK_SUGGESTION_TEMPLATE, KUN_TASK_SUGGESTION_ACTION_TEMPLATE,
+  KUN_AGENT_ROSTER_TEMPLATE } from '../../../shared/kun-endpoints'
 import { ROOM_ENDPOINTS, ROOM_TASK_ACTIONS } from '../../../shared/rooms-api'
 import {
   KUN_ATTACHMENT_CONTENT_TEMPLATE,
@@ -14,6 +16,9 @@ import {
   KUN_MEMORY_DISTILLATION_DECISION_TEMPLATE,
   KUN_MEMORY_DISTILLATION_TEMPLATE,
   KUN_MEMORY_RECORD_TEMPLATE,
+  KUN_MEMORY_RELATIONS_PATH,
+  KUN_MEMORY_CONTEXT_PREVIEW_PATH,
+  KUN_MEMORY_RELATIONS_ANALYZE_PATH,
   KUN_MEMORY_TEMPLATE,
   KUN_MCP_OAUTH_SERVER_TEMPLATE,
   KUN_MCP_OAUTH_TEMPLATE,
@@ -120,6 +125,7 @@ import {
   KUN_THREAD_TURNS_TEMPLATE,
   KUN_THREAD_INTERRUPT_TEMPLATE,
   KUN_THREAD_TOOL_CANCEL_TEMPLATE,
+  KUN_THREAD_CANVAS_RECEIPTS_TEMPLATE,
   KUN_THREAD_MODEL_REQUESTS_TEMPLATE,
   KUN_THREAD_TRAJECTORY_TEMPLATE,
   KUN_THREAD_TRAJECTORY_SUMMARY_TEMPLATE,
@@ -177,7 +183,7 @@ import {
   KUN_GRAPH_PROJECT_CONSOLIDATE_TEMPLATE
 } from '../../../shared/kun-endpoints'
 import { MODEL_ENDPOINT_FORMATS } from '../../../shared/app-settings'
-import { MAX_BODY_BYTES, MAX_URL_LENGTH, trimmedString } from './common'
+import { MAX_BODY_BYTES, MAX_URL_LENGTH, optionalTrimmedString, trimmedString } from './common'
 export const providerProbePayloadSchema = z
   .object({
     providerId: trimmedString(128),
@@ -212,8 +218,15 @@ export const modelsDevCatalogPayloadSchema = z
 
 export const promptOptimizationPayloadSchema = z
   .object({
-    text: trimmedString(100_000)
+    text: trimmedString(100_000),
+    requestId: optionalTrimmedString(128),
+    providerId: z.string().trim().max(128).optional(),
+    model: z.string().trim().max(512).optional()
   })
+  .strict()
+
+export const promptOptimizationCancelPayloadSchema = z
+  .object({ requestId: trimmedString(128) })
   .strict()
 
 interface EndpointTemplate {
@@ -241,6 +254,18 @@ function compileEndpoint(
 }
 
 const ENDPOINTS: readonly EndpointTemplate[] = [
+  // Gen UI widget state and MCP Apps host requests made on behalf of sandbox pages.
+  compileEndpoint('/v1/threads/{threadId}/gen-ui/state', ['GET']),
+  compileEndpoint('/v1/threads/{threadId}/gen-ui/state/{widgetId}', ['PUT']),
+  compileEndpoint('/v1/mcp-apps/catalog', ['GET']),
+  ...['resource', 'resources', 'tool'].map((action) => compileEndpoint('/v1/mcp-apps/' + action, ['POST'])),
+  compileEndpoint('/v1/github/status', ['GET']),
+  compileEndpoint('/v1/github/authorize', ['POST']),
+  compileEndpoint('/v1/github/authorization/{id}', ['GET', 'DELETE']),
+  compileEndpoint('/v1/github/sharing', ['PATCH']),
+  compileEndpoint('/v1/github/connection', ['DELETE']),
+  compileEndpoint('/v1/github/repositories', ['POST']),
+  compileEndpoint('/v1/github/continue', ['POST']),
   compileEndpoint('/v1/gmail/status', ['GET']),
   compileEndpoint('/v1/gmail/local-model', ['GET', 'POST']),
   compileEndpoint('/v1/gmail/authorize', ['POST']),
@@ -251,6 +276,10 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_AGENT_DISPATCH_INTENTS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_AGENT_DISPATCH_INTENT_TEMPLATE, ['GET']),
   compileEndpoint(KUN_AGENT_DISPATCH_ACTION_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_TASK_SUGGESTIONS_TEMPLATE, ['GET']),
+  compileEndpoint(KUN_TASK_SUGGESTION_TEMPLATE, ['GET']),
+  compileEndpoint(KUN_TASK_SUGGESTION_ACTION_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_AGENT_ROSTER_TEMPLATE, ['GET']),
   compileEndpoint('/v1/threads/{threadId}/handoff-preview', ['GET']),
   compileEndpoint('/v1/agents/{agentId}/commitments', ['GET', 'POST']),
   compileEndpoint('/v1/agents/{agentId}/commitments/{commitmentId}', ['GET', 'PATCH']),
@@ -348,6 +377,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint('/v1/rooms/{roomId}/runs', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs/{runId}', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs/{runId}/items', ['GET']),
+  compileEndpoint('/v1/rooms/{roomId}/runs/{runId}/steps', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs/{runId}/events', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/read', ['GET', 'POST']),
   compileEndpoint('/v1/rooms/{roomId}/search', ['GET']),
@@ -461,6 +491,9 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_ATTACHMENT_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ATTACHMENT_CONTENT_TEMPLATE, ['GET']),
   compileEndpoint(KUN_MEMORY_TEMPLATE, ['GET', 'POST']),
+  compileEndpoint(KUN_MEMORY_RELATIONS_PATH, ['POST']),
+  compileEndpoint(KUN_MEMORY_CONTEXT_PREVIEW_PATH, ['POST']),
+  compileEndpoint(KUN_MEMORY_RELATIONS_ANALYZE_PATH, ['POST']),
   compileEndpoint(KUN_MEMORY_DIAGNOSTICS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_MEMORY_DISTILLATION_TEMPLATE, ['GET']),
   compileEndpoint(KUN_MEMORY_DISTILLATION_DECISION_TEMPLATE, ['POST']),
@@ -528,6 +561,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_THREAD_STEER_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_INTERRUPT_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_TOOL_CANCEL_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_THREAD_CANVAS_RECEIPTS_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_MODEL_REQUESTS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_THREAD_TRAJECTORY_TEMPLATE, ['GET']),
   compileEndpoint(KUN_THREAD_TRAJECTORY_SUMMARY_TEMPLATE, ['GET']),
@@ -540,6 +574,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_BACKGROUND_SHELLS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_BACKGROUND_SHELL_TEMPLATE, ['GET']),
   compileEndpoint(`${KUN_BACKGROUND_SHELL_TEMPLATE}/stop`, ['POST']),
+  compileEndpoint(`${KUN_BACKGROUND_SHELL_TEMPLATE}/stdin`, ['POST']),
   compileEndpoint(KUN_DELEGATION_DIAGNOSTICS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_DELEGATION_ABORT_TEMPLATE, ['POST']),
   compileEndpoint(KUN_DELEGATION_PROFILES_TEMPLATE, ['GET']),

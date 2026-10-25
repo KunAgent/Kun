@@ -91,13 +91,18 @@ export async function listHarnessesForManager(
   deps: HarnessListDeps,
   currentModel?: string,
   /** UI pickers need every model; the tool result keeps the small default cap. */
-  options: { modelsPerGroup?: number } = {}
+  options: {
+    modelsPerGroup?: number
+    /** Lists (and detects) only these engines; a picker never pays for engines it hides. */
+    only?: (harnessId: string) => boolean
+  } = {}
 ): Promise<HarnessListOutput> {
   const perGroup = options.modelsPerGroup ?? MODELS_PER_GROUP
   const rules = ADMISSION_RULES['manager-worker']
   const runtimeMap = deps.runtimes?.get() ?? {}
   const providers = await deps.providers?.().catch(() => undefined) ?? []
-  const agents = await Promise.all(deps.catalog.list().filter((def) => !deps.catalog.isDisabled(def.id)).map(async (def) => {
+  const agents = await Promise.all(deps.catalog.list().filter((def) => !deps.catalog.isDisabled(def.id) &&
+    (options.only?.(def.id) ?? true)).map(async (def) => {
     const terminalOnly = def.transport === 'terminal'
     const status = await deps.detector.status(def.id).catch(() => undefined)
     deps.readiness?.warmProfiles(def.id)

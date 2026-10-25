@@ -1,3 +1,4 @@
+import { captureWorkSubmissionIntent, sendExplicitWorkMessage } from '../product-analytics/work-submission'
 import type { ThreadGoal, ThreadGoalStatus, ThreadTodoList, ThreadTodoStatus } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -42,6 +43,7 @@ import {
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import { emptyLiveProjection } from './chat-store-live-projection'
 import { invalidatePendingTurnStarts } from './turn-start-fence'
+import { resetFilesForRewind } from './chat-store-rewind-file-reset'
 
 /**
  * Release the worktree pool slot owned by a thread when the task completes
@@ -391,9 +393,10 @@ export function createMaintenanceRecoveryActions(
     }
   },
 
-  rewindAndResend: async (userBlockId, newText) => {
+  rewindAndResend: async (userBlockId, newText, options) => {
     const trimmed = newText.trim()
     if (!trimmed) return
+    const analyticsIntent = captureWorkSubmissionIntent()
     const state = get()
     if (state.busy) {
       set({ error: i18n.t('common:rewindBusyError') })
@@ -418,22 +421,16 @@ export function createMaintenanceRecoveryActions(
     if (rewindAndResendInFlight.has(operationKey)) return
     rewindAndResendInFlight.add(operationKey)
     try {
-      const checkpointId = targetBlock.meta?.workspaceCheckpointId
-      if (checkpointId) {
-        const expectedWorkspaceRoot = resolveCheckpointExpectedWorkspaceRoot(state)
-        const restored = await window.kunGui.restoreGitCheckpoint({
-          checkpointId,
-          expectedThreadId: threadId,
-          ...(expectedWorkspaceRoot ? { expectedWorkspaceRoot } : {})
-        }).catch((error) => ({
-          ok: false as const,
-          reason: 'error' as const,
-          message: error instanceof Error ? error.message : String(error)
-        }))
-        if (!restored.ok) {
-          set({ error: restored.message })
+      // Files are reset per file, never with a workspace-wide git reset; an
+      // unsafe file falls back to resetting the conversation alone.
+      let fileResetNotice: string | null = null
+      if (options?.resetFiles && targetBlock.meta?.workspaceCheckpointId) {
+        const reset = await resetFilesForRewind(state, targetBlock.id)
+        if (reset.kind === 'failed') {
+          set({ error: reset.message })
           return
         }
+        if (reset.kind === 'fell_back') fileResetNotice = i18n.t('common:rewindResetFellBack')
       }
 
       const trimmedBlocks = state.blocks.slice(0, idx)
@@ -445,10 +442,14 @@ export function createMaintenanceRecoveryActions(
         attachment.id.trim().length > 0
       )
       const composerContexts = targetBlock.meta?.composerContexts ?? []
+      // The editor passes the file mentions still present in the edited text;
+      // without it the original message's references carry over unchanged.
+      const fileReferences = options?.fileReferences ?? targetBlock.meta?.fileReferences ?? []
       const attachmentOverrides = {
         ...(attachmentIds.length ? { attachmentIds } : {}),
         ...(attachments.length ? { attachments } : {}),
-        ...(composerContexts.length ? { composerContexts } : {})
+        ...(composerContexts.length ? { composerContexts } : {}),
+        ...(fileReferences.length ? { fileReferences } : {})
       }
 
       const droppedUserIds = state.blocks
@@ -497,18 +498,24 @@ export function createMaintenanceRecoveryActions(
         turnReasoningLastAtByUserId,
         error: null
       })
-      if (canvasResend) {
-        await get().sendMessage(canvasResend.text, 'agent', {
-          displayText: canvasResend.displayText,
-          ...(canvasResend.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
-          ...(canvasResend.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
-          ...attachmentOverrides
-        })
-      } else if (attachmentIds.length > 0 || composerContexts.length > 0) {
-        await get().sendMessage(trimmed, undefined, attachmentOverrides)
-      } else {
-        await get().sendMessage(trimmed)
+      const resend = (clientRequestId?: string): Promise<boolean> => {
+        const overrides = { ...attachmentOverrides, ...(clientRequestId ? { clientRequestId } : {}) }
+        if (canvasResend) {
+          return get().sendMessage(canvasResend.text, 'agent', {
+            displayText: canvasResend.displayText,
+            ...(canvasResend.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+            ...(canvasResend.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
+            ...overrides
+          })
+        }
+        if (clientRequestId || attachmentIds.length > 0 || composerContexts.length > 0 || fileReferences.length > 0) {
+          return get().sendMessage(trimmed, undefined, overrides)
+        }
+        return get().sendMessage(trimmed)
       }
+      if (state.route === 'write') await sendExplicitWorkMessage(resend, analyticsIntent)
+      else await resend()
+      if (fileResetNotice) set({ error: fileResetNotice })
     } catch (e) {
       const message = formatRuntimeError(e)
       // Rewind can lose a race with a server-started continuation. The SSE

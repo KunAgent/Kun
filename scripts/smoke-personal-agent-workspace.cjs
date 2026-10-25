@@ -365,6 +365,15 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert.equal(recovered.runId, restarting.runId)
     assert.equal(recovered.threadId, restarting.threadId)
     assert.equal(recovered.turnId, restarting.turnId)
+    // This visit retains its failure notice; reload intentionally hides acknowledged failures.
+    if (recovered.status === 'failed') await poll(async () =>
+      (await activity(entry.roomId)).requests.find((item) => item.id === restarting.requestId)?.failureAcknowledged === true,
+    15000, 'renderer acknowledged the interrupted request before recovery geometry')
+    await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay', entry.roomId)
+    await sidebar.resizeTo(760, 780)
+    await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow', entry.roomId)
+    await sidebar.resizeTo(1360, 900)
+    assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Inspecting recovery controls must not replay the request')
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
     await openPrivate(firstAgent.name)
@@ -376,11 +385,10 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert.deepEqual(afterRestart.requests.map((item) => item.id), beforeRestart.requests.map((item) => item.id))
     assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Runtime restart and renderer reload must not replay an interrupted request')
     assert(!(await browserState(restarting.threadId)).sessionId, 'Runtime restart destroys transient browser authority')
-    await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay', entry.roomId)
-    await sidebar.resizeTo(760, 780)
-    await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow', entry.roomId)
-    await sidebar.resizeTo(1360, 900)
-    assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Inspecting recovery controls must not replay the request')
+    if (recovered.status === 'failed') assert.equal(await page.locator(
+      '[data-rooms-workspace][data-private-chat="true"][data-room-id=' + JSON.stringify(entry.roomId) + ']:visible .direct-failed'
+    ).count(), 0, 'Reload must not raise an already acknowledged failure again')
+    await capture('workspace-18c-reloaded-recovery-no-replay')
     await openSavedFiles()
     await page.locator('.direct-file-list:visible').getByRole('button', { name: /workspace-evidence\.txt/ }).first().click()
     await poll(async () => (await page.locator('.rooms-content-preview:visible').innerText()).includes('Saved personal workspace artifact v1'), 15000, 'saved artifact survives real restart')

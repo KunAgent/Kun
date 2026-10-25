@@ -262,5 +262,7 @@
     "default": "still the default model; change it in the default model setting",
     "keptRoutes": "{{names}} would have no members left, so they keep theirs; edit those routes on the Routing page.",
     "review": "Review removal"
-  }
+  },
+  "cursorSubscriptionAgentHint": "A Cursor subscription runs through the Cursor Agent, so it is not listed among Kun models. Check and enable Cursor under Agents, then pick Cursor from the Agent menu in the composer.",
+  "cursorSubscriptionOpenAgent": "Open Cursor Agent settings"
 }

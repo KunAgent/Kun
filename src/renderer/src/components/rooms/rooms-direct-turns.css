@@ -1,0 +1,186 @@
+/* Private chat turns: one header per run, the work between messages folded,
+ * and what a finished turn changed under its last message. The doubled
+ * attribute selector outranks the Code surface bubble rules regardless of
+ * which chunk loads first. */
+
+.room-turn-clock { display: inline-flex; gap: 6px; color: var(--ds-text-muted); white-space: nowrap; }
+/* "18:23 – 18:27": the end time continues the start time instead of taking a full meta gap. */
+.rooms-message-meta > .room-turn-clock:not(.is-live) { margin-left: -0.25rem; }
+.room-turn-clock.is-live { color: var(--ds-success); font-weight: 500; }
+
+.room-turn-trail { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 4px 0 8px; }
+.room-turn-trail-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 11px 0 7px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: background-color .12s ease;
+}
+.room-turn-trail-chip:hover { background: var(--ds-surface-hover); }
+.room-turn-trail-chip:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.room-turn-trail-chip > svg { flex: none; }
+.room-turn-trail-chevron { transition: transform .15s ease; }
+.room-turn-trail-chip[aria-expanded='true'] .room-turn-trail-chevron { transform: rotate(90deg); }
+.room-turn-trail-summary { display: inline-flex; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.room-turn-trail-summary > span + span::before { content: '·'; margin-right: 6px; color: var(--ds-text-faint); }
+.room-turn-trail-summary .is-lead { color: var(--ds-text); font-weight: 500; }
+.room-turn-trail-summary .is-failed { color: var(--ds-danger); }
+.room-turn-trail-time,
+.room-turn-step-time { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+.room-turn-steps {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(42.5rem, 100%);
+  margin: 0;
+  padding: 0 0 0 6px;
+  list-style: none;
+}
+.room-turn-steps::before {
+  content: '';
+  position: absolute;
+  left: 15.5px;
+  top: 14px;
+  bottom: 14px;
+  width: 1px;
+  background: var(--ds-border);
+}
+.room-turn-step { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; column-gap: 10px; padding: 4px 0; font-size: 12.5px; line-height: 19px; }
+.room-turn-step-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--ds-border);
+  border-radius: 50%;
+  background: var(--ds-bg-main);
+  color: var(--ds-success);
+}
+.room-turn-step.is-running .room-turn-step-icon { color: var(--ds-accent); }
+.room-turn-step.is-failed .room-turn-step-icon { border-color: transparent; background: var(--ds-danger-soft); color: var(--ds-danger); }
+.room-turn-step.is-cancelled .room-turn-step-icon { color: var(--ds-text-faint); }
+.room-turn-step-text { display: flex; flex-direction: column; min-width: 0; }
+.room-turn-step-title,
+.room-turn-step-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-turn-step-title { color: var(--ds-text); }
+.room-turn-step-title code { padding: 1px 5px; border-radius: 5px; background: var(--ds-surface-hover); font-size: 12px; }
+.room-turn-step-detail { color: var(--ds-text-muted); }
+.room-turn-step-detail.is-failed { color: var(--ds-danger); }
+.room-turn-step-time { color: var(--ds-text-muted); }
+
+.room-turn-decision {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 11px 0 9px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+}
+.room-turn-decision > svg { flex: none; color: var(--ds-success); }
+.room-turn-decision.is-denied > svg { color: var(--ds-danger); }
+.room-turn-decision.is-expired > svg { color: var(--ds-text-faint); }
+.room-turn-decision strong { flex: none; color: var(--ds-text); font-weight: 500; }
+.room-turn-decision-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.room-turn-decision time { flex: none; }
+
+.room-turn-result {
+  width: min(42.5rem, 100%);
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid var(--ds-border);
+  border-radius: 14px;
+  background: var(--ds-surface-card);
+  font-size: 13px;
+}
+.room-turn-result > header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
+.room-turn-result > header strong { color: var(--ds-text); font-size: 13.5px; font-weight: 600; }
+.room-turn-result > header > span:last-child:not(.room-turn-result-icon) { margin-left: auto; color: var(--ds-text-muted); font-size: 12px; }
+.room-turn-result-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ds-success-soft);
+  color: var(--ds-success);
+}
+.room-turn-result:is(.is-failed, .is-recovery_required) .room-turn-result-icon { background: var(--ds-danger-soft); color: var(--ds-danger); }
+.room-turn-result.is-cancelled .room-turn-result-icon { background: var(--ds-surface-hover); color: var(--ds-text-muted); }
+.room-turn-result-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); margin: 0; border-top: 1px solid var(--ds-border-muted); }
+.room-turn-result-facts > div { padding: 8px 14px; }
+.room-turn-result-facts > div + div { border-left: 1px solid var(--ds-border-muted); }
+.room-turn-result-facts dt { color: var(--ds-text-muted); font-size: 12px; }
+.room-turn-result-facts dd { margin: 0; color: var(--ds-text); font-size: 17px; font-weight: 600; line-height: 24px; font-variant-numeric: tabular-nums; }
+.room-turn-result-facts .is-failed dd { color: var(--ds-danger); }
+.room-turn-result-files { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 8px 14px 10px; border-top: 1px solid var(--ds-border-muted); list-style: none; }
+.room-turn-result-files li { display: inline-flex; align-items: center; gap: 5px; max-width: 220px; padding: 3px 8px; border-radius: 7px; background: var(--ds-surface-subtle); color: var(--ds-text-muted); }
+.room-turn-result-files code { overflow: hidden; color: var(--ds-text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.room-turn-result-error { margin: 0; padding: 8px 14px; border-top: 1px solid var(--ds-border-muted); color: var(--ds-danger); font-size: 12.5px; overflow-wrap: anywhere; }
+.room-turn-result > footer { display: flex; padding: 6px 8px; border-top: 1px solid var(--ds-border-muted); background: var(--ds-surface-subtle); }
+.room-turn-result > footer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--ds-accent);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.room-turn-result > footer button:hover { background: var(--ds-surface-hover); }
+.room-turn-result > footer button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
+
+/* A turn's bubbles stack tightly: with a pointer, the message tools float over
+ * the message on hover instead of reserving a row under every bubble. Touch
+ * and narrow layouts keep them always visible in their own row (rooms-polish.css). */
+@media (hover: hover) and (min-width: 641px) {
+  .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row:not(.rooms-message-system) .rooms-message-actions {
+    position: absolute;
+    top: -14px;
+    right: 0;
+    margin: 0;
+    min-height: 0;
+    border-color: var(--ds-border);
+    background: var(--ds-surface-elevated);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 10%);
+    pointer-events: none;
+  }
+  .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-user .rooms-message-actions { right: auto; left: 0; }
+  .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row:is(:hover, :focus-within) .rooms-message-actions,
+  .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-actions:has([aria-expanded='true']) { pointer-events: auto; }
+}
+
+/* Bubbles: the user's own messages need no avatar and read as the accent tint;
+ * the Agent's are flat gray at a reading width; timestamps keep full contrast. */
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-user > :is(.rooms-avatar, .rooms-message-avatar-spacer) { display: none; }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-meta { padding: 0; color: var(--ds-text-muted); font-size: 12px; opacity: 1; }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-member .rooms-message-meta { align-items: center; }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-member .rooms-message-meta strong { display: inline; }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-meta time { color: var(--ds-text-muted); }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-bubble { border: 0; }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-bubble:not(.rooms-message-wide):not(:has(pre, table, .ds-code-block)) { max-width: min(42.5rem, 100%); }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-member .rooms-message-bubble { border-radius: 6px 16px 16px 16px; background: var(--ds-surface-subtle); }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-user .rooms-message-bubble {
+  border-radius: 16px 16px 6px 16px;
+  background: color-mix(in srgb, var(--ds-accent) 13%, var(--ds-surface-card));
+  color: var(--ds-text);
+}

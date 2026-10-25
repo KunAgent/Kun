@@ -1,0 +1,129 @@
+/* Shared surface of the Word, Excel and slide viewers: a soft desk the documents sit on. */
+
+:root {
+  --kun-office-desk: #e8e5df;
+  --kun-office-rail: #f2f0ec;
+  --kun-office-rule: rgba(66, 56, 44, 0.12);
+  --kun-office-number: #8c857b;
+  --kun-office-thumb-ring: rgba(46, 38, 28, 0.13);
+  --kun-office-slide-shadow: 0 1px 2px rgba(31, 25, 18, 0.1), 0 10px 28px rgba(31, 25, 18, 0.12);
+}
+
+html[data-theme='dark'] {
+  --kun-office-desk: #141517;
+  --kun-office-rail: #191a1d;
+  --kun-office-rule: rgba(255, 255, 255, 0.07);
+  --kun-office-number: #7e8085;
+  --kun-office-thumb-ring: rgba(255, 255, 255, 0.1);
+  --kun-office-slide-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.kun-office-scroll {
+  background: var(--kun-office-desk);
+  scrollbar-width: thin;
+}
+
+.kun-office-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 32px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+.kun-office-state__body {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 44ch;
+  text-align: center;
+}
+
+.kun-office-state__body strong {
+  color: var(--ds-text);
+  font-size: 13px;
+}
+
+.kun-office-state__spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--kun-office-rule);
+  border-top-color: var(--ds-accent);
+  border-radius: 50%;
+  animation: kun-office-spin 0.8s linear infinite;
+}
+
+@keyframes kun-office-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Word: pages on the desk. The viewer marks its text as unselectable; reading
+   a document includes quoting it, so selection is switched back on. */
+.kun-docx .workspace-docx-preview {
+  position: relative;
+  min-height: 100%;
+  padding: 20px 16px 28px;
+}
+
+.kun-docx [data-docx-editor-root],
+.kun-docx [data-docx-editor-root] * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+.kun-docx [data-docx-page-surface] {
+  border-radius: 2px;
+  box-shadow: var(--kun-office-slide-shadow);
+}
+
+/* Excel: worksheet tabs under the grid. */
+.kun-xlsx-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 6px 8px;
+  border-top: 1px solid var(--ds-border-muted);
+  background: var(--ds-surface-card);
+  scrollbar-width: none;
+}
+
+.kun-xlsx-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.kun-xlsx-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 200px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--ds-text) 3.5%, transparent);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.kun-xlsx-tab:hover {
+  background: color-mix(in srgb, var(--ds-text) 6%, transparent);
+}
+
+.kun-xlsx-tab[aria-selected='true'] {
+  color: var(--ds-text);
+  font-weight: 500;
+  background: color-mix(in srgb, var(--ds-text) 9%, transparent);
+}
+
+.kun-xlsx-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ds-accent) 55%, transparent);
+  outline-offset: 1px;
+}

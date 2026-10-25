@@ -1,0 +1,25 @@
+{
+  "composerTrayGraph": {
+    "segmentLabel": "Graph · {{titles}}",
+    "segmentLabelStatus": "Graph · {{status}}",
+    "titleSeparator": "、",
+    "segmentAria": "Graph 実行：ノード {{total}} 件のうち {{accepted}} 件が受理済み、{{running}} 件が実行中",
+    "segmentAriaQuiet": "Graph 実行：ノード {{total}} 件のうち {{accepted}} 件が受理済みです。実行中のノードが長く反応していません",
+    "segmentAriaAsking": "Graph 実行：ノード {{total}} 件のうち {{accepted}} 件が受理済みです。回答を待っているノードがあります",
+    "segmentAriaAwaiting": "Graph 実行：ノード {{total}} 件のうち {{accepted}} 件が受理済みです。実行があなたの対応を待っています",
+    "segmentAriaFlagged": "Graph 実行：ノード {{total}} 件のうち {{accepted}} 件が受理済みです。対応が必要なノードがあります",
+    "sheetTitle": "Graph 実行",
+    "acceptedSummary": "ノード {{total}} 件のうち {{accepted}} 件が受理済み",
+    "runningSummary_one": "{{count}} 件が実行中",
+    "runningSummary_other": "{{count}} 件が実行中",
+    "nodeRetry": "再試行 {{number}}",
+    "lastActivitySeconds": "最終アクティビティ {{seconds}} 秒前",
+    "lastActivityAgo": "最終アクティビティ {{ago}}",
+    "stillWaiting": "モデルまたはツールの応答をまだ待っています",
+    "elapsedTitle": "{{duration}} 実行中",
+    "correctionAria": "Graph の計画を一時停止：プランにあなたの入力が必要です",
+    "correctionNote": "下書きは保存されています。チャットで指示を追加してから、計画を続けてください。",
+    "correctionMore_one": "さらに {{count}} 件の問題",
+    "correctionMore_other": "さらに {{count}} 件の問題"
+  }
+}

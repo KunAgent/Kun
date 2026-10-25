@@ -124,6 +124,21 @@ describe('explicit per-profile readiness', () => {
     expect(await f.service.readyProfiles('opencode')).toEqual([])
     await expect(f.service.validateTurn('thread', 'turn', new AbortController().signal)).rejects.toThrow('readiness proof')
   })
+  it('keeps one Agent process when only the explicit model changes', async () => {
+    const f = await fixture(); f.enable()
+    f.options.providers!['account-a']!.models = ['model-a', 'model-b']
+    const signature = (model: string) => f.service.configurationSignature({ ...route, model })
+    await f.service.prepareTurn('thread', 'a', { ...route, model: 'model-a' }, signature('model-a'), new AbortController().signal)
+    const first = f.service.reuseIdentityForTurn('thread', 'a')
+    await f.service.prepareTurn('thread', 'b', { ...route, model: 'model-b' }, signature('model-b'), new AbortController().signal)
+    const second = f.service.reuseIdentityForTurn('thread', 'b')
+    expect(first).toBeTypeOf('string')
+    expect(second).toBe(first)
+    // The full admission proof still names the model it was checked for.
+    expect(f.service.configurationSignature({ ...route, model: 'model-a' }))
+      .not.toBe(f.service.configurationSignature({ ...route, model: 'model-b' }))
+  })
+
   it('keeps native profile keys independent from provider labels and separates provider accounts', () => {
     expect(harnessProfileKey({ ...route, providerId: 'default', credentialMode: 'native-login' })).toBe('["opencode","native-login",""]')
     expect(harnessProfileKey({ ...route, credentialMode: 'native-login' })).not.toBe(harnessProfileKey({ ...route, credentialMode: 'native-login', providerId: 'account-b' }))

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CanvasTool, Rect, ViewBox } from './canvas-types'
+import type { CanvasTool, DevicePreset, Rect, ViewBox } from './canvas-types'
 
 const MIN_ZOOM = 0.02
 const MAX_ZOOM = 50
@@ -13,6 +13,8 @@ type ViewportState = {
   activeTool: CanvasTool
   gridVisible: boolean
   snapEnabled: boolean
+  /** Device chosen from the board menu; null = follow the design target. */
+  screenDevicePreset: DevicePreset | null
 
   setContainerSize: (width: number, height: number) => void
   setVbox: (vbox: ViewBox) => void
@@ -21,6 +23,7 @@ type ViewportState = {
   zoomToFit: (bounds: Rect, padding?: number, options?: { maxZoom?: number; minZoom?: number }) => void
   resetView: () => void
   setActiveTool: (tool: CanvasTool) => void
+  setScreenDevicePreset: (preset: DevicePreset | null) => void
   toggleGrid: () => void
   toggleSnap: () => void
   getZoom: () => number
@@ -41,6 +44,7 @@ export const useCanvasViewportStore = create<ViewportState>((set, get) => ({
   activeTool: 'select',
   gridVisible: true,
   snapEnabled: true,
+  screenDevicePreset: null,
 
   setContainerSize: (width, height) => {
     set((s) => {
@@ -128,6 +132,7 @@ export const useCanvasViewportStore = create<ViewportState>((set, get) => ({
     })),
 
   setActiveTool: (tool) => set({ activeTool: tool }),
+  setScreenDevicePreset: (preset) => set({ screenDevicePreset: preset }),
 
   toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
 
