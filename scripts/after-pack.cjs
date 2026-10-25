@@ -23,6 +23,8 @@ const macho = require('./after-pack-thin-macho.cjs')
 const scopeDedupe = require('./after-pack-scope-dedupe.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
+  normalizeArch,
+  normalizePlatform,
   assertElfExecutable,
   installCliLaunchers,
   installLinuxElectronLauncher,
@@ -124,10 +126,6 @@ const REQUIRED_RETIRED_BUNDLED_EXTENSION_IDS = [
   'kun-examples.kun-video-editor',
   'kun-examples.presentation-studio'
 ]
-
-function normalizePlatform(platform) {
-  return platform === 'win' ? 'win32' : platform
-}
 
 function appBundlePath(context) {
   return join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
@@ -618,12 +616,6 @@ function ensureNodePtyHelpersExecutable(context) {
       console.warn(`[after-pack] could not chmod node-pty spawn-helper (${folder}):`, error.message)
     }
   }
-}
-
-function normalizeArch(arch) {
-  if (arch === 'x64' || arch === 1) return 'x64'
-  if (arch === 'arm64' || arch === 3) return 'arm64'
-  throw new Error(`[after-pack] Unsupported packaged resource arch: ${arch}`)
 }
 
 function prunePackedWhisperResources(context) {

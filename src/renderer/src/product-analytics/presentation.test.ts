@@ -10,8 +10,9 @@ import {
   noteAnalyticsTurn, useResultPresented
 } from './presentation'
 
+const chatState = vi.hoisted(() => ({ surface: 'code' }))
 vi.mock('../store/chat-store', () => ({
-  useChatStore: { getState: () => ({ route: 'chat', activeThreadId: 'thread', threads: [{ id: 'thread', agentSurface: 'code' }] }) }
+  useChatStore: { getState: () => ({ route: 'chat', activeThreadId: 'thread', threads: [{ id: 'thread', agentSurface: chatState.surface }] }) }
 }))
 const track = vi.fn(async () => {})
 const renderers: ReactTestRenderer[] = []
@@ -35,6 +36,7 @@ beforeEach(() => {
   setProductCapture(false)
   clearAnalyticsPresentation()
   track.mockClear()
+  chatState.surface = 'code'
 })
 afterEach(async () => {
   await act(async () => { renderers.splice(0).forEach(renderer => renderer.unmount()) })
@@ -83,4 +85,19 @@ it.each(['disabled', 'remote', 'historical'])('does not report visible %s result
   await render()
   noteAnalyticsRoomRendered(message)
   expect(track).not.toHaveBeenCalled()
+})
+
+it('excludes Write results without consuming their live Code marker', async () => {
+  vi.stubGlobal('document', { hidden: false })
+  setProductCapture(true, 'epoch')
+  noteLiveResults()
+  chatState.surface = 'write'
+  await render()
+  expect(track).not.toHaveBeenCalled()
+  chatState.surface = 'code'
+  await render()
+  await vi.waitFor(() => expect(track).toHaveBeenCalledTimes(1))
+  expect(track).toHaveBeenCalledWith({ name: 'result_presented', properties: {
+    mode: 'code', runKey: expect.stringMatching(/^[a-f0-9]{64}$/), outputPresent: true
+  } }, 'epoch')
 })
