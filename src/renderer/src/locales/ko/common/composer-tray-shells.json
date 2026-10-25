@@ -1,0 +1,32 @@
+{
+  "composerTrayShells": {
+    "title": "백그라운드 명령",
+    "ariaLabel": "백그라운드 명령: {{detail}}",
+    "segmentCount_one": "백그라운드 명령 {{count}}개",
+    "segmentCount_other": "백그라운드 명령 {{count}}개",
+    "inBackground_one": "백그라운드 {{count}}개",
+    "inBackground_other": "백그라운드 {{count}}개",
+    "failedCount_one": "{{count}}개 실패",
+    "failedCount_other": "{{count}}개 실패",
+    "runningFor": "{{duration}} 동안 실행 중",
+    "exitCode": "종료 코드 {{code}}",
+    "stopped": "중지됨",
+    "endedBySignal": "신호로 종료됨",
+    "failed": "실패",
+    "copyOutput": "출력 복사",
+    "copied": "복사됨",
+    "sendToKun": "Kun에 보내기",
+    "sendToKunTitle": "이 출력을 입력창에 첨부합니다",
+    "sendCopiedInstead": "대신 복사됨",
+    "sendUnavailable": "첨부할 수 없음",
+    "sendUnavailableTitle": "이 출력을 입력창에 첨부하지 못했습니다",
+    "dismiss": "제거",
+    "showOutput": "{{command}} 출력 보기",
+    "hideOutput": "{{command}} 출력 숨기기",
+    "outputLabel": "{{command}} 출력",
+    "outputFile": "전체 출력: {{path}}",
+    "outputTruncated": "미리보기가 잘림",
+    "noOutput": "(아직 출력 없음)",
+    "empty": "백그라운드 명령이 없습니다."
+  }
+}

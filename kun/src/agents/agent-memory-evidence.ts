@@ -19,7 +19,8 @@ export async function collectAgentMemoryEvidence(deps: RoomRuntimeDeps, job: Age
     if (sources.length >= 8 || sources.some((source) => source.id === id)) return false
     const trust = kind === 'user' ? 'explicit-user' : kind === 'tool' ? 'observed' : 'inferred'
     const sourceId = id.length <= 128 ? id : 'src_' + createHash('sha256').update(id).digest('hex').slice(0, 24)
-    sources.push({ id: sourceId, kind, locator, threadId: job.rootRequestId, itemId: id, excerpt: text.slice(0, 512),
+    // An attachment-only message has no body; an empty excerpt fails memory source validation.
+    sources.push({ id: sourceId, kind, locator, threadId: job.rootRequestId, itemId: id, ...(text.trim() ? { excerpt: text.slice(0, 512) } : {}),
       contentHash: createHash('sha256').update(text).digest('hex'), trust, ...metadata })
     texts.push({ id: sourceId, author, trust, outcome: metadata.outcome, text: boundedRoomText(text, kind === 'user' ? 2000 : 1000) })
     return true

@@ -151,6 +151,23 @@ describe('AgentsCollaborationSettingsPanel', () => {
     act(() => renderer.unmount())
   })
 
+  it('saves the no-response dispatch window and the approval-mode switch', async () => {
+    const saveRequest = vi.fn(async (request: AdeCollaborationSettingsMutation) => ({
+      ok: true as const, value: request.value, revision: savedRevision, generation: 6
+    }))
+    const renderer = await renderPanel(saveRequest)
+    const window = renderer.root.find((node) => node.type === 'select' && node.props['data-dispatch-auto-start'])
+    expect(window.props.value).toBe('60')
+    act(() => window.props.onChange({ target: { value: '180' } }))
+    const confirm = renderer.root.findByProps({ role: 'switch', 'aria-label': 'adeSettings.dispatchAutoStartConfirm' })
+    expect(confirm.props['aria-checked']).toBe(true)
+    act(() => confirm.props.onClick())
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).toHaveBeenCalledWith({ expectedRevision: revision, value: expect.objectContaining({
+      dispatch: { autoStartSeconds: 180, autoStartWhenConfirmationRequired: false } }) })
+    act(() => renderer.unmount())
+  })
+
   it('does not persist an incomplete manager route', async () => {
     const saveRequest = vi.fn()
     const renderer = await renderPanel(saveRequest)

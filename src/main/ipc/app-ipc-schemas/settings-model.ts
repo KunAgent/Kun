@@ -326,6 +326,7 @@ const subagentProfilePatchSchema = z
     credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
     gatewayBinding: HarnessGatewayBindingSchema.optional(),
     delegationNotes: z.string().max(1_000).optional(),
+    owns: z.string().max(300).optional(),
     builtin: z.boolean().optional()
   })
   .passthrough()
@@ -334,6 +335,7 @@ const subagentsPatchSchema = z
   .object({
     enabled: z.boolean().optional(),
     useExistingAgents: z.boolean().optional(),
+    honorEngineBinding: z.boolean().optional(),
     maxParallel: z.number().int().positive().max(256).optional(),
     proactiveRetry: z.object({
       enabled: z.boolean().optional(),
@@ -641,6 +643,15 @@ export const kunRuntimePatchSchema = z.object({
     stall: z.object({
       structuredMinutes: z.number().int().min(1).max(240).optional(),
       terminalMinutes: z.number().int().min(1).max(480).optional()
+    }).strict().optional(),
+    dispatch: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
+      autoStartWhenConfirmationRequired: z.boolean().optional()
+    }).strict().optional(),
+    tasks: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
+      worktree: z.boolean().optional(),
+      inheritContext: z.boolean().optional()
     }).strict().optional(),
     notifications: z.object({
       waiting: z.boolean().optional(),

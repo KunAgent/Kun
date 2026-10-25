@@ -1,6 +1,10 @@
 export const KUN_AGENT_DISPATCH_INTENTS_TEMPLATE = '/v1/agent-dispatch-intents'
 export const KUN_AGENT_DISPATCH_INTENT_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}'
 export const KUN_AGENT_DISPATCH_ACTION_TEMPLATE = '/v1/agent-dispatch-intents/{intentId}/actions'
+export const KUN_TASK_SUGGESTIONS_TEMPLATE = '/v1/task-suggestions'
+export const KUN_TASK_SUGGESTION_TEMPLATE = '/v1/task-suggestions/{intentId}'
+export const KUN_TASK_SUGGESTION_ACTION_TEMPLATE = '/v1/task-suggestions/{intentId}/actions'
+export const KUN_AGENT_ROSTER_TEMPLATE = '/v1/agent-roster'
 
 /**
  * Kun HTTP endpoint path templates. The renderer and the main
@@ -528,6 +532,11 @@ export function kunThreadEventsPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/events`
 }
 
+export const KUN_THREAD_CANVAS_RECEIPTS_TEMPLATE = '/v1/threads/{id}/canvas-receipts'
+export function kunThreadCanvasReceiptsPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/canvas-receipts`
+}
+
 export const KUN_THREAD_MODEL_REQUESTS_TEMPLATE = '/v1/threads/{id}/model-requests'
 export function kunThreadModelRequestsPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/model-requests`
@@ -582,6 +591,9 @@ export function kunBackgroundShellPath(sessionId: string): string {
 }
 export function kunBackgroundShellStopPath(sessionId: string): string {
   return `${kunBackgroundShellPath(sessionId)}/stop`
+}
+export function kunBackgroundShellStdinPath(sessionId: string): string {
+  return `${kunBackgroundShellPath(sessionId)}/stdin`
 }
 
 /** Thread mode shared with the Kun contract. */

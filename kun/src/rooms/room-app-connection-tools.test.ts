@@ -65,7 +65,8 @@ describe('Room app connection cards', () => {
   it('offers native Gmail and publishes one durable card for a configured app', async () => {
     const f = await fixture()
     expect((await f.list.execute({}, f.context)).output).toMatchObject({ suggested: [
-      { id: 'google_gmail', name: 'Gmail', connectionKind: 'native_gmail' }],
+      { id: 'google_gmail', name: 'Gmail', connectionKind: 'native_gmail' },
+      { id: 'github', name: 'GitHub', connectionKind: 'native_github' }],
       configured: [expect.objectContaining({ id: 'notion' }),
         expect.objectContaining({ id: 'google_gmail', status: 'not_connected', connectionKind: 'native_gmail' })] })
     const first = await f.request.execute({ serverId: 'notion', reason: 'I need Notion to search your notes.' }, f.context)
@@ -126,6 +127,21 @@ describe('Room app connection cards', () => {
     thread.roomContext!.blockedProviderIds.push('gmail')
     await f.threads.upsert(thread)
     expect((await f.request.execute({ serverId: 'google_gmail', reason: 'Need mail' }, f.context)).isError).toBe(true)
+  })
+
+  it('creates a GitHub App card without a configured legacy MCP server or local credentials', async () => {
+    const f = await fixture()
+    bindRoomAppAccess(f.threads, () => ({ servers: {}, statuses: {}, github: {
+      configured: true, connected: false, reconnectRequired: false, allowModelSharing: false,
+      repositoryCount: 0, repositories: []
+    } }))
+    const result = await f.request.execute({ serverId: 'github', reason: 'Read the selected repository' }, f.context)
+    expect(result.isError).not.toBe(true)
+    const id = (result.output as { messageId: string }).messageId
+    expect((await f.store.get<RoomMessage>('message', id))!.value.appConnection)
+      .toMatchObject({ serverId: 'github', status: 'requested', resumed: false })
+    expect((await f.request.execute({ serverId: 'github', reason: 'Read repository' },
+      { ...f.context, clientSurface: 'im' })).isError).toBe(true)
   })
 
   it('keeps native Gmail available while remote Gmail is hidden, but enforces an explicitly saved Agent deny', async () => {

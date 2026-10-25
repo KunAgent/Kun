@@ -1,4 +1,4 @@
-import type { PptWorkflowScope, ToolHostContext } from '../ports/tool-host.js'
+import type { ToolHostContext } from '../ports/tool-host.js'
 import type { ToolTurnContextInput } from './turn-execution-types.js'
 import type { InteractiveToolBridge } from './interactive-tool-bridge.js'
 import { KUN_GMAIL_LOCAL_PROVIDER_ID } from '../gmail/tool-policy.js'
@@ -11,7 +11,6 @@ export type ToolDiscoveryContextFactoryDeps = {
   allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
-  pptWorkflowScope?: PptWorkflowScope
   blockedProviderIds?: readonly string[]
   blockedToolNames?: readonly string[]
   blockedSkillIds?: readonly string[]
@@ -79,7 +78,6 @@ export function createToolDiscoveryContext(
     ...(deps.allowHostReads ? { allowHostReads: true } : {}),
     ...(deps.allowedWritePaths ? { allowedWritePaths: deps.allowedWritePaths } : {}),
     ...(deps.allowedArtifactIds ? { allowedArtifactIds: deps.allowedArtifactIds } : {}),
-    ...(deps.pptWorkflowScope ? { pptWorkflowScope: deps.pptWorkflowScope } : {}),
     ...(deps.blockedProviderIds ? { blockedProviderIds: deps.blockedProviderIds } : {}),
     ...(deps.blockedToolNames ? { blockedToolNames: deps.blockedToolNames } : {}),
     ...(deps.blockedSkillIds ? { blockedSkillIds: deps.blockedSkillIds } : {}),
@@ -114,8 +112,10 @@ export function createToolDiscoveryContext(
  * prefix. Execution still uses the original turn context and therefore keeps
  * every tool's `shouldAdvertise` predicate as an enforcement backstop.
  *
- * Plan, Graph, Work, and dedicated SVG turns retain their narrower catalogs
- * because those are real capability phases rather than presentation modes.
+ * Plan, Graph, Work, dedicated SVG, and reserved HTML page turns retain their
+ * narrower catalogs because those are real capability phases rather than
+ * presentation modes. A page turn's fixed catalog is identical for every page,
+ * so a batch of page turns still shares one cached prefix.
  */
 export function modelToolDiscoveryContexts(context: ToolHostContext): ToolHostContext[] {
   const surface = context.agentSurface ?? 'code'
@@ -125,6 +125,7 @@ export function modelToolDiscoveryContexts(context: ToolHostContext): ToolHostCo
     context.orchestration === 'graph' ||
     context.guiPlan ||
     context.guiDesignArtifact?.kind === 'svg' ||
+    context.guiDesignArtifact?.kind === 'html' ||
     context.roomStepKind !== undefined ||
     (surface !== 'code' && surface !== 'design')
   ) {

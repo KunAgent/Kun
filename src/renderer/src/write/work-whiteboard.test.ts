@@ -482,4 +482,50 @@ describe('Work whiteboard registry', () => {
       workspaceRoot: '/other', boardId: 'auth-flow'
     })).resolves.toMatchObject({ ok: false, code: 'workspace_mismatch' })
   })
+
+  it('reads the registry only when asked and reports the loaded workspace', async () => {
+    seedRegistry({
+      'board-a': {
+        id: 'board-a', title: 'A', workspaceRoot: '/work', threadId: null,
+        phase: 'blank', revision: 0, createdAt: savedAt, updatedAt: savedAt
+      }
+    })
+    expect(useWriteWorkspaceStore.getState().whiteboardsLoadedRoot).toBeNull()
+
+    await expect(useWriteWorkspaceStore.getState().ensureWhiteboards('/work')).resolves.toBe(true)
+    await expect(useWriteWorkspaceStore.getState().ensureWhiteboards('/work')).resolves.toBe(true)
+
+    expect(useWriteWorkspaceStore.getState().whiteboardsLoadedRoot).toBe('/work')
+    expect(readWorkspaceFile.mock.calls.filter(([payload]) => payload.path === WORK_WHITEBOARD_INDEX))
+      .toHaveLength(1)
+  })
+
+  it('treats an unreadable index as unknown and refuses to overwrite it', async () => {
+    directories.add(WORK_WHITEBOARD_DIR)
+    files.set(WORK_WHITEBOARD_INDEX, '{not json')
+
+    await expect(useWriteWorkspaceStore.getState().ensureWhiteboards('/work')).resolves.toBe(false)
+    expect(useWriteWorkspaceStore.getState().whiteboardsLoadedRoot).toBeNull()
+    expect(useWriteWorkspaceStore.getState().whiteboardsLoadError).toBeTruthy()
+
+    await expect(useWriteWorkspaceStore.getState().createWhiteboard('/work', { title: 'Blocked' }))
+      .resolves.toBeNull()
+    expect(files.get(WORK_WHITEBOARD_INDEX)).toBe('{not json')
+    expect(writeWorkspaceFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps every board when two creations overlap', async () => {
+    seedRegistry({})
+    const store = useWriteWorkspaceStore.getState()
+
+    const [first, second] = await Promise.all([
+      store.createWhiteboard('/work', { title: 'First', id: 'board-first' }),
+      store.createWhiteboard('/work', { title: 'Second', id: 'board-second' })
+    ])
+
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    expect(Object.keys(parseWorkWhiteboardRegistry(files.get(WORK_WHITEBOARD_INDEX)!, '/work')).sort())
+      .toEqual(['board-first', 'board-second'])
+  })
 })

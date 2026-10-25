@@ -81,6 +81,21 @@ describe('durable queued-to-steering ownership', () => {
     await flushDurableSteering(h.turns, 'thread', h.a.turnId)
     expect((await h.sessionStore.loadItems('thread')).filter((item) => item.id.startsWith('item_steered_'))).toHaveLength(1)
   })
+
+  it('checks pending steering from metadata without hydrating item history', async () => {
+    const h = await harness()
+    const get = vi.spyOn(h.threadStore, 'get')
+    await flushDurableSteering(h.turns, 'thread', h.a.turnId)
+    expect(get).not.toHaveBeenCalled()
+
+    await h.turns.steerTurn({ threadId: 'thread', turnId: h.a.turnId, sourceTurnId: h.b.turnId,
+      operationId: 'guide-b', text: 'B' })
+    get.mockClear()
+    await flushDurableSteering(h.turns, 'thread', h.a.turnId)
+    // Marking a delivery durable is a read-modify-write and still reads the full record.
+    expect(get).toHaveBeenCalledTimes(1)
+    expect((await h.turns.getTurn('thread', h.a.turnId))?.steeringDeliveries?.every((entry) => entry.delivered)).toBe(true)
+  })
 })
 
 describe('delegated runtime steering', () => {

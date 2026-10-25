@@ -47,6 +47,16 @@ describe('agent memory service', () => {
     expect((await f.service.list(f.agent.id, {})).memories).toHaveLength(0)
   })
 
+  it('saves a memory sourced from an attachment-only message without an empty excerpt', async () => {
+    const f = await fixture()
+    const row = (await f.store.get<typeof f.message>('message', f.message.id))!
+    await f.store.commit({ requestId: 'attachment-only', checks: [{ kind: 'message', id: row.id, expectedRevision: row.revision }],
+      puts: [{ kind: 'message', id: row.id, roomId: f.room.id, value: { ...row.value, body: '', status: 'final' } }] })
+    const saved = await f.service.create(f.agent.id, f.input)
+    expect(saved.memory.sources).toHaveLength(1)
+    expect(saved.memory.sources[0]).not.toHaveProperty('excerpt')
+  })
+
   it('recovers a committed canonical edit after losing its room receipt without applying twice', async () => {
     const f = await fixture()
     const saved = await f.service.create(f.agent.id, f.input)

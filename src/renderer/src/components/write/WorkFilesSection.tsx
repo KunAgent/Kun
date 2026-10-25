@@ -1,13 +1,11 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useMemo, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { FilePlus2, FolderPlus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
 import { readWriteThreadRegistry } from '../../write/write-thread-registry'
 import {
-  writeActivityForThreadIds,
   writeDirectoryActivity,
   writeFileActivity,
   type WriteResourceActivityContext
@@ -15,14 +13,13 @@ import {
 import { addPdfToPaperLibrary } from '../../paper/paper-library-actions'
 import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import { WriteFileTree } from './WriteFileTree'
-import { WorkWhiteboardSidebarSection } from './WorkWhiteboardSidebarSection'
 import { WorkSidebarSection } from './WorkSidebarSection'
 import type { WorkDirectoryActions } from './use-work-directory-actions'
 
 /**
- * 文件: the current space's whiteboards and file tree. Opening anything here
- * adds it as context to the current session; it never switches the session.
- * The papers folder is shown by 论文 instead, as papers rather than folders.
+ * 文件: the current space's file tree. Opening anything here adds it as context
+ * to the current session; it never switches the session. Whiteboards moved to
+ * the 产物 row so a long board list no longer pushes the tree down.
  */
 export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions }): ReactElement {
   const { t } = useTranslation('common')
@@ -34,11 +31,9 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
     awaitingUserInputThreadIds: s.awaitingUserInputThreadIds,
     unreadThreadIds: s.unreadThreadIds
   })))
-  const [whiteboardsExpanded, setWhiteboardsExpanded] = useState(true)
-  const [whiteboardMenuId, setWhiteboardMenuId] = useState<string | null>(null)
   const {
     workspaceRoot, entriesByDir, expandedDirs, loadingDirs, treeError, activeFilePath,
-    activeWhiteboardId, whiteboards, papersDir, toggleDirectory, openFile, refreshWorkspace, openWhiteboard
+    papersDir, toggleDirectory, openFile, refreshWorkspace
   } = useWriteWorkspaceStore(useShallow((s) => ({
     workspaceRoot: s.workspaceRoot,
     entriesByDir: s.entriesByDir,
@@ -46,13 +41,10 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
     loadingDirs: s.loadingDirs,
     treeError: s.treeError,
     activeFilePath: s.activeFilePath,
-    activeWhiteboardId: s.activeWhiteboardId,
-    whiteboards: s.whiteboards,
     papersDir: s.paperReading.papersDir,
     toggleDirectory: s.toggleDirectory,
     openFile: s.openFile,
-    refreshWorkspace: s.refreshWorkspace,
-    openWhiteboard: s.openWhiteboard
+    refreshWorkspace: s.refreshWorkspace
   })))
   const { root } = actions
   const writeRegistry = readWriteThreadRegistry()
@@ -67,12 +59,6 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
       [root]: rootEntries.filter((entry) => !(entry.type === 'directory' && entry.name === papersFolder))
     }
   }, [entriesByDir, papersFolder, root])
-  const activityLabels = {
-    runningLabel: t('sidebarThreadRunning'),
-    failedLabel: t('sidebarThreadFailed'),
-    unreadLabel: t('sidebarThreadUnread'),
-    awaitingInputLabel: t('sidebarThreadAwaitingInput')
-  }
 
   const sectionActions = (
     <>
@@ -99,35 +85,6 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
             {actions.revealError}
           </div>
         ) : null}
-        <WorkWhiteboardSidebarSection
-          whiteboards={Object.values(whiteboards)}
-          activeWhiteboardId={activeWhiteboardId}
-          expanded={whiteboardsExpanded}
-          openMenuId={whiteboardMenuId}
-          label={t('writeWhiteboards', { defaultValue: 'Whiteboards' })}
-          createLabel={t('writeCreateWhiteboard', { defaultValue: 'New whiteboard' })}
-          moreActionsLabel={t('writeMoreActions')}
-          renameLabel={t('writeRenameEntry')}
-          deleteLabel={t('writeEntryDialogDelete')}
-          {...activityLabels}
-          activityForBoard={(board) => {
-            const activity = writeActivityForThreadIds(workWhiteboardThreadIds(board), activityContext).activity
-            // Boards a session created earlier share its thread; only the board being worked on is "running".
-            return activity === 'running' && board.id !== activeWhiteboardId ? 'idle' : activity
-          }}
-          onToggle={() => setWhiteboardsExpanded((value) => !value)}
-          onCreate={() => void actions.openNewWhiteboard()}
-          onOpen={openWhiteboard}
-          onToggleMenu={(boardId) => setWhiteboardMenuId((current) => current === boardId ? null : boardId)}
-          onRename={(board) => {
-            setWhiteboardMenuId(null)
-            actions.setEntryDialog({ kind: 'rename-whiteboard', board, value: board.title })
-          }}
-          onDelete={(board) => {
-            setWhiteboardMenuId(null)
-            actions.setEntryDialog({ kind: 'delete-whiteboard', board })
-          }}
-        />
         <WriteFileTree
           rootDirectory={root}
           dragReferenceRoot={workspaceRoot}

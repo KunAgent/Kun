@@ -178,7 +178,8 @@ export function getClawScheduleMcpLaunchConfig(): ClawScheduleMcpLaunchConfig {
   return {
     appPath: app.getAppPath(),
     execPath: process.execPath,
-    isPackaged: app.isPackaged
+    isPackaged: app.isPackaged,
+    userDataDir: app.getPath('userData')
   }
 }
 

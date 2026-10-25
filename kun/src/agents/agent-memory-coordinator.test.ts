@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,6 +55,7 @@ async function fixture(compare = false) {
   return { store, memory, agents, actor, capture, room, publish, sourceMessageId: sent.message.id, calls: () => calls }
 }
 afterEach(async () => {
+  vi.restoreAllMocks()
   for (const { root, store, capture } of resources.splice(0)) {
     await capture.close(); await store.close(); await rm(root, { recursive: true, force: true })
   }
@@ -149,4 +150,42 @@ it('runs the forgotten-memory scrub at most once per interval unless forced or m
   now += AGENT_MEMORY_SCRUB_INTERVAL_MS
   await service.scrubForgotten()
   expect(lists).toBe(6)
+})
+
+it('backs off a failing forgotten-memory scrub instead of retrying it on every room tick', async () => {
+  let now = 1_000_000, lists = 0, failing = true
+  const agents = { store: { list: async () => {
+    lists += 1
+    if (failing) throw new Error('Kun Service Manager request failed with HTTP 503')
+    return []
+  } } }
+  const { AgentMemoryService: Service, AGENT_MEMORY_SCRUB_RETRY_MS } = await import('./agent-memory-service.js')
+  const service = new Service(agents as never, () => ({ isForgotten: async () => false }) as never, () => true, () => now)
+  await expect(service.scrubForgotten()).rejects.toThrow('HTTP 503')
+  await service.scrubForgotten()
+  expect(lists).toBe(1)
+  now += AGENT_MEMORY_SCRUB_RETRY_MS
+  await expect(service.scrubForgotten()).rejects.toThrow('HTTP 503')
+  expect(lists).toBe(2)
+  now += AGENT_MEMORY_SCRUB_RETRY_MS
+  await service.scrubForgotten()
+  expect(lists).toBe(2)
+  now += AGENT_MEMORY_SCRUB_RETRY_MS
+  failing = false
+  await service.scrubForgotten()
+  expect(lists).toBe(4)
+  await service.scrubForgotten()
+  expect(lists).toBe(4)
+})
+
+it('keeps capturing memories while the forgotten-memory scrub fails', async () => {
+  const f = await fixture()
+  vi.spyOn(f.memory, 'scrubForgotten').mockRejectedValue(new Error('Kun Service Manager request failed with HTTP 400'))
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  await f.capture.tick()
+  await f.publish('new-response')
+  await f.capture.tick(); await setImmediate(); await f.capture.tick()
+  expect(f.calls()).toBe(1)
+  expect((await f.memory.list(f.actor.id, {})).memories).toHaveLength(1)
+  expect(warn).toHaveBeenCalledWith('[kun] agent memory scrub:', 'Kun Service Manager request failed with HTTP 400')
 })

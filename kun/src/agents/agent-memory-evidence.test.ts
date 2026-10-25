@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { collectAgentMemoryEvidence } from './agent-memory-evidence.js'
 import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
 import { revisionSnapshot } from '../memory/memory-revisions.js'
-import { MemoryRecord } from '../contracts/memory.js'
+import { MemoryRecord, MemorySourceEvidence } from '../contracts/memory.js'
 import { extractAgentMemories, prepareAgentMemoryCapture } from './agent-memory-extraction.js'
 import type { AgentMemoryCapture, AgentMemoryCaptureSnapshot } from './agent-memory-capture-types.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
@@ -38,6 +38,19 @@ it('prioritizes execution receipts over a full assistant-message budget and reta
     receiptId: 'delivery:verification:0', repositorySha: 'a'.repeat(40), artifactIds: ['test-log'], outcome: 'succeeded' })]))
   expect(evidence.sources.find((source) => source.id === 'delivery')).toMatchObject({ trust: 'inferred', artifactIds: ['diff-artifact'] })
   expect(evidence.capturedTasks).toEqual(['task'])
+})
+
+it('omits the excerpt of an attachment-only user message so the source still validates', async () => {
+  const f = fixture()
+  const store = f.deps.store as unknown as { get: (kind: string, id: string) => Promise<unknown> }
+  const get = store.get.bind(store)
+  store.get = async (kind, id) => {
+    const row = await get(kind, id) as { value: object } | null
+    return kind === 'message' && id === 'user' && row ? { ...row, value: { ...row.value, body: '' } } : row
+  }
+  const { sources } = await collectAgentMemoryEvidence(f.deps, f.job)
+  expect(sources.find((source) => source.id === 'user')).not.toHaveProperty('excerpt')
+  expect(() => MemorySourceEvidence.array().parse(sources)).not.toThrow()
 })
 
 it.each([['failed', 'passed'], ['cancelled', 'passed'], ['completed', 'failed']])('does not promote %s work with %s checks to observed success', async (status, checks) => {

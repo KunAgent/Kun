@@ -60,3 +60,10 @@ describe('toggleWriteInlineFormat', () => {
     expect(toggleWriteInlineFormat('\n\n', 'italic')).toBeNull()
   })
 })
+
+describe('clear inline formatting', () => {
+  it('removes inline wrappers while preserving headings, lists, images and literal punctuation', () => {
+    expect(toggleWriteInlineFormat('# **Title**\n\n- *Text* and ~~old~~ with `code` and [link](https://example.com)\n\n![image](a.png)\n\n2 * 3 = 6', 'clear'))
+      .toBe('# Title\n\n- Text and old with code and link\n\n![image](a.png)\n\n2 * 3 = 6')
+  })
+})

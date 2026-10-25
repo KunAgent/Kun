@@ -5,6 +5,8 @@ import {
   DESIGN_MODE_INSTRUCTION,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from './design-mode.js'
+import { DESIGN_CANVAS_MODE_INSTRUCTION } from './design-canvas-mode.js'
+import { DESIGN_HTML_PAGE_MODE_INSTRUCTION } from './design-html-page-mode.js'
 import { PLAN_MODE_INSTRUCTION } from './plan-mode.js'
 import { WORK_MODE_INSTRUCTION } from './work-mode.js'
 
@@ -12,6 +14,7 @@ type TurnModeState = {
   agentSurface?: 'code' | 'write' | 'design'
   orchestration: 'direct' | 'graph'
   guiDesignArtifact?: { kind: string }
+  guiDesignCanvas?: boolean
   guiDesignMode?: boolean
   designProfile?: unknown
 }
@@ -44,8 +47,12 @@ export function buildTurnModeInstruction(
     ...(planTurnActive ? [readOnlyRoomInstruction] : []),
     ...(turn.guiDesignArtifact?.kind === 'svg'
       ? [SVG_ARTIFACT_MODE_INSTRUCTION]
-      : turn.guiDesignMode === true || Boolean(turn.designProfile)
-        ? [DESIGN_MODE_INSTRUCTION]
-        : [])
+      : turn.guiDesignArtifact?.kind === 'html'
+        ? [DESIGN_HTML_PAGE_MODE_INSTRUCTION]
+        : turn.guiDesignMode === true && turn.guiDesignCanvas === true
+          ? [DESIGN_CANVAS_MODE_INSTRUCTION]
+          : turn.guiDesignMode === true || Boolean(turn.designProfile)
+            ? [DESIGN_MODE_INSTRUCTION]
+            : [])
   ].join('\n\n')
 }

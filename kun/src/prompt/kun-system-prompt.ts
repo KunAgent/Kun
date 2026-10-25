@@ -86,7 +86,7 @@ export function buildToolPreferenceInstruction(
   const memoryTools = presentNames(names, MEMORY_TOOL_NAMES)
   const memoryReadTools = presentNames(names, MEMORY_READ_TOOL_NAMES)
   const fastContextAvailable = names.has('fast_context')
-  const pptAgentAvailable = names.has('ppt_agent')
+  const pptToolsAvailable = names.has('ppt_preview') && names.has('ppt_export')
   const bullets: string[] = []
 
   if (inspectionTools.length > 0 && !fastContextAvailable) {
@@ -220,28 +220,16 @@ export function buildToolPreferenceInstruction(
     }
   }
 
-  if (pptAgentAvailable) {
+  if (pptToolsAvailable) {
     bullets.push(
-      'Use `ppt_agent(action="start", title="...")` for presentation/PPT tasks that require native PPTX or do not request another explicit presentation format. `title` is required on start: pass a short 2-6 word UI title (at most 160 characters) naming the task; it becomes the review whiteboard title and is never sent as presentation content. When the user explicitly asks for Presentation Studio or `.kun-ppt.html` and its direct extension tools are advertised, keep that HTML workflow separate. Apart from the title, pass only workflow control. Never rewrite, summarize, supplement, or invent the presentation request in tool arguments: the host forwards the exact active user turn and its attachments to the PPT child. Inspect the structured phase instead of assuming one call always returns a PPTX.'
+      'For presentation/PPT tasks that need a native, editable PPTX, follow the `slides` skill (load it with `load_skill` when it is not active): write the PPTD deck with file tools, show it with `ppt_preview`, and produce the PPTX only with `ppt_export`. A deck is delivered only when `ppt_export` returns `validated: true`; never build a PPTX with shell scripts. When the user explicitly asks for Presentation Studio or `.kun-ppt.html` and its direct extension tools are advertised, keep that HTML workflow separate.'
     )
-    bullets.push(
-      'When `ppt_agent` returns `phase="awaiting_review"`, the visual bundle is opened automatically on the parent whiteboard: stop final export, invite the user to review, and retain its childId/workflowId. For changes or failed pages, call `ppt_agent(action="revise_previews"|"retry_failed", childId, workflowId)`; after explicit approval, call `ppt_agent(action="approve_and_build", childId, workflowId)` so the same PPT child builds the editable deliverable. Review feedback is taken from the exact active turn and structured canvas context; do not copy it into tool arguments. If a review action returns `phase="source_unavailable"`, keep the same workflow, report that its structured review board must be restored, and never bypass governance by constructing or exporting a replacement deck with shell/file tools. Never replace an active review workflow with a new PPT child.'
-    )
-    const directionInputTool = names.has('user_input') ? '`user_input`' : names.has('request_user_input') ? '`request_user_input`' : ''
-    bullets.push(directionInputTool
-      ? `When \`ppt_agent\` returns \`phase="awaiting_direction"\`, the whiteboard is a preview surface, not a required input surface. Immediately ask through ${directionInputTool} with exactly one single-choice question whose id is \`ppt_direction:<workflowId>:<childId>\`. Preserve the returned direction order; label each option \`1. <name>\`, \`2. <name>\`, or \`3. <name>\`, mark the recommended option, and use its rationale as the description. After submission, call \`ppt_agent(action="select_direction", childId, workflowId)\` in the same turn; the host validates the answer against persisted candidates, so never invent or pass a direction id.`
-      : 'When `ppt_agent` returns `phase="awaiting_direction"`, the whiteboard is a preview surface, not a required input surface. The user may select a card or reply in the normal conversation with one direction name/number or acceptance of the recommendation. On that explicit confirmation, call `ppt_agent(action="select_direction", childId, workflowId)`; the host resolves the active turn against persisted candidates, so never invent or pass a direction id.')
-    if (names.has('delegate_task')) {
-      bullets.push(
-        'Reserve `delegate_task` for general child work; use `ppt_agent` for presentation tasks and verify the delivered deck (files + exported .pptx) in the parent turn.'
-      )
-    }
   }
 
   if (names.has('ppt_to_board')) {
     bullets.push(
-      pptAgentAvailable
-        ? 'Use `ppt_to_board` only for a completed direct-mode/final PPTD deck that has no image-first reviewBundle and that the user asked to show. Never replay boardSpec or call `ppt_to_board` for `phase="awaiting_review"`; the structured review bundle is applied automatically.'
+      pptToolsAvailable
+        ? 'Use `ppt_to_board` only when the user asks to edit a PPTD deck as shapes on the Design whiteboard (start at batch 0 and keep calling with batch+1 while `more` is true); `ppt_preview` already puts review previews on the whiteboard.'
         : 'In whiteboard / Design contexts, use `ppt_to_board` to lay a PPTD deck out on the canvas when the user asked to show a presentation (start at batch 0 and keep calling with batch+1 while `more` is true).'
     )
   }

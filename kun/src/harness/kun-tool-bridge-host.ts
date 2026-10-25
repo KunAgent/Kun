@@ -109,7 +109,6 @@ export type KunToolContextBoundary = Pick<
   | 'allowHostReads'
   | 'allowedWritePaths'
   | 'allowedArtifactIds'
-  | 'pptWorkflowScope'
   | 'blockedProviderIds'
   | 'blockedToolNames'
   | 'blockedSkillIds'
@@ -134,8 +133,7 @@ export type KunToolBridgeHostDeps = {
   defaultApprovalReviewer?: ApprovalReviewer
   /**
    * When false, the harness's own native tools are disabled for this scope
-   * (delegated children / managed workflows). Combined with a scoped
-   * `pptWorkflowScope`, overlap suppression applies to listing as well.
+   * (delegated children / managed workflows).
    */
   allowHarnessBuiltins?: boolean
   /** Read-only delegated scopes clamp policy/sandbox regardless of turn state. */
@@ -484,15 +482,11 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         providerKind: spec.providerKind,
         toolKind: spec.toolKind
       }))
-    const managedScope =
-      deps.allowHarnessBuiltins === false &&
-      deps.toolContextBoundary?.pptWorkflowScope !== undefined
     const suppressOverlap =
       Boolean(scope.graphPolicy) ||
       Boolean(scope.thread.roomContext) ||
       hasWorkbenchCapabilityConstraints(scope.thread.workbenchOrigin?.capabilityCeiling) ||
-      scope.plan.planMode ||
-      managedScope
+      scope.plan.planMode
     return selectBridgeableTools(catalog, {
       overlap: opts?.overlap ?? (suppressOverlap ? new Set() : undefined)
     })

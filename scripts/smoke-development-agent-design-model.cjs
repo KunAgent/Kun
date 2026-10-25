@@ -2,12 +2,16 @@
 
 const { createServer } = require('node:http')
 
-const DESIGN_BRIEF = 'Move the update button from the top bar into the sidebar footer, next to the account row. Show a compact "Update ready" pill.'
+const DESIGN_TITLE = 'Footer update entry'
+const SCREENS = [
+  { name: 'Sidebar footer', html: '<!doctype html><html><body style="margin:0;font:14px system-ui"><footer style="display:flex;align-items:center;gap:12px;padding:16px"><span>XingYu</span><button style="margin-left:auto;border-radius:999px;padding:6px 12px">Update ready</button></footer></body></html>' },
+  { name: 'Update ready pill', html: '<div style="display:inline-flex;padding:8px 14px;border-radius:999px;background:#7c5cff;color:#fff;font:600 13px system-ui">Update ready</div>' }
+]
 
 /**
  * Offline OpenAI-compatible model for the Code-agent Design smoke. A Code turn
- * marked [agent-design-smoke] calls design_open; the Design pass that the
- * workbench starts afterwards draws on the board with design_canvas.
+ * marked [agent-design-smoke] writes two screens with design_open in the same
+ * turn, then finishes with a short summary.
  */
 async function startAgentDesignModelFixture(model) {
   const observations = []
@@ -32,32 +36,15 @@ async function startAgentDesignModelFixture(model) {
       tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
     let message = { role: 'assistant', content: 'Done.' }
     let lane = 'other'
-    if (text.includes('Design request from the coding agent')) {
-      lane = 'design-pass'
-      if (tools.includes('design_canvas') && !toolResult('design-draw-1')) {
-        message = call('design-draw-1', 'design_canvas', {
-          action: 'update_shapes',
-          ops: [
-            { op: 'add', shape: { type: 'rect', name: 'Sidebar footer', x: 0, y: 0, width: 320, height: 96,
-              cornerRadius: 12, fills: [{ type: 'solid', color: '#F4F4F5', opacity: 1 }] } },
-            { op: 'add', shape: { type: 'rect', name: 'Update ready pill', x: 176, y: 30, width: 120, height: 36,
-              cornerRadius: 18, fills: [{ type: 'solid', color: '#7C5CFF', opacity: 1 }] } }
-          ]
-        })
-      } else {
-        message = { role: 'assistant', content: 'Drafted the sidebar footer update entry on the canvas.' }
-      }
-    } else if (text.includes('[agent-design-smoke]')) {
+    if (text.includes('[agent-design-smoke]')) {
       lane = 'code'
       if (tools.includes('design_open') && !toolResult('design-open-1')) {
-        message = call('design-open-1', 'design_open', {
-          title: 'Footer update entry',
-          brief: DESIGN_BRIEF,
-          target: 'web'
-        })
+        message = call('design-open-1', 'design_open', { title: DESIGN_TITLE, target: 'web', screens: SCREENS })
       } else {
-        message = { role: 'assistant', content: 'I queued a design pass for the footer update entry.' }
+        message = { role: 'assistant', content: 'The footer update entry is on the design canvas.' }
       }
+    } else if (text.includes('Design request from the coding agent')) {
+      lane = 'design-pass'
     }
     observations.push({
       lane,
@@ -81,4 +68,4 @@ async function startAgentDesignModelFixture(model) {
   return { baseUrl, snapshot: () => ({ baseUrl, observations }), close: () => new Promise((resolve) => server.close(resolve)) }
 }
 
-module.exports = { startAgentDesignModelFixture, DESIGN_BRIEF }
+module.exports = { startAgentDesignModelFixture, DESIGN_TITLE, SCREENS }

@@ -7,6 +7,7 @@ import {
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { canUseMcpServer } from './mcp-naming.js'
 import { callMcpToolWithReconnect, isMcpReplaySafe } from './mcp-tool-runtime.js'
+import { mcpCallTimeoutMs } from './mcp-call-budget.js'
 import type { McpToolDescriptor } from './mcp-types.js'
 import type { McpConnectionState } from './mcp-tool-provider.js'
 
@@ -98,7 +99,7 @@ export function createMcpAppsAccess(
         state,
         { name: input.name, arguments: input.arguments },
         input.context,
-        state.server.timeoutMs,
+        mcpCallTimeoutMs(state.server),
         isMcpReplaySafe(descriptor.annotations)
       )
       return { result, descriptor }

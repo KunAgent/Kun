@@ -13,6 +13,12 @@ export function createRuntimeAgentDispatch(model: Awaited<ReturnType<typeof crea
   const service = new AgentDispatchService({
     store: new FileAgentDispatchIntentStore(core.activeOptions.dataDir),
     applicationSessionId: appSessionOwnerFromEnvironment()?.ownerSessionId ?? core.activeOptions.instanceId ?? randomUUID(),
+    // Read per decision: the Settings window applies config without restarting the runtime.
+    autoStart: () => {
+      const dispatch = core.activeOptions.ade?.dispatch
+      return { delayMs: (dispatch?.autoStartSeconds ?? 60) * 1000,
+        whenConfirmationRequired: dispatch?.autoStartWhenConfirmationRequired ?? true }
+    },
     onUpdated: async (intent) => {
       await runWithoutTurnMutationFence(() => core.events.record({ kind: 'agent_dispatch_intent',
         threadId: intent.source.threadId, dispatchIntent: publicAgentDispatchIntent(intent) }))

@@ -1,7 +1,7 @@
 import { useCanvasSelectionStore } from '../canvas-selection-store'
 import { useCanvasShapeStore } from '../canvas-shape-store'
 import { useCanvasViewportStore } from '../canvas-viewport-store'
-import { createHtmlFrameShape } from '../canvas-types'
+import { createHtmlFrameShape, DEVICE_DIMENSIONS } from '../canvas-types'
 import { getScreenArtifactFactory, getScreenCreationFactory } from '../screen-artifact-bridge'
 import { defaultDevicePresetForDesignTarget, defaultFrameSizeForDesignTarget } from '../../design-context'
 import { useDesignWorkspaceStore } from '../../design-workspace-store'
@@ -27,8 +27,9 @@ export function createScreenTool(): CanvasToolHandler {
       startY = e.canvasY
 
       const designTarget = useDesignWorkspaceStore.getState().designContext.designTarget
-      const devicePreset = defaultDevicePresetForDesignTarget(designTarget)
-      clickCreateSize = defaultFrameSizeForDesignTarget(designTarget)
+      const chosenPreset = useCanvasViewportStore.getState().screenDevicePreset
+      const devicePreset = chosenPreset ?? defaultDevicePresetForDesignTarget(designTarget)
+      clickCreateSize = chosenPreset ? DEVICE_DIMENSIONS[chosenPreset] : defaultFrameSizeForDesignTarget(designTarget)
       const factory = getScreenArtifactFactory()
       const artifactId = creationFactory ? '__screen_preview__' : factory?.('Screen') ?? null
       if (!artifactId) {

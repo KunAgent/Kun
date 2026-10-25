@@ -524,11 +524,13 @@ export async function registerRuntimeWithManager(input: {
   manager: ServiceManagerConnection
   registration: RuntimeRegistration
   fetch?: typeof fetch
+  signal?: AbortSignal
 }): Promise<RuntimeRegistration> {
   const response = await requestManagerResponse(input.manager, `/v1/runtimes/${input.registration.flavor}/register`, {
     method: 'PUT',
     body: { ...input.registration, ...(input.manager.discovery.appOwner ? { appOwner: input.manager.discovery.appOwner } : {}) },
-    fetch: input.fetch
+    fetch: input.fetch,
+    signal: input.signal
   })
   if (response.status === 409) {
     const conflict = z.object({
@@ -548,14 +550,23 @@ export async function heartbeatRuntimeWithManager(input: {
   flavor: RuntimeFlavor
   instanceId: string
   fetch?: typeof fetch
+  signal?: AbortSignal
 }): Promise<boolean> {
   const response = await requestManagerResponse(input.manager, `/v1/runtimes/${input.flavor}/heartbeat`, {
     method: 'POST',
     body: { instanceId: input.instanceId },
-    fetch: input.fetch
+    fetch: input.fetch,
+    signal: input.signal
   })
-  if (response.ok) return true
-  if (response.status === 409) return false
+  if (response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    return true
+  }
+  if (response.status === 409) {
+    const body = await response.json()
+    if (z.object({ code: z.literal('runtime_instance_changed') }).safeParse(body).success) return false
+    throw new ServiceManagerHttpError(409, undefined, 'Manager heartbeat conflict did not confirm ownership loss')
+  }
   await requireManagerJson(response)
   return false
 }

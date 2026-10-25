@@ -612,10 +612,6 @@ describe('shared model connection settings projection', () => {
       summaryModel: 'removed-compaction'
     }
     currentKun.fastContext = { ...currentKun.fastContext, providerId: deletedProviderId, model: 'removed-fast' }
-    currentKun.lab = {
-      ...currentKun.lab,
-      pptAgent: { ...currentKun.lab.pptAgent, providerId: deletedProviderId, model: 'removed-ppt' }
-    }
     currentKun.graph = {
       ...currentKun.graph,
       workerModel: { mode: 'fixed', providerId: deletedProviderId, model: 'removed-worker' }
@@ -646,7 +642,6 @@ describe('shared model connection settings projection', () => {
       videoGeneration: { providerId: '', model: '' },
       contextCompaction: { summaryProviderId: '', summaryModel: '' },
       fastContext: { providerId: '', model: '' },
-      lab: { pptAgent: { providerId: '', model: '' } },
       graph: { workerModel: { mode: 'inherit' } },
       smallModel: '', smallModelProviderId: '', smallModelAccountId: '',
       titleModel: '', titleProviderId: '', titleAccountId: '',
@@ -654,6 +649,7 @@ describe('shared model connection settings projection', () => {
       codeReviewModel: '', codeReviewProviderId: '', codeReviewAccountId: '',
       planModel: '', planProviderId: '', planAccountId: ''
     })
+    expect(patch).not.toHaveProperty('lab')
     expect(patch.subagents?.profiles?.[0]).not.toHaveProperty('providerId')
     expect(patch.subagents?.profiles?.[0]).not.toHaveProperty('model')
     expect(modelProviderDeletionWritePatch({

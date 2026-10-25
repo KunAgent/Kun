@@ -19,7 +19,8 @@ function makeDeps(overrides: {
   harnesses?: ReturnType<typeof def>[]
   disabled?: (id: string) => boolean
   statuses?: Record<string, HarnessStatus | undefined>
-  quota?: ProviderQuotaListResponse | null
+  lastKnown?: Record<string, HarnessStatus | undefined>
+  quota?: ProviderQuotaListResponse | null | (() => Promise<ProviderQuotaListResponse | null>)
 } = {}) {
   const defs = overrides.harnesses ?? [def('kun'), def('claude-code')]
   const detector = {
@@ -27,8 +28,10 @@ function makeDeps(overrides: {
       overrides.statuses && id in overrides.statuses
         ? overrides.statuses[id]
         : ready(id),
+    lastKnownStatus: (id: string) => overrides.lastKnown?.[id],
     status: vi.fn(async (id: string) => ready(id))
   }
+  const quota = overrides.quota
   return {
     deps: {
       catalog: {
@@ -36,32 +39,68 @@ function makeDeps(overrides: {
         isDisabled: overrides.disabled ?? (() => false)
       },
       detector,
-      quota: async () => overrides.quota ?? null
+      quota: typeof quota === 'function' ? quota : async () => quota ?? null
     },
     detector
   }
 }
 
+function claudeQuota(usedPercent: number): ProviderQuotaListResponse {
+  return {
+    refreshedAt: '2026-01-01T00:00:00.000Z',
+    entries: [{
+      providerId: 'claude-subscription',
+      providerName: 'Claude',
+      presetId: 'claude-subscription',
+      status: 'available',
+      metrics: [{ id: 'session', label: '5h', unit: '%', usedPercent }]
+    }]
+  }
+}
+
 describe('createGraphHarnessSummary', () => {
   it('lists each ready harness with name, suitability, and quota state', async () => {
-    const { deps } = makeDeps({
-      quota: {
-        refreshedAt: '2026-01-01T00:00:00.000Z',
-        entries: [{
-          providerId: 'claude-subscription',
-          providerName: 'Claude',
-          presetId: 'claude-subscription',
-          status: 'available',
-          metrics: [{ id: 'session', label: '5h', unit: '%', usedPercent: 40 }]
-        }]
-      }
-    })
+    const { deps } = makeDeps({ quota: claudeQuota(40) })
     const summary = await createGraphHarnessSummary(deps)()
     expect(summary).toContain('Graph worker harnesses')
     expect(summary).toContain('- kun (Kun) — Kun agent loop')
     expect(summary).toContain('- claude-code (Claude Code) — delegated agent loop')
-    expect(summary).toContain('quota: 40% used')
+    expect(summary).toContain('quota: 40-49% used')
     expect(summary).toContain('quota: unknown')
+  })
+
+  it('shows quota in ten-point bands so small moves keep the menu text', async () => {
+    let used = 51
+    const summary = createGraphHarnessSummary(makeDeps({ quota: async () => claudeQuota(used) }).deps)
+    const first = await summary()
+    used = 58.6
+    expect(await summary()).toBe(first)
+    expect(first).toContain('quota: 50-59% used')
+    used = 130
+    expect(await summary()).toContain('quota: 100% used')
+  })
+
+  it('keeps the last quota snapshot when a later read fails', async () => {
+    let fail = false
+    const summary = createGraphHarnessSummary(makeDeps({
+      quota: async () => { if (fail) throw new Error('offline'); return claudeQuota(40) }
+    }).deps)
+    const first = await summary()
+    fail = true
+    expect(await summary()).toBe(first)
+  })
+
+  it('keeps an expired harness listed from its last verdict while it refreshes', async () => {
+    const statuses: Record<string, HarnessStatus | undefined> = {}
+    const { deps, detector } = makeDeps({ statuses, lastKnown: { 'claude-code': ready('claude-code') } })
+    const summary = createGraphHarnessSummary(deps)
+    statuses['claude-code'] = ready('claude-code')
+    const fresh = await summary()
+    statuses['claude-code'] = undefined
+    const expired = await summary()
+    expect(expired).toBe(fresh)
+    expect(expired).toContain('- claude-code (Claude Code)')
+    expect(detector.status).toHaveBeenCalledWith('claude-code')
   })
 
   it('omits disabled and not-installed harnesses', async () => {

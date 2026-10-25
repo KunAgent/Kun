@@ -1,7 +1,8 @@
+import { GitHubRequestedCards } from './github-tool-card'
 import { memo, useMemo, useState, type ReactElement, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock, RuntimeChildActivity, ToolBlock } from '../../agent/types'
-import { formatChildActivityLabel } from './explore-peek-summary'
+import { childActivityLiveAction } from './message-timeline-tool-action'
 import { useChatStore } from '../../store/chat-store'
 import { deriveTurnSections, groupTurnProcessTimeline } from './derive-turn-sections'
 import { OrderedTurnTimeline } from './message-timeline-ordered-timeline'
@@ -37,6 +38,8 @@ import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
 import { useTimelineSurface } from './timeline-surface'
 import { LiveTurnProgressRow } from './message-timeline-live-progress'
 import { GmailRequestedCards } from './gmail-tool-card'
+import { AgentDispatchGroup } from './AgentDispatchCard'
+import { PptDeckCards } from './PptDeckCard'
 import { useTurnUndo } from './turn-undo-controls'
 import {
   parseDelegateDetail,
@@ -257,17 +260,13 @@ export function ConversationTurn({
     const child = liveToolBlock.meta?.child
     if (!child || typeof child !== 'object' || Array.isArray(child)) return undefined
     const activity = (child as {
-      activity?: { phase?: RuntimeChildActivity['phase']; label?: string; toolName?: string; startedAt?: string; updatedAt?: string }
+      activity?: { phase?: RuntimeChildActivity['phase']; toolName?: string }
     }).activity
-    if (!activity?.label?.trim()) return undefined
-    return formatChildActivityLabel({
-      phase: activity.phase ?? 'tool',
-      label: activity.label.trim(),
-      ...(activity.toolName?.trim() ? { toolName: activity.toolName.trim() } : {}),
-      startedAt: activity.startedAt ?? '',
-      updatedAt: activity.updatedAt ?? ''
-    })
-  }, [liveToolBlock])
+    if (!activity) return undefined
+    // Only the nested tool's action word: the child's own label can carry paths
+    // and command text that would bloat the parent turn's one-line status.
+    return childActivityLiveAction({ phase: activity.phase, toolName: activity.toolName }, t)
+  }, [liveToolBlock, t])
   // A live user_input gate means the turn is parked waiting for the user, not
   // computing. Surface that instead of the generic "thinking" label.
   const awaitingUserInput = isProcessing && hasLivePendingUserInput(turn.blocks)
@@ -395,7 +394,16 @@ export function ConversationTurn({
       ) : null}
 
       {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
-        <GmailRequestedCards blocks={workProcessBlocks} />
+        <><GmailRequestedCards blocks={workProcessBlocks} />
+        <GitHubRequestedCards blocks={workProcessBlocks} /></>
+      ) : null}
+
+      {!hasOrderedTimeline && !isProcessing && !workExpanded ? (
+        <AgentDispatchGroup blocks={workProcessBlocks} readOnly={!allowMainThreadActions} />
+      ) : null}
+
+      {!hasOrderedTimeline && !isProcessing ? (
+        <PptDeckCards blocks={workProcessBlocks} readOnly={!allowMainThreadActions} />
       ) : null}
 
       {!hasOrderedTimeline

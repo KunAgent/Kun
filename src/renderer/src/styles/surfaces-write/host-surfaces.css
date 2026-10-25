@@ -40,13 +40,7 @@
   box-shadow: none;
 }
 
-.write-workspace-view {
-  container-type: inline-size;
-  container-name: write-workspace;
-}
-
 .write-workspace-view.is-focus-mode {
-  container-type: normal;
   overflow: visible;
 }
 

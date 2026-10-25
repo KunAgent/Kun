@@ -34,7 +34,7 @@
   "settingsIaHarnessesDesc": "Codex、Claude Code、OpenCode などのエージェントを会話に参加させます。",
   "settingsIaCollaborationDesc": "複数のエージェントで取り組むタスクの既定値。",
   "settingsIaCodeDesc": "Code の作業フォルダー、ブランチの分離方法、ロールバック用のスナップショット。",
-  "settingsIaTerminalDesc": "ターミナルの配色、SSH サーバー、kun コマンド。",
+  "settingsIaTerminalDesc": "ターミナルの外観と動作、新規セッションメニューから起動できるエージェント、SSH サーバー、kun コマンド。",
   "settingsIaPaperDesc": "論文の閲読、検索ソース、翻訳。",
   "settingsIaLabsDesc": "改良中の機能です。オンにすると詳細設定が表示されます。",
   "settingsIaRuntimeDesc": "ローカルサービス、コンテキスト上限、実行時の保護。通常は変更不要です。",

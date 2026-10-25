@@ -143,10 +143,10 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       onToggle: () => undefined
     }))
     expect(html).toMatch(/Processing|处理中|processing/)
-    expect(html).not.toMatch(/Processed|已处理/)
+    expect(html).not.toMatch(/This turn|本轮记录/)
   })
 
-  it('renders a completed collapsed turn as processed with duration only', () => {
+  it('renders a completed collapsed turn as the turn record with duration only', () => {
     const html = renderToStaticMarkup(createElement(WorkMetaRow, {
       processing: false,
       durationMs: 101_000,
@@ -154,7 +154,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       onToggle: () => undefined
     }))
 
-    expect(html).toMatch(/Processed 1m 41s|已处理 1m 41s/)
+    expect(html).toMatch(/This turn · 1m 41s|本轮记录 · 1m 41s/)
     expect(html).not.toMatch(/Work process|工作过程|steps|步|Read|读取|Thought|思考/)
     expect(html).toContain('aria-expanded="false"')
   })
@@ -166,7 +166,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       onToggle: () => undefined
     }))
 
-    expect(html).toMatch(/Processed|已处理/)
+    expect(html).toMatch(/This turn|本轮记录/)
     expect(html).not.toMatch(/Work process|工作过程|steps|步/)
   })
 

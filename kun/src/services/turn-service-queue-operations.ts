@@ -506,7 +506,7 @@ export const turnServiceQueueOperations = {
             if (userItem) {
               await this['deps'].events.record({
                 kind: 'item_created', threadId: input.threadId, turnId: candidate.id,
-                itemId: userItem.id, item: userItem
+                itemId: userItem.id, item: userItem, turnStartedAt: startedTurn.startedAt
               }).catch(() => undefined)
             }
             return { turnId: candidate.id }

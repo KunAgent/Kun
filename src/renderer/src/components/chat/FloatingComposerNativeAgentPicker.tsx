@@ -135,7 +135,7 @@ export function FloatingComposerNativeAgentPicker({ harnessId, threadId, compact
           aria-label={title}
           title={title}
           onClick={() => setOpen((current) => !current)}
-          className={`flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-raised px-2 text-xs transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-elevated px-2 text-xs transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60 ${
             selected ? 'text-ds-ink' : 'text-ds-muted'}`}
         >
           <UserRound className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />

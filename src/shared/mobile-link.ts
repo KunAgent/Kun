@@ -1,3 +1,4 @@
+import type { AccountEntitlements } from '@kun/remote-protocol'
 import type { MobileLinkScope } from './mobile-link-scopes'
 export type MobileLinkStatus = {
   enabled: boolean
@@ -9,6 +10,8 @@ export type MobileLinkStatus = {
   grants: Array<{ id: string; controllerId: string; name?: string; scopes?: MobileLinkScope[] }>
 }
 export type MobileLinkApi = {
+  reconnect(): Promise<MobileLinkStatus>
+  entitlements(): Promise<AccountEntitlements>
   status(): Promise<MobileLinkStatus>
   enable(enabled: boolean): Promise<MobileLinkStatus>
   confirm(id: string, scopes?: MobileLinkScope[]): Promise<MobileLinkStatus>
@@ -17,6 +20,8 @@ export type MobileLinkApi = {
 }
 export const MOBILE_LINK_CHANNELS = {
   status: 'mobile-link:status',
+  entitlements: 'mobile-link:entitlements',
+  reconnect: 'mobile-link:reconnect',
   enable: 'mobile-link:enable',
   confirm: 'mobile-link:confirm',
   revoke: 'mobile-link:revoke',

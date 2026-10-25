@@ -21,6 +21,8 @@ type WorkspaceOfficePreviewProps = {
     source: WorkspacePresentationViewSource
   ) => void
   presentationKeyboardActive?: boolean
+  /** 1-based slides to mark as changed in the deck's thumbnail rail. */
+  changedSlides?: readonly number[]
 }
 
 export function WorkspaceOfficePreview({
@@ -30,7 +32,8 @@ export function WorkspaceOfficePreview({
   onSelectionChange,
   onQuoteSelection,
   onPresentationViewChange,
-  presentationKeyboardActive = true
+  presentationKeyboardActive = true,
+  changedSlides
 }: WorkspaceOfficePreviewProps): ReactElement {
   if (result.viewer === 'word') {
     return <WorkspaceDocxPreview result={result} loading={loading} refreshError={refreshError} onSelectionChange={onSelectionChange} onQuoteSelection={onQuoteSelection} />
@@ -44,6 +47,7 @@ export function WorkspaceOfficePreview({
         onSelectionChange={onSelectionChange}
         onPresentationViewChange={onPresentationViewChange}
         keyboardActive={presentationKeyboardActive}
+        changedSlides={changedSlides}
       />
     )
   }

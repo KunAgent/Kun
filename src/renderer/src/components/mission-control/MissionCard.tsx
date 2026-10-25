@@ -184,7 +184,7 @@ export function MissionCard({
           <button
             type="submit"
             disabled={!answer.trim() || sending}
-            className="shrink-0 rounded-md bg-ds-control px-2 py-1 text-[11px] text-ds-control-foreground disabled:opacity-50"
+            className="shrink-0 rounded-md bg-control px-2 py-1 text-[11px] text-control-foreground disabled:opacity-50"
           >
             {t('missionAnswerSubmit')}
           </button>

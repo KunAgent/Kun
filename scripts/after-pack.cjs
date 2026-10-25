@@ -16,12 +16,15 @@ const {
 } = require('node:fs')
 const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
+const { writeRuntimeIntegrityManifest } = require('./after-pack-runtime-integrity.cjs')
 const { trimPackedNodePtyPayload } = require('./after-pack-node-pty.cjs')
 const { deduplicatePackedJimpZod } = require('./after-pack-jimp.cjs')
 const macho = require('./after-pack-thin-macho.cjs')
 const scopeDedupe = require('./after-pack-scope-dedupe.cjs')
 const {
   LINUX_SANDBOX_LAUNCHER_FLAG,
+  normalizeArch,
+  normalizePlatform,
   assertElfExecutable,
   installCliLaunchers,
   installLinuxElectronLauncher,
@@ -123,10 +126,6 @@ const REQUIRED_RETIRED_BUNDLED_EXTENSION_IDS = [
   'kun-examples.kun-video-editor',
   'kun-examples.presentation-studio'
 ]
-
-function normalizePlatform(platform) {
-  return platform === 'win' ? 'win32' : platform
-}
 
 function appBundlePath(context) {
   return join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
@@ -283,7 +282,10 @@ function prunePackedHoistedKunDependencies(context) {
     const rootManifest = join(modules, relativeManifest)
     const duplicateManifest = join(kunModules, relativeManifest)
     assertExists(rootManifest, `root-hoisted package manifest ${packageName}`)
-    assertExists(duplicateManifest, `duplicate Kun package manifest ${packageName}`)
+    // npm prune may already have removed a duplicate production dependency.
+    // Kun resolves it from the app-root node_modules after hoisting, so only
+    // compare versions when the duplicate is still present.
+    if (!existsSync(duplicateManifest)) continue
     const rootVersion = JSON.parse(readFileSync(rootManifest, 'utf8')).version
     const duplicateVersion = JSON.parse(readFileSync(duplicateManifest, 'utf8')).version
     if (!rootVersion || rootVersion !== duplicateVersion) {
@@ -616,12 +618,6 @@ function ensureNodePtyHelpersExecutable(context) {
   }
 }
 
-function normalizeArch(arch) {
-  if (arch === 'x64' || arch === 1) return 'x64'
-  if (arch === 'arm64' || arch === 3) return 'arm64'
-  throw new Error(`[after-pack] Unsupported packaged resource arch: ${arch}`)
-}
-
 function prunePackedWhisperResources(context) {
   const whisperDir = join(packedResourcesDir(context), 'whisper')
   if (!existsSync(whisperDir)) return
@@ -645,6 +641,7 @@ async function afterPack(context) {
   await maybeSignBundledOfficeCli(context)
   prunePackedWhisperResources(context)
   ensureNodePtyHelpersExecutable(context)
+  writeRuntimeIntegrityManifest(context, packedResourcesDir(context))
   installCliLaunchers(context)
   installLinuxElectronLauncher(context)
   maybeAdhocSignMacApp(context)

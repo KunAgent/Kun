@@ -1,4 +1,5 @@
 import { RemoteForkSchema, RemoteRewindSchema } from './remote-history.js'
+import { ThreadTaskOriginSchema } from './thread-task-origin.js'
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { ContextSnapshotEvent } from './context-snapshot.js'
@@ -163,8 +164,9 @@ export type ResumeSessionMetadata = z.infer<typeof ResumeSessionMetadataSchema>
  * - `side`: a "by-the-way" side conversation that inherits a one-time
  *   snapshot of its parent and runs in parallel. Excluded from the
  *   default thread listing.
+ * - `task`: a session started from a suggestion card; listed, nested under its parent.
  */
-export const ThreadRelation = z.enum(['primary', 'fork', 'side'])
+export const ThreadRelation = z.enum(['primary', 'fork', 'side', 'task'])
 export type ThreadRelation = z.infer<typeof ThreadRelation>
 
 export const ThreadGoalStatus = z.enum([
@@ -261,6 +263,8 @@ export const ThreadSchemaBase = z.object({
   roomContext: RoomThreadContextSchema.optional(),
   /** Host-written: this Code/Work thread was started by a bot Agent. Never accepted from a request. */
   workbenchOrigin: ThreadWorkbenchOriginSchema.optional(),
+  /** Host-written: the suggestion card task this `task` thread runs. */
+  taskOrigin: ThreadTaskOriginSchema.optional(),
   /** Read-only external history; never part of the native session stream. */
   historyRefId: z.string().min(1).optional(),
   id: z.string().min(1),
@@ -435,6 +439,7 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   parentThreadId: true,
   executionUnit: true,
   workbenchOrigin: true,
+  taskOrigin: true,
   planBuildRunId: true,
   planBuildAdmissionFingerprint: true,
   planBuildAdmissionCapabilityHash: true,
@@ -530,7 +535,8 @@ export type CreateThreadRequest = z.infer<typeof CreateThreadRequest>
  */
 export const ForkThreadRequest = z
   .object({
-    relation: ThreadRelation.default('fork'),
+    // Task sessions come only from a suggestion card, never from this route.
+    relation: ThreadRelation.exclude(['task']).default('fork'),
     title: z.string().optional(),
     turnId: z.string().trim().min(1).optional(),
     /** Exclude turnId itself, allowing a faithful undo branch before turn one. */

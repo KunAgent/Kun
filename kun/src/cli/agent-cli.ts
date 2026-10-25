@@ -15,7 +15,6 @@ import {
   ServeExitCode
 } from './serve.js'
 import type { ServeOptions } from './cli-options.js'
-import { runTuiCommand } from '../tui/index.js'
 import { hasFlag, positionals, stringFlag } from './agent-cli-args.js'
 import { resolveRunInvocation } from './agent-cli-run-options.js'
 
@@ -48,7 +47,10 @@ export async function runAgentCommand(
     case 'chat':
       return runChat(argv, io)
     case 'tui':
-      return runTuiCommand(argv, io)
+      // The terminal UI owns its own Node interpreter and native renderer, so it
+      // must stay out of the static graph that serve, manager, and the
+      // non-TUI commands load.
+      return (await import('../tui/index.js')).runTuiCommand(argv, io)
     case 'exec':
       return runExec(argv, io)
   }

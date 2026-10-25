@@ -66,6 +66,24 @@ const OVERLOADED_SIGNAL =
  */
 const REQUEST_SIZE_SIGNAL =
   /(context|token|prompt|input|max_?(?:output_)?tokens|length|上下文|长度|字数).{0,40}(exceed|limit|maximum|too (?:long|large)|超过|超出|上限)|(exceed(?:ed|s)?|超过|超出).{0,40}(context|token|length|max_?tokens|上下文|长度)/iu
+/** A quoted model id, or a bare one that looks like an id (has a digit or separator). */
+const MODEL_ID = String.raw`(?:[\x60'"][^\x60'"\s]{1,128}[\x60'"]|[a-z0-9][\w.:/@]*[-.:/@\d][\w.:/@-]*)`
+const MODEL_NOT_OFFERED =
+  String.raw`(?:is\s+)?(?:not\s+(?:supported|found|available|enabled|allowed)|unsupported|unavailable|does\s+not\s+exist)`
+/**
+ * A 400 that names the requested model as unknown or not offered to this
+ * account (a subscription plan without that model) is a route problem, not a
+ * malformed request: no retry or prompt change on the same model helps.
+ */
+const MODEL_UNAVAILABLE_SIGNAL = new RegExp([
+  String.raw`model[_\s-]?not[_\s-]?found`,
+  String.raw`(?:unsupported|unknown)[_\s-]?model\b`,
+  String.raw`no\s+such\s+model`,
+  String.raw`model\s+${MODEL_ID}\s+${MODEL_NOT_OFFERED}`,
+  String.raw`${MODEL_ID}\s+model\s+${MODEL_NOT_OFFERED}`,
+  '(?:不存在|无效|未知|不支持)的?模型',
+  '模型.{0,40}(?:不存在|未开通|无权限?(?:访问|使用))'
+].join('|'), 'iu')
 
 /** Reasons that never benefit from retrying the same credential/target. */
 const FAILOVER_REASONS: ReadonlySet<ModelFailureReason> = new Set([
@@ -116,7 +134,13 @@ export function classifyModelFailure(input: {
     (QUOTA_SIGNAL.test(signal) || QUOTA_SIGNAL_ZH.test(signal) || QUOTA_ERROR_CODE.test(signal))
   ) reason = 'quota'
   else if (status === 400 && QUOTA_ERROR_CODE.test(signal)) reason = 'quota'
-  // 5. Generic mappings.
+  // 5. A model the provider does not offer here fails the same way on every
+  //    retry; name it so callers can route around it.
+  else if (
+    (status === undefined || status === 400 || status === 422) &&
+    MODEL_UNAVAILABLE_SIGNAL.test(signal)
+  ) reason = 'model'
+  // 6. Generic mappings.
   else if (status === 429 || RATE_SIGNAL.test(signal)) reason = 'rate'
   else if (status === 529 || OVERLOADED_SIGNAL.test(signal)) reason = 'overloaded'
   else if (status === 401 || status === 403) reason = 'auth'

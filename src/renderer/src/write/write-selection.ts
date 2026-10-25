@@ -84,6 +84,7 @@ export function writeSelectionStatesEqual(
   if (a === b) return true
   if (a.charCount !== b.charCount || a.text !== b.text) return false
   if (a.blockType !== b.blockType) return false
+  if ((a.activeFormats ?? []).join(',') !== (b.activeFormats ?? []).join(',')) return false
   if (
     a.sourceKind !== b.sourceKind ||
     a.sourceFormat !== b.sourceFormat ||

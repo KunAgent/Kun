@@ -52,6 +52,7 @@ import { withThreadStoreMutation } from './thread-mutation-coordinator.js'
 import type { ThreadLifecycleFence } from './thread-lifecycle-fence.js'
 import { ThreadItemProjectionService } from './thread-item-projection.js'
 import { ComposerContextAttachmentSchema } from '../contracts/composer-context.js'
+import { noteAppliedTurnError } from './turn-error-item-dedupe.js'
 import {
   goalContextInstruction,
   goalContextKey
@@ -64,6 +65,7 @@ export const turnServiceItemPersistenceOperations = {
    * calls this after each chunk so SSE consumers see live updates.
    */
 async applyItem(this: TurnService, threadId: string, item: TurnItem): Promise<void> {
+    if (item.kind === 'error') noteAppliedTurnError(threadId, item.turnId, item.message)
     await this['appendItem'](threadId, item)
     await this['deps'].events.record({
       kind: 'item_created',

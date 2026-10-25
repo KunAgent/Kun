@@ -42,14 +42,16 @@ export function resolveDirectSendComposerSelection(input: {
 }
 
 /**
- * Code sends always run on the composer's Agent. A Work send does when the
- * Work assistant submits it; Work's own Kun flows keep the native loop.
+ * Code sends always run on the composer's Agent. A Work send, or an artifact
+ * chat panel send, does when that composer submits it; Work's own Kun flows
+ * keep the native loop.
  */
 export function sendFollowsComposerAgent(
   route: ChatState['route'],
   overrides: Pick<SendMessageOverrides, 'useComposerAgent'> | undefined
 ): boolean {
-  return route === 'chat' || route === 'ade' || (route === 'write' && overrides?.useComposerAgent === true)
+  return route === 'chat' || route === 'ade' ||
+    ((route === 'write' || route === 'artifacts') && overrides?.useComposerAgent === true)
 }
 
 export function composerSelectionNeedsProvider(selection: ReturnType<typeof resolveDirectSendComposerSelection>): boolean {

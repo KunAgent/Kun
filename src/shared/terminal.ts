@@ -8,7 +8,7 @@
  * contract — mirroring how the workspace/SSE types are structured.
  */
 
-export const TERMINAL_MAX_SESSIONS = 8
+export const TERMINAL_MAX_SESSIONS = 16
 export const TERMINAL_MAX_DATA_WRITE_BYTES = 1_000_000
 export const TERMINAL_RING_BUFFER_BYTES = 64 * 1024
 export const TERMINAL_MAX_SESSION_ID_LENGTH = 256
@@ -28,6 +28,8 @@ export type TerminalAgentCreate = {
   taskWorkspaceId?: string
   parentThreadId?: string
   workspaceKind?: 'worktree' | 'local' | 'directory'
+  /** false skips the `kun worker` reporting appendix on the task. */
+  report?: boolean
 }
 
 export type TerminalCreatePayload = {
@@ -38,6 +40,12 @@ export type TerminalCreatePayload = {
   cols?: number
   rows?: number
   agent?: TerminalAgentCreate
+  /** Absolute shell path; main only honours paths it detected itself. */
+  shell?: string
+  /** Load Kun's command-mark hooks into zsh, bash or fish. */
+  shellIntegration?: boolean
+  /** Extra environment for a profile launch (validated key names). */
+  env?: Record<string, string>
 }
 
 export type TerminalWritePayload = {
@@ -65,8 +73,26 @@ export type TerminalExitPayload = {
 }
 
 export type TerminalCreateResult =
-  | { ok: true; sessionId: string; replayed?: boolean }
+  | { ok: true; sessionId: string; replayed?: boolean; unitId?: string; shellIntegration?: boolean }
   | { ok: false; message: string }
+
+/** A login shell the main process found on this machine. */
+export type TerminalShellOption = {
+  path: string
+  name: string
+  /** True for shells Kun ships command-mark hooks for. */
+  supportsIntegration: boolean
+}
+
+/** Foreground state of a local PTY, used to confirm closing a busy terminal. */
+export type TerminalProcessInfo = {
+  /** Foreground process name as the OS reports it. */
+  process: string | null
+  /** Base name of the shell the session started. */
+  shell: string | null
+  /** A program other than the shell owns the terminal. */
+  busy: boolean
+}
 
 /**
  * Callback-channel appendix appended to a terminal agent's injected task:

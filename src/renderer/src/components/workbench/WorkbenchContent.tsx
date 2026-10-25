@@ -1,4 +1,4 @@
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useMemo, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
@@ -17,6 +17,7 @@ import { shouldShowSideSessionReturnBar } from './workbench-side-session-mode'
 import { ensureThreadBinding, useReviewStore } from '../../store/review-store'
 import { useActivityStore } from '../../store/activity-store'
 import { selectWorkerRowsForParent } from '../../store/activity-selectors'
+import { selectSessionExecutionSummary } from '../../store/session-execution-summary'
 
 type Context = Record<string, any>
 
@@ -56,13 +57,17 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   const externalSource = activeThreadRelation === 'side' ? externalSubagentSourceForThread(activeThreadId) : undefined
   const reviewEnabled = useReviewStore((s) =>
     activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
-  // the Workers rail button appears while worker rows exist under
-  // the active (manager) thread; the panel itself also self-disables.
-  const workersEnabled = useActivityStore((s) =>
-    Boolean(
-      activeThreadId &&
-        selectWorkerRowsForParent(s.rows, activeThreadId).length > 0
-    ))
+  // The Workers rail entry stays available while this thread has background
+  // rows, and reports unfinished work so a collapsed panel still shows it.
+  const activityRows = useActivityStore((s) => s.rows)
+  const activityFeedError = useActivityStore((s) => s.status === 'error')
+  const workerSummary = useMemo(() => {
+    if (!activeThreadId) return null
+    const rows = selectWorkerRowsForParent(activityRows, activeThreadId)
+    if (rows.length === 0) return null
+    return selectSessionExecutionSummary(rows, { feedError: activityFeedError })
+  }, [activityRows, activeThreadId, activityFeedError])
+  const workersEnabled = workerSummary !== null
   useEffect(() => {
     if (activeThreadId) void ensureThreadBinding(activeThreadId)
   }, [activeThreadId])
@@ -141,7 +146,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onBackdropClose={toggleLeftSidebar}
       />
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="ds-workbench-card relative flex min-h-0 min-w-0 flex-1 flex-col">
       {activeExtensionCenterView ? (
         <main className="ds-stage-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -281,6 +286,11 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             graphEnabled,
             reviewEnabled,
             workersEnabled,
+            workersRunning:
+              workerSummary?.kind === 'running' ||
+              workerSummary?.kind === 'starting' ||
+              workerSummary?.kind === 'continuing',
+            workersUnfinished: workerSummary?.unfinished ?? 0,
             sideChatRunningCount: currentSideRunningCount,
             sideChatOpen: rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sideConversations,
             sideChatEnabled: runtimeConnection === 'ready' && Boolean(activeThreadId),

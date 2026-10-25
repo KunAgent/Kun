@@ -44,7 +44,7 @@ export function FastContextEvidenceDetail({
   if (!pack) return null
   return (
     <div className="mt-3 space-y-3" data-testid="fast-context-evidence-detail">
-      <p className="text-[12px] font-semibold text-ds-heading">
+      <p className="text-[12px] font-semibold text-ds-ink">
         {t('fastContextEvidenceLabel', { defaultValue: 'Evidence' })} · {t('fastContextEvidenceCount', {
           count: pack.evidenceCount,
           defaultValue: `${pack.evidenceCount} evidence`

@@ -79,10 +79,10 @@ export function ConversationFileDropZone({
           role="status"
           aria-live="polite"
           data-conversation-file-drop-overlay
-          className="pointer-events-none absolute inset-3 z-40 flex items-center justify-center rounded-[28px] border-2 border-dashed border-ds-accent/55 bg-ds-card/88 text-ds-ink shadow-[0_18px_60px_rgba(20,47,95,0.14)] backdrop-blur-md dark:bg-ds-card/92"
+          className="pointer-events-none absolute inset-3 z-40 flex items-center justify-center rounded-[28px] border-2 border-dashed border-accent-tint/55 bg-ds-card/88 text-ds-ink shadow-[0_18px_60px_rgba(20,47,95,0.14)] backdrop-blur-md dark:bg-ds-card/92"
         >
           <div className="flex items-center gap-3 rounded-2xl bg-ds-card/95 px-5 py-3 text-[14px] font-semibold shadow-sm">
-            <FileUp className="h-5 w-5 text-ds-accent" strokeWidth={1.9} />
+            <FileUp className="h-5 w-5 text-accent" strokeWidth={1.9} />
             <span>{t('composerDropFilesHere')}</span>
           </div>
         </div>

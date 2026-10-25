@@ -167,6 +167,11 @@ describe('createToolDiscoveryContext', () => {
       ...base,
       agentSurface: 'write'
     })).toEqual([expect.objectContaining({ agentSurface: 'write' })])
+    const page = {
+      ...base,
+      guiDesignArtifact: { kind: 'html' as const, artifactId: 'page_1', relativePath: '.kun-design/doc/page_1/v1.html' }
+    }
+    expect(modelToolDiscoveryContexts(page)).toEqual([page])
 
     const designOnly = LocalToolHost.defineTool({
       name: 'design_only',

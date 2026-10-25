@@ -34,7 +34,7 @@
   "settingsIaHarnessesDesc": "把 Codex、Claude Code、OpenCode 等 Agent 接入你的对话。",
   "settingsIaCollaborationDesc": "多个 Agent 一起完成任务时的默认设置。",
   "settingsIaCodeDesc": "Code 模式在哪个目录工作、怎么隔离分支、怎样保留可回退的检查点。",
-  "settingsIaTerminalDesc": "终端配色、SSH 服务器和 kun 命令行。",
+  "settingsIaTerminalDesc": "内置终端的外观和行为、新建菜单里能直接启动的 Agent、SSH 服务器和 kun 命令行。",
   "settingsIaPaperDesc": "论文阅读、检索来源与翻译。",
   "settingsIaLabsDesc": "仍在打磨的能力。打开某项后会出现它的详细设置。",
   "settingsIaRuntimeDesc": "本地服务、上下文上限与运行保护。大多数人不需要改动这里。",

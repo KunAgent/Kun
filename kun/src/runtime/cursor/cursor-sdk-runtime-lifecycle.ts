@@ -11,7 +11,7 @@ import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.j
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import { buildHistoryTranscript, DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES } from '../agent-sdk/sdk-context-assembler.js'
 import { filterGoalContextsForGoalKey, goalContextKey } from '../../loop/continuation-instructions.js'
-import { delegatedCapabilityFingerprint, delegatedCredentialIdentity, delegatedRouteKey, priorItemsForDelegatedTurn, type DelegatedSessionPreparation } from '../delegated-session-binding.js'
+import { delegatedCapabilityFingerprint, delegatedCredentialIdentity, delegatedProviderStateKey, priorItemsForDelegatedTurn, type DelegatedSessionPreparation } from '../delegated-session-binding.js'
 import { recordHandoffInjected, resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
 import { delegatedGraphCompletionCheck, delegatedGraphRecoveryInstruction, parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 import { CursorSdkEventMapper } from './cursor-sdk-event-mapper.js'
@@ -20,6 +20,7 @@ import {
   CURSOR_AUTH_RECOVERY_PROMPT,
   CursorTurnInterruptedError,
   cursorAgentExecutionOptions,
+  cursorTurnModelParams,
   cursorSdkErrorCode,
   resolveCursorSdkImages,
   resolveCursorTurnCredentials,
@@ -194,6 +195,7 @@ export async function runCursorSdkTurnOwned(
       workspace: thread.workspace,
       apiKey,
       model,
+      modelParams: await cursorTurnModelParams({ apiKey, modelId: model, effort: turn.reasoningEffort }),
       name: `Kun · ${thread.title || thread.id}`.slice(0, 120),
       planMode,
       approvalPolicy,
@@ -224,6 +226,7 @@ export async function runCursorSdkTurnOwned(
           }),
           workspace: thread.workspace,
           model,
+          modelScope: 'session',
           capabilityFingerprint: delegatedCapabilityFingerprint({
             systemPrompt: deps.systemPrompt?.trim() || '',
             threadPersona: thread.systemPrompt?.trim() || '',
@@ -367,7 +370,7 @@ export async function runCursorSdkTurnOwned(
           ])
       const attachIsolatedStore = (): void => {
         if (!deps.sessionCoordinator || !sdk.JsonlLocalAgentStore || !preparation) return
-        const dir = deps.sessionCoordinator.store.providerStateDir('cursor-sdk', threadId, delegatedRouteKey(preparation.route))
+        const dir = deps.sessionCoordinator.store.providerStateDir('cursor-sdk', threadId, delegatedProviderStateKey(preparation.route))
         // Each step's checkpoint carries Cursor's own context count: the live gauge.
         const store = observeCursorCheckpointContext(new sdk.JsonlLocalAgentStore(dir), (details) => {
           void Promise.resolve(deps.events.record(cursorContextSnapshot({ threadId, turnId, model, providerId: resolvedProviderId,
@@ -483,6 +486,7 @@ export async function runCursorSdkTurnOwned(
           harnessTurnTiming(threadId, turnId).requestStarted()
           run = await Promise.race([
             agent.send(attemptMessage, {
+              model: options.model,
               mode: options.mode,
               local: {
                 ...(forceRecoveryRun ? { force: true } : {}),

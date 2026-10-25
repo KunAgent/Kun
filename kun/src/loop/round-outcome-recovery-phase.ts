@@ -52,7 +52,8 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
   protected async failEmptyTerminalResponse(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
     const message =
       'Model provider completed without returning text, reasoning, a tool call, or generated output. ' +
-      'Check provider/model availability and routing, then resend the message.'
+      'The request itself succeeded, so the model may have judged there was nothing left to do, or the ' +
+      'provider route dropped the reply. Resend the message; if it repeats, check the provider/model and routing.'
     const route = input.prepared.actingModelRoute
     const details = {
       model: input.prepared.model,

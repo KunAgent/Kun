@@ -36,6 +36,8 @@ type Props = {
   onContinueLocalSession?: () => void
   onOpen?: () => void
   onSelect: (harnessId: string) => void
+  /** Menu footnote; defaults to the composer's next-turn rule, null hides it. */
+  hint?: string | null
 }
 
 /** New-turn picker: only explicitly enabled profiles with current readiness are selectable. */
@@ -48,7 +50,8 @@ export function FloatingComposerHarnessPicker({
   needsConfirm,
   onContinueLocalSession,
   onOpen,
-  onSelect
+  onSelect,
+  hint
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const [open, setOpen] = useState(false)
@@ -187,7 +190,7 @@ export function FloatingComposerHarnessPicker({
                     role="menuitem"
                     onClick={() => openAgentSettings(row)}
                     aria-label={configureProvider ? t('adeAgentAction.configureProvider') : `${row.definition.displayName} ${t('adeHarnessOpenSettings')}`}
-                    className="shrink-0 rounded-md p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-accent"
+                    className="shrink-0 rounded-md p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     data-harness-repair={id}
                   >
                     <Settings2 className="h-4 w-4" strokeWidth={1.75} />
@@ -222,9 +225,9 @@ export function FloatingComposerHarnessPicker({
             <Settings2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             {t('adeHarnessOpenSettings')}
           </button>
-          <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
-            {t('adeHarnessPicker.nextTurnHint')}
-          </div>
+          {hint === null ? null : <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
+            {hint ?? t('adeHarnessPicker.nextTurnHint')}
+          </div>}
         </>
       )}
     </div>
@@ -246,7 +249,7 @@ export function FloatingComposerHarnessPicker({
             setPendingSwitch(null)
             if (next) onOpen?.()
           }}
-          className="flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-raised px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-elevated px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
           title={t('adeHarnessPicker.title')}
           aria-label={t('adeHarnessPicker.title')}
           data-composer-harness-picker

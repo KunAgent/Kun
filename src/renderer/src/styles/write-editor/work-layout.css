@@ -351,8 +351,3 @@
   background: var(--ds-status-dot-success, #128a4a);
   box-sizing: content-box;
 }
-
-/* Selection menu: AI actions read in the skill violet. */
-.write-inline-agent-action-row > svg:first-child {
-  color: var(--ds-skill, #7a68e8);
-}

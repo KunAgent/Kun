@@ -19,6 +19,12 @@ export const ADMISSION_RULES: Record<
   }
 > = {
   'one-to-one': { required: ['abort'] },
+  // delegate_task children share the parent workspace, so a write-capable
+  // child needs an engine-native sandbox; read-only roles count as isolated.
+  'delegate-child': {
+    required: ['abort', 'structuredStreaming'],
+    sandbox: 'isolated-or-native'
+  },
   'manager-worker': {
     required: ['abort', 'structuredStreaming'],
     sandbox: 'isolated-or-native'

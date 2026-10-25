@@ -46,7 +46,7 @@ export function useWorkbenchDesignRuntime({
   const canvasDocument = useCanvasShapeStore((s) => s.document)
   const canvasDocumentKey = useCanvasShapeStore((s) => s.documentKey)
   const canvasSelectedIds = useCanvasSelectionStore((s) => s.selectedIds)
-  const designContextRoute = designTaskActive && route === 'chat' ? 'design' : route
+  const designContextRoute = route === 'chat' ? (designTaskActive ? 'design' : 'code') : route
   const contextState = useDesignComposerContextState({
     route: designContextRoute,
     canvasDocument,

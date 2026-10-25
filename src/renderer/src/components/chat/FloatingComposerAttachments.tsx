@@ -53,7 +53,7 @@ function PastedTextAttachmentCard({
         <button
           type="button"
           onClick={() => onRemoveAttachment(attachment.id)}
-          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-focus"
+          className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-white shadow-sm transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-focus-ring)]"
           aria-label={t('composerRemoveAttachment')}
           title={t('composerRemoveAttachment')}
         >

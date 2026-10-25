@@ -51,6 +51,8 @@ type RoomTickOutcome = { active: boolean; nextWakeAt?: number; catchUp?: boolean
 
 const ACTIVE_TICK_MS = 1_000
 const IDLE_TICK_MS = 15_000
+/** A repeating memory capture failure is logged again only after this long. */
+const MEMORY_CAPTURE_WARNING_INTERVAL_MS = 5 * 60_000
 
 export class RoomRuntime {
   private readonly memoryCapture: AgentMemoryCoordinator
@@ -79,6 +81,7 @@ export class RoomRuntime {
   private stopped = true
   private inFlight?: Promise<void>
   private wakeQueued = false
+  private memoryCaptureWarning?: { message: string; at: number }
   private actionQueue: Promise<unknown> = Promise.resolve()
   private requestCursor?: number
   private readonly executionService: RoomService
@@ -159,6 +162,13 @@ export class RoomRuntime {
       this.inFlight = undefined
       if (this.wakeQueued) { this.wakeQueued = false; this.wake() }
     })
+  }
+  private warnMemoryCapture(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    const now = Date.now(), last = this.memoryCaptureWarning
+    if (last?.message === message && now - last.at < MEMORY_CAPTURE_WARNING_INTERVAL_MS) return
+    this.memoryCaptureWarning = { message, at: now }
+    console.warn('[kun] room memory capture:', message)
   }
   /**
    * Active work keeps the one-second cadence. Idle passes wait up to fifteen
@@ -320,7 +330,12 @@ export class RoomRuntime {
     if (!this.held()) return { active: false }
     await this.deps.assertOwnership()
     await this.agents.initialize()
-    const outcome: RoomTickOutcome = { active: await this.memoryCapture.tick() }
+    // Memory capture is background work. Its failure must never hold up the
+    // requests, stops and tasks below, and it does not keep the active cadence.
+    const outcome: RoomTickOutcome = { active: await this.memoryCapture.tick().catch((error: unknown) => {
+      this.warnMemoryCapture(error)
+      return false
+    }) }
     try { await reconcileRoomNotificationGates(this.deps) }
     catch (error) {
       console.warn('[kun] room notification reconciliation:', error instanceof Error ? error.message : String(error))

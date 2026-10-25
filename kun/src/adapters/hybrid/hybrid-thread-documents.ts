@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 import type { ThreadRecord } from '../../contracts/threads.js'
 import { ThreadSchemaReadable } from '../../contracts/threads.js'
 import type { TurnItem } from '../../contracts/items.js'
-import { readJsonlTail } from '../file/file-session-jsonl.js'
+import { readJsonlTail, serializedArrayBytesUpTo, serializedBytes } from '../file/file-session-jsonl.js'
 import { JsonlFileAccessCoordinator } from '../file/jsonl-file-access.js'
 import {
   accumulateTurnMetadata,
@@ -184,16 +184,7 @@ export class HybridThreadDocumentRepository {
   ): void {
     // Replacing the hydrated record must preserve the offsets just read.
     this.removeCachedRecord(threadId)
-    // Size item bodies separately and bail out at the admission budget instead
-    // of constructing a second full JSON copy of an oversized history.
-    const metadata = { ...entry.record, turns: entry.record.turns.map(turn => ({ ...turn, items: [] })) }
-    let bytes = Buffer.byteLength(JSON.stringify(metadata), 'utf-8')
-    sizing: for (const turn of entry.record.turns) {
-      for (let index = 0; index < turn.items.length; index += 1) {
-        if (bytes > this.cacheMaxBytes / 2) break sizing
-        bytes += Buffer.byteLength(JSON.stringify(turn.items[index]), 'utf-8') + (index > 0 ? 1 : 0)
-      }
-    }
+    const bytes = threadRecordBytesUpTo(entry.record, this.cacheMaxBytes / 2)
     if (bytes > this.cacheMaxBytes / 2 || bytes > this.cacheMaxBytes) {
       this.invalidate(threadId)
       return
@@ -215,6 +206,17 @@ export class HybridThreadDocumentRepository {
     if (cached) this.cacheBytes = Math.max(0, this.cacheBytes - cached.bytes)
     this.cache.delete(threadId)
   }
+}
+
+/** JSON byte size, exact while within `limit`; stops early on a large hydrated history. */
+export function threadRecordBytesUpTo(record: ThreadRecord, limit: number): number {
+  let bytes = serializedBytes({ ...record, turns: record.turns.map((turn) => ({ ...turn, items: [] })) })
+  for (const turn of record.turns) {
+    if (bytes > limit) return bytes
+    // The skeleton already counted this turn's empty `[]`.
+    bytes += serializedArrayBytesUpTo(turn.items, limit - bytes) - 2
+  }
+  return bytes
 }
 
 function fileMark(info: { size: number; mtimeMs: number; ino: number }): FileMark {

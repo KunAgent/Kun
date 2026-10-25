@@ -8,8 +8,15 @@ import {
   type ExternalSubagentView
 } from '../../agent/external-subagent'
 import { AgentIcon } from '../agent-icon'
-import { AgentKun } from '../subagents/AgentKun'
-import { parseDelegateDetail, readChildMeta, type DelegateDetail } from './subagent-call-card-support'
+import { SubagentRoleTile, subagentRoleVisual } from '../subagents/SubagentRoleTile'
+import {
+  KNOWN_POSE_IDS,
+  hashHue,
+  parseDelegateDetail,
+  readChildMeta,
+  type CardStatus,
+  type DelegateDetail
+} from './subagent-call-card-support'
 import type { ToolBlock } from '../../agent/types'
 
 /** The external-Agent view the mapper attached to a subagent tool block, if any. */
@@ -104,45 +111,44 @@ export function ExternalSubagentNotice({
   )
 }
 
-/** The icon of the Agent that ran the subagent, so it never wears Kun's own figure. */
+/** The icon of the Agent that ran the subagent, so it never wears Kun's own role icon. */
 export function ExternalSubagentAvatar({
   view,
+  status,
   compact,
-  running
+  animate
 }: {
   view: ExternalSubagentView
+  status: CardStatus
   compact: boolean
-  running: boolean
+  animate: boolean
 }): ReactElement {
   const source = EXTERNAL_SUBAGENT_SOURCE_LABELS[view.source]
-  const frame = compact ? 'h-8 w-8 rounded-[10px]' : 'h-9 w-9 rounded-[11px]'
   return (
     <span className="relative shrink-0" data-testid="external-subagent-avatar" title={view.profile ? `${view.profile} · ${source}` : source}>
-      <span className={`flex items-center justify-center border border-ds-border-muted bg-ds-card text-ds-ink ${frame}`}>
-        <AgentIcon harnessId={view.source} size={compact ? 18 : 20} label={source} />
-      </span>
-      {running ? (
-        <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-accent ring-2 ring-ds-card" />
-      ) : null}
+      <SubagentRoleTile status={status} size={compact ? 'sm' : 'md'} animate={animate} neutral>
+        <AgentIcon harnessId={view.source} size={compact ? 15 : 17} label={source} />
+      </SubagentRoleTile>
     </span>
   )
 }
 
-/** One avatar of a subagent group header's overlapping cluster. */
+/** One tile of a subagent group header's overlapping cluster. */
 export function SwarmClusterAvatar({ block, index }: { block: ChatBlock; index: number }): ReactElement {
   const external = readExternalSubagentView(block)
   const child = readChildMeta(block)
   const detail = parseDelegateDetail(block.kind === 'tool' ? (block as ToolBlock).detail : undefined)
   const pose = child.childProfile || detail.profile || child.childLabel || child.childId || 'custom'
+  const { Icon, color } = subagentRoleVisual(pose, KNOWN_POSE_IDS.has(pose) ? null : hashHue(pose))
   return (
     <span
-      className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-ds-card ${external ? 'bg-ds-card text-ds-ink' : ''}`}
+      className={`flex h-[22px] w-[22px] items-center justify-center rounded-[7px] border-2 border-ds-card ${external ? 'bg-ds-card-muted text-ds-ink' : ''}`}
       style={{
-        marginLeft: index === 0 ? 0 : -8,
-        ...(external ? {} : { background: 'radial-gradient(circle at 50% 36%,#fff,#eef4fb)' })
+        marginLeft: index === 0 ? 0 : -6,
+        ...(external ? {} : { backgroundColor: `color-mix(in srgb, ${color} 18%, var(--ds-card, #fff))`, color })
       }}
     >
-      {external ? <AgentIcon harnessId={external.source} size={14} /> : <AgentKun id={pose} className="h-5 w-5" />}
+      {external ? <AgentIcon harnessId={external.source} size={12} /> : <Icon size={12} strokeWidth={2.2} aria-hidden="true" />}
     </span>
   )
 }

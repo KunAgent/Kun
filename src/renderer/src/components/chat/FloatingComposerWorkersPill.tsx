@@ -1,9 +1,20 @@
 import { useMemo, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Users } from 'lucide-react'
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleHelp,
+  ClipboardCheck,
+  Loader2
+} from 'lucide-react'
 import { useActivityStore } from '../../store/activity-store'
 import { selectWorkerRowsForParent } from '../../store/activity-selectors'
-import { workersPillState } from '../workers/worker-row-data'
+import {
+  selectSessionExecutionSummary,
+  type SessionExecutionCounts,
+  type SessionExecutionSummary
+} from '../../store/session-execution-summary'
 
 /** Window event asking the workbench to open the Workers right panel. */
 export const OPEN_WORKERS_PANEL_EVENT = 'kun:open-workers-panel'
@@ -12,41 +23,142 @@ export function requestOpenWorkersPanel(): void {
   window.dispatchEvent(new CustomEvent(OPEN_WORKERS_PANEL_EVENT))
 }
 
+const STATUS_LABEL_KEY: Record<
+  Exclude<SessionExecutionSummary['kind'], 'none'>,
+  string
+> = {
+  running: 'backgroundTaskRunning',
+  starting: 'backgroundTaskStarting',
+  continuing: 'backgroundTaskContinuing',
+  'waiting-user': 'backgroundTaskWaiting',
+  review: 'backgroundTaskReview',
+  failed: 'backgroundTaskFailed',
+  completed: 'backgroundTaskCompleted',
+  unknown: 'backgroundTaskUnknown'
+}
+
+function countLabel(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  counts: SessionExecutionCounts
+): string {
+  const parts: string[] = []
+  const push = (value: number, key: string): void => {
+    if (value > 0) parts.push(t(key, { value }))
+  }
+  push(counts.running, 'backgroundTaskCountRunning')
+  push(counts.starting, 'backgroundTaskCountStarting')
+  push(counts.waiting, 'backgroundTaskCountWaiting')
+  push(counts.review, 'backgroundTaskCountReview')
+  push(counts.failed, 'backgroundTaskCountFailed')
+  push(counts.completed, 'backgroundTaskCountDone')
+  return parts.join(' · ')
+}
+
 /**
- * ADE composer track pill: `Workers N` while manager-dispatched
- * workers are in flight on this thread; switches to the amber
- * `Workers · N 待回答` variant when a worker waits on an answer. Hidden for
- * non-ADE threads and teams with nothing in flight.
+ * Superseded: the composer now shows background work as the Workers segment
+ * of its activity tray (composer-tray/workers-tray-kind.tsx). This strip is
+ * no longer rendered; it stays only while WorkersPanel.test.ts still covers
+ * it, and the open-panel event above stays the shared entry point.
+ *
+ * Composer status strip: the thread's background work stays visible after the
+ * turn's reply finishes and its process log collapses.
+ *
+ * It only appears when this thread actually has background work, so ordinary
+ * one-on-one turns are unchanged. The spinner is reserved for children that are
+ * really executing; waiting, review, failure, and an unconfirmed feed use static
+ * symbols so the strip never implies progress it cannot prove.
  */
 export function FloatingComposerWorkersPill({
   threadId,
-  enabled
+  mainRunning = false
 }: {
   threadId: string | null
-  enabled: boolean
+  mainRunning?: boolean
 }): ReactElement | null {
   const { t } = useTranslation('common')
   const activityRows = useActivityStore((s) => s.rows)
-  const workerRows = useMemo(
-    () => (threadId && enabled ? selectWorkerRowsForParent(activityRows, threadId) : []),
-    [activityRows, threadId, enabled]
-  )
-  const { active, waitingQuestions } = workersPillState(workerRows)
-  if (!enabled || !threadId || active === 0) return null
-  const waiting = waitingQuestions > 0
+  const feedError = useActivityStore((s) => s.status === 'error')
+  const summary = useMemo(() => {
+    if (!threadId) return null
+    const rows = selectWorkerRowsForParent(activityRows, threadId)
+    // No background work: leave the composer exactly as it was.
+    if (rows.length === 0) return null
+    return selectSessionExecutionSummary(rows, { feedError, mainRunning })
+  }, [activityRows, threadId, feedError, mainRunning])
+
+  if (!summary || summary.kind === 'none') return null
+
+  const label = t(STATUS_LABEL_KEY[summary.kind])
+  const counts = countLabel(t, summary.counts)
+  const detail =
+    counts ||
+    (summary.kind === 'unknown' ? t('backgroundTaskUnknownHint') : '')
+  const activity =
+    summary.kind === 'unknown' ? undefined : summary.activityTitle
+  const Icon =
+    summary.kind === 'running' || summary.kind === 'starting' || summary.kind === 'continuing'
+      ? Loader2
+      : summary.kind === 'completed'
+        ? CircleCheck
+        : summary.kind === 'failed'
+          ? CircleAlert
+          : summary.kind === 'unknown'
+            ? CircleDashed
+            : summary.kind === 'review'
+              ? ClipboardCheck
+              : CircleHelp
+  const spinning =
+    summary.kind === 'running' || summary.kind === 'starting' || summary.kind === 'continuing'
+  const iconClass = spinning
+    ? 'text-accent'
+    : summary.kind === 'completed'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : summary.kind === 'failed'
+        ? 'text-red-500'
+        : summary.kind === 'unknown'
+          ? 'text-ds-faint'
+          : 'text-amber-500'
+  const action =
+    summary.kind === 'waiting-user' || summary.kind === 'failed'
+      ? t('backgroundTaskResolve')
+      : t('backgroundTaskOpen')
+  const remaining = summary.unfinished
+
   return (
-    <button
-      type="button"
-      data-workers-pill
-      onClick={requestOpenWorkersPanel}
-      className={`ds-composer-status-glass pointer-events-auto inline-flex min-h-8 items-center gap-1.5 self-start rounded-full border px-3 py-1 text-[12px] font-medium transition hover:border-accent/40 ${
-        waiting ? 'border-ds-status-warning/40 text-ds-status-warning' : 'text-ds-muted hover:text-ds-ink'
-      }`}
+    <div
+      data-background-task-strip={summary.kind}
+      data-background-task-unfinished={remaining}
+      className="ds-composer-status-glass pointer-events-auto flex w-full max-w-[46rem] items-center gap-2.5 self-start rounded-xl border border-ds-border-muted py-2 pl-3 pr-2"
     >
-      <Users className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden />
-      {waiting
-        ? t('workersPillWaiting', { count: waitingQuestions })
-        : t('workersPill', { count: active })}
-    </button>
+      <Icon
+        className={`h-3.5 w-3.5 shrink-0 ${iconClass} ${spinning ? 'motion-safe:animate-spin motion-reduce:animate-none' : ''}`}
+        strokeWidth={2}
+        aria-hidden="true"
+      />
+      <div
+        className="min-w-0 flex-1"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <div className="flex min-w-0 items-center gap-1.5 text-[12.5px] leading-5">
+          <span className="shrink-0 font-medium text-ds-ink">{label}</span>
+          {activity ? (
+            <span className="min-w-0 truncate text-ds-muted">· {activity}</span>
+          ) : null}
+        </div>
+        {detail ? (
+          <div className="truncate text-[11.5px] leading-4 text-ds-muted">{detail}</div>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        onClick={requestOpenWorkersPanel}
+        className="shrink-0 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11.5px] font-medium text-ds-ink transition hover:border-ds-border hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/45"
+        aria-label={t('backgroundTaskWorkersLabel', { status: label, remaining })}
+      >
+        {action}
+      </button>
+    </div>
   )
 }

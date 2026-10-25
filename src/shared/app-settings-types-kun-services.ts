@@ -363,6 +363,8 @@ export type KunAdeSettingsPatchV1 = {
   budget?: { softTokens?: number; hardTokens?: number } | null
   hibernation?: { enabled?: boolean; idleMinutes?: number }
   stall?: { structuredMinutes?: number; terminalMinutes?: number }
+  dispatch?: { autoStartSeconds?: number; autoStartWhenConfirmationRequired?: boolean }
+  tasks?: { autoStartSeconds?: number; worktree?: boolean; inheritContext?: boolean }
   notifications?: {
     waiting?: boolean
     failed?: boolean

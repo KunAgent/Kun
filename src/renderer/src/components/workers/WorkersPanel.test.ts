@@ -1,21 +1,18 @@
 // @vitest-environment jsdom
-import { useWorkerViewStore } from './worker-view-store'
-import { createElement, type ReactElement } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { createElement } from 'react'
+import { act } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../i18n'
-import type { ActivityRow } from '@shared/activity-row'
 import type { AdeTeamOverview } from '@shared/ade-teams'
 
-const provider = {
+const provider = vi.hoisted(() => ({
   getTeamOverview: vi.fn(),
   getThreadDetail: vi.fn(),
-  sendUserMessage: vi.fn(),
-  getQueuedTurns: vi.fn(),
   getTeamWorker: vi.fn(),
   controlTeamWorker: vi.fn(),
-  answerTeamQuestion: vi.fn()
-}
+  answerTeamQuestion: vi.fn(),
+  interruptTurn: vi.fn()
+}))
 
 vi.mock('../../agent/registry', () => ({
   getProvider: () => provider
@@ -24,125 +21,41 @@ vi.mock('../../agent/registry', () => ({
 import { WorkersPanel } from './WorkersPanel'
 import { FloatingComposerWorkersPill } from '../chat/FloatingComposerWorkersPill'
 import { WorkerControlBanner } from './WorkerControlBanner'
+import { OPEN_WORKER_SESSION_EVENT, useWorkerViewStore } from './worker-view-store'
 import { useActivityStore } from '../../store/activity-store'
 import { useChatStore } from '../../store/chat-store'
+import { buttons, byData, byLabel, MGR, mountTracker, teamOverview, textOf, workerRow } from './worker-test-fixtures'
 
-const MGR = 'thr_mgr'
-
-function workerRow(overrides: Partial<ActivityRow>): ActivityRow {
-  const ts = new Date(Date.now() - 60_000).toISOString()
-  return {
-    unitId: 'wrk_1',
-    kind: 'worker',
-    threadId: 'wrk_1',
-    parentThreadId: MGR,
-    harnessId: 'kun',
-    title: 'backend',
-    workspace: { path: '/ws', kind: 'worktree' },
-    state: 'working',
-    children: { working: 0, waiting: 0, done: 0, failed: 0 },
-    stateSince: ts,
-    updatedAt: ts,
-    stalled: false,
-    visibility: 'active',
-    pinned: false,
-    ...overrides
-  } as ActivityRow
-}
-
-function overview(): AdeTeamOverview {
-  return {
-    team: {
-      teamId: 'team_1',
-      managerThreadId: MGR,
-      status: 'active',
-      workers: [
-        {
-          workerId: 'wrk_1',
-          label: 'backend',
-          route: { harnessId: 'claude-code', model: 'opus', credentialMode: 'subscription' },
-          control: 'manager',
-          state: 'active'
-        },
-        { workerId: 'wrk_2', label: 'docs', control: 'manager', state: 'active' }
-      ],
-      createdAt: 'x',
-      updatedAt: 'x'
-    },
-    dispatches: [
-      {
-        dispatchId: 'dsp_1',
-        teamId: 'team_1',
-        workerId: 'wrk_1',
-        title: 'api',
-        state: 'delivering',
-        capture: { changedFiles: 2, insertions: 90, deletions: 12 },
-        createdAt: 'x',
-        updatedAt: 'x'
-      }
-    ],
-    questions: [
-      {
-        questionId: 'q_1',
-        dispatchId: 'dsp_1',
-        workerId: 'wrk_1',
-        question: 'ship behind a flag?',
-        state: 'open',
-        createdAt: 'x',
-        updatedAt: 'x'
-      }
-    ]
-  }
-}
-
-const mounted = new Set<ReactTestRenderer>()
-afterEach(async () => {
-  await act(async () => { for (const renderer of mounted) renderer.unmount() })
-  mounted.clear()
-})
-
-async function render(el: ReactElement): Promise<ReactTestRenderer> {
-  let renderer!: ReactTestRenderer
-  await act(async () => {
-    renderer = create(el)
-  })
-  mounted.add(renderer)
-  return renderer
-}
-
-function buttons(renderer: ReactTestRenderer): ReactTestInstance[] {
-  return renderer.root.findAllByType('button' as never)
-}
-
-function textOf(node: ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === 'string' ? child : textOf(child)))
-    .join('')
-}
-
-function buttonText(node: ReactTestInstance): string {
-  return textOf(node)
-}
+const { render, unmountAll } = mountTracker()
+afterEach(unmountAll)
 
 beforeEach(() => {
-  useWorkerViewStore.setState({ managers: {} })
+  useWorkerViewStore.setState({ drafts: {}, labels: {} })
   vi.clearAllMocks()
-  provider.getTeamOverview.mockResolvedValue(overview())
+  provider.getTeamOverview.mockResolvedValue(teamOverview())
   provider.getThreadDetail.mockResolvedValue({ blocks: [], latestSeq: 1 })
-  provider.sendUserMessage.mockResolvedValue({ threadId: 'wrk_1', turnId: 'turn-1', status: 'queued', queuedPosition: 0 })
-  provider.getQueuedTurns.mockResolvedValue({ queuedTurns: [] })
   provider.getTeamWorker.mockResolvedValue(null)
   provider.controlTeamWorker.mockResolvedValue(undefined)
   provider.answerTeamQuestion.mockResolvedValue(undefined)
+  provider.interruptTurn.mockResolvedValue(undefined)
   useActivityStore.setState({ rows: {}, cursor: null, status: 'live' })
   useChatStore.setState({ activeThreadId: MGR, selectThread: vi.fn(async () => undefined) } as never)
 })
 
+function captureOpenedWorkers(): { opened: string[]; stop: () => void } {
+  const opened: string[] = []
+  const listener = (event: Event): void => {
+    opened.push((event as CustomEvent<{ workerId: string }>).detail.workerId)
+  }
+  window.addEventListener(OPEN_WORKER_SESSION_EVENT, listener)
+  return { opened, stop: () => window.removeEventListener(OPEN_WORKER_SESSION_EVENT, listener) }
+}
+
 describe('WorkersPanel', () => {
-  it('does not fetch teams or mount a worker transcript while its tool tab is hidden', async () => {
+  it('does not fetch teams while its tool tab is hidden', async () => {
     const renderer = await render(createElement(WorkersPanel, { active: false }))
     expect(provider.getTeamOverview).not.toHaveBeenCalled()
-    expect(renderer.root.findAll((node) => node.props['data-worker-inspector'])).toHaveLength(0)
+    expect(byData(renderer, 'data-worker-row')).toHaveLength(0)
   })
 
   it('keeps an explicit manager scope when the globally active thread differs', async () => {
@@ -153,226 +66,63 @@ describe('WorkersPanel', () => {
     expect(useChatStore.getState().activeThreadId).toBe('other-thread')
   })
 
-  it('previews a worker in place and opens its full thread only on the explicit action', async () => {
-    const renderer = await render(createElement(WorkersPanel))
-    const open = buttons(renderer).find((button) => buttonText(button) === 'backend')!
-    await act(async () => open.props.onClick())
-    expect(useChatStore.getState().activeThreadId).toBe(MGR)
-    expect(useChatStore.getState().selectThread).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(provider.getThreadDetail).toHaveBeenCalledWith('wrk_1',
-      expect.objectContaining({ priority: 'background', signal: expect.any(AbortSignal) })))
-    expect(renderer.root.findAll((node) => node.props['data-worker-inspector'] === 'wrk_1')).toHaveLength(1)
-    const fullOpen = renderer.root.findAll((node) => node.props['data-worker-full-open'] === 'wrk_1')[0]!
-    await act(async () => fullOpen.props.onClick())
-    expect(useChatStore.getState().selectThread).toHaveBeenCalledWith('wrk_1')
-  })
-
-  it('ignores a late detail response after switching the preview to another worker', async () => {
-    let resolveFirst: ((detail: { blocks: []; latestSeq: number }) => void) | undefined
-    provider.getThreadDetail.mockImplementation((id: string) => id === 'wrk_1'
-      ? new Promise((resolve) => { resolveFirst = resolve })
-      : Promise.resolve({ blocks: [], latestSeq: 22 }))
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await vi.waitFor(() => expect(resolveFirst).toBeDefined())
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'docs')!.props.onClick())
-    await vi.waitFor(() => expect(renderer.root.findAll((node) =>
-      node.props['data-worker-preview-seq'] === 22)).toHaveLength(1))
-    await act(async () => resolveFirst!({ blocks: [], latestSeq: 11 }))
-    expect(renderer.root.findAll((node) => node.props['data-worker-inspector'] === 'wrk_2')).toHaveLength(1)
-    expect(renderer.root.findAll((node) => node.props['data-worker-preview-seq'] === 22)).toHaveLength(1)
-    expect(useChatStore.getState().activeThreadId).toBe(MGR)
-  })
-
-  it('renders the worker conversation from its own thread detail', async () => {
-    provider.getThreadDetail.mockResolvedValue({
-      latestSeq: 2,
-      blocks: [
-        { kind: 'user', id: 'worker-user', turnId: 'worker-turn', text: 'worker scoped question' },
-        { kind: 'assistant', id: 'worker-answer', turnId: 'worker-turn', text: 'worker scoped answer' }
-      ]
-    })
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain('worker scoped answer'))
-    expect(JSON.stringify(renderer.toJSON())).toContain('worker scoped question')
-    expect(useChatStore.getState().activeThreadId).toBe(MGR)
-  })
-
-  it('keeps a running worker process live between model streams and folds it once settled', async () => {
-    const blocks = [
-      { kind: 'user', id: 'worker-user', turnId: 'worker-turn', text: 'run the checks' },
-      { kind: 'tool', id: 'worker-tool', turnId: 'worker-turn', summary: 'Edited src/foo.ts', status: 'running', toolKind: 'file_change' }
-    ]
-    // No liveProjection: the worker is executing a tool, not streaming text.
-    provider.getThreadDetail.mockResolvedValue({
-      latestSeq: 3, blocks, activeTurn: { id: 'worker-turn', status: 'running', orchestration: 'direct' }
-    })
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await vi.waitFor(() => expect(renderer.root.findAll((node) => node.props['data-worker-preview-seq'] === 3)).toHaveLength(1))
-    expect(renderer.root.findAll((node) => node.props['data-turn-live-status-owner'])).not.toHaveLength(0)
-    expect(JSON.stringify(renderer.toJSON())).toContain('Edited src/foo.ts')
-
-    provider.getThreadDetail.mockResolvedValue({
-      latestSeq: 4, blocks: [blocks[0], { ...blocks[1], status: 'success' }], activeTurn: null
-    })
-    const refresh = renderer.root.findAll((node) => node.type === 'button' && node.props['aria-label'] === 'Refresh')[0]!
-    await act(async () => refresh.props.onClick())
-    await vi.waitFor(() => expect(renderer.root.findAll((node) => node.props['data-worker-preview-seq'] === 4)).toHaveLength(1))
-    expect(renderer.root.findAll((node) => node.props['data-turn-live-status-owner'])).toHaveLength(0)
-  })
-
-  it('keeps a separate draft for each worker without changing the main thread', async () => {
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.onChange({ target: { value: 'backend draft' } }))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'docs')!.props.onClick())
-    expect(renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_2')[0]!.props.value).toBe('')
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_2')[0]!.props.onChange({ target: { value: 'docs draft' } }))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    expect(renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.value).toBe('backend draft')
-    expect(useChatStore.getState().activeThreadId).toBe(MGR)
-  })
-
-  it('restores the selected worker and its unsent input after the panel closes', async () => {
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.onChange({ target: { value: 'Keep this worker note' } }))
-    useWorkerViewStore.getState().managers[MGR].scrollPositions.set('wrk_1', 420)
-    await act(async () => renderer.unmount())
-    mounted.delete(renderer)
-    const reopened = await render(createElement(WorkersPanel))
-    expect(reopened.root.findAll((node) => node.props['data-worker-inspector'] === 'wrk_1')).toHaveLength(1)
-    expect(reopened.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.value).toBe('Keep this worker note')
-    expect(useWorkerViewStore.getState().managers[MGR].scrollPositions.get('wrk_1')).toBe(420)
-  })
-
-  it('sends only to the selected worker after control acknowledgement and reports queuing', async () => {
-    const sequence: string[] = []
-    provider.controlTeamWorker.mockImplementation(async () => { sequence.push('take-over') })
-    provider.sendUserMessage.mockImplementation(async () => {
-      sequence.push('send')
-      return { threadId: 'wrk_1', turnId: 'queued-turn', status: 'queued', queuedPosition: 1 }
-    })
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.onChange({ target: { value: 'fix only backend' } }))
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-send'] === 'wrk_1')[0]!.props.onClick())
-    await vi.waitFor(() => expect(provider.sendUserMessage).toHaveBeenCalledTimes(1))
-    expect(sequence).toEqual(['take-over', 'send'])
-    expect(provider.sendUserMessage).toHaveBeenCalledWith('wrk_1', 'fix only backend', expect.objectContaining({ enqueueIfBusy: true }))
-    expect(renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.value).toBe('')
-    expect(JSON.stringify(renderer.toJSON())).toContain('Queued')
-    expect(useChatStore.getState().activeThreadId).toBe(MGR)
-  })
-
-  it('keeps the worker draft when host control fails', async () => {
-    provider.controlTeamWorker.mockRejectedValue(new Error('control refused'))
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.onChange({ target: { value: 'keep this request' } }))
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-send'] === 'wrk_1')[0]!.props.onClick())
-    await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain('control refused'))
-    expect(renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.value).toBe('keep this request')
-    expect(provider.sendUserMessage).not.toHaveBeenCalled()
-  })
-
-  it('keeps a late uploaded attachment on its original worker after switching previews', async () => {
-    let resolveUpload!: (value: unknown) => void
-    const uploadRuntimeImageAttachment = vi.fn(() => new Promise((resolve) => { resolveUpload = resolve }))
-    Object.defineProperty(window, 'kunGui', { configurable: true, value: {
-      getPathForFile: () => '/tmp/late.png', uploadRuntimeImageAttachment
-    } })
-    try {
-      const renderer = await render(createElement(WorkersPanel))
-      await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-      const fileInput = renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')[0]!
-      await act(async () => fileInput.props.onChange({ currentTarget: { files: [new File(['png'], 'late.png', { type: 'image/png' })] } }))
-      await vi.waitFor(() => expect(uploadRuntimeImageAttachment).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'wrk_1' })))
-      await act(async () => buttons(renderer).find((button) => buttonText(button) === 'docs')!.props.onClick())
-      await act(async () => resolveUpload({
-        ok: true,
-        attachment: { id: 'late-image', name: 'late.png', mimeType: 'image/png' },
-        preview: { mimeType: 'image/png', dataBase64: 'AAAA' }
-      }))
-      expect(JSON.stringify(renderer.toJSON())).not.toContain('late.png')
-      await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-      expect(JSON.stringify(renderer.toJSON())).toContain('late.png')
-    } finally {
-      Object.defineProperty(window, 'kunGui', { configurable: true, value: undefined })
-    }
-  })
-
-  it('offers hand-back and stop as separate worker-scoped actions', async () => {
-    const team = overview()
-    team.team.workers[0]!.control = 'user'
-    provider.getTeamOverview.mockResolvedValue(team)
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    const control = renderer.root.findAll((node) => node.props['data-worker-control-action'])[0]!
-    await act(async () => control.props.onClick())
-    expect(provider.controlTeamWorker).toHaveBeenCalledWith('wrk_1', 'hand-back')
-    const stop = renderer.root.findAll((node) => node.props['data-worker-stop-action'])[0]!
-    await act(async () => stop.props.onClick())
-    expect(provider.controlTeamWorker).toHaveBeenCalledWith('wrk_1', 'stop')
-    expect(provider.sendUserMessage).not.toHaveBeenCalled()
-    expect(useChatStore.getState().activeThreadId).toBe(MGR)
-  })
-
-  it('does not duplicate a send when clicked twice before take-over returns', async () => {
-    let acknowledge!: () => void
-    provider.controlTeamWorker.mockImplementation(() => new Promise<void>((resolve) => {
-      acknowledge = resolve
-    }))
-    const renderer = await render(createElement(WorkersPanel))
-    await act(async () => buttons(renderer).find((button) => buttonText(button) === 'backend')!.props.onClick())
-    await act(async () => renderer.root.findAll((node) => node.props['data-worker-draft'] === 'wrk_1')[0]!.props.onChange({ target: { value: 'send once' } }))
-    const send = renderer.root.findAll((node) => node.props['data-worker-send'] === 'wrk_1')[0]!
-    await act(async () => { send.props.onClick(); send.props.onClick() })
-    expect(provider.controlTeamWorker).toHaveBeenCalledTimes(1)
-    expect(provider.sendUserMessage).not.toHaveBeenCalled()
-    await act(async () => acknowledge())
-    await vi.waitFor(() => expect(provider.sendUserMessage).toHaveBeenCalledTimes(1))
-  })
-
-  it('renders worker rows with harness/model, diff stats, and the summary', async () => {
+  it('groups members by what they need and shows agent, usage and diff stats', async () => {
     useActivityStore.setState({
       rows: {
         wrk_1: workerRow({ unitId: 'wrk_1', threadId: 'wrk_1', state: 'waiting', waitingReason: 'question' }),
-        wrk_2: workerRow({ unitId: 'wrk_2', threadId: 'wrk_2', state: 'working' })
+        wrk_2: workerRow({ unitId: 'wrk_2', threadId: 'wrk_2', state: 'working', currentTool: 'read_file' })
       }
     })
     const renderer = await render(createElement(WorkersPanel))
+    const sections = byData(renderer, 'data-workers-section').map((node) => node.props['data-workers-section'])
+    expect(sections).toEqual(['needs-you', 'working'])
     const text = JSON.stringify(renderer.toJSON())
-    expect(text).toContain('backend')
-    expect(text).toContain('claude-code')
-    expect(text).toContain('opus')
+    expect(text).toContain('claude-code · opus · 4.1M tok')
     expect(text).toContain('"+","90"')
+    expect(text).toContain('7.97M')
     expect(text).toContain('ship behind a flag?')
-    const summary = renderer.root.findAll((n) => n.props['data-workers-summary'])[0]
-    expect(summary).toBeTruthy()
+    const activity = byData(renderer, 'data-worker-activity').map(textOf)
+    expect(activity).toEqual(['Waiting on your answer', 'Reading files'])
+    expect(byData(renderer, 'data-workers-summary')).toHaveLength(1)
   })
 
-  it('stops a worker and detaches only after confirmation', async () => {
+  it('opens a member in its own tab without touching the main thread', async () => {
+    const capture = captureOpenedWorkers()
+    try {
+      const renderer = await render(createElement(WorkersPanel))
+      await act(async () => byData(renderer, 'data-worker-open', 'wrk_2')[0]!.props.onClick())
+      expect(capture.opened).toEqual(['wrk_2'])
+      expect(useWorkerViewStore.getState().labels.wrk_2).toBe('docs')
+      expect(useChatStore.getState().selectThread).not.toHaveBeenCalled()
+      expect(provider.getThreadDetail).not.toHaveBeenCalled()
+    } finally {
+      capture.stop()
+    }
+  })
+
+  it('stops a live member and releases it only after confirming in the menu', async () => {
+    useActivityStore.setState({ rows: { wrk_1: workerRow({ unitId: 'wrk_1', threadId: 'wrk_1', state: 'working' }) } })
     const renderer = await render(createElement(WorkersPanel))
-    const stop = buttons(renderer).find((b) => buttonText(b).includes('Stop'))
-    await act(async () => stop!.props.onClick())
+    await act(async () => byData(renderer, 'data-worker-row-stop', 'wrk_1')[0]!.props.onClick())
     expect(provider.controlTeamWorker).toHaveBeenCalledWith('wrk_1', 'stop')
-    // detach needs the inline confirm
-    const release = buttons(renderer).find((b) => buttonText(b).includes('Release'))
-    await act(async () => release!.props.onClick())
+    const row = byData(renderer, 'data-worker-row', 'wrk_1')[0]!
+    const menu = row.findAll((node) => node.type === 'button' && node.props['aria-label'] === 'More actions')[0]!
+    await act(async () => menu.props.onClick())
+    const release = (): ReturnType<typeof byData>[number] => byData(renderer, 'data-worker-menu-item', 'detach')[0]!
+    await act(async () => release().props.onClick())
     expect(provider.controlTeamWorker).not.toHaveBeenCalledWith('wrk_1', 'detach')
-    const confirm = buttons(renderer).find((b) => buttonText(b).includes('Release worker?'))
-    await act(async () => confirm!.props.onClick())
+    expect(textOf(release())).toContain('Release worker?')
+    await act(async () => release().props.onClick())
     expect(provider.controlTeamWorker).toHaveBeenCalledWith('wrk_1', 'detach')
   })
 
-  it('answers an open question inline', async () => {
+  it('answers an open question inline, by option or typed text', async () => {
     const renderer = await render(createElement(WorkersPanel))
-    const input = renderer.root.findAllByType('input' as never)[0]
-    await act(async () => input!.props.onChange({ target: { value: 'yes, flag it' } }))
-    await act(async () => input!.props.onKeyDown({ key: 'Enter' }))
+    await act(async () => byData(renderer, 'data-worker-question-option', 'Yes')[0]!.props.onClick())
+    expect(provider.answerTeamQuestion).toHaveBeenCalledWith('q_1', 'Yes')
+    const input = renderer.root.findAllByType('input' as never)[0]!
+    await act(async () => input.props.onChange({ target: { value: 'yes, flag it' } }))
+    await act(async () => input.props.onKeyDown({ key: 'Enter', nativeEvent: {} }))
     expect(provider.answerTeamQuestion).toHaveBeenCalledWith('q_1', 'yes, flag it')
   })
 
@@ -380,10 +130,10 @@ describe('WorkersPanel', () => {
     let settle!: (value: AdeTeamOverview | null) => void
     provider.getTeamOverview.mockReturnValue(new Promise((resolve) => { settle = resolve }))
     const renderer = await render(createElement(WorkersPanel))
-    expect(JSON.stringify(renderer.toJSON())).toContain('Loading team')
-    expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(0)
+    expect(byData(renderer, 'data-workers-loading')).toHaveLength(1)
+    expect(byData(renderer, 'data-workers-empty')).toHaveLength(0)
     await act(async () => settle(null))
-    expect(JSON.stringify(renderer.toJSON())).not.toContain('Loading team')
+    expect(byData(renderer, 'data-workers-loading')).toHaveLength(0)
   })
 
   it('shows the empty state instead of loading forever for a thread that owns no team', async () => {
@@ -392,60 +142,164 @@ describe('WorkersPanel', () => {
     provider.getTeamOverview.mockResolvedValue(null)
     const renderer = await render(createElement(WorkersPanel))
     expect(provider.getTeamOverview).toHaveBeenCalledWith(MGR)
-    expect(JSON.stringify(renderer.toJSON())).not.toContain('Loading team')
-    expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(1)
-    expect(renderer.root.findAll((n) => n.props['data-workers-error'] !== undefined)).toHaveLength(0)
+    expect(byData(renderer, 'data-workers-loading')).toHaveLength(0)
+    expect(byData(renderer, 'data-workers-empty')).toHaveLength(1)
+    expect(byData(renderer, 'data-workers-error')).toHaveLength(0)
+  })
+
+  it('offers a retry when the team lookup fails', async () => {
+    provider.getTeamOverview.mockRejectedValueOnce(new Error('runtime down')).mockResolvedValue(teamOverview())
+    const renderer = await render(createElement(WorkersPanel))
+    expect(byData(renderer, 'data-workers-error')).toHaveLength(1)
+    await act(async () => buttons(renderer).find((button) => textOf(button).includes('Retry'))!.props.onClick())
+    expect(JSON.stringify(renderer.toJSON())).toContain('backend')
+    expect(byData(renderer, 'data-workers-error')).toHaveLength(0)
+  })
+
+  it('lists child agents outside a team, which the Workers pill counts', async () => {
+    // A PPT child (or a delegated subagent) registers as a worker activity row
+    // without any team; the panel used to say the team has no workers.
+    provider.getTeamOverview.mockResolvedValue(null)
+    useActivityStore.setState({ rows: {
+      child_ppt: workerRow({ unitId: 'child_ppt', threadId: 'thr_ppt_child', title: 'Kun 产品介绍', turnId: 'turn_ppt' })
+    } })
+    const capture = captureOpenedWorkers()
+    try {
+      const renderer = await render(createElement(WorkersPanel))
+      expect(JSON.stringify(renderer.toJSON())).toContain('Kun 产品介绍')
+      expect(byData(renderer, 'data-workers-empty')).toHaveLength(0)
+
+      await act(async () => byData(renderer, 'data-worker-open', 'child_ppt')[0]!.props.onClick())
+      expect(capture.opened).toEqual(['child_ppt'])
+
+      await act(async () => byLabel(renderer, 'More actions')!.props.onClick())
+      expect(byData(renderer, 'data-worker-menu-item', 'detach')).toHaveLength(0)
+      await act(async () => byData(renderer, 'data-worker-menu-item', 'full-open')[0]!.props.onClick())
+      expect(useChatStore.getState().selectThread).toHaveBeenCalledWith('thr_ppt_child')
+
+      await act(async () => byData(renderer, 'data-worker-row-stop', 'child_ppt')[0]!.props.onClick())
+      expect(provider.interruptTurn).toHaveBeenCalledWith('thr_ppt_child', 'turn_ppt')
+      expect(provider.controlTeamWorker).not.toHaveBeenCalled()
+    } finally {
+      capture.stop()
+    }
   })
 
   it('picks up a team created after the first lookup found none', async () => {
-    provider.getTeamOverview.mockResolvedValueOnce(null).mockResolvedValue(overview())
+    provider.getTeamOverview.mockResolvedValueOnce(null).mockResolvedValue(teamOverview())
     const renderer = await render(createElement(WorkersPanel))
     expect(JSON.stringify(renderer.toJSON())).not.toContain('backend')
     await act(async () => {
       useActivityStore.setState({ rows: { wrk_1: workerRow({ unitId: 'wrk_1', threadId: 'wrk_1' }) } })
     })
     await vi.waitFor(() => expect(JSON.stringify(renderer.toJSON())).toContain('backend'), { timeout: 3000 })
-    expect(renderer.root.findAll((n) => n.props['data-workers-empty'] !== undefined)).toHaveLength(0)
+    expect(byData(renderer, 'data-workers-empty')).toHaveLength(0)
   })
 })
 
 describe('FloatingComposerWorkersPill', () => {
-  it('counts in-flight workers and shows the amber waiting variant', async () => {
+  it('keeps unfinished background work visible after the reply ends', async () => {
     useActivityStore.setState({
+      status: 'live',
       rows: {
-        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'working' }),
-        w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'working' }),
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', title: 'repair-check', state: 'working' }),
+        w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'initializing' }),
         other: workerRow({ unitId: 'other', threadId: 'other', parentThreadId: 'thr_other' })
       }
     })
-    let renderer = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: true })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
     )
-    expect(JSON.stringify(renderer.toJSON())).toContain('Workers 2')
-    useActivityStore.setState({
-      rows: { w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'waiting', waitingReason: 'question' }) }
-    })
-    renderer = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: true })
-    )
-    const pill = renderer.root.findAll((n) => n.props['data-workers-pill'] !== undefined)[0]
-    expect(pill!.props.className).toContain('warning')
-    expect(JSON.stringify(renderer.toJSON())).toContain('1')
+    const strip = byData(renderer, 'data-background-task-strip')[0]
+    expect(strip!.props['data-background-task-strip']).toBe('running')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Working in background')
+    expect(JSON.stringify(renderer.toJSON())).toContain('1 running · 1 starting')
+    expect(byLabel(renderer, 'Background tasks: Working in background, 2 unfinished')).toBeTruthy()
+    // The unrelated thread's worker never reaches this strip.
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('other')
   })
 
-  it('hides for non-ade threads and teams without in-flight workers', async () => {
+  it('separates running, waiting, and finished counts and surfaces the waiting action', async () => {
     useActivityStore.setState({
+      status: 'live',
+      rows: {
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'working' }),
+        w2: workerRow({ unitId: 'w2', threadId: 'w2', state: 'waiting', waitingReason: 'question' }),
+        w3: workerRow({ unitId: 'w3', threadId: 'w3', state: 'done', reviewStatus: 'passed' })
+      }
+    })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
+    )
+    const strip = byData(renderer, 'data-background-task-strip')[0]!
+    // A waiting child outranks a running sibling; only two children are unfinished.
+    expect(strip.props['data-background-task-strip']).toBe('waiting-user')
+    expect(strip.props['data-background-task-unfinished']).toBe(2)
+    const html = JSON.stringify(renderer.toJSON())
+    expect(html).toContain('Needs your input')
+    expect(html).toContain('1 running · 1 waiting · 1 done')
+    expect(buttons(renderer).some((button) => textOf(button) === 'Review')).toBe(true)
+  })
+
+  it('treats an open review verdict as unfinished instead of success', async () => {
+    useActivityStore.setState({
+      status: 'live',
+      rows: {
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'done', reviewRequired: true })
+      }
+    })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
+    )
+    const strip = byData(renderer, 'data-background-task-strip')[0]!
+    expect(strip.props['data-background-task-strip']).toBe('review')
+    expect(strip.props['data-background-task-unfinished']).toBe(1)
+  })
+
+  it('keeps working after every child returned while the main turn continues', async () => {
+    useActivityStore.setState({
+      status: 'live',
+      rows: {
+        w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'done', reviewStatus: 'passed' })
+      }
+    })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR, mainRunning: true })
+    )
+    expect(byData(renderer, 'data-background-task-strip')[0]!.props['data-background-task-strip'])
+      .toBe('continuing')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Still working')
+  })
+
+  it('reports an unconfirmed state instead of live progress when the feed is down', async () => {
+    useActivityStore.setState({
+      status: 'error',
       rows: { w1: workerRow({ unitId: 'w1', threadId: 'w1', state: 'working' }) }
     })
-    const disabled = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: false })
+    const renderer = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
     )
-    expect(disabled.toJSON()).toBeNull()
-    useActivityStore.setState({ rows: {} })
+    expect(byData(renderer, 'data-background-task-strip')[0]!.props['data-background-task-strip'])
+      .toBe('unknown')
+    expect(JSON.stringify(renderer.toJSON())).toContain('Task status unconfirmed')
+  })
+
+  it('hides for threads without background work', async () => {
+    useActivityStore.setState({ status: 'live', rows: {} })
     const empty = await render(
-      createElement(FloatingComposerWorkersPill, { threadId: MGR, enabled: true })
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
     )
     expect(empty.toJSON()).toBeNull()
+    useActivityStore.setState({
+      status: 'live',
+      rows: { other: workerRow({ unitId: 'other', threadId: 'other', parentThreadId: 'thr_other' }) }
+    })
+    const unrelated = await render(
+      createElement(FloatingComposerWorkersPill, { threadId: MGR })
+    )
+    expect(unrelated.toJSON()).toBeNull()
+    const noThread = await render(createElement(FloatingComposerWorkersPill, { threadId: null }))
+    expect(noThread.toJSON()).toBeNull()
   })
 })
 
@@ -456,18 +310,16 @@ describe('WorkerControlBanner', () => {
       worker: { workerId: 'wrk_1', label: 'backend', control: 'manager', state: 'active' }
     })
     const renderer = await render(createElement(WorkerControlBanner, { threadId: 'wrk_1' }))
-    const banner = renderer.root.findAll((n) => n.props['data-worker-control-banner'])[0]
-    expect(banner!.props['data-worker-control-banner']).toBe('manager')
-    const button = buttons(renderer).find((b) => buttonText(b).includes('Take over'))
+    expect(byData(renderer, 'data-worker-control-banner')[0]!.props['data-worker-control-banner']).toBe('manager')
+    const button = buttons(renderer).find((b) => textOf(b).includes('Take over'))
     provider.getTeamWorker.mockResolvedValue({
       team: { teamId: 't1' },
       worker: { workerId: 'wrk_1', label: 'backend', control: 'user', state: 'active' }
     })
     await act(async () => button!.props.onClick())
     expect(provider.controlTeamWorker).toHaveBeenCalledWith('wrk_1', 'take-over')
-    const switched = renderer.root.findAll((n) => n.props['data-worker-control-banner'])[0]
-    expect(switched!.props['data-worker-control-banner']).toBe('user')
-    const handBack = buttons(renderer).find((b) => buttonText(b).includes('Hand back'))
+    expect(byData(renderer, 'data-worker-control-banner')[0]!.props['data-worker-control-banner']).toBe('user')
+    const handBack = buttons(renderer).find((b) => textOf(b).includes('Hand back'))
     await act(async () => handBack!.props.onClick())
     expect(provider.controlTeamWorker).toHaveBeenCalledWith('wrk_1', 'hand-back')
   })
@@ -475,6 +327,6 @@ describe('WorkerControlBanner', () => {
   it('stays hidden for non-worker threads', async () => {
     provider.getTeamWorker.mockResolvedValue(null)
     const renderer = await render(createElement(WorkerControlBanner, { threadId: 'thr_plain' }))
-    expect(renderer.root.findAll((n) => n.props['data-worker-control-banner'])).toHaveLength(0)
+    expect(byData(renderer, 'data-worker-control-banner')).toHaveLength(0)
   })
 })

@@ -84,6 +84,23 @@ describe('Model picker after Agent selection moves to the mode control', () => {
     expect(onReasoning).not.toHaveBeenCalled()
   })
 
+  it('shows a Cursor model thinking levels instead of Auto alone', async () => {
+    await act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', composerModel: 'grok-4.6', composerProviderId: 'ade-cred:provider:cursor-subscription',
+      composerPickList: ['grok-4.6', 'composer-2.5'], composerReasoningEffort: 'auto',
+      composerModelGroups: [{ providerId: 'ade-cred:provider:cursor-subscription', label: 'Provider · Cursor subscription', nativeHarnessId: 'cursor',
+        modelIds: ['grok-4.6', 'composer-2.5'], modelInfo: {
+          'grok-4.6': { id: 'grok-4.6', displayName: 'Grok 4.6', reasoningEfforts: ['high', 'max'], defaultReasoningEffort: 'high' },
+          'composer-2.5': { id: 'composer-2.5', displayName: 'Composer 2.5', reasoningEfforts: [] }
+        } }],
+      canChangeModel: true, onComposerModelChange: vi.fn(), onComposerReasoningEffortChange: vi.fn()
+    })))
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click())
+    expect(document.body.textContent).toContain('Grok 4.6')
+    expect([...document.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]')].map((option) => option.dataset.reasoningEffort))
+      .toEqual(['auto', 'high', 'max'])
+  })
+
   it('uses native image metadata and does not label unknown capabilities as text-only', async () => {
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
       compact: false, mode: 'select', composerModel: 'vision', composerPickList: ['vision', 'text', 'unknown'],

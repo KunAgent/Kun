@@ -1,0 +1,38 @@
+{
+  "composerTray": {
+    "regionLabel": "現在のアクティビティ",
+    "queueLabel": "キュー内のメッセージ",
+    "collapse": "折りたたむ",
+    "stop": "停止",
+    "duration": {
+      "seconds": "{{seconds}}秒",
+      "minutes": "{{minutes}}分",
+      "minutesSeconds": "{{minutes}}分{{seconds}}秒",
+      "hours": "{{hours}}時間",
+      "hoursMinutes": "{{hours}}時間{{minutes}}分",
+      "underMinute": "1分未満",
+      "minutesRounded": "{{minutes}}分",
+      "hoursRounded": "{{hours}}時間",
+      "hoursMinutesRounded": "{{hours}}時間{{minutes}}分",
+      "justNow": "たった今",
+      "ago": "{{duration}}前"
+    }
+  },
+  "composerInterrupt": {
+    "previous": "前へ",
+    "next": "次へ",
+    "pagerPosition": "{{total}}件中{{index}}件目",
+    "countdown": "{{seconds}}秒",
+    "countdownTitle": "{{seconds}}秒後に Kun が自分で続行します",
+    "deciding": "Kun が自分で判断しています…",
+    "recommended": "おすすめ",
+    "optionsLabel": "選択肢",
+    "freeTextLabel": "自分の回答"
+  },
+  "composerDock": {
+    "runningPlaceholder": "入力を続けると、追加の変更をキューに入れられます…",
+    "queueMessage": "キューに追加",
+    "stopWithShortcut": "停止（Esc）",
+    "enterToQueue": "Enter でキューに追加"
+  }
+}

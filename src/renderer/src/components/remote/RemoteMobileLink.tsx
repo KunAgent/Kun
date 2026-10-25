@@ -37,7 +37,7 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
           <button
             type="button"
             className={REMOTE_PRIMARY_BUTTON_CLASS}
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || !link.mobileAllowed}
             onClick={(event) => runTrustedUserActivation(event, () => confirm(pairing.id, choices[pairing.id] ?? PERSONAL_SCOPES))}
           >
             {zh ? '允许访问' : 'Allow access'}
@@ -76,14 +76,16 @@ export function MobileChannelRow({ link }: { link: MobileLink }): ReactElement |
         <Smartphone size={15} />
       </RemoteIconTile>
       <RemoteRowText
-        title={zh ? 'Kun iOS · 中继' : 'Kun iOS · relay'}
+        title={zh ? 'Kun iOS · Plus 及以上' : 'Kun iOS · Plus or higher'}
         subtitle={mobileSubtitle(link)}
       />
+      {signedIn && !link.mobileAllowed ? <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={link.refreshMembership}>{zh ? '刷新会员状态' : 'Refresh membership'}</button>
+        : ['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(state?.error ?? '') ? <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={link.retryVip}>{zh ? '会员已更新，重新连接' : 'Membership updated · reconnect'}</button> : null}
       {signedIn ? (
         <RemoteSwitch
           checked={on}
           label={label}
-          disabled={!state || busy === 'stop' || (Boolean(busy) && !canStop)}
+          disabled={!state || busy === 'stop' || (!canStop && (!link.mobileAllowed || Boolean(busy)))}
           onToggle={toggle}
         />
       ) : account.state.status === 'authorizing' ? (
@@ -124,7 +126,7 @@ function MobileGrantRow({ link, grant }: { link: MobileLink; grant: MobileLinkSt
   const dirty = [...draft].sort().join(',') !== [...(grant.scopes ?? PERSONAL_SCOPES)].sort().join(',')
   return <RemoteRow className="flex-wrap">
     <RemoteStatusDot on />
-    <RemoteRowText title={grant.name ?? grant.controllerId} subtitle={zh ? 'Kun iOS · 中继' : 'Kun iOS · relay'} />
+    <RemoteRowText title={grant.name ?? grant.controllerId} subtitle={zh ? 'Kun iOS · Plus 及以上' : 'Kun iOS · Plus or higher'} />
     <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={() => revoke(grant.id)}>
       {zh ? '撤销' : 'Revoke'}
     </button>

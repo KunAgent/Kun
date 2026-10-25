@@ -58,6 +58,9 @@ export function defaultSideTitle(parentTitle: string, parentThreadId: string): s
 
 export function defaultSideModel(state: ChatState, parentThreadId: string): string {
   const parent = state.threads.find((thread) => thread.id === parentThreadId)
+  // The route the parent turn actually ran is more precise than the thread row.
+  const routeModel = parent?.executionConfig?.route.model?.trim()
+  if (routeModel) return routeModel
   if (parent?.model) return parent.model
   if (state.composerModel) return state.composerModel
   return DEFAULT_KUN_MODEL
@@ -70,6 +73,13 @@ export function defaultSideProviderId(
 ): string {
   const normalizedModel = model.trim().toLowerCase()
   const parent = state.threads.find((thread) => thread.id === parentThreadId)
+  const route = parent?.executionConfig?.route
+  if (
+    route?.providerId?.trim() &&
+    route.model.trim().toLowerCase() === normalizedModel
+  ) {
+    return route.providerId.trim()
+  }
   if (
     parent?.providerId?.trim() &&
     parent.model.trim().toLowerCase() === normalizedModel

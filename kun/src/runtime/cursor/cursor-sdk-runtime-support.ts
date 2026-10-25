@@ -73,6 +73,8 @@ import {
 } from './cursor-sdk-event-mapper.js'
 import type { CursorBridgeTool } from './cursor-sdk-tool-bridge.js'
 
+export { cursorTurnModelParams } from '../../harness/cursor-subscription-catalog.js'
+
 const DEFAULT_CURSOR_MODEL = 'auto'
 const MAX_CURSOR_ERROR_LENGTH = 2_000
 export const CURSOR_AUTH_RECOVERY_PROMPT = [
@@ -175,6 +177,8 @@ export function cursorAgentExecutionOptions(input: {
   approvalPolicy: string
   sandboxMode: string
   enforceReadOnly?: boolean
+  /** SDK thinking parameter. Omitted for Auto and models without a mapped level. */
+  modelParams?: Array<{ id: string; value: string }>
 }): AgentOptions {
   const mutationAllowed =
     input.enforceReadOnly !== true
@@ -184,7 +188,10 @@ export function cursorAgentExecutionOptions(input: {
     && input.sandboxMode !== 'external-sandbox'
   return {
     apiKey: input.apiKey,
-    model: { id: normalizeCursorModel(input.model) },
+    model: {
+      id: normalizeCursorModel(input.model),
+      ...(input.modelParams?.length ? { params: input.modelParams } : {})
+    },
     name: input.name,
     mode: mutationAllowed ? 'agent' : 'plan',
     local: {

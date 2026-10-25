@@ -118,6 +118,14 @@ try {
   }
   Find-KunRegistration
 
+  # The installed paths must match the manifest the packager wrote. Checking the
+  # installer output here (not win-unpacked) is what catches a payload that
+  # lost a runtime package between packing and installation.
+  & node (Join-Path $PSScriptRoot 'verify-packaged-runtime-integrity.cjs') `
+    '--resources' (Join-Path $installLocation 'resources') `
+    '--mode' 'hash'
+  Assert-True ($LASTEXITCODE -eq 0) 'The installed Kun runtime failed integrity verification.'
+
   & node (Join-Path $PSScriptRoot 'smoke-packaged-cli.cjs') `
     '--resources' (Join-Path $installLocation 'resources')
   Assert-True ($LASTEXITCODE -eq 0) 'The installed Kun CLI smoke failed.'

@@ -88,6 +88,14 @@ async function startDirectModel({ real = false } = {}) {
         await hold()
       }
       let content = review ? JSON.stringify({ decision: 'allow', riskLevel: 'low', rationale: 'Isolated fixture write requested by the user.' }) : memory ? '{"candidates":[]}' : prompt ? '你好！我可以帮你处理问题和文件。' : 'Private chat'
+      if (messages.some((item) => item.role === 'system' && String(item.content).includes('You are Kun writing editor.'))) {
+        const requestText = messages.map((item) => String(item.content)).join('\n')
+        const selected = /<<<EDIT_SCOPE\s*\n([\s\S]*?)\n>>>/.exec(requestText)?.[1] ?? ''
+        if (requestText.includes('HOLD_SELECTION')) await hold()
+        const replacement = requestText.includes('再短一点') ? '更新后，选中文字即可调用助手，确认修订后写入文件。'
+          : selected.replace('这次更新之后，', '更新后，').replace('就能让它帮你', '即可').replace('或者重新整理格式', '或整理格式').replace('修改的结果会先以修订的方式展示出来，等你确认以后才会真正写进文件', '改动以修订形式展示，确认后才写入文件')
+        content = '<<<EDIT\n' + replacement + '\n>>>'
+      }
       let tool
       if (prompt && !memory && !review) {
         const external = /EXTERNAL_FILE_B64:([A-Za-z0-9_-]+)/.exec(prompt)

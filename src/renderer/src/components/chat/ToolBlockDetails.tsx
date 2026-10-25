@@ -1,3 +1,4 @@
+import { GitHubToolCard, githubToolThread } from './github-tool-card'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { Maximize2, X } from 'lucide-react'
@@ -14,6 +15,8 @@ export function ToolBlockDetails({ block }: { block: ToolBlock }): ReactElement 
   const workspaceRoot = useTimelineFilePreviewWorkspaceRoot()
   const presentation = readToolPresentation(block)
   const [expanded, setExpanded] = useState(false)
+  const githubThread = githubToolThread(presentation)
+  if (githubThread) return <GitHubToolCard threadId={githubThread} presentation={presentation} />
   const gmailThread = gmailToolThread(presentation)
   if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
   return <div className="min-w-0" data-tool-block-details>

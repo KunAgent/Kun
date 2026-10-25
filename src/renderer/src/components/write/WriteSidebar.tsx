@@ -16,6 +16,7 @@ import { WorkSidebarPrimaryActions } from './WorkSidebarNav'
 import { WorkSpaceSwitcher } from './WorkSpaceSwitcher'
 import { WorkSessionsSection } from './WorkSessionsSection'
 import { WorkFilesSection } from './WorkFilesSection'
+import { WorkArtifactsSection } from './WorkArtifactsSection'
 import { WorkPapersSection } from './WorkPapersSection'
 import './work-sidebar.css'
 
@@ -54,6 +55,7 @@ export function WriteSidebar({
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const runtimeReady = useChatStore((s) => s.runtimeConnection === 'ready')
   const loadWriteSettings = useWriteWorkspaceStore((s) => s.loadWriteSettings)
+  const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const remoteMobile = useRemoteMobileLayout()
   const actions = useWorkDirectoryActions()
   const { whiteboardCreation, entryDialog, setEntryDialog } = actions
@@ -100,6 +102,7 @@ export function WriteSidebar({
         ) : (
           <div className="work-sidebar-body ds-no-drag px-1" data-work-sidebar>
             <WorkSessionsSection onOpenArchives={() => onOpenSettings('archives')} />
+            <WorkArtifactsSection workspaceRoot={workspaceRoot} />
             <WorkFilesSection actions={actions} />
             {/* Phones keep their own paper home. */}
             {remoteMobile ? null : <WorkPapersSection />}

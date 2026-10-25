@@ -1,8 +1,10 @@
 import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
+import { AdeDispatchConfigSchema, AdeTasksConfigSchema } from './ade-dispatch-config.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { withoutRetiredLabAppSurfaceFlags, withoutRetiredPptAgentKeys } from './kun-config-retired-keys.js'
 import { ProviderAdmissionSchema, ProviderAuthProfileSchema, ProviderHeaderProfileSchema } from '../contracts/provider-configuration.js'
 import {
   ApprovalReviewModelSelectionSchema
@@ -337,30 +339,17 @@ export const FastContextConfigSchema = z
 export type FastContextConfig = z.infer<typeof FastContextConfigSchema>
 
 /**
- * Lab `ppt_agent` tool: same shape as Fast Context (enabled + optional child
- * model route + fast). The PPT child also inherits the main session unless
- * model and providerId are configured as a pair.
+ * Historical `lab.pptAgent` config is retained for the PPT image asset
+ * preference. The former master switch is parsed but no longer gates tools.
  */
-export const LabPptAgentConfigSchema = z
+export const LabPptAgentConfigSchema = z.preprocess(withoutRetiredPptAgentKeys, z
   .object({
+    /** Retired master switch; accepted for compatibility but ignored by the PPT tools. */
     enabled: z.boolean().default(true),
-    model: z.string().min(1).optional(),
-    providerId: z.string().min(1).optional(),
-    reasoningEffort: ModelReasoningEffort.optional(),
-    fast: z.boolean().default(false),
-    imageFirst: z.boolean().default(true)
+    /** Fill PPT image slots with generated supplementary assets when an image model is available. */
+    imageAssets: z.boolean().default(true)
   })
-  .strict()
-  .superRefine((config, ctx) => {
-    const hasModel = Boolean(config.model?.trim())
-    const hasProvider = Boolean(config.providerId?.trim())
-    if (hasModel === hasProvider) return
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: hasModel ? ['providerId'] : ['model'],
-      message: 'pptAgent model and providerId must be configured together'
-    })
-  })
+  .strict())
 export type LabPptAgentConfig = z.infer<typeof LabPptAgentConfigSchema>
 
 export const LabConversationVisualizationConfigSchema = z.object({
@@ -375,12 +364,11 @@ export const LabProjectBoardConfigSchema = z.object({
 }).strict()
 export type LabProjectBoardConfig = z.infer<typeof LabProjectBoardConfigSchema>
 
-export const LabConfigSchema = z
+const LabConfigObjectSchema = z
   .object({
     pptAgent: LabPptAgentConfigSchema.default({
       enabled: true,
-      fast: false,
-      imageFirst: true
+      imageAssets: true
     }),
     conversationVisualization: LabConversationVisualizationConfigSchema.default({
       enabled: false
@@ -388,14 +376,16 @@ export const LabConfigSchema = z
     projectBoard: LabProjectBoardConfigSchema.default({
       enabled: false
     }),
-    // Generated widgets (`render_widget`) and MCP App pages for `ui://` tools.
-    genUi: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
-    mcpApps: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     opencodeReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     claudeCodeReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     codexReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false })
   })
   .strict()
+
+// Built-in Gen UI widgets (render_widget) and MCP App pages no longer have a
+// Lab switch; the preprocess drops the historical flags so old config files
+// keep loading without disabling the features.
+export const LabConfigSchema = z.preprocess(withoutRetiredLabAppSurfaceFlags, LabConfigObjectSchema)
 export type LabConfig = z.infer<typeof LabConfigSchema>
 
 // Harness section schemas live in kun-config-harnesses.ts (file split);
@@ -455,6 +445,8 @@ export const AdeConfigSchema = z
     managerMayApprove: z.boolean().default(false),
     /** Unattended turns may keep full-access when true; otherwise clamped. */
     allowUnattendedFullAccess: z.boolean().default(false),
+    dispatch: AdeDispatchConfigSchema,
+    tasks: AdeTasksConfigSchema,
     limits: z
       .object({
         softWorkers: z.number().int().min(1).max(16).default(4),

@@ -15,7 +15,7 @@ function fixture(hello = '{"v":1,"kind":"hello"}') {
         : path.endsWith('/relay-tickets') ? { url: 'wss://relay.test/ws', ticket: 'ticket' }
           : path.endsWith('/relay-lease') ? { ok: true, expiresAt: Date.now() + 300000 } : { ok: true })
   }) as unknown as ReturnType<typeof vi.fn<typeof fetch>>
-  const deps: LinkDependencies = {
+  const deps: LinkDependencies = { requireMembership: async () => {},
     account: { getState: async () => ({ status: 'authenticated', error: null, user: { id: 'owner', name: 'Owner', email: 'o@test.invalid', avatarUrl: null } }),
       accessToken: async () => 'token', expire: async () => {}, onState: () => () => {} },
     identity: async () => ({ id: host, credential: 'a'.repeat(64) }),

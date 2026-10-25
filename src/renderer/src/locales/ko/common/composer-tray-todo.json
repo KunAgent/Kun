@@ -1,0 +1,27 @@
+{
+  "composerTrayTodo": {
+    "title": "작업 목록",
+    "segmentAria": "작업 목록: {{step}} · {{total}}단계 중 {{current}}단계",
+    "fromPlan": "출처",
+    "outlineLabel": "Plan 개요",
+    "outlineSteps_one": "{{count}}단계",
+    "outlineSteps_other": "{{count}}단계",
+    "outlineNote": "Graph 오케스트레이션이 실행 중입니다. 이 목록은 Plan 개요이며 실시간 실행 진행률이 아닙니다.",
+    "inProgress": "진행 중",
+    "inProgressFor": "진행 중 · {{duration}}",
+    "upNext": "다음 작업",
+    "foldDone_one": "{{count}}개 완료",
+    "foldDone_other": "{{count}}개 완료",
+    "foldEarlier_one": "이전 {{count}}개",
+    "foldEarlier_other": "이전 {{count}}개",
+    "foldRemaining_one": "남은 {{count}}개",
+    "foldRemaining_other": "남은 {{count}}개",
+    "foldLater_one": "이후 {{count}}개",
+    "foldLater_other": "이후 {{count}}개",
+    "blockedCount_one": "{{count}}개 차단됨",
+    "blockedCount_other": "{{count}}개 차단됨",
+    "failedCount_one": "{{count}}개 실패",
+    "failedCount_other": "{{count}}개 실패",
+    "ownerTitle": "담당: {{name}}"
+  }
+}

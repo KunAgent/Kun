@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { ChatBlock } from '../../src/renderer/src/agent/types'
+import { ChatTimelineZoomFixture } from './chat-timeline-zoom'
 import '../../src/renderer/src/index.css'
 import '../../src/renderer/src/styles/base-shell.css'
 import '../../src/renderer/src/styles/markdown-code.css'
@@ -27,7 +28,7 @@ const [{ MessageTimeline }, { StreamdownAssistant }, { useChatStore }, theme, la
 await language.default.changeLanguage('en')
 theme.applyTheme('light')
 
-type FixtureState = { mode: 'timeline' | 'text'; count: number; id: string; text: string; streaming: boolean }
+type FixtureState = { mode: 'timeline' | 'text' | 'zoom'; count: number; id: string; text: string; streaming: boolean }
 let current: FixtureState = { mode: 'timeline', count: 500, id: 'chat-a', text: '', streaming: true }
 let update: (state: FixtureState) => void = () => undefined
 function blocksFor(state: FixtureState): ChatBlock[] {
@@ -62,6 +63,10 @@ const fixture = {
   load: (count: number, id = 'chat-a') => present({ ...current, mode: 'timeline', count, id }),
   append: (count: number) => present({ ...current, count: current.count + count }),
   text: (text: string, streaming = true) => present({ ...current, mode: 'text', text, streaming }),
+  zoom: (scale: number) => {
+    theme.applyUiFontScale(scale)
+    present({ ...current, mode: 'zoom' })
+  },
   theme: theme.applyTheme
 }
 Object.assign(window, { chatRenderingFixture: fixture })
@@ -75,6 +80,7 @@ function Fixture(): ReactElement {
       {state.mode === 'timeline' ? <MessageTimeline key={state.id} blocks={blocks}
         liveReasoning="" live="" activeThreadId={state.id} runtimeConnection="ready"
         onRetryConnection={() => undefined} onOpenSettings={() => undefined} />
+        : state.mode === 'zoom' ? <ChatTimelineZoomFixture />
         : <div data-testid="reveal-output"><StreamdownAssistant text={state.text} streaming={state.streaming} /></div>}
     </section>
   </main>

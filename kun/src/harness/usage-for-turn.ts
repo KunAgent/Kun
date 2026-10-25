@@ -9,6 +9,9 @@ import { hasWorkbenchCapabilityConstraints } from '../contracts/thread-workbench
  */
 export const HARNESS_USAGES = [
   'one-to-one',
+  // Selection-time only: the agent roster checks delegate_task engine bindings
+  // against it; child turns themselves keep the usage derived below.
+  'delegate-child',
   'manager-worker',
   'graph-worker',
   'graph-lead',

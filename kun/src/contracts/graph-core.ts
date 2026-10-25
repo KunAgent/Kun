@@ -205,7 +205,9 @@ export const GraphAssignmentReferenceV1Schema = z.discriminatedUnion('kind', [
     allowedSkills: z.array(Identifier).max(256).optional(),
     blockedSkills: z.array(Identifier).max(256).default([]),
     allowedMcpServers: z.array(Identifier).max(128).optional(),
-    blockedMcpServers: z.array(Identifier).max(128).default([])
+    blockedMcpServers: z.array(Identifier).max(128).default([]),
+    /** Agent roster role this executor was built from (provenance only). */
+    rosterProfileId: z.string().trim().min(1).max(128).optional()
   }).strict()
 ])
 export type GraphAssignmentReferenceV1 = z.infer<typeof GraphAssignmentReferenceV1Schema>
@@ -218,6 +220,8 @@ const GraphAssignmentSnapshotV1CompatibilitySchema = z.object({
   requestedProfileId: GraphProfileIdSchema.optional(),
   requestedProfileVersion: z.number().int().positive().optional(),
   routingReason: BoundedSummary.optional(),
+  /** Agent roster role the executor plays, when the plan named one. */
+  rosterProfileId: z.string().trim().min(1).max(128).optional(),
   name: z.string().trim().min(1).max(128),
   systemPrompt: BoundedText,
   model: z.string().trim().min(1).max(256),

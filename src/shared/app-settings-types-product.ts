@@ -18,6 +18,9 @@ import type {
 } from '../../kun/src/contracts/policy.js'
 import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { BrowserUseMode } from './browser-use'
+import type { TerminalSettingsPatchV1, TerminalSettingsV1 } from './app-settings-types-terminal'
+
+export * from './app-settings-types-terminal'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
 
@@ -532,41 +535,6 @@ export type ScheduleRuntimeStatus = {
 
 export type GuiUpdateConfigV1 = {
   channel: GuiUpdateChannel
-}
-
-export type TerminalColorMode = 'native' | 'none' | 'custom'
-
-export type TerminalColorSettingsV1 = {
-  /** 'native' = built-in app theme colors; 'none' = monochrome; 'custom' = use user-defined colors. */
-  colorMode: TerminalColorMode
-  foreground: string
-  background: string
-  cursor: string
-  selectionBackground: string
-  black: string
-  red: string
-  green: string
-  yellow: string
-  blue: string
-  magenta: string
-  cyan: string
-  white: string
-  brightBlack: string
-  brightRed: string
-  brightGreen: string
-  brightYellow: string
-  brightBlue: string
-  brightMagenta: string
-  brightCyan: string
-  brightWhite: string
-}
-
-export type TerminalSettingsV1 = {
-  colors: TerminalColorSettingsV1
-}
-
-export type TerminalSettingsPatchV1 = {
-  colors?: Partial<TerminalColorSettingsV1>
 }
 
 export type DarkUiColorsV1 = {

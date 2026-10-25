@@ -10,6 +10,7 @@ import { normalizeWorkbenchRoute } from './workbench-route'
 import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
+import { useArtifactLibraryStore } from '../../artifacts/artifact-library-store'
 
 type CodeSidebarProps = ComponentProps<typeof Sidebar>
 
@@ -117,6 +118,8 @@ export function WorkbenchLeftSidebar({
   const remoteMobile = useRemoteMobileLayout()
   // The wardrobe page keeps the sidebar of the mode it was opened from.
   const wardrobeFromWork = useWardrobeRoute((state) => state.returnRoute === 'write')
+  // The artifact library opened from Work keeps Work's sidebar and space switcher.
+  const artifactsFromWork = useArtifactLibraryStore((state) => state.source === 'work')
   if (collapsed) return null
   const normalizedRoute = normalizeWorkbenchRoute(route)
   const wardrobe = normalizedRoute === 'wardrobe'
@@ -139,7 +142,9 @@ export function WorkbenchLeftSidebar({
           workspaceRoot={workspaceRoot}
           onClose={wrapCloseOpt(onCloseExtensionView)}
         />
-      ) : normalizedRoute === 'write' || (wardrobe && wardrobeFromWork) ? (
+      ) : normalizedRoute === 'write'
+        || (wardrobe && wardrobeFromWork)
+        || (normalizedRoute === 'artifacts' && artifactsFromWork) ? (
         <Suspense fallback={<SidebarFallback />}>
           <WriteSidebar
             activeView="write"

@@ -56,6 +56,12 @@ describe('TimelineVirtualList with the shared timeline scroller', () => {
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     vi.stubGlobal('ResizeObserver', TestResizeObserver)
+    // jsdom does not compute CSS zoom, so model its browser CSSOM value too.
+    const getComputedStyle = window.getComputedStyle.bind(window)
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudoElement) => {
+      const style = getComputedStyle(element, pseudoElement)
+      return element === document.body ? Object.assign(style, { zoom: document.body.style.zoom || '1' }) : style
+    })
     vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
       return this.hasAttribute('data-viewport') ? 320 : 40
     })
@@ -65,8 +71,9 @@ describe('TimelineVirtualList with the shared timeline scroller', () => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
       const viewport = this.closest<HTMLElement>('[data-viewport]')
       const offset = Number(this.closest<HTMLElement>('[data-list-offset]')?.dataset.listOffset ?? 0)
-      const top = this.hasAttribute('data-viewport') ? 0 : offset - (viewport?.scrollTop ?? 0)
-      return { top, bottom: top + 40, height: 40, width: 800, left: 0, right: 800, x: 0, y: top, toJSON: () => ({}) }
+      const zoom = Number.parseFloat(document.body.style.zoom) || 1
+      const top = this.hasAttribute('data-viewport') ? 0 : (offset - (viewport?.scrollTop ?? 0)) * zoom
+      return { top, bottom: top + 40 * zoom, height: 40 * zoom, width: 800, left: 0, right: 800, x: 0, y: top, toJSON: () => ({}) }
     })
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true,
       value(this: HTMLElement, options: ScrollToOptions) {
@@ -80,6 +87,7 @@ describe('TimelineVirtualList with the shared timeline scroller', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     container.remove()
+    document.body.style.zoom = ''
     delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo
     observers.clear()
     vi.restoreAllMocks()
@@ -124,6 +132,17 @@ describe('TimelineVirtualList with the shared timeline scroller', () => {
     await act(async () => resize(container.querySelector<HTMLElement>('[data-list-name="second"]')!))
     expect(second.querySelector('[data-row-content="row-275"]')).not.toBeNull()
     expect(second.querySelector('[data-row-content="row-300"]')).toBeNull()
+    expect(mounted(container).length).toBeLessThan(45)
+  })
+
+  it.each([0.82, 1, 1.2])('keeps the visible records and tail mounted at %s body zoom', async (zoom) => {
+    document.body.style.zoom = String(zoom)
+    await act(async () => root.render(createElement(Fixture, { twoLists: true })))
+    const second = container.querySelector('[data-list-name="second"]')!
+    await scroll(52_000)
+    expect(second.querySelector('[data-row-content="row-300"]')).not.toBeNull()
+    await scroll(79_680)
+    expect(second.querySelector('[data-row-content="row-999"]')).not.toBeNull()
     expect(mounted(container).length).toBeLessThan(45)
   })
 

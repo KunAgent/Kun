@@ -28,6 +28,15 @@ export const adeCollaborationMutationSchema = z.object({
       structuredMinutes: z.number().int().min(1).max(240),
       terminalMinutes: z.number().int().min(1).max(480)
     }).strict(),
+    dispatch: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600),
+      autoStartWhenConfirmationRequired: z.boolean()
+    }).strict(),
+    tasks: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600),
+      worktree: z.boolean(),
+      inheritContext: z.boolean()
+    }).strict(),
     harnessRouter: z.boolean(),
     deterministicHandoff: z.boolean()
   }).strict().superRefine((value, context) => {

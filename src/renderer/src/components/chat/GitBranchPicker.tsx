@@ -543,7 +543,7 @@ export function GitBranchPicker({
                   {!useWorktreePool ? (
                     <button
                       type="button"
-                      className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ds-faint opacity-0 transition hover:bg-ds-active hover:text-ds-ink focus-visible:opacity-100 group-hover/branch:opacity-100 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ds-faint opacity-0 transition hover:bg-ds-hover hover:text-ds-ink focus-visible:opacity-100 group-hover/branch:opacity-100 disabled:cursor-not-allowed disabled:opacity-45"
                       onClick={() => void checkoutBranchWorktree(branch.name)}
                       disabled={actingBranch != null}
                       aria-label={t('gitOpenBranchWorktree', { branch: branch.name })}
@@ -602,7 +602,7 @@ export function GitBranchPicker({
               <button
                 type="button"
                 disabled={actingBranch != null}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ds-faint transition hover:bg-ds-active hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45"
                 aria-label={footerWorktreeTitle}
                 onPointerEnter={(event) => showTooltip(footerWorktreeTitle, event.clientX, event.clientY)}
                 onPointerMove={(event) => moveTooltip(event.clientX, event.clientY)}

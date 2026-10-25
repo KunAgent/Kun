@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
+import { createWriteStream } from 'node:fs'
 import { link, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pipeline } from 'node:stream/promises'
+import * as yauzl from 'yauzl'
+import * as yazl from 'yazl'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { buildOfficeCliLocalTools } from './office-cli-tool-provider.js'
@@ -26,6 +30,53 @@ function context(workspace: string): ToolHostContext {
 
 function sha256(value: Buffer | string): string {
   return createHash('sha256').update(value).digest('hex')
+}
+
+const PPTX_HEADER =
+  '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+  '<p:presentation xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+  'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
+const PPTX_MASTERS =
+  '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>'
+const PPTX_NOTES = '<p:notesMasterIdLst><p:notesMasterId r:id="rId11"/></p:notesMasterIdLst>'
+const PPTX_SLIDES = '<p:sldIdLst><p:sldId id="256" r:id="rId3"/></p:sldIdLst>'
+const PPTX_SIZES = '<p:sldSz cx="12192000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/>'
+const PPTX_RELATIONSHIPS =
+  '<?xml version="1.0"?>' +
+  '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+  '<Relationship Id="rId11" Type="http://schemas.openxmlformats.org/officeDocument/2006/' +
+  'relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/></Relationships>'
+
+async function writePptxFixture(filePath: string, notesAfterSlides: boolean): Promise<void> {
+  const body = notesAfterSlides
+    ? `${PPTX_HEADER}${PPTX_MASTERS}${PPTX_SLIDES}${PPTX_NOTES}${PPTX_SIZES}</p:presentation>`
+    : `${PPTX_HEADER}${PPTX_MASTERS}${PPTX_NOTES}${PPTX_SLIDES}${PPTX_SIZES}</p:presentation>`
+  const zip = new yazl.ZipFile()
+  zip.addBuffer(Buffer.from('<?xml version="1.0"?><Types/>', 'utf8'), '[Content_Types].xml')
+  zip.addBuffer(Buffer.from(body, 'utf8'), 'ppt/presentation.xml')
+  zip.addBuffer(Buffer.from(PPTX_RELATIONSHIPS, 'utf8'), 'ppt/_rels/presentation.xml.rels')
+  zip.end()
+  await pipeline(zip.outputStream, createWriteStream(filePath))
+}
+
+async function readPresentationXml(filePath: string): Promise<string> {
+  const zipfile = await yauzl.openPromise(filePath, {
+    lazyEntries: true,
+    decodeStrings: true,
+    autoClose: false
+  })
+  try {
+    for await (const entry of zipfile.eachEntry()) {
+      if (entry.fileName !== 'ppt/presentation.xml') continue
+      const stream = await zipfile.openReadStreamPromise(entry)
+      const chunks: Buffer[] = []
+      for await (const chunk of stream) chunks.push(Buffer.from(chunk as Buffer))
+      return Buffer.concat(chunks).toString('utf8')
+    }
+    throw new Error('fixture has no ppt/presentation.xml')
+  } finally {
+    zipfile.close()
+  }
 }
 
 describe('OfficeCLI controlled tools', () => {
@@ -157,8 +208,8 @@ describe('OfficeCLI controlled tools', () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-office-tools-'))
     roots.push(workspace)
     const filePath = join(workspace, 'deck.pptx')
-    const source = Buffer.from('source deck')
-    await writeFile(filePath, source)
+    await writePptxFixture(filePath, false)
+    const source = await readFile(filePath)
     const run = vi.fn(async (args: readonly string[]) => {
       if (args[0] === 'batch') {
         await writeFile(args[1]!, 'invalid edited deck')
@@ -242,5 +293,118 @@ describe('OfficeCLI controlled tools', () => {
     expect(run).not.toHaveBeenCalled()
     expect(await readFile(filePath)).toEqual(source)
     expect(await readFile(aliasPath)).toEqual(source)
+  })
+
+  it('repairs a PPTX notes master order defect before running the edit batch', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-office-tools-'))
+    roots.push(workspace)
+    const filePath = join(workspace, 'deck.pptx')
+    await writePptxFixture(filePath, true)
+    const source = await readFile(filePath)
+    let orderAtBatch = ''
+    const run = vi.fn(async (args: readonly string[]) => {
+      if (args[0] === 'batch') {
+        orderAtBatch = await readPresentationXml(args[1]!)
+        return { stdout: '{"success":true}', stderr: '', exitCode: 0 }
+      }
+      if (args[0] === 'validate') {
+        return { stdout: '{"success":true}', stderr: '', exitCode: 0 }
+      }
+      return { stdout: 'Deck outline', stderr: '', exitCode: 0 }
+    })
+    const edit = buildOfficeCliLocalTools({ run })[1]!
+
+    const result = await edit.execute({
+      path: 'deck.pptx',
+      expectedSha256: sha256(source),
+      operations: [{ type: 'set', target: '/slide[1]/shape[@id=2]', props: { size: '12pt' } }]
+    }, context(workspace))
+
+    expect(result.isError).not.toBe(true)
+    expect(result.output).toMatchObject({
+      source_repairs: ['moved-notes-master-id-list in ppt/presentation.xml']
+    })
+    expect(orderAtBatch.indexOf('<p:notesMasterIdLst>')).toBeLessThan(
+      orderAtBatch.indexOf('<p:sldIdLst>')
+    )
+  })
+
+  it('treats a failed validation payload as a failure even with a zero exit code', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-office-tools-'))
+    roots.push(workspace)
+    const filePath = join(workspace, 'deck.pptx')
+    await writePptxFixture(filePath, true)
+    const source = await readFile(filePath)
+    const run = vi.fn(async (args: readonly string[]) => {
+      if (args[0] === 'batch') {
+        return { stdout: '{"success":true}', stderr: '', exitCode: 0 }
+      }
+      if (args[0] === 'validate') {
+        return {
+          stdout: '{"success":false,"message":"schema error in notesMasterIdLst"}',
+          stderr: '',
+          exitCode: 0
+        }
+      }
+      return { stdout: 'Deck outline', stderr: '', exitCode: 0 }
+    })
+    const edit = buildOfficeCliLocalTools({ run })[1]!
+
+    const result = await edit.execute({
+      path: 'deck.pptx',
+      expectedSha256: sha256(source),
+      operations: [{ type: 'set', target: '/slide[1]/shape[@id=2]', props: { size: '12pt' } }]
+    }, context(workspace))
+
+    expect(result.isError).toBe(true)
+    expect(result.output).toMatchObject({
+      error: expect.stringContaining('schema error in notesMasterIdLst')
+    })
+    expect(result.output).toMatchObject({
+      error: expect.stringContaining('the original file was not modified')
+    })
+    expect(await readFile(filePath)).toEqual(source)
+  })
+
+  it('surfaces the nested validation error detail without flooding the result', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-office-tools-'))
+    roots.push(workspace)
+    const filePath = join(workspace, 'deck.pptx')
+    await writePptxFixture(filePath, false)
+    const source = await readFile(filePath)
+    const nested = {
+      success: false,
+      data: {
+        count: 8,
+        errors: Array.from({ length: 8 }, (_value, index) => ({
+          type: 'Schema',
+          description: `defect ${index} ${'x'.repeat(600)}`,
+          path: '/p:presentation[1]',
+          part: '/ppt/presentation.xml'
+        }))
+      }
+    }
+    const run = vi.fn(async (args: readonly string[]) => {
+      if (args[0] === 'batch') return { stdout: '{"success":true}', stderr: '', exitCode: 0 }
+      if (args[0] === 'validate') {
+        return { stdout: JSON.stringify(nested), stderr: '', exitCode: 0 }
+      }
+      return { stdout: 'Deck outline', stderr: '', exitCode: 0 }
+    })
+    const edit = buildOfficeCliLocalTools({ run })[1]!
+
+    const result = await edit.execute({
+      path: 'deck.pptx',
+      expectedSha256: sha256(source),
+      operations: [{ type: 'set', target: '/slide[1]/shape[@id=2]', props: { size: '12pt' } }]
+    }, context(workspace))
+
+    const error = String((result.output as Record<string, unknown>).error)
+    expect(error).toContain('defect 0')
+    expect(error).toContain('/ppt/presentation.xml')
+    expect(error).toContain('x'.repeat(100))
+    expect(error.length).toBeLessThan(3_000)
+    expect(error).not.toContain('defect 5')
+    expect(await readFile(filePath)).toEqual(source)
   })
 })

@@ -1,5 +1,6 @@
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { toLayoutPx } from '../../lib/body-zoom'
 import { TimelineRowStateContext } from './timeline-row-state'
 import { REVEAL_VIRTUAL_TIMELINE_BLOCK } from './timeline-virtual-navigation'
 
@@ -71,7 +72,9 @@ export function TimelineVirtualList<T>({
     const host = hostRef.current
     if (!host || !viewport) return
     const measureOffset = (): void => {
-      const margin = host.getBoundingClientRect().top - viewport.getBoundingClientRect().top + viewport.scrollTop - viewport.clientTop
+      // Rectangles include body zoom; scrollTop and virtual row sizes use layout pixels.
+      const margin = toLayoutPx(host.getBoundingClientRect().top - viewport.getBoundingClientRect().top)
+        + viewport.scrollTop - viewport.clientTop
       setScrollMargin((previous) => Math.abs(previous - margin) < 0.5 ? previous : margin)
     }
     measureOffset()

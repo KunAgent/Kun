@@ -58,7 +58,6 @@ describe('listModelProviderReferences', () => {
           promptOptimization: { providerId: 'prov-a' },
           fastContext: { providerId: 'prov-a', model: 'm1' },
           lab: {
-            pptAgent: { providerId: 'prov-a', model: 'm1' },
             autoPlanBuild: { scheduledDefaults: { providerId: 'prov-a' } }
           },
           graph: { workerModel: { mode: 'fixed', providerId: 'prov-a', model: 'm1' } }
@@ -68,7 +67,7 @@ describe('listModelProviderReferences', () => {
     const kinds = modelProviderReferenceKinds(settings, 'prov-a')
     for (const kind of [
       'image', 'speech', 'textToSpeech', 'music', 'video',
-      'promptOptimization', 'fastContext', 'pptAgent', 'autoPlanBuild', 'graph'
+      'promptOptimization', 'fastContext', 'autoPlanBuild', 'graph'
     ]) {
       expect(kinds).toContain(kind)
     }

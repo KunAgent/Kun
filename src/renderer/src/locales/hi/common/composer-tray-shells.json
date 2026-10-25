@@ -1,0 +1,32 @@
+{
+  "composerTrayShells": {
+    "title": "बैकग्राउंड कमांड",
+    "ariaLabel": "बैकग्राउंड कमांड: {{detail}}",
+    "segmentCount_one": "{{count}} बैकग्राउंड कमांड",
+    "segmentCount_other": "{{count}} बैकग्राउंड कमांड",
+    "inBackground_one": "{{count}} बैकग्राउंड में",
+    "inBackground_other": "{{count}} बैकग्राउंड में",
+    "failedCount_one": "{{count}} विफल",
+    "failedCount_other": "{{count}} विफल",
+    "runningFor": "{{duration}} से चल रहा है",
+    "exitCode": "एग्ज़िट कोड {{code}}",
+    "stopped": "रोका गया",
+    "endedBySignal": "सिग्नल से बंद हुआ",
+    "failed": "विफल",
+    "copyOutput": "आउटपुट कॉपी करें",
+    "copied": "कॉपी हो गया",
+    "sendToKun": "Kun को भेजें",
+    "sendToKunTitle": "इस आउटपुट को संदेश बॉक्स में जोड़ें",
+    "sendCopiedInstead": "इसके बजाय कॉपी किया गया",
+    "sendUnavailable": "जोड़ा नहीं जा सका",
+    "sendUnavailableTitle": "इस आउटपुट को संदेश बॉक्स में नहीं जोड़ा जा सका",
+    "dismiss": "हटाएँ",
+    "showOutput": "{{command}} का आउटपुट देखें",
+    "hideOutput": "{{command}} का आउटपुट छिपाएँ",
+    "outputLabel": "{{command}} का आउटपुट",
+    "outputFile": "पूरा आउटपुट: {{path}}",
+    "outputTruncated": "पूर्वावलोकन छोटा किया गया",
+    "noOutput": "(अभी कोई आउटपुट नहीं)",
+    "empty": "कोई बैकग्राउंड कमांड नहीं है।"
+  }
+}

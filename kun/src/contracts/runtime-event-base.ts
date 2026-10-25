@@ -34,6 +34,7 @@ export const RuntimeEventBase = z.object({
     childSeq: z.number().int().nonnegative(),
     childLauncher: z.preprocess(
       (value) => (value === 'explore_agent' ? 'fast_context' : value),
+      // `ppt_agent` is the retired PPT sub-agent, kept so replayed events still parse.
       z.enum(['delegate_task', 'fast_context', 'ppt_agent', 'component_design', 'diagram_design', 'graph', 'manager-worker'])
     ).optional(),
     childTerminationReason: z.enum(['user_stop', 'manual_stop', 'runtime_restart', 'child_error']).optional(),

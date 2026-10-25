@@ -378,6 +378,8 @@ export function defaultKunAdeSettings(): KunAdeSettingsV1 {
     limits: { softWorkers: 4, hardWorkers: 8 },
     hibernation: { enabled: true, idleMinutes: 30 },
     stall: { structuredMinutes: 10, terminalMinutes: 20 },
+    dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true },
+    tasks: { autoStartSeconds: 0, worktree: true, inheritContext: false },
     notifications: {
       waiting: true,
       failed: true,
@@ -421,6 +423,8 @@ export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
     : undefined
   const hibernation = isRecord(input.hibernation) ? input.hibernation : {}
   const stall = isRecord(input.stall) ? input.stall : {}
+  const dispatch = isRecord(input.dispatch) ? input.dispatch : {}
+  const tasks = isRecord(input.tasks) ? input.tasks : {}
   const notifications = isRecord(input.notifications) ? input.notifications : {}
   return {
     enabled: bool(input.enabled, defaults.enabled),
@@ -452,6 +456,20 @@ export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
       terminalMinutes: clampInt(
         stall.terminalMinutes, 1, 480, defaults.stall.terminalMinutes
       )
+    },
+    dispatch: {
+      autoStartSeconds: clampInt(
+        dispatch.autoStartSeconds, 0, 3_600, defaults.dispatch.autoStartSeconds
+      ),
+      autoStartWhenConfirmationRequired: bool(
+        dispatch.autoStartWhenConfirmationRequired,
+        defaults.dispatch.autoStartWhenConfirmationRequired
+      )
+    },
+    tasks: {
+      autoStartSeconds: clampInt(tasks.autoStartSeconds, 0, 3_600, defaults.tasks.autoStartSeconds),
+      worktree: bool(tasks.worktree, defaults.tasks.worktree),
+      inheritContext: bool(tasks.inheritContext, defaults.tasks.inheritContext)
     },
     notifications: {
       waiting: bool(notifications.waiting, defaults.notifications.waiting),
@@ -489,6 +507,7 @@ export function mergeKunAdeSettings(
     budget: patch.budget === null ? undefined : { ...base.budget, ...(patch.budget ?? {}) },
     hibernation: { ...base.hibernation, ...(patch.hibernation ?? {}) },
     stall: { ...base.stall, ...(patch.stall ?? {}) },
+    dispatch: { ...base.dispatch, ...(patch.dispatch ?? {}) },
     notifications: { ...base.notifications, ...(patch.notifications ?? {}) }
   })
 }

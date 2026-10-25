@@ -1,5 +1,4 @@
 import { appendHostMetadata } from './catalog-metadata'
-import type { SharedFileTransfer } from './share-files'
 import { MobileShareHosts } from './share-host'
 import { desktopScheduleDescriptors } from './desktop-schedules'
 import { MobileNotifications } from './notifications'
@@ -18,10 +17,9 @@ import {
   READ_CONDITIONAL_CAPABILITY,
   type RelayNotice,
   type DeviceIdentity,
-  type Frame,
-  type Socket
+  type Frame
 } from '@kun/remote-protocol'
-import type { AccountSessionEnding, ArtAccountAccess } from '../art-assets/account-access'
+import type { AccountSessionEnding } from '../art-assets/account-access'
 import { hasKunAccountSession } from '../../shared/kun-account'
 import type { MobileLinkStatus } from '../../shared/mobile-link'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
@@ -41,33 +39,8 @@ const CERTAIN_REJECTIONS = new Set([
  * lists grants at most this often instead of on every 20 s renewal.
  */
 export const PEER_LIST_INTERVAL_MS = 300000
-export type LinkDependencies = {
-  account: ArtAccountAccess
-  identity(owner: string): Promise<DeviceIdentity>
-  origin: string
-  name: string
-  platform: string
-  appVersion?: string
-  fetch: typeof fetch
-  socket(url: string, headers: Record<string, string>): Socket
-  lease(): Promise<ProtectedRuntimeRequestLease>
-  diagnostic?(code: string, details?: { attempt?: number; elapsedMs?: number }): void
-  sharedFiles?: SharedFileTransfer
-  desktopSchedules?(method: string, params: unknown, scope: {
-    accountId: string; deviceId: string; authorizationId: string; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[]
-  }, lease: ProtectedRuntimeRequestLease): Promise<unknown>
-  files?(
-    scope: {
-      api: RemoteApi
-      peer: string
-      owner: string
-      authorizationId: string
-      current(): boolean
-      lease(): Promise<ProtectedRuntimeRequestLease>
-    },
-    call: any
-  ): Promise<unknown>
-}
+import type { LinkDependencies } from './service-dependencies'
+export type { LinkDependencies } from './service-dependencies'
 export class MobileLinkService {
   private authorities = new MobileLinkAuthorities()
   private notifications: MobileNotifications
@@ -298,10 +271,10 @@ export class MobileLinkService {
           grants = g.grants
           this.pairingPeers = new Map(p.pairings.map((pairing: { id: string; controllerId: string }) => [pairing.id, pairing.controllerId]))
           this.updateGrants(g.grants)
-          this.error = undefined
+          if (!['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? '')) this.error = undefined
         }
       } catch {
-        if (generation === this.generation && grantsVersion === this.grantsVersion)
+        if (generation === this.generation && grantsVersion === this.grantsVersion && !['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? ''))
           this.error = 'CONNECTION_UNAVAILABLE'
       }
     }
@@ -315,6 +288,17 @@ export class MobileLinkService {
       grants: grants.map((grant) => ({ ...grant, scopes: this.authorities.scopes(grant.controllerId, grant.id) }))
     }
   }
+  async retryMembership() {
+    if (!['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? '')) throw new Error('INVALID_MEMBERSHIP_RETRY')
+    const client = this.client, api = this.api
+    if (!client || !api) return this.enable(true, true)
+    const value = await api.entitlements()
+    if (client !== this.client || api !== this.api || value.userId !== this.owner) throw new Error('ACCOUNT_CHANGED')
+    if (!value.features.mobileRemote) throw new Error('vip_mobile_remote_required')
+    client.start()
+    return this.status()
+  }
+
   async enable(value: boolean, keepGrants = false) {
     if (!value) {
       ++this.enableOperation
@@ -328,6 +312,8 @@ export class MobileLinkService {
       return await this.setEnabled(value, keepGrants)
     } catch (error) {
       if (operation === this.enableOperation && !this.enabled) this.stop()
+      if ((error as { code?: string })?.code === 'vip_mobile_remote_required') this.error = 'VIP_REQUIRED'
+      if ((error as { code?: string })?.code === 'ENTITLEMENTS_UNAVAILABLE') this.error = 'ENTITLEMENTS_UNAVAILABLE'
       throw error
     } finally {
       if (operation === this.enableOperation) this.enabling = false
@@ -396,6 +382,8 @@ export class MobileLinkService {
     if (!hasKunAccountSession(state) || !state.user)
       throw new Error('LOGIN_REQUIRED')
     if (this.sessionEnding) throw new Error('ACCOUNT_CHANGED')
+    await sessionOperation(() => this.deps.requireMembership(state.user!.id), control.signal)
+    if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     this.observedOwner = state.user.id
     const owner = state.user.id,
       identity = await sessionOperation(() => this.deps.identity(owner), control.signal)
@@ -419,7 +407,7 @@ export class MobileLinkService {
     } catch (error) {
       // An old enable request may finish after logout's disable request.
       // Repeat cleanup after that request settles, still with the old identity.
-      if (token)
+      if (token && (error as { code?: string })?.code !== 'vip_mobile_remote_required')
         await this.disable(identity, token)
       throw error
     }
@@ -451,7 +439,7 @@ export class MobileLinkService {
         // Lease renewal must never wait behind noncritical grants/UI metadata.
         const result = await api.request('/relay-lease', 'POST', undefined, false, signal)
         this.transportCurrent(generation, epoch, signal)
-        // The transport reports the renewed expiry (up to five minutes) through leaseChanged.
+        // The transport reports the server's membership-capped expiry through leaseChanged.
         if (Date.now() - peersListedAt < PEER_LIST_INTERVAL_MS) return result
         peersListedAt = Date.now()
         void refreshPeers(epoch, signal).catch(() => {
@@ -468,9 +456,11 @@ export class MobileLinkService {
       relay: (notice: RelayNotice) => {
         if (generation === this.generation) this.relayNotice(notice, () => refreshPeers(this.transportEpoch))
       },
-      state: (online: boolean) => {
+      state: (online: boolean, reason?: string) => {
         if (generation === this.generation) {
           this.online = online
+          if (reason === 'VIP_REQUIRED') this.error = 'VIP_REQUIRED'
+          if (online) this.error = undefined
           if (online) {
             this.authorizationId = randomUUID()
             this.notifyReconnected()
@@ -496,6 +486,8 @@ export class MobileLinkService {
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
       throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)
+    await this.deps.requireMembership(this.owner!)
+    if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     await this.api.request('/pairings/' + id + '/confirm', 'POST')
     if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     ++this.grantsVersion

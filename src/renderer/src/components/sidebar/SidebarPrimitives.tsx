@@ -6,6 +6,7 @@ import type {
   ReactNode
 } from 'react'
 import { ChevronRight, Command, PanelLeft, Search, X } from 'lucide-react'
+import './sidebar-lean-rows.css'
 
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -57,7 +58,7 @@ export function SidebarFrame({
   return (
     <aside
       className={cx(
-        'ds-drag ds-sidebar-shell relative flex h-full w-full shrink-0 flex-col overflow-hidden px-4 pb-3',
+        'ds-drag ds-sidebar-shell relative flex h-full w-full shrink-0 flex-col overflow-hidden px-2.5 pb-2',
         className
       )}
     >
@@ -78,7 +79,7 @@ export function SidebarFrame({
       {children}
 
       {footer ? (
-        <div className="ds-sidebar-footer ds-no-drag mt-2 border-t border-[var(--ds-sidebar-divider)] px-1.5 pt-3">
+        <div className="ds-sidebar-footer ds-no-drag mt-2 border-t border-[var(--ds-sidebar-divider)] px-1 pt-3">
           {footer}
         </div>
       ) : null}

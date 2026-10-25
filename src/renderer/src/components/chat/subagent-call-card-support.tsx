@@ -597,17 +597,6 @@ export function GeneratedPill({ t }: { t: TFunction<'common'> }): ReactElement {
   )
 }
 
-export function ExploreKindBadge({ t }: { t: TFunction<'common'> }): ReactElement {
-  return (
-    <span
-      data-testid="explore-kind-badge"
-      className="shrink-0 rounded-full bg-emerald-500/12 px-2 py-[2px] text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-300"
-    >
-      {t('exploreKindBadge', { defaultValue: 'Explore' })}
-    </span>
-  )
-}
-
 export function MetaChip({ children, title }: { children: React.ReactNode; title?: string }): ReactElement {
   return (
     <span
@@ -661,40 +650,26 @@ export function AgentModelMetadata({
 }: {
   agentIdentity: string
   profileId?: string
-  /** When omitted/empty, the model chips are hidden (never show "Not recorded"). */
+  /** When omitted/empty, the model is hidden (never show "Not recorded"). */
   model?: string
   compact: boolean
   t: TFunction<'common'>
 }): ReactElement {
-  const labelClass = 'shrink-0 rounded-[5px] bg-ds-card-muted/70 px-1.5 py-0.5 font-semibold text-ds-faint'
-  const valueClass = 'min-w-0 truncate rounded-[5px] bg-ds-card-muted/45 px-1.5 py-0.5 text-ds-muted'
   const modelValue = model?.trim() || ''
   return (
-    <div
+    <span
       data-testid="subagent-route-metadata"
       data-agent-id={profileId ?? ''}
       data-model={modelValue}
-      className="mt-1 flex min-w-0 items-center gap-1 overflow-hidden text-[10.5px] leading-4"
+      className={`flex min-w-0 shrink items-baseline gap-1 text-[12px] text-ds-muted ${compact ? 'max-sm:hidden' : ''}`}
     >
-      <span className={labelClass}>{t('subagentAgentLabel', { defaultValue: 'Agent' })}</span>
-      <span
-        className={`${valueClass} ${compact ? 'max-w-[180px]' : 'max-w-[240px]'}`}
-        title={agentIdentity}
-      >
-        {agentIdentity}
-      </span>
+      <span className="truncate" title={agentIdentity}>{agentIdentity}</span>
       {modelValue ? (
         <>
-          <span className="shrink-0 text-ds-faint">·</span>
-          <span className={labelClass}>{t('subagentModelLabel', { defaultValue: 'Model' })}</span>
-          <span
-            className={`${valueClass} ${compact ? 'max-w-[130px]' : 'max-w-[180px]'} font-mono`}
-            title={modelValue}
-          >
-            {modelValue}
-          </span>
+          <span className="shrink-0 text-ds-faint" aria-label={t('subagentModelLabel', { defaultValue: 'Model' })}>·</span>
+          <span className="min-w-0 truncate font-mono text-[11.5px]" title={modelValue}>{modelValue}</span>
         </>
       ) : null}
-    </div>
+    </span>
   )
 }

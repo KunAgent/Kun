@@ -13,7 +13,12 @@ import type {
   ModelsDevCatalogResult,
   StagedProviderImportLink
 } from '@shared/kun-gui-api'
-import type { ModelProviderPreset } from '@shared/model-provider-presets'
+import { MAGPIE_TOKEN } from '@shared/magpie-import'
+import {
+  getModelProviderPreset,
+  modelProviderPresetProfile,
+  type ModelProviderPreset
+} from '@shared/model-provider-presets'
 import {
   useEffect,
   useMemo,
@@ -401,6 +406,50 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     }
   }
 
+  const confirmStagedImport = async (providerId: string, unchanged: boolean): Promise<void> => {
+    const staged = stagedImportLink
+    setStagedImportLink(null)
+    setSelectedProviderId(providerId)
+    if (unchanged || staged?.draft.presetId !== 'magpie') return
+    const preset = getModelProviderPreset('magpie')
+    if (!preset) return
+    const chat = staged.draft.chatBaseUrl
+    const anthropic = staged.draft.anthropicBaseUrl
+    const responses = staged.draft.responsesBaseUrl
+    const profile: ModelProviderProfileV1 = {
+      ...modelProviderPresetProfile(preset, MAGPIE_TOKEN),
+      id: providerId,
+      apiKey: MAGPIE_TOKEN,
+      baseUrl: chat ?? responses ?? anthropic ?? preset.baseUrl,
+      endpointFormat: chat ? 'chat_completions' : responses ? 'responses' : 'messages',
+      endpoints: {
+        ...(chat ? { chat_completions: chat } : {}),
+        ...(responses ? { responses } : {}),
+        ...(anthropic ? { messages: anthropic } : {})
+      }
+    }
+    const discovery = await discoverProviderModels(profile, {
+      t,
+      providerProxy,
+      sharedConnectionFor,
+      fetchModelsDevCatalogFor,
+      importPickedModels,
+      setProbeStates
+    })
+    if (!discovery.firstChatModel || !discovery.mergedProvider) return
+    const mergedProvider = { ...discovery.mergedProvider, apiKey: '' }
+    const nextProviders = modelProviders.some((item) => item.id === profile.id)
+      ? modelProviders.map((item) => item.id === profile.id ? mergedProvider : item)
+      : [...modelProviders, mergedProvider]
+    updateModelProviders(
+      nextProviders,
+      kunProviderSelectionPatch({
+        providerId: profile.id,
+        model: discovery.firstChatModel
+      })
+    )
+  }
+
   const { activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = buildProvidersViewModel({ t, form, showApiKey, modelProviders,
     sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId,
     addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts,
@@ -420,7 +469,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   }
 
   const view = { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError: providerSaveError, saveIssue, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeProvider, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
-    externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink,
+    externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink, confirmStagedImport,
     importLinkInput, setImportLinkInput, importLinkError, setImportLinkError, stageImportLinkInput }
   return <ProvidersSettingsView view={view} />
 }

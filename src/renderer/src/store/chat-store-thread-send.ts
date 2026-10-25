@@ -524,7 +524,7 @@ export async function sendThreadMessage(
     const displayText = queued?.displayText ?? overrides?.displayText?.trim() ?? trimmedText
     const userDisplayText = displayText !== trimmedText ? displayText : undefined
     const generatedTitle = deriveThreadTitleFromPrompt(displayText)
-    const shouldAutoRenameForRoute = get().route === 'chat'
+    const shouldAutoRenameForRoute = get().route === 'chat' || get().route === 'artifacts'
     const activeThread = activeThreadId
       ? get().threads.find((thread) => thread.id === activeThreadId) ?? null
       : null

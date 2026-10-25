@@ -336,7 +336,8 @@ color: var(--wn-text-2);
 }
 
 .kun-wn-fixes,
-.kun-wn-older {
+.kun-wn-older,
+.kun-wn-more-features {
 display: flex;
 flex-direction: column;
 gap: 2px;
@@ -349,6 +350,39 @@ border-top: 1px solid var(--wn-line);
 margin: 0;
 padding-top: 0;
 border-top: 0;
+}
+
+.kun-wn-feature-list {
+display: flex;
+flex-direction: column;
+gap: 8px;
+margin: 4px 8px 10px;
+padding: 0;
+list-style: none;
+}
+
+.kun-wn-feature-list[hidden] {
+display: none;
+}
+
+.kun-wn-feature-list li {
+display: flex;
+flex-direction: column;
+gap: 3px;
+padding: 11px 12px;
+border: 1px solid var(--wn-line);
+border-radius: 10px;
+background: var(--wn-surface-2);
+font-size: 13px;
+line-height: 1.5;
+}
+
+.kun-wn-feature-list strong {
+color: var(--wn-text);
+}
+
+.kun-wn-feature-list span {
+color: var(--wn-text-2);
 }
 
 .kun-wn-disclosure {

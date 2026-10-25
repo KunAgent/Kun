@@ -22,6 +22,7 @@ const BUILTIN_KEYS: Record<string, { labelKey: string; promptKey: string }> = {
     labelKey: 'writeQuickActionReformat',
     promptKey: 'writeQuickActionReformatPrompt'
   },
+  // Keep legacy defaults available for saved actions with customized labels or prompts.
   distill: {
     labelKey: 'writeQuickActionDistill',
     promptKey: 'writeQuickActionDistillPrompt'

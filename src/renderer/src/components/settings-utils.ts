@@ -76,6 +76,14 @@ const SETTINGS_CLEAR_SENTINELS: Readonly<Record<string, string>> = {
   'agents.kun.contextCompaction.summaryProviderId': ''
 }
 
+// The main-process merger replaces these records whole (`patch.x ?? base.x`),
+// so a key-level diff would drop deleted keys and wipe untouched siblings.
+const SETTINGS_WHOLE_RECORDS: ReadonlySet<string> = new Set([
+  'agents.kun.harnesses.defaults',
+  'agents.kun.harnesses.providers',
+  'agents.kun.ade.projectDefaults'
+])
+
 export const DEFAULT_WORKSPACE_ROOT = '~/.kun/default_workspace'
 
 export function splitSettingsList(raw: string): string[] {
@@ -216,7 +224,7 @@ function diffSettingsValue(
   path: readonly string[]
 ): unknown | typeof SETTINGS_DIFF_NO_CHANGE {
   if (settingsValueEqual(base, next)) return SETTINGS_DIFF_NO_CHANGE
-  if (isPlainSettingsRecord(base) && isPlainSettingsRecord(next)) {
+  if (isPlainSettingsRecord(base) && isPlainSettingsRecord(next) && !SETTINGS_WHOLE_RECORDS.has(path.join('.'))) {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(next).sort()) {
       const childDiff = diffSettingsValue(base[key], next[key], [...path, key])

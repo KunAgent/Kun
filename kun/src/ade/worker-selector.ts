@@ -10,6 +10,7 @@ import type { ProviderQuotaListResponse } from '../contracts/provider-quota.js'
 import type { HarnessCatalog } from '../harness/harness-catalog.js'
 import type { HarnessDetector } from '../harness/harness-detector.js'
 import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
+import { resolveHarnessRoute, type HarnessRoutePin } from '../harness/harness-route-resolution.js'
 import {
   recallSubagents,
   type SubagentRecallHit,
@@ -17,15 +18,15 @@ import {
 } from '../delegation/subagent-router.js'
 import { quotaEntryFor, quotaUsedPercent } from './quota-snapshot.js'
 import { reportLanguage, type ReportLanguage } from './user-report.js'
-import type { FileTeamStore } from './team-store.js'
-import type { FileDispatchStore } from './dispatch-store.js'
+import { workerRouteKey, type WorkerRouteHealth } from './worker-route-health.js'
 
 /**
  * Deterministic worker route selection. `worker_create` without an
  * explicit `agent` runs this: every routable profile plus every ready harness
  * default is a candidate; admission filters first, then a fixed score
  * combines BM25 role recall, user preference order, quota pressure, recent
- * failures, and model cost tier.
+ * route failures, and model cost tier. A route whose model was refused for
+ * this account in the last hour is excluded like a failed admission.
  */
 
 export type RouteCandidate = {
@@ -51,8 +52,8 @@ export type WorkerSelectorDeps = {
   quota(): Promise<ProviderQuotaListResponse | null>
   /** User preference order from `agents.kun.harnesses.agentOrder`. */
   agentOrder(): readonly HarnessId[]
-  /** Failed dispatch count for this team+harness within the last hour. */
-  recentFailures(teamId: string, harnessId: HarnessId): Promise<number>
+  /** Same-team failures of this exact route (engine + provider + model) within the last hour. */
+  routeHealth(teamId: string, route: HarnessRoute): Promise<WorkerRouteHealth>
   /** 0 cheap / 1 mid / 2 expensive by catalog pricing; 0 when unknown. */
   modelCostTier(route: HarnessRoute): 0 | 1 | 2
   /** True when the worker runs in an isolated task workspace. */
@@ -138,46 +139,9 @@ async function buildCandidates(
 
   const routeFor = (
     defId: HarnessId,
-    profile?: { model?: string; providerId?: string; credentialMode?: HarnessCredentialMode; gatewayBinding?: HarnessGatewayBinding }
-  ): { route: HarnessRoute; rejectedReason?: string } => {
-    const def = byId.get(defId)
-    if (!def) {
-      return {
-        route: { harnessId: defId, model: '-', credentialMode: 'provider' },
-        rejectedReason: `unknown harness ${defId}`
-      }
-    }
-    const credentialMode = profile?.credentialMode ?? (profile?.gatewayBinding ? 'kun-gateway' : def.credentialModes[0])
-    if (!credentialMode || !def.credentialModes.includes(credentialMode)) {
-      return {
-        route: { harnessId: defId, model: '-', credentialMode: credentialMode ?? 'provider' },
-        rejectedReason: `credentialMode ${credentialMode ?? '(none)'} is not supported by harness ${def.id}`
-      }
-    }
-    if (profile?.gatewayBinding && (credentialMode !== 'kun-gateway' || !def.gateway || (profile.gatewayBinding.small && !def.gateway.env.smallModel) || !deps.gatewayAliasModel?.(profile.gatewayBinding))) return {
-      route: { harnessId: def.id, model: '-', credentialMode, gatewayBinding: profile.gatewayBinding }, rejectedReason: 'Agent gateway alias is unavailable'
-    }
-    const model =
-      (profile?.gatewayBinding ? deps.gatewayAliasModel?.(profile.gatewayBinding) : profile?.model?.trim()) ||
-      deps.configuredModel?.(def.id, profile?.providerId, credentialMode) || def.staticModels[0] ||
-      (def.modelSource === 'provider' ? manager.model?.trim() : '') ||
-      ''
-    if (!model) {
-      return {
-        route: { harnessId: defId, model: '-', credentialMode },
-        rejectedReason: `harness ${def.id} advertises no model; set agent.model explicitly`
-      }
-    }
-    const providerId =
-      credentialMode === 'native-login' || profile?.gatewayBinding
-        ? undefined
-        : profile?.providerId?.trim() ||
-          (def.modelSource === 'provider' ? manager.providerId?.trim() : undefined)
-    return {
-      route: { harnessId: def.id, model, ...(providerId ? { providerId } : {}), credentialMode,
-        ...(profile?.gatewayBinding ? { gatewayBinding: profile.gatewayBinding } : {}) }
-    }
-  }
+    profile?: HarnessRoutePin
+  ): { route: HarnessRoute; rejectedReason?: string } =>
+    resolveHarnessRoute({ harnessId: defId, definition: byId.get(defId), pin: profile, deps, parent: manager })
 
   // Profile-bound candidates: a role pinned to a harness/model.
   for (const doc of docs) {
@@ -299,9 +263,27 @@ export async function selectWorkerRoute(
   })
   const admitted = all.filter((candidate) => candidate.admission.ok)
   const eligible = admitted.filter((candidate) => !excluded.has(candidate.route.harnessId))
+  const healthByRoute = new Map<string, Promise<WorkerRouteHealth>>()
+  const healthOf = (candidate: RouteCandidate): Promise<WorkerRouteHealth> => {
+    const key = workerRouteKey(candidate.route)
+    let health = healthByRoute.get(key)
+    if (!health) {
+      health = deps.routeHealth(input.teamId, candidate.route)
+      healthByRoute.set(key, health)
+    }
+    return health
+  }
+  // A route whose model this account was just refused fails identically again.
+  const unusable = new Map<RouteCandidate, string>()
+  const refusals = await Promise.all(eligible.map(async (candidate) => (await healthOf(candidate)).unusable))
+  eligible.forEach((candidate, index) => {
+    const reason = refusals[index]
+    if (reason) unusable.set(candidate, `failed in this task within the last hour: ${compactReason(reason)}`)
+  })
+  const usable = eligible.filter((candidate) => !unusable.has(candidate))
   const quota = await deps.quota()
   // Quota exhaustion is a hard exclusion: >=95% drops a candidate.
-  const quotaOk = eligible.filter(
+  const quotaOk = usable.filter(
     (candidate) => quotaPenalty(quota, candidate).penalty !== Number.POSITIVE_INFINITY
   )
   if (!quotaOk.length) {
@@ -311,7 +293,7 @@ export async function selectWorkerRoute(
         return `${candidate.label}: quota ${Math.round(quotaInfo.usedPercent)}% used`
       }
       if (excluded.has(candidate.route.harnessId)) return `${candidate.label}: excluded by caller`
-      return `${candidate.label}: ${candidate.rejectedReason ?? 'not eligible'}`
+      return `${candidate.label}: ${unusable.get(candidate) ?? candidate.rejectedReason ?? 'not eligible'}`
     })
     throw new NoEligibleWorkerError(rejectionList)
   }
@@ -321,14 +303,9 @@ export async function selectWorkerRoute(
   const hits = recallSubagents(`${input.role ?? ''}\n${input.task}`, admittedDocs)
 
   const order = deps.agentOrder()
-  const failures = new Map<HarnessId, number>()
   const scored = await Promise.all(
     quotaOk.map(async (candidate) => {
-      let recent = failures.get(candidate.route.harnessId)
-      if (recent === undefined) {
-        recent = await deps.recentFailures(input.teamId, candidate.route.harnessId)
-        failures.set(candidate.route.harnessId, recent)
-      }
+      const recent = (await healthOf(candidate)).failures
       const prefIndex = order.indexOf(candidate.route.harnessId)
       const userPreference = prefIndex >= 0 ? (order.length - prefIndex) / order.length : 0
       const score =
@@ -370,12 +347,15 @@ export async function selectWorkerRoute(
     recallHit,
     quota,
     excluded: [...excluded],
-    rejected: all.filter(
-      (candidate) =>
-        !candidate.admission.ok ||
+    rejected: all.flatMap((candidate) => {
+      const refused = unusable.get(candidate)
+      if (refused) return [{ ...candidate, rejectedReason: refused }]
+      return !candidate.admission.ok ||
         (quotaPenalty(quota, candidate).penalty === Number.POSITIVE_INFINITY &&
           !quotaOk.includes(candidate))
-    ),
+        ? [candidate]
+        : []
+    }),
     language
   })
   return {
@@ -392,28 +372,7 @@ export async function selectWorkerRoute(
   }
 }
 
-/**
- * Same-team same-harness dispatch failures within the last hour. Shared by worker_create and cross-review routing.
- */
-export async function countRecentWorkerFailures(
-  stores: {
-    teams: Pick<FileTeamStore, 'get'>
-    dispatches: Pick<FileDispatchStore, 'list'>
-  },
-  teamId: string,
-  harnessId: HarnessId
-): Promise<number> {
-  const team = await stores.teams.get(teamId)
-  if (!team) return 0
-  const harnessByWorker = new Map(
-    team.workers.map((worker) => [worker.workerId, worker.route.harnessId])
-  )
-  const cutoff = Date.now() - 60 * 60_000
-  const dispatches = await stores.dispatches.list(teamId).catch(() => [])
-  return dispatches.filter(
-    (dispatch) =>
-      dispatch.state === 'failed' &&
-      harnessByWorker.get(dispatch.workerId) === harnessId &&
-      Date.parse(dispatch.updatedAt) >= cutoff
-  ).length
+function compactReason(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length <= 160 ? flat : `${flat.slice(0, 157)}...`
 }

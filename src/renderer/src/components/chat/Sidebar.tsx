@@ -22,6 +22,7 @@ import type { ClawImDialogMode, ClawInstallTarget } from './SidebarClawDialogHel
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarAttentionPanel } from './SidebarAttentionPanel'
+import { useSidebarBackgroundActivity } from './useSidebarBackgroundActivity'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarAgentChatsSection } from './SidebarAgentChatsSection'
@@ -130,6 +131,7 @@ export function Sidebar({
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
   const awaitingUserInputThreadIds = useChatStore((s) => s.awaitingUserInputThreadIds)
+  const backgroundActivityByThread = useSidebarBackgroundActivity()
   const clawChannels = useChatStore((s) => s.clawChannels)
   const activeClawChannelId = useChatStore((s) => s.activeClawChannelId)
   const selectClawChannel = useChatStore((s) => s.selectClawChannel)
@@ -155,7 +157,8 @@ export function Sidebar({
       watchTurnCompletion,
       unreadThreadIds,
       scheduledThreadActivities,
-      awaitingUserInputThreadIds
+      awaitingUserInputThreadIds,
+      backgroundActivityByThread
     }),
     [
       activeThreadId,
@@ -163,7 +166,8 @@ export function Sidebar({
       watchTurnCompletion,
       unreadThreadIds,
       scheduledThreadActivities,
-      awaitingUserInputThreadIds
+      awaitingUserInputThreadIds,
+      backgroundActivityByThread
     ]
   )
 

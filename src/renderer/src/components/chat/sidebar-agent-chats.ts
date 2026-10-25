@@ -3,9 +3,10 @@ import type { RoomSidebarEntry, RoomSidebarQuery } from '@shared/rooms-api'
 /** Code lists private and group conversations; Agent pair transcripts stay in Agent details. */
 export const AGENT_CHATS_COLLAPSED_COUNT = 4
 
-export type ConversationFilter = 'all' | 'unread' | 'attention' | 'group'
+export type ConversationFilter = 'all' | 'unread' | 'attention' | 'group' | 'assistants'
 export type ConversationListState = 'active' | 'archived' | 'deleted'
-export const CONVERSATION_FILTERS: readonly ConversationFilter[] = ['all', 'unread', 'attention', 'group']
+/** `assistants` shows only the user's external personal assistants; Rooms are left out. */
+export const CONVERSATION_FILTERS: readonly ConversationFilter[] = ['all', 'unread', 'attention', 'group', 'assistants']
 
 export function conversationSidebarQuery(
   listState: ConversationListState,

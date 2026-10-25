@@ -1,3 +1,4 @@
+import { readAccountEntitlements, requireAccountFeature } from '../account-entitlements'
 import { transferSharedFiles } from './share-file-services'
 import { MobileDesktopSchedules } from './desktop-schedules'
 import { app, ipcMain, net, powerMonitor } from 'electron'
@@ -21,7 +22,7 @@ const networkKey = () => Object.entries(networkInterfaces()).flatMap(([name, add
 const DIAGNOSTIC_CODES = new Set([
   'CONNECTING', 'CONNECTED', 'RENEWED', 'RENEW_RETRY', 'APPLICATION_CALLBACK_FAILED',
   'CONNECT_TIMEOUT', 'CONNECT_FAILED', 'SEND_FAILED', 'HELLO_TIMEOUT', 'PROTOCOL_ERROR',
-  'SOCKET_ERROR', 'SOCKET_CLOSED', 'LEASE_EXPIRED', 'AUTHORIZATION_REJECTED',
+  'SOCKET_ERROR', 'SOCKET_CLOSED', 'LEASE_EXPIRED', 'AUTHORIZATION_REJECTED', 'VIP_REQUIRED',
   'PONG_TIMEOUT', 'HEARTBEAT_FAILED', 'HOST_SUSPENDED', 'HOST_RESUMED', 'HOST_CLOCK_GAP',
   'NETWORK_ONLINE', 'NETWORK_CHANGED', 'NETWORK_RECOVERY', 'NETWORK_HINT_CHECK', 'LOCAL_LEASE_EXPIRED',
   'PEER_METADATA_REFRESH_FAILED', 'PEER_RESYNC_FAILED',
@@ -49,6 +50,7 @@ export function registerMobileLink(
   const desktopSchedules = new MobileDesktopSchedules(options)
   const service = new MobileLinkService({
     account,
+    requireMembership: (owner) => requireAccountFeature(account, (input, init) => net.fetch(String(input), init), 'mobileRemote', owner),
     origin: 'https://api-kun-server.com',
     name: hostname(),
     appVersion: app.getVersion(),
@@ -78,7 +80,10 @@ export function registerMobileLink(
   const resume = new MobileRelayResume({ account, relay: service, preference: new RelayPreference(links), diagnostic })
   const recovery = new MobileLinkRecovery({
     online: () => net.isOnline(), network: networkKey,
-    suspend: () => service.suspend(), reconnect: (reason) => service.reconnect(reason),
+    suspend: () => service.suspend(), reconnect: (reason) => {
+      service.reconnect(reason)
+      resume.recover()
+    },
     power: (listener) => {
       const suspend = () => listener('suspend'), resume = () => listener('resume')
       powerMonitor.on('suspend', suspend)
@@ -88,6 +93,14 @@ export function registerMobileLink(
         powerMonitor.removeListener('resume', resume)
       }
     }
+  })
+  ipcMain.handle(channels.reconnect, (event) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.retryMembership()
+  })
+  ipcMain.handle(channels.entitlements, (event) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return readAccountEntitlements(account, (input, init) => net.fetch(String(input), init))
   })
   ipcMain.handle(channels.status, (event) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

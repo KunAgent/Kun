@@ -1,0 +1,80 @@
+{
+  "workersEmptyTitle": "아직 구성원이 없습니다",
+  "workersUnavailableTitle": "팀 정보를 읽을 수 없습니다",
+  "workersRetry": "다시 시도",
+  "workersHeader": {
+    "members": "구성원 {{n}}명",
+    "usageTitle": "팀 전체 토큰 사용량",
+    "success": "완료",
+    "running": "진행 중",
+    "warning": "응답 대기",
+    "danger": "실패"
+  },
+  "workersSection": {
+    "needs-you": "확인 필요",
+    "working": "진행 중",
+    "done": "종료"
+  },
+  "workersStatus": {
+    "question": "답변 대기",
+    "approval": "승인 대기",
+    "waiting": "대기 중",
+    "failed": "실패",
+    "working": "진행 중",
+    "done": "완료",
+    "released": "해제됨",
+    "idle": "유휴"
+  },
+  "workersTool": {
+    "read": "파일 읽는 중",
+    "edit": "파일 수정 중",
+    "search": "코드 검색 중",
+    "command": "명령 실행 중",
+    "web": "웹 검색 중",
+    "delegate": "하위 작업 배정 중",
+    "other": "{{tool}} 호출 중"
+  },
+  "workersPhase": {
+    "investigating": "조사 중",
+    "implementing": "구현 중",
+    "verifying": "검증 중",
+    "blocked": "막힘",
+    "compacting": "컨텍스트 압축 중"
+  },
+  "workersTime": {
+    "justNow": "방금",
+    "minutes": "{{n}}분 전",
+    "hours": "{{n}}시간 전",
+    "days": "{{n}}일 전"
+  },
+  "workersRow": {
+    "files": "파일 {{n}}개"
+  },
+  "workersAction": {
+    "openInMain": "메인 화면에서 열기",
+    "more": "더 보기"
+  },
+  "workersQuestion": {
+    "waitingOn": "{{name}}이(가) 답변을 기다리고 있습니다",
+    "otherAnswer": "또는 다른 답변 입력…",
+    "answer": "답변",
+    "answerPlaceholder": "또는 답변을 입력…",
+    "answerHint": "답변해도 제어권을 가져오지 않습니다"
+  },
+  "workerTab": {
+    "fallbackTitle": "구성원",
+    "loadingConversation": "대화를 불러오는 중…",
+    "noConversation": "아직 대화가 없습니다.",
+    "missing": "이 구성원은 더 이상 팀에 없습니다.",
+    "childReadOnly": "이 에이전트는 매니저가 실행합니다. 여기서는 대화가 읽기 전용입니다.",
+    "releasedReadOnly": "이 구성원은 해제되었습니다. 대화는 읽기 전용입니다."
+  },
+  "workerComposer": {
+    "managed": "매니저 관리 중",
+    "handBack": "제어 중 · 매니저에게 반환",
+    "takeOverTitle": "매니저에게서 이 구성원을 넘겨받기",
+    "handBackTitle": "매니저에게 제어권 반환",
+    "takeOverHint": "보내면 제어권을 가져옵니다. 언제든 매니저에게 반환할 수 있습니다."
+  },
+  "assignmentCardTask": "작업"
+}

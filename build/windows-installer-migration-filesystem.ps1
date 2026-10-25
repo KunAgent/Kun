@@ -412,6 +412,9 @@ function Assert-PackagedInstallPayload {
   Assert-NonEmptyPayloadFile (
     Join-Path $target 'resources\app.asar.unpacked\kun\dist\manager\manager-entry.js'
   ) 'the unpacked Kun service manager entry'
+
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-runtime-integrity.ps1')
+  Assert-PackagedRuntimeIntegrity $target
 }
 
 function Get-RecoveryPayloadSource {

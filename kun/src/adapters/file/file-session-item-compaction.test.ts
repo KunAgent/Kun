@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { makeAssistantTextItem } from '../../domain/item.js'
 import { compactFileSessionItems } from './file-session-item-compaction.js'
 import * as jsonl from './file-session-jsonl.js'
-import { serializeItemRecords } from './file-session-live-items.js'
+import { serializeItemRecords, serializeLiveItems } from './file-session-live-items.js'
 import { JsonlFileAccessCoordinator } from './jsonl-file-access.js'
 
 const roots: string[] = []
@@ -23,7 +23,8 @@ async function fixture() {
   await writeFile(path, serializeItemRecords([item]))
   let revision = 0
   const input = {
-    path, threadId: 'thread', evidencePath: join(root, 'tail.json'), force: false, minimumBytes: 1,
+    path, threadId: 'thread', evidencePath: join(root, 'tail.json'), liveItemsPath: join(root, 'live.json'),
+    force: false, minimumBytes: 1,
     cachedItemCount: () => 0, fileAccess: new JsonlFileAccessCoordinator(), readRevision: () => revision,
     bumpRevision: () => { revision++ }, bumpItemsVersion: vi.fn(), cacheItems: vi.fn(),
     refreshIndex: vi.fn(async () => {}), scheduleRetry: vi.fn(),
@@ -120,4 +121,14 @@ it('bounds clean-history hints and rechecks an evicted history', async () => {
   expect(read).toHaveBeenCalledTimes(129)
   await run()
   expect(read).toHaveBeenCalledTimes(130)
+})
+
+
+it('preserves the live overlay and durable prefix when a forced scan cannot shrink history', async () => {
+  const { input, item } = await fixture()
+  const live = { ...item, id: 'live', text: 'streaming', status: 'running' as const }
+  await writeFile(input.liveItemsPath, serializeLiveItems([{ item: live, representedSeq: 1 }]))
+  expect(await compactFileSessionItems({ ...input, force: true })).toMatchObject({ compacted: false, itemCount: 1 })
+  expect(input.cacheItems).toHaveBeenCalledWith([item, live], 1)
+  expect(await readFile(input.path, 'utf8')).toBe(serializeItemRecords([item]))
 })

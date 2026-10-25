@@ -389,6 +389,8 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   const payload = payloadFor(item)
   if (typeof payload.dispatchIntentId === 'string') meta.dispatchIntentId = payload.dispatchIntentId
   if (payload.dispatchIntent && typeof payload.dispatchIntent === 'object') meta.dispatchIntent = payload.dispatchIntent
+  if (typeof payload.taskSuggestionId === 'string') meta.taskSuggestionId = payload.taskSuggestionId
+  if (payload.taskSuggestion && typeof payload.taskSuggestion === 'object') meta.taskSuggestion = payload.taskSuggestion
   const paperSearch = paperSearchMetaFromToolItem(item)
   if (paperSearch) meta.paperSearch = paperSearch
   const paperDetails = paperDetailsFromToolItem(item)

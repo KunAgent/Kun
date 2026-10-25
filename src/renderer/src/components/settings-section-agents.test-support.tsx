@@ -35,7 +35,7 @@ import {
   modelProvidersSettingsPatch
 } from './settings-section-agents'
 import { FastContextSettingsPanel } from './settings-section-assistant-fast-context'
-import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
+import { PptSkillSettingsPanel } from './settings-section-agents-ppt'
 import { laboratoryTestLabels } from './settings-section-agents.test-labels'
 import { ProviderModelsManager } from './settings-section-provider-models'
 import { providerProxyTestLabels } from './provider-proxy-test-labels'
@@ -686,5 +686,5 @@ export async function clickProviderTab(renderer: ReactTestRenderer, label: strin
   await act(async () => tab!.props.onClick())
 }
 
-export { AgentsSettingsSection, DEFAULT_MODEL_PROVIDER_ID, FastContextSettingsPanel, LaboratorySettingsSection, PptAgentSettingsPanel, ProviderModelsManager, ProvidersSettingsSection, act, afterEach, antigravityProviderCatalogPatch, beforeEach, createElement, createRenderer, defaultKunRuntimeSettings, defaultModelProviderSettings, describe, enqueueSharedModelMutation, expect, getModelProviderPreset, it, modelProviderPresetAccountProfile, modelProviderPresetProfile, modelProviderTokenPlanProfile, modelProvidersSettingsPatch, renderToStaticMarkup, resetSharedProviderMutationCoordinatorForTests, sharedProviderMutationCoordinator, useChatStore, vi }
+export { AgentsSettingsSection, DEFAULT_MODEL_PROVIDER_ID, FastContextSettingsPanel, LaboratorySettingsSection, PptSkillSettingsPanel, ProviderModelsManager, ProvidersSettingsSection, act, afterEach, antigravityProviderCatalogPatch, beforeEach, createElement, createRenderer, defaultKunRuntimeSettings, defaultModelProviderSettings, describe, enqueueSharedModelMutation, expect, getModelProviderPreset, it, modelProviderPresetAccountProfile, modelProviderPresetProfile, modelProviderTokenPlanProfile, modelProvidersSettingsPatch, renderToStaticMarkup, resetSharedProviderMutationCoordinatorForTests, sharedProviderMutationCoordinator, useChatStore, vi }
 export type { AntigravitySubscriptionModelCatalog, ClaudeSubscriptionProbeResult, CursorSubscriptionModel, KunFastContextSettingsV1, KunLabSettingsV1, ModelProviderModelGroup, ModelProviderModelProfileV1, ModelProviderProbeResult, ModelProviderProfileV1, ModelsDevCatalogResult, ReactTestInstance, ReactTestRenderer }

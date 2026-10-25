@@ -363,7 +363,8 @@ it('uses the long-completion prompt and token budget for inspiration mode', asyn
     }
     expect(body.suffix).toBeUndefined()
     expect(body.thinking).toEqual({ type: 'disabled' })
-    expect(body.messages[1].content).toContain('Trigger hint: edit')
+    expect(body.messages[0].content).toContain('Always perform the requested edit')
+    expect(body.messages[1].content).toContain('<<<EDIT_SCOPE')
     expect(body.messages[1].content).toContain('<<<PREFIX')
     expect(body.messages[1].content).toContain('<<<SUFFIX')
   })

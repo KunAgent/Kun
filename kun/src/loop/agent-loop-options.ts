@@ -25,7 +25,6 @@ import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import type { MemoryRetrievalFeedbackTarget } from '../memory/memory-retrieval-feedback.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { ResolvedHook } from '../hooks/hook-engine.js'
 import type { TokenEconomyConfig } from './token-economy.js'
 import type { ToolStormBreakerOptions } from './tool-storm-breaker.js'
@@ -145,8 +144,6 @@ export type AgentLoopOptions = {
   allowedWritePaths?: readonly string[]
   /** Artifact capability set captured at the delegated child boundary. */
   allowedArtifactIds?: readonly string[]
-  /** Host-minted managed PPT authority for this child execution only. */
-  pptWorkflowScope?: PptWorkflowScope
   /**
    * Provider ids hard-blocked for this loop (e.g. a subagent profile's blocked
    * MCP servers, as `mcp:<serverId>`). Deny-list layered on top of inherit and
@@ -210,6 +207,10 @@ export type AgentLoopOptions = {
    * stable prefix; absent when the ADE manager block is not wired.
    */
   adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
+  /** Suggestion-card state for the owning thread, resolved per turn after the stable prefix. */
+  taskSuggestionContext?: (input: { threadId: string }) => Promise<string | undefined>
+  /** Dispatch ladder + role ownership block (agent roster `owns`). */
+  delegationContext?: (input: { threadId: string; workspace?: string; surface?: 'code' | 'write' | 'design' }) => Promise<string | undefined>
   /** Accepted per-turn context-window mode snapshots (frozen at admission). */
   contextWindowModes?: ContextWindowTurnModes
   /** Window transition coordinator backing the new_context tool. */

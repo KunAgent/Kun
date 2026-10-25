@@ -441,7 +441,8 @@ async function prepareKunLaunch(
       launch: {
         appPath: app.getAppPath(),
         execPath: process.execPath,
-        isPackaged: app.isPackaged
+        isPackaged: app.isPackaged,
+        userDataDir: app.getPath('userData')
       }
     },
     builtinSkillsRoot: bundledSkillsDirectory()

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread, ThreadDetail, ThreadEventSink } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { buildPrefetchedThreadSnapshot, cacheThreadSnapshot, clearThreadSnapshotCache } from './thread-snapshot-cache'
+import { seedEmptyThreadSnapshot } from './new-thread-snapshot'
 import { createInitialChatStoreState } from './chat-store-initial-state'
 
 const registry = vi.hoisted(() => ({ getProvider: vi.fn() }))
@@ -120,5 +121,22 @@ describe('background checkpoint selection', () => {
     expect(subscribeThreadEvents).toHaveBeenCalledWith('b', 10, expect.anything(), expect.anything())
     sink!.onReplaySynchronized?.(1_000)
     expect(h.get().threadLoadingId).toBeNull()
+  })
+
+  it('selects a thread created this instant from a seeded empty page without a timeline read', async () => {
+    const getThreadDetail = vi.fn()
+    const getQueuedTurns = vi.fn()
+    const subscribeThreadEvents = vi.fn(async () => undefined)
+    registry.getProvider.mockReturnValue({ getThreadDetail, getQueuedTurns, subscribeThreadEvents })
+    const h = setup()
+    const created: NormalizedThread = { id: 'n', title: 'New chat', workspace: '/workspace', mode: 'agent',
+      model: 'model', updatedAt: '2026-10-11T00:00:01Z', status: 'idle', turnCount: 0 }
+    h.set({ threads: [...h.get().threads, created] })
+    expect(seedEmptyThreadSnapshot(created)).toBe(true)
+    await h.actions.selectThread('n')
+    expect(getThreadDetail).not.toHaveBeenCalled()
+    expect(getQueuedTurns).not.toHaveBeenCalled()
+    expect(h.get()).toMatchObject({ activeThreadId: 'n', threadLoadingId: null, blocks: [], lastSeq: 0, busy: false })
+    expect(subscribeThreadEvents).toHaveBeenCalledWith('n', 0, expect.anything(), expect.anything())
   })
 })

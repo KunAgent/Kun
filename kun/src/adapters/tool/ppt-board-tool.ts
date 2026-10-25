@@ -23,7 +23,7 @@ export function buildPptBoardLocalTools(): LocalTool[] {
 
 const PPT_TO_BOARD_DESCRIPTION = [
   'Lay a PPTD deck project (deck.pptd + pages/*.page) out on the Design whiteboard as editable screens.',
-  'Use this when the user asks to show a presentation on the board, or after `ppt_agent` delivers a deck with a boardSpec.',
+  'Use this when the user asks to show or edit a presentation as shapes on the board; review previews come from `ppt_preview` instead.',
   'Each page becomes a screen frame; text, shapes, tables and images are converted into editable shapes.',
   'The board is created lazily on the first screen and the user can then edit text, fonts, colors and images directly.',
   'Call it repeatedly with `batch` = 0, 1, 2, ... until `more` is false when the deck is large (each batch is capped at 100 ops).'

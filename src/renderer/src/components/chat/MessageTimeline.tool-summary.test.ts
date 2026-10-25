@@ -33,6 +33,7 @@ import {
 import { readGeneratedWorkspaceImagePreview } from './generated-media-preview'
 
 const labels: Record<string, string> = {
+  toolLiveActionSearch: 'Searching',
   toolActionCommand: 'Ran command',
   toolBuiltinRead: 'Read',
   toolBuiltinWrite: 'Write',
@@ -365,7 +366,7 @@ describe('MessageTimeline tool summaries', () => {
         t,
         { processing: true, singleReasoningSection: false }
       )
-    ).toBe('Working Search phase summary · Read 1 file · Searched once')
+    ).toBe('Working Searching · Read 1 file · Searched once')
   })
 
   it('folds live reasoning into a preceding non-text tool batch', () => {

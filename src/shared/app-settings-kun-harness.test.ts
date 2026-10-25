@@ -301,6 +301,16 @@ describe('normalizeKunAdeSettings', () => {
     expect(normalized.budget).toEqual({ softTokens: 1_000 })
   })
 
+  it('clamps the no-response dispatch window and keeps 0 as "always wait"', () => {
+    expect(defaultKunAdeSettings().dispatch).toEqual({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true })
+    expect(normalizeKunAdeSettings({ dispatch: { autoStartSeconds: 99_999 } }).dispatch.autoStartSeconds).toBe(3_600)
+    expect(normalizeKunAdeSettings({ dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false } }).dispatch)
+      .toEqual({ autoStartSeconds: 0, autoStartWhenConfirmationRequired: false })
+    const merged = mergeKunAdeSettings(normalizeKunAdeSettings({ dispatch: { autoStartSeconds: 180 } }),
+      { dispatch: { autoStartWhenConfirmationRequired: false } })
+    expect(merged.dispatch).toEqual({ autoStartSeconds: 180, autoStartWhenConfirmationRequired: false })
+  })
+
   it('merge clears budget on null and deep-merges nested groups', () => {
     const current = normalizeKunAdeSettings({
       enabled: true,

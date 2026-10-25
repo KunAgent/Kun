@@ -9,11 +9,11 @@ import { buildCanvasKunMcpServer, CANVAS_MCP_SERVER_ID } from './canvas-mcp-conf
 
 const launch = { appPath: '/Applications/Kun.app/Contents/Resources/app.asar', execPath: process.execPath, isPackaged: true }
 
-function withMcpApps(settings: AppSettingsV1, dataDir: string, enabled: boolean): AppSettingsV1 {
+function withDataDir(settings: AppSettingsV1, dataDir: string): AppSettingsV1 {
   const kun = settings.agents.kun
   return {
     ...settings,
-    agents: { ...settings.agents, kun: { ...kun, dataDir, lab: { ...kun.lab, mcpApps: { enabled } } } }
+    agents: { ...settings.agents, kun: { ...kun, dataDir } }
   } as AppSettingsV1
 }
 
@@ -30,26 +30,20 @@ describe('canvas MCP App config', () => {
     ])
   })
 
-  it('adds the managed server only while MCP Apps is enabled', async () => {
+  it('always registers the managed server without a Lab switch', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'kun-canvas-config-'))
     const dataDir = join(userDataDir, 'runtime-data')
     const defaults = await new JsonSettingsStore(userDataDir).load()
-    const sync = async (enabled: boolean) => {
-      const settings = withMcpApps(defaults, dataDir, enabled)
-      await syncGuiManagedKunConfig(dataDir, resolveKunRuntimeSettings(settings), {
-        scheduleMcp: { settings, launch: { appPath: userDataDir, execPath: process.execPath, isPackaged: false } },
-        mcpConfigPath: join(userDataDir, 'missing-mcp.json')
-      })
-      return JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')) as {
-        capabilities: { mcp: { servers: Record<string, unknown> } }
-        lab: { mcpApps: { enabled: boolean } }
-      }
+    const settings = withDataDir(defaults, dataDir)
+    await syncGuiManagedKunConfig(dataDir, resolveKunRuntimeSettings(settings), {
+      scheduleMcp: { settings, launch: { appPath: userDataDir, execPath: process.execPath, isPackaged: false } },
+      mcpConfigPath: join(userDataDir, 'missing-mcp.json')
+    })
+    const config = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8')) as {
+      capabilities: { mcp: { servers: Record<string, unknown> } }
+      lab?: Record<string, unknown>
     }
-    const enabled = await sync(true)
-    expect(enabled.capabilities.mcp.servers[CANVAS_MCP_SERVER_ID]).toMatchObject({ trustScope: 'user' })
-    expect(enabled.lab.mcpApps.enabled).toBe(true)
-    const disabled = await sync(false)
-    expect(disabled.capabilities.mcp.servers[CANVAS_MCP_SERVER_ID]).toBeUndefined()
-    expect(disabled.lab.mcpApps.enabled).toBe(false)
+    expect(config.capabilities.mcp.servers[CANVAS_MCP_SERVER_ID]).toMatchObject({ trustScope: 'user' })
+    expect(config.lab).not.toHaveProperty('mcpApps')
   })
 })

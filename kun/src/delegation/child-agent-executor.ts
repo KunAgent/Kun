@@ -33,11 +33,6 @@ import type { ModelClient } from '../ports/model-client.js'
 import { RandomIdGenerator } from '../ports/id-generator.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
-import {
-  childDirectionBundle,
-  childDeckArtifact,
-  childReviewBundle
-} from './child-ppt-result-extraction.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHost } from '../ports/tool-host.js'
@@ -280,8 +275,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(blockedSkillIds.length ? { blockedSkillIds } : {}),
       skillsEnabled: input.skillsEnabled !== false,
       instructionsEnabled: input.security?.instructionsEnabled !== false,
-      memoryEnabled: input.security?.memoryEnabled !== false,
-      ...(input.pptWorkflowScope ? { pptWorkflowScope: input.pptWorkflowScope } : {})
+      memoryEnabled: input.security?.memoryEnabled !== false
     })
     const loop = new AgentLoop({
       threadStore,
@@ -321,7 +315,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(input.security?.allowedArtifactIds
         ? { allowedArtifactIds: input.security.allowedArtifactIds }
         : {}),
-      ...(input.pptWorkflowScope ? { pptWorkflowScope: input.pptWorkflowScope } : {}),
       ...(blockedToolNames.length ? { blockedToolNames } : {}),
       ...(blockedProviderIds.length ? { blockedProviderIds } : {}),
       ...(blockedSkillIds.length ? { blockedSkillIds } : {}),
@@ -517,9 +510,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       parentThreadId: input.parentThreadId,
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {})
     })
-    const reviewBundle = childReviewBundle(items, started.turnId)
-    const directionBundle = childDirectionBundle(items, started.turnId)
-    const deckArtifact = childDeckArtifact(items, started.turnId)
     const evidencePack = input.fastContext && input.fastContextTasks?.length
       ? buildFastContextEvidencePack({
           tasks: input.fastContextTasks,
@@ -545,9 +535,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     }
     const structuredResult = {
       ...result,
-      ...(directionBundle !== undefined ? { directionBundle } : {}),
-      ...(reviewBundle !== undefined ? { reviewBundle } : {}),
-      ...(deckArtifact !== undefined ? { deckArtifact } : {}),
       ...(evidencePack ? { evidencePack } : {})
     }
     // Only a FATAL error fails the child. Recoverable tool errors — a tool
@@ -609,9 +596,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     }
     return {
       ...result,
-      ...(directionBundle !== undefined ? { directionBundle } : {}),
-      ...(reviewBundle !== undefined ? { reviewBundle } : {}),
-      ...(deckArtifact !== undefined ? { deckArtifact } : {}),
       ...(evidence ? { evidence } : {}),
       ...(evidencePack ? { evidencePack } : {}),
       usage: childUsage,

@@ -256,11 +256,13 @@ export function HtmlFrameOverlay({
             interactive={!readOnly && interactiveId === shape.id}
             panning={panning || readOnly}
             editing={!readOnly && editingId === shape.id}
-            onDoubleClick={readOnly ? () => undefined : onToggleInteractive}
+            onDoubleClick={readOnly ? () => undefined : onToggleModify}
+            onToggleInteractive={readOnly ? undefined : onToggleInteractive}
             onToggleModify={readOnly ? () => undefined : onToggleModify}
             onUseElementAsContext={readOnly ? undefined : onUseElementAsContext}
             onRuntimeQualityFindings={readOnly ? undefined : onRuntimeQualityFindings}
             onRequestQualityRepair={readOnly ? undefined : onRequestQualityRepair}
+            canvasReadOnly={readOnly}
           />
         )
       })}

@@ -27,6 +27,8 @@
   "subagentsRuntimePolicyDesc": "委任の同時実行数を設定します。上限を超えたタスクはキューで待機します。",
   "subagentsUseExistingAgents": "既存のエージェントを使用",
   "subagentsUseExistingAgentsDesc": "オンでは delegate_task が設定済みプロファイルを選択します。オフではメインエージェントがタスクごとに一回限りの役割を定義します。",
+  "subagentsHonorEngineBinding": "ロールを紐づいたエンジンで実行",
+  "subagentsHonorEngineBindingDesc": "オン：Claude Code や Codex などのエンジンに紐づくロールは delegate_task でもそのエンジンで実行し、エンジンが使えないときはエラーにします。オフ：delegate_task の子はすべてメインのルートで実行します。",
   "subagentsMaxParallel": "最大並列サブエージェント数",
   "subagentsMaxParallelDesc": "これだけ多くのサブエージェントが一度に実行された後、新しいタスクはキューで待機します。",
   "subagentsProactiveRetry": "メインエージェントによる失敗したサブエージェントの再試行",

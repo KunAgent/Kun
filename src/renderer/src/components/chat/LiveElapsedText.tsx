@@ -50,5 +50,5 @@ export function LiveSilenceText({ threadId, sinceMs }: { threadId: string; since
     const id = window.setInterval(update, 1000)
     return () => window.clearInterval(id)
   }, [sinceMs, t, threadId])
-  return <span ref={ref} className="text-amber-600 dark:text-amber-300" data-live-silence />
+  return <span ref={ref} className="whitespace-nowrap text-amber-600 dark:text-amber-300" data-live-silence />
 }

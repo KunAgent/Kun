@@ -15,15 +15,18 @@ const requestSchema = z
   .strict()
 
 let rendererBadge = 0
-let attentionBadge = 0
 const notified = new Set<string>()
 
-/** Writes the renderer's unread badge plus anything waiting for attention. */
+/**
+ * Writes the renderer's unified attention count. Notification requests from
+ * other surfaces never add to it: they have no row in the sidebar list, so an
+ * extra number would leave the user with nothing to open and clear.
+ */
 export function applyAppBadge(nextRendererBadge = rendererBadge): boolean {
   rendererBadge = nextRendererBadge
   if (process.platform !== 'darwin' && process.platform !== 'linux') return false
   try {
-    return app.setBadgeCount(Math.min(rendererBadge + attentionBadge, MAX_APP_BADGE_COUNT))
+    return app.setBadgeCount(Math.min(rendererBadge, MAX_APP_BADGE_COUNT))
   } catch {
     return false
   }
@@ -33,8 +36,6 @@ export function registerUserAttentionIpc(getMainWindow: () => BrowserWindow | nu
   ipcMain.handle(USER_ATTENTION_CHANNEL, async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     const request = parseIpcPayload(USER_ATTENTION_CHANNEL, requestSchema, payload)
-    attentionBadge = request.badge
-    applyAppBadge()
     if (request.badge === 0) {
       notified.clear()
       return { shown: false }

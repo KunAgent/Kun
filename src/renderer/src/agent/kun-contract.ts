@@ -72,8 +72,10 @@ export type CoreThreadSummaryJson = {
   taskWorkspaceId?: string
   agentId?: string
   systemPrompt?: string
-  relation?: 'primary' | 'fork' | 'side'
+  relation?: 'primary' | 'fork' | 'side' | 'task'
   parentThreadId?: string
+  /** Host-written: the suggestion-card task a `task` session runs. */
+  taskOrigin?: { intentId: string; taskId: string; index: number; total: number }
   /** Host-written ADE worker binding; absent for normal threads. */
   executionUnit?: {
     kind: 'worker'

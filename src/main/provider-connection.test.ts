@@ -19,6 +19,15 @@ beforeEach(() => {
   electronResolveProxy.mockResolvedValue('DIRECT')
 })
 
+describe('providerProbeHeaders', () => {
+  it('labels Magpie catalog probes as Kun unless a User-Agent is already set', () => {
+    expect(providerProbeHeaders('chat_completions', 'magpie-kun')['User-Agent']).toBe('Kun')
+    expect(providerProbeHeaders('chat_completions', 'sk-other')['User-Agent']).toBeUndefined()
+    expect(providerProbeHeaders('chat_completions', 'magpie-kun', { 'User-Agent': 'Custom/1' })['User-Agent'])
+      .toBe('Custom/1')
+  })
+})
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })

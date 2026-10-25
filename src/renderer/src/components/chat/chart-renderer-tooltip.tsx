@@ -14,7 +14,7 @@ export function ChartTooltip({ hover }: { hover: ChartHover | null }): ReactElem
     <div
       role="tooltip"
       data-chart-tooltip
-      className="pointer-events-none absolute z-10 min-w-32 rounded-lg border border-ds-border bg-ds-surface-elevated px-2.5 py-2 text-xs shadow-lg"
+      className="pointer-events-none absolute z-10 min-w-32 rounded-lg border border-ds-border bg-ds-elevated px-2.5 py-2 text-xs shadow-lg"
       style={{ left: hover.x + 12, top: hover.y + 12 }}
     >
       <div className="font-medium text-ds-ink">{hover.category}</div>

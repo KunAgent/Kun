@@ -207,6 +207,34 @@ describe('WorkspaceFilePreviewPanel toolbar', () => {
     await act(async () => renderer.unmount())
   })
 
+  it('hands its open files to a hosting tab strip and keeps only the file toolbar', async () => {
+    const publish = vi.fn()
+    const actionsRef: { current: import('./workspace-file-preview-host-tabs').FilePreviewHostTabActions | null } = { current: null }
+    const onSelectTarget = vi.fn()
+    const onToggleFileTree = vi.fn()
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(WorkspaceFilePreviewPanel, {
+        target: null,
+        openTargets: [],
+        workspaceRoot: '/repo',
+        hostTabs: { publish, actionsRef },
+        onSelectTarget,
+        onToggleFileTree,
+        onClose: () => undefined
+      }))
+    })
+    expect(renderer.root.findAll((node) => node.props.role === 'tablist')).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ 'aria-label': 'Collapse' })).toHaveLength(0)
+    expect(renderer.root.findByProps({ 'aria-label': 'Show file tree' })).toBeTruthy()
+    expect(publish).toHaveBeenLastCalledWith({ activeKey: '', tabs: [] })
+
+    actionsRef.current?.select(openTargets[1])
+    expect(onSelectTarget).toHaveBeenCalledWith(openTargets[1])
+    await act(async () => renderer.unmount())
+    expect(publish).toHaveBeenLastCalledWith(null)
+  })
+
   it('reveals the selected file in its workspace file manager', async () => {
     const revealWorkspaceFileInFolder = vi.fn(async () => ({ ok: true as const }))
     vi.stubGlobal('window', {

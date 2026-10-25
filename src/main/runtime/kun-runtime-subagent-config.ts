@@ -30,6 +30,7 @@ export function subagentProfilesForRuntime(
   const candidate = {
     enabled: subagents.enabled !== false,
     useExistingAgents: subagents.useExistingAgents !== false,
+    ...(subagents.honorEngineBinding === false ? { honorEngineBinding: false } : {}),
     maxParallel: validMaxParallel(subagents.maxParallel) ? subagents.maxParallel : 256,
     proactiveRetry: {
       enabled: subagents.proactiveRetry?.enabled !== false,
@@ -52,6 +53,7 @@ export function subagentProfilesForRuntime(
   return SubagentsCapabilityConfig.parse({
     enabled: candidate.enabled,
     useExistingAgents: candidate.useExistingAgents,
+    ...(candidate.honorEngineBinding === false ? { honorEngineBinding: false } : {}),
     maxParallel: candidate.maxParallel,
     proactiveRetry: candidate.proactiveRetry,
     ...(subagents.defaultToolPolicy ? { defaultToolPolicy: subagents.defaultToolPolicy } : {})
@@ -98,6 +100,9 @@ function stripBlankProfileFields(profile: Record<string, unknown>): Record<strin
     (typeof next.delegationNotes !== 'string' || next.delegationNotes.length > 1000)
   ) {
     delete next.delegationNotes
+  }
+  if (next.owns !== undefined && (typeof next.owns !== 'string' || next.owns.trim().length > 300)) {
+    delete next.owns
   }
   if (next.credentialMode !== undefined && next.harnessId === undefined) {
     // A credential path only applies to a bound harness; kun keeps 'provider'.

@@ -24,9 +24,8 @@ import {
 } from './settings-section-agent-panels'
 import { GraphModeSettingsPanel } from './settings-section-graph-panel'
 import { ConversationVisualizationSettingsPanel } from './settings-section-lab-conversation-visualization'
-import { AppSurfacesSettingsPanels } from './settings-section-lab-app-surfaces'
+import { AssistantMailboxSettingsPanel } from './settings-section-lab-assistant-mailbox'
 import { ContextWindowSettingsPanel } from './settings-section-lab-context-window'
-import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
 import { CodexReferenceBranchesSettingsPanel } from './settings-section-lab-codex-reference'
 import { ProjectBoardSettingsPanel } from './settings-section-lab-project-board'
@@ -77,14 +76,12 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
   const enabledCount = [
     contextCompaction.modelInitiatedCompactionEnabled === true,
     lab.conversationVisualization.enabled,
-    lab.genUi?.enabled === true,
-    lab.mcpApps?.enabled === true,
     lab.codexReferenceBranches?.enabled === true || lab.claudeCodeReferenceBranches?.enabled === true
       || lab.opencodeReferenceBranches?.enabled === true,
     lab.autoPlanBuild.enabled,
     graph.enabled,
-    lab.pptAgent.enabled,
     lab.projectBoard.enabled,
+    lab.assistantMailbox?.enabled === true,
     computerUse.enabled,
     browserUse.enabled
   ].filter(Boolean).length
@@ -92,7 +89,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
   return (
     <>
       <p className="ds-settings-lab-summary" role="status">
-        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 11 })}
+        {t('settingsIaLabsEnabledCount', { count: enabledCount, total: 9 })}
       </p>
       <LabFeatureGroup label={t('settingsIaLabsGroupConversation')}>
         <ContextWindowSettingsPanel
@@ -120,7 +117,6 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           value={lab}
           onChange={(patch) => updateKun({ lab: patch })}
         />
-        <AppSurfacesSettingsPanels t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
         <CodexReferenceBranchesSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
       </LabFeatureGroup>
 
@@ -141,27 +137,12 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ graph: patch })}
         />
-        <PptAgentSettingsPanel
-          t={t}
-          value={lab}
-          modelProviders={modelProviders}
-          leadProviderId={activeProviderId}
-          leadModel={kun.model}
-          imageGen={runtimeInfo?.capabilities?.imageGen
-            ? {
-                available: runtimeInfo.capabilities.imageGen.available === true,
-                supportsReferenceEdit: runtimeInfo.capabilities.imageGen.supportsReferenceEdit === true,
-                ...(runtimeInfo.capabilities.imageGen.reason ? { reason: runtimeInfo.capabilities.imageGen.reason } : {})
-              }
-            : undefined}
-          selectControlClass={selectControlClass}
-          onChange={(patch) => updateKun({ lab: patch })}
-        />
         <ProjectBoardSettingsPanel
           t={t}
           value={lab}
           onChange={(patch) => updateKun({ lab: patch })}
         />
+        <AssistantMailboxSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
       </LabFeatureGroup>
 
       <LabFeatureGroup label={t('settingsIaLabsGroupControl')}>
