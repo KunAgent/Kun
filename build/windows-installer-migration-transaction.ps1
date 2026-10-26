@@ -293,7 +293,7 @@ function Assert-UpdateTransactionPaths($Transaction) {
   }
 }
 
-function Read-UpdateTransaction {
+function Read-TrustedUpdateTransaction {
   $path = Get-UpdateTransactionPath
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
   Assert-UpdateTransactionStorage
@@ -306,7 +306,12 @@ function Read-UpdateTransaction {
   if (-not [string]::Equals([string]$transaction.InstallMode, (Get-NormalizedInstallMode), [StringComparison]::Ordinal)) {
     throw 'The automatic update transaction installation mode does not match.'
   }
-  Assert-UpdateTransactionPaths $transaction
+  return $transaction
+}
+
+function Read-UpdateTransaction {
+  $transaction = Read-TrustedUpdateTransaction
+  if ($null -ne $transaction) { Assert-UpdateTransactionPaths $transaction }
   return $transaction
 }
 

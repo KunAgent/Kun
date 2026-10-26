@@ -254,7 +254,7 @@ jobs:
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
-        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
+        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts src/main/windows-installer-migration.restart.test.ts --no-file-parallelism
 
       - name: Upload Windows transaction diagnostics
         if: always()

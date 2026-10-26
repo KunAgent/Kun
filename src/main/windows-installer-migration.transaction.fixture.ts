@@ -15,7 +15,7 @@ const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
 export type Fixture = ReturnType<typeof fixture>
-export type Action = 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction'
+export type Action = 'ResolveUpdateScope' | 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction' | 'RecoverInstallerUpdateTransaction'
 
 export function payload(root: string, executable: string): void {
   mkdirSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli'), { recursive: true })
@@ -66,7 +66,7 @@ export function fixture(inPlace = false, unicodePath = false) {
   return input
 }
 
-export function run(input: Fixture, action: Action, fault = '') {
+export function run(input: Fixture, action: Action, fault = '', environment: NodeJS.ProcessEnv = {}) {
   const powershell = join(
     process.env.SystemRoot ?? 'C:\\Windows',
     'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
@@ -106,7 +106,8 @@ export function run(input: Fixture, action: Action, fault = '') {
       KUN_INSTALLER_INSTALL_REGISTRY_KEY: 'Software\\KunInstallerTransactionTest\\Install',
       KUN_INSTALLER_UNINSTALL_REGISTRY_KEY: 'Software\\KunInstallerTransactionTest\\Uninstall',
       KUN_INSTALLER_FAULT_INJECTION: fault ? '1' : '0',
-      KUN_INSTALLER_FAULT_POINT: fault
+      KUN_INSTALLER_FAULT_POINT: fault,
+      ...environment
     }
   })
   if (fault) {
