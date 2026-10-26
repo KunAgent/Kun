@@ -115,6 +115,7 @@
   "approvalSubmitting": "Submitting decision…",
   "approvalFailed": "Request failed",
   "approvalNativeConfirmationCancelled": "Confirmation cancelled. This action is still waiting for your decision.",
+  "approvalReviewModel": "Review model: {{model}}",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

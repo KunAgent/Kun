@@ -66,4 +66,56 @@ describe('Delegated mandatory human approval', () => {
     gate.decide('appr', 'allow', 'Human approved exact message')
     await expect(result).resolves.toEqual({ decision: 'allow', reviewer: 'user', reason: 'Human approved exact message' })
   })
+
+  it('passes harness provenance to the reviewer and never implies default-provider inheritance', async () => {
+    const review = vi.fn(async () => ({
+      decision: 'deny' as const,
+      reviewer: 'agent' as const,
+      reviewId: 'review_1',
+      reviewStatus: 'denied' as const,
+      reason: 'Denied'
+    }))
+    const events = { record: vi.fn(async () => undefined) } as unknown as RuntimeEventRecorder
+    const signal = new AbortController().signal
+    const approval = createApprovalRequest({
+      id: 'appr_source', threadId: 'thread', turnId: 'turn', toolName: 'acp:execute', summary: 'Run command',
+      action: createApprovalActionEnvelope({ toolName: 'acp:execute', arguments: { command: 'ls' }, workspace: '/tmp', reason: 'Run command' })
+    })
+    const base = {
+      approvalPolicy: 'on-request' as const, sandboxMode: 'workspace-write' as const,
+      approvalReviewer: 'agent' as const, actingModelRoute: { model: 'swe-2-high', providerId: 'codex' },
+      intent: 'List files', signal
+    }
+    await makeDelegatedAwaitApproval({ approvalReview: { review }, events }, {
+      ...base, reviewSource: { harnessId: 'devin', credentialMode: 'native-login' }
+    })(approval)
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({
+      route: expect.objectContaining({
+        model: 'swe-2-high',
+        providerId: 'codex',
+        source: { harnessId: 'devin', credentialMode: 'native-login' }
+      })
+    }))
+    // A caller that cannot prove provenance must not look like a Kun turn.
+    await makeDelegatedAwaitApproval({ approvalReview: { review }, events }, base)(approval)
+    expect(review).toHaveBeenLastCalledWith(expect.objectContaining({
+      route: expect.objectContaining({ source: { harnessId: 'unknown' } })
+    }))
+  })
+
+  it('denies an already-cancelled turn before any review or human gate', async () => {
+    const review = vi.fn()
+    const gate = new InMemoryApprovalGate()
+    const events = { record: vi.fn(async () => undefined) } as unknown as RuntimeEventRecorder
+    const controller = new AbortController()
+    controller.abort()
+    const awaitApproval = makeDelegatedAwaitApproval({ approvalGate: gate, approvalReview: { review }, events }, {
+      approvalPolicy: 'on-request', sandboxMode: 'workspace-write', approvalReviewer: 'agent',
+      actingModelRoute: { model: 'm', providerId: 'p' }, intent: 'Act', signal: controller.signal
+    })
+    const request = createApprovalRequest({ id: 'aborted', threadId: 'thread', turnId: 'turn', toolName: 'acp:execute', summary: 'Run' })
+    await expect(awaitApproval(request)).resolves.toBe('deny')
+    expect(review).not.toHaveBeenCalled()
+    expect(gate.get('aborted')).toBeUndefined()
+  })
 })

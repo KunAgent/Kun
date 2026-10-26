@@ -270,7 +270,13 @@ export async function createRuntimeModelComposition(
       routePoolProviderIds: core.activeOptions.routePools?.map((pool) => pool.id),
       inheritedRouteAllowed: (route) => !route.requestedGatewayAlias || Boolean(core.activeOptions.routePools?.some((pool) =>
         pool.enabled && pool.modelId === route.requestedGatewayAlias && pool.targets.some((target) =>
-          target.enabled && target.providerId === route.providerId && target.modelId === route.model)))
+          target.enabled && target.providerId === route.providerId && target.modelId === route.model))),
+      // A third-party harness model id belongs to that harness, not to an
+      // arbitrary Kun provider. Only a provider with a dedicated isolated
+      // no-tools review adapter may inherit it; everything else fails closed
+      // instead of sending the harness model to the default provider.
+      nativeRouteAllowed: (route) =>
+        core.activeOptions.providers?.[route.providerId?.trim() ?? '']?.kind === 'agent-sdk'
     }),
     events,
     usage: usageService,

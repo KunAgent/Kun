@@ -4,7 +4,7 @@ import { useWorkPresentation } from '../../product-analytics/work-presentation'
 import { TimelineApprovalCard } from './TimelineApprovalCard'
 import { memo, useEffect, useState, type ReactElement, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench, Ban, TriangleAlert } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
@@ -280,6 +280,24 @@ function MessageBubbleImpl({
       block.status === 'timed-out' ||
       block.status === 'failed-closed' ||
       block.status === 'aborted'
+    const routeLabel = block.reviewModelRoute?.model?.trim()
+      ? block.reviewModelRoute.providerId
+        ? `${block.reviewModelRoute.providerId}/${block.reviewModelRoute.model}`
+        : block.reviewModelRoute.model
+      : null
+    const StatusIcon =
+      block.status === 'in-progress'
+        ? Loader2
+        : block.status === 'approved'
+          ? Check
+          : block.status === 'denied'
+            ? Ban
+            : TriangleAlert
+    const statusIconTone = block.status === 'in-progress'
+      ? 'animate-spin text-accent'
+      : block.status === 'approved'
+        ? 'text-ds-success'
+        : 'text-ds-danger'
     return (
       <div
         className={`rounded-[20px] border px-4 py-3 text-[13px] leading-6 shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${
@@ -292,28 +310,24 @@ function MessageBubbleImpl({
         aria-live="polite"
       >
         <div className="flex items-center gap-2 font-semibold text-ds-ink">
-          {block.status === 'in-progress' ? (
-            <Loader2 className="h-4 w-4 animate-spin text-accent" aria-hidden="true" />
-          ) : (
-            <Check className="h-4 w-4 text-accent" aria-hidden="true" />
-          )}
-          <span>{t('approvalReviewTitle')}</span>
+          <StatusIcon
+            className={`h-4 w-4 shrink-0 ${statusIconTone}`}
+            role="img"
+            aria-label={statusLabel}
+          />
+          <span className="min-w-0 [overflow-wrap:anywhere]">{t('approvalReviewTitle')}</span>
         </div>
         {block.toolName ? (
-          <div className="mt-1 text-[12px] text-ds-muted">
+          <div className="mt-1 text-[12px] text-ds-muted [overflow-wrap:anywhere]">
             {t('approvalTool', { name: block.toolName })}
           </div>
         ) : null}
-        {block.reviewModelRoute ? (
-          <div className="mt-1 text-[12px] text-ds-muted">
-            {t('approvalReviewModel', {
-              model: block.reviewModelRoute.providerId
-                ? `${block.reviewModelRoute.providerId}/${block.reviewModelRoute.model}`
-                : block.reviewModelRoute.model
-            })}
+        {routeLabel ? (
+          <div className="mt-1 text-[12px] text-ds-muted [overflow-wrap:anywhere]">
+            {t('approvalReviewModel', { model: routeLabel })}
           </div>
         ) : null}
-        <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-ds-ink">{block.summary}</p>
+        <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-ds-ink [overflow-wrap:anywhere]">{block.summary}</p>
         <p className="mt-2 text-[12px] font-medium text-ds-muted">{statusLabel}</p>
         {block.riskLevel ? (
           <p className="mt-1 text-[12px] text-ds-muted">
@@ -321,7 +335,7 @@ function MessageBubbleImpl({
           </p>
         ) : null}
         {block.rationale ? (
-          <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-ds-muted">
+          <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-ds-muted [overflow-wrap:anywhere]">
             {t('approvalReviewRationale', { rationale: block.rationale })}
           </p>
         ) : null}

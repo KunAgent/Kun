@@ -114,6 +114,7 @@
   "approvalSubmitting": "결정을 제출하는 중…",
   "approvalFailed": "요청 실패",
   "approvalNativeConfirmationCancelled": "확인이 취소되었습니다. 이 작업은 아직 결정을 기다리고 있습니다.",
+  "approvalReviewModel": "Review model: {{model}}",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

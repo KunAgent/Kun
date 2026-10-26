@@ -443,6 +443,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         sandboxMode,
         approvalReviewer,
         actingModelRoute,
+        reviewSource: { harnessId: definition.id, credentialMode },
         intent,
         signal
       }

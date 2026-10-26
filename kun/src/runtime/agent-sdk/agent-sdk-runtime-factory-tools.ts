@@ -124,6 +124,7 @@ export function createAgentSdkToolRuntimeDeps(
           sandboxMode,
           approvalReviewer,
           actingModelRoute,
+          reviewSource: { harnessId: turn?.harnessId ?? thread?.harnessId ?? 'unknown' },
           intent: turn.prompt,
           signal: signal ?? new AbortController().signal
         }

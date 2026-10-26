@@ -94,6 +94,72 @@ describe('createApprovalReviewModelContextResolver', () => {
     })
     expect(() => pooled(undefined)).toThrow('route pools cannot provide')
   })
+
+  it('refuses a third-party harness model through an unrelated provider', () => {
+    const resolver = createApprovalReviewModelContextResolver({
+      selection: () => ({ mode: 'inherit' }),
+      clients: clientsFor({ codex: modelClient('codex-subscription') }),
+      nativeRouteAllowed: () => false
+    })
+    expect(() => resolver({
+      model: 'swe-2-high',
+      source: { harnessId: 'devin', credentialMode: 'native-login' }
+    })).toThrow('cannot be inherited for automatic review')
+    expect(() => resolver({
+      model: 'swe-2-high',
+      providerId: 'codex',
+      source: { harnessId: 'devin', credentialMode: 'native-login' }
+    })).toThrow('cannot be inherited for automatic review')
+  })
+
+  it('inherits a native harness route only with an isolated review adapter', () => {
+    const resolver = createApprovalReviewModelContextResolver({
+      selection: () => ({ mode: 'inherit' }),
+      clients: clientsFor({ 'claude-subscription': modelClient('claude-review') }),
+      nativeRouteAllowed: (route) => route.providerId === 'claude-subscription'
+    })
+    const context = resolver({
+      model: 'claude-sonnet-5',
+      providerId: 'claude-subscription',
+      source: { harnessId: 'claude-code', credentialMode: 'native-login' }
+    })
+    expect(context.source).toBe('inherit')
+    expect(context.client).toMatchObject({ provider: 'claude-review' })
+  })
+
+  it('keeps Kun and resolved gateway routes on the existing inherit path', () => {
+    const resolver = createApprovalReviewModelContextResolver({
+      selection: () => ({ mode: 'inherit' }),
+      clients: clientsFor({
+        'provider-b': modelClient('kun-client'),
+        'route-gateway:local': modelClient('gateway-client')
+      }),
+      nativeRouteAllowed: () => false
+    })
+    expect(resolver({ model: 'chat', providerId: 'provider-b', source: { harnessId: 'kun' } }).client)
+      .toMatchObject({ provider: 'kun-client' })
+    expect(() => resolver({
+      model: 'route/coding',
+      providerId: 'route-gateway:local',
+      requestedGatewayAlias: 'route/coding',
+      source: { harnessId: 'codex', credentialMode: 'kun-gateway' }
+    })).not.toThrow()
+  })
+
+  it('keeps the fixed reviewer independent of third-party execution models', () => {
+    const resolver = createApprovalReviewModelContextResolver({
+      selection: () => ({ mode: 'fixed', providerId: 'provider-b', model: 'review-model' }),
+      clients: clientsFor({ 'provider-b': modelClient('fixed-client') }),
+      nativeRouteAllowed: () => false
+    })
+    const context = resolver({
+      model: 'swe-2-high',
+      providerId: 'codex',
+      source: { harnessId: 'devin', credentialMode: 'native-login' }
+    })
+    expect(context.route).toEqual({ model: 'review-model', providerId: 'provider-b' })
+    expect(context.client).toMatchObject({ provider: 'fixed-client' })
+  })
 })
 
 function clientsFor(

@@ -271,6 +271,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         sandboxMode: ctx.sandboxMode,
         approvalReviewer: ctx.approvalReviewer,
         actingModelRoute: ctx.actingModelRoute,
+        reviewSource: { harnessId: ctx.definition.id, credentialMode: ctx.credentialMode },
         intent: ctx.intent,
         signal
       }
