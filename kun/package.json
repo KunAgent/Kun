@@ -1,6 +1,6 @@
 {
   "name": "kun",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Kun local HTTP/SSE agent runtime",
   "engines": {
     "node": ">=22.19.0"
