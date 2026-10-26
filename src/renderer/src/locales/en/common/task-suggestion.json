@@ -101,7 +101,10 @@
     "sidebar": {
       "count": "{{started}} of {{total}} suggested tasks started",
       "expand": "Show task sessions",
-      "collapse": "Hide task sessions"
+      "collapse": "Hide task sessions",
+      "workers": "{{count}} parallel workers",
+      "workerDone": "Worker finished",
+      "workerStop": "Stop worker"
     }
   }
 }

@@ -101,7 +101,10 @@
     "sidebar": {
       "count": "{{total}} 个建议任务已启动 {{started}} 个",
       "expand": "展开任务子会话",
-      "collapse": "收起任务子会话"
+      "collapse": "收起任务子会话",
+      "workers": "并行派发 · {{count}} 个任务",
+      "workerDone": "任务已完成",
+      "workerStop": "停止任务"
     }
   }
 }
