@@ -317,7 +317,7 @@ type SidebarTreeRowProps = {
   trailing?: ReactNode
   actions?: ReactNode
   actionsVisibility?: 'hidden' | 'subtle' | 'visible'
-  actionsLayout?: 'inline' | 'overlay'
+  actionsLayout?: 'inline' | 'overlay' | 'swap'
   className?: string
   buttonClassName?: string
   buttonStyle?: CSSProperties
@@ -355,7 +355,9 @@ export function SidebarTreeRow({
   const outlined = active && activeVariant === 'outline'
   const rail = activeVariant === 'rail'
   const actionsClass =
-    actionsVisibility === 'hidden'
+    actionsLayout === 'swap'
+      ? 'opacity-100'
+      : actionsVisibility === 'hidden'
       ? 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100'
       : actionsVisibility === 'visible'
         ? 'opacity-100'
@@ -363,7 +365,12 @@ export function SidebarTreeRow({
   const actionsWrapClass =
     actionsLayout === 'overlay'
       ? 'absolute inset-y-0 right-1.5 flex items-center gap-0.5'
-      : 'mr-1.5 flex shrink-0 items-center gap-0.5'
+      : actionsLayout === 'swap'
+        // Takes real layout space on hover (replacing the row's trailing meta) so the title truncates before it.
+        ? actionsVisibility === 'visible'
+          ? 'mr-1 flex shrink-0 items-center'
+          : 'mr-1 hidden shrink-0 items-center group-hover:flex group-focus-within:flex'
+        : 'mr-1.5 flex shrink-0 items-center gap-0.5'
   const trailingWrapClass =
     actionsLayout === 'overlay'
       ? 'mr-1.5 flex shrink-0 items-center gap-0.5 transition group-hover:opacity-0 group-focus-within:opacity-0'
