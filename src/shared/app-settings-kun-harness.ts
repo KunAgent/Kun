@@ -1,5 +1,6 @@
 import { BUILTIN_HARNESS_IDS } from '../../kun/src/contracts/builtin-harness-ids.js'
 import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from './ade-collaboration-settings'
 import {
   GENERIC_ACP_BASE,
   HarnessProviderOverrideSchema,
@@ -378,7 +379,7 @@ export function defaultKunAdeSettings(): KunAdeSettingsV1 {
     limits: { softWorkers: 4, hardWorkers: 8 },
     hibernation: { enabled: true, idleMinutes: 30 },
     stall: { structuredMinutes: 10, terminalMinutes: 20 },
-    dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true },
+    dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '' },
     tasks: { autoStartSeconds: 0, worktree: true, inheritContext: false },
     notifications: {
       waiting: true,
@@ -464,7 +465,10 @@ export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
       autoStartWhenConfirmationRequired: bool(
         dispatch.autoStartWhenConfirmationRequired,
         defaults.dispatch.autoStartWhenConfirmationRequired
-      )
+      ),
+      preferencePrompt: typeof dispatch.preferencePrompt === 'string'
+        ? dispatch.preferencePrompt.slice(0, ADE_DISPATCH_PREFERENCE_MAX_CHARS)
+        : defaults.dispatch.preferencePrompt
     },
     tasks: {
       autoStartSeconds: clampInt(tasks.autoStartSeconds, 0, 3_600, defaults.tasks.autoStartSeconds),

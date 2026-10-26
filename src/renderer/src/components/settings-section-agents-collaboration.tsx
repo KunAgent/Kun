@@ -16,6 +16,7 @@ import { defaultKunAdeSettings } from '@shared/app-settings-kun-harness'
 import { DEFAULT_ADE_TASK_SUGGESTION_SETTINGS } from '@shared/ade-collaboration-settings'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
 import { DispatchAutoStartSettingRows } from './settings-dispatch-auto-start'
+import { DispatchPreferenceSettingRow } from './dispatch-preference-field'
 import { TaskSuggestionSettingRows } from './settings-task-suggestions'
 import { isKunModelProviderGroup } from '../lib/kun-model-provider-groups'
 import type { SettingsDraftController } from './settings-draft-navigation'
@@ -48,6 +49,7 @@ type Draft = {
   terminalMinutes: string
   autoStartSeconds: number
   autoStartWhenConfirmationRequired: boolean
+  preferencePrompt: string
   tasks: AdeCollaborationSettingsValue['tasks']
   harnessRouter: boolean
   deterministicHandoff: boolean
@@ -74,6 +76,7 @@ function draftFrom(ade: AdeCollaborationSettingsValue): Draft {
     terminalMinutes: String(ade.stall.terminalMinutes),
     autoStartSeconds: ade.dispatch.autoStartSeconds,
     autoStartWhenConfirmationRequired: ade.dispatch.autoStartWhenConfirmationRequired,
+    preferencePrompt: ade.dispatch.preferencePrompt ?? '',
     tasks: { ...(ade.tasks ?? DEFAULT_ADE_TASK_SUGGESTION_SETTINGS) },
     harnessRouter: ade.harnessRouter,
     deterministicHandoff: ade.deterministicHandoff
@@ -118,7 +121,8 @@ function draftValue(
     hibernation: { enabled: draft.hibernationEnabled, idleMinutes },
     stall: { structuredMinutes, terminalMinutes },
     dispatch: { autoStartSeconds: draft.autoStartSeconds,
-      autoStartWhenConfirmationRequired: draft.autoStartWhenConfirmationRequired },
+      autoStartWhenConfirmationRequired: draft.autoStartWhenConfirmationRequired,
+      preferencePrompt: draft.preferencePrompt.trim() },
     tasks: { ...draft.tasks },
     harnessRouter: draft.harnessRouter,
     deterministicHandoff: draft.deterministicHandoff
@@ -362,6 +366,7 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
           whenConfirmationRequired={draft.autoStartWhenConfirmationRequired}
           onSeconds={(value) => edit('autoStartSeconds', value)}
           onWhenConfirmationRequired={(value) => edit('autoStartWhenConfirmationRequired', value)} />
+        <DispatchPreferenceSettingRow value={draft.preferencePrompt} onChange={(value) => edit('preferencePrompt', value)} />
         <TaskSuggestionSettingRows t={t} value={draft.tasks} onChange={(value) => edit('tasks', value)} />
         <details className="mt-4 border-t border-ds-border-muted pt-4">
           <summary className="cursor-pointer text-[13px] font-medium text-ds-ink">

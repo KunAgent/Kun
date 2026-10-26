@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { GatewayMiddlewareSchema } from '../../../../kun/src/contracts/gateway-middleware.js'
 import { routePoolPatchesSchema } from './settings-route-pools'
 import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from '../../../shared/ade-collaboration-settings'
 import {
   APP_LOCALES,
   IMAGE_GENERATION_QUALITIES,
@@ -647,7 +648,8 @@ export const kunRuntimePatchSchema = z.object({
     }).strict().optional(),
     dispatch: z.object({
       autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
-      autoStartWhenConfirmationRequired: z.boolean().optional()
+      autoStartWhenConfirmationRequired: z.boolean().optional(),
+      preferencePrompt: z.string().max(ADE_DISPATCH_PREFERENCE_MAX_CHARS).optional()
     }).strict().optional(),
     tasks: z.object({
       autoStartSeconds: z.number().int().min(0).max(3_600).optional(),

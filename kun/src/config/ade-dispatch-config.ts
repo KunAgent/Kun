@@ -1,18 +1,23 @@
 import { z } from 'zod'
 
+/** Longest user dispatch preference the manager context carries. */
+export const ADE_DISPATCH_PREFERENCE_MAX_CHARS = 2_000
+
 /**
  * Dispatch cards waiting on the user start on their own after `autoStartSeconds`
  * without a response (0 = always wait). Ask-for-approval cards join the window
  * only when `autoStartWhenConfirmationRequired` is set; their workers still ask
- * before each action.
+ * before each action. `preferencePrompt` is the user's own guidance on which
+ * Agent and model suit which work; the manager reads it when it dispatches.
  */
 export const AdeDispatchConfigSchema = z
   .object({
     autoStartSeconds: z.number().int().min(0).max(3_600).default(60),
-    autoStartWhenConfirmationRequired: z.boolean().default(true)
+    autoStartWhenConfirmationRequired: z.boolean().default(true),
+    preferencePrompt: z.string().max(ADE_DISPATCH_PREFERENCE_MAX_CHARS).default('')
   })
   .strict()
-  .default({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true })
+  .default({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '' })
 export type AdeDispatchConfig = z.infer<typeof AdeDispatchConfigSchema>
 
 /**
