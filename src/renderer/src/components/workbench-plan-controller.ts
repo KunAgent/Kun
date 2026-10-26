@@ -482,7 +482,20 @@ export function useWorkbenchPlanController({
               }
             : {})
         })
-        if (dispatched) await onPlanBuildStarted?.(plan)
+        if (dispatched) {
+          const threadId = useChatStore.getState().activeThreadId
+          if (threadId) {
+            usePlanBuildAgentStore.getState().setHandoff(plan.id, {
+              threadId,
+              route: {
+                agentId: buildHarnessId,
+                ...(buildModel ? { model: buildModel } : {}),
+                ...(buildProviderId ? { providerId: buildProviderId } : {})
+              }
+            })
+          }
+          await onPlanBuildStarted?.(plan)
+        }
         return
       }
       const displayText = prepared.prompt.includes('<prompt_managed_worktree_protocol>')

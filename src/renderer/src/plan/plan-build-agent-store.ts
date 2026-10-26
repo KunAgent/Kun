@@ -6,14 +6,21 @@ import type { AgentDispatchAssignmentRoute } from '@shared/agent-dispatch'
  * timeline card and the plan panel share one pick; a plan without an entry
  * builds on the composer's current Agent, exactly as before the picker.
  */
+export type PlanBuildHandoff = { route: AgentDispatchAssignmentRoute; threadId: string }
+
 type PlanBuildAgentState = {
   plans: Record<string, AgentDispatchAssignmentRoute>
+  /** Plans already handed to an external Agent conversation, for the card's handed-off state. */
+  handoffs: Record<string, PlanBuildHandoff>
   setRoute: (planId: string, route: AgentDispatchAssignmentRoute) => void
   clearRoute: (planId: string) => void
+  setHandoff: (planId: string, handoff: PlanBuildHandoff) => void
+  clearHandoff: (planId: string) => void
 }
 
 export const usePlanBuildAgentStore = create<PlanBuildAgentState>((set) => ({
   plans: {},
+  handoffs: {},
   setRoute: (planId, route) => {
     if (!planId) return
     set((state) => ({ plans: { ...state.plans, [planId]: route } }))
@@ -23,6 +30,17 @@ export const usePlanBuildAgentStore = create<PlanBuildAgentState>((set) => ({
       if (!state.plans[planId]) return state
       const { [planId]: _removed, ...rest } = state.plans
       return { plans: rest }
+    })
+  },
+  setHandoff: (planId, handoff) => {
+    if (!planId) return
+    set((state) => ({ handoffs: { ...state.handoffs, [planId]: handoff } }))
+  },
+  clearHandoff: (planId) => {
+    set((state) => {
+      if (!state.handoffs[planId]) return state
+      const { [planId]: _removed, ...rest } = state.handoffs
+      return { handoffs: rest }
     })
   }
 }))

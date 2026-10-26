@@ -257,7 +257,8 @@ describe('workbench plan build orchestration', () => {
     expect(dispatchExternalPlanBuild).toHaveBeenCalledWith(expect.objectContaining({
       harnessId: 'codex', model: 'gpt-6.1-codex', credentialMode: 'native-login', workspaceRoot: '/Users/codex/app'
     }))
-    usePlanBuildAgentStore.setState({ plans: {} })
+    expect(usePlanBuildAgentStore.getState().handoffs[planId]?.route.agentId).toBe('codex')
+    usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} })
   })
 
   it('sends an explicit Graph build without selecting Graph for later messages', async () => {

@@ -388,7 +388,7 @@ describe('PlanBuildActions external Agent pick', () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
-    usePlanBuildAgentStore.setState({ plans: {} })
+    usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} })
     resetPlanWorktreePreferenceStoreForTests()
     await i18n.changeLanguage('en')
   })
@@ -409,6 +409,25 @@ describe('PlanBuildActions external Agent pick', () => {
     expect(renderer.root.findAllByProps({ 'data-plan-worktree-select': true })).toHaveLength(0)
     await act(async () => renderer.root.findByProps({ 'data-plan-build-start': true }).props.onClick())
     expect(onBuild).toHaveBeenCalledWith('direct')
+    await act(async () => renderer.unmount())
+  })
+
+  it('shows the handed-off state with a way back into the conversation', async () => {
+    await i18n.changeLanguage('zh')
+    usePlanBuildAgentStore.getState().setHandoff('plan-1', { threadId: 'thread-9', route: { agentId: 'codex', model: 'gpt-6.1-codex' } })
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(PlanBuildActions, {
+        disabled: false, graphEnabled: true, variant: 'card', planId: 'plan-1', onBuild: vi.fn()
+      }))
+    })
+    expect(renderer.root.findAllByProps({ 'data-plan-build-handoff': 'codex' }).length).toBeGreaterThan(0)
+    expect(rendererText(renderer)).toContain('已交给')
+    expect(renderer.root.findAllByProps({ 'data-plan-build-start': true })).toHaveLength(0)
+    await act(async () => {
+      renderer.root.findByProps({ children: '重新构建' }).props.onClick()
+    })
+    expect(renderer.root.findAllByProps({ 'data-plan-build-start': true }).length).toBeGreaterThan(0)
     await act(async () => renderer.unmount())
   })
 })

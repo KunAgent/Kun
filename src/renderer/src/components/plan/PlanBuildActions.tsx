@@ -14,6 +14,8 @@ import {
 } from '../../plan/plan-scheduled-task'
 import { PlanScheduledBuildDialog } from './PlanScheduledBuildDialog'
 import { PlanBuildAgentPicker, usePlanBuildRoute } from './PlanBuildAgentPicker'
+import { PlanBuildHandoffRow } from './PlanBuildHandoffRow'
+import { usePlanBuildAgentStore } from '../../plan/plan-build-agent-store'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import { ensureGuiPlanLoadedFromMeta } from '../../plan/load-plan-from-meta'
 import { guiPlanMetaMatchesArtifact, type GuiPlanToolMeta } from '../../plan/plan-tool'
@@ -238,6 +240,8 @@ export function PlanBuildActions({
   }, [buildDisabled, closeMenu, menuOpen, resolvedPlanId])
 
   const { route, external, agentName } = usePlanBuildRoute(resolvedPlanId)
+  const handoff = usePlanBuildAgentStore((state) => (variant === 'card' ? state.handoffs[resolvedPlanId] : undefined))
+  const clearHandoff = usePlanBuildAgentStore((state) => state.clearHandoff)
   // External Agents build in a host-managed task worktree; Graph and
   // scheduled builds stay Kun-only.
   useEffect(() => {
@@ -247,7 +251,7 @@ export function PlanBuildActions({
   const scheduledSelected = selectedMode === 'scheduled'
   const chipClass = 'inline-flex h-9 min-w-0 max-w-full items-center gap-1.5 rounded-[10px] border border-ds-border bg-ds-card px-2.5 text-[12.5px] font-medium text-ds-ink'
   const agentControl = resolvedPlanId && !scheduledSelected ? (
-    <PlanBuildAgentPicker planId={resolvedPlanId} route={route} disabled={buildDisabled} />
+    <PlanBuildAgentPicker planId={resolvedPlanId} route={route} disabled={buildDisabled} compact={variant === 'panel'} />
   ) : null
   const worktreeControl = !resolvedPlanId || !preference?.initialized ? null : external && !scheduledSelected ? (
     <span data-plan-build-task-worktree className={`${chipClass} border-dashed text-ds-muted`}
@@ -373,6 +377,10 @@ export function PlanBuildActions({
         t('planScheduleBuildCountdownMinute', { count: countdown.minutes })
       ].filter(Boolean).join(' ')
     : t('planScheduleBuildDueSoon')
+
+  if (handoff) {
+    return <PlanBuildHandoffRow handoff={handoff} onRebuild={() => clearHandoff(resolvedPlanId)} />
+  }
 
   return (
     <div data-plan-build-tray className="flex w-full min-w-0 flex-col gap-2.5 rounded-[16px] bg-ds-card-muted/70 p-3 dark:bg-white/[0.04]">
