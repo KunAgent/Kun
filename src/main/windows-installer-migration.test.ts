@@ -269,7 +269,7 @@ describe('Windows installer migration ACL contract', () => {
   })
 
   it('aborts an ambiguous dual-scope automatic update without a source marker', () => {
-    const installerScript = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
+    const installerScript = readFileSync(join(process.cwd(), 'build/installer-update-scope.nsh'), 'utf8')
     const selectionStart = installerScript.indexOf('Function KunSelectAutomaticUpdateMode')
     const scopeAbort = installerScript.indexOf(
       '!insertmacro KunAbortAutomaticUpdate scope_ambiguous scope'

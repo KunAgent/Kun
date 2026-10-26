@@ -17,6 +17,18 @@ function Test-SafeRuntimeManifestPath([string]$PathValue) {
   return $true
 }
 
+function Write-RuntimeFileInspection([string]$PathValue, [string]$RelativePath) {
+  try {
+    . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+    $inspection = [KunInstallerPayloadCopy]::InspectLiteralFile($PathValue)
+    Write-InstallerDiagnostic "RUNTIME_FILE_CHECK relative=$RelativePath pathLength=$($PathValue.Length) native=$inspection"
+  } catch {
+    # Evidence must never turn a strict integrity failure into success or replace
+    # its original error. The native probe also refuses reparse-path ancestors.
+    Write-InstallerDiagnostic "RUNTIME_FILE_CHECK relative=$RelativePath pathLength=$($PathValue.Length) nativeInspectionError=$($_.Exception.Message)"
+  }
+}
+
 function Assert-PackagedRuntimeIntegrity([string]$Root) {
   $manifestPath = Join-Path $Root 'resources\kun-runtime-integrity.json'
   # Older installs shipped no manifest. The caller still enforces its required
@@ -35,6 +47,7 @@ function Assert-PackagedRuntimeIntegrity([string]$Root) {
     }
     $path = Join-Path $Root ('resources\' + ([string]$file.path).Replace('/', '\'))
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+      Write-RuntimeFileInspection $path ([string]$file.path)
       throw "The installed Kun runtime is missing a packaged file: $($file.path)"
     }
     $item = Get-Item -LiteralPath $path -Force
@@ -42,6 +55,7 @@ function Assert-PackagedRuntimeIntegrity([string]$Root) {
       throw "The installed Kun runtime file must not use a reparse point: $($file.path)"
     }
     if ($item.Length -ne [int64]$file.size) {
+      Write-RuntimeFileInspection $path ([string]$file.path)
       throw "The installed Kun runtime file is truncated: $($file.path)"
     }
   }
@@ -51,6 +65,11 @@ function Assert-PackagedRuntimeIntegrity([string]$Root) {
       throw "The packaged Kun runtime integrity manifest has an unsafe package path: $($module.dir)"
     }
     $path = Join-Path $Root ('resources\' + ([string]$module.dir).Replace('/', '\') + '\package.json')
-    Assert-NonEmptyPayloadFile $path "the runtime package $($module.name)"
+    try {
+      Assert-NonEmptyPayloadFile $path "the runtime package $($module.name)"
+    } catch {
+      Write-RuntimeFileInspection $path (([string]$module.dir) + '/package.json')
+      throw
+    }
   }
 }

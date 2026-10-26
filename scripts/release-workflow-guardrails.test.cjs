@@ -114,7 +114,9 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
     ['Test Windows installer recovery safety', 'recovery-safety']
   ]) {
     const step = stepByName(recovery, name)
-    const extra = file === 'recovery-safety' ? ' src/main/windows-installer-migration.payload-backup.test.ts' : ''
+    const extra = file === 'recovery-safety'
+      ? ' src/main/windows-installer-migration.payload-backup.test.ts'
+      : ' src/main/windows-installer-migration.restart.test.ts --no-file-parallelism'
     assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts${extra}`)
     assert.equal(step.if, undefined)
   }

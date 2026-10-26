@@ -1,3 +1,7 @@
+!include "${PROJECT_DIR}\build\installer-update-scope.nsh"
+!include "${PROJECT_DIR}\build\installer-update-observability.nsh"
+!include "${PROJECT_DIR}\build\installer-update-extraction.nsh"
+
 !macro KunAbortAutomaticUpdate CODE PHASE MESSAGE
   !ifndef BUILD_UNINSTALLER
   ${if} ${isUpdated}
@@ -43,6 +47,9 @@
 !macroend
 
 !macro KunAutomaticUpdateFunctions
+  !insertmacro KunAutomaticUpdateScopeFunctions
+  !insertmacro KunAutomaticUpdateObservabilityFunctions
+  !insertmacro KunAutomaticUpdateExtractionFunctions
   Function KunWriteAutomaticUpdateResult
     ${ifNot} ${isUpdated}
       Return
@@ -90,13 +97,23 @@
     ${endif}
     StrCpy $KunInstallerJournalPath "$APPDATA\KunInstallerRecovery\${APP_GUID}.json"
     StrCpy $KunInstallerTransactionPath "$APPDATA\KunInstallerRecovery\${APP_GUID}-update.json"
-    StrCpy $KunInstallerTargetDir $INSTDIR
+    ; The running source remains authoritative if an interrupted builder wrote
+    ; staging registration. Scope selection has already authenticated that case.
+    ${if} $KunInstallerUpdateSourceDir != ""
+      StrCpy $KunInstallerSourceDir $KunInstallerUpdateSourceDir
+      StrCpy $INSTDIR $KunInstallerUpdateSourceDir
+      Call KunResolveInstallTarget
+    ${else}
+      Call KunRefreshInstallPaths
+    ${endif}
     Call KunSetMigrationEnvironment
-    !insertmacro kunRunMigrationHelper RecoverUpdateTransaction
+    !insertmacro kunRunMigrationHelper RecoverInstallerUpdateTransaction
     ${if} $KunInstallerHelperExitCode != 0
       MessageBox MB_OK|MB_ICONSTOP "Kun could not recover an interrupted automatic update.$\r$\n$KunInstallerHelperOutput" /SD IDOK
       !insertmacro KunAbortAutomaticUpdate recovery_failed recovery "An interrupted automatic update could not be recovered."
     ${endif}
+    ; Rollback may have restored registration; discard any pre-recovery snapshot.
+    StrCpy $KunInstallerSnapshotMode ""
   FunctionEnd
 
   Function KunRunAutomaticUpdateHealthCheck

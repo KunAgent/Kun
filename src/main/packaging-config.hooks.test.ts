@@ -278,6 +278,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     const installerScript = [
       'installer.nsh',
       'installer-manual-upgrade.nsh',
+      'installer-update-scope.nsh',
       'installer-process-check.nsh'
     ].map((fileName) =>
       readFileSync(join(process.cwd(), 'build', fileName), 'utf8').replace(/\r\n/g, '\n')
@@ -473,7 +474,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(installerScript).toContain('KUN_INSTALLER_SECONDARY_SOURCE_STALE')
     expect(installerScript).not.toContain('Stop-Process -Id')
 
-    expect(migrationScript).toContain("'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'SwitchUpdatePayload'")
+    expect(migrationScript).toContain("'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'RecoverInstallerUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'StageExtractedUpdatePayload', 'SwitchUpdatePayload'")
     expect(migrationScript).toContain("'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath'")
     expect(migrationScript).toContain('function Invoke-CleanupInPlaceLeftovers')
     expect(migrationScript).toContain('function Test-RetainedInPlaceKnownEntry')
