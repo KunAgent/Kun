@@ -65,6 +65,12 @@ export function WorkTabStrip(): ReactElement | null {
     seenPath.current = focusedPath
     if (focusedPath && sessionMain && !split && !peek) showDocument()
   }, [focusedPath, sessionMain, split, peek, showDocument])
+  // Keep the tab on stage in view when the row overflows.
+  const listRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const selected = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]')
+    selected?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  })
   if (!workspaceRoot) return null
 
   const documents: DocumentTab[] = []
@@ -123,7 +129,7 @@ export function WorkTabStrip(): ReactElement | null {
           />
         </div>
       ) : null}
-      <div role="tablist" aria-label={t('workTabsLabel')} className="work-tab-list">
+      <div ref={listRef} role="tablist" aria-label={t('workTabsLabel')} className="work-tab-list">
         {sessionIds.map((id) => {
           const selected = sessionOnStage && id === current
           return (

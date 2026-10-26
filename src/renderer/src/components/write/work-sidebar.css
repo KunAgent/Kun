@@ -244,8 +244,23 @@
   background: color-mix(in srgb, var(--ds-surface-card) 82%, transparent);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 0 0 1px var(--kun-hair-1);
 }
-/* One list, one look: per-kind glyphs made every row a different shape. */
-.work-session-anchor { display: none; }
+/* One list, one look: every session carries the same small K mark, like its tab. */
+.work-session-anchor {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--kun-sunken);
+  color: var(--ds-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.work-session-row[aria-current='true'] .work-session-anchor {
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent-strong);
+}
 .work-session-menu,
 .work-session-side { top: 5px; }
 [data-work-sidebar] .ds-sidebar-command-row,
@@ -256,7 +271,6 @@
 }
 [data-work-sidebar] .ds-sidebar-tree-row > button { min-height: 32px; }
 [data-theme='dark'] .work-session-row[aria-current='true'] { box-shadow: 0 0 0 1px var(--kun-hair-2); }
-.work-open-file-icon { flex: none; }
 .work-materials-label {
   margin-top: 14px;
   padding: 6px 12px 2px;
@@ -265,3 +279,22 @@
   font-size: 12.5px;
   font-weight: 500;
 }
+
+/* Materials: files, papers and artifacts read as plain rows, not nested section titles. */
+.work-materials .work-section + .work-section,
+.work-materials .work-section { margin-top: 0; }
+.work-materials .work-section-head { padding: 0; }
+.work-materials .work-section-toggle {
+  height: 34px;
+  gap: 8px;
+  border-radius: var(--kun-radius-sm);
+  padding: 0 10px;
+  color: var(--ds-text);
+  font-size: 13.5px;
+  font-weight: 400;
+}
+.work-materials .work-section-toggle:hover { background: var(--ds-sidebar-row-hover); color: var(--ds-text); }
+.work-materials .work-section-label { flex: 1; }
+.work-materials .work-section-count { color: var(--ds-text-faint); font-size: 12px; }
+.work-materials .work-section-chevron { opacity: 1; color: var(--ds-text-faint); }
+.work-materials .work-section-body { padding: 2px 0 6px 12px; }
