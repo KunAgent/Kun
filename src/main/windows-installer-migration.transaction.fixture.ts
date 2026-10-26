@@ -15,7 +15,7 @@ const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
 export type Fixture = ReturnType<typeof fixture>
-export type Action = 'ResolveUpdateScope' | 'ValidateUpdateRollback' | 'Prepare' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction' | 'RecoverInstallerUpdateTransaction'
+export type Action = 'ResolveUpdateScope' | 'ValidateUpdateRollback' | 'Prepare' | 'StageExtractedUpdatePayload' | 'SwitchUpdatePayload' | 'ValidateCutover' | 'RollbackUpdateTransaction' | 'Restore' | 'UpdatePath' | 'ValidateHealthResult' | 'CommitUpdateTransaction' | 'FinalizeUpdateTransaction' | 'RecoverUpdateTransaction' | 'RecoverInstallerUpdateTransaction'
 
 export function payload(root: string, executable: string): void {
   mkdirSync(join(root, 'resources', 'app.asar.unpacked', 'kun', 'dist', 'cli'), { recursive: true })
@@ -66,13 +66,13 @@ export function fixture(inPlace = false, unicodePath = false) {
   return input
 }
 
-export function run(input: Fixture, action: Action, fault = '', environment: NodeJS.ProcessEnv = {}, bounded = false) {
+export function run(input: Fixture, action: Action, fault = '', environment: NodeJS.ProcessEnv = {}, bounded = false, helperPath = helper) {
   const powershell = join(
     process.env.SystemRoot ?? 'C:\\Windows',
     'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
   )
   const result = spawnSync(powershell, [
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', action,
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helperPath, '-Action', action,
     '-ResultPath', input.result(action), ...(bounded ? ['-Bounded'] : [])
   ], {
     encoding: 'utf8',

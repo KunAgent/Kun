@@ -47,9 +47,27 @@ describe('Windows embedded extraction registration boundary (static/symbolic con
       hooks.indexOf('StrCpy $INSTDIR $KunInstallerPrimarySourceDir')
     )
     expect(hooks).toContain('StrCpy $appExe $KunInstallerHelperOutput')
-    expect(hooks).not.toMatch(/^\s*(?:SetOutPath|StrCpy \$OUTDIR|Call KunFinishAutomaticUpdateTransaction)/m)
+    expect(hooks).not.toMatch(/^\s*(?:StrCpy \$OUTDIR|Call KunFinishAutomaticUpdateTransaction)/m)
     expect(automatic).toContain('!insertmacro KunAutomaticUpdateExtractionFunctions')
     expect(installer).toContain('Call KunFinishAutomaticUpdateTransaction')
+  })
+
+  it('uses short private extraction then authenticated native staging before shell publication', () => {
+    expect(installer).toContain('StrCpy $INSTDIR "$PLUGINSDIR\\kun-candidate"')
+    expect(installer).not.toContain('StrCpy $KunInstallerStageDir "$PLUGINSDIR')
+    const prepared = installer.slice(installer.indexOf('StrCpy $KunInstallerMigrationPrepared 1'))
+    expect(prepared).toContain('${if} ${isUpdated}\n      ; Keep extraction')
+    const stageCall = hooks.indexOf('!insertmacro kunRunMigrationHelper StageExtractedUpdatePayload')
+    const stageOutput = hooks.indexOf('SetOutPath $KunInstallerStageDir')
+    expect(stageCall).toBeGreaterThan(hooks.indexOf('${if} $KunInstallerMigrationPrepared != 1'))
+    expect(stageCall).toBeLessThan(stageOutput)
+    expect(hooks.slice(stageCall, stageOutput)).toContain('KunAbortAutomaticUpdate candidate_staging_failed')
+    expect(hooks).toContain('ClearErrors\n    SetOutPath $KunInstallerStageDir\n    ${if} ${Errors}')
+    expect(stageOutput).toBeLessThan(hooks.indexOf('StrCpy $INSTDIR $KunInstallerPrimarySourceDir'))
+    expect(hooks).not.toMatch(/^\s*(?:RMDir|Delete .*kun-candidate)/m)
+    // Stock fallback deletes 7z-out, so it is not a reliable repair source.
+    expect(extraction).toContain('RMDir /r "$PLUGINSDIR\\7z-out"')
+    expect(hooks).not.toContain('7z-out')
   })
 
   it('checks the actual selected registration before cutover and restores diagnostic state', () => {
@@ -73,18 +91,22 @@ describe('Windows embedded extraction registration boundary (static/symbolic con
     ['C:\\Users\\test\\AppData\\Local\\Programs\\Kun', 'Kun.exe'],
     ['C:\\Users\\test\\AppData\\Local\\Programs\\DeepSeek GUI', 'DeepSeek GUI.exe']
   ])('keeps uninstaller output staged and registration at original source: %s', (source, executable) => {
-    // Symbolically evaluate the real hook's two assignments and the builder's
+    // Symbolically evaluate the real hook's path assignments and the builder's
     // variable consumers. This is not execution of NSIS or a native installer.
     const stage = 'C:\\Users\\test\\AppData\\Local\\Programs\\Kun.kun-stage-123'
     const state: Record<string, string> = {
-      INSTDIR: stage,
-      OUTDIR: stage,
+      INSTDIR: 'C:\\Temp\\nsi123.tmp\\kun-candidate',
+      OUTDIR: 'C:\\Temp\\nsi123.tmp\\kun-candidate',
+      KunInstallerStageDir: stage,
       appExe: win32.join(stage, 'Kun.exe'),
       KunInstallerPrimarySourceDir: source,
       KunInstallerHelperOutput: win32.join(source, executable)
     }
-    for (const match of hooks.matchAll(/^\s*StrCpy \$(INSTDIR|appExe) \$(\w+)$/gm)) {
-      state[match[1]] = state[match[2]]
+    for (const line of hooks.split('\n')) {
+      const assignment = line.match(/^\s*StrCpy \$(INSTDIR|appExe) \$(\w+)$/)
+      const output = line.match(/^\s*SetOutPath \$(\w+)$/)
+      if (assignment) state[assignment[1]] = state[assignment[2]]
+      if (output) state.OUTDIR = state[output[1]]
     }
     expect(files).toContain('File "/oname=${UNINSTALL_FILENAME}" "${UNINSTALLER_OUT_FILE}"')
     expect(files).toContain('WriteRegStr SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"')

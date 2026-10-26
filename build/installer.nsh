@@ -558,8 +558,10 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
     StrCpy $KunInstallerMigrationPrepared 1
     Call KunRecordPreparedAutomaticUpdate
     ${if} ${isUpdated}
-      StrCpy $INSTDIR $KunInstallerStageDir
-      DetailPrint "Automatic update will extract the candidate payload into $KunInstallerStageDir."
+      ; Keep extraction below legacy shell copy path limits. The transaction
+      ; still authorizes StageDir; the post-extraction helper copies into it.
+      StrCpy $INSTDIR "$PLUGINSDIR\kun-candidate"
+      DetailPrint "Automatic update will extract into a private installer candidate directory."
     ${endif}
   FunctionEnd
 

@@ -50,7 +50,7 @@ describe('Windows installer boundary observability (static NSIS contracts)', () 
       prepare.indexOf('Call KunRecordPreparedAutomaticUpdate')
     )
     expect(prepare.indexOf('Call KunRecordPreparedAutomaticUpdate')).toBeLessThan(
-      prepare.indexOf('StrCpy $INSTDIR $KunInstallerStageDir')
+      prepare.indexOf('StrCpy $INSTDIR "$PLUGINSDIR\\kun-candidate"')
     )
     const install = installer.slice(installer.indexOf('!macro customInstall'), installer.indexOf('!macro customUnInstall\n'))
     expect(install.indexOf('Call KunRecordCutoverAutomaticUpdate')).toBeGreaterThan(-1)

@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'RecoverInstallerUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
+  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'RecoverInstallerUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'StageExtractedUpdatePayload', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
   [string]$Action,
   [string]$ResultPath = '',
   [switch]$Bounded
@@ -191,6 +191,9 @@ try {
     }
     'PrepareUpdateTransaction' {
       Initialize-UpdateTransaction
+    }
+    'StageExtractedUpdatePayload' {
+      Stage-ExtractedUpdatePayload
     }
     'SwitchUpdatePayload' {
       Invoke-SwitchUpdatePayload

@@ -56,6 +56,7 @@ function Invoke-SmokeAutomaticUpdate([string]$Scenario) {
   $cursor = 0
   foreach ($marker in @(
     'NSIS update-boundary=prepared',
+    'SUCCESS action=StageExtractedUpdatePayload',
     'START action=ResolveRecoveryExecutable',
     'NSIS update-boundary=registration-original',
     'NSIS update-boundary=cutover',

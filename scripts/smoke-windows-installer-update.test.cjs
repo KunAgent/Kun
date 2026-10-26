@@ -31,7 +31,8 @@ test('uses the installer no-pending lifecycle without force-run and restores inh
 
 test('requires compiled extraction, cutover, commit and finalize evidence plus retained user bytes', () => {
   for (const marker of [
-    'NSIS update-boundary=prepared', 'START action=ResolveRecoveryExecutable',
+    'NSIS update-boundary=prepared', 'SUCCESS action=StageExtractedUpdatePayload',
+    'START action=ResolveRecoveryExecutable',
     'NSIS update-boundary=registration-original',
     'NSIS update-boundary=cutover', 'SUCCESS action=SwitchUpdatePayload',
     'SUCCESS action=ValidateCutover', 'SUCCESS action=CommitUpdateTransaction',

@@ -205,6 +205,44 @@ public static class KunInstallerPayloadCopy {
     if (replaceDestination && Attributes(to, true) != Invalid) DeleteTree(to);
     CopyTree(from, to);
   }
+  static void CompareTree(string source, string destination) {
+    uint left = Attributes(source, false), right = Attributes(destination, false);
+    if ((left & Directory) != (right & Directory)) throw new IOException("Staged payload entry type differs: " + destination);
+    if ((left & Directory) != 0) {
+      var sourceNames = Children(source);
+      var destinationNames = new Dictionary<string, bool>(StringComparer.Ordinal);
+      foreach (string name in Children(destination)) destinationNames.Add(name, true);
+      if (sourceNames.Count != destinationNames.Count) throw new IOException("Staged payload tree differs: " + destination);
+      foreach (string name in sourceNames) {
+        if (!destinationNames.ContainsKey(name)) throw new IOException("Staged payload entry is missing: " + name);
+        CompareTree(source + @"\" + name, destination + @"\" + name);
+      }
+      return;
+    }
+    FileData sourceData, destinationData;
+    if (!GetFileAttributesExW(source, 0, out sourceData)) throw Error("Cannot inspect candidate file", source);
+    if (!GetFileAttributesExW(destination, 0, out destinationData)) throw Error("Cannot inspect staged file", destination);
+    if (sourceData.SizeHigh != destinationData.SizeHigh || sourceData.SizeLow != destinationData.SizeLow) {
+      throw new IOException("Staged payload file size differs: " + destination);
+    }
+  }
+  public static void CopyExtractedCandidate(string source, string destination) {
+    ValidateAncestors(source);
+    ValidateAncestors(destination);
+    string from = Extended(source), to = Extended(destination);
+    if ((Attributes(from, false) & Directory) == 0) throw new IOException("Extracted candidate is not a directory.");
+    uint existing = Attributes(to, true);
+    if (existing != Invalid && ((existing & Directory) == 0 || Children(to).Count != 0)) {
+      throw new IOException("The automatic update stage is not empty; refusing to merge candidate files.");
+    }
+    Copy(source, destination, false);
+    CompareExtractedCandidate(source, destination);
+  }
+  public static void CompareExtractedCandidate(string source, string destination) {
+    ValidateAncestors(source);
+    ValidateAncestors(destination);
+    CompareTree(Extended(source), Extended(destination));
+  }
 }
 '@
 }

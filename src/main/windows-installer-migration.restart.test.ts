@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { spawn, spawnSync } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertExpectedFailure, assertSucceeded, captureDiagnostics, cleanupTransactionFixtures, fixture,
@@ -298,5 +298,234 @@ windowsOnly('Installer restart recovery bootstrap', () => {
       ...restartedEnvironment(input), KUN_INSTALLER_TARGET: join(input.root, 'unrelated')
     }), 'wrong current target')
     expect(readFileSync(input.transaction)).toEqual(before)
+  }, 120_000)
+})
+
+function copyHelpers(pluginRoot: string): string {
+  mkdirSync(pluginRoot, { recursive: true })
+  const build = join(process.cwd(), 'build')
+  for (const name of readdirSync(build).filter((name) => /^windows-installer-migration(?:-.*)?\.ps1$/.test(name))) {
+    copyFileSync(join(build, name), join(pluginRoot, name))
+  }
+  return join(pluginRoot, 'windows-installer-migration.ps1')
+}
+function candidatePayload(candidate: string): void {
+  payload(candidate, 'Kun.exe')
+  writeFileSync(join(candidate, 'Kun.exe'), 'candidate executable')
+  const resources = join(candidate, 'resources')
+  const files: Array<{ path: string, size: number }> = []
+  const walk = (directory: string) => {
+    for (const name of readdirSync(directory)) {
+      const path = join(directory, name)
+      if (statSync(path).isDirectory()) walk(path)
+      else files.push({ path: relative(resources, path).replaceAll('\\', '/'), size: statSync(path).size })
+    }
+  }
+  walk(resources)
+  writeFileSync(join(resources, 'kun-runtime-integrity.json'), JSON.stringify({ schemaVersion: 1, files, modules: [] }))
+}
+function preparedFixture() {
+  const input = fixture(true)
+  const pluginRoot = join(input.root, 'NSIS plugin')
+  const helper = copyHelpers(pluginRoot)
+  const candidate = join(pluginRoot, 'kun-candidate')
+  assertSucceeded(run(input, 'Prepare'), 'Prepare')
+  candidatePayload(candidate)
+  return { input, helper, candidate }
+}
+function stage(input: Fixture, helper: string, environment: NodeJS.ProcessEnv = {}) {
+  return run(input, 'StageExtractedUpdatePayload', '', environment, true, helper)
+}
+function compare(input: Fixture, candidate: string) {
+  return spawnSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), [
+    '-NoProfile', '-NonInteractive', '-Command',
+    '$ErrorActionPreference="Stop"; . $env:KUN_TEST_COPY_HELPER; [KunInstallerPayloadCopy]::CompareExtractedCandidate($env:KUN_TEST_CANDIDATE, $env:KUN_TEST_STAGE)'
+  ], {
+    encoding: 'utf8', timeout: 60_000,
+    env: { ...process.env, KUN_TEST_COPY_HELPER: join(process.cwd(), 'build/windows-installer-migration-payload-copy.ps1'),
+      KUN_TEST_CANDIDATE: candidate, KUN_TEST_STAGE: input.stage }
+  })
+}
+
+describe('automatic update extraction source contract', () => {
+  it('derives a fixed helper-local candidate and retains the authoritative prepared stage', () => {
+    const script = readFileSync(join(process.cwd(), 'build/windows-installer-migration-actions.ps1'), 'utf8')
+    const action = script.slice(script.indexOf('function Stage-ExtractedUpdatePayload'), script.indexOf('function Assert-UpdateHealthResult'))
+    expect(action).toContain('Read-UpdateTransaction')
+    expect(action).toContain("[string]$transaction.Phase -ne 'prepared'")
+    expect(action).toContain("Join-Path $PSScriptRoot 'kun-candidate'")
+    expect(action).toContain('([string]$transaction.StageRoot)')
+    expect(action).toContain('[KunInstallerPayloadCopy]::Validate($candidate)')
+    expect(action.indexOf('Assert-PackagedInstallPayloadAt $candidate')).toBeLessThan(action.indexOf('CopyExtractedCandidate'))
+    expect(action).toContain('Assert-PackagedInstallPayloadAt $stage')
+    expect(action).not.toContain('Remove-')
+    expect(action).not.toContain('Set-UpdateTransactionPhase')
+  })
+})
+
+windowsOnly('native helper staging from a fixed short extraction directory', () => {
+  it('rolls back a deterministic partial native copy without losing unknown user files, then retries', async () => {
+    const { input, helper, candidate } = preparedFixture()
+    const lockedFile = join(candidate, 'resources', 'app.asar')
+    const journalBefore = readFileSync(input.journal)
+    const transactionBefore = readFileSync(input.transaction)
+    const journal = JSON.parse(journalBefore.toString('utf8').replace(/^\uFEFF/, ''))
+    const preservedNotes = join(journal.Records[0].Stash, 'content', 'notes.txt')
+    expect(readFileSync(preservedNotes, 'utf8')).toBe('preserved user file')
+    const command = [
+      '$ErrorActionPreference = "Stop"',
+      `Add-Type -TypeDefinition 'public static class KunFixtureCopyLockRelease { public static void Wait() { var ready = new System.Threading.ManualResetEvent(false); var input = new System.Threading.Thread(() => { System.Console.ReadLine(); ready.Set(); }); input.IsBackground = true; input.Start(); ready.WaitOne(90000); } }'`,
+      '$stream = [IO.File]::Open($env:KUN_TEST_LOCK_FILE, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)',
+      'try { [Console]::Out.WriteLine("READY"); [Console]::Out.Flush(); [KunFixtureCopyLockRelease]::Wait() } finally { $stream.Dispose() }'
+    ].join('; ')
+    const locker = spawn(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      ['-NoProfile', '-NonInteractive', '-Command', command], {
+        env: { ...process.env, KUN_TEST_LOCK_FILE: lockedFile }, stdio: ['pipe', 'pipe', 'pipe']
+      })
+    let output = ''
+    let errors = ''
+    locker.stdout.on('data', (chunk) => { output += String(chunk) })
+    locker.stderr.on('data', (chunk) => { errors += String(chunk) })
+    locker.stdin.on('error', () => undefined)
+    const exited = new Promise<number | null>((resolve, reject) => {
+      locker.once('exit', resolve)
+      locker.once('error', reject)
+    })
+    void exited.catch(() => undefined)
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => { clearInterval(poll); reject(new Error(`Copy locker readiness timed out: ${errors}`)) }, 15_000)
+        const poll = setInterval(() => {
+          if (output.includes('READY')) { clearTimeout(timeout); clearInterval(poll); resolve() }
+          else if (locker.exitCode !== null) { clearTimeout(timeout); clearInterval(poll); reject(new Error(`Copy locker exited before ready: ${errors}`)) }
+        }, 25)
+        void exited.catch((error) => { clearTimeout(timeout); clearInterval(poll); reject(error) })
+      })
+      const failed = stage(input, helper)
+      assertExpectedFailure(failed, 'exclusive candidate lock interrupts native staging')
+      expect(failed.status).not.toBe(124)
+      expect(`${failed.stdout}\n${failed.stderr}`).toContain('Cannot copy payload')
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      expect(locker.exitCode).toBeNull()
+      expect(locker.signalCode).toBeNull()
+      // CopyTree creates this directory before attempting its locked child;
+      // this proves partial progress without depending on enumeration order.
+      expect(existsSync(join(input.stage, 'resources'))).toBe(true)
+      expect(readFileSync(input.transaction)).toEqual(transactionBefore)
+      expect(readFileSync(input.journal)).toEqual(journalBefore)
+      expect(readFileSync(preservedNotes, 'utf8')).toBe('preserved user file')
+      expect(readFileSync(join(input.backup, 'notes.txt'), 'utf8')).toBe('preserved user file')
+      expect(readFileSync(join(input.source, 'Kun.exe'), 'utf8')).toBe('executable')
+    } finally {
+      locker.stdin.end('\n')
+      const exitCode = await new Promise<number | null>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error(`Copy locker failed to exit naturally: ${errors}`)), 15_000)
+        void exited.then((code) => { clearTimeout(timeout); resolve(code) }, (error) => { clearTimeout(timeout); reject(error) })
+      })
+      expect(exitCode, errors).toBe(0)
+    }
+    assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'rollback partial native staging')
+    expect(existsSync(input.stage)).toBe(false)
+    expect(existsSync(input.journal)).toBe(false)
+    expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
+    expect(readTransaction(input).Phase).toBe('rolled_back')
+    assertSucceeded(run(input, 'Prepare'), 'Prepare after partial staging rollback')
+    assertSucceeded(stage(input, helper), 'native staging retry after natural lock release')
+    assertSucceeded(run(input, 'SwitchUpdatePayload'), 'Switch after native staging retry')
+    assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'rollback retried candidate')
+    expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
+  }, 360_000)
+
+  it('copies a complete deep tree into the unchanged authorized stage and preserves old recovery data', () => {
+    const { input, helper, candidate } = preparedFixture()
+    const deep = join('resources', ...Array.from({ length: 6 }, (_, index) => `dependency-${index}-${'x'.repeat(35)}`), 'payload.bin')
+    mkdirSync(dirname(join(candidate, deep)), { recursive: true })
+    const bytes = Buffer.from(Array.from({ length: 4096 }, (_, index) => index % 256))
+    writeFileSync(join(candidate, deep), bytes)
+    mkdirSync(join(candidate, 'empty-directory'))
+    // Rebuild the manifest to include the deep dependency, not just bootstraps.
+    rmSync(join(candidate, 'resources', 'kun-runtime-integrity.json'))
+    candidatePayload(candidate)
+    expect(join(input.stage, deep).length).toBeGreaterThan(260)
+    const transaction = readFileSync(input.transaction)
+    const journal = readFileSync(input.journal)
+    const outside = join(input.root, 'unrelated')
+    mkdirSync(outside)
+    writeFileSync(join(outside, 'sentinel'), 'unchanged')
+    assertSucceeded(stage(input, helper, { KUN_INSTALLER_CANDIDATE: outside }), 'native candidate staging')
+    expect(readFileSync(join(input.stage, deep))).toEqual(bytes)
+    expect(readdirSync(join(input.stage, 'empty-directory'))).toEqual([])
+    expect(readFileSync(input.transaction)).toEqual(transaction)
+    expect(readFileSync(input.journal)).toEqual(journal)
+    expect(readFileSync(join(input.source, 'Kun.exe'), 'utf8')).toBe('executable')
+    expect(readFileSync(join(input.backup, 'notes.txt'), 'utf8')).toBe('preserved user file')
+    expect(readFileSync(join(outside, 'sentinel'), 'utf8')).toBe('unchanged')
+    expect(existsSync(candidate)).toBe(true)
+    assertSucceeded(run(input, 'SwitchUpdatePayload'), 'Switch complete native-copied payload')
+    expect(readFileSync(join(input.target, 'Kun.exe'), 'utf8')).toBe('candidate executable')
+    assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'rollback after staged candidate')
+    expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
+  }, 180_000)
+
+  it.each(['nonempty', 'tampered-stage', 'wrong-phase', 'missing-manifest', 'missing-file', 'truncated-file'])(
+    'rejects %s before modifying original payload or recovery records', (fault) => {
+      const { input, helper, candidate } = preparedFixture()
+      if (fault === 'nonempty') {
+        mkdirSync(input.stage)
+        writeFileSync(join(input.stage, 'unknown-user-file'), 'keep')
+      } else if (fault === 'tampered-stage' || fault === 'wrong-phase') {
+        const transaction = JSON.parse(readFileSync(input.transaction, 'utf8').replace(/^\uFEFF/, ''))
+        if (fault === 'tampered-stage') transaction.StageRoot = join(input.root, 'unrelated-stage')
+        else transaction.Phase = 'committed'
+        writeFileSync(input.transaction, JSON.stringify(transaction))
+      } else if (fault === 'missing-manifest') rmSync(join(candidate, 'resources', 'kun-runtime-integrity.json'))
+      else if (fault === 'missing-file') rmSync(join(candidate, 'resources', 'app.asar'))
+      else writeFileSync(join(candidate, 'resources', 'app.asar'), 'wrong-size')
+      const before = readFileSync(input.transaction)
+      const journal = readFileSync(input.journal)
+      assertExpectedFailure(stage(input, helper), `stage ${fault}`)
+      expect(readFileSync(input.transaction)).toEqual(before)
+      expect(readFileSync(input.journal)).toEqual(journal)
+      expect(readFileSync(join(input.source, 'Kun.exe'), 'utf8')).toBe('executable')
+      if (fault === 'nonempty') expect(readFileSync(join(input.stage, 'unknown-user-file'), 'utf8')).toBe('keep')
+      else expect(existsSync(input.stage)).toBe(false)
+    }, 120_000
+  )
+
+  it.each(['candidate-root', 'candidate-descendant', 'stage-root'] as const)('refuses %s reparse points', (location) => {
+    const { input, helper, candidate } = preparedFixture()
+    const outside = join(input.root, 'outside')
+    mkdirSync(outside)
+    writeFileSync(join(outside, 'sentinel'), 'keep')
+    if (location === 'candidate-root') {
+      rmSync(candidate, { recursive: true })
+      symlinkSync(outside, candidate, 'junction')
+    } else if (location === 'candidate-descendant') {
+      symlinkSync(outside, join(candidate, 'linked'), 'junction')
+    } else symlinkSync(outside, input.stage, 'junction')
+    assertExpectedFailure(stage(input, helper), `reparse ${location}`)
+    expect(readFileSync(join(outside, 'sentinel'), 'utf8')).toBe('keep')
+  }, 120_000)
+
+  it('refuses a helper-local candidate overlapping the original install even with a valid transaction', () => {
+    const { input } = preparedFixture()
+    const pluginRoot = join(input.source, 'unexpected-plugin')
+    const helper = copyHelpers(pluginRoot)
+    candidatePayload(join(pluginRoot, 'kun-candidate'))
+    assertExpectedFailure(stage(input, helper), 'candidate overlaps source')
+    expect(existsSync(join(pluginRoot, 'kun-candidate', 'Kun.exe'))).toBe(true)
+    expect(existsSync(input.stage)).toBe(false)
+  }, 120_000)
+
+  it.each(['size', 'missing', 'extra', 'type'] as const)('detects %s divergence in complete staged inventory', (fault) => {
+    const { input, helper, candidate } = preparedFixture()
+    assertSucceeded(stage(input, helper), 'stage before verification tamper')
+    const file = join(input.stage, 'resources', 'app.asar')
+    if (fault === 'size') writeFileSync(file, 'wrong-size')
+    else if (fault === 'missing') rmSync(file)
+    else if (fault === 'extra') writeFileSync(join(input.stage, 'unexpected'), 'extra')
+    else { rmSync(file); mkdirSync(file) }
+    assertExpectedFailure(compare(input, candidate), `inventory ${fault}`)
+    expect(existsSync(candidate)).toBe(true)
   }, 120_000)
 })
