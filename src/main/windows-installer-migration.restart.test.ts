@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -98,6 +98,22 @@ windowsOnly('Installer restart recovery bootstrap', () => {
     const next = { ...input, stage: `${input.target}.kun-stage-${process.pid + 10000}`,
       backup: join(dirname(input.journal), `update-backup-${process.pid + 10000}`) }
     assertSucceeded(run(next, 'Prepare', '', { KUN_INSTALLER_SELF_PID: String(process.pid + 10000) }), 'Prepare after recovered restart')
+  }, 120_000)
+
+  it('preserves a legitimately active stage-named installation during a later update recovery', () => {
+    const input = installerFixture()
+    const activeSource = `${input.source}.kun-stage-777`
+    renameSync(input.source, activeSource)
+    input.source = activeSource
+    input.target = activeSource
+    input.stage = `${activeSource}.kun-stage-${originalPid}`
+    assertSucceeded(run(input, 'Prepare'), 'Prepare from active stage-named source')
+    payload(input.stage, 'Kun.exe')
+    assertSucceeded(run(input, 'RecoverInstallerUpdateTransaction', '', restartedEnvironment(input)), 'recover active stage-named source')
+    expect(existsSync(join(activeSource, 'Kun.exe'))).toBe(true)
+    expect(readFileSync(join(activeSource, 'notes.txt'), 'utf8')).toBe('preserved user file')
+    expect(existsSync(input.stage)).toBe(false)
+    expect(existsSync(input.transaction)).toBe(false)
   }, 120_000)
 
   it('supports the independently resolved registered source when older updaters have no source marker', () => {
