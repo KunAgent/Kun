@@ -339,7 +339,7 @@ describe('model provider settings', () => {
         kun: {
           ...defaultKunRuntimeSettings(),
           providerId: minimaxProfile.id,
-          model: minimaxProfile.models[0]
+          model: 'MiniMax-M3'
         }
       }
     })
