@@ -55,7 +55,7 @@ export type TurnExecutionFailure = {
 export type ModelRoundOutcome = 'continue' | 'stop' | 'failed' | 'aborted'
 
 /** Outcome returned after the ordered tool-dispatch stage. */
-export type ToolDispatchOutcome = 'continue' | 'aborted' | 'all_suppressed' | 'budget_exhausted'
+export type ToolDispatchOutcome = 'continue' | 'aborted' | 'all_suppressed' | 'some_suppressed' | 'budget_exhausted'
 
 export type ResolvedTurnAttachments = Readonly<{
   imageAttachments: readonly ModelInputAttachment[]

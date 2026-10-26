@@ -376,7 +376,8 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       return this.advanceToolSuppressionRecovery(input)
     }
     await this.updatePostToolFailureRecoveryAfterDispatch(input, dispatchableToolCalls)
-    this.toolSuppressionRecoveryStepsByTurn.delete(input.turnId)
+    // Keep the recovery budget across unrelated successful rounds, too.
+    // Otherwise alternating a suppressed call and echo can run forever.
     if (this.deps.receipts) {
       // Two-phase design tools: block the next model request until the
       // renderer confirms the canvas applied (or the timeout finalizes the
@@ -402,6 +403,8 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       }
       this.svgCompletionRecoveryStepsByTurn.delete(input.turnId)
     }
+    // Unrelated successful calls must not mask a repeating suppressed failure.
+    if (dispatched === 'some_suppressed') return this.advanceToolSuppressionRecovery(input)
     return 'continue'
   }
 }

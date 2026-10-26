@@ -75,11 +75,13 @@ export class ContextWindowNotes {
   async readFile(threadId: string, rawArgs: unknown): Promise<NotesReadFileResult> {
     const args = NotesReadFileArgsSchema.parse(rawArgs)
     const note = await this.store.readNote(threadId, args.path)
-    if (!note) throw new Error(`note not found: ${args.path}`)
+    if (!note) throw new Error(`note not found: ${args.path}. Use notes_list_files_by_prefix to find a note in this thread, or history_search_contents to recover context; do not retry the same missing path.`)
     const offset = args.cursor !== undefined
       ? decodeOffsetCursor(args.cursor, `notes:read:${threadId}:${args.path}`)
       : (args.offset ?? 0)
-    if (offset instanceof Error) throw offset
+    if (offset instanceof Error) {
+      throw new Error(`${offset.message}. Retry notes_read_file without cursor for this path, then use only its returned nextCursor.`)
+    }
     const read = segmentRead(note.content, offset)
     return {
       path: args.path,
@@ -126,7 +128,7 @@ export class ContextWindowNotes {
       threadId, args.path, args.operationId, args.text, this.nowIso(),
       await this.positionOf(threadId)
     )
-    return { path: args.path, revision: outcome.revision, operationId: args.operationId }
+    return { path: args.path, revision: outcome.revision, operationId: args.operationId, applied: outcome.status === 'applied' }
   }
 
   async writeFile(threadId: string, rawArgs: unknown): Promise<NotesWriteFileResult> {
