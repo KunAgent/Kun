@@ -33,6 +33,8 @@ import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-refe
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
+import { buildCodexAppServerDeps, type CodexRuntimeSharedDeps } from './runtime-composition-codex.js'
+import { buildPiRpcDeps } from './runtime-composition-pi.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -77,6 +79,23 @@ export function createRuntimeRegistry(
   // Per-turn `kun-tools` grants for ACP child sessions; the bridge
   // host still narrows execution to each child's read/write boundary.
   const kunToolsMcp = services.kunToolsMcp
+  const sessionLayerDeps = (child: Parameters<ChildDelegatedRuntimeFactory>[0]): CodexRuntimeSharedDeps => ({
+    sessionCoordinator: delegatedSessions,
+    threadStore: child.threadStore,
+    sessionStore: child.sessionStore,
+    turns: child.turns,
+    events: child.events,
+    ids: child.ids,
+    credentialEnv: services.acpCredentialEnv,
+    systemPrompt: child.prefix.systemPrompt,
+    approvalGate,
+    approvalReview: approvalReviewService,
+    userInputGate: core.userInputGate,
+    ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
+    ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {}),
+    ...(llmDebug ? { debugSink: llmDebug } : {}),
+    nowIso
+  })
   const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) => {
     const childRuntimes = buildHarnessRuntimes({
     usage: usageService,
@@ -279,7 +298,13 @@ export function createRuntimeRegistry(
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       nowIso,
       ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
-    }
+    },
+    // Session-layer transports (codex app-server, pi rpc): dispatched workers
+    // pinned to Codex/Pi run here, so the child map must register them too.
+    codexAppServer: { ...buildCodexAppServerDeps(core.activeOptions, services.harnesses, sessionLayerDeps(child)),
+      enforceReadOnly: child.toolPolicy === 'readOnly' },
+    piRpc: { ...buildPiRpcDeps(core.activeOptions, services.harnesses, sessionLayerDeps(child)),
+      enforceReadOnly: child.toolPolicy === 'readOnly' }
     })
     const childRouter = new HarnessRouter({
       enabled: () => core.activeOptions.ade?.harnessRouter !== false,
