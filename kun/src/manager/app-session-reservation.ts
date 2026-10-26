@@ -4,7 +4,8 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { AppSessionOwnerSchema, type AppSessionOwner } from '../contracts/app-session-owner.js'
 import { requireRuntimeProcessIdentity, runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
-import { withManagerStartLock } from './manager-discovery.js'
+import { sameCanonicalPath } from './canonical-path.js'
+import { readManagerHandoffDiscoveryStrict, withManagerStartLock } from './manager-discovery.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 
 export const AppSessionParticipantSchema = z.object({
@@ -99,7 +100,8 @@ export async function acquireAppSessionReservation(input: {
   const owned: string[] = []
   try {
     for (const path of paths) {
-      await withManagerStartLock(`${path}.election`, () => claim(path, record), input.signal)
+      await withManagerStartLock(`${path}.election`,
+        () => claimAppSessionReservation(path, record, { signal: input.signal }), input.signal)
       owned.push(path)
     }
   } catch (error) {
@@ -128,9 +130,29 @@ export async function acquireAppSessionReservation(input: {
   }
 }
 
-async function claim(path: string, record: z.infer<typeof AppSessionReservationSchema>): Promise<void> {
+const CLAIM_PUBLICATION_GRACE_MS = 5_000
+const CLAIM_RETRY_MS = 50
+
+type ClaimOwnerState =
+  | { kind: 'record'; value: z.infer<typeof AppSessionReservationSchema> }
+  | { kind: 'missing' }
+  | { kind: 'unreadable' }
+
+/**
+ * Claim one profile path. An owner record that cannot be read is never treated
+ * as a free profile: live processes and a live Runtime Manager still block the
+ * claim, and a directory that stays unreadable past the publication grace is
+ * archived with its evidence before the claim is retried.
+ */
+export async function claimAppSessionReservation(
+  path: string,
+  record: z.infer<typeof AppSessionReservationSchema>,
+  options: { signal?: AbortSignal; publicationGraceMs?: number } = {}
+): Promise<void> {
+  const graceMs = options.publicationGraceMs ?? CLAIM_PUBLICATION_GRACE_MS
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   for (;;) {
+    options.signal?.throwIfAborted()
     try {
       await mkdir(path, { mode: 0o700 })
       try { await writeFile(join(path, 'owner.json'), JSON.stringify(record), { flag: 'wx', mode: 0o600 }) }
@@ -139,26 +161,111 @@ async function claim(path: string, record: z.infer<typeof AppSessionReservationS
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     }
-    let existing: z.infer<typeof AppSessionReservationSchema>
-    try { existing = AppSessionReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8'))) }
-    catch { throw new AppSessionConflictError(path, 'owner identity is starting or cannot be verified') }
-    if (runtimeProcessIsAlive(existing.owner.ownerPid, {
-      startedAt: existing.owner.ownerStartedAt, processIdentity: existing.owner.ownerProcessIdentity
-    })) {
-      throw new AppSessionConflictError(
-        path,
-        `a running ${existing.owner.ownerKind} application session (pid ${existing.owner.ownerPid}) owns this profile`
-      )
+    const owner = await readClaimOwner(path)
+    if (owner.kind === 'record') {
+      if (runtimeProcessIsAlive(owner.value.owner.ownerPid, {
+        startedAt: owner.value.owner.ownerStartedAt, processIdentity: owner.value.owner.ownerProcessIdentity
+      })) {
+        throw new AppSessionConflictError(
+          path,
+          `a running ${owner.value.owner.ownerKind} application session (pid ${owner.value.owner.ownerPid}) owns this profile`
+        )
+      }
+      const orphans = await liveParticipants(path)
+      if (orphans.length > 0) throw orphanedReservationError(path, owner.value.owner, orphans)
+      await retireClaimDirectory(path)
+      continue
     }
-    const orphans = await liveParticipants(path)
-    if (orphans.length > 0) throw orphanedReservationError(path, existing.owner, orphans)
-    const stale = `${path}.retired-${randomUUID()}`
-    try { await rename(path, stale) } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
-      throw error
-    }
-    await rm(stale, { recursive: true, force: true })
+    // Only a claim directory that nobody published into can be abandoned. A
+    // live writer publishes owner.json within the grace window below.
+    const participantConflict = await claimParticipantConflict(path)
+    if (participantConflict) throw participantConflict
+    const managerConflict = await claimManagerConflict(path, record)
+    if (managerConflict) throw managerConflict
+    const ageMs = await claimDirectoryAgeMs(path)
+    if (ageMs === undefined) continue
+    if (ageMs < graceMs) { await delay(CLAIM_RETRY_MS); continue }
+    await archiveUnverifiedClaim(path)
   }
+}
+
+async function readClaimOwner(path: string): Promise<ClaimOwnerState> {
+  let text: string
+  try { text = await readFile(join(path, 'owner.json'), 'utf8') } catch (error) {
+    // A missing record may be a writer that has not published yet; every other
+    // read failure is real evidence and must never read as "no owner".
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
+    throw error
+  }
+  try { return { kind: 'record', value: AppSessionReservationSchema.parse(JSON.parse(text)) } }
+  catch { return { kind: 'unreadable' } }
+}
+
+/** Directory mtime dates the last publish attempt, so it outlives a corrupt payload. */
+async function claimDirectoryAgeMs(path: string): Promise<number | undefined> {
+  try { return Date.now() - (await stat(path)).mtimeMs } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
+async function claimParticipantConflict(path: string): Promise<AppSessionConflictError | undefined> {
+  let live: LiveParticipant[]
+  try { live = await liveParticipants(path) } catch {
+    return new AppSessionConflictError(path,
+      'its leftover process records are unreadable, so ownership cannot be verified',
+      'Quit every Kun client, then inspect the app-session directory for diagnosis and retry')
+  }
+  if (live.length === 0) return undefined
+  const pids = [...new Set(live.map((participant) => participant.pid))]
+  const listed = live.map((participant) => `pid ${participant.pid} (${participant.instanceId})`).join(', ')
+  const stop = process.platform === 'win32'
+    ? pids.map((pid) => `taskkill /PID ${pid} /T /F`).join(' && ')
+    : `kill ${pids.join(' ')}`
+  return new AppSessionConflictError(
+    path,
+    `its owner record is unreadable, but processes it started are still running and did not shut down: ${listed}`,
+    `Stop them (\`${stop}\`), then retry`)
+}
+
+async function claimManagerConflict(
+  path: string,
+  record: z.infer<typeof AppSessionReservationSchema>
+): Promise<AppSessionConflictError | undefined> {
+  let manager
+  try { manager = await readManagerHandoffDiscoveryStrict(record.controlDir) } catch {
+    return new AppSessionConflictError(path,
+      'its Runtime Manager record is unreadable, so no owner can be verified',
+      'Quit every Kun client, then inspect manager.json in the control directory and retry')
+  }
+  if (!manager || !sameCanonicalPath(manager.dataDir, record.dataDir)) return undefined
+  if (!runtimeProcessIsAlive(manager.pid, { startedAt: manager.startedAt })) return undefined
+  return new AppSessionConflictError(path, `a Runtime Manager (pid ${manager.pid}) still owns this profile`)
+}
+
+async function retireClaimDirectory(path: string): Promise<void> {
+  const stale = `${path}.retired-${randomUUID()}`
+  try { await rename(path, stale) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  await rm(stale, { recursive: true, force: true })
+}
+
+/** Keep the unreadable record instead of deleting it: it is the only trace of that owner. */
+async function archiveUnverifiedClaim(path: string): Promise<void> {
+  const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+  try { await rename(path, `${path}.unverified-${stamp}-${randomUUID().slice(0, 8)}`) } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return
+    throw new AppSessionConflictError(path,
+      `its unreadable owner record could not be archived (${code ?? 'unknown error'})`,
+      `Check that ${dirname(path)} is writable, then retry`)
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function participantsAlive(path: string): Promise<boolean> {

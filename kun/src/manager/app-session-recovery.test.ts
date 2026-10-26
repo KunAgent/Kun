@@ -193,6 +193,15 @@ describe('orphaned application Manager recovery', () => {
     expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
   })
 
+  it('skips retirement instead of failing when an owner record is unreadable', async () => {
+    const f = await fixture()
+    await writeFile(join(f.claims[0], 'owner.json'), '{"owner":')
+    await f.recover()
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+    expect(await readManagerHandoffDiscoveryStrict(f.profile.controlDir)).not.toBeNull()
+    expect(await readFile(join(f.profile.dataDir, 'history.json'), 'utf8')).toBe('saved conversations')
+  })
+
   it('does not signal a recycled participant PID', async () => {
     const f = await fixture()
     for (const path of f.claims) {
