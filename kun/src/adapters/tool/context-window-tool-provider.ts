@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import {
   contextWindowToolSpecByName,
   CONTEXT_WINDOW_TOOL_NAMES,
@@ -45,7 +46,42 @@ function modeDisabledOutput(toolName: string): { output: unknown; isError: boole
   }
 }
 
-function failureOutput(error: unknown): { output: unknown; isError: boolean } {
+/**
+ * Turn a Zod issue into one actionable phrase. The previous behaviour leaked
+ * the raw issue array (a JSON blob) as the tool error, which told the model
+ * what failed but not what to send instead.
+ */
+function zodIssueHint(issue: ZodError['issues'][number]): string {
+  const record = issue as unknown as Record<string, unknown> & { message: string }
+  switch (issue.code) {
+    case 'too_small':
+      return `needs at least ${String(record.minimum ?? 1)}`
+    case 'too_big':
+      return `allows at most ${String(record.maximum ?? '?')}`
+    case 'invalid_type':
+      return `expected ${String(record.expected ?? 'a valid value')}`
+    case 'unrecognized_keys': {
+      const keys = Array.isArray(record.keys) ? record.keys.join(', ') : ''
+      return keys ? `unexpected field(s): ${keys}` : 'unexpected field(s)'
+    }
+    default:
+      return issue.message
+  }
+}
+
+function failureOutput(toolName: string, error: unknown): { output: unknown; isError: boolean } {
+  if (error instanceof ZodError) {
+    const details = error.issues
+      .map((issue) => `${issue.path.join('.') || 'arguments'}: ${zodIssueHint(issue)}`)
+      .join('; ')
+    return {
+      output: {
+        error: `invalid arguments for ${toolName}: ${details}. Correct that argument and call ${toolName} again; ` +
+          'optional fields may be omitted entirely instead of sent as empty values.'
+      },
+      isError: true
+    }
+  }
   return {
     output: { error: error instanceof Error ? error.message : String(error) },
     isError: true
@@ -96,7 +132,7 @@ export function buildContextWindowToolProviders(input: {
           return { output: await input.service.notes.writeFile(context.threadId, args) }
       }
     } catch (error) {
-      return failureOutput(error)
+      return failureOutput(toolName, error)
     }
   }
 

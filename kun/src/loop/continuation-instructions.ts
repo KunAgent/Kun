@@ -213,6 +213,7 @@ export function toolSuppressionRecoveryInstruction(
     'Tool-loop recovery:',
     '- The previous model response only requested tool calls that the host suppressed as repetitions.',
     '- Do not repeat the same tool with the same arguments.',
+    '- A corrected retry is allowed: the guard blocks identical arguments only. If the call failed argument validation, fix the argument it named and call the same tool again.',
     '- Either use a meaningfully different available tool or provide a clear, non-empty final answer.',
     '- Do not stop with an empty response.'
   ].join('\n')

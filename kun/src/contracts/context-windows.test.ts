@@ -236,6 +236,17 @@ describe('context window tool schemas', () => {
     })).toEqual({ path: 'notes/log.md', text: 'step done', expectedRevision: 0 })
   })
 
+  it('treats an empty cursor as an omitted cursor instead of a validation error', () => {
+    // Regression: models fill every advertised property and send cursor: ''.
+    // decodeOffsetCursor already maps '' to offset 0, so validation must not
+    // reject the only spelling the model can reliably produce.
+    expect(NotesReadFileArgsSchema.parse({ path: 'notes/log.md', cursor: '' }))
+      .toEqual({ path: 'notes/log.md', cursor: '' })
+    expect(HistoryListWindowsArgsSchema.parse({ cursor: '' })).toEqual({ cursor: '' })
+    expect(NotesReadFileArgsSchema.safeParse({ path: 'notes/log.md', cursor: 'x'.repeat(1025) }).success)
+      .toBe(false)
+  })
+
   it('enforces boundedness constants in argument schemas', () => {
     expect(HistoryListWindowsArgsSchema.safeParse({ pageSize: 101 }).success).toBe(false)
     expect(HistoryListWindowsArgsSchema.safeParse({ pageSize: 100 }).success).toBe(true)
