@@ -4,7 +4,7 @@ import { resolvePlanBuildRoute, usePlanBuildAgentStore } from './plan-build-agen
 const composer = { harnessId: 'kun', model: 'deepseek-v4', providerId: 'deepseek', credentialMode: '' }
 
 describe('plan build agent store', () => {
-  afterEach(() => usePlanBuildAgentStore.setState({ plans: {} }))
+  afterEach(() => usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} }))
 
   it('falls back to the composer Agent until the plan has a pick', () => {
     expect(resolvePlanBuildRoute(undefined, composer))
@@ -21,5 +21,13 @@ describe('plan build agent store', () => {
     expect(usePlanBuildAgentStore.getState().plans['plan-b']).toBeUndefined()
     store.clearRoute('plan-a')
     expect(usePlanBuildAgentStore.getState().plans['plan-a']).toBeUndefined()
+  })
+
+  it('keeps a handoff per plan until the card rebuilds', () => {
+    const store = usePlanBuildAgentStore.getState()
+    store.setHandoff('plan-a', { threadId: 'thread-1', route: { agentId: 'codex' } })
+    expect(usePlanBuildAgentStore.getState().handoffs['plan-a']?.threadId).toBe('thread-1')
+    store.clearHandoff('plan-a')
+    expect(usePlanBuildAgentStore.getState().handoffs['plan-a']).toBeUndefined()
   })
 })
