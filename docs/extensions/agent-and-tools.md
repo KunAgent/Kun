@@ -287,9 +287,9 @@ model tool call
 
 `sideEffects` 是政策输入，不是扩展自我授权。Kun 可以把声称 read-only 的操作升级为需要审批；扩展不能降低用户、sandbox、workspace 或 ApprovalGate 的严格程度。
 
-- 外部副作用在 Host-owned protected surface 由真实用户决定；
-- 扩展消息、Agent steering、Webview click、content script 都不能伪造审批；
-- Direct DOM 在审批待处理期间会被撤销；合成 click 会被拒绝，真实点击还需通过 Main 原生确认和 Kun 后端验证的短时单次 action-bound consent；
+- 工具副作用遵循 Runtime policy；需要审批时，由真实用户在 Code 或 Room 可见卡片中一次决定；
+- 扩展消息、Agent steering、Webview 不是审批 API；
+- Direct DOM 在审批待处理期间会被撤销，合成按钮 click 被拒绝。Main 校验 pending 请求和精确选项后签发 Kun 验证的短时单次 consent，不再弹出第二次原生确认。若工作台被注入且能调用受信任 IPC，就可能提交决定；这不再是独立于 DOM 的 consent 隔离边界；
 - 执行策略和 sandbox 的任何实际变化同样需要 Main 原生确认及绑定旧值/新值/发送 frame 的单次 consent；普通 Settings/Composer DOM 不能自行授权；
 - `request_user_input` 只能由 Kun 的 authenticated user boundary 回答；
 - headless 没有可信交互 surface 时保持 gated 或按显式 policy 结束，不合成答案。

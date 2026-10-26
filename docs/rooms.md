@@ -153,8 +153,11 @@ isolation block the operation rather than falling back to the source directory.
 The task panel shows actual Runtime status, working directory, frozen
 configuration, progress, verification, delivery and review evidence. Pending
 approvals and structured questions can be answered directly in the room.
-Approvals use the protected `resolveKunApproval` bridge and native confirmation;
-structured answers use the existing Runtime user-input API. Integration
+Approvals submit directly from the card through `resolveKunApproval`, without a
+second native confirmation. Main revalidates the pending action and exact choice
+and issues a one-shot consent; this does not isolate consent from a compromised
+workbench DOM. Permission-mode changes still require native confirmation.
+Structured answers use the existing Runtime user-input API. Integration
 executions expose their own pending gates, so those decisions target the actual
 integration thread instead of the original developer/reviewer thread.
 "Open in Code" opens the same execution record without duplicating the task.

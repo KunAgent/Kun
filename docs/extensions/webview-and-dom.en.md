@@ -258,7 +258,6 @@ These Host-owned windows load no extension Webview or content script:
 - install/upgrade and permission review;
 - workspace trust;
 - all of Settings and onboarding, plus account/secret entry, OAuth completion, and secret reveal;
-- the native Agent tool-approval prompt (the workbench also revokes Direct DOM while an approval is pending);
 - other security-critical consent.
 
 After a real decision in a protected surface, Main creates a short-lived single-use consent token bound to extension/version, operation kind, parameter digest, workspace, window session, and expiry. The token stays inside trusted host code.
@@ -267,7 +266,7 @@ A synthetic click, similar-looking button, or payload from ordinary DOM cannot c
 
 Agent tool approval adds an independent defense-in-depth chain. When an approval is `pending` or `submitting`, Kun revokes the current workbench content-script bindings and performs one clean reload to remove residual listeners, observers, and DOM mutations. Approval buttons accept only real Chromium events marked `isTrusted`; `HTMLElement.click()` and script-dispatched events are ignored. A real click enters a dedicated preload IPC method, while the generic `runtimeRequest` bridge cannot address `/v1/approvals/*`.
 
-For an interactive decision, Electron Main then shows a native modal that extensions cannot control. Only after confirmation does Main mint a 30-second, single-use HMAC consent bound exactly to the `approvalId`, `allow|deny` decision, expiry, and random nonce. `kun serve` verifies and consumes it before touching the `ApprovalGate`. Missing, forged, replayed, expired, different-ID, and different-decision tokens fail closed. Explicit `auto`/`never` policies use the same dedicated Main channel and action-bound token without pretending that a user clicked.
+For interactive tool approvals, the visible Code or Room card is the single confirmation; Electron Main does not show a second modal. Main validates the sending frame, pending snapshot and selected provider option, rechecks the snapshot before submission, and mints a 30-second, single-use HMAC consent bound to `approvalId`, `allow|deny`, the exact choice, expiry and a random nonce. `kun serve` verifies and consumes it before touching `ApprovalGate`; invalid, replayed, expired or mismatched tokens fail closed. This no longer isolates tool consent from a compromised workbench DOM: a caller able to invoke the trusted approval IPC may submit a decision without the independent native review. DOM event checks and snapshot validation do not replace that boundary. Runtime-owned policy decisions retain their existing authorization rules; the renderer cannot submit a policy allow.
 
 Settings changes to `approvalPolicy`/`sandboxMode` are not authorized as ordinary form writes either. Main compares the request with current persisted values, shows a native confirmation, and then creates a 30-second, one-shot action token that stays in Main and is bound to the old values, new values, and sending frame. Persistence occurs only after that token is consumed. The Composer permission picker also rejects synthetic events and passes through this Main gate. Direct DOM therefore can neither read Settings API-key/secret inputs nor use ordinary or synthetic clicks to switch later execution to `auto + danger-full-access`.
 
