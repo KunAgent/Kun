@@ -7,6 +7,7 @@ import type { NormalizedThread } from '../../agent/types'
 const prewarmMock = vi.hoisted(() => ({ requestThreadPrewarm: vi.fn() }))
 
 vi.mock('../../store/thread-detail-prewarm', () => prewarmMock)
+vi.mock('../../store/activity-store', () => ({ useActivityStore: (select: (state: { rows: Record<string, never> }) => unknown) => select({ rows: {} }) }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key })
 }))
