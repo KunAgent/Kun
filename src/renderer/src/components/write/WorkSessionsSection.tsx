@@ -21,7 +21,6 @@ import { writeWorkspaceKey } from '../../write/write-thread-registry'
 import { writeActivityForThreadIds, type WriteResourceActivityContext } from '../../write/write-resource-activity'
 import { usePaperStore } from '../../write/paper/paper-store'
 import { useWorkSessionStore } from '../../write/work-session-store'
-import { useWorkSlotsStore } from '../../write/work-slots-store'
 import { forgetWorkSessionTabs } from '../../write/work-session-tabs'
 import type { WorkSessionEntry } from '../../write/work-sessions-model'
 import { openWorkSession } from '../../write/work-session-actions'
@@ -30,6 +29,8 @@ import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import { SidebarActionDialog, type SidebarActionDialogState } from '../chat/SidebarProjectOverlays'
 import { RoomPopover } from '../rooms/RoomPopover'
 import { WorkSidebarSection } from './WorkSidebarSection'
+import { WorkOpenFileRows } from './WorkOpenFileRows'
+import { useWorkViewStore } from '../../write/work-view-store'
 import { useWorkSessions } from './use-work-sessions'
 import '../rooms/conversation-manage.css'
 
@@ -182,7 +183,7 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   )
 
   return (
-    <WorkSidebarSection id="sessions" label={t('workSidebarViewSessions')} actions={actions}>
+    <WorkSidebarSection id="sessions" label={t('workSidebarRecent')} actions={actions}>
       {searchOpen ? (
         <div className="work-sidebar-search">
           <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)}
@@ -195,6 +196,7 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
         </div>
       ) : null}
       <div className="work-sessions" data-work-sessions>
+        <WorkOpenFileRows />
         {draftRow ? (
           <div className="work-session-item" data-work-session-draft>
             <button type="button" className="work-session-row" aria-current="true">
@@ -225,8 +227,8 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
             <div key={session.id} className="work-session-item" data-work-session={session.id}>
               <button type="button" className="work-session-row" aria-current={isCurrent ? 'true' : undefined}
                 title={sessionLabel(session)} onClick={() => {
-                  useWorkSlotsStore.getState().setAssistantMain(true)
-                  void openWorkSession(session)
+                  useWorkViewStore.getState().showSession()
+                  void openWorkSession(session, undefined, { restoreWorkbench: false })
                 }}>
                 <span className="work-session-anchor"><AnchorIcon anchor={session.anchor} /></span>
                 <span className="work-session-title" data-placeholder={session.title ? undefined : 'true'}>
@@ -242,8 +244,11 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
               </button>
               <button type="button" className="work-session-side rooms-icon-button" data-work-session-side
                 title={t('workOpenBeside')} aria-label={t('workOpenBeside')} onClick={() => {
-                  useWorkSlotsStore.getState().setAssistantMain(false)
-                  void openWorkSession(session).then(() => useWriteWorkspaceStore.getState().setAssistantOpen(true))
+                  // Beside: the file keeps the stage and the session joins it in the split.
+                  const view = useWorkViewStore.getState()
+                  if (!view.split) view.toggleSplit()
+                  view.showDocument()
+                  void openWorkSession(session, undefined, { restoreWorkbench: false })
                 }}>
                 <PanelRight size={14} aria-hidden="true" />
               </button>

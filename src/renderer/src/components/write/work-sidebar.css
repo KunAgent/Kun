@@ -256,3 +256,12 @@
 }
 [data-work-sidebar] .ds-sidebar-tree-row > button { min-height: 32px; }
 [data-theme='dark'] .work-session-row[aria-current='true'] { box-shadow: 0 0 0 1px var(--kun-hair-2); }
+.work-open-file-icon { flex: none; }
+.work-materials-label {
+  margin-top: 14px;
+  padding: 6px 12px 2px;
+  border-top: 1px solid var(--kun-hair-1);
+  color: color-mix(in srgb, var(--ds-text-muted) 82%, transparent);
+  font-size: 12.5px;
+  font-weight: 500;
+}

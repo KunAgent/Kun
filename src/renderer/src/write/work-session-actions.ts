@@ -10,6 +10,7 @@ import { beginWorkSessionTransition, currentWorkSessionId, useWorkSessionStore }
 import { readWorkSessionTabs, workSessionTabTarget } from './work-session-tabs'
 import type { WorkSessionEntry } from './work-sessions-model'
 import { workAssistantThreadRoute } from './work-assistant-agent'
+import { useWorkViewStore } from './work-view-store'
 
 /** Mount a space; every space is a folder with its documents, boards and papers. */
 export async function mountWorkSpace(root: string): Promise<boolean> {
@@ -136,14 +137,25 @@ async function restoreSessionTabs(root: string, threadId: string): Promise<boole
  * Open a session: it becomes the current session of its space, and its
  * workbench comes back — the remembered tabs, or what it is attached to.
  */
-export async function openWorkSession(session: WorkSessionEntry, root?: string): Promise<void> {
+export async function openWorkSession(
+  session: WorkSessionEntry,
+  root?: string,
+  options: { restoreWorkbench?: boolean } = {}
+): Promise<void> {
   const end = beginWorkSessionTransition()
   try {
     if (root && !(await mountWorkSpace(root))) return
     const spaceRoot = useWriteWorkspaceStore.getState().workspaceRoot
     if (!spaceRoot) return
     useWorkSessionStore.getState().select(spaceRoot, session.id)
+    useWorkViewStore.getState().openSessionTab(spaceRoot, session.id)
     await useChatStore.getState().selectWriteThread(session.id, spaceRoot)
+    // A session opened as its own tab leaves the open files alone; only a page that
+    // is itself the session (Agent research) still comes with it.
+    if (options.restoreWorkbench === false) {
+      if (session.anchor.kind === 'research') await openSessionAnchor(spaceRoot, session)
+      return
+    }
     const restored = await restoreSessionTabs(spaceRoot, session.id)
     // Restoring the discover tab does not carry the research run. Apply it
     // anyway, or the page stays on the empty "new research" composer.

@@ -1,6 +1,5 @@
 import { useMemo, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useWorkSlotsStore } from '../../write/work-slots-store'
 import { FilePlus2, FolderPlus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
@@ -16,6 +15,7 @@ import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import { WriteFileTree } from './WriteFileTree'
 import { WorkSidebarSection } from './WorkSidebarSection'
 import type { WorkDirectoryActions } from './use-work-directory-actions'
+import { useWorkViewStore } from '../../write/work-view-store'
 
 /**
  * 文件: the current space's file tree. Opening anything here adds it as context
@@ -97,11 +97,14 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
           rootLoading={rootLoading}
           onToggleDir={(path) => void toggleDirectory(workspaceRoot, path)}
           onSelectFile={(path) => {
-            useWorkSlotsStore.getState().setAssistantMain(false)
+            useWorkViewStore.getState().showDocument()
             void openFile(workspaceRoot, path)
           }}
           onOpenBeside={(path) => {
-            useWorkSlotsStore.getState().setAssistantMain(true)
+            // Beside: the session keeps the stage and the file joins it in the split.
+            const view = useWorkViewStore.getState()
+            view.showSession()
+            if (!view.split) view.toggleSplit()
             void openFile(workspaceRoot, path)
           }}
           onCreateFile={(directoryPath) => void actions.openCreateFileDialog(directoryPath)}
