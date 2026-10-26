@@ -6,7 +6,7 @@ import { MobileModelPicker } from './MobileModelPicker'
 import './mobile-code-options.css'
 
 const MODES = ['auto', 'agent', 'plan'] as const
-const REASONING = ['auto', 'off', 'low', 'medium', 'high', 'max'] as const
+const REASONING = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
 export function MobileCodeOptions({ open, onClose, model, providerId, models, groups, mode,
   reasoning, onModel, onMode, onReasoning, onOpenSettings }: {
@@ -32,7 +32,8 @@ export function MobileCodeOptions({ open, onClose, model, providerId, models, gr
   }
   const reasoningLabels: Record<(typeof REASONING)[number], string> = {
     auto: t('composerReasoningAuto'), off: t('composerReasoningOff'), low: t('composerReasoningLow'),
-    medium: t('composerReasoningMedium'), high: t('composerReasoningHigh'), max: t('composerReasoningMax')
+    medium: t('composerReasoningMedium'), high: t('composerReasoningHigh'),
+    xhigh: t('composerReasoningXhigh'), max: t('composerReasoningMax')
   }
   return <MobileSheet open={open} title={t('composerModelControls')} closeLabel={t('close')} onClose={onClose}>
     <div className="kun-mobile-form">

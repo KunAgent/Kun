@@ -7,6 +7,7 @@ export const TurnReasoningEffortSchema = z.enum([
   'low',
   'medium',
   'high',
+  'xhigh',
   'max'
 ])
 export type TurnReasoningEffort = z.infer<typeof TurnReasoningEffortSchema>

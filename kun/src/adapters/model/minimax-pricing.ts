@@ -1,6 +1,6 @@
 export type MiniMaxCurrencyCosts = {
   costUsd?: number
-  costCny: number
+  costCny?: number
 }
 
 type MiniMaxPrice = {
@@ -72,6 +72,20 @@ const MINIMAX_M3_LONG_CONTEXT_PRICE: MiniMaxPrice = {
   cacheRead: 0.84
 }
 
+// MiniMax-M3.1-Flash published prices per 1M tokens. The China platform bills
+// CNY and the international platform bills USD, so the request host picks the table.
+const MINIMAX_M31_FLASH_CNY_PRICE: MiniMaxPrice = {
+  input: 1,
+  output: 4,
+  cacheRead: 0.1
+}
+
+const MINIMAX_M31_FLASH_USD_PRICE: MiniMaxPrice = {
+  input: 0.15,
+  output: 0.6,
+  cacheRead: 0.015
+}
+
 function isMiniMaxHost(baseUrl: string): boolean {
   try {
     const host = new URL(baseUrl).hostname.toLowerCase()
@@ -97,7 +111,22 @@ function priceForModel(model: string, billableInputTokens: number): MiniMaxPrice
   return MINIMAX_TEXT_PRICES[normalized] ?? null
 }
 
-function costCnyForPrice(input: {
+function flashPriceForHost(providerHost: string | undefined): {
+  price: MiniMaxPrice
+  currency: 'CNY' | 'USD'
+} {
+  try {
+    const host = providerHost ? new URL(providerHost).hostname.toLowerCase() : ''
+    if (host === 'api.minimax.io' || host === 'api.minimax.chat') {
+      return { price: MINIMAX_M31_FLASH_USD_PRICE, currency: 'USD' }
+    }
+  } catch {
+    // Fall through to the China platform price.
+  }
+  return { price: MINIMAX_M31_FLASH_CNY_PRICE, currency: 'CNY' }
+}
+
+function costForPrice(input: {
   price: MiniMaxPrice
   inputTokens: number
   cacheReadTokens: number
@@ -128,15 +157,21 @@ export function estimateMiniMaxCost(input: {
     0,
     input.inputTokens + input.cacheReadTokens + input.cacheWriteTokens
   )
+  const normalizedModel = normalizeModel(input.model)
+  const costInput = {
+    inputTokens: Math.max(0, input.inputTokens),
+    cacheReadTokens: Math.max(0, input.cacheReadTokens),
+    cacheWriteTokens: Math.max(0, input.cacheWriteTokens),
+    outputTokens: Math.max(0, input.outputTokens)
+  }
+  if (normalizedModel === 'minimax-m3.1-flash') {
+    const { price, currency } = flashPriceForHost(input.providerHost)
+    const cost = costForPrice({ price, ...costInput })
+    return currency === 'USD' ? { costUsd: cost } : { costCny: cost }
+  }
   const price = priceForModel(input.model, billableInputTokens)
   if (!price) return null
   return {
-    costCny: costCnyForPrice({
-      price,
-      inputTokens: Math.max(0, input.inputTokens),
-      cacheReadTokens: Math.max(0, input.cacheReadTokens),
-      cacheWriteTokens: Math.max(0, input.cacheWriteTokens),
-      outputTokens: Math.max(0, input.outputTokens)
-    })
+    costCny: costForPrice({ price, ...costInput })
   }
 }

@@ -57,6 +57,7 @@
   "providerModelEffortLow": "नीचा",
   "providerModelEffortMedium": "मध्यम",
   "providerModelEffortHigh": "ऊँचा",
+  "providerModelEffortXhigh": "अति ऊँचा",
   "providerModelEffortMax": "अधिकतम",
   "providerModelAliasesLabel": "उपनाम (वैकल्पिक)",
   "providerModelAliasesPlaceholder": "अल्पविराम से अलग किया गया, उदा. डीपसीक-चैट",

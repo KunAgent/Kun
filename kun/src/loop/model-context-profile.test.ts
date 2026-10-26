@@ -315,6 +315,19 @@ describe('built-in reasoning compatibility profiles', () => {
     })
   })
 
+  it('publishes the MiniMax-M3.1-Flash five-effort profile without inheriting M3 off semantics', () => {
+    expect(modelCapabilitiesForProviderModel({
+      providerId: 'minimax',
+      baseUrl: 'https://api.minimaxi.com/anthropic',
+      kind: 'http',
+      model: 'MiniMax-M3.1-Flash'
+    }).reasoning).toEqual({
+      supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      defaultEffort: 'max',
+      requestProtocol: 'anthropic-thinking'
+    })
+  })
+
   it('does not apply aggregator variants to an unknown custom endpoint', () => {
     expect(modelCapabilitiesForProviderModel({
       providerId: 'private',

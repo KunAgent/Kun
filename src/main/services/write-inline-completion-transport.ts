@@ -127,11 +127,13 @@ export function buildProviderRequestBody(input: {
   ]
   if (input.responseFormat === 'messages') {
     const converted = buildAnthropicMessages(messages)
+    const alwaysThinking = input.model.trim().toLowerCase().split('/').filter(Boolean).at(-1) === 'minimax-m3.1-flash'
     return {
       model: input.model,
       messages: converted.messages,
-      max_tokens: input.maxTokens,
-      ...(converted.system ? { system: converted.system } : {})
+      max_tokens: alwaysThinking ? Math.max(input.maxTokens, 1024) : input.maxTokens,
+      ...(converted.system ? { system: converted.system } : {}),
+      ...(alwaysThinking ? { output_config: { effort: 'low' } } : {})
     }
   }
   if (input.responseFormat === 'responses') {

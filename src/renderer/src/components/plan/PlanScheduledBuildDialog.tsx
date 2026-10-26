@@ -90,7 +90,11 @@ export function PlanScheduledBuildDialog({ settings, orchestration, initialTask,
   const selectedProvider = providers.find((provider) => provider.providerId === providerId)
   const selectedProfile = scheduleModelProfileForSelection(selectedProvider, model)
   const [reasoningEffort, setReasoningEffort] = useState<ScheduleReasoningEffort>(() =>
-    resolveScheduleReasoningSelection(initialTask?.reasoningEffort || chat.composerReasoningEffort, selectedProfile))
+    resolveScheduleReasoningSelection(
+      initialTask?.reasoningEffort ||
+        (chat.composerReasoningEffort === 'xhigh' ? 'max' : chat.composerReasoningEffort),
+      selectedProfile
+    ))
   const reasoningOptions = scheduleReasoningOptionsForModel(selectedProfile)
   const instant = zonedDateTimeToIso(date, time, timeZone)
   const pricing = instant.ok ? modelTimePricingState(selectedProvider?.provider, model, instant.iso) : { state: 'unsupported' as const }

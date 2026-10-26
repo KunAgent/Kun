@@ -57,6 +57,7 @@
   "providerModelEffortLow": "Низкий",
   "providerModelEffortMedium": "Средний",
   "providerModelEffortHigh": "Высокий",
+  "providerModelEffortXhigh": "Очень высокий",
   "providerModelEffortMax": "Максимальный",
   "providerModelAliasesLabel": "Псевдонимы (необязательно)",
   "providerModelAliasesPlaceholder": "Через запятую, например deepseek-chat",

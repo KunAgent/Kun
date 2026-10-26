@@ -49,4 +49,45 @@ describe('MiniMax pricing', () => {
       outputTokens: 1_000
     })).toBeNull()
   })
+
+  it('prices MiniMax-M3.1-Flash with the China platform CNY rates', () => {
+    const cost = estimateMiniMaxCost({
+      model: 'MiniMax-M3.1-Flash',
+      providerHost: 'https://api.minimaxi.com/anthropic',
+      inputTokens: 1_000_000,
+      cacheReadTokens: 1_000_000,
+      cacheWriteTokens: 0,
+      outputTokens: 1_000_000
+    })
+
+    expect(cost).not.toBeNull()
+    expect(cost!.costCny).toBeCloseTo(5.1)
+    expect(cost!.costUsd).toBeUndefined()
+  })
+
+  it('prices MiniMax-M3.1-Flash with the international platform USD rates', () => {
+    const cost = estimateMiniMaxCost({
+      model: 'minimax-m3.1-flash',
+      providerHost: 'https://api.minimax.io/anthropic',
+      inputTokens: 1_000_000,
+      cacheReadTokens: 1_000_000,
+      cacheWriteTokens: 0,
+      outputTokens: 1_000_000
+    })
+
+    expect(cost).not.toBeNull()
+    expect(cost!.costUsd).toBeCloseTo(0.765)
+    expect(cost!.costCny).toBeUndefined()
+  })
+
+  it('does not reuse M3 prices for unknown MiniMax models', () => {
+    expect(estimateMiniMaxCost({
+      model: 'MiniMax-M9',
+      providerHost: 'https://api.minimaxi.com/anthropic',
+      inputTokens: 1_000_000,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 1_000_000
+    })).toBeNull()
+  })
 })

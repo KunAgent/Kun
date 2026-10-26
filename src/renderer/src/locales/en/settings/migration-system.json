@@ -104,6 +104,7 @@
   "graphSettingsReasoningLow": "Low",
   "graphSettingsReasoningMedium": "Medium",
   "graphSettingsReasoningHigh": "High",
+  "graphSettingsReasoningXhigh": "X-High",
   "graphSettingsReasoningMax": "Ultra",
   "graphSettingsGlobalConcurrency": "Global parallel nodes",
   "graphSettingsGlobalConcurrencyDesc": "Maximum worker nodes scheduled across all active Graph runs.",

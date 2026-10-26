@@ -653,6 +653,7 @@
   "composerReasoningLow": "Low",
   "composerReasoningMedium": "Med",
   "composerReasoningHigh": "High",
+  "composerReasoningXhigh": "X-High",
   "composerReasoningMax": "Ultra",
   "composerReasoningFaster": "Faster",
   "composerReasoningSmarter": "Smarter",

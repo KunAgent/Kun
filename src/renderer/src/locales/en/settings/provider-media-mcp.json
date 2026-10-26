@@ -57,6 +57,7 @@
   "providerModelEffortLow": "Low",
   "providerModelEffortMedium": "Medium",
   "providerModelEffortHigh": "High",
+  "providerModelEffortXhigh": "X-High",
   "providerModelEffortMax": "Max",
   "providerModelAliasesLabel": "Aliases (optional)",
   "providerModelAliasesPlaceholder": "Comma separated, e.g. deepseek-chat",

@@ -353,6 +353,12 @@ export const XIAOMI_REASONING: ModelProviderReasoningCapabilityV1 = {
   requestProtocol: 'mimo-chat-completions'
 }
 
+export const MINIMAX_M31_FLASH_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+  defaultEffort: 'max',
+  requestProtocol: 'anthropic-thinking'
+}
+
 export const MINIMAX_M3_REASONING: ModelProviderReasoningCapabilityV1 = {
   supportedEfforts: ['auto', 'off'],
   defaultEffort: 'auto',

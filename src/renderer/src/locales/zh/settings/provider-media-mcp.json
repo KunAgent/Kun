@@ -57,6 +57,7 @@
   "providerModelEffortLow": "低",
   "providerModelEffortMedium": "中",
   "providerModelEffortHigh": "高",
+  "providerModelEffortXhigh": "极高",
   "providerModelEffortMax": "最强",
   "providerModelAliasesLabel": "别名（可选）",
   "providerModelAliasesPlaceholder": "逗号分隔，例如 deepseek-chat",

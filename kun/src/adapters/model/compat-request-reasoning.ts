@@ -31,6 +31,8 @@ export function responsesReasoningForEffort(
       return payload('medium')
     case 'high':
       return payload('high')
+    case 'xhigh':
+      return payload(reasoning?.supportedEfforts.includes('xhigh') ? 'xhigh' : (options.maxEffort ?? 'high'))
     case 'max':
       return payload(options.maxEffort ?? 'high')
     default:
@@ -242,11 +244,12 @@ export function applyAnthropicReasoningEffort(
 
 function anthropicOutputEffortForReasoningEffort(
   effort: NormalizedReasoningEffort
-): 'low' | 'medium' | 'high' | 'max' | null {
+): 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null {
   switch (effort) {
     case 'low':
     case 'medium':
     case 'high':
+    case 'xhigh':
     case 'max':
       return effort
     case 'auto':
@@ -262,6 +265,11 @@ export function resolveReasoningEffort(
   const normalized = normalizeReasoningEffortValue(effort)
   if (!normalized || !reasoning.supportedEfforts.length) return undefined
   if (reasoning.supportedEfforts.includes(normalized)) return normalized
+  // Providers without a distinct xhigh tier keep the historical xhigh → max alias.
+  if (normalized === 'xhigh') {
+    if (reasoning.supportedEfforts.includes('max')) return 'max'
+    return reasoning.supportedEfforts.includes(reasoning.defaultEffort) ? reasoning.defaultEffort : undefined
+  }
   if (
     normalized === 'low' &&
     reasoning.supportedEfforts.includes('off') &&
@@ -290,9 +298,10 @@ function normalizeReasoningEffortValue(effort: string | undefined): NormalizedRe
       return 'medium'
     case 'high':
       return 'high'
+    case 'xhigh':
+      return 'xhigh'
     case 'max':
     case 'maximum':
-    case 'xhigh':
       return 'max'
     default:
       return undefined

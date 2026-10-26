@@ -58,6 +58,7 @@ export const REASONING_EFFORT_LABEL_KEYS: Record<ModelReasoningEffort, string> =
   low: 'providerModelEffortLow',
   medium: 'providerModelEffortMedium',
   high: 'providerModelEffortHigh',
+  xhigh: 'providerModelEffortXhigh',
   max: 'providerModelEffortMax'
 }
 

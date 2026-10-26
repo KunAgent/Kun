@@ -520,6 +520,7 @@ describe('provider presets', () => {
     ['volcengine-coding-plan', 'doubao-seed-1-6-250615', 'thinking-toggle-chat-completions'],
     ['xiaomi', 'mimo-v2.5-pro', 'mimo-chat-completions'],
     ['minimax', 'MiniMax-M3', 'anthropic-thinking'],
+    ['minimax', 'MiniMax-M3.1-Flash', 'anthropic-thinking'],
     ['aliyun', 'qwq-plus', 'qwen-chat-completions'],
     ['tencentcloud', 'hunyuan-t1-latest', 'thinking-toggle-chat-completions'],
     ['codex', 'gpt-5.6-luna', 'openai-responses'],
@@ -533,6 +534,27 @@ describe('provider presets', () => {
     expect(preset).not.toBeNull()
     expect(modelProviderPresetProfile(preset!).modelProfiles[model]?.reasoning?.requestProtocol)
       .toBe(requestProtocol)
+  })
+
+  it('adds MiniMax-M3.1-Flash to both official MiniMax catalogs with a 1M vision profile', () => {
+    const preset = getModelProviderPreset('minimax')
+    expect(preset).not.toBeNull()
+    const profile = modelProviderPresetProfile(preset!)
+
+    expect(preset!.models).toContain('MiniMax-M3.1-Flash')
+    expect(preset!.tokenPlan?.models).toContain('MiniMax-M3.1-Flash')
+    expect(profile.modelProfiles['MiniMax-M3.1-Flash']).toMatchObject({
+      contextWindowTokens: 1_000_000,
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      supportsToolCalling: true,
+      reasoning: {
+        supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        defaultEffort: 'max',
+        requestProtocol: 'anthropic-thinking'
+      }
+    })
+    expect(profile.modelProfiles['MiniMax-M3']?.reasoning?.supportedEfforts).toEqual(['auto', 'off'])
   })
 
   it('keeps OpenCode Go DeepSeek v4 profiles aligned with DeepSeek defaults (#658)', () => {

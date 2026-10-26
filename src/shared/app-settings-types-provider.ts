@@ -336,7 +336,7 @@ export const MODEL_PROVIDER_MESSAGE_PARTS = ['text', 'image_url', 'input_image']
 
 export type ModelProviderMessagePartSupport = (typeof MODEL_PROVIDER_MESSAGE_PARTS)[number]
 
-export const MODEL_REASONING_EFFORTS = ['auto', 'off', 'low', 'medium', 'high', 'max'] as const
+export const MODEL_REASONING_EFFORTS = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
 export type ModelReasoningEffort = (typeof MODEL_REASONING_EFFORTS)[number]
 
@@ -552,7 +552,7 @@ export const MODEL_ROUTE_STRATEGIES = [
 /** Target provider id that names another route alias (nested routing). */
 export const NESTED_ROUTE_PROVIDER_ID = '@route'
 
-export const MODEL_ROUTE_RULE_EFFORTS = ['off', 'low', 'medium', 'high', 'max', 'auto'] as const
+export const MODEL_ROUTE_RULE_EFFORTS = ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'] as const
 export type ModelRouteRuleEffort = (typeof MODEL_ROUTE_RULE_EFFORTS)[number]
 
 export type ModelRouteRuleV1 = {

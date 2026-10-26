@@ -57,6 +57,7 @@
   "providerModelEffortLow": "低い",
   "providerModelEffortMedium": "中",
   "providerModelEffortHigh": "高",
+  "providerModelEffortXhigh": "極高",
   "providerModelEffortMax": "マックス",
   "providerModelAliasesLabel": "エイリアス (オプション)",
   "providerModelAliasesPlaceholder": "カンマ区切り、例:ディープシークチャット",

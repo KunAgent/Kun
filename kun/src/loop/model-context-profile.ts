@@ -272,6 +272,13 @@ function providerReasoningCapability(
   if (
     (provider.includes('minimax') || providerHostMatches(endpoint, 'minimaxi.com') ||
       providerHostMatches(endpoint, 'minimax.io')) &&
+    model.split('/').at(-1) === 'minimax-m3.1-flash'
+  ) {
+    return reasoning(['low', 'medium', 'high', 'xhigh', 'max'], 'max', 'anthropic-thinking')
+  }
+  if (
+    (provider.includes('minimax') || providerHostMatches(endpoint, 'minimaxi.com') ||
+      providerHostMatches(endpoint, 'minimax.io')) &&
     model.includes('minimax-m3')
   ) {
     return reasoning(['auto', 'off'], 'auto', 'anthropic-thinking')

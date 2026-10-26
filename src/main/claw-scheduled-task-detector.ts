@@ -251,6 +251,7 @@ function buildDetectionRequest(input: {
     }
   }
   if (endpointFormat === 'messages') {
+    const alwaysThinking = input.model.trim().toLowerCase().split('/').filter(Boolean).at(-1) === 'minimax-m3.1-flash'
     return {
       url: buildModelEndpointUrl(input.baseUrl, input.endpointFormat),
       headers,
@@ -259,7 +260,8 @@ function buildDetectionRequest(input: {
         model: input.model,
         system: input.systemPrompt,
         messages: [{ role: 'user', content: input.sourceText }],
-        max_tokens: 300
+        max_tokens: alwaysThinking ? 1024 : 300,
+        ...(alwaysThinking ? { output_config: { effort: 'low' } } : {})
       }
     }
   }

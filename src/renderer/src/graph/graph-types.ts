@@ -125,7 +125,7 @@ export type GraphPlanNode = {
         systemPrompt: string
         model?: string
         providerId?: string
-        reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
+        reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
         toolPolicy?: 'readOnly' | 'inherit'
         allowedTools?: string[]
         blockedTools?: string[]
@@ -217,7 +217,7 @@ export type GraphAttempt = {
     allowedModelProviderIds: string[]
     allowedModels: string[]
     allowedProviderIds: string[]
-    reasoningEffort: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
+    reasoningEffort: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
     toolPolicy: 'readOnly' | 'inherit'
     allowedTools: string[]
     blockedTools: string[]
@@ -496,7 +496,7 @@ export type GraphPatchOperation =
             systemPrompt: string
             model?: string
             providerId?: string
-            reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
+            reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
             toolPolicy?: 'readOnly' | 'inherit'
             allowedTools?: string[]
             blockedTools?: string[]
@@ -556,7 +556,7 @@ export type GraphAgentProfile = {
   systemPrompt: string
   model: string
   providerId: string
-  reasoningEffort: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
+  reasoningEffort: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   provenanceEpisodeIds: string[]
   aliasProfileIds?: string[]
   createdAt: string
