@@ -21,6 +21,8 @@ export type GitBranchesResult =
       currentBranch: string | null
       branches: GitBranchRow[]
       dirtyCount: number
+      /** Free bytes on the volume that holds `~/.kun/worktrees`; null when unknown. */
+      worktreeFreeBytes?: number | null
     }
   | {
       ok: false
