@@ -6,7 +6,6 @@ import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { flushDesignWorkspacePersistence } from '../../design/design-persistence-flush'
 import type { DesignHtmlElementContext } from '../../design/design-composer-context'
 import type { DesignArtifact } from '../../design/design-types'
-import type { DesignRuntimeQualityPayload } from '../../design/design-html-quality'
 import { DesignCanvas } from './DesignCanvas'
 
 type Props = {
@@ -28,8 +27,6 @@ type Props = {
     brief: string
   ) => boolean | Promise<boolean>
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
 }
 
 export function designWorkspaceStageMode(options: {
@@ -68,8 +65,6 @@ export function DesignWorkspaceView({
   onScreenCreated,
   onSvgCreated,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const loadDesignSettings = useDesignWorkspaceStore((s) => s.loadDesignSettings)
@@ -147,8 +142,6 @@ export function DesignWorkspaceView({
             onScreenCreated={onScreenCreated}
             onSvgCreated={onSvgCreated}
             onUseElementAsContext={onUseElementAsContext}
-            onRuntimeQualityFindings={onRuntimeQualityFindings}
-            onRequestQualityRepair={onRequestQualityRepair}
           />
         )}
       </div>

@@ -42,8 +42,6 @@ type Props = Pick<
   | 'onScreenCreated'
   | 'onSvgCreated'
   | 'onUseElementAsContext'
-  | 'onRuntimeQualityFindings'
-  | 'onRequestQualityRepair'
 > & {
   workspaceRoot: string
   activeThreadId: string | null
@@ -164,8 +162,6 @@ export function CodeCanvasPanel({
   onScreenCreated,
   onSvgCreated,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair
 }: Props) {
   const { t } = useTranslation('common')
   const surface = useCodeCanvasDesignSurface((s) => s.surface)
@@ -426,8 +422,6 @@ export function CodeCanvasPanel({
               onScreenCreated={onScreenCreated}
               onSvgCreated={onSvgCreated}
               onUseElementAsContext={onUseElementAsContext}
-              onRuntimeQualityFindings={onRuntimeQualityFindings}
-              onRequestQualityRepair={onRequestQualityRepair}
               leftSidebarCollapsed={focusedPresentation ? leftSidebarCollapsed : undefined}
               onToggleLeftSidebar={focusedPresentation ? onToggleLeftSidebar : undefined}
               chrome={{ title, notice: titlePill, actions: hostActions }}

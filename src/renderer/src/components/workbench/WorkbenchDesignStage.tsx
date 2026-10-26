@@ -15,8 +15,6 @@ type WorkbenchDesignStageProps = Pick<
   | 'onScreenCreated'
   | 'onSvgCreated'
   | 'onUseElementAsContext'
-  | 'onRuntimeQualityFindings'
-  | 'onRequestQualityRepair'
 > & {
   rightPanel: ReactNode
   drawingStart: DesignDrawingStartProps

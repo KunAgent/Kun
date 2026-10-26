@@ -1,8 +1,6 @@
 import { useState } from 'react'
-import { Maximize2, MousePointerClick, Play, SlidersHorizontal, Square } from 'lucide-react'
+import { Maximize2, Play, SlidersHorizontal, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { DesignRuntimeQualityPayload } from '../../../../design/design-html-quality'
-import type { DesignHtmlQualityFinding } from '../../../../design/design-html-quality'
 import type { DesignArtifact } from '../../../../design/design-types'
 import { useCanvasSelectionStore } from '../../../../design/canvas/canvas-selection-store'
 import {
@@ -10,7 +8,6 @@ import {
   useCanvasInspectorStore
 } from '../../../../design/canvas/canvas-inspector-store'
 import { BoardDownloadMenu } from '../chrome/BoardDownloadMenu'
-import { HtmlFrameQualityControl } from './HtmlFrameQualityControl'
 
 /** Height of the label row above a board, in screen pixels. */
 export function htmlFrameChromeOffset(screenWidth: number): number {
@@ -33,25 +30,16 @@ export function htmlFrameChromeActionLevel(options: { screenWidth: number; activ
 type HtmlFrameChromeProps = {
   active: boolean
   artifact?: DesignArtifact
-  artifactId?: string
-  artifactRelativePath?: string
   chromeOffset: number
   drawingActive: boolean
-  editing: boolean
   failedMessage: string
   interactive: boolean
   previewWebviewUrl: string
-  qualityChecked: boolean
-  qualityDetailsOpen: boolean
-  qualityFindings: DesignHtmlQualityFinding[]
   screenWidth: number
   shapeId: string
   shapeName: string
   workspaceRoot: string
-  onQualityDetailsOpenChange: React.Dispatch<React.SetStateAction<boolean>>
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
   onToggleInteractive?: (shapeId: string) => void
-  onToggleModify: (shapeId: string) => void
   readOnly?: boolean
   /** Outer-to-inner path of the hovered or selected element. */
   crumbs?: { id: number; label: string; current: boolean }[]
@@ -64,17 +52,11 @@ const actionButton =
 export function HtmlFrameChrome({
   active,
   artifact,
-  artifactId,
-  artifactRelativePath,
   chromeOffset,
   drawingActive,
-  editing,
   failedMessage,
   interactive,
   previewWebviewUrl,
-  qualityChecked,
-  qualityDetailsOpen,
-  qualityFindings,
   screenWidth,
   shapeId,
   shapeName,
@@ -82,17 +64,14 @@ export function HtmlFrameChrome({
   readOnly,
   crumbs = [],
   onSelectCrumb,
-  onQualityDetailsOpenChange,
-  onRequestQualityRepair,
-  onToggleInteractive,
-  onToggleModify
+  onToggleInteractive
 }: HtmlFrameChromeProps): React.JSX.Element {
   const { t } = useTranslation('common')
   const ready = Boolean(previewWebviewUrl) && !drawingActive && !failedMessage
   const [hovered, setHovered] = useState(false)
-  // Icons stay out of the way until the board is hovered, selected, edited or
-  // has its quality details open; the name strip is otherwise just the name.
-  const actionsVisible = hovered || active || editing || qualityDetailsOpen
+  // Icons stay out of the way until the board is hovered or selected; the name
+  // strip is otherwise just the name.
+  const actionsVisible = hovered || active
   const statusDot = drawingActive ? 'generating' : failedMessage ? 'failed' : null
   const level = interactive ? 'none' : htmlFrameChromeActionLevel({ screenWidth, active })
   const showActions = level !== 'none' || interactive
@@ -177,44 +156,6 @@ export function HtmlFrameChrome({
           onPointerLeave={() => setHovered(false)}
           onDoubleClick={stop}
         >
-          {active && ready && level === 'full' ? (
-            <HtmlFrameQualityControl
-              available={screenWidth > 220}
-              open={qualityDetailsOpen}
-              onOpenChange={onQualityDetailsOpenChange}
-              screenWidth={screenWidth}
-              artifactId={artifactId}
-              artifactRelativePath={artifactRelativePath}
-              shapeId={shapeId}
-              qualityChecked={qualityChecked}
-              qualityFindings={qualityFindings}
-              onRequestQualityRepair={onRequestQualityRepair}
-            />
-          ) : null}
-          {editing ? (
-            <span className="mr-1 whitespace-nowrap rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] font-medium text-accent">
-              {t('canvasBoardEditHint')}
-            </span>
-          ) : null}
-          {ready && !readOnly && (editing || active) ? (
-            <button
-              type="button"
-              onPointerDown={stop}
-              onClick={(event) => {
-                stop(event)
-                selectBoard()
-                onToggleModify(shapeId)
-              }}
-              title={t(editing ? 'canvasBoardEditDone' : 'canvasBoardEdit')}
-              aria-label={t(editing ? 'canvasBoardEditDone' : 'canvasBoardEdit')}
-              aria-pressed={editing}
-              className={`${actionButton} ${screenWidth > 440 ? '!w-auto gap-1 px-1.5' : ''} ${editing ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
-              data-canvas-board-pick={shapeId}
-            >
-              <MousePointerClick className="h-3.5 w-3.5" strokeWidth={1.9} />
-              {screenWidth > 440 ? <span className="whitespace-nowrap text-[11px]">{t(editing ? 'canvasBoardEditDone' : 'canvasBoardEdit')}</span> : null}
-            </button>
-          ) : null}
           {ready && !readOnly && (interactive || active) ? (
             <button
               type="button"

@@ -44,7 +44,7 @@ type Options = {
   canvasWidth: number
   canvasHeight: number
   /** Picking is available on this frame (select tool, not generating, not read-only). */
-  editing: boolean
+  enabled: boolean
   interactive: boolean
   executeScript: DesignHtmlPreviewHostRenderProps['executeScript']
   shapeId: string
@@ -78,26 +78,23 @@ function inPreviewPoint(
 }
 
 export function useHtmlFrameElementSelection(options: Options) {
-  const { artifact, editing, interactive, executeScript, shapeId, previewRevision } = options
+  const { artifact, interactive, executeScript, shapeId, previewRevision } = options
   const epoch = JSON.stringify([
     shapeId, artifact?.id, artifact?.relativePath, previewRevision,
     options.previewWebviewUrl, options.webviewMountNonce
   ])
   const [pick, setPick] = useState<Pick | null>(null)
-  const [hover, setHover] = useState<Pick | null>(null)
   const [hoverBox, setHoverBox] = useState<HoverBox | null>(null)
   const [pointerInside, setPointerInside] = useState(false)
   const [altHeld, setAltHeld] = useState(false)
   const [layerMenu, setLayerMenu] = useState<HtmlFrameLayerMenu | null>(null)
   const [selectionError, setSelectionError] = useState('')
-  const enabled = editing && !interactive
+  const enabled = options.enabled && !interactive
   const live = useRef({ epoch, enabled, options })
   live.current = { epoch, enabled, options }
   const current = useRef<Pick | null>(null)
   const owner = useRef(Symbol('html-selection'))
-  const sequences = useRef({ select: 0, hover: 0 })
-  const inFlight = useRef({ select: false, hover: false })
-  const lastHover = useRef(-Infinity)
+  const sequences = useRef({ select: 0 })
   const hoverBoxRef = useRef<HoverBox | null>(null)
   const leaveTimer = useRef<number | null>(null)
   const relocateTimers = useRef<number[]>([])
@@ -141,10 +138,8 @@ export function useHtmlFrameElementSelection(options: Options) {
   }, [])
 
   const clearHover = useCallback(() => {
-    sequences.current.hover += 1
     if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current)
     leaveTimer.current = null
-    setHover(null)
     setHoverTarget(null)
   }, [setHoverTarget])
 
@@ -191,7 +186,6 @@ export function useHtmlFrameElementSelection(options: Options) {
     return () => {
       mounted.current = false
       sequences.current.select += 1
-      sequences.current.hover += 1
       if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current)
       cancelRelocation()
       clearReference()
@@ -241,11 +235,9 @@ export function useHtmlFrameElementSelection(options: Options) {
   }, [enabled, clearHover])
 
   const selectChain = useCallback((
-    chain: HtmlElementPickChain | null, capturedEpoch: string, extra: { boxId?: number; token?: number }, deep: boolean
+    chain: HtmlElementPickChain | null, capturedEpoch: string, extra: { boxId?: number; token?: number }
   ): boolean => {
-    const selection = chain && (deep || extra.boxId !== undefined
-      ? htmlElementSelectionFromChainIndex(chain, 0)
-      : resolveHtmlElementPickSelection(chain))
+    const selection = chain && htmlElementSelectionFromChainIndex(chain, 0)
     if (!chain || !selection || !selection.element.selectorIsUnique) return false
     apply({ selection, chain, epoch: capturedEpoch, ...extra })
     return true
@@ -262,7 +254,7 @@ export function useHtmlFrameElementSelection(options: Options) {
       const value = await pending
       if (!mounted.current || sequence !== sequences.current.select || capturedEpoch !== live.current.epoch) return false
       const chain = normalizeHtmlElementPickResult(value)
-      if (chain && selectChain(chain, capturedEpoch, { boxId: id, token }, false)) return true
+      if (chain && selectChain(chain, capturedEpoch, { boxId: id, token })) return true
       if ((value as { reason?: string } | null)?.reason === 'stale') void refresh(true)
       setSelectionError('Unable to select this component. Try another element.')
     } catch {
@@ -271,43 +263,36 @@ export function useHtmlFrameElementSelection(options: Options) {
     return false
   }, [refresh, selectChain])
 
-  const legacyPick = useCallback((
-    point: { x: number; y: number }, mode: 'hover' | 'select', deep: boolean
-  ) => {
-    const opts = live.current.options
+  /**
+   * Point pick straight from the page: the exact node under the pointer. Used
+   * for Cmd/Ctrl-click and when no element map has arrived yet.
+   */
+  const pointPick = useCallback((point: { x: number; y: number }, deep: boolean) => {
     const capturedEpoch = live.current.epoch
-    const sequence = ++sequences.current[mode]
-    inFlight.current[mode] = true
+    const sequence = ++sequences.current.select
     const valid = () => mounted.current && live.current.enabled &&
-      capturedEpoch === live.current.epoch && sequences.current[mode] === sequence
+      capturedEpoch === live.current.epoch && sequences.current.select === sequence
     void (async () => {
       try {
-        const pending = opts.executeScript(buildHtmlElementPickScript(point))
+        const pending = live.current.options.executeScript(buildHtmlElementPickScript(point))
         if (!pending) throw new Error('Preview is not ready.')
         const value = await pending
         if (!valid()) return
         const chain = normalizeHtmlElementPickResult(value)
         const selection = chain && (deep ? htmlElementSelectionFromChainIndex(chain, 0) : resolveHtmlElementPickSelection(chain))
         if (!chain || !selection || !selection.element.selectorIsUnique) {
-          if (mode === 'hover') setHover(null)
-          else {
-            clearElementSelection()
-            if ((value as { reason?: string } | null)?.reason !== 'empty') {
-              setSelectionError('Unable to select this component. Try another element.')
-            }
+          clearElementSelection()
+          if ((value as { reason?: string } | null)?.reason !== 'empty') {
+            setSelectionError('Unable to select this component. Try another element.')
           }
           return
         }
-        const next = { selection, chain, epoch: capturedEpoch }
-        if (mode === 'hover') setHover(next)
-        else apply(next)
+        apply({ selection, chain, epoch: capturedEpoch })
       } catch {
-        if (valid() && mode === 'select') {
+        if (valid()) {
           clearElementSelection()
           setSelectionError('Unable to read this component. Try again when the preview is ready.')
         }
-      } finally {
-        inFlight.current[mode] = false
       }
     })()
   }, [apply, clearElementSelection])
@@ -322,31 +307,20 @@ export function useHtmlFrameElementSelection(options: Options) {
       window.clearTimeout(leaveTimer.current)
       leaveTimer.current = null
     }
-    const point = inPreviewPoint(clientX, clientY, bounds, live.current.options)
     const map = getMap()
-    if (map && !mods.deep) {
-      setHover(null)
-      const box = hitTestHtmlElementMap(map, point)
-      const previous = hoverBoxRef.current
-      if (!box) return
-      if (previous && previous.box.id === box.id && previous.token === map.token) return
-      setHoverTarget({ box, parent: htmlElementMapParent(map, box.id), token: map.token, epoch: live.current.epoch })
-      return
-    }
-    if (inFlight.current.hover || inFlight.current.select || Date.now() - lastHover.current < 90) return
-    lastHover.current = Date.now()
-    setHoverTarget(null)
-    legacyPick(point, 'hover', Boolean(mods.deep))
-  }, [getMap, legacyPick, setHoverTarget])
+    if (!map) return
+    const point = inPreviewPoint(clientX, clientY, bounds, live.current.options)
+    const box = hitTestHtmlElementMap(map, point, { deep: mods.deep })
+    const previous = hoverBoxRef.current
+    if (!box || (previous && previous.box.id === box.id && previous.token === map.token)) return
+    setHoverTarget({ box, parent: htmlElementMapParent(map, box.id), token: map.token, epoch: live.current.epoch })
+  }, [getMap, setHoverTarget])
 
   const leave = useCallback(() => {
     setPointerInside(false)
-    // A response still in flight belongs to a pointer that is gone.
-    sequences.current.hover += 1
     if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current)
     leaveTimer.current = window.setTimeout(() => {
       leaveTimer.current = null
-      setHover(null)
       setHoverTarget(null)
     }, HOVER_LEAVE_MS)
   }, [setHoverTarget])
@@ -363,28 +337,12 @@ export function useHtmlFrameElementSelection(options: Options) {
     const box = map && !mods.deep ? hitTestHtmlElementMap(map, point) : null
     if (map && box) {
       void selectBox(box.id, map.token).then((ok) => {
-        if (!ok && live.current.enabled && mounted.current && current.current === null) {
-          legacyPick(point, 'select', false)
-        }
+        if (!ok && live.current.enabled && mounted.current && current.current === null) pointPick(point, false)
       })
       return
     }
-    legacyPick(point, 'select', Boolean(mods.deep))
-  }, [clearHover, getMap, legacyPick, selectBox])
-
-  const hoverAt = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!live.current.enabled) return
-    hoverClient(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
-      { deep: event.metaKey || event.ctrlKey })
-  }, [hoverClient])
-
-  const selectElementAt = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!live.current.enabled || event.button !== 0) return
-    event.preventDefault()
-    event.stopPropagation()
-    selectClient(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
-      { deep: event.metaKey || event.ctrlKey })
-  }, [selectClient])
+    pointPick(point, Boolean(mods.deep))
+  }, [clearHover, getMap, pointPick, selectBox])
 
   const selectIndex = useCallback((index: number) => {
     const value = current.current
@@ -475,11 +433,9 @@ export function useHtmlFrameElementSelection(options: Options) {
   }, [apply])
 
   const selected = pick?.epoch === epoch ? pick.selection : null
-  const legacyHovered = hover?.epoch === epoch ? hover.selection.element : null
   const boxHovered = hoverBox?.epoch === epoch ? hoverBox : null
   const hoverIsSelection = Boolean(
-    (boxHovered && pick && pick.boxId === boxHovered.box.id && pick.token === boxHovered.token) ||
-    (legacyHovered && legacyHovered.selector === selected?.element.selector)
+    boxHovered && pick && pick.boxId === boxHovered.box.id && pick.token === boxHovered.token
   )
   const map = getMap()
   const selectedBox = selected && pick?.boxId !== undefined && map && map.token === pick.token
@@ -494,7 +450,7 @@ export function useHtmlFrameElementSelection(options: Options) {
   }, [map, crumbBoxId, selectedBox, boxHovered])
   const hoverRect = boxHovered
     ? { left: boxHovered.box.x, top: boxHovered.box.y, width: boxHovered.box.w, height: boxHovered.box.h }
-    : legacyHovered?.rect ?? null
+    : null
   const measureLines = useMemo(() => {
     if (!altHeld || !selected || !boxHovered || hoverIsSelection) return []
     const rect = selected.element.rect
@@ -506,8 +462,7 @@ export function useHtmlFrameElementSelection(options: Options) {
   return {
     selectionError,
     hoverRect,
-    hoverLabel: boxHovered ? htmlElementBoxLabel(boxHovered.box)
-      : legacyHovered ? htmlElementCandidateLabel(legacyHovered) : '',
+    hoverLabel: boxHovered ? htmlElementBoxLabel(boxHovered.box) : '',
     hoverSize: boxHovered ? htmlElementBoxSizeLabel(boxHovered.box) : '',
     hoverParentRect: boxHovered?.parent && !boxHovered.parent.shell
       ? { left: boxHovered.parent.x, top: boxHovered.parent.y, width: boxHovered.parent.w, height: boxHovered.parent.h }
@@ -526,11 +481,9 @@ export function useHtmlFrameElementSelection(options: Options) {
     )),
     canDrillToHit: Boolean(selected && selected.element.selector !== selected.hit.selector),
     canEditText: Boolean(selected?.element.editableText),
-    hoverAt,
     hoverClient,
     leave,
     clearHover: leave,
-    selectElementAt,
     selectClient,
     selectParentElement,
     selectHitElement: () => selectIndex(0),

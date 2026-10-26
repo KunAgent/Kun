@@ -8,9 +8,6 @@ import type { DesignHtmlElementContext } from '../../../../design/design-compose
 import { inferDesignArtifactFoundationRole } from '../../../../design/design-types'
 import { useDesignWorkspaceStore } from '../../../../design/design-workspace-store'
 import { useChatStore } from '../../../../store/chat-store'
-import {
-  type DesignRuntimeQualityPayload
-} from '../../../../design/design-html-quality'
 import { replaceHtmlElementTextInSource } from '../../../../design/design-html-element-edit'
 import { writeDesignWorkspaceFile } from '../../../../design/design-persistence-coordinator'
 import { useDesignHtmlPreview } from '../../DesignHtmlPreviewHost'
@@ -43,7 +40,6 @@ import { useHtmlFrameAutoSize } from './use-html-frame-auto-size'
 import { useHtmlFrameAiCursor } from './use-html-frame-ai-cursor'
 import { useHtmlFrameCodeBindings } from './use-html-frame-code-bindings'
 import { useHtmlFrameElementSelection } from './use-html-frame-element-selection'
-import { useHtmlFrameRuntimeQuality } from './use-html-frame-runtime-quality'
 type ScreenOverlayProps = {
   shape: CanvasShape
   workspaceRoot: string
@@ -56,14 +52,8 @@ type ScreenOverlayProps = {
   active: boolean
   interactive: boolean
   panning: boolean
-  /** Element-pick ("修改") mode is on for this frame: clicking selects text/elements. */
-  editing: boolean
-  onDoubleClick: (shapeId: string) => void
   onToggleInteractive?: (shapeId: string) => void
-  onToggleModify: (shapeId: string) => void
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
   /** The whole canvas is read-only (browsing a historical drawing). */
   canvasReadOnly?: boolean
 }
@@ -79,13 +69,8 @@ function ScreenOverlayInner({
   active,
   interactive,
   panning,
-  editing,
-  onDoubleClick,
   onToggleInteractive,
-  onToggleModify,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair,
   canvasReadOnly = false
 }: ScreenOverlayProps): ReactElement {
   const [localPreviewError, setLocalPreviewError] = useState('')
@@ -210,18 +195,10 @@ function ScreenOverlayInner({
   }, [previewAsyncEpoch])
   const previewError = localPreviewError || preview.error
   const { t } = useTranslation('common')
-  const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      onDoubleClick(shape.id)
-    },
-    [shape.id, onDoubleClick]
-  )
-  // Hovering and clicking elements works without entering "修改": it only needs
-  // the select tool. The explicit mode stays for a capturing pick layer.
+  // Hovering and clicking elements only needs the select tool.
   const activeTool = useCanvasViewportStore((s) => s.activeTool)
   const pickAvailable = !isHistoricalVersion && !canvasReadOnly && !panning && !drawingActive && !interactive
-  const pickEnabled = pickAvailable && (editing || activeTool === 'select')
+  const pickEnabled = pickAvailable && activeTool === 'select'
   const pickBodyRef = useRef<HTMLDivElement | null>(null)
   const {
     selectionError,
@@ -241,10 +218,8 @@ function ScreenOverlayInner({
     canSelectParent,
     canDrillToHit,
     canEditText,
-    hoverAt,
     hoverClient,
     leave,
-    selectElementAt,
     selectClient,
     selectParentElement,
     selectHitElement,
@@ -259,7 +234,7 @@ function ScreenOverlayInner({
     artifact: renderedArtifact,
     canvasWidth,
     canvasHeight,
-    editing: pickEnabled,
+    enabled: pickEnabled,
     executeScript,
     interactive,
     shapeId: shape.id,
@@ -271,28 +246,16 @@ function ScreenOverlayInner({
     onUseElementAsContext
   })
   useHtmlFramePassivePick({
-    enabled: pickEnabled && !editing,
+    enabled: pickEnabled,
     bodyRef: pickBodyRef,
     onHover: hoverClient,
     onLeave: leave,
     onClick: selectClient,
     onContextMenu: openLayerMenu
   })
-  const frameTargeted = active || editing
-  const toolCanPick = editing || activeTool === 'select'
   useEffect(() => {
-    if (!frameTargeted || !toolCanPick) clearElementSelection()
-  }, [frameTargeted, toolCanPick, clearElementSelection])
-  useEffect(() => {
-    if (!editing || selectedElementContext || canvasReadOnly) return
-    const exit = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      event.preventDefault()
-      onToggleModify(shape.id)
-    }
-    window.addEventListener('keydown', exit)
-    return () => window.removeEventListener('keydown', exit)
-  }, [editing, selectedElementContext, canvasReadOnly, onToggleModify, shape.id])
+    if (!active || activeTool !== 'select') clearElementSelection()
+  }, [active, activeTool, clearElementSelection])
 
   const [elementTextDraft, setElementTextDraft] = useState('')
   const [elementTextOpen, setElementTextOpen] = useState(false)
@@ -373,27 +336,6 @@ function ScreenOverlayInner({
     previewFileUrl: preview.fileUrl,
     previewRevision: preview.revision
   })
-  const {
-    qualityChecked,
-    qualityDetailsOpen,
-    qualityFindings,
-    setQualityDetailsOpen
-  } = useHtmlFrameRuntimeQuality({
-    active,
-    artifactId: artifact?.id,
-    artifactKind,
-    artifactRelativePath,
-    executeScript,
-    interactive,
-    previewAsyncEpochRef,
-    previewRevision: preview.revision,
-    previewWebviewUrl: preview.webviewUrl,
-    shapeId: shape.id,
-    webview,
-    webviewMountNonce,
-    onRuntimeQualityFindings
-  })
-
   // Promote a pending preview to "ready" only once the turn has settled: the file
   // holds a complete standalone HTML document and the agent is no longer streaming.
   // This keeps the transparent generating surface up for the whole write so the
@@ -463,11 +405,10 @@ function ScreenOverlayInner({
         width: screenWidth,
         height: screenHeight,
         zIndex,
-        pointerEvents: htmlFrameOverlayPointerEvents({ panning, interactive, editing }),
+        pointerEvents: htmlFrameOverlayPointerEvents({ panning, interactive }),
         borderRadius: frameRadius,
         ...motionStyle
       }}
-      onDoubleClick={handleDoubleClick}
     >
       {selectionError && pickEnabled ? <div role="status" className="absolute left-2 top-2 z-30 rounded bg-white px-2 py-1 text-xs text-ds-ink">{selectionError}</div> : null}
       {showChrome ? (
@@ -475,27 +416,18 @@ function ScreenOverlayInner({
           active={active}
           artifact={renderedArtifact}
           workspaceRoot={workspaceRoot}
-          artifactId={artifact?.id}
-          artifactRelativePath={artifactRelativePath}
           chromeOffset={chromeOffset}
           drawingActive={drawingActive}
-          editing={editing && !isHistoricalVersion}
           crumbs={pickEnabled ? crumbs : undefined}
           onSelectCrumb={selectBreadcrumb}
           failedMessage={failedMessage}
           interactive={interactive}
           previewWebviewUrl={preview.webviewUrl}
-          qualityChecked={qualityChecked}
-          qualityDetailsOpen={qualityDetailsOpen}
-          qualityFindings={qualityFindings}
           screenWidth={screenWidth}
           shapeId={shape.id}
           shapeName={shape.name}
-          onQualityDetailsOpenChange={setQualityDetailsOpen}
-          onRequestQualityRepair={isHistoricalVersion ? undefined : onRequestQualityRepair}
           readOnly={isHistoricalVersion || canvasReadOnly}
           onToggleInteractive={onToggleInteractive}
-          onToggleModify={onToggleModify}
         />
       ) : null}
 
@@ -582,18 +514,6 @@ function ScreenOverlayInner({
             <div className="pointer-events-none absolute inset-x-3 top-3 rounded-md border border-red-300/70 bg-white/92 px-2.5 py-1.5 text-[11px] font-semibold text-red-700 shadow-sm dark:border-red-400/35 dark:bg-red-950/85 dark:text-red-200">
               {failedMessage}
             </div>
-          ) : null}
-          {preview.webviewUrl && editing && pickEnabled ? (
-            <div
-              className="absolute inset-0 cursor-crosshair"
-              title={t('canvasBoardPickHint')}
-              onPointerDown={selectElementAt}
-              onPointerEnter={hoverAt}
-              onPointerMove={hoverAt}
-              onPointerLeave={leave}
-              onDoubleClick={(event) => event.stopPropagation()}
-              data-canvas-element-pick-layer="true"
-            />
           ) : null}
           {preview.webviewUrl && pickEnabled ? (
             <HtmlFramePickOutline

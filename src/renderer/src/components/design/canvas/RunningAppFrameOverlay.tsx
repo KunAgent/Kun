@@ -16,7 +16,6 @@ type Props = {
   active: boolean
   interactive: boolean
   panning: boolean
-  editing: boolean
   onDoubleClick: (shapeId: string) => void
 }
 
@@ -31,13 +30,12 @@ export function RunningAppFrameOverlay({
   active,
   interactive,
   panning,
-  editing,
   onDoubleClick
 }: Props): ReactElement | null {
   const motionStyle = useCanvasMotionPortalStyle(shape, zoom)
   const frame = shape.runningApp
   if (!frame?.url) return null
-  const pointerEvents = htmlFrameOverlayPointerEvents({ panning, interactive, editing })
+  const pointerEvents = htmlFrameOverlayPointerEvents({ panning, interactive })
   const label = runningAppFrameLabel(frame)
   return (
     <div

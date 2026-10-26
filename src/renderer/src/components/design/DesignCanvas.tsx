@@ -2,7 +2,6 @@ import type { ReactElement } from 'react'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import type { DesignArtifact } from '../../design/design-types'
 import type { DesignHtmlElementContext } from '../../design/design-composer-context'
-import type { DesignRuntimeQualityPayload } from '../../design/design-html-quality'
 import { designThreadBelongsToDocument } from '../../design/design-thread-workbench'
 import { useChatStore } from '../../store/chat-store'
 import { DesignDocumentCanvasSurface } from './canvas/DesignDocumentCanvasSurface'
@@ -25,8 +24,6 @@ type CanvasProps = {
     brief: string
   ) => boolean | Promise<boolean>
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
 }
 
 /** Design-mode unified stage: one SVG/Figma-style board hosts HTML screen frames and vector layers. */
@@ -39,8 +36,6 @@ export function DesignCanvas({
   onScreenCreated,
   onSvgCreated,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair
 }: CanvasProps): ReactElement {
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
   const activeDocumentId = useDesignWorkspaceStore((s) => s.activeDocumentId)
@@ -65,8 +60,6 @@ export function DesignCanvas({
       onScreenCreated={onScreenCreated}
       onSvgCreated={onSvgCreated}
       onUseElementAsContext={onUseElementAsContext}
-      onRuntimeQualityFindings={onRuntimeQualityFindings}
-      onRequestQualityRepair={onRequestQualityRepair}
     />
   )
 }
