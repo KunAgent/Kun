@@ -30,6 +30,7 @@ import {
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { nativeAgentLaunchEnv } from './native-agent-network.js'
+import { acpLaunchArgs } from './acp-launch-args.js'
 import { providerModuleFor } from './providers/registry.js'
 import type { AgentProviderModule, ProviderFailureContext } from './providers/provider-module.js'
 import { acpPermissionModeUnoffered, applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
@@ -80,7 +81,7 @@ async function launchAcp(input: Launch): Promise<AcpProcess> {
       harnessId: input.definition.id,
       signal: input.signal,
       command: input.command,
-      args: input.definition.launch?.args ?? [],
+      args: acpLaunchArgs(input.definition, input.deps.session?.permissionMode),
       env: input.env,
       secretEnv: input.secretEnv,
       credentialEnv: input.deps.env,

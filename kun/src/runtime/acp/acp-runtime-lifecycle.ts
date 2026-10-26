@@ -4,6 +4,7 @@
  * resolution, image decoding, the ensure-once workspace checkpoint gate, and
  * the session-binding commit.
  */
+import { acpLaunchArgs } from '../../harness/acp-launch-args.js'
 import { intersectCapabilities } from '../../harness/effective-capabilities.js'
 import type { HarnessCapabilities } from '../../contracts/harness-capabilities.js'
 import type { Turn } from '../../contracts/turns.js'
@@ -67,6 +68,7 @@ export async function acquireAcpConnection(
   host: AcpClientHost,
   sessions: AcpSessionManager,
   input: {
+    permissionModeId?: string
     poolKey: string
     command?: string
     definition: HarnessDefinition
@@ -94,7 +96,7 @@ export async function acquireAcpConnection(
       harnessId: input.definition.id,
       signal: input.signal, validateLaunch: input.validateLaunch,
       command,
-      args: input.definition.launch?.args ?? [],
+      args: acpLaunchArgs(input.definition, input.permissionModeId),
       env: acpLaunchEnv(input.definition, { ...secretEnv, ...input.credentialEnv }),
       secretEnv,
       credentialEnv: input.credentialEnv,

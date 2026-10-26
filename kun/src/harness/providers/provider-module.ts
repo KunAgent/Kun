@@ -118,6 +118,8 @@ export type AcpSessionUsageSource = {
 
 /** ACP session behaviour that differs per engine. */
 export type ProviderAcpHooks = {
+  /** Permission-dependent startup flags; session metadata must still confirm the mode. */
+  launchArgs?(args: string[], permissionMode: string | undefined): string[]
   /** Usage from the engine's session log when the protocol carries none. */
   readonly sessionUsage?: AcpSessionUsageSource
   /**
