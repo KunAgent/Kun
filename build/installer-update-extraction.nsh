@@ -20,6 +20,35 @@
 !macroend
 
 !macro KunAutomaticUpdateExtractionFunctions
+  Function KunAssertPreCutoverRegistration
+    Push $R7
+    Push $R8
+    Push $R9
+    StrCpy $R9 0
+    ${if} ${Errors}
+      StrCpy $R9 1
+    ${endif}
+    ClearErrors
+    ReadRegStr $R8 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ; PrimarySourceDir was normalized by the source-resolution helper. NSIS's
+    ; string comparison is case-insensitive; a different path must fail closed.
+    ${if} ${Errors}
+    ${orIf} $R8 != $KunInstallerPrimarySourceDir
+      !insertmacro KunAbortAutomaticUpdate registration_changed_before_cutover prepare "The installation registration changed before payload activation."
+    ${endif}
+    StrCpy $R7 $KunInstallerUpdateBoundary
+    StrCpy $KunInstallerUpdateBoundary "registration-original"
+    Call KunRecordAutomaticUpdateBoundary
+    StrCpy $KunInstallerUpdateBoundary $R7
+    ClearErrors
+    ${if} $R9 == 1
+      SetErrors
+    ${endif}
+    Pop $R9
+    Pop $R8
+    Pop $R7
+  FunctionEnd
+
   Function KunRestorePreCutoverRegistrationTarget
     ${if} $KunInstallerMigrationPrepared != 1
     ${orIf} $KunInstallerPrimarySourceDir == ""

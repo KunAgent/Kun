@@ -6,19 +6,19 @@ import { describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const builderRoot = dirname(require.resolve('app-builder-lib/package.json'))
 const nsis = join(builderRoot, 'templates/nsis')
-const section = readFileSync(join(nsis, 'installSection.nsh'), 'utf8')
-const extraction = readFileSync(join(nsis, 'include/extractAppPackage.nsh'), 'utf8')
-const files = readFileSync(join(nsis, 'include/installer.nsh'), 'utf8')
-const hooks = readFileSync(join(process.cwd(), 'build/installer-update-extraction.nsh'), 'utf8')
-const automatic = readFileSync(join(process.cwd(), 'build/installer-automatic-update.nsh'), 'utf8')
-const installer = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
+const section = readFileSync(join(nsis, 'installSection.nsh'), 'utf8').replace(/\r\n/g, '\n')
+const extraction = readFileSync(join(nsis, 'include/extractAppPackage.nsh'), 'utf8').replace(/\r\n/g, '\n')
+const files = readFileSync(join(nsis, 'include/installer.nsh'), 'utf8').replace(/\r\n/g, '\n')
+const hooks = readFileSync(join(process.cwd(), 'build/installer-update-extraction.nsh'), 'utf8').replace(/\r\n/g, '\n')
+const automatic = readFileSync(join(process.cwd(), 'build/installer-automatic-update.nsh'), 'utf8').replace(/\r\n/g, '\n')
+const installer = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('Windows embedded extraction registration boundary (static/symbolic contracts)', () => {
   it('uses the pinned builder post-decompression hooks before registry publication', () => {
     expect(require('app-builder-lib/package.json').version).toBe('26.16.1')
     const config = require('../../electron-builder.config.cjs')
     expect(config.win.target).toEqual([{ target: 'nsis', arch: ['x64'] }])
-    expect(readFileSync(join(builderRoot, 'out/targets/nsis/NsisTarget.js'), 'utf8'))
+    expect(readFileSync(join(builderRoot, 'out/targets/nsis/NsisTarget.js'), 'utf8').replace(/\r\n/g, '\n'))
       .toContain('const USE_NSIS_BUILT_IN_COMPRESSOR = false;')
     expect(extraction.indexOf('!insertmacro decompress')).toBeLessThan(
       extraction.indexOf('!insertmacro custom_files_post_decompression')
@@ -50,6 +50,23 @@ describe('Windows embedded extraction registration boundary (static/symbolic con
     expect(hooks).not.toMatch(/^\s*(?:SetOutPath|StrCpy \$OUTDIR|Call KunFinishAutomaticUpdateTransaction)/m)
     expect(automatic).toContain('!insertmacro KunAutomaticUpdateExtractionFunctions')
     expect(installer).toContain('Call KunFinishAutomaticUpdateTransaction')
+  })
+
+  it('checks the actual selected registration before cutover and restores diagnostic state', () => {
+    expect(hooks).toContain('ReadRegStr $R8 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation')
+    expect(hooks).toContain('${orIf} $R8 != $KunInstallerPrimarySourceDir')
+    expect(hooks).toContain('!insertmacro KunAbortAutomaticUpdate registration_changed_before_cutover')
+    expect(hooks).toContain('StrCpy $KunInstallerUpdateBoundary "registration-original"')
+    expect(hooks).toContain('StrCpy $KunInstallerUpdateBoundary $R7')
+    expect(hooks).toContain('Pop $R9\n    Pop $R8\n    Pop $R7')
+    const customInstall = installer.slice(installer.indexOf('!macro customInstall'))
+    expect(customInstall.indexOf('Call KunAssertPreCutoverRegistration')).toBeGreaterThan(-1)
+    expect(customInstall.indexOf('Call KunAssertPreCutoverRegistration')).toBeLessThan(
+      customInstall.indexOf('Call KunRecordCutoverAutomaticUpdate')
+    )
+    expect(customInstall.indexOf('Call KunAssertPreCutoverRegistration')).toBeLessThan(
+      customInstall.indexOf('Call KunFinishAutomaticUpdateTransaction')
+    )
   })
 
   it.each([

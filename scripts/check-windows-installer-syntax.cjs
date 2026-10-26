@@ -14,6 +14,7 @@ const installerSmokePath = join(__dirname, 'smoke-windows-installer.ps1')
 const installerHelperPaths = [
   installerHelperPath,
   installerSmokePath,
+  join(__dirname, 'smoke-windows-installer-update.ps1'),
   'windows-installer-migration-paths.ps1',
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',

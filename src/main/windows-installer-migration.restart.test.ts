@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  assertExpectedFailure, assertSucceeded, cleanupTransactionFixtures, fixture,
+  assertExpectedFailure, assertSucceeded, captureDiagnostics, cleanupTransactionFixtures, fixture,
   payload, powershell, primeCutoverMetadata, run, windowsOnly, type Fixture
 } from './windows-installer-migration.transaction.fixture'
 
@@ -35,15 +36,27 @@ function readTransaction(input: Fixture): Record<string, unknown> {
 afterEach(cleanupTransactionFixtures)
 
 describe('Installer restart recovery source contract', () => {
+  it('exports only the known restart journal names under the existing CI evidence names', () => {
+    const input = installerFixture()
+    mkdirSync(dirname(input.journal), { recursive: true })
+    writeFileSync(input.journal, '{"Phase":"preserved"}')
+    writeFileSync(input.transaction, '{"Phase":"prepared"}')
+    writeFileSync(join(dirname(input.journal), 'private-settings.json'), '{}')
+    const output = join(input.root, 'exported')
+    captureDiagnostics(input.root, output)
+    expect(readdirSync(join(output, 'recovery')).sort()).toEqual(['journal.json', 'transaction.json'])
+    expect(readFileSync(join(output, 'recovery', 'transaction.json'), 'utf8')).toContain('prepared')
+  })
+
   it('authenticates the stored transaction before adopting only dynamic paths', () => {
-    const transaction = readFileSync(join(process.cwd(), 'build/windows-installer-migration-transaction.ps1'), 'utf8')
+    const transaction = readFileSync(join(process.cwd(), 'build/windows-installer-migration-transaction.ps1'), 'utf8').replace(/\r\n/g, '\n')
     const trustedReader = transaction.slice(transaction.indexOf('function Read-TrustedUpdateTransaction'), transaction.indexOf('function Read-UpdateTransaction'))
     expect(trustedReader.indexOf('Assert-UpdateTransactionStorage')).toBeLessThan(trustedReader.indexOf('Get-Content'))
     expect(trustedReader).toContain('[int]$transaction.SchemaVersion -ne 4')
     expect(trustedReader).toContain('(Get-JournalAppGuid)')
     expect(trustedReader).toContain('(Get-NormalizedInstallMode)')
     expect(transaction).toContain('if ($null -ne $transaction) { Assert-UpdateTransactionPaths $transaction }')
-    const recovery = readFileSync(join(process.cwd(), 'build/windows-installer-migration-recovery-env.ps1'), 'utf8')
+    const recovery = readFileSync(join(process.cwd(), 'build/windows-installer-migration-recovery-env.ps1'), 'utf8').replace(/\r\n/g, '\n')
     const restart = recovery.slice(recovery.indexOf('function Recover-InstallerUpdateTransaction'), recovery.indexOf('# Scope selection'))
     expect(restart.indexOf('Read-TrustedUpdateTransaction')).toBeLessThan(restart.indexOf('Get-InstallerRestartRecoveryEnvironment'))
     expect(restart.indexOf('Get-InstallerRestartRecoveryEnvironment')).toBeLessThan(restart.indexOf('SetEnvironmentVariable'))
@@ -64,16 +77,78 @@ describe('Installer restart recovery source contract', () => {
   })
 
   it('keeps the GUI recovery entry point strict and dispatches installer restart separately', () => {
-    const script = readFileSync(join(process.cwd(), 'build/windows-installer-migration.ps1'), 'utf8')
+    const script = readFileSync(join(process.cwd(), 'build/windows-installer-migration.ps1'), 'utf8').replace(/\r\n/g, '\n')
     expect(script).toContain("'RecoverUpdateTransaction' {\n      Recover-PendingUpdateTransaction")
     expect(script).toContain("'RecoverInstallerUpdateTransaction' {\n      Recover-InstallerUpdateTransaction")
-    const installer = readFileSync(join(process.cwd(), 'build/installer-automatic-update.nsh'), 'utf8')
+    const installer = readFileSync(join(process.cwd(), 'build/installer-automatic-update.nsh'), 'utf8').replace(/\r\n/g, '\n')
     const recover = installer.slice(installer.indexOf('Function KunRecoverInterruptedAutomaticUpdate'), installer.indexOf('Function KunRunAutomaticUpdateHealthCheck'))
     expect(recover.indexOf('Call KunSetMigrationEnvironment')).toBeLessThan(recover.indexOf('kunRunMigrationHelper RecoverInstallerUpdateTransaction'))
   })
 })
 
 windowsOnly('Installer restart recovery bootstrap', () => {
+  it('preserves a locked original payload and prepares successfully after natural lock release (helper only)', async () => {
+    const input = installerFixture()
+    const asar = join(input.source, 'resources', 'app.asar')
+    const original = readFileSync(asar)
+    // The locker lives outside the install root. Its command line contains no
+    // install-root path, so Stop-AppProcesses must not classify it as the app.
+    const command = [
+      '$ErrorActionPreference = "Stop"',
+      `Add-Type -TypeDefinition 'public static class KunFixtureLockRelease { public static void Wait() { var ready = new System.Threading.ManualResetEvent(false); var input = new System.Threading.Thread(() => { System.Console.ReadLine(); ready.Set(); }); input.IsBackground = true; input.Start(); ready.WaitOne(90000); } }'`,
+      '$stream = [IO.File]::Open($env:KUN_TEST_LOCK_FILE, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)',
+      'try { [Console]::Out.WriteLine("READY"); [Console]::Out.Flush(); [KunFixtureLockRelease]::Wait() } finally { $stream.Dispose() }'
+    ].join('; ')
+    const locker = spawn(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      ['-NoProfile', '-NonInteractive', '-Command', command], {
+        env: { ...process.env, KUN_TEST_LOCK_FILE: asar }, stdio: ['pipe', 'pipe', 'pipe']
+      })
+    let output = ''
+    let errorOutput = ''
+    locker.stdout.on('data', (chunk) => { output += String(chunk) })
+    locker.stderr.on('data', (chunk) => { errorOutput += String(chunk) })
+    // EPIPE is harmless if the locker's own bounded wait has already ended.
+    locker.stdin.on('error', () => undefined)
+    const exited = new Promise<number | null>((resolve, reject) => {
+      locker.once('exit', resolve)
+      locker.once('error', reject)
+    })
+    void exited.catch(() => undefined)
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => { clearInterval(poll); reject(new Error(`Locker readiness timed out: ${errorOutput}`)) }, 15_000)
+        const poll = setInterval(() => {
+          if (output.includes('READY')) { clearTimeout(timeout); clearInterval(poll); resolve() }
+          else if (locker.exitCode !== null) { clearTimeout(timeout); clearInterval(poll); reject(new Error(`Locker exited before ready: ${errorOutput}`)) }
+        }, 25)
+        timeout.unref()
+        // The ready wait is bounded even when spawning the locker fails.
+        void exited.catch((error) => { clearTimeout(timeout); clearInterval(poll); reject(error) })
+      })
+      expect(locker.exitCode).toBeNull()
+      const failed = run(input, 'Prepare', '', {}, true)
+      assertExpectedFailure(failed, 'Prepare while another process holds an exclusive payload lock')
+      expect(failed.status).not.toBe(124)
+      expect(`${failed.stdout}\n${failed.stderr}`).toContain('Cannot copy payload')
+      // Deliver queued process-exit events after the synchronous helper call.
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      expect(locker.exitCode).toBeNull()
+      expect(locker.signalCode).toBeNull()
+      expect(existsSync(input.transaction)).toBe(false)
+      expect(existsSync(input.stage)).toBe(false)
+      expect(readFileSync(join(input.source, 'notes.txt'), 'utf8')).toBe('preserved user file')
+    } finally {
+      locker.stdin.end('\n')
+      const exitCode = await new Promise<number | null>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error(`Locker did not exit naturally after release: ${errorOutput}`)), 15_000)
+        void exited.then((code) => { clearTimeout(timeout); resolve(code) }, (error) => { clearTimeout(timeout); reject(error) })
+      })
+      expect(exitCode, errorOutput).toBe(0)
+    }
+    expect(readFileSync(asar)).toEqual(original)
+    assertSucceeded(run(input, 'Prepare', '', {}, true), 'Prepare after exclusive lock release')
+  }, 360_000)
+
   it.each([true, false])('recovers a prepared transaction with a new PID and no health file (in-place: %s)', (inPlace) => {
     const input = installerFixture(inPlace)
     assertSucceeded(run(input, 'Prepare'), 'Prepare')

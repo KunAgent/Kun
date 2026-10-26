@@ -66,14 +66,14 @@ export function fixture(inPlace = false, unicodePath = false) {
   return input
 }
 
-export function run(input: Fixture, action: Action, fault = '', environment: NodeJS.ProcessEnv = {}) {
+export function run(input: Fixture, action: Action, fault = '', environment: NodeJS.ProcessEnv = {}, bounded = false) {
   const powershell = join(
     process.env.SystemRoot ?? 'C:\\Windows',
     'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
   )
   const result = spawnSync(powershell, [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', action,
-    '-ResultPath', input.result(action)
+    '-ResultPath', input.result(action), ...(bounded ? ['-Bounded'] : [])
   ], {
     encoding: 'utf8',
     env: {
@@ -180,7 +180,7 @@ export function captureDiagnostics(root: string, destination: string): void {
   const recovery = join(root, 'recovery')
   if (existsSync(recovery)) {
     for (const name of readdirSync(recovery)) {
-      if (/^(diagnostic\.log|journal\.json|transaction\.json|abc-update\.json|result-[\w-]+\.txt)$/.test(name)) {
+      if (/^(diagnostic\.log|journal\.json|transaction\.json|abc-update\.json|transaction-test-guid(?:-update)?\.json|result-[\w-]+\.txt)$/.test(name)) {
         files.push(join('recovery', name))
       }
     }
@@ -190,7 +190,12 @@ export function captureDiagnostics(root: string, destination: string): void {
     if (!existsSync(join(root, name))) continue
     // The first case uses a GUID-like filename; CI's existing upload glob uses
     // transaction.json, so normalize only the diagnostic copy, not the live state.
-    const output = join(destination, name === join('recovery', 'abc-update.json') ? join('recovery', 'transaction.json') : name)
+    const diagnosticNames: Record<string, string> = {
+      [join('recovery', 'abc-update.json')]: join('recovery', 'transaction.json'),
+      [join('recovery', 'transaction-test-guid-update.json')]: join('recovery', 'transaction.json'),
+      [join('recovery', 'transaction-test-guid.json')]: join('recovery', 'journal.json')
+    }
+    const output = join(destination, diagnosticNames[name] ?? name)
     mkdirSync(dirname(output), { recursive: true })
     copyFileSync(join(root, name), output)
   }

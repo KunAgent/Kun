@@ -206,6 +206,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
 
 !macro customInstall
   ${if} ${isUpdated}
+    Call KunAssertPreCutoverRegistration
     Call KunRecordCutoverAutomaticUpdate
     Call KunFinishAutomaticUpdateTransaction
   ${else}

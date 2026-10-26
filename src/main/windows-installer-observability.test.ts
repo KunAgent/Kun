@@ -4,9 +4,9 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const installer = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
-const automatic = readFileSync(join(process.cwd(), 'build/installer-automatic-update.nsh'), 'utf8')
-const observations = readFileSync(join(process.cwd(), 'build/installer-update-observability.nsh'), 'utf8')
+const installer = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8').replace(/\r\n/g, '\n')
+const automatic = readFileSync(join(process.cwd(), 'build/installer-automatic-update.nsh'), 'utf8').replace(/\r\n/g, '\n')
+const observations = readFileSync(join(process.cwd(), 'build/installer-update-observability.nsh'), 'utf8').replace(/\r\n/g, '\n')
 
 function functionBody(name: string): string {
   const match = observations.match(new RegExp(`  Function ${name.replace(/\./g, '\\.')}\\n([\\s\\S]*?)  FunctionEnd`))
@@ -29,7 +29,7 @@ describe('Windows installer boundary observability (static NSIS contracts)', () 
       install.indexOf('Call KunFinishAutomaticUpdateTransaction')
     )
     const template = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')),
-      'templates/nsis/installSection.nsh'), 'utf8')
+      'templates/nsis/installSection.nsh'), 'utf8').replace(/\r\n/g, '\n')
     expect(template.indexOf('!insertmacro installApplicationFiles')).toBeLessThan(
       template.indexOf('!insertmacro customInstall')
     )
