@@ -1,5 +1,5 @@
 import type { DragEvent as ReactDragEvent, ReactElement, ReactNode } from 'react'
-import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, PanelRight, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { SidebarActivityIndicator, type SidebarActivity } from '../sidebar/SidebarActivityIndicator'
@@ -36,6 +36,8 @@ type Props = {
   onRevealEntry: (entry: WorkspaceEntry) => void
   /** Show the paper action on PDF rows (docs: 「加入论文库」, papers: 「作为论文打开」). */
   onOpenPdfAsPaper?: (entry: WorkspaceEntry) => void
+  /** Open a file in the side slot, leaving the main slot alone. */
+  onOpenBeside?: (path: string) => void
   /** Tooltip/title override for the PDF paper action (surface-aware label). */
   openPdfAsPaperTitle?: string
   onRefresh: () => void
@@ -130,6 +132,7 @@ export function WriteFileTree({
   onDeleteEntry,
   onRevealEntry,
   onOpenPdfAsPaper,
+  onOpenBeside,
   openPdfAsPaperTitle,
   onRefresh,
   showHeader = true,
@@ -203,6 +206,11 @@ export function WriteFileTree({
                       </TreeActionButton>
                     ) : null}
                   </>
+                ) : null}
+                {!isDirectory && onOpenBeside ? (
+                  <TreeActionButton title={t('workOpenBeside')} onClick={() => onOpenBeside(entry.path)}>
+                    <PanelRight className="h-3.5 w-3.5" strokeWidth={1.85} />
+                  </TreeActionButton>
                 ) : null}
                 {!isDirectory && onOpenPdfAsPaper && isPdfEntry(entry) ? (
                   <TreeActionButton

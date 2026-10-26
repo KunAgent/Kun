@@ -101,8 +101,8 @@ export function WriteSidebar({
           />
         ) : (
           <div className="work-sidebar-body ds-no-drag px-1" data-work-sidebar>
-            <WorkSessionsSection onOpenArchives={() => onOpenSettings('archives')} />
             <WorkArtifactsSection workspaceRoot={workspaceRoot} />
+            <WorkSessionsSection onOpenArchives={() => onOpenSettings('archives')} />
             <WorkFilesSection actions={actions} />
             {/* Phones keep their own paper home. */}
             {remoteMobile ? null : <WorkPapersSection />}

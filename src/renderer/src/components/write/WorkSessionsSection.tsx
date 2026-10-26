@@ -7,6 +7,7 @@ import {
   GraduationCap,
   MessageSquare,
   MoreHorizontal,
+  PanelRight,
   PencilLine,
   Search,
   Shapes,
@@ -20,6 +21,7 @@ import { writeWorkspaceKey } from '../../write/write-thread-registry'
 import { writeActivityForThreadIds, type WriteResourceActivityContext } from '../../write/write-resource-activity'
 import { usePaperStore } from '../../write/paper/paper-store'
 import { useWorkSessionStore } from '../../write/work-session-store'
+import { useWorkSlotsStore } from '../../write/work-slots-store'
 import { forgetWorkSessionTabs } from '../../write/work-session-tabs'
 import type { WorkSessionEntry } from '../../write/work-sessions-model'
 import { openWorkSession } from '../../write/work-session-actions'
@@ -222,7 +224,10 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
           return (
             <div key={session.id} className="work-session-item" data-work-session={session.id}>
               <button type="button" className="work-session-row" aria-current={isCurrent ? 'true' : undefined}
-                title={sessionLabel(session)} onClick={() => void openWorkSession(session)}>
+                title={sessionLabel(session)} onClick={() => {
+                  useWorkSlotsStore.getState().setAssistantMain(true)
+                  void openWorkSession(session)
+                }}>
                 <span className="work-session-anchor"><AnchorIcon anchor={session.anchor} /></span>
                 <span className="work-session-title" data-placeholder={session.title ? undefined : 'true'}>
                   {sessionLabel(session)}
@@ -234,6 +239,13 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
                 ) : session.updatedAt ? (
                   <span className="work-session-time">{sessionTime(session.updatedAt)}</span>
                 ) : null}
+              </button>
+              <button type="button" className="work-session-side rooms-icon-button" data-work-session-side
+                title={t('workOpenBeside')} aria-label={t('workOpenBeside')} onClick={() => {
+                  useWorkSlotsStore.getState().setAssistantMain(false)
+                  void openWorkSession(session).then(() => useWriteWorkspaceStore.getState().setAssistantOpen(true))
+                }}>
+                <PanelRight size={14} aria-hidden="true" />
               </button>
               <RoomPopover label={t('workSessionMore')} trigger={<MoreHorizontal size={14} />}
                 className="work-session-menu rooms-icon-button" align="end" width={188}>

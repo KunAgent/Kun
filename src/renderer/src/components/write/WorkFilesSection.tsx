@@ -1,5 +1,6 @@
 import { useMemo, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { useWorkSlotsStore } from '../../write/work-slots-store'
 import { FilePlus2, FolderPlus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
@@ -95,7 +96,14 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
           error={treeError}
           rootLoading={rootLoading}
           onToggleDir={(path) => void toggleDirectory(workspaceRoot, path)}
-          onSelectFile={(path) => void openFile(workspaceRoot, path)}
+          onSelectFile={(path) => {
+            useWorkSlotsStore.getState().setAssistantMain(false)
+            void openFile(workspaceRoot, path)
+          }}
+          onOpenBeside={(path) => {
+            useWorkSlotsStore.getState().setAssistantMain(true)
+            void openFile(workspaceRoot, path)
+          }}
           onCreateFile={(directoryPath) => void actions.openCreateFileDialog(directoryPath)}
           onCreateDirectory={(directoryPath) => void actions.openCreateDirectoryDialog(directoryPath)}
           onRenameEntry={actions.openRenameEntryDialog}
