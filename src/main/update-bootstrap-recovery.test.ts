@@ -125,6 +125,30 @@ describe('recoverUpdateBeforeRuntimeStart', () => {
     expect(recovery).toBeNull()
   })
 
+  it.each(['prepared', 'payload_switched', 'awaiting_health', 'rolling_back'])('defers runtime startup during a live installer %s phase without clearing recovery', async (phase) => {
+    result = null
+    transaction = { phase, installerPid: 123, installerProcessIdentity: 'win32-v1:2026-10-27T00:00:00.0000000Z' }
+    const { recoverUpdateBeforeRuntimeStart } = await import('./update-bootstrap-recovery')
+    const deps = { platform: 'win32' as const, version: () => '0.1.0', scheduleRollback: vi.fn(),
+      relaunch: vi.fn(), exit: vi.fn(), installerIsAlive: vi.fn().mockReturnValue(true) }
+    await expect(recoverUpdateBeforeRuntimeStart(deps)).resolves.toBe(true)
+    expect(deps.exit).toHaveBeenCalledWith(0)
+    expect(deps.installerIsAlive).toHaveBeenCalledWith(123, expect.objectContaining({ processIdentity: transaction.installerProcessIdentity }))
+    expect(pending).not.toBeNull()
+    expect(deps.relaunch).not.toHaveBeenCalled()
+    expect(deps.scheduleRollback).not.toHaveBeenCalled()
+  })
+
+  it('allows startup after the exact installer exits or its PID is reused', async () => {
+    result = null
+    transaction = { phase: 'prepared', installerPid: 123, installerProcessIdentity: 'win32-v1:2026-10-27T00:00:00.0000000Z' }
+    const { recoverUpdateBeforeRuntimeStart } = await import('./update-bootstrap-recovery')
+    const exit = vi.fn()
+    await expect(recoverUpdateBeforeRuntimeStart({ platform: 'win32', version: () => '0.1.0',
+      scheduleRollback: vi.fn(), relaunch: vi.fn(), exit, installerIsAlive: () => false })).resolves.toBe(false)
+    expect(exit).not.toHaveBeenCalled()
+  })
+
   it('keeps the recovery record when the grace window has expired', async () => {
     const clearGuiUpdateRecovery = (await import('./gui-updater-pending')).clearGuiUpdateRecovery
     recovery = {

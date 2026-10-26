@@ -188,6 +188,55 @@ function Test-InterruptedUpdateScopeRegistration([string]$Scope, [string]$Runnin
   }
 }
 
+# Retry only a single failed filesystem operation, never a whole transaction.
+# A shared wait budget prevents many locked entries multiplying the delay.
+function Invoke-UpdateFileOperation([scriptblock]$Operation) {
+  $delay = 100
+  while ($true) {
+    try { & $Operation; return } catch {
+      $errorRecord = $_
+      $exception = $_.Exception
+      $sharing = $false
+      while ($null -ne $exception) {
+        $code = $exception.HResult -band 0xffff
+        if ($exception -is [ComponentModel.Win32Exception]) { $code = $exception.NativeErrorCode }
+        if ($code -eq 32 -or $code -eq 33) { $sharing = $true; break }
+        $exception = $exception.InnerException
+      }
+      if (-not $sharing -or $script:UpdateFileWaitMs -ge 10000) { throw $errorRecord }
+      $wait = [Math]::Min($delay, 10000 - $script:UpdateFileWaitMs)
+      Write-InstallerDiagnostic "FILE_BUSY retryMs=$wait waitedMs=$script:UpdateFileWaitMs"
+      Start-Sleep -Milliseconds $wait
+      $script:UpdateFileWaitMs += $wait
+      $delay = [Math]::Min(1000, $delay * 2)
+    }
+  }
+}
+
+function Set-InstallerTransactionOwner([hashtable]$Transaction) {
+  $ownerPid = 0
+  [void][int]::TryParse((Get-EnvironmentValue 'KUN_INSTALLER_SELF_PID'), [ref]$ownerPid)
+  if ($ownerPid -le 0) { return }
+  try {
+    $owner = Get-Process -Id $ownerPid -ErrorAction Stop
+    try { $birth = $owner.StartTime.ToUniversalTime() } finally { $owner.Dispose() }
+    $birth = $birth.AddTicks(-($birth.Ticks % 10))
+    $Transaction.InstallerPid = $ownerPid
+    $Transaction.InstallerProcessIdentity = 'win32-v1:' + $birth.ToString('O')
+  } catch {
+    Write-InstallerDiagnostic 'INSTALLER_OWNER unavailable; cutover process checks remain required'
+  }
+}
+
+function Stop-UpdatePayloadProcesses($Transaction) {
+  $roots = @([string]$Transaction.Source, [string]$Transaction.Target, [string]$Transaction.OldPayloadRoot)
+  $result = Stop-AppProcesses $roots
+  if ($result.Outcome -ne 'stopped') {
+    Write-BlockingProcessDiagnostic $result
+    throw 'Application processes did not exit before update payload mutation.'
+  }
+}
+
 # Readiness is checked inside the process that will perform recovery, after
 # elevation when required, before asking the running GUI to release its files.
 function Assert-UpdateRollbackReady {
