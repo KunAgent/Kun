@@ -40,7 +40,7 @@ describe('RoundOutcomeCoordinator', () => {
     expect(h.effects).toEqual([])
   })
 
-  it('continues after the first all-suppressed round and resets after a different tool executes', async () => {
+  it('continues after the first all-suppressed round and keeps the budget after a different tool executes', async () => {
     const h = harness({ dispatchOutcomes: ['all_suppressed', 'continue'] })
     const repeatedCall = {
       callId: 'call_repeated',
@@ -59,7 +59,7 @@ describe('RoundOutcomeCoordinator', () => {
 
     await expect(h.coordinator.resolve(input(completed({ toolCalls: [alternateCall] }))))
       .resolves.toBe('continue')
-    expect(h.coordinator.toolSuppressionRecoverySteps(turnId)).toBe(0)
+    expect(h.coordinator.toolSuppressionRecoverySteps(turnId)).toBe(1)
   })
 
   it('terminates an active goal on the tools-disabled suppression final answer', async () => {
