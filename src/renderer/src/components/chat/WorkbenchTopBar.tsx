@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { TerminalAttentionBadge, useTerminalButtonTooltip } from '../terminal/TerminalAttentionBadge'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
+import { RailCollapseButton, RailReopenButton, useRailCollapseStore } from '../workbench/rail-collapse'
 import { WorkbenchSideRailDivider, WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
 import {
   Blocks,
@@ -359,6 +360,7 @@ export function WorkbenchTopActions({
           <Ellipsis className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
+      {!remoteMobile ? <RailReopenButton /> : null}
     </div>
   )
 }
@@ -387,6 +389,7 @@ export function WorkbenchSideRail({
   onSelectExtension
 }: Props): ReactElement | null {
   const { t } = useTranslation(['common', 'settings'])
+  const railCollapsed = useRailCollapseStore((state) => state.collapsed)
   // The Remote panel configures this host; hide the entry inside Remote clients.
   const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
   const pairings = useMobilePairings().length
@@ -523,8 +526,12 @@ export function WorkbenchSideRail({
     )
   }
 
+  if (railCollapsed) return null
+
   return (
     <WorkbenchSideRailSurface>
+      <RailCollapseButton />
+      <WorkbenchSideRailDivider />
       {groups.map((group, index) => (
         <Fragment key={index}>
           {index === 2 ? <span className="flex-1" aria-hidden="true" /> : null}

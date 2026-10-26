@@ -4,10 +4,22 @@
   display: flex;
   flex-direction: column;
   padding: 4px;
-  border: 1px solid var(--ds-sidebar-row-ring);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--ds-sidebar-row-active) 70%, transparent);
-  box-shadow: 0 1px 2px rgb(16 24 40 / 0.04);
+  border: 0;
+  border-radius: var(--kun-radius-md);
+  background: color-mix(in srgb, var(--ds-surface-card) 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 55%, transparent);
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.kun-account-dock:hover,
+.kun-account-dock:has(.kun-account-card[data-open]) {
+  background: color-mix(in srgb, var(--ds-surface-card) 88%, transparent);
+  box-shadow:
+    0 1px 2px rgb(16 24 40 / 0.06),
+    0 6px 16px rgb(16 24 40 / 0.06),
+    0 0 0 1px color-mix(in srgb, white 70%, transparent);
 }
 
 [data-theme='dark'] .kun-account-dock {
@@ -19,7 +31,7 @@
   gap: 4px;
   padding-right: 3px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 /* The dock is already the surface; an open menu only tints the account row. */

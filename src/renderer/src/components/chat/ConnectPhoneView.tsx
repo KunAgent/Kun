@@ -346,7 +346,7 @@ export function ConnectPhoneView({
             </div>
 
             {target === 'telegram' ? (
-              <div className="mx-auto mt-9 flex w-full max-w-[400px] flex-col items-center rounded-[14px] border border-[#ececea] bg-white p-6 shadow-[0_18px_38px_rgba(32,37,43,0.05)]">
+              <div className="mx-auto mt-9 flex w-full max-w-[400px] flex-col items-center rounded-[22px] border-0 bg-white p-6 shadow-[var(--kun-shadow-rest)]">
                 <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#26A5E4]/10">
                   <ClawProviderLogo provider="telegram" className="h-8 w-8" />
                 </span>
@@ -373,7 +373,7 @@ export function ConnectPhoneView({
               </div>
             ) : (
               <>
-                <div className="mx-auto mt-9 flex h-[226px] w-[226px] flex-col items-center justify-center rounded-[14px] border border-[#ececea] bg-white p-3 shadow-[0_18px_38px_rgba(32,37,43,0.05)]">
+                <div className="mx-auto mt-9 flex h-[226px] w-[226px] flex-col items-center justify-center rounded-[22px] border-0 bg-white p-3 shadow-[var(--kun-shadow-rest)]">
                   {installQr.status === 'idle' ? (
                     <div className="grid justify-items-center gap-4">
                       <div className="flex h-20 w-20 items-center justify-center rounded-[18px] bg-[#f3f4f2] text-[#9aa2ad]">

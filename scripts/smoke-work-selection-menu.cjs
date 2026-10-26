@@ -29,8 +29,7 @@ async function content(page) {
 }
 async function exerciseWorkSelectionMenu({ page, poll, capture, recordDiagnostic, resize, workspaceRoot, fixture }) {
   await resize(1440, 1050)
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  await page.locator('[role="menuitemradio"][data-workspace-mode="write"]').click()
+  await page.locator('[role="tab"][data-workspace-mode="write"]').click()
   await page.locator('[data-work-home]').waitFor({ timeout: 60000 })
   const space = join(workspaceRoot, 'selection-menu'), file = join(space, 'review.md')
   await mkdir(space, { recursive: true }); await writeFile(file, ORIGINAL)

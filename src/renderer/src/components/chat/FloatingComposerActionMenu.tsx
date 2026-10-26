@@ -141,7 +141,7 @@ export function calculatePersonaMenuPlacement({
   return { left, top, width, maxHeight }
 }
 
-const rowClass = 'ds-no-drag flex min-h-8 w-full items-center gap-2 px-3 py-1.5 text-left transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-ds-muted'
+const rowClass = 'ds-no-drag flex min-h-10 w-full items-center gap-2.5 rounded-[11px] px-2.5 py-1.5 text-left text-[14px] transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-ds-muted'
 
 export function FloatingComposerActionMenu({
   context
@@ -297,7 +297,7 @@ export function FloatingComposerActionMenu({
       aria-label={t('composerMenuTitle')}
       style={style}
       onKeyDown={handleMenuKeyDown}
-      className="ds-composer-action-menu fixed z-50 box-border overflow-y-auto rounded-[18px] border border-ds-border bg-white py-1.5 text-[13px] text-ds-muted shadow-[0_18px_52px_rgba(15,23,42,0.18)] dark:bg-ds-card"
+      className="ds-composer-action-menu kun-menu-pop fixed z-50 box-border overflow-y-auto rounded-[16px] border-0 bg-white p-1.5 text-[13px] text-ds-muted shadow-[var(--kun-shadow-lift)] dark:bg-ds-card"
     >
       {fileReferenceEnabled ? (
         <>

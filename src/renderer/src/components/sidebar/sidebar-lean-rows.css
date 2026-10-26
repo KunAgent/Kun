@@ -8,7 +8,7 @@
 html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-ui-plugin-scene-chrome-sidebar])
   .ds-sidebar-shell {
   --ds-sidebar-row-hover: color-mix(in srgb, var(--ds-text) 5.5%, transparent);
-  --ds-sidebar-row-active: color-mix(in srgb, var(--ds-text) 9%, transparent);
+  --ds-sidebar-row-active: color-mix(in srgb, var(--ds-surface-card) 82%, transparent);
   --ds-sidebar-row-ring: transparent;
 }
 
@@ -16,10 +16,20 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
 .ds-sidebar-shell .ds-sidebar-tree-row,
 .ds-sidebar-shell .sidebar-menu-row {
   border-color: transparent;
-  border-radius: 7px;
+  border-radius: var(--kun-radius-sm);
   transition:
     background-color 150ms ease,
+    box-shadow 150ms ease,
     color 150ms ease;
+}
+
+/* The selected row is a raised card instead of a heavier fill. */
+.ds-sidebar-shell .ds-sidebar-command-row[data-active='true'],
+.ds-sidebar-shell .ds-sidebar-tree-row[data-active='true'],
+.ds-sidebar-shell .sidebar-menu-row.is-active {
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.06),
+    0 0 0 1px var(--kun-hair-1);
 }
 
 .ds-sidebar-shell .ds-sidebar-command-row[data-active='true'],
@@ -29,12 +39,12 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
   font-weight: 400;
 }
 
-/* Destination and action rows: 30px, 16px icon, 13px label. */
+/* Destination and action rows: 36px, 17px icon, 14px label. */
 .ds-sidebar-shell .ds-sidebar-command-row {
-  min-height: 30px;
+  min-height: 36px;
   gap: 8px;
-  padding: 0 9px;
-  font-size: 13px;
+  padding: 0 10px;
+  font-size: 14px;
 }
 
 .ds-sidebar-shell .ds-sidebar-command-row[data-variant='footer'] {
@@ -47,10 +57,10 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
 }
 
 .ds-sidebar-shell .sidebar-menu-row {
-  height: 30px;
-  gap: 8px;
-  padding: 0 9px;
-  font-size: 13px;
+  height: 36px;
+  gap: 10px;
+  padding: 0 10px;
+  font-size: 14px;
 }
 
 .ds-sidebar-shell .sidebar-menu-row-icon,
@@ -74,9 +84,9 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
 
 .ds-sidebar-shell .sidebar-new-task,
 .ds-sidebar-shell .sidebar-new-chat {
-  height: 30px;
+  height: 36px;
   border-color: transparent;
-  border-radius: 7px;
+  border-radius: var(--kun-radius-sm);
   background: transparent;
   box-shadow: none;
   transition:
@@ -85,14 +95,15 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
 }
 
 .ds-sidebar-shell .sidebar-new-task {
-  gap: 8px;
-  padding: 0 9px;
-  font-size: 13px;
+  gap: 10px;
+  padding: 0 10px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .ds-sidebar-shell .sidebar-new-chat {
-  width: 30px;
-  flex-basis: 30px;
+  width: 36px;
+  flex-basis: 36px;
 }
 
 .ds-sidebar-shell .sidebar-new-task:hover:not(:disabled),
@@ -108,7 +119,7 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
 }
 
 .ds-sidebar-shell .ds-sidebar-tree-row > button {
-  min-height: 30px;
+  min-height: 34px;
   padding-top: 5px;
   padding-bottom: 5px;
 }
@@ -138,7 +149,7 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
 
 .ds-sidebar-shell .ds-sidebar-icon-button {
   border-color: transparent;
-  border-radius: 7px;
+  border-radius: var(--kun-radius-sm);
 }
 
 /* Section titles that collapse their list: type only, brighter on hover. */

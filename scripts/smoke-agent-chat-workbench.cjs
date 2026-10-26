@@ -126,12 +126,10 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
   const projectScope = await roomWorkbenchSnapshot(page)
   assert.equal(projectScope.activeThreadId, project.id)
   assert.equal(projectScope.workspaceRoot, workspaceRoot)
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  assert.deepEqual(await page.locator('[role="menuitemradio"][data-workspace-mode]').evaluateAll((items) =>
-    items.map((item) => item.dataset.workspaceMode)), ['write', 'chat'], 'Rooms is no longer a workspace mode')
-  await page.keyboard.press('Escape')
+  assert.deepEqual(await page.locator('[role="tab"][data-workspace-mode]').evaluateAll((items) =>
+    items.map((item) => item.dataset.workspaceMode)), ['chat', 'write', 'chats'], 'Rooms is no longer a workspace route')
   await capture('workbench-01-project-task')
-  assertions.push('The workspace mode menu offers only Work and Code')
+  assertions.push('The mode pill offers only Code, Work and Chats')
   assertions.push(...await exerciseComposerModelPanel({ page, poll, capture, prefix: 'workbench-01b' }))
 
   await openPrivate()
