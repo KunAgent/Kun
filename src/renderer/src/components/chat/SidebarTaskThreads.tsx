@@ -7,7 +7,8 @@ import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
 import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import type { SidebarThreadActivity } from './sidebar-project-selectors'
 import { loadCollapsedTaskGroups, saveCollapsedTaskGroups, strongestTaskActivity, taskGroupCounts } from './sidebar-task-threads'
-import { selectSidebarWorkerRows, workerGlyph, type SidebarWorkerRow } from './sidebar-worker-rows'
+import { AgentIcon } from '../agent-icon'
+import { selectSidebarWorkerRows, type SidebarWorkerRow } from './sidebar-worker-rows'
 
 type SidebarTaskThreadsValue = {
   childrenByParent: Map<string, NormalizedThread[]>
@@ -179,7 +180,9 @@ function WorkerRows({ workers, labelled, context }: { workers: SidebarWorkerRow[
           active ? 'border-[var(--ds-sidebar-row-ring)] bg-[var(--ds-sidebar-row-active)]' : 'border-transparent hover:bg-[var(--ds-sidebar-row-hover)]'
         } ${worker.activity === 'read' && !active ? 'text-ds-muted' : ''}`}
         onClick={() => context.onSelect(worker.threadId)} title={worker.title}>
-        <span aria-hidden className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] bg-ds-ink text-[10px] font-extrabold text-ds-card">{workerGlyph(worker.harnessId)}</span>
+        <span aria-hidden className="flex h-[18px] w-[18px] shrink-0 items-center justify-center">
+          <AgentIcon harnessId={worker.harnessId} size={16} />
+        </span>
         <span className="min-w-0 flex-1 truncate">{worker.title}</span>
         <span className="flex max-w-[45%] shrink-0 items-center gap-1.5 group-hover:opacity-0 group-focus-within:opacity-0">
           {end ? <span className={`truncate text-[11.5px] ${worker.activity === 'failed' ? 'text-ds-status-danger' : worker.activity === 'awaiting-input' ? 'text-ds-status-warning' : 'text-ds-faint'}`}>{end}</span> : null}

@@ -60,7 +60,3 @@ export function selectSidebarWorkerRows(
   }
   return result
 }
-
-export function workerGlyph(harnessId: string): string {
-  return harnessId === 'kun' || !harnessId ? 'K' : harnessId.slice(0, 1).toUpperCase()
-}

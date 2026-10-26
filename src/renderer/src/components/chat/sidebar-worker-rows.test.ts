@@ -12,6 +12,10 @@ const row = (unitId: string, extra: Partial<ActivityRow> = {}): ActivityRow => (
 const NOW = Date.parse('2026-10-26T10:01:00.000Z')
 
 describe('selectSidebarWorkerRows', () => {
+  it.each(['kun', 'codex', 'cursor', 'custom-agent', ''])('preserves harness identity %j independently of the title', (harnessId) => {
+    const rows = { agent: row('agent', { harnessId, title: 'MiniMax official verification' }) }
+    expect(selectSidebarWorkerRows(rows, NOW).get('parent')![0].harnessId).toBe(harnessId)
+  })
   it('groups worker rows by parent in start order with their status', () => {
     const rows = {
       b: row('b', { stateSince: '2026-10-26T10:00:05.000Z', state: 'waiting', waitingReason: 'approval' }),
