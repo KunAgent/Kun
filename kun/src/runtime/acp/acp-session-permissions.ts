@@ -102,6 +102,7 @@ async function set<T>(conn: AcpConnection, mode: string, method: string, params:
     const nativeMessage = `${error instanceof Error ? error.message : 'request failed'} ${details}`
       .replace(/("[^"]*(?:token|secret|password|key|authorization)[^"]*"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
     const summary = redactApprovalSensitiveText(nativeMessage)
+      // eslint-disable-next-line no-control-regex -- summaries strip ASCII controls
       .replace(/[\r\n\x00-\x1f\x7f]/g, ' ').slice(0, 300)
     const rpcCode = error instanceof AcpError ? error.rpcCode : undefined
     throw new AcpError('policy_denied', `${denied(mode).message} ${method}${rpcCode === undefined ? '' : ` (RPC ${rpcCode})`}: ${summary}`, { rpcCode })
