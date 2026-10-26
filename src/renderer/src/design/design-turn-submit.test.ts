@@ -85,7 +85,6 @@ describe('submitDesignTurn', () => {
     }))
     const takeLastCanvasErrors = vi.fn(() => [])
     const sendMessage = vi.fn(async () => true)
-    const clearAutoRepairScope = vi.fn()
 
     const result = await submitDesignTurn({
       promptText: 'Create a dashboard',
@@ -102,7 +101,6 @@ describe('submitDesignTurn', () => {
       suppressedIds: new Set(['hidden']),
       htmlElementContext: null,
       explicitScreenShapeId: 'frame_1',
-      clearAutoRepairScope,
       getDesignState: () => designState,
       getCanvasShapeState: () => ({ document: canvasDocument }) as never,
       getCanvasSelectionState: () => ({ selectedIds: new Set(['shape_1']) }) as never,
@@ -123,7 +121,6 @@ describe('submitDesignTurn', () => {
       explicitScreenShapeId: 'frame_1'
     }))
     expect(designState.setDesignIntentMode).toHaveBeenCalledWith('modify')
-    expect(clearAutoRepairScope).toHaveBeenCalledWith('artifact:board')
     expect(prepareTurnFiles).toHaveBeenCalledWith(expect.objectContaining({
       workspaceRoot: '/workspace',
       resolvedTarget: target

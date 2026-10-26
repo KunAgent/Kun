@@ -6,11 +6,8 @@ import { useHtmlFrameElementSelection } from './use-html-frame-element-selection
 
 type Options = Parameters<typeof useHtmlFrameElementSelection>[0]
 type Result = ReturnType<typeof useHtmlFrameElementSelection>
-const event = () => ({
-  button: 0, clientX: 40, clientY: 40,
-  preventDefault: vi.fn(), stopPropagation: vi.fn(),
-  currentTarget: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) }
-}) as unknown as React.PointerEvent<HTMLDivElement>
+const BOUNDS = { left: 0, top: 0, width: 100, height: 100 }
+const click = () => result.selectClient(40, 40, BOUNDS)
 const node = (tagName: string, selector: string) => ({
   tagName, selector, selectorIsUnique: true, text: 'Take over', html: `<${tagName}>Take over</${tagName}>`,
   editableText: true, rect: { left: 10, top: 10, width: 80, height: 30 }
@@ -27,7 +24,7 @@ function options(executeScript: Options['executeScript']): Options {
   return {
     artifact: { id: 'a', title: 'Page', relativePath: 'page.html', kind: 'html', versions: [],
       createdAt: '', updatedAt: '' },
-    canvasWidth: 1000, canvasHeight: 1000, editing: true, interactive: false,
+    canvasWidth: 1000, canvasHeight: 1000, enabled: true, interactive: false,
     executeScript, shapeId: 'frame', previewRevision: 1,
     setFileError: vi.fn(), setLocalPreviewError: vi.fn(), onUseElementAsContext: vi.fn()
   }
@@ -41,13 +38,11 @@ afterEach(async () => {
 })
 
 describe('HTML component selection lifecycle', () => {
-  it('keeps a pending click when hover occurs and retains parent/drill navigation', async () => {
-    let resolve!: (value: unknown) => void
-    const execute = vi.fn(() => new Promise<unknown>((done) => { resolve = done }))
+  it('selects by point, then walks parent and inner element', async () => {
+    const execute = vi.fn(() => Promise.resolve(payload))
     await mount(options(execute))
-    act(() => { result.selectElementAt(event()); result.hoverAt(event()) })
+    await act(async () => click())
     expect(execute).toHaveBeenCalledTimes(1)
-    await act(async () => { resolve(payload) })
     expect(result.selectedElementContext?.selector).toBe('#take')
     expect(result.canDrillToHit).toBe(true)
     act(() => result.selectParentElement())
@@ -57,12 +52,29 @@ describe('HTML component selection lifecycle', () => {
     expect(result.canSelectParent).toBe(true)
   })
 
-  it('discards a hover response arriving after pointer leave', async () => {
-    let resolve!: (value: unknown) => void
-    await mount(options(() => new Promise((done) => { resolve = done })))
-    act(() => { result.hoverAt(event()); result.clearHover() })
-    await act(async () => { resolve(payload) })
-    expect(result.hoverRect).toBeNull()
+  it('hovers from the local element map without asking the page again', async () => {
+    vi.useFakeTimers()
+    try {
+      const box = (parent: number, x: number, w: number, tagName: string) => ({
+        parent, depth: parent + 2, x, y: 0, w, h: 50, tagName, text: tagName
+      })
+      const mapPayload = { ok: true, token: 1, viewportWidth: 100, viewportHeight: 100,
+        boxes: [box(-1, 0, 100, 'section'), box(0, 10, 40, 'button')] }
+      const execute = vi.fn(() => Promise.resolve(mapPayload))
+      await mount(options(execute))
+      await act(async () => { result.hoverClient(2, 2, BOUNDS) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+      await act(async () => { result.hoverClient(2, 2, BOUNDS) })
+      expect(result.hoverRect).toEqual({ left: 10, top: 0, width: 40, height: 50 })
+      expect(result.hoverLabel).toBe('Button · button')
+      const calls = execute.mock.calls.length
+      await act(async () => { result.hoverClient(3, 2, BOUNDS); result.hoverClient(4, 2, BOUNDS) })
+      expect(execute.mock.calls.length).toBe(calls)
+      await act(async () => { result.leave(); await vi.advanceTimersByTimeAsync(200) })
+      expect(result.hoverRect).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops the reference when the element cannot be found again after a revision change', async () => {
@@ -73,7 +85,7 @@ describe('HTML component selection lifecycle', () => {
       ))
       const opts = options(execute)
       await mount(opts)
-      await act(async () => result.selectElementAt(event()))
+      await act(async () => click())
       expect(result.selectedElementContext?.selector).toBe('#take')
       await act(async () => {
         renderer!.update(createElement(Harness, { options: { ...opts, previewRevision: 2 } }))
@@ -99,7 +111,7 @@ describe('HTML component selection lifecycle', () => {
       ))
       const opts = options(execute)
       await mount(opts)
-      await act(async () => result.selectElementAt(event()))
+      await act(async () => click())
       expect(result.selectedElementContext?.selector).toBe('#take')
       await act(async () => {
         renderer!.update(createElement(Harness, { options: { ...opts, previewRevision: 2 } }))
@@ -116,8 +128,8 @@ describe('HTML component selection lifecycle', () => {
   it('clears an empty click without reporting a file failure', async () => {
     const opts = options(vi.fn().mockResolvedValueOnce(payload).mockResolvedValueOnce({ ok: false, reason: 'empty' }))
     await mount(opts)
-    await act(async () => result.selectElementAt(event()))
-    await act(async () => result.selectElementAt(event()))
+    await act(async () => click())
+    await act(async () => click())
     expect(result.selectedElementContext).toBeNull()
     expect(opts.setFileError).not.toHaveBeenCalled()
   })

@@ -14,7 +14,6 @@ import {
   shouldShowCanvasDocumentLoading,
   shouldResetCanvasTransientInteractionAfterDocumentSync,
   shouldSyncCanvasHtmlFrames,
-  shouldEnterHtmlFrameComponentPickOnDoubleClick
 } from './CanvasViewport'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape } from '../../../design/canvas/canvas-types'
 
@@ -164,18 +163,6 @@ describe('CanvasViewport surface behavior', () => {
     ).toBeNull()
   })
 
-  it('enters component picking from design-surface double-clicks only', () => {
-    const htmlFrame = createDefaultShape('frame', 0, 0)
-    htmlFrame.htmlArtifactId = 'artifact_html'
-    const plainFrame = createDefaultShape('frame', 0, 0)
-
-    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('design', htmlFrame)).toBe(true)
-    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('code', htmlFrame)).toBe(false)
-    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('work', htmlFrame)).toBe(false)
-    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('design', plainFrame)).toBe(false)
-    expect(shouldEnterHtmlFrameComponentPickOnDoubleClick('design', undefined)).toBe(false)
-  })
-
   it('allows code canvases to override the design-system persistence directory', () => {
     expect(resolveCanvasDesignSystemBaseDir('.kun-canvas', '.kun-canvas/code-thread-1')).toBe(
       '.kun-canvas/code-thread-1'
@@ -234,48 +221,36 @@ describe('CanvasViewport surface behavior', () => {
     }
 
     expect(resolveHtmlFrameOverlayInteractionState(doc, new Set([htmlFrame.id]), {
-      interactiveId: htmlFrame.id,
-      editingId: htmlFrame.id
+      interactiveId: htmlFrame.id
     })).toEqual({
-      interactiveId: htmlFrame.id,
-      editingId: htmlFrame.id
+      interactiveId: htmlFrame.id
     })
     expect(resolveHtmlFrameOverlayInteractionState(doc, new Set([htmlFrame.id]), {
-      interactiveId: 'removed-frame',
-      editingId: htmlFrame.id
+      interactiveId: 'removed-frame'
     })).toEqual({
-      interactiveId: null,
-      editingId: htmlFrame.id
+      interactiveId: null
     })
     expect(resolveHtmlFrameOverlayInteractionState(doc, new Set(), {
-      interactiveId: htmlFrame.id,
-      editingId: htmlFrame.id
+      interactiveId: htmlFrame.id
     })).toEqual({
-      interactiveId: null,
-      editingId: null
+      interactiveId: null
     })
     expect(resolveHtmlFrameOverlayInteractionState(doc, new Set([hiddenHtmlFrame.id, plainFrame.id]), {
-      interactiveId: hiddenHtmlFrame.id,
-      editingId: plainFrame.id
+      interactiveId: hiddenHtmlFrame.id
     })).toEqual({
-      interactiveId: null,
-      editingId: null
+      interactiveId: null
     })
     expect(resolveHtmlFrameOverlayInteractionState(doc, new Set([htmlFrame.id]), {
       interactiveId: htmlFrame.id,
-      editingId: htmlFrame.id,
       overlayAvailable: false
     })).toEqual({
-      interactiveId: null,
-      editingId: null
+      interactiveId: null
     })
     expect(resolveHtmlFrameOverlayInteractionState(doc, new Set([htmlFrame.id]), {
       interactiveId: htmlFrame.id,
-      editingId: htmlFrame.id,
       mountableFrameIds: new Set()
     })).toEqual({
-      interactiveId: null,
-      editingId: null
+      interactiveId: null
     })
   })
 

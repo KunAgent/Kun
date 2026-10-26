@@ -118,8 +118,6 @@ type WorkbenchRightPanelElementOptions = Pick<
     | 'onScreenCreated'
     | 'onSvgCreated'
     | 'onUseElementAsContext'
-    | 'onRuntimeQualityFindings'
-    | 'onRequestQualityRepair'
   >
   file: Pick<
     FilePanelProps,

@@ -459,8 +459,6 @@ export function Workbench(): ReactElement {
     designThreads,
     designHistoryThreadIds,
     hasRegisteredHistory: designHasRegisteredHistory,
-    handleDesignQualityRepairRequest,
-    handleDesignRuntimeQualityFindings,
     implementDesignInCode,
     openDesignMode,
     sendCodeCanvasPrompt,
@@ -634,8 +632,7 @@ export function Workbench(): ReactElement {
     openDesignDocumentInWhiteboard, extensionRightRailItems, extensionRightPanelItems,
     openRightPanelTab, activateRightPanelTab, closeCodeRightTool, toggleFileTreeSidePanel,
     setError, canvasDocumentKey, canvasDocument, sendCodeCanvasPrompt,
-    implementDesignInCode, selectCanvasShape, handleDesignHtmlElementAsContext,
-    handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest
+    implementDesignInCode, selectCanvasShape, handleDesignHtmlElementAsContext
   })
   return <>
     {autoPlanBuildDialog}
@@ -651,7 +648,7 @@ export function Workbench(): ReactElement {
     openCodeMode, openAdeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy, implementDesignInCode,
     handleDesignHtmlElementAsContext, selectCanvasShape, sendDesignPrompt,
-    handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest, rightPanelSharedProps,
+    rightPanelSharedProps,
     designWorkspaceRoot, workspaceRoot, designAssistantModel, resolvedDesignAssistantProviderId,
     designAssistantPickList, setDesignAssistantModel, designComposerReasoningEffort,
     composerFastMode, setDesignComposerReasoningEffort, setComposerFastMode, designContextChips,

@@ -280,29 +280,17 @@ export function htmlFrameShouldShowGeneratingCanvas({
 
 export function htmlFrameOverlayPointerEvents({
   panning,
-  interactive,
-  editing
+  interactive
 }: {
   panning: boolean
   interactive: boolean
-  editing: boolean
 }): 'auto' | 'none' {
   if (panning) return 'none'
-  return interactive || editing ? 'auto' : 'none'
+  return interactive ? 'auto' : 'none'
 }
 
 export function htmlFrameOverlayCanMountAtZoom(zoom: number): boolean {
   return Number.isFinite(zoom) && zoom >= HTML_FRAME_MIN_OVERLAY_ZOOM
-}
-
-export function htmlFrameShouldClearElementContextOnEditingChange({
-  wasEditing,
-  editing
-}: {
-  wasEditing: boolean
-  editing: boolean
-}): boolean {
-  return wasEditing && !editing
 }
 
 export type HtmlFramePreviewAsyncEpoch = {

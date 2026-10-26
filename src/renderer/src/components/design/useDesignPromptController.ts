@@ -22,7 +22,7 @@ import {
   runDesignPagesDispatch
 } from '../../design/design-pages-dispatch'
 import { routeDesignPrompt } from '../../design/design-prompt-router'
-import type { DesignPromptSource } from '../../design/design-quality-repair-dispatch'
+import type { DesignPromptSource } from '../../design/design-turn-submit'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { ensureDesignBoardArtifact } from '../../design/design-board'
 import {
@@ -52,7 +52,6 @@ import {
   submitDesignTurn,
   type DesignTurnSubmitSendMessage
 } from '../../design/design-turn-submit'
-import { useDesignQualityRepair } from './useDesignQualityRepair'
 
 export type DesignPromptControllerOptions = {
   route: string
@@ -634,7 +633,6 @@ export function useDesignPromptController({
         explicitSvgArtifactId: options.svgArtifactId,
         imageEditReferencePath: options.imageEditReferencePath,
         ...(options.messageSource ? { messageSource: options.messageSource } : {}),
-        clearAutoRepairScope: clearDesignAutoRepairScope,
         // Screen/SVG follow-ups are drained one at a time; resolving only once
         // the runtime has admitted the turn keeps that serialization honest.
         ...(drawing.created || options.screenShapeId || options.svgArtifactId
@@ -679,21 +677,5 @@ export function useDesignPromptController({
     }
   }
 
-  const {
-    clearDesignAutoRepairScope,
-    handleDesignRuntimeQualityFindings,
-    handleDesignQualityRepairRequest
-  } = useDesignQualityRepair({
-    route,
-    runtimeConnection,
-    busy,
-    sendDesignPrompt
-  })
-
-  return {
-    sendDesignPrompt,
-    clearDesignAutoRepairScope,
-    handleDesignRuntimeQualityFindings,
-    handleDesignQualityRepairRequest
-  }
+  return { sendDesignPrompt }
 }

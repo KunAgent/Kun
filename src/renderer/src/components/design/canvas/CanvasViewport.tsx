@@ -11,7 +11,6 @@ import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 import type { DesignArtifact } from '../../../design/design-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
-import type { DesignRuntimeQualityPayload } from '../../../design/design-html-quality'
 import { CanvasWorkspaceContext } from '../../../design/canvas/canvas-workspace-context'
 import {
   handleCanvasKeyDown,
@@ -43,7 +42,6 @@ import {
   shouldRenderCanvasMinimap,
   shouldRenderDesignArtifactOverlays,
   shouldSyncCanvasHtmlFrames,
-  shouldEnterHtmlFrameComponentPickOnDoubleClick,
   resolveSelectedImageAnnotationAction,
   resolveCanvasDesignSystemBaseDir,
   resolveHtmlFrameOverlayInteractionState
@@ -84,7 +82,6 @@ export {
   shouldRenderCanvasMinimap,
   shouldRenderDesignArtifactOverlays,
   shouldSyncCanvasHtmlFrames,
-  shouldEnterHtmlFrameComponentPickOnDoubleClick,
   resolveCanvasSelectionAfterDocumentSync,
   resolveHtmlFrameOverlayInteractionState,
   shouldResetCanvasTransientInteractionAfterDocumentSync,
@@ -107,8 +104,6 @@ type Props = {
   syncHtmlScreens?: boolean
   onImplementDesign?: (artifact: DesignArtifact) => void
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
   onRequestAssistant?: () => void
   /** Reports whether the current canvas document loaded safely for guarded actions. */
   onDocumentLoadStateChange?: (loaded: boolean) => void
@@ -138,8 +133,6 @@ export function CanvasViewport({
   syncHtmlScreens = false,
   onImplementDesign,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair,
   onRequestAssistant,
   onDocumentLoadStateChange,
   onError,
@@ -171,7 +164,6 @@ export function CanvasViewport({
 
   const [prototypePlayerOpen, setPrototypePlayerOpen] = useState(false)
   const [interactiveHtmlFrameId, setInteractiveHtmlFrameId] = useState<string | null>(null)
-  const [editingHtmlFrameId, setEditingHtmlFrameId] = useState<string | null>(null)
   const zoom = containerWidth / vbox.width
   const motionOpen = useCanvasMotionStore((s) => s.open)
   const motionPlaying = useCanvasMotionStore((s) => s.playing)
@@ -193,7 +185,6 @@ export function CanvasViewport({
     useCanvasMotionStore.getState().setActiveFrameId(frameId)
     setActiveTool('select')
     setInteractiveHtmlFrameId(null)
-    setEditingHtmlFrameId(null)
   }, [designMotionOpen, document, selectedIds, setActiveTool])
   const htmlFrameOverlayMountableIds = useMemo(() => {
     if (!htmlFrameOverlayCanMountAtZoom(zoom)) return new Set<string>()
@@ -207,35 +198,22 @@ export function CanvasViewport({
   }, [onUseElementAsContext])
 
   const toggleHtmlFrameInteractive = useCallback((shapeId: string): void => {
-    setEditingHtmlFrameId(null)
     setInteractiveHtmlFrameId((prev) => (prev === shapeId ? null : shapeId))
-  }, [])
-
-  const toggleHtmlFrameModify = useCallback((shapeId: string): void => {
-    setInteractiveHtmlFrameId(null)
-    setEditingHtmlFrameId((prev) => (prev === shapeId ? null : shapeId))
   }, [])
 
   useEffect(() => {
     const next = resolveHtmlFrameOverlayInteractionState(document, selectedIds, {
       interactiveId: interactiveHtmlFrameId,
-      editingId: editingHtmlFrameId,
       overlayAvailable: htmlFrameOverlayCanMountAtZoom(zoom),
       mountableFrameIds: htmlFrameOverlayMountableIds
     })
     if (next.interactiveId !== interactiveHtmlFrameId) {
       setInteractiveHtmlFrameId(next.interactiveId)
     }
-    if (next.editingId !== editingHtmlFrameId) {
-      setEditingHtmlFrameId(next.editingId)
-      if (!next.editingId) onUseElementAsContext?.(null)
-    }
   }, [
     document,
-    editingHtmlFrameId,
     htmlFrameOverlayMountableIds,
     interactiveHtmlFrameId,
-    onUseElementAsContext,
     selectedIds,
     zoom
   ])
@@ -442,11 +420,6 @@ export function CanvasViewport({
       const hitId = hitTest(interactionDocument, canvas.x, canvas.y)
       if (!hitId) return
       const shape = doc.objects[hitId]
-      if (shouldEnterHtmlFrameComponentPickOnDoubleClick(surface, shape)) {
-        useCanvasSelectionStore.getState().select([hitId])
-        toggleHtmlFrameModify(hitId)
-        return
-      }
       if (shape?.type === 'text') {
         useCanvasSelectionStore.getState().select([hitId])
         useCanvasSelectionStore.getState().setEditing(hitId)
@@ -459,7 +432,7 @@ export function CanvasViewport({
         useImageAnnotationStore.getState().openImageAnnotation(hitId)
       }
     },
-    [screenToCanvas, surface, toggleHtmlFrameModify]
+    [screenToCanvas, surface]
   )
 
   const onWheel = useCallback(
@@ -654,12 +627,8 @@ export function CanvasViewport({
                 workspaceRoot={workspaceRoot}
                 readOnly={readOnly}
                 interactiveId={interactiveHtmlFrameId}
-                editingId={editingHtmlFrameId}
                 onToggleInteractive={toggleHtmlFrameInteractive}
-                onToggleModify={toggleHtmlFrameModify}
                 onUseElementAsContext={onUseElementAsContext}
-                onRuntimeQualityFindings={onRuntimeQualityFindings}
-                onRequestQualityRepair={onRequestQualityRepair}
               />
               <SvgFrameOverlay workspaceRoot={workspaceRoot} />
             </>

@@ -84,8 +84,7 @@ export function useWorkbenchShellRuntime(context: Context): {
     openRightPanelTab, activateRightPanelTab, closeCodeRightTool, toggleFileTreeSidePanel,
     setError, canvasDocumentKey, canvasDocument, sendCodeCanvasPrompt,
     implementDesignInCode, selectCanvasShape,
-    handleDesignHtmlElementAsContext, handleDesignRuntimeQualityFindings,
-    handleDesignQualityRepairRequest
+    handleDesignHtmlElementAsContext
   } = context
   const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
   const extraWorkspaceRoots = extraRootsForWorkspace(fileTreeWorkspaceRoot, folderSets)
@@ -321,8 +320,6 @@ export function useWorkbenchShellRuntime(context: Context): {
           svgArtifactId: artifactId
         })
       },
-      onRuntimeQualityFindings: handleDesignRuntimeQualityFindings,
-      onRequestQualityRepair: handleDesignQualityRepairRequest
     },
     file: {
       target: filePreviewTarget,
@@ -407,8 +404,6 @@ export function useWorkbenchShellRuntime(context: Context): {
             svgArtifactId: artifactId
           })
         },
-        onRuntimeQualityFindings: handleDesignRuntimeQualityFindings,
-        onRequestQualityRepair: handleDesignQualityRepairRequest,
         onCollapse: exitCanvasFocusMode
       }}
       conversation={{
