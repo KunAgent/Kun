@@ -9,6 +9,7 @@ export const kunAccountApi: KunAccountApi = {
   cancelLogin: () => ipcRenderer.invoke(channels.cancel),
   refresh: () => ipcRenderer.invoke(channels.refresh),
   logout: () => ipcRenderer.invoke(channels.logout),
+  openMembership: () => ipcRenderer.invoke(channels.membership),
   openAccountCenter: () => ipcRenderer.invoke(channels.manage),
   onState: (handler) => {
     const listener = (_event: IpcRendererEvent, state: KunAccountState) => handler(state)

@@ -89,6 +89,11 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
     await shell.openExternal(`${KUN_ACCOUNT_ISSUER}/auth/account`)
   })
 
+  ipcMain.handle(channels.membership, async (event) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    await shell.openExternal('https://www.kun-agent.com/account?tab=membership')
+  })
+
   const handle = (channel: string, run: (input: unknown) => Promise<unknown>) =>
     ipcMain.handle(channel, (event: IpcMainInvokeEvent, input: unknown) => { assertTrustedWorkbenchSender(event, getMainWindow); return run(input) })
   let savedPosterPath: string | undefined
