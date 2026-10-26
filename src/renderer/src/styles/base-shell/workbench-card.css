@@ -67,4 +67,12 @@
     --ds-sidebar-surface-bg: var(--ds-bg-main);
     --ds-sidebar-surface-chrome-bg: var(--ds-bg-main);
   }
+
+  /* The rail shares the work card's surface so it reads as one column, not a stray strip. */
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-card
+    > .kun-rail-slot {
+    --ds-sidebar-surface-bg: var(--ds-bg-main);
+    --ds-sidebar-surface-chrome-bg: var(--ds-bg-main);
+  }
 }

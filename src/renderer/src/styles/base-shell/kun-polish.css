@@ -127,7 +127,7 @@
   }
 }
 
-/* The tool rail sits on the window ground beside the work card. */
+/* The tool rail is the work card's own right edge, not a strip of ground beside it. */
 .kun-rail-slot {
   display: flex;
   flex: none;
@@ -138,10 +138,9 @@
 }
 
 .kun-rail-slot .ds-workbench-side-rail.ds-sidebar-surface {
-  width: 52px;
-  border-left-width: 0;
+  width: 48px;
   background: transparent;
-  padding-top: calc(var(--kun-card-gutter) + 6px);
+  padding: 9px 0 12px;
 }
 
 /* Every top-bar action (trace, extensions, tools) sits in one pill of round chips. */
