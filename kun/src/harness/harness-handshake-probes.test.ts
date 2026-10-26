@@ -229,6 +229,18 @@ describe('ACP session model metadata', () => {
 })
 
 describe('ACP launch configuration readiness', () => {
+  it.each(['qoder', 'qoder-cn'])('negotiates %s bypass permission using the advertised yolo alias', async (id) => {
+    const child = fixture({ session: { sessionId: 'fixture', configOptions: [{
+      id: 'mode', name: 'Mode', category: 'mode', type: 'select', currentValue: 'default',
+      options: ['default', 'acceptEdits', 'auto', 'dontAsk', 'yolo'].map((value) => ({ value, name: value }))
+    }] } })
+    spawn.mockResolvedValue(child.process)
+    expect(await probeAcpHandshake(catalog.get(id)!, 'fixture', { session: { permissionMode: 'bypass_permissions' } }))
+      .toMatchObject({ ok: true })
+    expect(child.requests.map((request) => request.method)).toEqual(['initialize', 'session/new', 'session/set_config_option'])
+    expect(child.requests[2].params).toEqual({ sessionId: 'fixture', configId: 'mode', value: 'yolo' })
+    expect(child.stop).toHaveBeenCalledOnce()
+  })
   it('checks session setup even for the default model without sending a prompt', async () => {
     const child = fixture()
     spawn.mockResolvedValue(child.process)

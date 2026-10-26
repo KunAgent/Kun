@@ -23,6 +23,12 @@ const SOURCE_TO_HARNESS = {
 } as const
 
 describe('expanded Agent catalog', () => {
+  it.each(['qoder', 'qoder-cn'])('keeps %s saved permissions with explicit ACP aliases', (id) => {
+    expect(byId.get(id)?.acpPermission?.modeAliases)
+      .toEqual({ bypass_permissions: ['yolo', 'bypassPermissions'] })
+    expect(byId.get(id)?.permissionModes.map((mode) => mode.id)).toEqual(['default', 'bypass_permissions'])
+    expect(byId.get(id)?.permissionModes[1]?.kunPermissionMode).toBe('full-access')
+  })
   it('covers the fixed 42 products and separately exposes the Cursor CLI', () => {
     const all = new Set(BUILTIN_HARNESSES.map((definition) => definition.id))
     expect(all.size).toBe(BUILTIN_HARNESSES.length)
