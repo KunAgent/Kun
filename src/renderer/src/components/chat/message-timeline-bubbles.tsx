@@ -53,8 +53,8 @@ export const MessageBubble = memo(MessageBubbleImpl)
  */
 export function assistantActionRowClass(speaking: boolean): string {
   return [
-    'mt-1 flex min-h-5 min-w-0 items-center justify-between gap-3 text-[11.5px] text-ds-faint',
-    'transition duration-150 group-hover/message:opacity-100',
+    'mt-1 flex min-h-5 min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[11.5px] text-ds-faint',
+    'transition duration-150 group-hover/message:opacity-100 focus-within:opacity-100',
     speaking ? 'opacity-100' : 'opacity-0'
   ].join(' ')
 }
@@ -176,18 +176,18 @@ function MessageBubbleImpl({
           </div>
         {!streaming ? (
           <div className={assistantActionRowClass(speakingBlockId === block.id)} data-assistant-action-row>
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1" data-assistant-action-meta>
               <span className="truncate">{createdAtLabel ?? ''}</span>
               {turnMetrics ? (
                 <span
-                  className="shrink-0 whitespace-nowrap tabular-nums"
+                  className="min-w-0 max-w-full whitespace-normal break-words tabular-nums"
                   title={t('turnMetricsTitle')}
                 >
                   {turnMetricsLabel(t, turnMetrics)}
                 </span>
               ) : null}
             </span>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 whitespace-nowrap [&>*]:shrink-0" data-assistant-action-buttons>
               {rollbackAction ? (
                 <button
                   type="button"
