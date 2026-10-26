@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MemoryType } from './memory.js'
 import {
   MemoryCandidate,
   MemoryCandidateDraft,
@@ -10,8 +11,27 @@ export const MEMORY_DISTILLATION_STORE_VERSION = 1 as const
 export const MEMORY_DISTILLATION_MAX_CANDIDATES = 8
 export const MEMORY_DISTILLATION_PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1_000
 
+// Extraction parses raw model output, which is untrusted: a single bad
+// value must not reject the whole response and fail the memory run.
+// Scalar enum fields fall back to their conservative member at this
+// boundary only; the canonical schemas in memory-distillation.ts stay
+// strict.
+// - durability: anything not exactly 'durable' is treated as 'transient',
+//   so the candidate is skipped as non-durable instead of persisted.
+// - type: unknown types degrade to the generic 'fact'.
+// Comparisons are different: they carry consolidation intent against
+// existing memories, so silently dropping a malformed comparison would
+// turn a supersede/update into a plain create that bypasses conflict
+// review. parseMemoryDistillationExtractionResponse therefore validates
+// candidates one by one and drops a candidate that fails validation,
+// reporting it in `dropped` so callers can retain a diagnostic instead
+// of writing the candidate as an unrelated new memory.
+const ExtractionMemoryType = MemoryType.catch('fact')
+const ExtractionDurability = MemoryCandidateDurability.catch('transient')
+
 export const MemoryDistillationExtractionCandidate = MemoryCandidateDraft.extend({
-  durability: MemoryCandidateDurability,
+  type: ExtractionMemoryType,
+  durability: ExtractionDurability,
   comparisons: z.array(z.object({
     memoryId: z.string().min(1).max(256),
     relation: MemoryCandidateRelation,
@@ -29,6 +49,59 @@ export const MemoryDistillationExtractionResponse = z.object({
 export type MemoryDistillationExtractionResponse = z.infer<
   typeof MemoryDistillationExtractionResponse
 >
+
+export type MemoryDistillationExtractionDroppedCandidate = {
+  index: number
+  error: string
+}
+
+export type MemoryDistillationExtractionParseResult = {
+  candidates: MemoryDistillationExtractionCandidate[]
+  dropped: MemoryDistillationExtractionDroppedCandidate[]
+}
+
+const ExtractionEnvelope = z.object({ candidates: z.array(z.unknown()) })
+
+/**
+ * Parse raw extraction model output candidate by candidate. A candidate
+ * that fails validation (for example a comparison with an out-of-enum
+ * relation) is dropped and reported in `dropped` with a compact reason,
+ * so one damaged candidate neither fails the whole response nor slips
+ * through as an unrelated new memory. A malformed envelope (not an
+ * object, or `candidates` not an array) still throws, like
+ * MemoryDistillationExtractionResponse.parse did.
+ */
+export function parseMemoryDistillationExtractionResponse(
+  raw: unknown
+): MemoryDistillationExtractionParseResult {
+  const { candidates: rawCandidates } = ExtractionEnvelope.parse(raw)
+  const candidates: MemoryDistillationExtractionCandidate[] = []
+  const dropped: MemoryDistillationExtractionDroppedCandidate[] = []
+  rawCandidates.forEach((rawCandidate, index) => {
+    if (index >= MEMORY_DISTILLATION_MAX_CANDIDATES) {
+      dropped.push({
+        index,
+        error: `exceeds the ${MEMORY_DISTILLATION_MAX_CANDIDATES}-candidate limit`
+      })
+      return
+    }
+    const parsed = MemoryDistillationExtractionCandidate.safeParse(rawCandidate)
+    if (parsed.success) candidates.push(parsed.data)
+    else dropped.push({ index, error: summarizeExtractionIssues(parsed.error) })
+  })
+  return { candidates, dropped }
+}
+
+function summarizeExtractionIssues(error: z.ZodError): string {
+  return error.issues
+    .slice(0, 3)
+    .map((issue) => {
+      const path = issue.path.join('.')
+      return path ? `${path}: ${issue.code}` : issue.code
+    })
+    .join('; ')
+    .slice(0, 200)
+}
 
 export const MemoryDistillationTarget = z.object({
   scope: z.literal('workspace'),

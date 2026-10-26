@@ -245,7 +245,9 @@ export class AgentMemoryCoordinator {
     const run = await this.deps.store.get('room_run', job.runId!)
     const finished = RoomRunRecordSchema.parse({ ...(run!.value as object),
       status: !allowed ? 'cancelled' : result.error ? 'failed' : 'completed',
-      reason: !allowed ? 'source_cancelled' : result.error ?? saved + ' saved; ' + pending + ' need review',
+      reason: !allowed ? 'source_cancelled' : result.error ??
+        saved + ' saved; ' + pending + ' need review' +
+        (result.diagnostics?.length ? '; ' + result.diagnostics.join('; ') : ''),
       error: result.error, usage: result.usage, usageStatus: result.usage ? 'complete' : 'unavailable',
       elapsedMs: result.elapsedMs, endedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
     await this.deps.store.commit({ requestId: job.runId! + ':finished',
