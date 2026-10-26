@@ -40,6 +40,8 @@
   "canvasBoardPickHint": "คลิกคอมโพเนนต์เพื่อให้ Kun แก้ไข",
   "canvasElementPickToolbar": "การกระทำกับคอมโพเนนต์",
   "canvasElementAskKun": "ให้ Kun แก้ไข",
+  "canvasElementAskPlaceholder": "ให้ Kun แก้ส่วนนี้…",
+  "canvasElementLayers": "เลือกเลเยอร์",
   "canvasElementSelectParent": "เลือกองค์ประกอบแม่",
   "canvasElementSelectChild": "เลือกองค์ประกอบภายใน",
   "canvasElementEditText": "แก้ไขข้อความ",

@@ -40,6 +40,8 @@
   "canvasBoardPickHint": "Kun से बदलवाने के लिए कंपोनेंट पर क्लिक करें",
   "canvasElementPickToolbar": "कंपोनेंट क्रियाएँ",
   "canvasElementAskKun": "Kun से कहें",
+  "canvasElementAskPlaceholder": "Kun से इसे बदलने को कहें…",
+  "canvasElementLayers": "लेयर चुनें",
   "canvasElementSelectParent": "पैरेंट चुनें",
   "canvasElementSelectChild": "भीतरी एलिमेंट चुनें",
   "canvasElementEditText": "टेक्स्ट संपादित करें",

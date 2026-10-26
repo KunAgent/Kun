@@ -65,17 +65,52 @@ describe('HTML component selection lifecycle', () => {
     expect(result.hoverRect).toBeNull()
   })
 
-  it('invalidates references on revision changes instead of rebinding to a sibling', async () => {
-    const opts = options(() => Promise.resolve(payload))
-    await mount(opts)
-    await act(async () => result.selectElementAt(event()))
-    expect(result.selectedElementContext?.selector).toBe('#take')
-    await act(async () => {
-      renderer!.update(createElement(Harness, { options: { ...opts, previewRevision: 2 } }))
-    })
-    expect(result.selectedElementContext).toBeNull()
-    expect(opts.onUseElementAsContext).toHaveBeenLastCalledWith(null)
-    expect(result.selectionError).toContain('changed')
+  it('drops the reference when the element cannot be found again after a revision change', async () => {
+    vi.useFakeTimers()
+    try {
+      const execute = vi.fn((code: string) => Promise.resolve(
+        code.includes("reason: 'ambiguous'") ? { ok: false, reason: 'ambiguous' } : payload
+      ))
+      const opts = options(execute)
+      await mount(opts)
+      await act(async () => result.selectElementAt(event()))
+      expect(result.selectedElementContext?.selector).toBe('#take')
+      await act(async () => {
+        renderer!.update(createElement(Harness, { options: { ...opts, previewRevision: 2 } }))
+      })
+      // Hidden at once: the old reference never points at the new document.
+      expect(result.selectedElementContext).toBeNull()
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(result.selectedElementContext).toBeNull()
+      expect(opts.onUseElementAsContext).toHaveBeenLastCalledWith(null)
+      expect(result.selectionError).toContain('changed')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps an id-anchored selection across a revision change', async () => {
+    vi.useFakeTimers()
+    try {
+      const execute = vi.fn((code: string) => Promise.resolve(
+        code.includes("reason: 'ambiguous'")
+          ? { ...payload, chain: [node('button', '#take'), node('section', '#card')] }
+          : payload
+      ))
+      const opts = options(execute)
+      await mount(opts)
+      await act(async () => result.selectElementAt(event()))
+      expect(result.selectedElementContext?.selector).toBe('#take')
+      await act(async () => {
+        renderer!.update(createElement(Harness, { options: { ...opts, previewRevision: 2 } }))
+      })
+      expect(result.selectedElementContext).toBeNull()
+      await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+      expect(result.selectedElementContext?.selector).toBe('#take')
+      expect(result.selectionError).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('clears an empty click without reporting a file failure', async () => {

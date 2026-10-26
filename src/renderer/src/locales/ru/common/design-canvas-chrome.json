@@ -40,6 +40,8 @@
   "canvasBoardPickHint": "Нажмите на компонент, чтобы попросить Kun",
   "canvasElementPickToolbar": "Действия с компонентом",
   "canvasElementAskKun": "Попросить Kun",
+  "canvasElementAskPlaceholder": "Попросите Kun изменить это…",
+  "canvasElementLayers": "Выбрать слой",
   "canvasElementSelectParent": "Выбрать родителя",
   "canvasElementSelectChild": "Выбрать вложенный элемент",
   "canvasElementEditText": "Править текст",

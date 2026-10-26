@@ -40,6 +40,8 @@
   "canvasBoardPickHint": "Click a component to ask Kun",
   "canvasElementPickToolbar": "Component actions",
   "canvasElementAskKun": "Ask Kun",
+  "canvasElementAskPlaceholder": "Ask Kun to change this…",
+  "canvasElementLayers": "Select layer",
   "canvasElementSelectParent": "Select parent",
   "canvasElementSelectChild": "Select inner element",
   "canvasElementEditText": "Edit text",

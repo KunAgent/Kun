@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ArrowUp, Check, CornerDownRight, MessageSquareText, Type, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -31,15 +32,15 @@ type HtmlFrameElementPickBarProps = {
   canEditText: boolean
   textEditorOpen: boolean
   editor: ElementPickTextEditor
-  onAskKun: () => void
+  onAskKun: (promptSeed?: string) => void
   onSelectParent: () => void
   onSelectHit: () => void
   onToggleTextEditor: () => void
   onClear: () => void
 }
 
-const BAR_WIDTH = 268
-const BAR_HEIGHT = 74
+const BAR_WIDTH = 392
+const BAR_HEIGHT = 40
 const EDGE = 8
 
 export function htmlFrameElementPickBarPosition({
@@ -66,9 +67,8 @@ export function htmlFrameElementPickBarPosition({
 }
 
 /**
- * Floating actions for a picked component. It deliberately exposes only the
- * actions the product actually supports: hand the reference to Kun, walk up the
- * DOM path, drill into the clicked node, or edit plain text in place.
+ * Compact pill for a picked component: name, up/inner/edit-text, and an inline
+ * "ask Kun" field. Enter seeds the composer with the text and the reference.
  */
 export function HtmlFrameElementPickBar({
   label,
@@ -90,61 +90,48 @@ export function HtmlFrameElementPickBar({
 }: HtmlFrameElementPickBarProps): React.JSX.Element {
   const { t } = useTranslation('common')
   const position = htmlFrameElementPickBarPosition({ rect, zoom, screenWidth, screenHeight })
-  const buttonClass =
-    'pointer-events-auto inline-flex h-6 items-center gap-1 rounded-[5px] px-1.5 text-[11px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40'
+  const [ask, setAsk] = useState('')
+  const iconButtonClass =
+    'pointer-events-auto inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40'
   const stop = (event: React.SyntheticEvent): void => {
     event.stopPropagation()
   }
   return (
     <div
-      className="absolute z-20 rounded-[8px] border border-ds-border bg-white/97 p-1.5 shadow-[0_14px_34px_rgba(15,23,42,0.18)] backdrop-blur dark:bg-[#171b22]/97"
+      className="pointer-events-auto absolute z-20 rounded-[12px] border border-ds-border bg-white/97 p-[5px] shadow-[0_6px_20px_rgba(15,23,42,0.16)] backdrop-blur dark:bg-[#171b22]/97"
       style={{ left: position.left, top: position.top, width: BAR_WIDTH }}
       role="toolbar"
       aria-label={t('canvasElementPickToolbar')}
       onPointerDown={stop}
       onPointerMove={stop}
+      onKeyDown={(event) => event.stopPropagation()}
       onDoubleClick={stop}
       data-canvas-element-pick-bar="true"
     >
-      <div className="flex items-start gap-1">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[11px] font-semibold leading-4 text-ds-ink">{label}</div>
-          {path.length > 0 ? (
-            <div className="truncate text-[10px] leading-3.5 text-ds-faint">{path.join(' / ')}</div>
-          ) : null}
+      <div className="flex items-center gap-0.5">
+        <div className="max-w-[120px] shrink-0 truncate px-1.5 text-[11px] font-semibold text-accent" title={path.join(' / ')}>
+          {label}
         </div>
-        <button
-          type="button"
-          onClick={onClear}
-          title={t('canvasElementClear')}
-          aria-label={t('canvasElementClear')}
-          className="pointer-events-auto -mr-0.5 -mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-        >
-          <X className="h-3 w-3" strokeWidth={2} />
-        </button>
-      </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1">
-        <button
-          type="button"
-          onClick={onAskKun}
-          className="pointer-events-auto inline-flex h-6 items-center gap-1 rounded-[5px] bg-accent px-2 text-[11px] font-semibold text-white transition hover:opacity-90"
-        >
-          <MessageSquareText className="h-3 w-3" strokeWidth={2} />
-          {t('canvasElementAskKun')}
-        </button>
+        <span aria-hidden="true" className="mx-0.5 h-4 w-px shrink-0 bg-ds-border" />
         <button
           type="button"
           onClick={onSelectParent}
           disabled={!canSelectParent}
-          className={buttonClass}
+          title={t('canvasElementSelectParent')}
+          aria-label={t('canvasElementSelectParent')}
+          className={iconButtonClass}
         >
-          <ArrowUp className="h-3 w-3" strokeWidth={2} />
-          {t('canvasElementSelectParent')}
+          <ArrowUp className="h-3.5 w-3.5" strokeWidth={2} />
         </button>
         {canDrillToHit ? (
-          <button type="button" onClick={onSelectHit} className={buttonClass}>
-            <CornerDownRight className="h-3 w-3" strokeWidth={2} />
-            {t('canvasElementSelectChild')}
+          <button
+            type="button"
+            onClick={onSelectHit}
+            title={t('canvasElementSelectChild')}
+            aria-label={t('canvasElementSelectChild')}
+            className={iconButtonClass}
+          >
+            <CornerDownRight className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         ) : null}
         {canEditText ? (
@@ -152,12 +139,40 @@ export function HtmlFrameElementPickBar({
             type="button"
             onClick={onToggleTextEditor}
             aria-pressed={textEditorOpen}
-            className={`${buttonClass} ${textEditorOpen ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
+            title={t('canvasElementEditText')}
+            aria-label={t('canvasElementEditText')}
+            className={`${iconButtonClass} ${textEditorOpen ? 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent' : ''}`}
           >
-            <Type className="h-3 w-3" strokeWidth={2} />
-            {t('canvasElementEditText')}
+            <Type className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         ) : null}
+        <label className="pointer-events-auto flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-[7px] bg-ds-hover/40 px-2 dark:bg-white/8">
+          <MessageSquareText className="h-3 w-3 shrink-0 text-accent" strokeWidth={2} aria-hidden="true" />
+          <input
+            type="text"
+            value={ask}
+            onChange={(event) => setAsk(event.target.value)}
+            onKeyDown={(event) => {
+              event.stopPropagation()
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
+              event.preventDefault()
+              onAskKun(ask.trim() || undefined)
+              setAsk('')
+            }}
+            placeholder={t('canvasElementAskPlaceholder')}
+            aria-label={t('canvasElementAskKun')}
+            className="min-w-0 flex-1 bg-transparent text-[11.5px] text-ds-ink outline-none placeholder:text-ds-faint"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={onClear}
+          title={t('canvasElementClear')}
+          aria-label={t('canvasElementClear')}
+          className={iconButtonClass}
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
       </div>
       {textEditorOpen ? (
         <div

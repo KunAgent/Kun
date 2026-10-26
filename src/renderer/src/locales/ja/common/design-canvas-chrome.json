@@ -40,6 +40,8 @@
   "canvasBoardPickHint": "コンポーネントをクリックして Kun に依頼",
   "canvasElementPickToolbar": "コンポーネント操作",
   "canvasElementAskKun": "Kun に依頼",
+  "canvasElementAskPlaceholder": "このコンポーネントの変更を Kun に依頼…",
+  "canvasElementLayers": "レイヤーを選択",
   "canvasElementSelectParent": "親要素を選択",
   "canvasElementSelectChild": "内側の要素を選択",
   "canvasElementEditText": "テキストを編集",

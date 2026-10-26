@@ -40,6 +40,8 @@
   "canvasBoardPickHint": "点击组件，让 Kun 修改",
   "canvasElementPickToolbar": "组件操作",
   "canvasElementAskKun": "让 Kun 修改",
+  "canvasElementAskPlaceholder": "让 Kun 改这里…",
+  "canvasElementLayers": "选择图层",
   "canvasElementSelectParent": "选择父级",
   "canvasElementSelectChild": "选择内部元素",
   "canvasElementEditText": "编辑文字",
