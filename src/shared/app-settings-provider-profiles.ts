@@ -129,7 +129,7 @@ export function defaultModelProviderProfile(apiKey: string, baseUrl: string): Mo
       'deepseek-v4-pro': deepseekTextModelProfile(),
       'deepseek-v4-flash': {
         ...deepseekTextModelProfile(),
-        aliases: ['deepseek-chat', 'deepseek-reasoner']
+        aliases: ['deepseek-flash', 'deepseek-chat', 'deepseek-reasoner']
       }
     }
   }

@@ -128,6 +128,30 @@ describe('AcpLiveSteering (live)', () => {
     expect(errors).toHaveLength(1)
     expect(String(errors[0])).toContain('agent busy')
   })
+
+  test('guidance the engine refuses mid-run is still answered as a follow-up in the same turn', async () => {
+    const fake = fakeSteering()
+    let attempts = 0
+    const { delivery, sent, errors } = recordingDelivery({
+      send: async (entries) => {
+        attempts += 1
+        // The first attempt races the run's end; the follow-up succeeds.
+        if (attempts === 1) throw new Error('no active run')
+        sent.push(entries.map((entry) => entry.text))
+        return { stopReason: 'end_turn' }
+      }
+    })
+    const live = new AcpLiveSteering({ steering: fake.steering, mode: 'live' })
+    live.start(delivery)
+    fake.admit('commit when done')
+    await tick()
+    expect(sent).toEqual([])
+
+    await live.finish({ followUp: true })
+    expect(sent).toEqual([['commit when done']])
+    expect(errors).toEqual([])
+    expect(fake.sealed).toBe(true)
+  })
 })
 
 describe('AcpLiveSteering (deferred)', () => {

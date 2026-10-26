@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelProviderModelProfileV1 } from '@shared/app-settings'
 import { modelProviderModelProfile, modelReasoningEfforts } from '@shared/app-settings-provider-core'
+import { defaultModelProviderProfile } from '@shared/app-settings-provider-profiles'
 import { metadataEvidence } from '../../../../../kun/src/contracts/model-metadata-evidence.js'
 import { withModelObservation, setModelMetadataOverride } from '../../../../../kun/src/services/model-metadata-resolver.js'
 import { modelProfileForModel, modelProfileForSelection, normalizeComposerReasoningEffort, reasoningOptionsForModel } from './floating-composer-model-picker-logic'
@@ -30,6 +31,13 @@ describe('effective capabilities in model menus', () => {
     expect(normalizeComposerReasoningEffort('max', { supportsReasoning: true })).toBe('auto')
     expect(reasoningOptionsForModel({ supportsReasoning: false }).map((option) => option.id)).toEqual(['off'])
     expect(normalizeComposerReasoningEffort('max', { supportsReasoning: false })).toBe('off')
+  })
+  it('resolves the harness catalog short id to the DeepSeek flash reasoning levels', () => {
+    const provider = defaultModelProviderProfile('key', 'https://api.deepseek.com')
+    const profile = modelProfileForModel(provider, 'deepseek-flash')
+    expect(profile?.reasoning?.supportedEfforts).toEqual(['off', 'high', 'max'])
+    expect(reasoningOptionsForModel(profile).map((option) => option.id)).toEqual(['off', 'high', 'max'])
+    expect(normalizeComposerReasoningEffort('high', profile)).toBe('high')
   })
   it('does not borrow another connection profile when the selected account has no metadata', () => {
     expect(modelProfileForSelection([

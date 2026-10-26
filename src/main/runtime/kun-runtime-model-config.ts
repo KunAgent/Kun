@@ -22,7 +22,7 @@ const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
     supportsToolCalling: true, messageParts: ['text']
   },
   'deepseek-v4-flash': {
-    aliases: ['deepseek-chat', 'deepseek-reasoner'],
+    aliases: ['deepseek-flash', 'deepseek-chat', 'deepseek-reasoner'],
     contextWindowTokens: 1_000_000,
     contextCompaction: { softThreshold: 980_000, hardThreshold: 990_000 },
     inputModalities: ['text'], outputModalities: ['text'],

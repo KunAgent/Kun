@@ -59,7 +59,10 @@ export const MODEL_CONTEXT_PROFILES: readonly ModelContextProfile[] = [
   deepseekV4Profile('deepseek-v4-pro', ['deepseek-v4-pro']),
   deepseekV4Profile('deepseek-v4-flash', [
     'deepseek-v4-flash',
-    // Back-compat aliases currently routed by DeepSeek to v4-flash modes.
+    // Back-compat aliases currently routed by DeepSeek to v4-flash modes. The
+    // harness catalogs advertise the short `deepseek-flash` id, so it must
+    // resolve to the same reasoning and context facts.
+    'deepseek-flash',
     'deepseek-chat',
     'deepseek-reasoner'
   ]),
@@ -335,6 +338,7 @@ function reasoning(
 function isKnownZenMuxReasoningModel(model: string): boolean {
   if (model.includes('non-reasoning')) return false
   return [
+    'deepseek-flash',
     'deepseek-chat',
     'deepseek-reasoner',
     'deepseek-r1',
