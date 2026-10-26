@@ -47,10 +47,10 @@ export function ReviewPlanCard({
     <div
       data-review-plan-card
       title={relativePath}
-      className="flex w-full flex-col gap-5 rounded-[26px] border border-ds-border-muted/80 bg-ds-card/95 px-6 py-5 shadow-[0_16px_40px_rgba(20,47,95,0.055)] dark:border-white/[0.08] dark:bg-ds-card/90"
+      className="flex w-full flex-col gap-3.5 rounded-[22px] border border-ds-border-muted/80 bg-ds-card/95 px-4 pb-4 pt-4 shadow-[0_12px_32px_rgba(20,47,95,0.05)] dark:border-white/[0.08] dark:bg-ds-card/90"
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft/80 text-accent">
+      <div className="flex min-w-0 flex-wrap items-center gap-3.5 px-1.5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-accent-soft/80 text-accent">
           <ListTodo className="h-5 w-5" strokeWidth={1.8} />
         </div>
         <div className="min-w-[220px] flex-1">

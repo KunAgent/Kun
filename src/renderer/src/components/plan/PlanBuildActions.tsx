@@ -1,6 +1,6 @@
 import { threadHasIsolatedWorkspace } from '../../lib/thread-workspace-owner'
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
-import { CalendarClock, ChevronDown, GitBranch, Hammer, Share2 } from 'lucide-react'
+import { ArrowUpRight, CalendarClock, ChevronDown, GitBranch, Hammer, Info, Lock, Share2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { systemTimeZone, type AppSettingsV1, type ScheduleReasoningEffort, type ScheduledTaskV1 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
@@ -13,6 +13,7 @@ import {
   scheduledTaskTime
 } from '../../plan/plan-scheduled-task'
 import { PlanScheduledBuildDialog } from './PlanScheduledBuildDialog'
+import { PlanBuildAgentPicker, usePlanBuildRoute } from './PlanBuildAgentPicker'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import { ensureGuiPlanLoadedFromMeta } from '../../plan/load-plan-from-meta'
 import { guiPlanMetaMatchesArtifact, type GuiPlanToolMeta } from '../../plan/plan-tool'
@@ -236,41 +237,46 @@ export function PlanBuildActions({
     if (menuOpen && (buildDisabled || !resolvedPlanId)) closeMenu(false)
   }, [buildDisabled, closeMenu, menuOpen, resolvedPlanId])
 
+  const { route, external, agentName } = usePlanBuildRoute(resolvedPlanId)
+  // External Agents build in a host-managed task worktree; Graph and
+  // scheduled builds stay Kun-only.
+  useEffect(() => {
+    if (external && selectedMode === 'graph') setSelectedMode('direct')
+  }, [external, selectedMode])
   const graphSelected = selectedMode === 'graph'
-  const worktreeControl = resolvedPlanId && preference?.initialized ? (
-    variant === 'card' ? (
-      <div data-plan-worktree-control className="flex min-w-[260px] flex-1 items-center gap-2.5">
-        <button type="button" role="switch" aria-checked={preference.usePromptWorktree}
-          aria-label={t('planWorktreeUsePrompt')}
-          onClick={() => setUsePromptWorktree(resolvedPlanId, !preference.usePromptWorktree)}
-          disabled={graphSelected}
-          className={`relative h-5 w-9 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${preference.usePromptWorktree ? 'bg-accent' : 'bg-ds-faint'} disabled:cursor-not-allowed disabled:opacity-45`}>
-          <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${preference.usePromptWorktree ? 'translate-x-4' : 'translate-x-0'}`} />
-        </button>
-        <div className="min-w-0">
-          <div className="text-[12.5px] font-medium text-ds-ink">{t('planWorktreeUsePrompt')}</div>
-          <div className={`mt-0.5 text-[11px] ${graphSelected ? 'text-amber-700 dark:text-amber-300' : 'text-ds-muted'}`}>
-            {graphSelected ? t('planWorktreeGraphUnsupported') : preference.usePromptWorktree ? t('planWorktreePromptHint') : t('planWorktreeCurrentWorkspaceWarning')}
-          </div>
-        </div>
-      </div>
-    ) : (
-      <label data-plan-worktree-control
-        className="inline-flex h-9 min-w-0 max-w-full items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2 text-[12px] font-medium text-ds-ink"
-        title={preference.usePromptWorktree ? t('planWorktreePromptHint') : t('planWorktreeCurrentWorkspaceWarning')}>
-        <GitBranch className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.8} />
-        <span className="sr-only">{t('planBuildEnvironment')}</span>
-        <select data-plan-worktree-select
-          value={preference.usePromptWorktree ? 'worktree' : 'workspace'}
-          disabled={graphSelected}
-          onChange={(event) => setUsePromptWorktree(resolvedPlanId, event.target.value === 'worktree')}
-          className="max-w-[140px] min-w-0 shrink cursor-pointer truncate bg-transparent text-[12px] font-medium text-ds-ink outline-none disabled:cursor-not-allowed disabled:opacity-45">
-          <option value="worktree">{t('planWorktreeOptionAgent')}</option>
-          <option value="workspace">{t('planWorktreeOptionCurrent')}</option>
-        </select>
-      </label>
-    )
+  const scheduledSelected = selectedMode === 'scheduled'
+  const chipClass = 'inline-flex h-9 min-w-0 max-w-full items-center gap-1.5 rounded-[10px] border border-ds-border bg-ds-card px-2.5 text-[12.5px] font-medium text-ds-ink'
+  const agentControl = resolvedPlanId && !scheduledSelected ? (
+    <PlanBuildAgentPicker planId={resolvedPlanId} route={route} disabled={buildDisabled} />
   ) : null
+  const worktreeControl = !resolvedPlanId || !preference?.initialized ? null : external && !scheduledSelected ? (
+    <span data-plan-build-task-worktree className={`${chipClass} border-dashed text-ds-muted`}
+      title={t('planBuildHintExternal', { agent: agentName })}>
+      <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+      <span className="truncate">{t('planBuildTaskWorktree')}</span>
+    </span>
+  ) : (
+    <label data-plan-worktree-control className={chipClass}
+      title={preference.usePromptWorktree ? t('planWorktreePromptHint') : t('planWorktreeCurrentWorkspaceWarning')}>
+      <GitBranch className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.8} />
+      <span className="sr-only">{t('planBuildEnvironment')}</span>
+      <select data-plan-worktree-select
+        value={preference.usePromptWorktree ? 'worktree' : 'workspace'}
+        disabled={graphSelected}
+        onChange={(event) => setUsePromptWorktree(resolvedPlanId, event.target.value === 'worktree')}
+        className="max-w-[140px] min-w-0 shrink cursor-pointer truncate bg-transparent text-[12.5px] font-medium text-ds-ink outline-none disabled:cursor-not-allowed disabled:opacity-45">
+        <option value="worktree">{t('planWorktreeOptionAgent')}</option>
+        <option value="workspace">{t('planWorktreeOptionCurrent')}</option>
+      </select>
+    </label>
+  )
+  const buildLabel = external ? t('planBuildHandOff', { agent: agentName })
+    : t(graphSelected ? 'planBuildGraphStart' : 'planBuildStart')
+  const buildHint = scheduledSelected ? t('planBuildScheduledKunOnly')
+    : external ? t('planBuildHintExternal', { agent: agentName })
+      : graphSelected ? t('planBuildGraphHint')
+        : preference?.usePromptWorktree ? t('planBuildHintKunWorktree', { agent: agentName })
+          : t('planBuildHintKunWorkspace', { agent: agentName })
 
   const dialog = dialogOpen && settings ? (
     <PlanScheduledBuildDialog settings={settings} orchestration="direct" initialTask={scheduledTask}
@@ -288,12 +294,13 @@ export function PlanBuildActions({
         {dialog}
         <div data-plan-build-actions data-plan-build-actions-variant={variant}
           className="flex min-w-0 flex-wrap items-center gap-2">
+          {agentControl}
           {worktreeControl}
           <div className="ml-auto inline-flex shrink-0 overflow-hidden rounded-lg">
             <button type="button" data-plan-build-direct disabled={buildDisabled} onClick={() => onBuild('direct')}
               className="inline-flex h-9 items-center gap-1.5 bg-accent px-3 text-[12.5px] font-semibold text-white transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 disabled:opacity-50">
-              <Hammer className="h-3.5 w-3.5" />
-              <span className="truncate">{t('planBuildDirect')}</span>
+              {external ? <ArrowUpRight className="h-3.5 w-3.5" /> : <Hammer className="h-3.5 w-3.5" />}
+              <span className="max-w-[160px] truncate">{external ? buildLabel : t('planBuildDirect')}</span>
             </button>
             <button type="button" ref={menuButtonRef} data-plan-build-menu-toggle disabled={buildDisabled}
               aria-haspopup="menu" aria-expanded={menuOpen} aria-controls={menuId}
@@ -332,7 +339,7 @@ export function PlanBuildActions({
               <CalendarClock className="h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 truncate">{t(scheduleMenuItem ? 'planScheduleBuildModify' : 'planScheduleBuild')}</span>
             </button>
-            {graphEnabled ? (
+            {graphEnabled && !external ? (
               <>
                 <div className="my-1 h-px bg-ds-border-muted" />
                 <button type="button" role="menuitem" data-plan-build-menu-graph disabled={buildDisabled}
@@ -368,58 +375,71 @@ export function PlanBuildActions({
     : t('planScheduleBuildDueSoon')
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3">
+    <div data-plan-build-tray className="flex w-full min-w-0 flex-col gap-2.5 rounded-[16px] bg-ds-card-muted/70 p-3 dark:bg-white/[0.04]">
       {dialog}
-      <div data-plan-build-actions data-plan-build-actions-variant={variant} className="flex w-full flex-wrap items-center gap-x-5 gap-y-3">
-        <label className="flex min-w-0 items-center gap-2.5 text-[12.5px] font-medium text-ds-ink">
-          <span className="shrink-0">{t('planBuildMode')}</span>
+      <div data-plan-build-actions data-plan-build-actions-variant={variant} className="flex w-full min-w-0 flex-wrap items-center gap-2">
+        <span className="shrink-0 px-0.5 text-[12px] text-ds-muted">{t('planBuildExecute')}</span>
+        {agentControl}
+        {worktreeControl}
+        <label className={chipClass}>
+          <span className="sr-only">{t('planBuildMode')}</span>
+          {scheduledSelected ? <CalendarClock className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.8} />
+            : graphSelected ? <Share2 className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.8} />
+              : <Hammer className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.8} />}
           <select data-plan-build-mode value={selectedMode} disabled={disabled}
             onChange={(event) => selectMode(event.target.value as PlanBuildMode)}
-            className="h-10 min-w-[160px] rounded-xl border border-ds-border bg-ds-card px-3 text-[12.5px] text-ds-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20">
+            className="min-w-0 max-w-[130px] cursor-pointer truncate bg-transparent text-[12.5px] font-medium text-ds-ink outline-none">
             <option value="direct">{t('planBuildDirect')}</option>
             <option value="scheduled">{t('planScheduleBuild')}</option>
-            {graphEnabled ? <option value="graph">{t('planBuildGraph')}</option> : null}
+            {graphEnabled && !external ? <option value="graph">{t('planBuildGraph')}</option> : null}
           </select>
         </label>
-        {worktreeControl}
-        {selectedMode === 'scheduled' && scheduledTask && taskTime && hasActiveSchedule ? (
-          <div data-plan-schedule-status className="ml-auto flex min-w-[330px] max-w-full items-center gap-3">
-            <CalendarClock className="h-8 w-8 shrink-0 text-accent" strokeWidth={1.7} />
-            <div className="min-w-0 flex-1">
-              <div className="text-[11.5px] font-medium text-ds-muted">
-                {t('planScheduleBuildScheduled')}
-              </div>
-              <div className="mt-0.5 flex flex-wrap items-baseline gap-1 text-[14px] font-medium text-ds-ink">
-                <span>{t('planScheduleBuildRemainingPrefix')}</span>
-                <span className="font-semibold text-accent">{countdownText}</span>
-                <span>{t('planScheduleBuildRemainingSuffix')}</span>
-              </div>
-              <div className="mt-0.5 truncate text-[11.5px] text-ds-muted">
-                {t('planScheduleBuildNextRun', { time: formattedTaskTime })}
-              </div>
-            </div>
-            <button type="button" data-plan-build-schedule disabled={buildDisabled}
-              onClick={() => void openSchedule(scheduledTask)}
-              className="inline-flex h-9 shrink-0 items-center rounded-full border border-accent bg-transparent px-3.5 text-[12.5px] font-medium text-accent transition hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 disabled:opacity-45">
-              {t('planScheduleBuildModify')}
-            </button>
-          </div>
-        ) : selectedMode === 'scheduled' ? (
+        <div className="flex-1" />
+        {scheduledSelected && hasActiveSchedule ? null : scheduledSelected ? (
           <button type="button" data-plan-build-schedule disabled={buildDisabled}
             onClick={() => void openSchedule(scheduledTask)}
-            className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-[13px] font-medium text-white transition hover:brightness-110 disabled:opacity-45">
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-accent px-4 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:opacity-45">
             <CalendarClock className="h-3.5 w-3.5" />
             {t('planScheduleBuildSet')}
           </button>
         ) : (
           <button type="button" data-plan-build-start disabled={buildDisabled}
-            onClick={() => onBuild(selectedMode === 'graph' ? 'graph' : 'direct')}
-            className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-[13px] font-medium text-white disabled:opacity-45">
-            {selectedMode === 'graph' ? <Share2 className="h-3.5 w-3.5" /> : <Hammer className="h-3.5 w-3.5" />}
-            {t(selectedMode === 'graph' ? 'planBuildGraphStart' : 'planBuildStart')}
+            onClick={() => onBuild(graphSelected ? 'graph' : 'direct')}
+            className="inline-flex h-10 max-w-full shrink-0 items-center gap-1.5 rounded-xl bg-accent px-4 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:opacity-45">
+            {external ? <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+              : graphSelected ? <Share2 className="h-3.5 w-3.5 shrink-0" /> : <Hammer className="h-3.5 w-3.5 shrink-0" />}
+            <span className="truncate">{buildLabel}</span>
           </button>
         )}
       </div>
+      {scheduledSelected && scheduledTask && taskTime && hasActiveSchedule ? (
+        <div data-plan-schedule-status className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-accent-soft/80 text-accent">
+            <CalendarClock className="h-[18px] w-[18px]" strokeWidth={1.8} />
+          </div>
+          <div className="min-w-[180px] flex-1">
+            <div className="text-[11px] font-medium text-ds-muted">{t('planScheduleBuildScheduled')}</div>
+            <div className="flex flex-wrap items-baseline gap-1 text-[13.5px] font-medium text-ds-ink">
+              <span>{t('planScheduleBuildRemainingPrefix')}</span>
+              <span className="font-semibold text-accent">{countdownText}</span>
+              <span>{t('planScheduleBuildRemainingSuffix')}</span>
+            </div>
+            <div className="mt-0.5 truncate text-[11.5px] text-ds-muted">
+              {t('planScheduleBuildNextRun', { time: formattedTaskTime })}
+            </div>
+          </div>
+          <button type="button" data-plan-build-schedule disabled={buildDisabled}
+            onClick={() => void openSchedule(scheduledTask)}
+            className="inline-flex h-8 shrink-0 items-center rounded-[10px] border border-accent bg-transparent px-3 text-[12.5px] font-medium text-accent transition hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 disabled:opacity-45">
+            {t('planScheduleBuildModify')}
+          </button>
+        </div>
+      ) : (
+        <div data-plan-build-hint className="flex min-w-0 items-start gap-1.5 px-0.5 text-[11.5px] leading-5 text-ds-muted">
+          <Info className="mt-[3px] h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.8} />
+          <span className="min-w-0">{buildHint}</span>
+        </div>
+      )}
     </div>
   )
 }

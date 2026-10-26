@@ -123,7 +123,7 @@ describe('plan build actions', () => {
     const card = renderer!.root.findByProps({ 'data-review-plan-card': true })
     const actions = renderer!.root.findByProps({ 'data-plan-build-actions-variant': 'card' })
     const start = renderer!.root.findByProps({ 'data-plan-build-start': true })
-    expect(card.props.className).toContain('rounded-[26px]')
+    expect(card.props.className).toContain('rounded-[22px]')
     expect(card.props.className).toContain('flex-col')
     expect(actions.props.className).toContain('flex-wrap')
 
@@ -213,30 +213,25 @@ describe('plan build actions', () => {
       ))
     })
 
-    const panelSelect = renderer!.root.findByProps({ 'data-plan-worktree-select': true })
-    const switches = renderer!.root.findAllByProps({ role: 'switch' })
-    expect(panelSelect.props.value).toBe('worktree')
-    expect(switches.map((item) => item.props['aria-checked'])).toEqual([true])
-    await act(async () => switches[0]!.props.onClick())
-    expect(renderer!.root.findByProps({ 'data-plan-worktree-select': true }).props.value).toBe('workspace')
-    expect(renderer!.root.findAllByProps({ role: 'switch' })
-      .map((item) => item.props['aria-checked'])).toEqual([false])
+    const selects = () => renderer!.root.findAllByProps({ 'data-plan-worktree-select': true })
+      .filter((item) => item.type === 'select')
+    expect(selects().map((item) => item.props.value)).toEqual(['worktree', 'worktree'])
+    await act(async () => selects()[1]!.props.onChange({ target: { value: 'workspace' } }))
+    expect(selects().map((item) => item.props.value)).toEqual(['workspace', 'workspace'])
     expect(renderer!.root.findAllByProps({ 'data-plan-build-mode': true }))
       .toHaveLength(1)
 
     const cardMode = renderer!.root.findByProps({ 'data-plan-build-mode': true })
     await act(async () => cardMode.props.onChange({ target: { value: 'graph' } }))
-    const graphSwitches = renderer!.root.findAllByProps({ role: 'switch' })
-    expect(graphSwitches[0]!.props.disabled).toBe(true)
+    expect(selects()[1]!.props.disabled).toBe(true)
     expect(JSON.stringify(renderer!.toJSON())).toContain(
-      'Prompt-managed worktrees are available for Direct builds only'
+      'Execute this plan with Graph delegation and supervision'
     )
     await act(async () => renderer!.root.findByProps({
       'data-plan-build-mode': true
     }).props.onChange({ target: { value: 'direct' } }))
-    expect(renderer!.root.findAllByProps({ role: 'switch' })[0]!.props.disabled).toBe(false)
-    expect(renderer!.root.findAllByProps({ role: 'switch' })
-      .map((item) => item.props['aria-checked'])).toEqual([false])
+    expect(selects()[1]!.props.disabled).toBe(false)
+    expect(selects()[1]!.props.value).toBe('workspace')
 
     act(() => renderer!.unmount())
   })
