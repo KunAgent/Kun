@@ -96,6 +96,14 @@ function Move-SmokeInstallationToActiveStageName {
     Assert-True ($value.IndexOf($original, [StringComparison]::OrdinalIgnoreCase) -ge 0) "The fixture does not own uninstall value $name."
     $uninstallValues[$name] = $value
   }
+  $originalBin = Join-Path $original 'bin'
+  $activeBin = Join-Path $active 'bin'
+  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $pathParts = @($userPath -split ';')
+  $ownedPathParts = @($pathParts | Where-Object {
+    [string]::Equals($_.Trim().TrimEnd('\'), $originalBin, [StringComparison]::OrdinalIgnoreCase)
+  })
+  Assert-True ($ownedPathParts.Count -gt 0) 'The fixture does not own its original user PATH entry.'
   Move-Item -LiteralPath $original -Destination $active
   $script:installLocation = $active
   Assert-True (Test-PathEqual (Get-ItemPropertyValue -LiteralPath $script:installRegistryPath -Name InstallLocation) $original) `
@@ -109,6 +117,16 @@ function Move-SmokeInstallationToActiveStageName {
     $updated = $value.Substring(0, $offset) + $active + $value.Substring($offset + $original.Length)
     Set-ItemProperty -LiteralPath $script:uninstallRegistryPath -Name $name -Value $updated
   }
+  Assert-True ([string]::Equals([Environment]::GetEnvironmentVariable('Path', 'User'), $userPath, [StringComparison]::Ordinal)) `
+    'User PATH changed while preparing the fixture.'
+  $updatedPathParts = @($pathParts | ForEach-Object {
+    if ([string]::Equals($_.Trim().TrimEnd('\'), $originalBin, [StringComparison]::OrdinalIgnoreCase)) {
+      $activeBin
+    } else {
+      $_
+    }
+  })
+  [Environment]::SetEnvironmentVariable('Path', ($updatedPathParts -join ';'), 'User')
   $shell = New-Object -ComObject WScript.Shell
   foreach ($folder in @('DesktopDirectory', 'Programs')) {
     $shortcutRoot = [Environment]::GetFolderPath($folder)

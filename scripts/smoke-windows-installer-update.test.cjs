@@ -52,3 +52,14 @@ test('rebinds only the owned temporary installation and exact previously discove
   assert.match(support, /Test-PathEqual \$shortcut.TargetPath \(Join-Path \$original 'Kun.exe'\)/)
   assert.doesNotMatch(support, /HKLM:|Stop-Process|taskkill/)
 })
+
+test('rebinds only the exact owned user PATH component and preserves unrelated components', () => {
+  assert.match(support, /\$originalBin = Join-Path \$original 'bin'/)
+  assert.match(support, /\$activeBin = Join-Path \$active 'bin'/)
+  assert.match(support, /\[string\]::Equals\(\$_\.Trim\(\)\.TrimEnd\('\\'\), \$originalBin, \[StringComparison\]::OrdinalIgnoreCase\)/)
+  assert.match(support, /Assert-True \(\$ownedPathParts\.Count -gt 0\)/)
+  assert.match(support, /GetEnvironmentVariable\('Path', 'User'\), \$userPath, \[StringComparison\]::Ordinal\)/)
+  assert.match(support, /\$activeBin\s*\} else \{\s*\$_\s*\}/)
+  assert.match(support, /SetEnvironmentVariable\('Path', \(\$updatedPathParts -join ';'\), 'User'\)/)
+  assert.doesNotMatch(support, /SetEnvironmentVariable\('Path', \$userPath/)
+})
