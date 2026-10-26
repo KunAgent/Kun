@@ -284,6 +284,8 @@ function Resolve-AutomaticUpdateScope {
           (Test-PathEqual $registeredSource $runningSource) -and
           (Test-RecoverableApplicationSource $registeredSource)) {
         $matches += $candidate.Scope
+      } elseif (Test-InterruptedUpdateScopeRegistration ([string]$candidate.Scope) $runningSource $registeredSource) {
+        $matches += $candidate.Scope
       }
     } catch {
       Write-InstallerDiagnostic "Automatic update ignored invalid $($candidate.Scope) registration: $($_.Exception.Message)"
