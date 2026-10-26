@@ -20,8 +20,8 @@ if ($Bounded) {
   $deadlineCompiler = [System.CodeDom.Compiler.CompilerParameters]::new()
   $deadlineCompiler.GenerateInMemory = $true
   $deadlineCompiler.CompilerOptions = '/nostdlib'
-  [void]$deadlineCompiler.ReferencedAssemblies.Add([object].Assembly.Location)
-  [void]$deadlineCompiler.ReferencedAssemblies.Add([ComponentModel.Win32Exception].Assembly.Location)
+  [void]$deadlineCompiler.ReferencedAssemblies.Add([System.Object].Assembly.Location)
+  [void]$deadlineCompiler.ReferencedAssemblies.Add([System.ComponentModel.Win32Exception].Assembly.Location)
   Add-Type -CompilerParameters $deadlineCompiler -TypeDefinition @'
 using System;
 using System.Threading;

@@ -9,8 +9,8 @@ if (-not ('KunInstallerPayloadCopy' -as [type])) {
   $payloadCompiler = [System.CodeDom.Compiler.CompilerParameters]::new()
   $payloadCompiler.GenerateInMemory = $true
   $payloadCompiler.CompilerOptions = '/nostdlib'
-  [void]$payloadCompiler.ReferencedAssemblies.Add([object].Assembly.Location)
-  [void]$payloadCompiler.ReferencedAssemblies.Add([ComponentModel.Win32Exception].Assembly.Location)
+  [void]$payloadCompiler.ReferencedAssemblies.Add([System.Object].Assembly.Location)
+  [void]$payloadCompiler.ReferencedAssemblies.Add([System.ComponentModel.Win32Exception].Assembly.Location)
   Add-Type -CompilerParameters $payloadCompiler -TypeDefinition @'
 using System;
 using System.Collections.Generic;
@@ -29,6 +29,14 @@ public static class KunInstallerPayloadCopy {
     [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string Name;
     [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)] public string Alternate;
   }
+  [StructLayout(LayoutKind.Sequential)]
+  struct FileData {
+    public uint Attributes;
+    public System.Runtime.InteropServices.ComTypes.FILETIME Creation, Access, Write;
+    public uint SizeHigh, SizeLow;
+  }
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  static extern bool GetFileAttributesExW(string path, int level, out FileData data);
   [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
   static extern uint GetFileAttributesW(string path);
   [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -129,6 +137,52 @@ public static class KunInstallerPayloadCopy {
   public static void Validate(string path) {
     ValidateAncestors(path);
     ValidateTree(Extended(path), false);
+  }
+  static void ValidateLiteralInspectionAncestors(string path) {
+    // Do not invoke legacy System.IO normalization on the very long path being
+    // diagnosed. Accept only ordinary absolute drive/UNC paths with literal,
+    // normalized segments; device namespaces and traversal are not diagnostic
+    // escape hatches. Mutation APIs retain their existing validation unchanged.
+    if (String.IsNullOrEmpty(path) || path.IndexOf('/') >= 0) throw new IOException("Invalid literal inspection path.");
+    int rootLength;
+    if (path.Length >= 3 && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) &&
+        path[1] == ':' && path[2] == '\\') {
+      rootLength = 3;
+    } else if (path.StartsWith(@"\\") && !path.StartsWith(@"\\?\") && !path.StartsWith(@"\\.\")) {
+      int serverEnd = path.IndexOf('\\', 2);
+      if (serverEnd <= 2 || serverEnd == path.Length - 1) throw new IOException("Invalid UNC inspection root.");
+      int shareEnd = path.IndexOf('\\', serverEnd + 1);
+      rootLength = shareEnd < 0 ? path.Length : shareEnd;
+      if (rootLength == serverEnd + 1) throw new IOException("Invalid UNC inspection root.");
+    } else {
+      throw new IOException("Inspection requires an absolute drive or UNC path.");
+    }
+    string segments = path.StartsWith(@"\\") ? path.Substring(2) : path.Substring(3);
+    foreach (string segment in segments.TrimEnd('\\').Split('\\')) {
+      if (segment == "." || segment == ".." || segment.IndexOfAny(new char[] { ':', '*', '?', '"', '<', '>', '|', '\0' }) >= 0 ||
+          (segment.Length == 0 && segments.Length != 0)) throw new IOException("Inspection requires normalized literal segments.");
+    }
+    string current = path;
+    while (current.Length > rootLength && current.EndsWith(@"\")) current = current.Substring(0, current.Length - 1);
+    while (true) {
+      Attributes(Extended(current), true);
+      if (current.Length <= rootLength) break;
+      int separator = current.LastIndexOf('\\');
+      current = separator < rootLength ? path.Substring(0, rootLength) : current.Substring(0, separator);
+    }
+  }
+  // Diagnostic only: exact literal metadata, not wildcard matching or permission
+  // to accept a file that the strict runtime integrity validator rejected.
+  public static string InspectLiteralFile(string path) {
+    ValidateLiteralInspectionAncestors(path);
+    FileData data;
+    if (!GetFileAttributesExW(Extended(path), 0, out data)) {
+      return "exists=false win32Error=" + Marshal.GetLastWin32Error();
+    }
+    if ((data.Attributes & Reparse) != 0) throw new IOException("Payload contains a reparse point: " + path);
+    ulong size = ((ulong)data.SizeHigh << 32) | data.SizeLow;
+    return "exists=true kind=" + ((data.Attributes & Directory) == 0 ? "file" : "directory") +
+      " bytes=" + size.ToString(System.Globalization.CultureInfo.InvariantCulture);
   }
   public static void Remove(string path) {
     ValidateAncestors(path);
