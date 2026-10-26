@@ -113,3 +113,11 @@ describe('Kun account IPC boundary', () => {
   })
 
 })
+
+it('opens membership redemption on a fixed website URL without accepting renderer destinations', async () => {
+  registerKunAccountIpc(() => null, runtime)
+  await mocks.handlers.get(channels.membership)!({}, 'https://attacker.example')
+  expect(mocks.open).toHaveBeenCalledWith('https://www.kun-agent.com/account?tab=membership')
+  mocks.assertTrusted.mockImplementation(() => { throw new Error('untrusted') })
+  await expect(Promise.resolve().then(() => mocks.handlers.get(channels.membership)!({}))).rejects.toThrow('untrusted')
+})
