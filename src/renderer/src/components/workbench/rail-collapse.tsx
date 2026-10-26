@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { PanelRightClose } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 const STORAGE_KEY = 'kun.rail.collapsed.v1'
@@ -31,6 +30,23 @@ export const useRailCollapseStore = create<RailCollapseState>((set, get) => ({
   }
 }))
 
+/**
+ * The rail's own mark: its column of tool chips with an arrow toward where it
+ * goes (folding) or comes back from (reopening), so it never reads as the
+ * side-panel toggle next to it.
+ */
+function RailGlyph({ direction, size }: { direction: 'fold' | 'reopen'; size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9}
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={direction === 'fold' ? 'M4 8l3.5 4L4 16' : 'M7 8l-3.5 4L7 16'} />
+      <rect x={11} y={3} width={9} height={5} rx={2} />
+      <rect x={11} y={9.5} width={9} height={5} rx={2} />
+      <rect x={11} y={16} width={9} height={5} rx={2} />
+    </svg>
+  )
+}
+
 /** Folds the rail away; sits at the top of the rail. */
 export function RailCollapseButton({ className = '' }: { className?: string }) {
   const { t } = useTranslation('common')
@@ -43,7 +59,7 @@ export function RailCollapseButton({ className = '' }: { className?: string }) {
       data-tooltip={t('railCollapse')}
       aria-label={t('railCollapse')}
     >
-      <PanelRightClose className="h-[16px] w-[16px]" strokeWidth={1.8} />
+      <RailGlyph direction="fold" size={16} />
     </button>
   )
 }
@@ -62,7 +78,7 @@ export function RailReopenButton() {
       data-tooltip={t('railExpand')}
       aria-label={t('railExpand')}
     >
-      <PanelRightClose className="h-[17px] w-[17px] rotate-180" strokeWidth={1.8} />
+      <RailGlyph direction="reopen" size={18} />
     </button>
   )
 }
