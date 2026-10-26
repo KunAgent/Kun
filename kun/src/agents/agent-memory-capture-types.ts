@@ -25,5 +25,5 @@ export type AgentMemoryCandidate = {
 export type AgentMemoryCaptureResult = {
   candidates: Array<{ candidate: MemoryCandidate; action: 'create' | 'update' | 'supersede';
     targetId?: string; targetFingerprint?: string }>;
-  usage?: UsageSnapshot; error?: string; elapsedMs: number
+  usage?: UsageSnapshot; error?: string; diagnostics?: string[]; elapsedMs: number
 }

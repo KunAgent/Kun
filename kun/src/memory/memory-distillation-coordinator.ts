@@ -4,7 +4,7 @@ import { isBoundGmailSensitiveHistory } from '../gmail/thread-data-state.js'
 import { buildTurnMemoryEvidence } from './memory-distillation-evidence.js'
 import type { TurnItem } from '../contracts/items.js'
 import {
-  MemoryDistillationExtractionResponse,
+  parseMemoryDistillationExtractionResponse,
   type MemoryDistillationDecisionRequest,
   type PendingMemoryCandidate
 } from '../contracts/memory-distillation-runtime.js'
@@ -432,7 +432,18 @@ export class MemoryDistillationCoordinator {
         }
       }
       controller.signal.throwIfAborted()
-      return MemoryDistillationExtractionResponse.parse(JSON.parse(output))
+      const parsed = parseMemoryDistillationExtractionResponse(JSON.parse(output))
+      if (parsed.dropped.length) {
+        this.options.onDiagnostic?.({
+          threadId: input.threadId,
+          turnId: input.turnId,
+          message: sanitizeMemoryDistillationDiagnostic(new Error(
+            `memory distillation dropped ${parsed.dropped.length} invalid candidate(s): ` +
+            parsed.dropped.map((entry) => `#${entry.index} ${entry.error}`).join('; ')
+          ))
+        })
+      }
+      return { candidates: parsed.candidates }
     } finally {
       clearTimeout(timeout)
       this.extractionControllers.delete(controller)
