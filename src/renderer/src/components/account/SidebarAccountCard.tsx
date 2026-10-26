@@ -1,14 +1,14 @@
-import type { ReactElement, Ref } from 'react'
+import type { ReactElement, ReactNode, Ref } from 'react'
 import { ChevronsUpDown, LogIn } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KunAccountState } from '@shared/kun-account'
 import { kunWardrobeRules, kunWardrobeItems } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
-import { RoomAvatar } from '../rooms/RoomAvatar'
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
 import { useRoomUserProfileSync } from '../rooms/room-user-profile'
 import { useWardrobe, wardrobeShelf } from '../rooms/room-wardrobe'
 import { kunAccountBadge, kunAccountCardCopy } from './kun-account-view'
+import { AccountFace } from './AccountAvatarPicker'
 import '../rooms/room-wardrobe.css'
 
 export type KunRuntimeConnection = 'ready' | 'checking' | 'idle' | 'offline'
@@ -48,7 +48,8 @@ export function AccountBottleBadge({ bottles, ready }: { bottles: number; ready:
 }
 
 export type SidebarAccountCardProps = {
-  variant: 'card' | 'compact'
+  /** `mini` is the face alone, the account entry of the Focus mode row. */
+  variant: 'card' | 'compact' | 'mini'
   state: KunAccountState
   open: boolean
   panelId?: string
@@ -56,6 +57,8 @@ export type SidebarAccountCardProps = {
   triggerRef: Ref<HTMLButtonElement>
   onToggle: () => void
   onLogin: () => void
+  /** A control on the card's right edge (the dock's Settings button); it replaces the menu chevron. */
+  accessory?: ReactNode
 }
 
 /**
@@ -63,7 +66,7 @@ export type SidebarAccountCardProps = {
  * state), the name and email, and the bottles waiting. A click opens the account menu above it;
  * signed out, a second button starts the browser sign-in directly.
  */
-export function SidebarAccountCard({ variant, state, open, panelId, cardRef, triggerRef, onToggle, onLogin }: SidebarAccountCardProps): ReactElement {
+export function SidebarAccountCard({ variant, state, open, panelId, cardRef, triggerRef, onToggle, onLogin, accessory }: SidebarAccountCardProps): ReactElement {
   const { t } = useTranslation('common')
   const runtime = useKunRuntimeStatus()
   const summary = useAccountWardrobeSummary()
@@ -72,6 +75,7 @@ export function SidebarAccountCard({ variant, state, open, panelId, cardRef, tri
   useRoomUserProfileSync()
   const onWardrobe = useChatStore((value) => value.route === 'wardrobe')
   const compact = variant === 'compact'
+  const mini = variant === 'mini'
   const loading = state.status === 'loading'
   const busy = state.status === 'authorizing'
   const user = state.user
@@ -84,6 +88,18 @@ export function SidebarAccountCard({ variant, state, open, panelId, cardRef, tri
   const bottles = summary.mode === 'guest' ? 0 : summary.bottles
   const shelf = bottles ? t(summary.ready ? 'wardrobePageBadgeReadyHint' : 'wardrobePageBadgeHint', { n: bottles }) : ''
   const label = [t('kunAccountOpenMenu', { name }), compact ? '' : hint, runtime.label, shelf].filter(Boolean).join('. ')
+  if (mini) {
+    return (
+      <div ref={cardRef} className="kun-account-mini" data-kun-account-card data-variant="mini" data-open={open || undefined}>
+        <button ref={triggerRef} type="button" className="kun-account-mini-face" data-kun-account-login data-cursor-spotlight-target
+          aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? panelId : undefined}
+          aria-label={`${label}. ${t('kunAccountCardOpen')}`} title={user ? `${user.name} · ${user.email}` : undefined} onClick={onToggle}>
+          <AccountFace user={user} size={24} />
+          <i className="kun-account-presence" data-runtime={runtime.connection} title={runtime.label} />
+        </button>
+      </div>
+    )
+  }
   return (
     <div
       ref={cardRef}
@@ -119,7 +135,7 @@ export function SidebarAccountCard({ variant, state, open, panelId, cardRef, tri
         ) : (
           <>
             <span className="kun-account-card-face" aria-hidden="true">
-              <RoomAvatar user id="user" label="" size={compact ? 22 : 32} />
+              <AccountFace user={user} size={compact ? 22 : 32} />
               <i className="kun-account-presence" data-runtime={runtime.connection} title={runtime.label} />
             </span>
             <span className="kun-account-card-text">
@@ -128,7 +144,7 @@ export function SidebarAccountCard({ variant, state, open, panelId, cardRef, tri
             </span>
             {bottles ? <AccountBottleBadge bottles={bottles} ready={summary.ready} /> : null}
             {busy ? <span className="kun-account-spinner" aria-hidden="true" />
-              : signIn && !compact ? null
+              : (signIn && !compact) || accessory ? null
                 : <ChevronsUpDown className="kun-account-card-chevron" size={14} strokeWidth={2} aria-hidden="true" />}
           </>
         )}
@@ -138,6 +154,7 @@ export function SidebarAccountCard({ variant, state, open, panelId, cardRef, tri
           <LogIn size={13} aria-hidden="true" />{t('kunAccountSignIn')}
         </button>
       ) : null}
+      {accessory}
     </div>
   )
 }

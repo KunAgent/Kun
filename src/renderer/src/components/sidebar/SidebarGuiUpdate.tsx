@@ -34,6 +34,7 @@ let pulsedVersion = ''
 /**
  * Drops the chip label when the footer bar cannot fit it beside the settings
  * gear. The label stays in the DOM (visually hidden) so its width is known.
+ * In the account dock the slot is an empty spacer, so it only has to stay non-negative.
  */
 function useChipLabelFits(chipRef: RefObject<HTMLButtonElement | null>, label: string): boolean {
   const [fits, setFits] = useState(true)
@@ -46,7 +47,8 @@ function useChipLabelFits(chipRef: RefObject<HTMLButtonElement | null>, label: s
       const labelWidth = chip.querySelector<HTMLElement>('[data-update-chip-label]')?.offsetWidth ?? 0
       const compact = chip.dataset.compact === 'true'
       const extra = compact ? labelWidth + CHIP_LABEL_EXTRA_WIDTH : 0
-      setFits(slot.clientWidth - SETTINGS_ICON_MIN_WIDTH - extra >= 0)
+      const reserved = slot.dataset.footerSettingsSlot === 'spacer' ? 0 : SETTINGS_ICON_MIN_WIDTH
+      setFits(slot.clientWidth - reserved - extra >= 0)
     }
     measure()
     const observer = new ResizeObserver(measure)

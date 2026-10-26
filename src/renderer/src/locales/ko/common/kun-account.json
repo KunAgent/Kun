@@ -73,5 +73,18 @@
   "kunAccountGuestBody": "옷장, 병, 초대 보상은 계정에 저장되어 다른 컴퓨터에서도 그대로예요.",
   "kunAccountGuestSignIn": "브라우저로 로그인",
   "kunAccountKeychainShort": "키체인에 저장됨",
-  "kunAccountCredentialShort": "자격 증명 저장소에 저장됨"
+  "kunAccountCredentialShort": "자격 증명 저장소에 저장됨",
+  "kunAccountAvatarTitle": "아바타",
+  "kunAccountAvatarChange": "아바타 변경",
+  "kunAccountAvatarOwn": "내 사진",
+  "kunAccountAvatarUpload": "사진 올리기",
+  "kunAccountAvatarKun": "Kun 모습",
+  "kunAccountAvatarReplace": "다른 사진",
+  "kunAccountAvatarUseAccount": "계정 사진 사용",
+  "kunAccountAvatarRemove": "사진 삭제",
+  "kunAccountAvatarHintAccount": "Kun 계정의 사진",
+  "kunAccountAvatarHintLocal": "사진은 이 컴퓨터에만 저장됩니다",
+  "kunAccountAvatarHintKun": "옷장에서 Kun을 꾸며 보세요",
+  "kunAccountAvatarInvalid": "5MB 이하의 PNG, JPEG, WebP, GIF를 선택하세요",
+  "kunAccountMenuSettingsHint": "모델, Agent, 화면, 단축키"
 }

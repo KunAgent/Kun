@@ -73,5 +73,18 @@
   "kunAccountGuestBody": "Your wardrobe, bottles and invite rewards stay with your account, even on a new computer.",
   "kunAccountGuestSignIn": "Sign in with browser",
   "kunAccountKeychainShort": "Saved in Keychain",
-  "kunAccountCredentialShort": "Saved in credential store"
+  "kunAccountCredentialShort": "Saved in credential store",
+  "kunAccountAvatarTitle": "Avatar",
+  "kunAccountAvatarChange": "Change avatar",
+  "kunAccountAvatarOwn": "My picture",
+  "kunAccountAvatarUpload": "Upload picture",
+  "kunAccountAvatarKun": "Kun look",
+  "kunAccountAvatarReplace": "Replace",
+  "kunAccountAvatarUseAccount": "Use account photo",
+  "kunAccountAvatarRemove": "Remove picture",
+  "kunAccountAvatarHintAccount": "From your Kun account",
+  "kunAccountAvatarHintLocal": "The picture stays on this computer",
+  "kunAccountAvatarHintKun": "Dress Kun up in the wardrobe",
+  "kunAccountAvatarInvalid": "Use a PNG, JPEG, WebP or GIF under 5 MB",
+  "kunAccountMenuSettingsHint": "Models, Agents, appearance and shortcuts"
 }

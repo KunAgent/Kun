@@ -1,0 +1,131 @@
+/* The sidebar footer dock: the account card with Settings on its edge, above the tool row. */
+
+.kun-account-dock {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--ds-sidebar-row-ring);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--ds-sidebar-row-active) 70%, transparent);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.04);
+}
+
+[data-theme='dark'] .kun-account-dock {
+  box-shadow: none;
+}
+
+.kun-account-dock .kun-account-card {
+  height: 48px;
+  gap: 4px;
+  padding-right: 3px;
+  border: 0;
+  border-radius: 10px;
+}
+
+/* The dock is already the surface; an open menu only tints the account row. */
+.kun-account-dock .kun-account-card[data-open],
+.kun-account-dock .kun-account-card[data-active] {
+  background: var(--ds-sidebar-row-hover);
+  box-shadow: none;
+}
+
+.kun-account-dock .kun-account-card-main {
+  padding-left: 6px;
+}
+
+.kun-account-dock .kun-account-presence {
+  box-shadow: 0 0 0 2px var(--ds-sidebar-row-active);
+}
+
+.kun-account-dock-settings {
+  flex: none;
+}
+
+.kun-account-dock .kun-account-card:hover .kun-account-dock-settings {
+  color: var(--ds-text);
+}
+
+.kun-account-dock-bar {
+  margin-top: 3px;
+  padding: 4px 1px 0;
+  border-top: 1px solid var(--ds-sidebar-divider);
+}
+
+.kun-account-dock-bar .ds-focus-mode-switch {
+  height: 28px;
+}
+
+/* Without the Settings label the row has room for "Focus" down to the narrowest sidebar. */
+@container (max-width: 216px) {
+  .kun-account-dock-bar .ds-focus-mode-switch {
+    padding-left: 9px;
+  }
+
+  .kun-account-dock-bar .ds-focus-mode-switch-label {
+    display: inline;
+  }
+}
+
+@container (max-width: 168px) {
+  .kun-account-dock-bar .ds-focus-mode-switch {
+    padding-left: 7px;
+  }
+
+  .kun-account-dock-bar .ds-focus-mode-switch-label {
+    display: none;
+  }
+}
+
+/* Focus mode: no frame, one quiet row; the face is the account entry. */
+.kun-account-focus-row {
+  padding: 0 2px;
+}
+
+.kun-account-mini {
+  display: inline-flex;
+  flex: none;
+}
+
+.kun-account-mini-face {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  outline: none;
+  transition: background 0.15s ease;
+}
+
+.kun-account-mini-face:hover,
+.kun-account-mini[data-open] .kun-account-mini-face {
+  background: var(--ds-sidebar-row-hover);
+}
+
+.kun-account-mini-face:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 30%, transparent);
+}
+
+.kun-account-mini .kun-account-presence {
+  right: 2px;
+  bottom: 2px;
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 2px var(--ds-bg-sidebar);
+}
+
+.kun-account-focus-row .ds-focus-mode-switch {
+  height: 28px;
+}
+
+/* Face, Focus and three tools: the label goes first when the row runs short. */
+@container (max-width: 236px) {
+  .kun-account-focus-row:has(.kun-account-mini) .ds-focus-mode-switch {
+    padding-left: 7px;
+  }
+
+  .kun-account-focus-row:has(.kun-account-mini) .ds-focus-mode-switch-label {
+    display: none;
+  }
+}
