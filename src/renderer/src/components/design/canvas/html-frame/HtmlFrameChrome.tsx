@@ -53,6 +53,9 @@ type HtmlFrameChromeProps = {
   onToggleInteractive?: (shapeId: string) => void
   onToggleModify: (shapeId: string) => void
   readOnly?: boolean
+  /** Outer-to-inner path of the hovered or selected element. */
+  crumbs?: { id: number; label: string; current: boolean }[]
+  onSelectCrumb?: (id: number) => void
 }
 
 const actionButton =
@@ -77,6 +80,8 @@ export function HtmlFrameChrome({
   shapeName,
   workspaceRoot,
   readOnly,
+  crumbs = [],
+  onSelectCrumb,
   onQualityDetailsOpenChange,
   onRequestQualityRepair,
   onToggleInteractive,
@@ -91,6 +96,7 @@ export function HtmlFrameChrome({
   const statusDot = drawingActive ? 'generating' : failedMessage ? 'failed' : null
   const level = interactive ? 'none' : htmlFrameChromeActionLevel({ screenWidth, active })
   const showActions = level !== 'none' || interactive
+  const showCrumbs = crumbs.length > 0 && screenWidth > 360 && !interactive
   const selectBoard = (): void => useCanvasSelectionStore.getState().select([shapeId])
   const expandBoard = (): void => {
     selectBoard()
@@ -119,7 +125,9 @@ export function HtmlFrameChrome({
         type="button"
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
-        className={`pointer-events-auto min-w-0 flex-1 truncate rounded-[4px] text-left leading-none transition-colors ${
+        className={`pointer-events-auto min-w-0 truncate rounded-[4px] text-left leading-none transition-colors ${
+          showCrumbs ? 'max-w-[40%] shrink-0' : 'flex-1'
+        } ${
           active ? 'font-semibold text-accent' : 'font-medium text-ds-muted hover:text-ds-ink'
         }`}
         onPointerDown={stop}
@@ -136,6 +144,30 @@ export function HtmlFrameChrome({
       >
         {shapeName}
       </button>
+      {showCrumbs ? (
+        <nav
+          aria-label={shapeName}
+          className="pointer-events-auto flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden whitespace-nowrap text-[11px] leading-none"
+          data-canvas-pick-breadcrumb="true"
+        >
+          {crumbs.map((crumb) => (
+            <span key={crumb.id} className="flex min-w-0 items-center gap-0.5">
+              <span aria-hidden="true" className="text-ds-faint">›</span>
+              <button
+                type="button"
+                onPointerDown={stop}
+                onClick={(event) => { stop(event); onSelectCrumb?.(crumb.id) }}
+                aria-current={crumb.current ? 'true' : undefined}
+                className={`min-w-0 truncate rounded-[4px] px-0.5 transition-colors ${
+                  crumb.current ? 'font-semibold text-accent' : 'text-ds-muted hover:text-ds-ink'
+                }`}
+              >
+                {crumb.label}
+              </button>
+            </span>
+          ))}
+        </nav>
+      ) : null}
       {showActions ? (
         <div
           className={`pointer-events-auto flex h-full shrink-0 items-center gap-0.5 transition-opacity ${

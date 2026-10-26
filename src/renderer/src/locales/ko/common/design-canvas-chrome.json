@@ -40,6 +40,8 @@
   "canvasBoardPickHint": "컴포넌트를 클릭해 Kun에 요청",
   "canvasElementPickToolbar": "컴포넌트 작업",
   "canvasElementAskKun": "Kun에 요청",
+  "canvasElementAskPlaceholder": "이 부분을 Kun에게 수정 요청…",
+  "canvasElementLayers": "레이어 선택",
   "canvasElementSelectParent": "상위 요소 선택",
   "canvasElementSelectChild": "내부 요소 선택",
   "canvasElementEditText": "텍스트 편집",
