@@ -48,7 +48,10 @@ import {
 } from './sidebar-agent-chats'
 import './sidebar-agent-chats.css'
 
-type Props = ComponentProps<typeof SidebarConversationsSection>
+type Props = ComponentProps<typeof SidebarConversationsSection> & {
+  /** 对话 mode: the list owns the whole sidebar, shows every conversation and keeps search open. */
+  fill?: boolean
+}
 
 const FILTER_LABEL_KEYS: Record<ConversationFilter, string> = {
   all: 'conversationFilterAll',
@@ -62,7 +65,7 @@ const FILTER_LABEL_KEYS: Record<ConversationFilter, string> = {
  * Code's conversation list: Agent private chats and group conversations in one
  * IM-style section above the projects. Opening an entry keeps the Code shell.
  */
-export function SidebarAgentChatsSection(props: Props): ReactElement {
+export function SidebarAgentChatsSection({ fill = false, ...props }: Props): ReactElement {
   const { t } = props
   const { t: tc } = useTranslation('common')
   const route = useChatStore((state) => state.route)
@@ -77,9 +80,10 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   useEffect(() => { startAssistantMailbox() }, [])
   useAssistantAttention(assistantStatus)
   const selectedRoomId = route === 'agent-chat' && !assistantSelection ? roomId : null
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsedState, setCollapsed] = useState(false)
+  const collapsed = fill ? false : collapsedState
   const [expanded, setExpanded] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(fill)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ConversationFilter>('all')
   const [listState, setListState] = useState<ConversationListState>('active')
@@ -136,7 +140,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
     if ([...hiddenEntries].every((id) => listed.has(id))) return
     setHiddenEntries(new Set([...hiddenEntries].filter((id) => listed.has(id))))
   }, [hiddenEntries, page.entries])
-  const browsingAll = expanded || listState !== 'active' || filter !== 'all'
+  const browsingAll = fill || expanded || listState !== 'active' || filter !== 'all'
   const listed = page.entries.filter((entry) => !hiddenEntries.has(entry.id) &&
     (listState === 'deleted' ? entry.deleted : !entry.deleted && entry.archived === (listState === 'archived')))
   const assistantItems = listState === 'active' ? filterAssistantItems(assistantSidebarItems(assistantStatus, readAt), filter, search) : []
@@ -205,7 +209,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
     : filter !== 'all' ? tc(FILTER_LABEL_KEYS[filter]) : ''
 
   return <>
-    <section className="sidebar-agent-chats ds-no-drag" data-browsing-all={browsingAll || undefined}
+    <section className="sidebar-agent-chats ds-no-drag" data-fill={fill || undefined} data-browsing-all={browsingAll || undefined}
       data-collapsed={collapsed || undefined} aria-label={t('sidebarConversations')}>
       <div className="sidebar-agent-chats-header">
         <button type="button" aria-expanded={!collapsed} title={t('agentChatsDescription')}
@@ -286,7 +290,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
             titleKey="agentChatsLegacyHistory" /> : null}
           </>}
         </div>
-        {props.runtimeReady && listState === 'active' && filter === 'all' && !search.trim() &&
+        {!fill && props.runtimeReady && listState === 'active' && filter === 'all' && !search.trim() &&
           (conversationCount > AGENT_CHATS_COLLAPSED_COUNT || page.nextCursor) ? <button type="button"
           className="sidebar-agent-chats-more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
           {expanded ? t('agentChatsShowLess') : page.nextCursor ? t('agentChatsViewAll')

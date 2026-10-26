@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../../i18n'
 import { readStylesheetBundle } from '../../../testing/stylesheet-bundle'
-import { useSidebarScopeStore } from '../sidebar-scope-store'
+import { useChatStore } from '../../../store/chat-store'
 import { WorkspaceModeTabs } from '../WorkspaceModeTabs'
 
 const attention = vi.hoisted(() => ({ count: 0 }))
@@ -17,7 +17,7 @@ type View = 'chat' | 'workflow' | 'write' | 'design' | 'rooms' | 'ade'
 describe('WorkspaceModeTabs', () => {
   beforeEach(async () => {
     attention.count = 0
-    useSidebarScopeStore.setState({ scope: 'code' })
+    useChatStore.setState({ route: 'chat' })
     await i18n.changeLanguage('en')
   })
 
@@ -74,25 +74,24 @@ describe('WorkspaceModeTabs', () => {
     act(() => renderer.unmount())
   })
 
-  it('opens Chats by flipping the sidebar scope without leaving Code', () => {
+  it('opens Chats as the conversation route and returns to the Code task from it', () => {
     const { componentProps, renderer } = renderInteractive('chat')
 
     act(() => tab(renderer, 'chats').props.onClick())
 
-    expect(useSidebarScopeStore.getState().scope).toBe('chats')
+    expect(useChatStore.getState().route).toBe('agent-chat')
     expect(componentProps.onCodeOpen).not.toHaveBeenCalled()
-    expect(componentProps.onWriteOpen).not.toHaveBeenCalled()
     expect(tab(renderer, 'chats').props['aria-selected']).toBe(true)
     act(() => tab(renderer, 'chat').props.onClick())
-    expect(useSidebarScopeStore.getState().scope).toBe('code')
+    expect(componentProps.onCodeOpen).toHaveBeenCalledOnce()
     act(() => renderer.unmount())
   })
 
-  it('returns to Code from another view when Chats or Code is picked', () => {
+  it('opens Chats from Work without going through Code', () => {
     const { componentProps, renderer } = renderInteractive('write')
     act(() => tab(renderer, 'chats').props.onClick())
-    expect(componentProps.onCodeOpen).toHaveBeenCalledOnce()
-    expect(useSidebarScopeStore.getState().scope).toBe('chats')
+    expect(componentProps.onCodeOpen).not.toHaveBeenCalled()
+    expect(useChatStore.getState().route).toBe('agent-chat')
     act(() => renderer.unmount())
   })
 
