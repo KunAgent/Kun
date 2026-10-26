@@ -17,6 +17,7 @@ import { listenForAccountCode } from '../kun-account/callback'
 import { KUN_ACCOUNT_CLIENT_ID, KUN_ACCOUNT_ISSUER } from '../kun-account/config'
 import { createEconomyClient } from '../kun-account/economy-client'
 import { AccountWardrobeSync, type RuntimeCall } from '../kun-account/wardrobe-sync'
+import { createAccountPhotoReader } from '../kun-account/account-photo'
 
 const ids = (value: unknown, max: number): string[] => {
   if (!Array.isArray(value) || !value.length || value.length > max || value.some((id) => typeof id !== 'string' || !id || id.length > 128)) {
@@ -87,6 +88,13 @@ export function registerKunAccountIpc(getMainWindow: () => BrowserWindow | null,
   ipcMain.handle(channels.manage, async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     await shell.openExternal(`${KUN_ACCOUNT_ISSUER}/auth/account`)
+  })
+
+  // Only the signed-in account's own photo URL is fetched; the renderer never names a URL.
+  const photo = createAccountPhotoReader((url, options) => net.fetch(url, options))
+  ipcMain.handle(channels.photo, async (event) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    return photo((await account().getState()).user?.avatarUrl ?? null)
   })
 
   ipcMain.handle(channels.membership, async (event) => {

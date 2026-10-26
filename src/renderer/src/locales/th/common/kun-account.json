@@ -73,5 +73,18 @@
   "kunAccountGuestBody": "ตู้เสื้อผ้า ขวด และรางวัลชวนเพื่อนอยู่กับบัญชี แม้เปลี่ยนคอมพิวเตอร์ก็ไม่หาย",
   "kunAccountGuestSignIn": "เข้าสู่ระบบด้วยเบราว์เซอร์",
   "kunAccountKeychainShort": "บันทึกในพวงกุญแจ",
-  "kunAccountCredentialShort": "บันทึกในที่เก็บข้อมูลรับรอง"
+  "kunAccountCredentialShort": "บันทึกในที่เก็บข้อมูลรับรอง",
+  "kunAccountAvatarTitle": "อวาตาร์",
+  "kunAccountAvatarChange": "เปลี่ยนอวาตาร์",
+  "kunAccountAvatarOwn": "รูปของฉัน",
+  "kunAccountAvatarUpload": "อัปโหลดรูป",
+  "kunAccountAvatarKun": "ลุค Kun",
+  "kunAccountAvatarReplace": "เปลี่ยนรูป",
+  "kunAccountAvatarUseAccount": "ใช้รูปบัญชี",
+  "kunAccountAvatarRemove": "ลบรูป",
+  "kunAccountAvatarHintAccount": "จากบัญชี Kun ของคุณ",
+  "kunAccountAvatarHintLocal": "รูปจะเก็บไว้ในคอมพิวเตอร์เครื่องนี้เท่านั้น",
+  "kunAccountAvatarHintKun": "แต่งตัว Kun ในตู้เสื้อผ้า",
+  "kunAccountAvatarInvalid": "เลือก PNG, JPEG, WebP หรือ GIF ขนาดไม่เกิน 5 MB",
+  "kunAccountMenuSettingsHint": "โมเดล Agent หน้าตา และคีย์ลัด"
 }

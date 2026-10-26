@@ -27,6 +27,8 @@ export interface KunAccountApi {
   logout(): Promise<KunAccountState>
   openAccountCenter(): Promise<void>
   openMembership?(): Promise<void>
+  /** The signed-in account's photo as a data URL (the renderer CSP blocks remote images); null without one. */
+  photo?(): Promise<string | null>
   onState(handler: (state: KunAccountState) => void): () => void
   /** The account's wardrobe, feather shop and invitations. */
   wardrobe: KunAccountWardrobeApi
@@ -35,7 +37,8 @@ export interface KunAccountApi {
 export const KUN_ACCOUNT_CHANNELS = {
   state: 'kun-account:state', get: 'kun-account:get', login: 'kun-account:login',
   cancel: 'kun-account:cancel', refresh: 'kun-account:refresh', logout: 'kun-account:logout',
-  manage: 'kun-account:manage', membership: 'kun-account:membership', reopen: 'kun-account:reopen'
+  manage: 'kun-account:manage', membership: 'kun-account:membership', reopen: 'kun-account:reopen',
+  photo: 'kun-account:photo'
 } as const
 
 /** A transient network outage keeps an already verified account signed in locally. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { bodyZoom } from '../../lib/body-zoom'
 import { useChatStore } from '../../store/chat-store'
@@ -22,9 +22,14 @@ export function kunAccountAvailable(): boolean {
 /**
  * The sidebar's Kun account: the footer card is the account, and its menu holds the wardrobe,
  * the shop, invitations and the account itself. The same panel follows the browser sign-in live.
- * `compact` is the one-line form for theme packs with their own sidebar scene.
+ * `compact` is the one-line form for theme packs with their own sidebar scene. In the footer dock the
+ * card carries Settings (`accessory`) and the menu lists it too (`onOpenSettings`).
  */
-export function KunAccountControl({ variant = 'card' }: { variant?: 'card' | 'compact' }): ReactElement | null {
+export function KunAccountControl({ variant = 'card', accessory, onOpenSettings }: {
+  variant?: 'card' | 'compact' | 'mini'
+  accessory?: ReactNode
+  onOpenSettings?: () => void
+}): ReactElement | null {
   const { state, busy, welcome, notice, dismissWelcome, run, api } = useKunAccount()
   const [open, setOpen] = useState(false)
   // Set while the panel was opened by a failed sign-in; it explains the failure once.
@@ -102,6 +107,8 @@ export function KunAccountControl({ variant = 'card' }: { variant?: 'card' | 'co
   }, [visible, close])
 
   if (!api || window.kunGui?.isRemoteWeb) return null
+  // The Focus mode face is only for a signed-in account; signed out, Focus mode stays quiet.
+  if (variant === 'mini' && !state.user) return null
 
   const act = (action: KunAccountAction) => {
     if (action === 'reopenLogin') setReopened(true)
@@ -155,6 +162,7 @@ export function KunAccountControl({ variant = 'card' }: { variant?: 'card' | 'co
         triggerRef={trigger}
         onToggle={toggle}
         onLogin={login}
+        accessory={accessory}
       />
       {visible ? createPortal(
         <div
@@ -171,7 +179,8 @@ export function KunAccountControl({ variant = 'card' }: { variant?: 'card' | 'co
         >
           {view === 'menu' ? (
             <KunAccountMenu state={state} busy={busy} titleId={titleId} platform={platform} refreshed={refreshed} manageFailed={manageFailed}
-              onAction={act} onNavigate={navigate} onManage={manage} />
+              onAction={act} onNavigate={navigate} onManage={manage}
+              onOpenSettings={onOpenSettings ? () => { close(false); onOpenSettings() } : undefined} />
           ) : view === 'guest' ? (
             <>
               <KunAccountPanelClose onClose={() => close()} />

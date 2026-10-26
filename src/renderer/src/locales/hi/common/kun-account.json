@@ -73,5 +73,18 @@
   "kunAccountGuestBody": "आपकी अलमारी, बोतलें और आमंत्रण इनाम खाते के साथ रहते हैं, नए कंप्यूटर पर भी।",
   "kunAccountGuestSignIn": "ब्राउज़र से साइन इन करें",
   "kunAccountKeychainShort": "कीचेन में सहेजा गया",
-  "kunAccountCredentialShort": "क्रेडेंशियल स्टोर में सहेजा गया"
+  "kunAccountCredentialShort": "क्रेडेंशियल स्टोर में सहेजा गया",
+  "kunAccountAvatarTitle": "अवतार",
+  "kunAccountAvatarChange": "अवतार बदलें",
+  "kunAccountAvatarOwn": "मेरी तस्वीर",
+  "kunAccountAvatarUpload": "तस्वीर अपलोड करें",
+  "kunAccountAvatarKun": "Kun रूप",
+  "kunAccountAvatarReplace": "बदलें",
+  "kunAccountAvatarUseAccount": "खाते की फ़ोटो लगाएँ",
+  "kunAccountAvatarRemove": "तस्वीर हटाएँ",
+  "kunAccountAvatarHintAccount": "आपके Kun खाते से",
+  "kunAccountAvatarHintLocal": "तस्वीर सिर्फ़ इसी कंप्यूटर पर रहती है",
+  "kunAccountAvatarHintKun": "वॉर्डरोब में Kun को सजाएँ",
+  "kunAccountAvatarInvalid": "5 MB से छोटी PNG, JPEG, WebP या GIF चुनें",
+  "kunAccountMenuSettingsHint": "मॉडल, Agent, रूप और शॉर्टकट"
 }

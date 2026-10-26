@@ -73,5 +73,18 @@
   "kunAccountGuestBody": "Гардероб, бутылки и награды за приглашения хранятся в аккаунте — даже на новом компьютере.",
   "kunAccountGuestSignIn": "Войти через браузер",
   "kunAccountKeychainShort": "Хранится в связке ключей",
-  "kunAccountCredentialShort": "Хранится в хранилище учётных данных"
+  "kunAccountCredentialShort": "Хранится в хранилище учётных данных",
+  "kunAccountAvatarTitle": "Аватар",
+  "kunAccountAvatarChange": "Сменить аватар",
+  "kunAccountAvatarOwn": "Моё фото",
+  "kunAccountAvatarUpload": "Загрузить фото",
+  "kunAccountAvatarKun": "Образ Kun",
+  "kunAccountAvatarReplace": "Заменить",
+  "kunAccountAvatarUseAccount": "Фото аккаунта",
+  "kunAccountAvatarRemove": "Удалить фото",
+  "kunAccountAvatarHintAccount": "Из вашего аккаунта Kun",
+  "kunAccountAvatarHintLocal": "Фото хранится только на этом компьютере",
+  "kunAccountAvatarHintKun": "Переоденьте Kun в гардеробе",
+  "kunAccountAvatarInvalid": "Выберите PNG, JPEG, WebP или GIF до 5 МБ",
+  "kunAccountMenuSettingsHint": "Модели, Agent, оформление и горячие клавиши"
 }

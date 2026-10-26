@@ -73,5 +73,18 @@
   "kunAccountGuestBody": "衣橱、漂流瓶和邀请奖励都跟着账号走，换一台电脑也不会丢。",
   "kunAccountGuestSignIn": "在浏览器登录",
   "kunAccountKeychainShort": "登录信息存于钥匙串",
-  "kunAccountCredentialShort": "登录信息存于系统凭据"
+  "kunAccountCredentialShort": "登录信息存于系统凭据",
+  "kunAccountAvatarTitle": "头像",
+  "kunAccountAvatarChange": "更换头像",
+  "kunAccountAvatarOwn": "我的头像",
+  "kunAccountAvatarUpload": "上传图片",
+  "kunAccountAvatarKun": "Kun 形象",
+  "kunAccountAvatarReplace": "换一张",
+  "kunAccountAvatarUseAccount": "用回账号头像",
+  "kunAccountAvatarRemove": "移除图片",
+  "kunAccountAvatarHintAccount": "来自你的 Kun 账号",
+  "kunAccountAvatarHintLocal": "图片只保存在这台电脑上",
+  "kunAccountAvatarHintKun": "在衣橱里给 Kun 换装",
+  "kunAccountAvatarInvalid": "请选择 5 MB 以内的 PNG、JPEG、WebP 或 GIF",
+  "kunAccountMenuSettingsHint": "模型、Agent、外观和快捷键"
 }

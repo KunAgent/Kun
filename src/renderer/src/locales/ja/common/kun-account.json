@@ -73,5 +73,18 @@
   "kunAccountGuestBody": "ワードローブ、ボトル、招待特典はアカウントに保存され、別のパソコンでも引き継げます。",
   "kunAccountGuestSignIn": "ブラウザでログイン",
   "kunAccountKeychainShort": "キーチェーンに保存",
-  "kunAccountCredentialShort": "資格情報ストアに保存"
+  "kunAccountCredentialShort": "資格情報ストアに保存",
+  "kunAccountAvatarTitle": "アバター",
+  "kunAccountAvatarChange": "アバターを変更",
+  "kunAccountAvatarOwn": "自分の画像",
+  "kunAccountAvatarUpload": "画像をアップロード",
+  "kunAccountAvatarKun": "Kun の姿",
+  "kunAccountAvatarReplace": "別の画像",
+  "kunAccountAvatarUseAccount": "アカウント写真に戻す",
+  "kunAccountAvatarRemove": "画像を削除",
+  "kunAccountAvatarHintAccount": "Kun アカウントの写真",
+  "kunAccountAvatarHintLocal": "画像はこのコンピューターにだけ保存されます",
+  "kunAccountAvatarHintKun": "クローゼットで Kun を着せ替え",
+  "kunAccountAvatarInvalid": "5 MB 以下の PNG・JPEG・WebP・GIF を選んでください",
+  "kunAccountMenuSettingsHint": "モデル、Agent、外観、ショートカット"
 }
