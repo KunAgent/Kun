@@ -1,4 +1,5 @@
 import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
+import { HarnessPermissionModePreferenceSchema } from '../contracts/harness-permission-preference.js'
 import { z } from 'zod'
 import {
   HarnessCredentialModeSchema,
@@ -44,8 +45,8 @@ export const HarnessDefaultsEntrySchema = z
     /** Provider connection id; meaningful for `provider`/`kun-gateway`. */
     providerId: z.string().min(1).max(128).optional(),
     model: z.string().min(1).max(512).optional(),
-    /** A permissionModes[].id on the harness definition. */
-    permissionMode: z.string().min(1).max(64).optional(),
+    /** A declared native mode, or an ACP custom mode requiring full access. */
+    permissionMode: HarnessPermissionModePreferenceSchema,
     isolation: z.enum(['local', 'worktree']).optional()
   }).strict()
 export type HarnessDefaultsEntry = z.infer<typeof HarnessDefaultsEntrySchema>

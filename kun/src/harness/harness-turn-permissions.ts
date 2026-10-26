@@ -1,3 +1,5 @@
+import { customAcpPermission } from './acp-launch-args.js'
+import { HarnessPermissionModePreferenceSchema } from '../contracts/harness-permission-preference.js'
 import { providerModule } from './providers/registry.js'
 import { KUN_TOOL_PERMISSION_MODES, kunToolPermissionModeFromSettings, type ApprovalPolicy,
   type ApprovalReviewer, type SandboxMode } from '../contracts/policy.js'
@@ -15,13 +17,18 @@ export function harnessTurnPermissionMode(definition: HarnessDefinition, input: 
   const readOnly = input.sandboxMode === 'read-only' || (input.unattended && !input.allowUnattendedFullAccess)
   const ceiling = readOnly
     ? 0 : KUN_TOOL_PERMISSION_MODES.indexOf(host)
+  const requested = HarnessPermissionModePreferenceSchema.parse(input.requested)
+  if (definition.transport === 'acp' && requested && customAcpPermission(requested, definition)) {
+    if (readOnly || host !== 'full-access') throw new HarnessTransportError('policy_denied',
+      `Custom ACP permission mode '${requested}' requires Full access; clear the override to follow Kun permissions`)
+    return resolvePermissionMode(definition, requested, input.unattended, input.allowUnattendedFullAccess)
+  }
   const allowed = definition.permissionModes.filter((mode) => KUN_TOOL_PERMISSION_MODES.indexOf(mode.kunPermissionMode) <= ceiling)
   if (!allowed.length) throw new HarnessTransportError('policy_denied',
     `${definition.displayName} has no permission mode within the current task's allowed scope`)
   // Equal Kun upper bounds do not make native modes equally strict: plan may
   // forbid writes while default still allows them after an external approval.
   if (readOnly) return allowed[0]!.id
-  const requested = input.requested?.trim()
   // An engine may map the writable scope onto its own native modes first.
   const native = providerModule(definition.id)?.permissionMode?.({ requested, ceiling })
   if (native) return native

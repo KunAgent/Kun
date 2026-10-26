@@ -1,3 +1,4 @@
+import { normalizeHarnessPermissionMode } from './harness-permission-mode'
 import { BUILTIN_HARNESS_IDS } from '../../kun/src/contracts/builtin-harness-ids.js'
 import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
 import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from './ade-collaboration-settings'
@@ -178,7 +179,7 @@ function normalizeHarnessDefaults(
     }
     const model = nonEmpty(rawEntry.model, 512)
     if (model) entry.model = model
-    const permissionMode = nonEmpty(rawEntry.permissionMode, 64)
+    const permissionMode = normalizeHarnessPermissionMode(rawEntry.permissionMode)
     if (permissionMode) entry.permissionMode = permissionMode
     if (
       typeof rawEntry.isolation === 'string' &&

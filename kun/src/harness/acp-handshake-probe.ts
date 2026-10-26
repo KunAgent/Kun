@@ -33,7 +33,8 @@ import { nativeAgentLaunchEnv } from './native-agent-network.js'
 import { acpLaunchArgs } from './acp-launch-args.js'
 import { providerModuleFor } from './providers/registry.js'
 import type { AgentProviderModule, ProviderFailureContext } from './providers/provider-module.js'
-import { acpPermissionModeUnoffered, applyAcpSessionPermission } from '../runtime/acp/acp-session-permissions.js'
+import { acpPermissionModeUnoffered } from '../runtime/acp/acp-session-permissions.js'
+import { applyAcpProviderPermission, customAcpPermission } from '../runtime/acp/acp-provider-permissions.js'
 import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
 
@@ -46,7 +47,7 @@ export type AcpHandshakeProbeDeps = {
   /** Optional local session metadata; never sends a prompt or authenticates. */
   includeModels?: boolean
   /** Exercise the same pre-prompt model/mode setup as a real turn, without inference. */
-  session?: { model?: string; permissionMode?: string }
+  session?: { model?: string; permissionMode?: string; customPermissionMode?: boolean }
   /** Resolves `launch.secretEnv` refs so the probe sees the real env. */
   resolveSecretEnv?: HarnessSecretRefResolver
 }
@@ -221,13 +222,12 @@ export async function probeAcpHandshake(
         await raceProbeAbort(applyAcpSessionModel(conn, { ...session, models: parseAcpLegacyModels(session.models) }, deps.session.model), signal)
         stage = 'permission'
         const agentsOnly = definition.nativeAgents === 'session-modes' && Boolean(deps.session.permissionMode) &&
+          !(deps.session.customPermissionMode ?? customAcpPermission(deps.session.permissionMode, definition)) &&
           acpPermissionModeUnoffered(session, deps.session.permissionMode!, definition.acpPermission)
-        const applyPermission = providerModuleFor(definition)?.acp?.applyPermission
-        if (applyPermission) await raceProbeAbort(applyPermission(conn, session, deps.session.permissionMode), signal)
-        // The session still works through an explicitly picked native Agent;
-        // Auto turns keep failing closed in applyAcpSessionPermission.
-        else if (agentsOnly) detail = 'The Agent replaced its permission modes with its own Agents; pick one in the composer'
-        else await raceProbeAbort(applyAcpSessionPermission(conn, session, deps.session.permissionMode, definition.acpPermission), signal)
+        // Preset Auto remains usable through a picked Agent; an explicit custom mode must match.
+        if (agentsOnly && !providerModuleFor(definition)?.acp?.applyPermission) detail = 'The Agent replaced its permission modes with its own Agents; pick one in the composer'
+        else await raceProbeAbort(applyAcpProviderPermission(conn, session, deps.session.permissionMode,
+          providerModuleFor(definition), definition.acpPermission, definition, deps.session.customPermissionMode), signal)
       }
     }
     const caps = init.agentCapabilities

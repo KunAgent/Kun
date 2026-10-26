@@ -1,4 +1,4 @@
-import { acpLaunchIdentity } from '../../harness/acp-launch-args.js'
+import { acpLaunchIdentity, acpPermissionSelection } from '../../harness/acp-launch-args.js'
 import { sessionInstructions } from '../../session/session-instructions.js'
 /**
  * ACP delegated runtime. `runTurn` owns a full Kun turn
@@ -310,7 +310,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           workspacePath: workspace,
           harnessId: definition.id,
           model,
-          permissionModeId,
+          ...acpPermissionSelection(definition, permissionModeId, this.deps.harnessDefaults?.(definition.id)?.permissionMode),
           ...(ctx.nativeAgentId ? { nativeAgentId: ctx.nativeAgentId } : {}),
           acpPermission: definition.acpPermission,
           reasoningEffort: turn.reasoningEffort,

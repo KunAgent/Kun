@@ -260,6 +260,7 @@ function nativePermissionNote(
   preview: NativePermissionPreview
 ): string {
   const mode = t(`agentUpdate.nativeModes.${preview.id}`, { defaultValue: preview.label })
+  if (preview.requiresFullAccess) return t('agentUpdate.nativePermissionFullAccessRequired', { agent: agentName, mode: preview.label })
   return t(preview.readOnly ? 'agentUpdate.nativePermissionReadOnly' : 'agentUpdate.nativePermission', { agent: agentName, mode })
 }
 

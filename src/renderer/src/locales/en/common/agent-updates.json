@@ -1,5 +1,6 @@
 {
   "agentUpdate": {
+    "nativePermissionFullAccessRequired": "{{agent}}: custom mode {{mode}} requires Full access. Clear it in Agent settings to follow composer permissions.",
     "title": "Agent version",
     "unchecked": "Not checked",
     "checking": "Checking for updates…",

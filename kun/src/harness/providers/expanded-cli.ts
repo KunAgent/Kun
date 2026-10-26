@@ -19,7 +19,7 @@ function expandedModule(definition: HarnessDefinition): AgentProviderModule {
       // 1.1.79 advertises yolo but both ACP setters reject it. The native
       // startup flag works; normal session negotiation still verifies it.
       launchArgs: (args: string[], mode: string | undefined) => [
-        ...args, '--permission-mode', mode === 'bypass_permissions' ? 'bypass_permissions' : 'default'
+        ...args, '--permission-mode', mode === 'yolo' ? 'bypass_permissions' : mode || 'default'
       ]
     } } : {}),
     // Grok Build reports the turn's usage in the prompt result's `_meta`, not in `usage`.

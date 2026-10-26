@@ -40,7 +40,7 @@ function nextTurn(h: Harness, id: string, full: boolean) {
   h.items.push({ id: `user-${id}`, threadId: 'thread_1', turnId: id, role: 'user', kind: 'user_message',
     status: 'completed', text: 'continue', createdAt: '2026-01-01T00:01:00.000Z' } as TurnItem)
 }
-async function setup(pool: AcpConnectionPool, loadMode?: string) {
+async function setup(pool: AcpConnectionPool, loadMode?: string, permissionMode?: string) {
   const spawnAgent = vi.fn<AcpSpawnFn>(async (_command, args, options) => {
     const mode = args.at(-1)
     return spawn(process.execPath, ['-e', agent], { stdio: ['pipe', 'pipe', 'pipe'],
@@ -49,7 +49,7 @@ async function setup(pool: AcpConnectionPool, loadMode?: string) {
   const h = await makeHarness('resume.json', {
     definition: { id: 'qoder', permissionModes: qoder.permissionModes, acpPermission: qoder.acpPermission },
     turn: { harnessId: 'qoder', ...kunToolPermissionModeSettings('full-access') },
-    thread: { harnessId: 'qoder' }, deps: { connectionPool: pool, spawn: spawnAgent }
+    thread: { harnessId: 'qoder' }, deps: { connectionPool: pool, spawn: spawnAgent, harnessDefaults: () => ({ permissionMode }) }
   })
   return { h, spawnAgent }
 }
@@ -79,7 +79,7 @@ it('uses resolved startup permissions, reuses same-mode processes and separates 
 it.each(['yolo', 'default', 'missing'])('validates restored %s metadata before allowing a prompt', async loadMode => {
   const pool = new AcpConnectionPool({ idleReleaseMs: 60_000 })
   try {
-    const { h, spawnAgent } = await setup(pool, loadMode)
+    const { h, spawnAgent } = await setup(pool, loadMode, 'yolo')
     expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
     // Force the next turn onto a replacement process, retaining its committed session binding.
     await pool.retireIdlePrefix('', 'no-connection')

@@ -43,7 +43,7 @@ function fixture(currentValue: string) {
 }
 
 describe('Qoder 1.1.79 permission startup', () => {
-  it.each(['default', undefined, 'yolo', 'invalid'])('does not elevate %s', mode => {
+  it.each(['default', undefined])('does not elevate %s', mode => {
     expect(acpLaunchArgs(qoder, mode)).toEqual(['--acp', '--permission-mode', 'default'])
   })
   it('uses the native startup spelling only for an explicit bypass and isolates the pool', () => {
@@ -57,11 +57,11 @@ describe('Qoder 1.1.79 permission startup', () => {
     expect(acpLaunchArgs(definition, 'bypass_permissions')).toEqual(definition.launch!.args)
     expect(acpLaunchIdentity('cli', definition, 'default')).toBe(acpLaunchIdentity('cli', definition, 'bypass_permissions'))
   })
-  it.each([['default', 'default'], ['bypass_permissions', 'yolo']])('probes %s without a broken setter or prompt', async (mode, currentValue) => {
+  it.each([['default', 'default'], ['bypass_permissions', 'yolo'], ['yolo', 'yolo']])('probes %s without a broken setter or prompt', async (mode, currentValue) => {
     const child = fixture(currentValue)
     vi.mocked(startHarnessProcess).mockResolvedValueOnce(child.process)
     expect(await probeAcpHandshake(qoder, 'qodercli', { session: { permissionMode: mode } })).toMatchObject({ ok: true })
-    expect(startHarnessProcess).toHaveBeenLastCalledWith(expect.objectContaining({ args: ['--acp', '--permission-mode', mode] }))
+    expect(startHarnessProcess).toHaveBeenLastCalledWith(expect.objectContaining({ args: ['--acp', '--permission-mode', mode === 'yolo' ? 'bypass_permissions' : mode] }))
     expect(child.requests.map(r => r.method)).toEqual(['initialize', 'session/new'])
     expect(child.stop).toHaveBeenCalledOnce()
     expect(existsSync(child.requests[1].params.cwd)).toBe(false)
