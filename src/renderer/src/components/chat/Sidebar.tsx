@@ -32,7 +32,6 @@ import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDial
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
-import { useSidebarScopeStore } from './sidebar-scope-store'
 import { SidebarFrame } from '../sidebar/SidebarPrimitives'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 import { openArtifactsPage } from '../../artifacts/artifact-library-store'
@@ -110,7 +109,8 @@ export function Sidebar({
   onNewConversation
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
-  const sidebarScope = useSidebarScopeStore((state) => state.scope)
+  // 对话 is the agent-chat route: the sidebar lists conversations instead of projects.
+  const chatsScope = useChatStore((state) => state.route === 'agent-chat')
   const iconProps = { className: 'h-4 w-4', strokeWidth: 1.75 }
   // HTML5 drag does not scroll containers; without this, dragged sidebar rows
   // cannot reach projects above or below the visible window.
@@ -197,7 +197,7 @@ export function Sidebar({
           onWriteOpen={onWriteOpen}
         />
 
-        {activeView !== 'claw' ? (
+        {activeView !== 'claw' && !chatsScope ? (
           <SidebarPrimaryActions
             runtimeReady={runtimeReady}
             newTaskLabel={t('newAgent')}
@@ -206,7 +206,7 @@ export function Sidebar({
             onNewTask={onNewChat}
           />
         ) : null}
-        <nav className="sidebar-code-nav" aria-label={t('sidebarTools')}>
+        {!chatsScope ? <nav className="sidebar-code-nav" aria-label={t('sidebarTools')}>
           {codexReferenceEnabled && activeView === 'chat' ? <SidebarNavRow
             icon={<Clock3 {...iconProps} />} label={t('codexHistoryCreate')} active={false}
             disabled={!runtimeReady} onClick={() => setCodexDialogOpen(true)}
@@ -242,7 +242,7 @@ export function Sidebar({
               active={activeView === 'board'}
             />
           ) : null}
-        </nav>
+        </nav> : null}
       </div>
 
       <div className="ds-no-drag mx-1 my-1" />
@@ -286,8 +286,9 @@ export function Sidebar({
         />
       ) : (
       <>
-      {sidebarScope === 'chats' ? (
+      {chatsScope ? (
   <SidebarAgentChatsSection
+          fill
           threads={threads}
           activeThreadId={activeThreadId}
           runtimeReady={runtimeReady}
@@ -302,7 +303,7 @@ export function Sidebar({
           t={t}
         />
       ) : null}
-      {!threadSearch.trim() && ['chat', 'write', 'schedule', 'workflow'].includes(activeView) ? (
+      {!chatsScope && !threadSearch.trim() && ['chat', 'write', 'schedule', 'workflow'].includes(activeView) ? (
         <SidebarAttentionPanel
           threads={threads}
           activityContext={sidebarActivityContext}
@@ -310,7 +311,7 @@ export function Sidebar({
           t={t}
         />
       ) : null}
-      {sidebarScope === 'code' ? (
+      {!chatsScope ? (
   <SidebarProjectsSection
           threads={threads}
           activeView={activeView === 'write' ? 'write' : 'chat'}

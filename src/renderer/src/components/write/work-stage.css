@@ -199,3 +199,28 @@
 }
 .work-home-space-trigger:hover { background: var(--ds-sidebar-row-hover); color: var(--ds-text); }
 .work-home-space-hint { color: var(--ds-text-faint); font-size: 12px; }
+
+/* Rounded pass: the conversation is a centered column with the composer's width and real
+   side margins; with a document beside it the two panes read as one surface. */
+.write-assistant-panel.is-stage .ds-chat-column-inset {
+  width: min(calc(100% - 48px), 760px);
+  max-width: none;
+  margin-inline: auto;
+}
+.write-assistant-panel.is-stage .write-assistant-header > div:first-child {
+  border-bottom-color: var(--kun-hair-1);
+}
+.work-stage-conversation.is-swapped > .work-side-document {
+  border-left-color: var(--kun-hair-1);
+}
+.work-stage-conversation.is-swapped > .work-side-document .write-editor-tabbar {
+  border-bottom-color: var(--kun-hair-1);
+  background: transparent;
+}
+.work-stage-conversation .write-editor-tab {
+  border-radius: var(--kun-radius-pill);
+}
+.work-home-card,
+.work-home-pill { border-color: var(--kun-hair-2); }
+.work-home-card { border-radius: var(--kun-radius-lg); }
+.work-context-chip { border-radius: var(--kun-radius-pill); border-color: var(--kun-hair-2); }

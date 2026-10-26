@@ -208,3 +208,51 @@
 
 /* Directory rows reserve no room for hover actions; names keep full width. */
 .work-directory .ds-sidebar-tree-row { min-height: 30px; }
+
+/* Rounded pass: one row rhythm (34px, 13.5px) for sessions, files and paper links,
+   the space card on the glass ground, quiet section heads whose actions show on hover. */
+.work-space-switcher {
+  height: 40px;
+  border: 0;
+  border-radius: var(--kun-radius-md);
+  background: color-mix(in srgb, var(--ds-surface-card) 55%, transparent);
+  box-shadow: inset 0 0 0 1px var(--kun-hair-1);
+  font-size: 13.5px;
+}
+.work-space-switcher:hover {
+  background: color-mix(in srgb, var(--ds-surface-card) 88%, transparent);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 0 0 1px var(--kun-hair-1);
+}
+.work-section + .work-section { margin-top: 12px; }
+.work-section-head { padding: 10px 0 2px 2px; }
+.work-section-toggle {
+  color: color-mix(in srgb, var(--ds-text-muted) 82%, transparent);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.work-section-actions { opacity: 0; transition: opacity 120ms ease; }
+.work-section-head:is(:hover, :focus-within) .work-section-actions { opacity: 1; }
+.work-session-row {
+  height: 34px;
+  border-radius: var(--kun-radius-sm);
+  padding: 0 10px;
+  font-size: 13.5px;
+}
+.work-session-row[aria-current='true'] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ds-surface-card) 82%, transparent);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 0 0 1px var(--kun-hair-1);
+}
+/* One list, one look: per-kind glyphs made every row a different shape. */
+.work-session-anchor { display: none; }
+.work-session-menu,
+.work-session-side { top: 5px; }
+[data-work-sidebar] .ds-sidebar-command-row,
+[data-work-sidebar] .sidebar-menu-row {
+  min-height: 34px;
+  height: auto;
+  font-size: 13.5px;
+}
+[data-work-sidebar] .ds-sidebar-tree-row > button { min-height: 32px; }
+[data-theme='dark'] .work-session-row[aria-current='true'] { box-shadow: 0 0 0 1px var(--kun-hair-2); }

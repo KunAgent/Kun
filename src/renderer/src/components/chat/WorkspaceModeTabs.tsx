@@ -9,7 +9,7 @@ import {
 import { Briefcase, Code2, MessagesSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useRoomAttentionCount } from '../rooms/useRoomEvents'
-import { useSidebarScopeStore } from './sidebar-scope-store'
+import { useChatStore } from '../../store/chat-store'
 
 type Props = {
   activeView:
@@ -31,9 +31,8 @@ type Props = {
 }
 
 /**
- * Code, Work and Chats share one pill switch. Chats is not a route of its own:
- * it flips the Code sidebar to Agent private and group conversations, so the
- * retired Rooms route is still shown as Code.
+ * Code, Work and Chats share one pill switch. Chats is the agent-chat route (private,
+ * group and assistant conversations); the retired Rooms route is still shown as Code.
  */
 type WorkspaceMode = 'chat' | 'write' | 'chats'
 
@@ -48,13 +47,12 @@ export function WorkspaceModeTabs({
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const roomAttention = useRoomAttentionCount()
-  const scope = useSidebarScopeStore((state) => state.scope)
-  const setScope = useSidebarScopeStore((state) => state.setScope)
+  const inChats = useChatStore((state) => state.route === 'agent-chat')
   const rootRef = useRef<HTMLDivElement>(null)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [thumb, setThumb] = useState<Thumb | null>(null)
   const selectedMode: WorkspaceMode =
-    activeView === 'write' ? 'write' : scope === 'chats' ? 'chats' : 'chat'
+    inChats ? 'chats' : activeView === 'write' ? 'write' : 'chat'
   const options = [
     { id: 'chat' as const, label: t('code'), Icon: Code2 },
     { id: 'write' as const, label: t('workspaceModeWorkLabel'), Icon: Briefcase },
@@ -89,10 +87,14 @@ export function WorkspaceModeTabs({
       if (activeView !== 'write') onWriteOpen()
       return
     }
-    setScope(mode === 'chats' ? 'chats' : 'code')
-    // Automation and board views map to the Code tab but are not Code itself,
-    // so picking Code or Chats from them must still navigate back.
-    if (activeView !== 'chat') onCodeOpen()
+    if (mode === 'chats') {
+      // The last conversation stays selected in its store, so the route alone reopens it.
+      if (!inChats) useChatStore.getState().setRoute('agent-chat')
+      return
+    }
+    // Automation and board views map to the Code tab but are not Code itself, and a
+    // conversation is not a Code task: picking Code from either returns to the task.
+    if (inChats || activeView !== 'chat') onCodeOpen()
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {

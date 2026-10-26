@@ -141,30 +141,37 @@
   width: 52px;
   border-left-width: 0;
   background: transparent;
-  padding-top: 10px;
+  padding-top: calc(var(--kun-card-gutter) + 6px);
 }
 
-/* Top-bar actions share one pill; each button is a round chip on it. */
-.ds-workbench-top-actions.ds-no-drag {
+/* Every top-bar action (trace, extensions, tools) sits in one pill of round chips. */
+.chat-topbar-actions.flex {
   gap: 2px;
   padding: 3px;
   border-radius: var(--kun-radius-pill);
   background: var(--kun-sunken);
 }
 
-.ds-workbench-top-actions .ds-topbar-action-button {
-  width: 30px;
+.chat-topbar-actions .ds-workbench-top-actions.ds-no-drag {
+  gap: 2px;
+}
+
+.chat-topbar-actions :is(.ds-topbar-action-button, .ds-header-text-button) {
   height: 30px;
   border-radius: var(--kun-radius-pill);
 }
 
-.ds-workbench-top-actions .ds-topbar-action-button:hover {
+.chat-topbar-actions .ds-topbar-action-button {
+  width: 30px;
+}
+
+.chat-topbar-actions :is(.ds-topbar-action-button, .ds-header-text-button):hover {
   background: var(--ds-surface-card);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
 
 /* The reopen button stands apart from the grey pill. */
-.ds-workbench-top-actions .kun-rail-reopen {
+.chat-topbar-actions .kun-rail-reopen {
   margin-left: 4px;
   border-radius: var(--kun-radius-pill);
 }
@@ -175,7 +182,7 @@
 }
 
 /* Dark: lift hairlines instead of dropping shadows, keep the glass cards legible. */
-[data-theme='dark'] .ds-workbench-top-actions .ds-topbar-action-button:hover {
+[data-theme='dark'] .chat-topbar-actions :is(.ds-topbar-action-button, .ds-header-text-button):hover {
   box-shadow: 0 0 0 1px var(--kun-hair-2);
 }
 
@@ -187,4 +194,23 @@
 
 [data-theme='dark'] .kun-rail-reopen:hover {
   background: color-mix(in srgb, var(--ds-accent) 28%, transparent);
+}
+
+/* Conversation details: framed image attachments, archive link only on hover. */
+.kun-media-figure {
+  overflow: hidden;
+  border-radius: var(--kun-radius-md);
+  box-shadow:
+    0 0 0 1px var(--kun-hair-2),
+    0 2px 8px rgba(16, 24, 40, 0.06);
+}
+
+[data-archive-history-action] {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+:hover > [data-archive-history-action],
+[data-archive-history-action]:focus-within {
+  opacity: 1;
 }
