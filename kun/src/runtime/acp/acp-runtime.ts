@@ -47,6 +47,7 @@ import { acpSubagentSource } from './acp-subagent-source.js'
 import { openCodeDatabasePath, startOpenCodeChildSessions } from './opencode-child-sessions.js'
 import { devinSessionDatabasePath } from './devin-session-usage.js'
 import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
+import { resolveAcpDocuments } from './acp-attachment-documents.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
   acpLegacyCapabilities,
@@ -393,6 +394,15 @@ export class AcpRuntime implements DelegatedTurnRuntime {
 
     const imageCapable =
       conn.initResult?.agentCapabilities?.promptCapabilities?.image === true
+    // Text attachments are inlined for every agent: an external ACP agent
+    // cannot read Kun's attachment store, so gating the body on image support
+    // used to drop pasted long text without a trace.
+    const inlineDocuments = await resolveAcpDocuments(
+      this.deps.attachmentStore,
+      threadId,
+      workspace,
+      userItem.attachmentIds ?? []
+    )
     const prompt = buildAcpPromptBlocks({
       handoffBrief: turnHandoff?.brief.text,
       historyTranscript:
@@ -416,6 +426,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       ),
       attachmentPaths: attachmentFallbackPaths(userItem),
       imageCapable,
+      documents: inlineDocuments.documents,
+      unreadableDocuments: inlineDocuments.unreadable,
       fileReferences: userItem.fileReferences ?? [],
       workspacePath: workspace
     })
@@ -521,12 +533,19 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           timing.observe(drafts)
           emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
         },
-        sendGuidance: async (entries) => sendPrompt(buildAcpPromptBlocks({
-          instructionBlocks: [], userText: entries.map((entry) => entry.text).join('\n\n'),
-          images: await resolveAcpImages(this.deps.attachmentStore, threadId, workspace,
-            entries.flatMap((entry) => entry.attachmentIds ?? []), imageCapable),
-          attachmentPaths: [], imageCapable, fileReferences: [], workspacePath: workspace
-        })),
+        sendGuidance: async (entries) => {
+          const guidanceDocuments = await resolveAcpDocuments(
+            this.deps.attachmentStore, threadId, workspace,
+            entries.flatMap((entry) => entry.attachmentIds ?? [])
+          )
+          return sendPrompt(buildAcpPromptBlocks({
+            instructionBlocks: [], userText: entries.map((entry) => entry.text).join('\n\n'),
+            images: await resolveAcpImages(this.deps.attachmentStore, threadId, workspace,
+              entries.flatMap((entry) => entry.attachmentIds ?? []), imageCapable),
+            attachmentPaths: [], imageCapable, fileReferences: [], workspacePath: workspace,
+            documents: guidanceDocuments.documents, unreadableDocuments: guidanceDocuments.unreadable
+          }))
+        },
         beforeFollowUp: () => {
           // The previous prompt settled; its answer gets its own item.
           const drafts = mapper.closeSegment()
