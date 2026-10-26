@@ -22,6 +22,8 @@ export type WorkPaperHostProps = {
   onAttachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
   /** Nothing is open: the assistant fills the center and the editor steps aside. */
   conversationStage: boolean
+  /** The assistant is main and the open files dock to the side. */
+  swapped?: boolean
   /** Assistant panel and rail, right of the editor. */
   rightPanel: ReactNode
   /** The editor, given the submit its quick asks use (the Work assistant send). */
@@ -43,6 +45,7 @@ export function WorkPaperHost({
   onSubmitPrompt,
   onAttachImage,
   conversationStage,
+  swapped = false,
   rightPanel,
   children
 }: WorkPaperHostProps): ReactElement {
@@ -128,10 +131,12 @@ export function WorkPaperHost({
   return (
     <PaperWorkbenchChromeContext.Provider value={chrome}>
       <WritePdfRendererProvider value={PaperPdfReader}>
-        <div className={`relative flex min-h-0 flex-1${conversationStage ? ' work-stage-conversation' : ''}`}
-          data-work-stage={conversationStage ? 'conversation' : 'documents'}>
+        <div className={`relative flex min-h-0 flex-1${conversationStage ? ' work-stage-conversation' : ''}${swapped ? ' is-swapped' : ''}`}
+          data-work-stage={swapped ? 'swapped' : conversationStage ? 'conversation' : 'documents'}>
           {/* Kept mounted while hidden: the editor owns lifecycle effects. */}
-          <div className={conversationStage ? 'hidden' : 'relative flex min-h-0 min-w-0 flex-1 flex-col'}>
+          <div className={swapped
+            ? 'work-side-document relative flex min-h-0 min-w-0 flex-col'
+            : conversationStage ? 'hidden' : 'relative flex min-h-0 min-w-0 flex-1 flex-col'}>
             {children(onSubmitPrompt ? submitPaperPrompt : undefined)}
             {workspaceRoot && infoDrawerOpen ? <PaperMetadataDrawer onClose={() => setInfoDrawerOpen(false)} /> : null}
           </div>

@@ -4,7 +4,7 @@ import { normalizeWorkbenchRoute } from './workbench-route'
 import { PaperNoticeToast } from '../paper/PaperNoticeToast'
 import { WriteSideRail } from '../write/WriteSideRail'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
-import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
+import { useWorkAssistantSwapped, useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
 import { useAgentChatPicker } from '../rooms/agent-chat-picker'
 import { closeAddAssistantDialog, openAssistantConversation, useAssistantNavigationStore } from '../assistants/assistant-navigation'
 import { closeWardrobePage } from '../wardrobe/wardrobe-route'
@@ -97,6 +97,7 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
   const remoteMobile = useRemoteMobileLayout()
   const rightPanel = <>{write.rightPanel}{remoteMobile ? null : <WriteSideRail />}</>
   const conversationStage = useWorkConversationStage()
+  const swapped = useWorkAssistantSwapped()
   const chrome = useMemo(() => ({
     leftSidebarCollapsed: write.leftSidebarCollapsed,
     onToggleLeftSidebar: write.onToggleLeftSidebar
@@ -111,6 +112,7 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
         onSubmitPrompt={write.onSubmitPrompt}
         onAttachImage={write.onAttachImage}
         conversationStage={conversationStage}
+        swapped={swapped}
         rightPanel={rightPanel}
       >
         {(submitPrompt) => (

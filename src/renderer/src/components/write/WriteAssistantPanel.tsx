@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   Loader2,
   MessageSquareQuote,
+  ArrowLeftRight,
   PanelRightClose,
   Plus,
   TextSelect,
@@ -41,7 +42,13 @@ import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
 import { WriteAssistantEmptyState } from './WriteAssistantEmptyState'
 import { WorkHomeHero, WorkHomeSpaceChip, WorkKunAvatar } from './WorkHomeEmptyState'
 import { WorkHomeCards } from './WorkHomeCards'
-import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
+import {
+  useWorkAssistantAlone,
+  useWorkAssistantSwapped,
+  useWorkConversationStage,
+  WorkStageChromeContext
+} from '../../write/work-conversation-stage'
+import { useWorkSlotsStore } from '../../write/work-slots-store'
 import { focusedPaperViewId, paperResearchStageActive } from '../../paper/paper-view'
 import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
@@ -187,6 +194,9 @@ export function WriteAssistantPanel({
   )
   // Nothing open: the panel is the center stage (Code-like home/conversation).
   const stage = useWorkConversationStage()
+  const swapped = useWorkAssistantSwapped()
+  const alone = useWorkAssistantAlone()
+  const swapSlots = useWorkSlotsStore((state) => state.swap)
   const stageChrome = useContext(WorkStageChromeContext)
   const detachedKey = useWorkContextStore((s) => s.detachedKey)
   // A removed chip only applies to the item it was removed from.
@@ -334,7 +344,7 @@ export function WriteAssistantPanel({
 
   return (
     <aside
-      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${stage ? 'is-stage ' : ''}${home ? 'is-home ' : ''}${className}`}
+      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${stage ? 'is-stage ' : ''}${swapped ? 'is-swapped ' : ''}${home ? 'is-home ' : ''}${className}`}
       data-work-assistant={stage ? 'stage' : 'panel'}
     >
       <div className="write-assistant-header ds-sidebar-surface-chrome relative shrink-0">
@@ -367,6 +377,18 @@ export function WriteAssistantPanel({
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
           </button>
+          {alone ? null : (
+            <button
+              type="button"
+              onClick={swapSlots}
+              className="write-panel-icon-button"
+              data-work-swap-slots={swapped ? 'file' : 'session'}
+              aria-label={swapped ? t('workSwapToFile') : t('workSwapToSession')}
+              title={swapped ? t('workSwapToFile') : t('workSwapToSession')}
+            >
+              <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          )}
           {stage ? null : (
             <button
               type="button"

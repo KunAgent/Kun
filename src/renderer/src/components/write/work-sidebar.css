@@ -168,7 +168,18 @@
   opacity: 0;
   pointer-events: none;
 }
-.work-session-item:is(:hover, :focus-within) .work-session-menu,
+.work-session-side {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+}
+.work-session-item:is(:hover, :focus-within) :is(.work-session-menu, .work-session-side),
 .work-session-menu[aria-expanded='true'] { opacity: 1; pointer-events: auto; }
 .work-session-rename {
   width: 100%;
