@@ -16,7 +16,12 @@ Var /GLOBAL KunInstallerUpdateBoundary
       ClearErrors
       FileOpen $R8 "$KunInstallerDiagnosticPath" a
       ${ifNot} ${Errors}
-        FileWrite $R8 "NSIS update-boundary=$KunInstallerUpdateBoundary$\r$\n"
+        ; NSIS mode "a" preserves contents but starts at offset zero. Seek on
+        ; every open so boundary markers cannot overwrite earlier diagnostics.
+        FileSeek $R8 0 END
+        ${ifNot} ${Errors}
+          FileWrite $R8 "NSIS update-boundary=$KunInstallerUpdateBoundary$\r$\n"
+        ${endif}
         FileClose $R8
       ${endif}
     ${endif}

@@ -2,7 +2,16 @@
 # deep installed payloads. Use Unicode Win32 APIs with extended-length paths;
 # this does not require LongPathsEnabled, PowerShell 7, or global runtime switches.
 if (-not ('KunInstallerPayloadCopy' -as [type])) {
-  Add-Type -TypeDefinition @'
+  # NSIS's plugin directory contains a native System.dll. CodeDOM's default
+  # short references can bind that file instead of the framework assembly.
+  # CompilerParameters replaces those defaults; use already-loaded framework
+  # locations, never the working directory or a caller-provided assembly path.
+  $payloadCompiler = [System.CodeDom.Compiler.CompilerParameters]::new()
+  $payloadCompiler.GenerateInMemory = $true
+  $payloadCompiler.CompilerOptions = '/nostdlib'
+  [void]$payloadCompiler.ReferencedAssemblies.Add([object].Assembly.Location)
+  [void]$payloadCompiler.ReferencedAssemblies.Add([ComponentModel.Win32Exception].Assembly.Location)
+  Add-Type -CompilerParameters $payloadCompiler -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

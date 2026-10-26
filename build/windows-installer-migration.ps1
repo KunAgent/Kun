@@ -13,7 +13,16 @@ Set-StrictMode -Version 2.0
 # Native recovery actions can outlive their coordinator if it is interrupted.
 # Keep the watchdog inside each process; normal installer invocations opt out.
 if ($Bounded) {
-  Add-Type -TypeDefinition @'
+  # NSIS's plugin directory contains a native System.dll. CodeDOM's default
+  # short references can bind that file instead of the framework assembly.
+  # CompilerParameters replaces those defaults; use already-loaded framework
+  # locations, never the working directory or a caller-provided assembly path.
+  $deadlineCompiler = [System.CodeDom.Compiler.CompilerParameters]::new()
+  $deadlineCompiler.GenerateInMemory = $true
+  $deadlineCompiler.CompilerOptions = '/nostdlib'
+  [void]$deadlineCompiler.ReferencedAssemblies.Add([object].Assembly.Location)
+  [void]$deadlineCompiler.ReferencedAssemblies.Add([ComponentModel.Win32Exception].Assembly.Location)
+  Add-Type -CompilerParameters $deadlineCompiler -TypeDefinition @'
 using System;
 using System.Threading;
 public static class KunInstallerActionDeadline {

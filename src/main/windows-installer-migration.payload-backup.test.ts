@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -26,12 +26,12 @@ function fixture() {
 }
 
 type Fixture = ReturnType<typeof fixture>
-function run(input: Fixture, action: Action) {
+function run(input: Fixture, action: Action, options: { cwd?: string, bounded?: boolean } = {}) {
   return spawnSync(powershell, [
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helper,
-    '-Action', action, '-ResultPath', join(input.root, `${action}.txt`)
+    '-Action', action, '-ResultPath', join(input.root, `${action}.txt`), ...(options.bounded ? ['-Bounded'] : [])
   ], {
-    encoding: 'utf8', timeout: 60_000,
+    encoding: 'utf8', timeout: 60_000, cwd: options.cwd,
     env: {
       ...process.env,
       KUN_INSTALLER_SOURCE: input.source,
@@ -81,6 +81,18 @@ afterEach(() => {
 })
 
 describe('automatic-update payload helper packaging', () => {
+  it('pins compiler references to loaded framework assemblies rather than the plugin working directory', () => {
+    for (const file of ['windows-installer-migration.ps1', 'windows-installer-migration-payload-copy.ps1']) {
+      const script = readFileSync(join(process.cwd(), 'build', file), 'utf8')
+      expect(script).toContain('[System.CodeDom.Compiler.CompilerParameters]::new()')
+      expect(script).toContain(".CompilerOptions = '/nostdlib'")
+      expect(script).toContain('.ReferencedAssemblies.Add([object].Assembly.Location)')
+      expect(script).toContain('.ReferencedAssemblies.Add([ComponentModel.Win32Exception].Assembly.Location)')
+      expect(script).toContain('Add-Type -CompilerParameters')
+      expect(script).not.toContain('Add-Type -ReferencedAssemblies')
+    }
+  })
+
   it('ships the long-path helper in both NSIS entry points and packaged recovery resources', () => {
     const filename = 'windows-installer-migration-payload-copy.ps1'
     for (const file of ['installer.nsh', 'installer-process-check.nsh']) {
@@ -95,6 +107,47 @@ describe('automatic-update payload helper packaging', () => {
 })
 
 windowsOnly('Windows PowerShell 5.1 automatic-update payload copy', () => {
+  it.each(['invalid', 'native'] as const)('compiles copy, removal and bounded watchdog from a plugin directory containing a %s System.dll', (kind) => {
+    const input = fixture()
+    const pluginDirectory = join(input.root, 'NSIS plugins')
+    mkdirSync(pluginDirectory)
+    const collision = join(pluginDirectory, 'System.dll')
+    if (kind === 'native') {
+      copyFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'kernel32.dll'), collision)
+    } else {
+      writeFileSync(collision, 'deliberately not a managed assembly')
+    }
+    const collisionBytes = readFileSync(collision)
+    const legacy = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command',
+      '$ErrorActionPreference = "Stop"; Add-Type -TypeDefinition "public class KunDefaultReferenceProbe {}"'], {
+      encoding: 'utf8', cwd: pluginDirectory, timeout: 60_000
+    })
+    expect(legacy.error).toBeUndefined()
+    expect(legacy.status, `${legacy.stdout}\n${legacy.stderr}`).not.toBe(0)
+    expect(`${legacy.stdout}\n${legacy.stderr}`).toMatch(/System\.dll/i)
+
+    // Fresh hosts prove both production Add-Type sites work with the collision
+    // still present. -Bounded compiles the watchdog before any helper modules.
+    succeeded(run(input, 'BackupPayload', { cwd: pluginDirectory, bounded: true }))
+    writeFileSync(join(input.source, 'resources', 'app.asar'), 'changed')
+    succeeded(run(input, 'RestorePayloadBackup', { cwd: pluginDirectory, bounded: true }))
+    expect(readFileSync(join(input.source, 'resources', 'app.asar'), 'utf8')).toBe('old asar')
+    const remove = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command', [
+      '$ErrorActionPreference = "Stop"',
+      '. (Join-Path $env:KUN_TEST_HELPERS "windows-installer-migration-paths.ps1")',
+      '. (Join-Path $env:KUN_TEST_HELPERS "windows-installer-migration-filesystem.ps1")',
+      '. (Join-Path $env:KUN_TEST_HELPERS "windows-installer-migration-payload-copy.ps1")',
+      'Remove-RecoveryPayloadTree $env:KUN_TEST_BACKUP'
+    ].join('; ')], {
+      encoding: 'utf8', cwd: pluginDirectory, timeout: 60_000,
+      env: { ...process.env, KUN_TEST_HELPERS: dirname(helper), KUN_TEST_BACKUP: input.backup }
+    })
+    succeeded(remove)
+    expect(existsSync(input.backup)).toBe(false)
+    expect(readFileSync(collision)).toEqual(collisionBytes)
+    untouchedOutside(input)
+  }, 240_000)
+
   it('uses the inbox Windows PowerShell 5.1 host', () => {
     const result = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-Command',
       '$PSVersionTable.PSVersion.ToString()'], { encoding: 'utf8' })
