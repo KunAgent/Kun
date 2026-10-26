@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import type { AttachmentContent, AttachmentStore } from '../../attachments/attachment-store.js'
 import type { TurnItem } from '../../contracts/items.js'
+import type { SteeringEntry } from '../../contracts/turns.js'
 import { makeHarness } from '../../../tests/helpers/acp-runtime-test-support.js'
 
 const PASTED_TEXT = [
@@ -116,5 +117,46 @@ describe('ACP runtime attachment delivery', () => {
       .join('\n')
     expect(text).toContain('could not be read')
     expect(text).toContain('att_missing')
+  })
+
+  test.each([
+    ['live-steering.json', 'also allow 5-1'],
+    ['deferred-steering.json', 'commit when done']
+  ])('guidance sent with an attachment carries its body too (%s)', async (scenario, guidanceText) => {
+      const pending: SteeringEntry[] = []
+      const listeners = new Set<() => void>()
+      let admitted = false
+      const steer = {
+        subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) },
+        take: async () => pending.splice(0),
+        sealIfEmpty: () => pending.length === 0
+      }
+      const h = await makeHarness(scenario, {
+        // Default user message ('hello agent') matches the scenario script;
+        // only the guidance carries an attachment.
+        deps: {
+          attachmentStore: storeOf([
+            attachment({ id: 'att_guidance', name: 'follow-up.txt', documentText: 'GUIDANCE-BODY' })
+          ])
+        },
+        turns: { openDelegatedSteering: () => steer },
+        // Admitted mid-run, so live steering joins the open prompt and every
+        // other engine answers it as a follow-up in the same turn.
+        onDelta: () => {
+          if (admitted) return
+          admitted = true
+          pending.push({ text: guidanceText, attachmentIds: ['att_guidance'] })
+          for (const listener of listeners) listener()
+        }
+      })
+
+      expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
+
+      const text = promptBlocks(h.requests('session/prompt')[1]?.params)
+        .filter((block) => block.type === 'text')
+        .map((block) => String(block.text ?? ''))
+        .join('\n')
+      expect(text).toContain(guidanceText)
+      expect(text).toContain('GUIDANCE-BODY')
   })
 })
