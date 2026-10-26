@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Loader2, RefreshCw, Square, Unplug } from 'lucide-react'
-import { useActivityStore } from '../../store/activity-store'
 import { useChatStore } from '../../store/chat-store'
 import type { WorkerRowData } from './worker-row-data'
 import {
@@ -38,9 +37,8 @@ export function WorkerSessionPanel({
   className?: string
 }): ReactElement {
   const { t } = useTranslation('common')
-  const activeThreadId = useChatStore((s) => s.activeThreadId)
-  const managerThreadId = useActivityStore((s) => s.rows[workerId]?.parentThreadId) ?? activeThreadId
-  const { rows, loaded, reload } = useTeamWorkers(managerThreadId, active)
+  const managerThreadId = useChatStore((s) => s.activeThreadId)
+  const { rows, loaded, loadFailed, reload } = useTeamWorkers(managerThreadId, active)
   const row = rows.find((entry) => entry.workerId === workerId)
   const seat = useMemo(
     () => workerSeatMap(
@@ -57,12 +55,15 @@ export function WorkerSessionPanel({
   if (!active) return <div className={className} data-worker-inspector={workerId} data-worker-inactive />
   if (!row) {
     return (
-      <div className={`flex h-full items-center justify-center gap-2 px-6 text-center text-[12.5px] text-ds-faint ${className ?? ''}`} data-worker-inspector={workerId}>
-        {loaded ? t('workerTab.missing') : <><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />{t('workersLoading')}</>}
+      <div role="status" className={`flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-[12.5px] text-ds-faint ${className ?? ''}`} data-worker-inspector={workerId}>
+        {loadFailed ? t('workersUnavailable') : loaded ? t('workerTab.missing') : <><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />{t('workersLoading')}</>}
+        {(loadFailed || loaded) && managerThreadId ? <button type="button" onClick={() => void reload()}
+          className="rounded-md px-3 py-1.5 text-accent hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          data-worker-membership-retry>{t('workersRetry')}</button> : null}
       </div>
     )
   }
-  return <WorkerSession key={workerId} row={row} seat={seat} reload={reload} className={className} />
+  return <WorkerSession key={`${managerThreadId}:${workerId}`} row={row} seat={seat} reload={reload} className={className} />
 }
 
 function WorkerSession({

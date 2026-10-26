@@ -182,6 +182,18 @@ describe('Agent dispatch card', () => {
     expect(renderer!.root.findAll((node) => node.props['data-controls'] === 'read-only')).toHaveLength(1)
   })
 
+  it('opens the requested worker from a cancelled historical card without live rows', async () => {
+    state.intent = fixture({ state: 'cancelled', deadline: undefined, target: { threadId: 'parent', workerIds: ['w1', 'w2'] } })
+    state.rows = {}
+    await render()
+    const view = renderer!.root.findAll((node) => node.type === 'button' &&
+      node.props['aria-label'] === 'dispatchIntent.viewProcess 1')[0]
+    expect(view).toBeDefined()
+    await act(async () => { view.props.onClick() })
+    expect(preview).toHaveBeenCalledWith('w1', expect.any(String))
+    expect(state.act).not.toHaveBeenCalled()
+  })
+
   it('renders nothing for a process run without dispatch cards', async () => {
     await act(async () => { renderer = create(createElement(AgentDispatchGroup, { blocks: [{ ...block, meta: {} } as ChatBlock] })) })
     expect(renderer!.toJSON()).toBeNull()

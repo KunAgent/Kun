@@ -57,8 +57,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   const externalSource = activeThreadRelation === 'side' ? externalSubagentSourceForThread(activeThreadId) : undefined
   const reviewEnabled = useReviewStore((s) =>
     activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
-  // The Workers rail entry stays available while this thread has background
-  // rows, and reports unfinished work so a collapsed panel still shows it.
+  // Live activity supplies badges, not the availability of historical collaboration.
   const activityRows = useActivityStore((s) => s.rows)
   const activityFeedError = useActivityStore((s) => s.status === 'error')
   const workerSummary = useMemo(() => {
@@ -67,7 +66,6 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
     if (rows.length === 0) return null
     return selectSessionExecutionSummary(rows, { feedError: activityFeedError })
   }, [activityRows, activeThreadId, activityFeedError])
-  const workersEnabled = workerSummary !== null
   useEffect(() => {
     if (activeThreadId) void ensureThreadBinding(activeThreadId)
   }, [activeThreadId])
@@ -285,7 +283,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             canvasEnabled: true,
             graphEnabled,
             reviewEnabled,
-            workersEnabled,
+            workersEnabled: true,
             workersRunning:
               workerSummary?.kind === 'running' ||
               workerSummary?.kind === 'starting' ||

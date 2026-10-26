@@ -58,6 +58,79 @@ async function type(renderer: Awaited<ReturnType<typeof render>>, workerId: stri
 }
 
 describe('WorkerSessionPanel', () => {
+  it.each(['completed', 'cancelled'] as const)('opens historical %s workers without live activity', async (state) => {
+    useActivityStore.setState({ rows: {} })
+    const team = teamOverview()
+    team.team.workers[0]!.state = 'released'
+    team.dispatches[0]!.state = state
+    provider.getTeamOverview.mockResolvedValue(team)
+    const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'wrk_1' }))
+    expect(byData(renderer, 'data-worker-preview-seq', 1)).toHaveLength(1)
+    expect(byData(renderer, 'data-worker-draft', 'wrk_1')).toHaveLength(0)
+    expect(provider.getThreadDetail).toHaveBeenCalledWith('wrk_1', expect.anything())
+    expect(provider.controlTeamWorker).not.toHaveBeenCalled()
+    expect(provider.sendUserMessage).not.toHaveBeenCalled()
+  })
+
+  it('retains the requested worker while membership loads', async () => {
+    useActivityStore.setState({ rows: {} })
+    let resolve!: (team: ReturnType<typeof teamOverview>) => void
+    provider.getTeamOverview.mockReturnValue(new Promise((done) => { resolve = done }))
+    const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'wrk_1' }))
+    expect(byData(renderer, 'data-worker-draft')).toHaveLength(0)
+    expect(provider.getThreadDetail).not.toHaveBeenCalled()
+    expect(renderer.root.findByProps({ role: 'status' })).toBeTruthy()
+    await act(async () => resolve(teamOverview()))
+    expect(byData(renderer, 'data-worker-draft', 'wrk_1')).toHaveLength(1)
+  })
+
+  it('offers retry after a membership lookup fails and then opens the same worker', async () => {
+    useActivityStore.setState({ rows: {} })
+    provider.getTeamOverview.mockRejectedValueOnce(new Error('offline'))
+    const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'wrk_1' }))
+    expect(provider.getThreadDetail).not.toHaveBeenCalled()
+    await act(async () => byData(renderer, 'data-worker-membership-retry')[0]!.props.onClick())
+    expect(byData(renderer, 'data-worker-draft', 'wrk_1')).toHaveLength(1)
+  })
+
+  it('keeps missing workers visible as a retryable notice without fetching their transcript', async () => {
+    useActivityStore.setState({ rows: {} })
+    provider.getTeamOverview.mockResolvedValue(null)
+    const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'missing' }))
+    expect(byData(renderer, 'data-worker-membership-retry')).toHaveLength(1)
+    expect(byData(renderer, 'data-worker-draft')).toHaveLength(0)
+    expect(provider.getThreadDetail).not.toHaveBeenCalled()
+  })
+
+  it('does not use another manager from live activity to open a foreign worker', async () => {
+    useChatStore.setState({ activeThreadId: 'other-manager' })
+    provider.getTeamOverview.mockResolvedValue(null)
+    const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'wrk_1' }))
+    expect(provider.getTeamOverview).toHaveBeenCalledWith('other-manager')
+    expect(byData(renderer, 'data-worker-draft')).toHaveLength(0)
+    expect(provider.getThreadDetail).not.toHaveBeenCalled()
+  })
+
+  it('discards late membership responses after switching managers', async () => {
+    useActivityStore.setState({ rows: {} })
+    let resolve!: (team: ReturnType<typeof teamOverview>) => void
+    provider.getTeamOverview.mockImplementation((id: string) => id === MGR
+      ? new Promise((done) => { resolve = done }) : Promise.resolve(null))
+    const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'wrk_1' }))
+    await act(async () => useChatStore.setState({ activeThreadId: 'other-manager' }))
+    await act(async () => resolve(teamOverview()))
+    expect(byData(renderer, 'data-worker-draft')).toHaveLength(0)
+    expect(provider.getThreadDetail).not.toHaveBeenCalled()
+  })
+
+  it('hides previously loaded membership immediately when the manager changes', async () => {
+    useActivityStore.setState({ rows: {} })
+    const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'wrk_1' }))
+    expect(byData(renderer, 'data-worker-draft')).toHaveLength(1)
+    provider.getTeamOverview.mockReturnValue(new Promise(() => undefined))
+    await act(async () => useChatStore.setState({ activeThreadId: 'other-manager' }))
+    expect(byData(renderer, 'data-worker-draft')).toHaveLength(0)
+  })
   it('loads nothing while its tab is hidden', async () => {
     const renderer = await render(createElement(WorkerSessionPanel, { workerId: 'wrk_1', active: false }))
     expect(provider.getTeamOverview).not.toHaveBeenCalled()

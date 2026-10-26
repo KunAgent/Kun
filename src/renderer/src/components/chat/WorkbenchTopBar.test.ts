@@ -184,6 +184,20 @@ describe('WorkbenchTopActions', () => {
 })
 
 describe('WorkbenchSideRail', () => {
+  it('offers collaboration by default without live worker counts', async () => {
+    await i18n.changeLanguage('en')
+    let renderer!: ReturnType<typeof createRenderer>
+    const onToggleRightPanelMode = vi.fn()
+    await act(async () => {
+      renderer = createRenderer(createElement(WorkbenchSideRail, {
+        rightPanelMode: null, onToggleRightPanelMode
+      }))
+    })
+    const button = renderer.root.findByProps({ 'aria-label': i18n.t('common:rightPanelWorkers') })
+    await act(async () => button.props.onClick())
+    expect(onToggleRightPanelMode).toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.workers)
+    act(() => renderer.unmount())
+  })
   beforeEach(async () => {
     await i18n.changeLanguage('en')
   })
