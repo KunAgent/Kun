@@ -8,6 +8,8 @@ import {
   normalizeAppSettings
 } from '../../shared/app-settings'
 import { kunRuntimePatchSchema } from '../ipc/app-ipc-schemas/settings-model'
+import { applySettingsPatchToSnapshot } from '../settings-store-foundation'
+import { validateRuntimeSettingsForApply } from '../main-runtime-settings-validate'
 import type { AppSettingsV1 } from '../../shared/app-settings'
 import {
   buildManagedRuntimeHotApplyBody,
@@ -27,6 +29,30 @@ const runtimeWith = (patch: Record<string, unknown>) => {
 }
 
 describe('harness/ade settings bridge', () => {
+  it('projects scenario preferences as prompt text only and validates rule patches', () => {
+    const preferences = [{ id: 'review', scenario: 'Code review', agentId: 'codex', model: 'm', enabled: true }]
+    expect(kunRuntimePatchSchema.safeParse({ ade: { dispatch: { preferences } } }).success).toBe(true)
+    expect(kunRuntimePatchSchema.safeParse({ ade: { dispatch: { preferences: [{ ...preferences[0], command: '/bin/sh' }] } } }).success).toBe(false)
+    const kun = runtimeWith({ ade: { dispatch: { preferences, preferencePrompt: 'Keep tests' } } })
+    const projected = adeConfigForRuntime(kun.ade)
+    expect(projected.dispatch).toMatchObject({ preferencePrompt: expect.stringContaining('Code review → Agent codex, model m') })
+    expect((projected.dispatch as { preferencePrompt: string }).preferencePrompt).toMatch(/Keep tests$/)
+    expect(projected.dispatch).not.toHaveProperty('preferences')
+  })
+
+  it('rejects over-budget combinations after a partial settings merge', () => {
+    const preferences = [{ id: 'review', scenario: 'Review', agentId: 'codex', enabled: true }]
+    const settings = normalizeAppSettings({ agents: { kun: { ade: { dispatch: { preferences } } } } } as AppSettingsV1)
+    const notes = 'x'.repeat(2000)
+    const first = applySettingsPatchToSnapshot(settings, { agents: { kun: { ade: { dispatch: { preferencePrompt: notes } } } } })
+    expect(validateRuntimeSettingsForApply(first)).toContain('preferences exceed')
+    const notesOnly = applySettingsPatchToSnapshot(settings, { agents: { kun: { ade: { dispatch: { preferences: [], preferencePrompt: notes } } } } })
+    expect(validateRuntimeSettingsForApply(notesOnly)).toBeNull()
+    const second = applySettingsPatchToSnapshot(notesOnly, { agents: { kun: { ade: { dispatch: { preferences } } } } })
+    expect(validateRuntimeSettingsForApply(second)).toContain('preferences exceed')
+    expect(settings.agents.kun.ade.dispatch.preferencePrompt).toBe('')
+  })
+
   it('preserves exact enabled profiles through IPC validation, normalization and runtime projection', () => {
     const profiles = [
       { harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'account-a' },

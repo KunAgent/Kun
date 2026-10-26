@@ -1,5 +1,6 @@
 import { AgentModelCatalogFooter } from '../ade/AgentModelCatalogFooter'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
+import { ComposerPickerPortalContext } from './composer-picker-portal-context'
 import { createPortal } from 'react-dom'
 import { AlertCircle, ChevronDown, Cpu, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -107,6 +108,7 @@ export function FloatingComposerModelPicker({
   renderNotice
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const portalContainer = useContext(ComposerPickerPortalContext)
   const pickerRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
@@ -250,6 +252,13 @@ export function FloatingComposerModelPicker({
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open || !portalContainer) return
+    const frame = requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>(
+      'input[type="search"], [aria-checked="true"], button:not(:disabled)')?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [open, portalContainer])
+
   const panelStyle: CSSProperties = placement
     ? { left: `${placement.left}px`, top: `${placement.top}px`, width: `${placement.width}px`, maxHeight: `${placement.maxHeight}px` }
     : { left: 0, top: 0, width: `${COMPOSER_MODEL_PANEL_WIDTH}px`, maxHeight: `${COMPOSER_MODEL_PANEL_MAX_HEIGHT}px`, visibility: 'hidden' }
@@ -277,6 +286,7 @@ export function FloatingComposerModelPicker({
         onConfigureProviders={onConfigureProviders}
         onPickModel={(modelId, providerId) => {
           onComposerModelChange(modelId, providerId)
+          if (portalContainer) triggerRef.current?.focus()
           setOpen(false)
         }}
         onClose={() => setOpen(false)}
@@ -287,7 +297,7 @@ export function FloatingComposerModelPicker({
       />
     )
     if (typeof document === 'undefined') return panel
-    return createPortal(panel, document.body)
+    return createPortal(panel, portalContainer ?? document.body)
   }
 
   return (

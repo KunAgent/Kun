@@ -9,6 +9,7 @@ import type {
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AgentsCollaborationSettingsPanel, collaborationApplyLabelKey } from './settings-section-agents-collaboration'
 import { AgentsHarnessesSettingsPanel } from './settings-section-agents-harnesses'
+import { DispatchPreferenceEditor } from './workers/DispatchPreferenceEditor'
 import { WorktreeSettingsSection } from './settings-section-worktree'
 import { useHarnessStore } from '../store/harness-store'
 import { useChatStore } from '../store/chat-store'
@@ -164,7 +165,24 @@ describe('AgentsCollaborationSettingsPanel', () => {
     act(() => confirm.props.onClick())
     await click(renderer, 'adeSettings.collaborationSave')
     expect(saveRequest).toHaveBeenCalledWith({ expectedRevision: revision, value: expect.objectContaining({
-      dispatch: { autoStartSeconds: 180, autoStartWhenConfirmationRequired: false, preferencePrompt: '' } }) })
+      dispatch: { autoStartSeconds: 180, autoStartWhenConfirmationRequired: false, preferencePrompt: '', preferences: [] } }) })
+    act(() => renderer.unmount())
+  })
+
+  it('saves visual preferences and rejects oversized composed text', async () => {
+    const saveRequest = vi.fn(async (request: AdeCollaborationSettingsMutation) => ({
+      ok: true as const, value: request.value, revision: savedRevision, generation: 7
+    }))
+    const renderer = await renderPanel(saveRequest)
+    const preferences = [{ id: 'review', scenario: 'Review', agentId: 'kun', enabled: true }]
+    act(() => renderer.root.findByType(DispatchPreferenceEditor).props.onPreferencesChange(preferences))
+    act(() => renderer.root.findByType(DispatchPreferenceEditor).props.onNotesChange('x'.repeat(2000)))
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).not.toHaveBeenCalled()
+    act(() => renderer.root.findByType(DispatchPreferenceEditor).props.onNotesChange('Preserve tests'))
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).toHaveBeenCalledWith({ expectedRevision: revision, value: expect.objectContaining({
+      dispatch: expect.objectContaining({ preferences, preferencePrompt: 'Preserve tests' }) }) })
     act(() => renderer.unmount())
   })
 

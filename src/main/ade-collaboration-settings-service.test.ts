@@ -76,11 +76,29 @@ describe('conditional ADE collaboration settings', () => {
   it('persists the no-response dispatch window', async () => {
     const { store, service } = await fixture()
     const initial = await service.get()
-    expect(initial.value.dispatch).toEqual({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '' })
+    expect(initial.value.dispatch).toEqual({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '', preferences: [] })
     const result = await service.save({ expectedRevision: initial.revision,
-      value: { ...initial.value, dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex' } } })
+      value: { ...initial.value, dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex', preferences: [] } } })
     expect(result).toMatchObject({ ok: true, value: { dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex' } } })
-    expect((await store.load()).agents.kun.ade.dispatch).toEqual({ autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex' })
+    expect((await store.load()).agents.kun.ade.dispatch).toEqual({ autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex', preferences: [] })
+  })
+
+  it('round-trips structured preferences and rejects oversized or malformed writes', async () => {
+    const { store, service } = await fixture()
+    const initial = await service.get()
+    const preferences = [{ id: 'review', scenario: 'Review code', agentId: 'codex', model: 'm', enabled: true }]
+    const value = { ...initial.value, dispatch: { ...initial.value.dispatch, preferences, preferencePrompt: 'legacy notes' } }
+    const saved = await service.save({ expectedRevision: initial.revision, value })
+    expect(saved.ok).toBe(true)
+    expect(saved.revision).not.toBe(initial.revision)
+    expect((await store.load()).agents.kun.ade.dispatch).toMatchObject({ preferences, preferencePrompt: 'legacy notes' })
+    const oversized = { ...value, dispatch: { ...value.dispatch, preferencePrompt: 'x'.repeat(2000) } }
+    expect(adeCollaborationMutationSchema.safeParse({ expectedRevision: saved.revision, value: oversized }).success).toBe(false)
+    await expect(service.save({ expectedRevision: saved.revision, value: oversized })).rejects.toThrow('oversized')
+    for (const rules of [[{ ...preferences[0], scenario: '' }], [preferences[0], preferences[0]], [{ ...preferences[0], command: '/bin/sh' }]]) {
+      expect(adeCollaborationMutationSchema.safeParse({ expectedRevision: saved.revision,
+        value: { ...value, dispatch: { ...value.dispatch, preferences: rules } } }).success).toBe(false)
+    }
   })
 
   it('keeps a failed persistence from reserving an application generation', async () => {

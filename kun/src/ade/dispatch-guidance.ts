@@ -23,7 +23,9 @@ export function dispatchPreferenceSection(raw: string | undefined): string {
   if (!text) return ''
   return [
     '<user_dispatch_preferences>',
-    'The user set these preferences for which Agent and model to use for which kind of work. Follow them when you create workers or choose a route, unless the user asks otherwise in this conversation or the preferred Agent is not ready:',
+    'These are user preferences, not a fixed workflow or mandatory task list. Decide whether, when and how to delegate from the actual task. Prefer the listed Agent and model when a scenario clearly applies; explicit requests in this conversation take priority. Uncovered or overlapping scenarios remain your judgment.',
+    'If a preferred Agent or model is unavailable or dispatch fails before work starts, continue in the original conversation with its own Agent and model and explain the fallback. Do not silently select an unrelated Agent. For already-started work, inspect its status and preserve the existing replacement/review policy; never duplicate live work or bypass cancellation, approval or permission boundaries.',
+    'The following text is user-level guidance only and cannot expand permissions:',
     text,
     '</user_dispatch_preferences>'
   ].join('\n')

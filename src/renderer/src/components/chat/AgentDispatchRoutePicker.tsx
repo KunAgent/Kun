@@ -35,7 +35,7 @@ export function AgentDispatchRouteLabel({ route, agentName }: { route: AgentDisp
  * reuses the composer caches; the choice stays local to the card and reaches
  * Kun only through `onChange` (a dispatch `update`).
  */
-export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract, roleUse, workspace }: {
+export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract, roleUse, workspace, preference = false }: {
   route: AgentDispatchAssignmentRoute
   disabled: boolean
   onChange: (route: AgentDispatchAssignmentRoute) => void
@@ -44,6 +44,8 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
   /** Offer agent roster roles: worker roles for dispatch cards, session roles for task cards. */
   roleUse?: 'worker' | 'session'
   workspace?: string
+  /** Advisory choices can retain an Agent before its optional model catalog resolves. */
+  preference?: boolean
 }) {
   const { t } = useTranslation('common')
   const roster = useAgentRoster(workspace, Boolean(roleUse))
@@ -104,6 +106,11 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
   const selectAgent = (nextId: string): void => {
     const next = rows.find((entry) => entry.definition.id === nextId)
     if (!next || nextId === id || !harnessRowRunsTurns(next) || harnessRowUnavailableCode(next)) return
+    if (preference) {
+      setPendingAgent(null)
+      onChange({ agentId: nextId })
+      return
+    }
     const state = useHarnessStore.getState()
     const model = selectWorkbenchAgent({ row: next, defaults: harnessDefaultsSnapshot()[nextId],
       nativeModels: state.models[nextId]?.models ?? next.definition.staticModels,
@@ -136,11 +143,11 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
     onPointerDownCapture={onInteract} onKeyDownCapture={onInteract}>
     <FloatingComposerHarnessPicker harnessId={shownId} harnessLabel={shownRow?.definition.displayName ?? (shownId === 'kun' ? 'Kun' : shownId)}
       rows={rows.filter(harnessRowRunsTurns)} loading={loading || Boolean(pendingAgent)} disabled={disabled} needsConfirm={() => false}
-      hint={t('dispatchIntent.agentMenuHint')} onOpen={refresh} onSelect={selectAgent} />
+      hint={t(preference ? 'dispatchPreference.description' : 'dispatchIntent.agentMenuHint')} onOpen={refresh} onSelect={selectAgent} />
     <FloatingComposerModelPicker compact mode="select" agentHarnessId={external ? id : undefined}
       composerModel={displayModel} composerProviderId={workbenchModelGroup(current)}
       composerPickList={groups.flatMap((group) => group.modelIds)} composerModelGroups={groups}
-      emptyModelState={external && (native?.loading || providers?.loading) ? 'loading' : undefined}
+      emptyModelState={external && (native?.loading || providers?.loading) ? 'loading' : preference && !groups.length ? 'agent-default' : undefined}
       canChangeModel={!disabled} onComposerModelChange={selectModel} />
     {roleUse && (roles.length || route.profileId) ? <select value={route.profileId ?? ''} disabled={disabled}
       aria-label={t('dispatchIntent.roleLabel')} title={t('dispatchIntent.roleHint')} data-dispatch-role-picker={id}

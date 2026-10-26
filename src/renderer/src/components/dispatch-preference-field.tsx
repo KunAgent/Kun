@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from '@shared/ade-collaboration-settings'
 import { SettingRow } from './settings-controls'
+import { DispatchPreferenceEditor, type DispatchPreferenceEditorProps } from './workers/DispatchPreferenceEditor'
 
 /**
  * The user's dispatch preference: plain guidance on which Agent and model
@@ -37,17 +38,14 @@ export function DispatchPreferenceField({ value, onChange, rows = 5, autoFocus =
 }
 
 /** Settings → Collaboration row for the same preference. */
-export function DispatchPreferenceSettingRow({ value, onChange }: {
-  value: string
-  onChange: (value: string) => void
-}): ReactElement {
+export function DispatchPreferenceSettingRows(props: DispatchPreferenceEditorProps): ReactElement {
   const { t } = useTranslation('common')
   return (
     <SettingRow
       title={t('dispatchPreference.title')}
       description={t('dispatchPreference.description')}
       wideControl
-      control={<div className="w-full min-w-0" data-dispatch-preference-setting><DispatchPreferenceField value={value} onChange={onChange} /></div>}
+      control={<div className="w-full min-w-0" data-dispatch-preference-setting><DispatchPreferenceEditor {...props} /></div>}
     />
   )
 }

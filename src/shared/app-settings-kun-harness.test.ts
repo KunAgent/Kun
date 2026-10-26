@@ -302,13 +302,13 @@ describe('normalizeKunAdeSettings', () => {
   })
 
   it('clamps the no-response dispatch window and keeps 0 as "always wait"', () => {
-    expect(defaultKunAdeSettings().dispatch).toEqual({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '' })
+    expect(defaultKunAdeSettings().dispatch).toEqual({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '', preferences: [] })
     expect(normalizeKunAdeSettings({ dispatch: { autoStartSeconds: 99_999 } }).dispatch.autoStartSeconds).toBe(3_600)
     expect(normalizeKunAdeSettings({ dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false } }).dispatch)
-      .toEqual({ autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: '' })
+      .toEqual({ autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: '', preferences: [] })
     const merged = mergeKunAdeSettings(normalizeKunAdeSettings({ dispatch: { autoStartSeconds: 180 } }),
       { dispatch: { autoStartWhenConfirmationRequired: false } })
-    expect(merged.dispatch).toEqual({ autoStartSeconds: 180, autoStartWhenConfirmationRequired: false, preferencePrompt: '' })
+    expect(merged.dispatch).toEqual({ autoStartSeconds: 180, autoStartWhenConfirmationRequired: false, preferencePrompt: '', preferences: [] })
     expect(normalizeKunAdeSettings({ dispatch: { preferencePrompt: `UI: claude-code\n${'x'.repeat(2_100)}` } }).dispatch.preferencePrompt)
       .toHaveLength(2_000)
   })

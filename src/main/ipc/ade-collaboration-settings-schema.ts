@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from '../../shared/ade-collaboration-settings'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS, dispatchPreferencesValid } from '../../shared/ade-collaboration-settings'
+import { dispatchPreferencesSchema } from './dispatch-preferences-schema'
 
 const modelRouteSchema = z.object({
   providerId: z.string().trim().min(1).max(128),
@@ -32,8 +33,9 @@ export const adeCollaborationMutationSchema = z.object({
     dispatch: z.object({
       autoStartSeconds: z.number().int().min(0).max(3_600),
       autoStartWhenConfirmationRequired: z.boolean(),
-      preferencePrompt: z.string().max(ADE_DISPATCH_PREFERENCE_MAX_CHARS)
-    }).strict(),
+      preferencePrompt: z.string().max(ADE_DISPATCH_PREFERENCE_MAX_CHARS),
+      preferences: dispatchPreferencesSchema.default([])
+    }).strict().refine(dispatchPreferencesValid, 'Collaboration preferences exceed the text budget.'),
     tasks: z.object({
       autoStartSeconds: z.number().int().min(0).max(3_600),
       worktree: z.boolean(),

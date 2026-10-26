@@ -15,6 +15,15 @@ const POOL: Record<string, WorkerProviderPoolEntry> = {
 const providerPool = async (providerId: string) => POOL[providerId]
 
 describe('resolveWorkerRoute', () => {
+  it('explains parent fallback without rerouting a rejected explicit pin', async () => {
+    let selections = 0
+    const result = await resolveWorkerRoute({ catalog, agent: { harnessId: 'missing-agent' },
+      select: async () => { selections++; return { error: 'must not run' } } })
+    expect(result).toMatchObject({ error: expect.stringContaining('original conversation with its own Agent and model') })
+    expect(result).toMatchObject({ error: expect.stringContaining('Do not bypass approval') })
+    expect(selections).toBe(0)
+  })
+
   it('resolves a structured alias without inheriting the manager provider or widening its account scope', async () => {
     const gatewayBinding = { main: { routeId: 'coding', allowedConnectionIds: ['one'] } }
     const resolved = await resolveWorkerRoute({ catalog, managerModel: 'private-model', managerProviderId: 'private-account',
@@ -22,7 +31,7 @@ describe('resolveWorkerRoute', () => {
       resolveGatewayAliases: async () => [{ routeId: 'coding', alias: 'route/coding', role: 'main', targets: [{ providerId: 'one', modelId: 'model' }] }] })
     expect(resolved).toEqual({ route: { harnessId: 'codex', model: 'route/coding', credentialMode: 'kun-gateway', gatewayBinding } })
     expect(await resolveWorkerRoute({ catalog, agent: { harnessId: 'codex', gatewayBinding },
-      resolveGatewayAliases: async () => { throw new Error('No approved target') } })).toEqual({ error: 'No approved target' })
+      resolveGatewayAliases: async () => { throw new Error('No approved target') } })).toEqual({ error: expect.stringContaining('No approved target') })
   })
   it('rejects a gateway route without an explicit export eligibility proof', async () => {
     for (const entry of [{ kind: 'http', models: ['model'] },

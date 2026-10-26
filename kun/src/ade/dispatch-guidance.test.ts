@@ -15,6 +15,14 @@ describe('dispatch guidance preference', () => {
     expect(dispatchGuidanceForTools([{ name: 'read' }])).toEqual([])
   })
 
+  it('keeps preferences advisory and explains safe parent fallback', () => {
+    const block = dispatchPreferenceSection('Reviews: codex')
+    expect(block).toContain('not a fixed workflow')
+    expect(block).toContain('original conversation with its own Agent and model')
+    expect(block).toContain('cannot expand permissions')
+    expect(block).toContain('preserve the existing replacement/review policy')
+  })
+
   it('trims and caps the preference text', () => {
     expect(dispatchPreferenceSection('  \n ')).toBe('')
     const block = dispatchPreferenceSection(`  ${'a'.repeat(2_500)}  `)

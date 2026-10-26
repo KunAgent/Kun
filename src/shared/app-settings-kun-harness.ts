@@ -1,7 +1,7 @@
 import { normalizeHarnessPermissionMode } from './harness-permission-mode'
 import { BUILTIN_HARNESS_IDS } from '../../kun/src/contracts/builtin-harness-ids.js'
 import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
-import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from './ade-collaboration-settings'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS, normalizeDispatchPreferences } from './ade-collaboration-settings'
 import {
   GENERIC_ACP_BASE,
   HarnessProviderOverrideSchema,
@@ -380,7 +380,7 @@ export function defaultKunAdeSettings(): KunAdeSettingsV1 {
     limits: { softWorkers: 4, hardWorkers: 8 },
     hibernation: { enabled: true, idleMinutes: 30 },
     stall: { structuredMinutes: 10, terminalMinutes: 20 },
-    dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '' },
+    dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '', preferences: [] },
     tasks: { autoStartSeconds: 0, worktree: true, inheritContext: false },
     notifications: {
       waiting: true,
@@ -467,6 +467,7 @@ export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
         dispatch.autoStartWhenConfirmationRequired,
         defaults.dispatch.autoStartWhenConfirmationRequired
       ),
+      preferences: normalizeDispatchPreferences(dispatch.preferences),
       preferencePrompt: typeof dispatch.preferencePrompt === 'string'
         ? dispatch.preferencePrompt.slice(0, ADE_DISPATCH_PREFERENCE_MAX_CHARS)
         : defaults.dispatch.preferencePrompt

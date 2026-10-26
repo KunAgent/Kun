@@ -12,6 +12,7 @@ import {
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1
 } from '../../shared/app-settings'
+import { composeDispatchPreferencePrompt } from '../../shared/ade-collaboration-settings'
 import { legacyProviderCredentialSourceId } from '../legacy-provider-settings-migration'
 
 const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
@@ -322,7 +323,7 @@ export function adeConfigForRuntime(
     dispatch: {
       autoStartSeconds: ade?.dispatch?.autoStartSeconds ?? 60,
       autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true,
-      preferencePrompt: ade?.dispatch?.preferencePrompt ?? ''
+      preferencePrompt: composeDispatchPreferencePrompt(ade?.dispatch)
     },
     tasks: {
       autoStartSeconds: ade?.tasks?.autoStartSeconds ?? 0,
