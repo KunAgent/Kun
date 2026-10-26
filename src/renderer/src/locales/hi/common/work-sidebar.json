@@ -27,5 +27,6 @@
   "workAssistantEmptyTitlePapers": "रिसर्च असिस्टेंट तैयार है",
   "workAssistantEmptySubPapers": "उद्धृत करने के लिए पेपर में टेक्स्ट चुनें, या नीचे से कोई कार्रवाई चुनें।",
   "workSessionArchived": "\"{{title}}\" संग्रहीत किया गया",
-  "workSessionUndo": "पूर्ववत करें"
+  "workSessionUndo": "पूर्ववत करें",
+  "workFilesResize": "फ़ाइलें क्षेत्र की ऊँचाई बदलने के लिए खींचें"
 }

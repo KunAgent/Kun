@@ -298,3 +298,111 @@
 .work-materials .work-section-count { color: var(--ds-text-faint); font-size: 12px; }
 .work-materials .work-section-chevron { opacity: 1; color: var(--ds-text-faint); }
 .work-materials .work-section-body { padding: 2px 0 6px 12px; }
+
+/* Height budget: 会话 keeps its rows, 资料 rows stay put, and 文件 (last) takes
+   whatever height is left and scrolls on its own. The body only scrolls when
+   the window is too short for those minimums. */
+.work-sidebar-body > .work-section[data-work-section='sessions'] { display: flex; flex: none; flex-direction: column; }
+/* Unfolded, the list is the one part that gives way: up to ten rows, never
+   below the folded five, scrolling inside with a soft fade. */
+.work-sidebar-body > .work-section[data-work-section='sessions']:has(.work-sessions-scroll[data-expanded='true']) {
+  min-height: 245px;
+  /* Shrink weights stay whole numbers: fractional factors summing below 1
+     only absorb that fraction of the overflow. */
+  flex: 0 100 auto;
+}
+.work-sidebar-body > .work-section[data-work-section='sessions'] > .work-section-body,
+.work-sidebar-body .work-sessions { min-height: 0; flex: 0 1 auto; }
+.work-sessions-scroll { display: flex; flex-direction: column; gap: 1px; }
+.work-sessions-scroll[data-expanded='true'] {
+  min-height: 0;
+  max-height: calc(10 * 35px);
+  flex: 0 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
+}
+
+.work-session-more {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  height: 28px;
+  align-items: center;
+  gap: 7px;
+  margin: 1px 0 2px;
+  padding: 0 10px;
+  border-radius: var(--kun-radius-sm);
+  color: var(--ds-text-muted);
+  text-align: left;
+}
+.work-session-more-chevron { flex: none; color: var(--ds-text-faint); transition: transform 160ms var(--kun-ease-out, ease); }
+.work-session-more[aria-expanded='true'] .work-session-more-chevron { transform: rotate(180deg); }
+
+/* 资料 gives way after an unfolded 会话 list, never below its rows plus the
+   pane's minimum. */
+.work-sidebar-body > .work-materials {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+/* Open, the pane asks for its own height (the grip sets it) and grows into
+   any free space; it shrinks last, after an unfolded list, down to 140px.
+   Closed, it is one row. */
+.work-files-pane {
+  display: flex;
+  min-height: 140px;
+  flex: 1 1 var(--work-files-basis, 260px);
+  flex-direction: column;
+}
+.work-files-pane:has(> .work-section[data-collapsed='true']) { min-height: 0; flex: none; }
+.work-files-pane > .work-section { min-height: 0; flex: 1 1 auto; }
+/* The tree sits in its own soft well and scrolls inside it. */
+.work-materials .work-files-pane .work-section-body {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+  margin: 4px 2px 0;
+  padding: 0 4px 4px;
+  overflow: hidden;
+  border-radius: var(--kun-radius-md, 14px);
+  background: var(--ds-sidebar-row-active);
+  box-shadow: inset 0 0 0 1px var(--ds-sidebar-row-ring);
+}
+.work-files-pane .work-directory {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  mask-image: linear-gradient(#000 calc(100% - 20px), transparent);
+}
+/* The grip splits height between an unfolded 会话 list and 文件; with the list
+   folded there is nothing to split, so it stays a quiet top inset. */
+.work-files-grip {
+  display: grid;
+  height: 10px;
+  flex: none;
+  place-items: center;
+  cursor: row-resize;
+  touch-action: none;
+  outline: none;
+}
+.work-sidebar-body:not(:has(.work-sessions-scroll[data-expanded='true'])) .work-files-grip {
+  visibility: hidden;
+  pointer-events: none;
+}
+.work-files-grip > span {
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ds-text) 16%, transparent);
+  transition: width 140ms, background-color 140ms;
+}
+.work-files-grip:is(:hover, :active, :focus-visible) > span {
+  width: 38px;
+  background: color-mix(in srgb, var(--ds-text) 32%, transparent);
+}
+.work-files-grip:focus-visible > span { background: var(--ds-accent); }

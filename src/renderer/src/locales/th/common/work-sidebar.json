@@ -27,5 +27,6 @@
   "workAssistantEmptyTitlePapers": "ผู้ช่วยวิจัยพร้อมแล้ว",
   "workAssistantEmptySubPapers": "เลือกข้อความในบทความเพื่ออ้างอิง หรือเลือกการดำเนินการด้านล่าง",
   "workSessionArchived": "เก็บถาวร \"{{title}}\" แล้ว",
-  "workSessionUndo": "เลิกทำ"
+  "workSessionUndo": "เลิกทำ",
+  "workFilesResize": "ลากเพื่อปรับความสูงส่วนไฟล์"
 }

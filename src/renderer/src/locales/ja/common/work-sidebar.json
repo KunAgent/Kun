@@ -27,5 +27,6 @@
   "workAssistantEmptyTitlePapers": "リサーチアシスタント待機中",
   "workAssistantEmptySubPapers": "論文内のテキストを選択して引用するか、下から操作を選んでください。",
   "workSessionArchived": "「{{title}}」をアーカイブしました",
-  "workSessionUndo": "元に戻す"
+  "workSessionUndo": "元に戻す",
+  "workFilesResize": "ドラッグしてファイル欄の高さを変更"
 }

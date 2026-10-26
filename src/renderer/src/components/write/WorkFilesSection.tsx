@@ -1,10 +1,10 @@
-import { useMemo, type ReactElement } from 'react'
+import { useMemo, type CSSProperties, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { FilePlus2, FolderPlus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { readWriteThreadRegistry } from '../../write/write-thread-registry'
+import { readWriteThreadRegistry, writeWorkspaceKey } from '../../write/write-thread-registry'
 import {
   writeDirectoryActivity,
   writeFileActivity,
@@ -16,9 +16,11 @@ import { WriteFileTree } from './WriteFileTree'
 import { WorkSidebarSection } from './WorkSidebarSection'
 import type { WorkDirectoryActions } from './use-work-directory-actions'
 import { useWorkViewStore } from '../../write/work-view-store'
+import { useFilesPaneResize } from './work-sidebar-layout'
 
 /**
- * 文件: the current space's file tree. Opening anything here adds it as context
+ * 文件: the current space's file tree, last in 资料 so it can take the rest of
+ * the sidebar's height and scroll on its own; its top edge resizes it. Opening anything here adds it as context
  * to the current session; it never switches the session. Whiteboards moved to
  * the 产物 row so a long board list no longer pushes the tree down.
  */
@@ -48,6 +50,7 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
     refreshWorkspace: s.refreshWorkspace
   })))
   const { root } = actions
+  const { height, handleProps } = useFilesPaneResize(writeWorkspaceKey(workspaceRoot))
   const writeRegistry = readWriteThreadRegistry()
   const rootLoading = Boolean(loadingDirs.__root__ || loadingDirs[root] || (workspaceRoot.trim() && !entriesByDir[root]))
   const papersFolder = (papersDir || 'papers').replace(/^\/+|\/+$/g, '')
@@ -79,7 +82,12 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
   )
 
   return (
+    <div className="work-files-pane" data-work-files-pane style={{ '--work-files-basis': `${height}px` } as CSSProperties}>
     <WorkSidebarSection id="files" label={t('workSidebarViewFiles')} actions={sectionActions}>
+      <div className="work-files-grip" role="separator" aria-orientation="horizontal" tabIndex={0}
+        aria-label={t('workFilesResize')} title={t('workFilesResize')} aria-valuenow={height} {...handleProps}>
+        <span aria-hidden />
+      </div>
       <div className="work-directory flex flex-col" data-work-directory>
         {actions.revealError ? (
           <div className="mx-1 mb-1 rounded-lg border border-red-200/70 bg-red-50/80 px-2.5 py-2 text-[12px] leading-5 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
@@ -126,5 +134,6 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
         />
       </div>
     </WorkSidebarSection>
+    </div>
   )
 }

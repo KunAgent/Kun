@@ -27,5 +27,6 @@
   "workAssistantEmptyTitlePapers": "Research assistant ready",
   "workAssistantEmptySubPapers": "Select text in a paper to quote it, or pick an action below.",
   "workSessionArchived": "Archived \"{{title}}\"",
-  "workSessionUndo": "Undo"
+  "workSessionUndo": "Undo",
+  "workFilesResize": "Drag to resize Files"
 }
