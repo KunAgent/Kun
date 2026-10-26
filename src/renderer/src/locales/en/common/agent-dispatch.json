@@ -72,5 +72,16 @@
       "terminal_prompt": "Waiting at a terminal prompt"
     }
   },
-  "roomsWorkbenchDispatchPolicyHint": "Code task cards follow this conversation’s permissions: confirmation, automatic review, or full access. A card with no reply starts after the window set in Settings › Collaboration. Other actions use the policy above."
+  "roomsWorkbenchDispatchPolicyHint": "Code task cards follow this conversation’s permissions: confirmation, automatic review, or full access. A card with no reply starts after the window set in Settings › Collaboration. Other actions use the policy above.",
+  "dispatchPreference": {
+    "title": "Dispatch preferences",
+    "empty": "Not set · the dispatching Agent decides",
+    "description": "Tell the dispatching Agent which Agent and model to use for which kind of work. Every dispatch reads it; an explicit request in the conversation wins, and an Agent that is not ready is replaced.",
+    "placeholder": "For example:\n- UI and styling: Claude Code · opus\n- Code review and security checks: Codex · gpt-6.1-codex\n- Bulk small edits and test runs: Kun · deepseek-flash\n- Never send network-dependent work to Devin",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "saved": "Saved; applies to the next dispatch",
+    "conflict": "Changed elsewhere just now; saving again replaces that change with yours"
+  }
 }

@@ -2,6 +2,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import { shouldAdvertiseNewManagerWork } from '../domain/manager-tools.js'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from '../config/ade-dispatch-config.js'
 
 export const MANAGER_DISPATCH_GUIDANCE = [
   '<kun_agent_dispatch>',
@@ -16,8 +17,36 @@ export const MANAGER_DISPATCH_GUIDANCE = [
   '</kun_agent_dispatch>'
 ].join('\n')
 
+/** User preference block; empty when the user wrote none. */
+export function dispatchPreferenceSection(raw: string | undefined): string {
+  const text = raw?.trim().slice(0, ADE_DISPATCH_PREFERENCE_MAX_CHARS)
+  if (!text) return ''
+  return [
+    '<user_dispatch_preferences>',
+    'The user set these preferences for which Agent and model to use for which kind of work. Follow them when you create workers or choose a route, unless the user asks otherwise in this conversation or the preferred Agent is not ready:',
+    text,
+    '</user_dispatch_preferences>'
+  ].join('\n')
+}
+
+let preferenceSource: (() => string | undefined) | undefined
+
+/**
+ * Live source of the user's dispatch preference (settings apply without a
+ * restart). The runtime composition registers it once; bridged main Agents
+ * read it through the guidance below, native Kun through the manager context.
+ */
+export function setDispatchPreferenceSource(source: (() => string | undefined) | undefined): void {
+  preferenceSource = source
+}
+
+function managerDispatchGuidance(): string[] {
+  const preference = dispatchPreferenceSection(preferenceSource?.())
+  return preference ? [MANAGER_DISPATCH_GUIDANCE, preference] : [MANAGER_DISPATCH_GUIDANCE]
+}
+
 export function dispatchGuidanceForTools(tools: readonly { name: string }[]): string[] {
-  return tools.some((tool) => tool.name === 'worker_create') ? [MANAGER_DISPATCH_GUIDANCE] : []
+  return tools.some((tool) => tool.name === 'worker_create') ? managerDispatchGuidance() : []
 }
 
 /** Delegated session runtimes already validated their effective route at admission. */
@@ -30,5 +59,5 @@ export function dispatchGuidanceForTurn(thread: ThreadRecord, turn: Turn, defini
     executionUnitKind: thread.executionUnit?.kind,
     roomAgent: Boolean(thread.roomContext), agentSurface: turn.agentSurface ?? thread.agentSurface,
     clientSurface: turn.clientSurface, imContext: Boolean(turn.imContext)
-  }) ? [MANAGER_DISPATCH_GUIDANCE] : []
+  }) ? managerDispatchGuidance() : []
 }

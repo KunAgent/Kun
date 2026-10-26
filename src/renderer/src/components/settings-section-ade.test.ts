@@ -164,7 +164,7 @@ describe('AgentsCollaborationSettingsPanel', () => {
     act(() => confirm.props.onClick())
     await click(renderer, 'adeSettings.collaborationSave')
     expect(saveRequest).toHaveBeenCalledWith({ expectedRevision: revision, value: expect.objectContaining({
-      dispatch: { autoStartSeconds: 180, autoStartWhenConfirmationRequired: false } }) })
+      dispatch: { autoStartSeconds: 180, autoStartWhenConfirmationRequired: false, preferencePrompt: '' } }) })
     act(() => renderer.unmount())
   })
 

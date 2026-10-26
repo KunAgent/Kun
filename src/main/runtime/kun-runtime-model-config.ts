@@ -321,7 +321,8 @@ export function adeConfigForRuntime(
     },
     dispatch: {
       autoStartSeconds: ade?.dispatch?.autoStartSeconds ?? 60,
-      autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true
+      autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true,
+      preferencePrompt: ade?.dispatch?.preferencePrompt ?? ''
     },
     tasks: {
       autoStartSeconds: ade?.tasks?.autoStartSeconds ?? 0,

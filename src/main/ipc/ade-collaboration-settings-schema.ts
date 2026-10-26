@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from '../../shared/ade-collaboration-settings'
 
 const modelRouteSchema = z.object({
   providerId: z.string().trim().min(1).max(128),
@@ -30,7 +31,8 @@ export const adeCollaborationMutationSchema = z.object({
     }).strict(),
     dispatch: z.object({
       autoStartSeconds: z.number().int().min(0).max(3_600),
-      autoStartWhenConfirmationRequired: z.boolean()
+      autoStartWhenConfirmationRequired: z.boolean(),
+      preferencePrompt: z.string().max(ADE_DISPATCH_PREFERENCE_MAX_CHARS)
     }).strict(),
     tasks: z.object({
       autoStartSeconds: z.number().int().min(0).max(3_600),

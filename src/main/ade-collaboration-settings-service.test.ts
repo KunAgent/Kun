@@ -76,11 +76,11 @@ describe('conditional ADE collaboration settings', () => {
   it('persists the no-response dispatch window', async () => {
     const { store, service } = await fixture()
     const initial = await service.get()
-    expect(initial.value.dispatch).toEqual({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true })
+    expect(initial.value.dispatch).toEqual({ autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '' })
     const result = await service.save({ expectedRevision: initial.revision,
-      value: { ...initial.value, dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false } } })
-    expect(result).toMatchObject({ ok: true, value: { dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false } } })
-    expect((await store.load()).agents.kun.ade.dispatch).toEqual({ autoStartSeconds: 0, autoStartWhenConfirmationRequired: false })
+      value: { ...initial.value, dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex' } } })
+    expect(result).toMatchObject({ ok: true, value: { dispatch: { autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex' } } })
+    expect((await store.load()).agents.kun.ade.dispatch).toEqual({ autoStartSeconds: 0, autoStartWhenConfirmationRequired: false, preferencePrompt: 'Reviews: codex' })
   })
 
   it('keeps a failed persistence from reserving an application generation', async () => {
