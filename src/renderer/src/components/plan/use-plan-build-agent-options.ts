@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { AgentDispatchAssignmentRoute } from '@shared/agent-dispatch'
@@ -48,7 +48,11 @@ export function usePlanBuildAgentOptions(
   const providers = useHarnessStore((state) => state.providerGroups[id])
   const fingerprint = harnessModelFingerprint(row)
   const current = workbenchModelFromRoute(route)
-  const pendingAgent = useRef<string | null>(null)
+  // An Agent picked before its catalog loaded: shown at once, applied when a model is known.
+  const [pendingAgent, setPendingAgent] = useState<string | null>(null)
+  const pendingRow = pendingAgent ? allRows.find((entry) => entry.definition.id === pendingAgent) : undefined
+  const pendingNative = useHarnessStore((state) => (pendingAgent ? state.models[pendingAgent] : undefined))
+  const pendingProviders = useHarnessStore((state) => (pendingAgent ? state.providerGroups[pendingAgent] : undefined))
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const labels = useMemo(() => ({
@@ -76,18 +80,25 @@ export function usePlanBuildAgentOptions(
   }, [external, id, fingerprint, row, disabled])
   // A newly chosen Agent may not have its catalog yet; pick its default model once it lands.
   useEffect(() => {
-    if (pendingAgent.current !== id || !row) return
+    if (!pendingAgent || !pendingRow) return
     const next = selectWorkbenchAgent({
-      row,
-      defaults: harnessDefaultsSnapshot()[id],
-      nativeModels: native?.models ?? row.definition.staticModels,
-      nativeDefault: native?.modelInfo?.find((entry) => entry.isDefault)?.id,
-      providerGroups: providers?.groups ?? []
+      row: pendingRow,
+      defaults: harnessDefaultsSnapshot()[pendingAgent],
+      nativeModels: pendingNative?.models ?? pendingRow.definition.staticModels,
+      nativeDefault: pendingNative?.modelInfo?.find((entry) => entry.isDefault)?.id,
+      providerGroups: pendingProviders?.groups ?? []
     })
-    if (!next.model) return
-    pendingAgent.current = null
-    onChangeRef.current(routeFromWorkbenchModel(next))
-  }, [id, row, native, providers])
+    if (next.model) {
+      setPendingAgent(null)
+      onChangeRef.current(routeFromWorkbenchModel(next))
+      return
+    }
+    // Both lookups settled without a usable model: drop the pick instead of hanging on it.
+    const modes = pendingRow.definition.credentialModes
+    const nativeSettled = !modes.includes('native-login') || (pendingNative && !pendingNative.loading)
+    const providersSettled = !modes.some((mode) => mode !== 'native-login') || (pendingProviders && !pendingProviders.loading)
+    if (nativeSettled && providersSettled) setPendingAgent(null)
+  }, [pendingAgent, pendingRow, pendingNative, pendingProviders])
 
   const refresh = (): void => {
     void loadHarnesses(true, { waitMs: 3_000 })
@@ -109,12 +120,12 @@ export function usePlanBuildAgentOptions(
         : state.providerGroups[nextId]?.groups ?? []
     })
     if (model.model) {
-      pendingAgent.current = null
+      setPendingAgent(null)
       onChange(routeFromWorkbenchModel(model))
       return
     }
     // Wait for the catalog instead of sending a route Kun would reject for a missing model.
-    pendingAgent.current = nextId
+    setPendingAgent(nextId)
     if (next.definition.credentialModes.includes('native-login')) void loadHarnessModels(nextId)
     if (next.definition.credentialModes.some((mode) => mode !== 'native-login')) void loadHarnessProviderGroups(nextId)
   }
@@ -135,6 +146,7 @@ export function usePlanBuildAgentOptions(
     displayModel: workbenchDisplayModel(current),
     selectedGroupId: workbenchModelGroup(current),
     modelsLoading: external && Boolean(native?.loading || providers?.loading),
+    pendingAgent,
     refresh,
     selectAgent,
     selectModel

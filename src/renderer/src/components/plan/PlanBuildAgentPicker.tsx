@@ -91,7 +91,7 @@ export function PlanBuildAgentPicker({ planId, route, disabled, compact = false 
           const status = blocked
             ? [labelKey ? t(labelKey) : null, nextStepKey && !detecting ? t(nextStepKey) : null].filter(Boolean).join(' · ')
             : id === 'kun' ? t('planBuildAgentStatusKun') : t('planBuildAgentStatusReady')
-          const selected = id === route.agentId
+          const selected = id === (options.pendingAgent ?? route.agentId)
           return (
             <div key={id} className="flex items-center gap-1">
               <button type="button" role="menuitem" disabled={blocked && !selected}
@@ -105,7 +105,7 @@ export function PlanBuildAgentPicker({ planId, route, disabled, compact = false 
                   <span className="block truncate text-[13px] font-semibold text-ds-ink">{row.definition.displayName}</span>
                   <span className={`block truncate text-[11.5px] ${blocked ? 'text-amber-700 dark:text-amber-300' : 'text-ds-muted'}`}>{status}</span>
                 </span>
-                {detecting ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ds-muted" strokeWidth={1.75} />
+                {detecting || id === options.pendingAgent ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ds-muted" strokeWidth={1.75} />
                   : selected ? <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2.2} /> : null}
               </button>
               {blocked && !detecting ? (

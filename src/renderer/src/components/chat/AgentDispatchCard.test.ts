@@ -150,9 +150,38 @@ describe('Agent dispatch card', () => {
     expect(text).toContain('dispatchIntent.autoIn:{\\"time\\":\\"0:42\\"}')
     const pickers = renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])
     expect(pickers).toHaveLength(2)
+    state.act.mockImplementation(async (action: string) => {
+      if (action !== 'pause') return undefined
+      state.intent = fixture({ state: 'paused', revision: 3, deadline: undefined })
+      return state.intent
+    })
     await act(async () => { pickers[1].props.onClick() })
-    expect(state.act).toHaveBeenCalledWith('update', { recommendation: { assignments: [routes[0],
+    // The pick pauses the countdown and stays local; nothing restarts the window yet.
+    expect(state.act).toHaveBeenCalledTimes(1)
+    expect(state.act).toHaveBeenCalledWith('pause')
+    await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
+    expect(JSON.stringify(renderer!.toJSON())).toContain('dispatchIntent.holdHint:{\\"seconds\\":10}')
+    expect(renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'] === 'codex')).toHaveLength(1)
+
+    // Another touch inside the window pushes the restart out again.
+    await act(async () => { vi.advanceTimersByTime(9_000) })
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[1].props.onClick() })
+    await act(async () => { vi.advanceTimersByTime(9_000) })
+    expect(state.act).toHaveBeenCalledTimes(1)
+
+    await act(async () => { vi.advanceTimersByTime(1_000) })
+    expect(state.act).toHaveBeenCalledTimes(2)
+    expect(state.act).toHaveBeenLastCalledWith('update', { recommendation: { assignments: [routes[0],
       { agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }] } })
+  })
+
+  it('updates a waiting card at once when no countdown is running', async () => {
+    state.intent = fixture({ state: 'pending_confirmation', deadline: undefined })
+    await render()
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[0].props.onClick() })
+    expect(state.act).toHaveBeenCalledWith('update', { recommendation: { assignments: [
+      { agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }, routes[1]] } })
+    expect(state.act).not.toHaveBeenCalledWith('pause')
   })
 
   it('tells ask-for-approval users the card starts if nobody replies', async () => {

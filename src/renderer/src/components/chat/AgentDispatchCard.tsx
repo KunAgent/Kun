@@ -19,6 +19,7 @@ import { TaskSuggestionCard } from './TaskSuggestionCard'
 import { AgentIcon } from '../agent-icon'
 import { agentIconId } from '../../lib/agent-icon-aliases'
 import { isTaskSuggestionBlock } from './task-suggestion-card-model'
+import { useDispatchInteractionHold } from './use-dispatch-interaction-hold'
 
 export function isAgentDispatchBlock(block: ChatBlock): block is ToolBlock & { meta: Record<string, unknown> & { dispatchIntentId: string } } {
   return block.kind === 'tool' && typeof block.meta?.dispatchIntentId === 'string'
@@ -54,6 +55,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const [draft, setDraft] = useState<Draft>()
   const [saveError, setSaveError] = useState('')
   const [routeFailed, setRouteFailed] = useState(false)
+  const hold = useDispatchInteractionHold(intent, act)
   const intentState = intent?.state
   // The editor belongs to a paused card; any other transition (resume elsewhere, cancel) closes it.
   useEffect(() => { if (intentState && intentState !== 'paused') setDraft(undefined) }, [intentState])
@@ -66,8 +68,9 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const locked = readOnly || activeThreadId !== intent.source.threadId
   // Older batch cards carry one shared route that Kun keeps fixed.
   const canEditRoutes = !locked && dispatchRoutesEditable(intent) && (Boolean(recommendation.assignments) || !batch)
-  const shown = draft ? assignments.map((assignment, index) => ({ label: assignment.label, ...draft.routes[index],
-    ...(draft.routes[index].agentId === assignment.agentId && assignment.agentName ? { agentName: assignment.agentName } : {}) }))
+  const localRoutes = draft?.routes ?? hold.routes
+  const shown = localRoutes ? assignments.map((assignment, index) => ({ label: assignment.label, ...localRoutes[index],
+    ...(localRoutes[index].agentId === assignment.agentId && assignment.agentName ? { agentName: assignment.agentName } : {}) }))
     : assignments
   const iconIds = shown.map((assignment) => agentIconId(assignment.agentId))
   const sharedIconId = iconIds.every((id) => id === iconIds[0]) ? iconIds[0] : undefined
@@ -75,13 +78,17 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const openWorker = (workerId: string, label?: string) => openWorkerSession(workerId, label)
   const changeRoute = (index: number, route: AgentDispatchAssignmentRoute) => {
     if (draft) { setDraft({ ...draft, routes: replaceAssignmentRoute(draft.routes, index, route) }); return }
+    // A counting-down card holds the pick until the user stops for a moment.
+    if (hold.changeRoute(index, route)) return
     if (sameAssignmentRoute(assignments[index], route)) return
-    // Applies at once; Kun restarts the no-response window for the new choice.
     void act('update', { recommendation: { assignments: replaceAssignmentRoute(assignments, index, route) } })
       .then((next) => setRouteFailed(!next))
   }
-  const startEdit = (paused: AgentDispatchIntentView) => setDraft({ title: paused.recommendation.title,
-    task: paused.recommendation.task, routes: dispatchAssignments(paused).map(assignmentRoute) })
+  const startEdit = (paused: AgentDispatchIntentView) => {
+    const held = hold.release()
+    setDraft({ title: paused.recommendation.title, task: paused.recommendation.task,
+      routes: held ?? dispatchAssignments(paused).map(assignmentRoute) })
+  }
   const save = async () => {
     if (!draft?.title.trim() || !draft.task.trim()) return
     const routesChanged = draft.routes.some((route, index) => !sameAssignmentRoute(route, assignments[index]))
@@ -114,7 +121,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
         onChange={(event) => setDraft({ ...draft, task: event.target.value })} className={`${fieldClass} text-[12.5px] leading-5`} />
     </div> : null}
     <AgentDispatchAssignmentList intent={intent} assignments={shown} editable={canEditRoutes} busy={busy}
-      onRouteChange={changeRoute} onOpenWorker={openWorker} />
+      onRouteChange={changeRoute} onInteract={hold.touch} onOpenWorker={openWorker} />
     <footer className="space-y-2.5 border-t border-ds-border-muted px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ds-faint">
         {workspaceName ? <span className="inline-flex min-w-0 items-center gap-1" title={recommendation.workspace}>
@@ -125,7 +132,9 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
           {t(`dispatchIntent.permission.${recommendation.effectivePermissionMode ?? recommendation.permissionMode}`)}
         </span>
         {autoStarted ? <span className="inline-flex items-center gap-1"><Timer size={12} aria-hidden />{t('dispatchIntent.autoStarted')}</span> : null}
-        {canEditRoutes && !draft ? <span className="min-w-0">{t('dispatchIntent.routeHint')}</span> : null}
+        {hold.holding ? <span className="min-w-0 text-ds-muted" data-dispatch-hold role="status">
+          {t('dispatchIntent.holdHint', { seconds: hold.secondsLeft })}</span>
+          : canEditRoutes && !draft ? <span className="min-w-0">{t('dispatchIntent.routeHint')}</span> : null}
       </div>
       <details className="text-[12px] text-ds-muted">
         <summary className="w-fit cursor-pointer select-none hover:text-ds-ink">{t('dispatchIntent.details')}</summary>
