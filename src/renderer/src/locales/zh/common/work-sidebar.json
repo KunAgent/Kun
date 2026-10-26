@@ -14,7 +14,7 @@
   "workOpenBeside": "在侧栏打开",
   "workSwapToFile": "让文件居中",
   "workSwapToSession": "让会话居中",
-  "workSessionShowMore": "显示更多（{{count}}）",
+  "workSessionShowMore": "展开其余 {{count}} 个",
   "workSessionShowLess": "收起",
   "workSessionLoading": "正在加载会话…",
   "workSessionNoMatches": "没有匹配的会话",
@@ -27,5 +27,6 @@
   "workAssistantEmptyTitlePapers": "研究助手待命中",
   "workAssistantEmptySubPapers": "选中论文中的内容即可引用，或从下面选择一个操作。",
   "workSessionArchived": "已归档「{{title}}」",
-  "workSessionUndo": "撤销"
+  "workSessionUndo": "撤销",
+  "workFilesResize": "拖动调整文件区高度"
 }

@@ -104,10 +104,11 @@ export function WriteSidebar({
             <WorkSessionsSection onOpenArchives={() => onOpenSettings('archives')} />
             <div className="work-materials-label">{t('workSidebarMaterials')}</div>
             <div className="work-materials">
-              <WorkFilesSection actions={actions} />
               {/* Phones keep their own paper home. */}
               {remoteMobile ? null : <WorkPapersSection />}
               <WorkArtifactsSection workspaceRoot={workspaceRoot} />
+              {/* Last, so the tree takes the remaining height. */}
+              <WorkFilesSection actions={actions} />
             </div>
           </div>
         )}

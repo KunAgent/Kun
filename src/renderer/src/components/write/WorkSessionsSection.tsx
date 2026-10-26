@@ -1,8 +1,9 @@
-import { useState, type ReactElement } from 'react'
+import { useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
+  ChevronDown,
   MoreHorizontal,
   PanelRight,
   PencilLine,
@@ -27,8 +28,10 @@ import { WorkSidebarSection } from './WorkSidebarSection'
 import { useWorkViewStore } from '../../write/work-view-store'
 import { useWorkSessions } from './use-work-sessions'
 import '../rooms/conversation-manage.css'
+import { readSessionsExpanded, writeSessionsExpanded } from './work-sidebar-layout'
 
-const VISIBLE_SESSIONS = 8
+/** Folded, the list shows the latest few; the open session always stays in view. */
+export const VISIBLE_SESSIONS = 5
 /** Below this age a session reads "just now" instead of ticking seconds. */
 const JUST_NOW_MS = 60_000
 
@@ -48,7 +51,6 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   const { t, i18n } = useTranslation('common')
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [showAll, setShowAll] = useState(false)
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
   const [actionDialog, setActionDialog] = useState<SidebarActionDialogState | null>(null)
   const searching = searchOpen && query.trim().length > 0
@@ -56,6 +58,15 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   const whiteboards = useWriteWorkspaceStore((state) => state.whiteboards)
   const spaceKey = writeWorkspaceKey(root)
   const current = useWorkSessionStore((state) => state.current[spaceKey])
+  const [expandedBySpace, setExpandedBySpace] = useState(() => readSessionsExpanded())
+  const showAll = expandedBySpace[spaceKey] === true
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const toggleShowAll = (): void => {
+    const next = !showAll
+    setExpandedBySpace(writeSessionsExpanded(spaceKey, next))
+    // Folding returns to the latest sessions at the top.
+    if (!next) listRef.current?.scrollTo?.({ top: 0 })
+  }
   const activity = useChatStore(useShallow((state): WriteResourceActivityContext & { route: string } => ({
     route: state.route,
     threads: state.threads,
@@ -145,8 +156,12 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   // not picked up yet, shows as the current row.
   const inList = sessions.some((session) => session.id === current)
   const draftRow = current !== undefined && !searching && (current === '' || (current === activity.activeThreadId && !inList))
-  const visible = showAll || searching ? sessions : sessions.slice(0, VISIBLE_SESSIONS)
+  const openId = activity.route === 'write' ? activity.activeThreadId : null
+  const folded = sessions.slice(0, VISIBLE_SESSIONS)
+  const openBeyondFold = openId ? sessions.find((session, index) => index >= VISIBLE_SESSIONS && session.id === openId) : undefined
+  const visible = showAll || searching ? sessions : openBeyondFold ? [...folded, openBeyondFold] : folded
   const hidden = sessions.length - visible.length
+  const canFold = !searching && sessions.length > VISIBLE_SESSIONS
 
   const actions = (
     <>
@@ -181,6 +196,7 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
         </div>
       ) : null}
       <div className="work-sessions" data-work-sessions>
+        <div ref={listRef} className="work-sessions-scroll" data-expanded={showAll && canFold ? 'true' : undefined}>
         {draftRow ? (
           <div className="work-session-item" data-work-session-draft>
             <button type="button" className="work-session-row" aria-current="true">
@@ -265,9 +281,12 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
             </div>
           )
         })}
-        {hidden > 0 || (showAll && sessions.length > VISIBLE_SESSIONS && !searching) ? (
-          <button type="button" className="work-session-more" onClick={() => setShowAll((value) => !value)}>
-            {hidden > 0 ? t('workSessionShowMore', { count: hidden }) : t('workSessionShowLess')}
+        </div>
+        {canFold && (showAll || hidden > 0) ? (
+          <button type="button" className="work-session-more" data-work-sessions-fold aria-expanded={showAll}
+            onClick={toggleShowAll}>
+            <ChevronDown className="work-session-more-chevron h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+            {showAll ? t('workSessionShowLess') : t('workSessionShowMore', { count: hidden })}
           </button>
         ) : null}
         {sessions.length === 0 && !draftRow ? (
