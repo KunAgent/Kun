@@ -47,7 +47,7 @@ export function buildDelegationToolProviders(
     ? {
         profile: {
           type: 'string',
-          description: 'Optional exact reusable profile id returned by list_subagent_profiles. Omit it to route over the effective catalog.'
+          description: 'Optional exact reusable profile id returned by list_subagent_profiles for a new child. Omit it to route over the effective catalog. On resume, omit it; if repeated, it must match the stored child profile and cannot change the role.'
         }
       }
     : { custom_agent: customAgentSchema() }
@@ -64,11 +64,11 @@ export function buildDelegationToolProviders(
         inputSchema: {
           type: 'object',
           properties: {
-            label: { type: 'string', description: 'A distinct 2-4 word UI title for this child.' },
+            label: { type: 'string', description: 'A distinct 2-4 word UI title for a new child. Omit on resume; repeated labels are ignored and the stored title is retained.' },
             prompt: { type: 'string', description: 'The task for the child agent.' },
             resumeChildId: {
               type: 'string',
-              description: 'Exact existing interrupted child id to continue. Omit this field entirely for a new child; never send an empty string or a sentinel such as "new".'
+              description: 'Exact existing interrupted child id to continue. For resume, send only prompt, resumeChildId, and expectedResumeCount. Omit this field entirely for a new child; never send an empty string or a sentinel such as "new".'
             },
             expectedResumeCount: {
               type: 'integer',
@@ -78,9 +78,12 @@ export function buildDelegationToolProviders(
             ...modeProperties,
             detach: {
               type: 'boolean',
-              description: 'Run in the background and return after the child is queued. The current turn does not wait for the result; omit this when the result must be consumed before the final answer.'
+              description: 'Run a new child in the background and return after the child is queued. The current turn does not wait for the result; omit this when the result must be consumed before the final answer. Resume runs in the foreground; omit detach or set false.'
             },
-            returnFormat: { type: 'string', enum: ['summary', 'evidence'] }
+            returnFormat: {
+              type: 'string', enum: ['summary', 'evidence'],
+              description: 'Result format for a new child. Omit on resume; repeated values are ignored and the stored format is retained.'
+            }
           },
           required: ['prompt'],
           additionalProperties: false
@@ -203,7 +206,7 @@ export function buildDelegationToolProviders(
 function customAgentSchema(): Record<string, unknown> {
   return {
     type: 'object',
-    description: 'One-run standalone role written by the parent. It always inherits the current turn model/provider/reasoning strength, is mutually exclusive with profile, and is retained only in the child-run audit snapshot.',
+    description: 'One-run standalone role written by the parent for a new child. Omit on resume, which retains the stored role. It always inherits the current turn model/provider/reasoning strength, is mutually exclusive with profile, and is retained only in the child-run audit snapshot.',
     properties: {
       name: { type: 'string' },
       description: { type: 'string' },
@@ -337,7 +340,7 @@ async function runChild(
   return childToolResult(runtime, record)
 }
 
-type ResumeArgs = { childId: string; expectedResumeCount?: number }
+type ResumeArgs = { childId: string; expectedResumeCount?: number; expectedProfile?: string }
 
 function parseResumeArgs(
   args: Record<string, unknown>,
@@ -363,12 +366,18 @@ function parseResumeArgs(
   if (rawCount !== undefined && expectedResumeCount === undefined) {
     return new Error('expectedResumeCount must be a non-negative integer')
   }
-  const creationOnly = ['label', 'profile', 'custom_agent', 'detach', 'returnFormat']
-    .find((key) => args[key] !== undefined)
+  // Models can echo creation fields or fill optional schema fields on resume.
+  // Keep the persisted title/format; treat a repeated profile as an assertion,
+  // never as a new route. Neutral placeholders must not prevent continuation.
+  const creationOnly = args.custom_agent !== undefined && args.custom_agent !== null
+    ? 'custom_agent'
+    : args.detach !== undefined && args.detach !== null && args.detach !== false
+      ? 'detach'
+      : undefined
   if (creationOnly) {
     return new Error(
-      `${creationOnly} is unavailable when resumeChildId is set; ` +
-      'omit resumeChildId and expectedResumeCount to create a new child'
+      `${creationOnly} cannot change during resume; omit ${creationOnly} and keep resumeChildId and expectedResumeCount. ` +
+      'Resume the same child with prompt, resumeChildId, and expectedResumeCount only.'
     )
   }
   if (context.subagentResume) {
@@ -381,6 +390,7 @@ function parseResumeArgs(
   }
   return {
     childId,
+    ...(stringValue(args.profile) ? { expectedProfile: stringValue(args.profile) } : {}),
     ...(expectedResumeCount !== undefined ? { expectedResumeCount } : {})
   }
 }
@@ -419,6 +429,7 @@ async function resumeChild(
       ...(resume.expectedResumeCount !== undefined
         ? { expectedResumeCount: resume.expectedResumeCount }
         : {}),
+      ...(resume.expectedProfile ? { expectedProfile: resume.expectedProfile } : {}),
       expectedLaunchers: ['delegate_task'],
       requireResumable: true,
       parentModelRoute: parentModelRoute(context),
@@ -460,6 +471,7 @@ function buildDelegateTaskDescription(runtime: DelegationRuntime): string {
     'Run a standalone child agent and return its result.',
     modeDescription,
     'For a new child, omit resumeChildId and expectedResumeCount entirely; never use empty or "new" sentinel values.',
+    'To continue an existing interrupted child, send only prompt, resumeChildId, and expectedResumeCount; omit label, profile, custom_agent, detach, and returnFormat. Resume retains the stored role, title, and result format and never creates a replacement child.',
     'Child model, provider, and reasoning strength remain host-controlled and are not tool-call arguments.',
     'Issue multiple calls in one message only for independent work. Do not start a detached review and then a foreground review for the same scope.',
     `Children default to the "${runtime.defaultToolPolicy}" tool policy and can never recursively delegate.`

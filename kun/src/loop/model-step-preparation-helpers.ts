@@ -60,6 +60,7 @@ export function subagentResumeToolGate(
     instruction: `This turn must continue child ${JSON.stringify(request.childId)}. ` +
       'Call delegate_task as the first action with resumeChildId set to that exact id, ' +
       `expectedResumeCount set to ${request.expectedResumeCount}, and a concise continuation prompt. ` +
+      'Send only prompt, resumeChildId, and expectedResumeCount; omit label, profile, custom_agent, detach, and returnFormat. ' +
       'Do not create a new child and do not call another tool first.'
   }
 }

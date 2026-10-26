@@ -385,10 +385,10 @@ describe('delegate_task observability output', () => {
       prompt: 'invalid override',
       resumeChildId: 'child_resume',
       expectedResumeCount: 1,
-      returnFormat: 'evidence'
+      custom_agent: { name: 'Replacement role' }
     }, resumeContext)).resolves.toMatchObject({
       isError: true,
-      output: { error: expect.stringContaining('omit resumeChildId and expectedResumeCount') }
+      output: { error: expect.stringContaining('omit custom_agent and keep resumeChildId and expectedResumeCount') }
     })
     expect(resumeChild).toHaveBeenCalledTimes(1)
   })

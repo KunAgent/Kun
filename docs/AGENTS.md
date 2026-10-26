@@ -119,6 +119,14 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
 
 ## Conversation Agent Dispatch
 
+Ordinary `delegate_task` resume calls need only `prompt`, `resumeChildId`, and
+`expectedResumeCount`. Echoed labels/result formats retain the persisted values;
+a non-empty profile is an assertion against the stored role, never a reroute.
+Neutral creation-field placeholders and `detach: false` must not block resume.
+Reject custom-role replacement and `detach: true`, preserve ownership/count,
+security and retry-budget checks, and never suggest a replacement child to fix
+a resume argument error.
+
 Ordinary new Code tasks can delegate without the advanced ADE switch. External
 main Agents require a functioning scoped Kun tool bridge; workers and delegated
 children must never create recursive teams. Both worker tools and private assistant
