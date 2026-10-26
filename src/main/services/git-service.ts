@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { access, mkdir, realpath } from 'node:fs/promises'
+import { access, mkdir, realpath, statfs } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, join, normalize } from 'node:path'
+import { basename, dirname, join, normalize } from 'node:path'
 import { promisify } from 'node:util'
 import type {
   GitBranchesResult,
@@ -209,7 +209,8 @@ export async function getGitBranches(workspaceRoot: string): Promise<GitBranches
     const dirtyCount = (await runGit(cwd, ['status', '--porcelain=v1'])).stdout
       .split('\n')
       .filter((line) => line.trim().length > 0).length
-    return { ok: true, repositoryRoot, primaryRepositoryRoot, currentBranch, branches, dirtyCount }
+    const worktreeFreeBytes = await freeBytesAt(join(homedir(), '.kun', 'worktrees'))
+    return { ok: true, repositoryRoot, primaryRepositoryRoot, currentBranch, branches, dirtyCount, worktreeFreeBytes }
   } catch (error) {
     return gitFailure(error)
   }
@@ -337,4 +338,20 @@ export async function removeGitBranchWorktree(params: {
   const cwd = await resolveGitCwd(params.workspaceRoot)
   if (!cwd) throw new Error('No working directory selected.')
   await runGit(cwd, ['worktree', 'remove', '--force', params.worktreePath], 30_000)
+}
+
+/** Free bytes on the volume holding `path` (nearest existing ancestor); null when unreadable. */
+async function freeBytesAt(path: string): Promise<number | null> {
+  let target = path
+  for (;;) {
+    try {
+      const info = await statfs(target, { bigint: true })
+      return Number(info.bavail * info.bsize)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return null
+      const parent = dirname(target)
+      if (parent === target) return null
+      target = parent
+    }
+  }
 }

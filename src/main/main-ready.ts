@@ -1,3 +1,4 @@
+import { startPlanWorktreeSweeper } from './services/plan-worktree-sweeper'
 import { registerArtProtocol } from './art-assets/protocol'
 import { sharedWorkspacePreviewProtocols } from './services/workspace-preview-protocol'
 import { app, dialog, protocol, type BrowserWindow } from 'electron'
@@ -239,6 +240,7 @@ export function startMainApp(): Promise<void> {
     const disposeHostPowerRecovery = installHostPowerRecovery()
     app.once('before-quit', disposeHostPowerRecovery)
     app.once('before-quit', () => disposeProxyAgents())
+    app.once('before-quit', startPlanWorktreeSweeper())
     if (await recoverUpdateBeforeRuntimeStart()) return
 
     const startup = await startWindowFirstStartup({
