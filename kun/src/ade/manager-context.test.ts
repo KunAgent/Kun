@@ -114,6 +114,26 @@ describe('createAdeManagerContext', () => {
     expect(block).toContain('Graph worker harnesses')
   })
 
+  it('carries the user dispatch preference beside the team state, never cut by the size cap', async () => {
+    const preference = '- UI work: claude-code / opus\n' + 'x'.repeat(1_800)
+    const block = await createAdeManagerContext({
+      ...makeDeps({ team: team({ workers: [worker()] }), harnessSummary: 'Graph worker harnesses: kun (Kun) — native loop' }),
+      dispatchPreference: () => preference
+    })({ threadId: 'thr_mgr' })
+    expect(block).toContain('<user_dispatch_preferences>')
+    expect(block).toContain('- UI work: claude-code / opus')
+    expect(block).toContain('Graph worker harnesses')
+    expect(block!.indexOf('<user_dispatch_preferences>')).toBeLessThan(block!.indexOf('Team team_1 state:'))
+  })
+
+  it('leaves the preference out when it is blank or new work is off', async () => {
+    const blank = await createAdeManagerContext({ ...makeDeps(), dispatchPreference: () => '   ' })({ threadId: 'thr_mgr' })
+    expect(blank).not.toContain('user_dispatch_preferences')
+    const off = await createAdeManagerContext({ ...makeDeps(), dispatchPreference: () => 'use codex' })({
+      threadId: 'thr_mgr', newWorkAllowed: false })
+    expect(off).not.toContain('user_dispatch_preferences')
+  })
+
   it('marks terminal dispatches with a worker report as awaiting review', async () => {
     const block = await createAdeManagerContext(makeDeps({
       dispatches: [dispatch({

@@ -34,7 +34,7 @@ export const kunGraphPatchSchema = z.object({
     mode: z.enum(['inherit', 'fixed']).optional(),
     providerId: z.string().trim().max(128).optional(),
     model: z.string().trim().max(256).optional(),
-    reasoningEffort: z.enum(['auto', 'off', 'low', 'medium', 'high', 'max']).optional()
+    reasoningEffort: z.enum(['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max']).optional()
   }).strict().optional(),
   scheduler: kunGraphSchedulerPatchSchema.optional(),
   context: z.object({

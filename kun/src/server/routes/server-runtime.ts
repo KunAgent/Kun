@@ -465,7 +465,7 @@ export type ServerRuntime = {
     model?: string
     providerId?: string
     accountId?: string
-    reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
+    reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   }): Promise<'completed' | 'failed' | 'aborted'> | void
   /** Canonical private runtime/config authorities excluded from remote project browsing. */
   remoteProtectedPaths?: string[]

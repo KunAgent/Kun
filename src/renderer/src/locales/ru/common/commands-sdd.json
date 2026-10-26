@@ -114,6 +114,7 @@
   "approvalSubmitting": "Отправка решения…",
   "approvalFailed": "Запрос не выполнен",
   "approvalNativeConfirmationCancelled": "Подтверждение отменено. Действие всё ещё ожидает вашего решения.",
+  "approvalReviewModel": "Review model: {{model}}",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

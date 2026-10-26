@@ -63,7 +63,7 @@ type Props = {
   graphEnabled?: boolean
   /** Thread binds a task workspace → offer the review tab. */
   reviewEnabled?: boolean
-  /** ADE thread has worker activity rows → offer the Workers tab. */
+  /** Collaboration is available by default, independently of live worker activity. */
   workersEnabled?: boolean
   /** Background children are executing right now. */
   workersRunning?: boolean
@@ -372,7 +372,7 @@ export function WorkbenchSideRail({
   planPanelEnabled = false,
   canvasEnabled = false,
   graphEnabled = false,
-  workersEnabled = false,
+  workersEnabled = true,
   workersRunning = false,
   workersUnfinished = 0,
   sideChatRunningCount = 0,

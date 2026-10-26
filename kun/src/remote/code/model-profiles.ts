@@ -54,5 +54,8 @@ export function checkedProfiles<T extends { models: string[]; label: string; pro
 export function allowsEffort(route: { profiles?: ModelProfiles }, model: string, effort: TurnReasoningEffort | undefined) {
   if (effort === undefined) return true
   const profile = route.profiles && Object.hasOwn(route.profiles, model) ? route.profiles[model] : undefined
-  return Boolean(profile?.efforts.includes(effort))
+  // The published remote protocol has no distinct xhigh tier; remote routes keep the
+  // historical xhigh → max alias. Local desktop paths still send xhigh verbatim.
+  const wireEffort = effort === 'xhigh' ? 'max' : effort
+  return Boolean(profile?.efforts.includes(wireEffort))
 }

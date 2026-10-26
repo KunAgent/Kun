@@ -104,6 +104,7 @@
   "graphSettingsReasoningLow": "低",
   "graphSettingsReasoningMedium": "中",
   "graphSettingsReasoningHigh": "高",
+  "graphSettingsReasoningXhigh": "极高",
   "graphSettingsReasoningMax": "超高",
   "graphSettingsGlobalConcurrency": "全局并发节点",
   "graphSettingsGlobalConcurrencyDesc": "所有活跃 Graph 运行合计允许调度的工作节点上限。",

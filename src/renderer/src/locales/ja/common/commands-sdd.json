@@ -114,6 +114,7 @@
   "approvalSubmitting": "決定を送信中…",
   "approvalFailed": "リクエストが失敗しました",
   "approvalNativeConfirmationCancelled": "確認をキャンセルしました。この操作はまだ判断待ちです。",
+  "approvalReviewModel": "Review model: {{model}}",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

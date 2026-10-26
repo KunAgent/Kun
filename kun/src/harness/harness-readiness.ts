@@ -22,6 +22,7 @@ import { readinessProbeEnvironment } from './harness-readiness-env.js'
 import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
 import { AGY_MODELS_TIMEOUT_MS, agyModelsHandshake } from './antigravity-readiness-probe.js'
+import { customAcpPermission } from '../runtime/acp/acp-provider-permissions.js'
 import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
 import { HarnessReadinessProofFile, type PersistedReadinessProof } from './harness-readiness-store.js'
 
@@ -610,6 +611,7 @@ export class HarnessReadinessService {
       case 'native-loop': return { ok: true, supported: true, protocol: 'native-loop' }
       case 'acp': return probeAcpHandshake(definition, command, { ...options,
         session: { model: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' ? snapshot.route.model : undefined,
+          customPermissionMode: customAcpPermission(this.deps.options().harnesses?.defaults?.[definition.id]?.permissionMode, definition),
           permissionMode: harnessTurnPermissionMode(definition, { ...this.deps.options(),
             requested: this.deps.options().harnesses?.defaults?.[definition.id]?.permissionMode,
             unattended: false, allowUnattendedFullAccess: false }) },

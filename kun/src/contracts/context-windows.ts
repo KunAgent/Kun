@@ -173,7 +173,8 @@ export type NotesSearchContentsResult = z.infer<typeof NotesSearchContentsResult
 export const NotesAppendToFileResultSchema = z.object({
   path: z.string().min(1),
   revision: z.number().int().nonnegative(),
-  operationId: z.string().min(1)
+  operationId: z.string().min(1),
+  applied: z.boolean()
 })
 export type NotesAppendToFileResult = z.infer<typeof NotesAppendToFileResultSchema>
 

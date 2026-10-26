@@ -18,6 +18,7 @@ export const REASONING_OPTIONS: Array<{ id: ComposerReasoningEffort; labelKey: s
   { id: 'low', labelKey: 'composerReasoningLow' },
   { id: 'medium', labelKey: 'composerReasoningMedium' },
   { id: 'high', labelKey: 'composerReasoningHigh' },
+  { id: 'xhigh', labelKey: 'composerReasoningXhigh' },
   { id: 'max', labelKey: 'composerReasoningMax' }
 ]
 export const LEGACY_REASONING_EFFORTS: ComposerReasoningEffort[] = ['off', 'low', 'medium', 'high', 'max']
@@ -72,7 +73,7 @@ export const FLOATING_REASONING_POPOVER_ESTIMATED_HEIGHT = 110
 export const FLOATING_REASONING_POPOVER_GAP = 12
 export const REASONING_RAIL_THUMB_RADIUS = 18
 export const UNGROUPED_MODEL_PROVIDER_ID = '__composer_models__'
-export const REASONING_RAIL_ORDER: ComposerReasoningEffort[] = ['off', 'low', 'medium', 'high', 'max', 'auto']
+export const REASONING_RAIL_ORDER: ComposerReasoningEffort[] = ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'auto']
 export const DEFAULT_COMPOSER_MODEL_KEYS = new Set(
   DEFAULT_COMPOSER_MODEL_IDS.map((id) => normalizeModelCapabilityKey(id))
 )

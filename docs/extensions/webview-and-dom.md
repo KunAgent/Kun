@@ -258,7 +258,6 @@ Bridge 不接受 extension ID、version、workspace 或 permission 作为调用�
 - 安装/升级和权限确认；
 - workspace trust；
 - 整个 Settings 与初始设置流程，以及账号/秘密输入、OAuth completion、secret reveal；
-- Agent 工具审批的原生确认框（审批待处理期间，工作台也会撤销 Direct DOM）；
 - 其它安全关键 consent。
 
 用户在 protected surface 真实确认后，Main 生成短时、单次 consent token，绑定 extension/version、operation kind、parameter digest、workspace、window session 和 expiry。Token 留在可信宿主内部。
@@ -267,7 +266,7 @@ Bridge 不接受 extension ID、version、workspace 或 permission 作为调用�
 
 Agent 工具审批还有一条独立的纵深防线：出现 `pending`/`submitting` 审批时，Kun 会撤销当前工作台的 content-script binding，并通过一次干净 reload 清除任意遗留 listener、observer 和 DOM 改写。审批按钮只接受 Chromium 标记为 `isTrusted` 的真实用户事件；`HTMLElement.click()` 或脚本派发的事件会被忽略。真实点击只会进入专用 preload IPC，通用 `runtimeRequest` bridge 不允许访问 `/v1/approvals/*`。
 
-对交互式审批，Electron Main 会再显示扩展无法控制的原生 modal。用户确认后，Main 才创建 30 秒、单次使用的 HMAC consent，精确绑定 `approvalId`、`allow|deny`、expiry 和随机 nonce；`kun serve` 在触碰 `ApprovalGate` 前验证并消费它。缺失、伪造、重放、过期、换审批 ID 或换 decision 都会 fail closed。显式 `auto`/`never` policy 也走同一专用 Main 通道和 action-bound token，但不伪装成一次用户点击。
+对交互式工具审批，Code 或 Room 的可见卡片就是唯一确认界面，Electron Main 不再显示第二个 modal。Main 校验发送 frame、pending 快照与所选 provider 选项，并在提交前重新核对快照；随后创建 30 秒、单次使用的 HMAC consent，精确绑定 `approvalId`、`allow|deny`、choice、expiry 和随机 nonce。`kun serve` 在触碰 `ApprovalGate` 前验证并消费它，伪造、重放、过期或不匹配的 token 仍 fail closed。但工具审批不再具有独立于工作台 DOM 的原生复核边界：若恶意注入能调用受信任审批 IPC，就可能提交决定；事件和快照检查不能替代这层隔离。Runtime 自有 policy 决策维持原有授权规则，renderer 不能提交 policy allow。
 
 Settings 中的 `approvalPolicy`/`sandboxMode` 也不是普通表单授权：任意实际变化都由 Main 比对当前持久值，显示原生确认，再生成只留在 Main 内、绑定旧值/新值/发送 frame 的 30 秒单次 action token；token 消费成功后才允许落盘。Composer 权限选择器同样拒绝合成事件，并经过这条 Main gate。因此 Direct DOM 既读不到 Settings 的 API key/secret input，也不能通过普通或合成 click 把后续执行改成 `auto + danger-full-access`。
 

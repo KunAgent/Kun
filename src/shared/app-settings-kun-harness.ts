@@ -1,5 +1,7 @@
+import { normalizeHarnessPermissionMode } from './harness-permission-mode'
 import { BUILTIN_HARNESS_IDS } from '../../kun/src/contracts/builtin-harness-ids.js'
 import { HarnessGatewayBindingSchema } from '../../kun/src/contracts/harness-gateway-binding.js'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS, normalizeDispatchPreferences } from './ade-collaboration-settings'
 import {
   GENERIC_ACP_BASE,
   HarnessProviderOverrideSchema,
@@ -177,7 +179,7 @@ function normalizeHarnessDefaults(
     }
     const model = nonEmpty(rawEntry.model, 512)
     if (model) entry.model = model
-    const permissionMode = nonEmpty(rawEntry.permissionMode, 64)
+    const permissionMode = normalizeHarnessPermissionMode(rawEntry.permissionMode)
     if (permissionMode) entry.permissionMode = permissionMode
     if (
       typeof rawEntry.isolation === 'string' &&
@@ -378,7 +380,7 @@ export function defaultKunAdeSettings(): KunAdeSettingsV1 {
     limits: { softWorkers: 4, hardWorkers: 8 },
     hibernation: { enabled: true, idleMinutes: 30 },
     stall: { structuredMinutes: 10, terminalMinutes: 20 },
-    dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true },
+    dispatch: { autoStartSeconds: 60, autoStartWhenConfirmationRequired: true, preferencePrompt: '', preferences: [] },
     tasks: { autoStartSeconds: 0, worktree: true, inheritContext: false },
     notifications: {
       waiting: true,
@@ -464,7 +466,11 @@ export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
       autoStartWhenConfirmationRequired: bool(
         dispatch.autoStartWhenConfirmationRequired,
         defaults.dispatch.autoStartWhenConfirmationRequired
-      )
+      ),
+      preferences: normalizeDispatchPreferences(dispatch.preferences),
+      preferencePrompt: typeof dispatch.preferencePrompt === 'string'
+        ? dispatch.preferencePrompt.slice(0, ADE_DISPATCH_PREFERENCE_MAX_CHARS)
+        : defaults.dispatch.preferencePrompt
     },
     tasks: {
       autoStartSeconds: clampInt(tasks.autoStartSeconds, 0, 3_600, defaults.tasks.autoStartSeconds),

@@ -1,3 +1,4 @@
+import { dispatchPreferencesValid } from '../shared/ade-collaboration-settings'
 import {
   getKunRuntimeSettings,
   MIN_KUN_LOCAL_PORT,
@@ -8,6 +9,8 @@ import {
 
 export function validateRuntimeSettingsForApply(next: AppSettingsV1): string | null {
   const runtime = resolveKunRuntimeSettings(next)
+  const preferences = getKunRuntimeSettings(next).ade?.dispatch
+  if (preferences && !dispatchPreferencesValid(preferences)) return 'Collaboration preferences exceed the text budget or contain an incomplete scenario.'
   if (!Number.isInteger(runtime.port) || runtime.port < MIN_KUN_LOCAL_PORT || runtime.port > 65_535) {
     return `Kun port must be an integer between ${MIN_KUN_LOCAL_PORT} and 65535 (got ${String(runtime.port)})`
   }

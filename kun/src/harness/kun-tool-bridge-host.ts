@@ -258,7 +258,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
   const makeAwaitApproval = (
     scope: Pick<
       KunToolBridgeTurnScope,
-      'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'actingModelRoute' | 'turn'
+      'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'actingModelRoute' | 'turn' | 'thread'
     >,
     signal: AbortSignal
   ): ToolHostContext['awaitApproval'] =>
@@ -273,6 +273,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         sandboxMode: scope.sandboxMode,
         approvalReviewer: scope.approvalReviewer,
         actingModelRoute: scope.actingModelRoute!,
+        reviewSource: { harnessId: scope.turn.harnessId ?? scope.thread.harnessId ?? 'unknown' },
         intent: scope.turn.prompt,
         signal
       }

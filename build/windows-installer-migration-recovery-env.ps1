@@ -50,6 +50,144 @@ function Assert-InstallerRecoveryFields($Transaction) {
   }
 }
 
+# A new installer has a different PID and no old stage/health environment.
+# Bootstrap only this installer entry point, never the GUI's strict reader.
+# The current install identity and shell/registry roots remain authoritative.
+function Get-InstallerRestartRecoveryEnvironment($Transaction) {
+  Assert-InstallerRecoveryFields $Transaction
+  $source = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_UPDATE_SOURCE')
+  if ([string]::IsNullOrWhiteSpace($source)) {
+    $source = Normalize-FullPath (Get-EnvironmentValue 'KUN_INSTALLER_SOURCE')
+  }
+  if ([string]::IsNullOrWhiteSpace($source) -or
+      -not (Test-PathEqual ([string]$Transaction.Source) $source)) {
+    throw 'The interrupted update source is not authorized by this installer.'
+  }
+  $target = Resolve-LegacySourceTarget $source
+  if ([string]::IsNullOrWhiteSpace($target)) { $target = $source }
+  if (-not (Test-PathEqual ([string]$Transaction.Target) $target) -or
+      -not (Test-PathEqual (Get-JournalTarget) $target) -or
+      [bool]$Transaction.InPlace -ne [bool](Test-PathEqual $source $target)) {
+    throw 'The interrupted update target is not authorized by this installer.'
+  }
+  if (-not (Test-PathEqual ([string]$Transaction.JournalPath) (Get-JournalPath))) {
+    throw 'The interrupted update journal is not authorized by this installer.'
+  }
+  foreach ($field in @('AppExecutable', 'CanonicalLeaf', 'InstallRegistryKey', 'UninstallRegistryKey', 'ProductName')) {
+    $name = (Get-InstallerRecoveryFieldMap)[$field]
+    if (-not [string]::Equals([string]$Transaction.$field, (Get-EnvironmentValue $name), [StringComparison]::OrdinalIgnoreCase)) {
+      throw "The interrupted update identity field is not authorized: $field"
+    }
+  }
+  if ([string]$Transaction.AutomaticUpdate -ne '1') {
+    throw 'The interrupted transaction is not an automatic update.'
+  }
+  $stage = Normalize-FullPath ([string]$Transaction.StageRoot)
+  $stagePattern = '^' + [Regex]::Escape($target + '.kun-stage-') + '([0-9]+)$'
+  $stageMatch = [Regex]::Match($stage, $stagePattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+  if (-not $stageMatch.Success) {
+    throw 'The interrupted update stage is not an authorized installer sibling.'
+  }
+  $oldPid = $stageMatch.Groups[1].Value
+  $backup = Join-Path (Split-Path -Parent (Get-JournalPath)) ('update-backup-' + $oldPid)
+  if (-not (Test-PathEqual ([string]$Transaction.BackupRoot) $backup) -or
+      -not (Test-PathEqual ([string]$Transaction.OldPayloadRoot) ($target + '.kun-old-' + $oldPid))) {
+    throw 'The interrupted update backup does not belong to its original installer.'
+  }
+  $health = Normalize-FullPath ([string]$Transaction.HealthResult)
+  $healthPaths = @((Get-UpdateTransactionPath) + '.health.json')
+  $pendingResult = Normalize-FullPath (Get-EnvironmentValue 'KUN_PENDING_UPDATE_RESULT')
+  if (-not [string]::IsNullOrWhiteSpace($pendingResult)) { $healthPaths += $pendingResult + '.health.json' }
+  $healthPaths += Join-Path ([IO.Path]::GetTempPath()) ('Kun-update-health-' + $oldPid + '.json')
+  if (-not ($healthPaths | Where-Object { Test-PathEqual $health $_ })) {
+    throw 'The interrupted update health result is not authorized by this installer.'
+  }
+  foreach ($path in @($source, $target, $stage, $backup, $health,
+      ([string]$Transaction.OldPayloadRoot), ([string]$Transaction.FailedPayloadRoot),
+      ([string]$Transaction.AssetsRoot))) {
+    Assert-SafeInstallRoot $path 'Interrupted update recovery'
+  }
+  return @{
+    KUN_INSTALLER_SOURCE = $source
+    KUN_INSTALLER_TARGET = $target
+    KUN_INSTALLER_STAGE = $stage
+    KUN_INSTALLER_PAYLOAD_BACKUP = $backup
+    KUN_INSTALLER_HEALTH_RESULT = $health
+  }
+}
+
+function Recover-InstallerUpdateTransaction {
+  # No saved path is adopted until storage ACLs, schema, app and scope pass.
+  $transaction = Read-TrustedUpdateTransaction
+  if ($null -eq $transaction) { return }
+  $environment = Get-InstallerRestartRecoveryEnvironment $transaction
+  $previous = @{}
+  try {
+    foreach ($name in $environment.Keys) {
+      $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+      [Environment]::SetEnvironmentVariable($name, $environment[$name], 'Process')
+    }
+    # Re-read with the normal exact-path, assets and shortcut authorization.
+    Recover-PendingUpdateTransaction
+    # A new Prepare must not try to read the old PID's terminal transaction.
+    Finalize-TerminalUpdateTransaction
+  } finally {
+    foreach ($name in $previous.Keys) {
+      [Environment]::SetEnvironmentVariable($name, $previous[$name], 'Process')
+    }
+  }
+}
+
+# Scope selection happens before elevation. Only observe an existing, securely
+# owned transaction here: never repair ACLs or quarantine files to obtain trust.
+function Test-InterruptedUpdateScopeRegistration([string]$Scope, [string]$RunningSource, [string]$RegisteredSource) {
+  $rootName = if ($Scope -eq 'all') { 'KUN_INSTALLER_ALL_RECOVERY_ROOT' } else { 'KUN_INSTALLER_CURRENT_RECOVERY_ROOT' }
+  $root = Normalize-FullPath (Get-EnvironmentValue $rootName)
+  if ([string]::IsNullOrWhiteSpace($root) -or [string]::IsNullOrWhiteSpace($RegisteredSource)) { return $false }
+  $guid = Get-JournalAppGuid
+  $path = Join-Path $root ($guid + '-update.json')
+  if (-not (Test-Path -LiteralPath $root -PathType Container) -or
+      -not (Test-Path -LiteralPath $path -PathType Leaf) -or
+      -not (Test-JournalAclSecure $root $Scope) -or
+      -not (Test-JournalAclSecure $path $Scope)) { return $false }
+  Assert-NoReparsePathComponents $path 'Interrupted update scope record'
+  $transaction = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+  if ([int]$transaction.SchemaVersion -ne 4 -or
+      -not [string]::Equals([string]$transaction.AppGuid, $guid, [StringComparison]::OrdinalIgnoreCase) -or
+      [string]$transaction.InstallMode -ne $Scope -or
+      -not (Test-PathEqual ([string]$transaction.Source) $RunningSource) -or
+      -not (Test-PathEqual ([string]$transaction.StageRoot) $RegisteredSource)) { return $false }
+  $target = Resolve-LegacySourceTarget $RunningSource
+  if ([string]::IsNullOrWhiteSpace($target)) { $target = $RunningSource }
+  $context = @{
+    KUN_INSTALLER_INSTALL_MODE = $Scope
+    KUN_INSTALLER_SOURCE = $RunningSource
+    KUN_INSTALLER_TARGET = $target
+    KUN_INSTALLER_JOURNAL = Join-Path $root ($guid + '.json')
+    KUN_INSTALLER_TRANSACTION = $path
+  }
+  $previous = @{}
+  try {
+    foreach ($name in $context.Keys) {
+      $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+      [Environment]::SetEnvironmentVariable($name, $context[$name], 'Process')
+    }
+    $environment = Get-InstallerRestartRecoveryEnvironment $transaction
+    foreach ($name in $environment.Keys) {
+      if (-not $previous.ContainsKey($name)) {
+        $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+      }
+      [Environment]::SetEnvironmentVariable($name, $environment[$name], 'Process')
+    }
+    Assert-UpdateTransactionPaths $transaction
+    return $true
+  } finally {
+    foreach ($name in $previous.Keys) {
+      [Environment]::SetEnvironmentVariable($name, $previous[$name], 'Process')
+    }
+  }
+}
+
 # Readiness is checked inside the process that will perform recovery, after
 # elevation when required, before asking the running GUI to release its files.
 function Assert-UpdateRollbackReady {

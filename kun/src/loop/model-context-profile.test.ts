@@ -8,6 +8,18 @@ import {
   safeProviderReasoningCapability
 } from './model-context-profile.js'
 
+describe('DeepSeek flash aliases', () => {
+  it('gives the harness catalog short id the same reasoning facts as v4-flash', () => {
+    for (const id of ['deepseek-v4-flash', 'deepseek-flash']) {
+      const capabilities = modelCapabilitiesForModel(id)
+      expect(capabilities.contextWindowTokens).toBe(1_000_000)
+      expect(capabilities.reasoning?.supportedEfforts).toEqual(['off', 'high', 'max'])
+      expect(capabilities.reasoning?.defaultEffort).toBe('max')
+      expect(capabilities.evidence?.reasoning?.status).not.toBe('unknown')
+    }
+  })
+})
+
 describe('contextThresholdsForModel safety cap', () => {
   it('caps soft/hard thresholds to 75%/85% of the context window', () => {
     // A config-provided profile that sets thresholds dangerously close to
@@ -300,6 +312,19 @@ describe('built-in reasoning compatibility profiles', () => {
         ? 'auto'
         : providerId === 'zenmux' || providerId === 'opencode-go' ? 'medium' : 'high',
       requestProtocol
+    })
+  })
+
+  it('publishes the MiniMax-M3.1-Flash five-effort profile without inheriting M3 off semantics', () => {
+    expect(modelCapabilitiesForProviderModel({
+      providerId: 'minimax',
+      baseUrl: 'https://api.minimaxi.com/anthropic',
+      kind: 'http',
+      model: 'MiniMax-M3.1-Flash'
+    }).reasoning).toEqual({
+      supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      defaultEffort: 'max',
+      requestProtocol: 'anthropic-thinking'
     })
   })
 

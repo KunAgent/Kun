@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { compareVersions, firstSentence, parseReleaseNotes, pickHighlights } from './release-notes-summary'
 
@@ -103,6 +104,29 @@ describe('pickHighlights', () => {
     const picked = pickHighlights({ version: '0.4.1', intro: '', features, fixes: [] }, { exclude: /focus/i, limit: 2 })
     expect(picked.highlights.map((item) => item.title)).toEqual(['A', 'B'])
     expect(picked.alsoUpdated).toEqual(['C'])
+  })
+})
+
+describe('0.4.3 release content', () => {
+  const markdown = readFileSync(new URL('../../release/release-v0.4.3.md', import.meta.url), 'utf8')
+
+  it.each([
+    { language: 'zh' as const, intro: '0.4.3 让计划执行', titles: ['计划执行 Agent 选择', '任务分派与协作', '账户与会员入口'], chips: ['更轻量的计划工作区', 'MiniMax-M3.1-Flash'], fix: '工具调用稳定性' },
+    { language: 'en' as const, intro: 'Kun 0.4.3 makes plan execution', titles: ['Choose the plan execution Agent', 'Task dispatch and collaboration', 'Account and membership access'], chips: ['Lighter plan worktrees', 'MiniMax-M3.1-Flash'], fix: 'Tool-call stability' }
+  ])('parses the shipped $language notes for the update panel', ({ language, intro, titles, chips, fix }) => {
+    const summary = parseReleaseNotes(markdown, '0.4.3', language)!
+    expect(summary.intro.startsWith(intro)).toBe(true)
+    expect(summary.features).toHaveLength(5)
+    expect(summary.fixes).toHaveLength(7)
+    expect(summary.fixes[0].title).toBe(fix)
+    const picked = pickHighlights(summary)
+    expect(picked.highlights.map((item) => item.title)).toEqual(titles)
+    expect(picked.alsoUpdated).toEqual(chips)
+    expect(picked.highlights.every((item) => item.body.length > 0 && item.body.length <= 96)).toBe(true)
+    expect(JSON.stringify(summary)).not.toContain('Full changelog')
+    expect(JSON.stringify(summary)).not.toContain('github.com')
+    if (language === 'en') expect(JSON.stringify(summary)).not.toMatch(/[\u4e00-\u9fff]/)
+    else expect(summary.intro).not.toContain('Kun 0.4.3 makes')
   })
 })
 

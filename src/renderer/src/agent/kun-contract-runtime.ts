@@ -567,7 +567,7 @@ export type CoreRuntimeEventJson = {
   status?: string | number
   /** turn_started: the effective routing and reasoning configuration. */
   accountId?: string
-  reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
+  reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   serviceTier?: 'priority'
   /** turn_started uses 'agent' | 'plan'; handoff_injected uses 'full' | 'delta'. */
   mode?: 'agent' | 'plan' | 'full' | 'delta'

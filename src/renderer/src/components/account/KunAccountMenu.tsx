@@ -1,16 +1,16 @@
 import { VipEntitlements } from './VipEntitlements'
-import type { ReactElement, ReactNode } from 'react'
-import { ArrowUpRight, Feather, Gift, LoaderCircle, LockKeyhole, LogIn, LogOut, RefreshCw, Shirt, ShoppingBag } from 'lucide-react'
+import { useState, type ReactElement, type ReactNode } from 'react'
+import { ArrowUpRight, Camera, Feather, Gift, LoaderCircle, LockKeyhole, LogIn, LogOut, RefreshCw, Settings, Shirt, ShoppingBag } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KunAccountState } from '@shared/kun-account'
 import { useChatStore } from '../../store/chat-store'
-import { RoomAvatar } from '../rooms/RoomAvatar'
 import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
 import type { WardrobeTabRequest } from '../wardrobe/wardrobe-tab-request'
 import type { KunAccountAction } from './useKunAccount'
 import { kunAccountErrorCopy } from './kun-account-view'
 import { KunAccountSky } from './KunAccountPanel'
 import { AccountBottleBadge, useAccountWardrobeSummary, useKunRuntimeStatus } from './SidebarAccountCard'
+import { AccountAvatarPicker, AccountFace } from './AccountAvatarPicker'
 
 type MenuProps = {
   state: KunAccountState
@@ -52,11 +52,12 @@ function MenuFoot({ children }: { children?: ReactNode }): ReactElement {
 }
 
 /** Signed in: who you are, what the wardrobe holds, where it leads, and the account itself. */
-export function KunAccountMenu({ state, busy, titleId, onAction, onNavigate, platform, refreshed, manageFailed, onManage }: MenuProps & {
-  platform: string; refreshed: boolean; manageFailed: boolean; onManage: () => void
+export function KunAccountMenu({ state, busy, titleId, onAction, onNavigate, platform, refreshed, manageFailed, onManage, onOpenSettings }: MenuProps & {
+  platform: string; refreshed: boolean; manageFailed: boolean; onManage: () => void; onOpenSettings?: () => void
 }): ReactElement | null {
   const { t } = useTranslation('common')
   const summary = useAccountWardrobeSummary()
+  const [picking, setPicking] = useState(false)
   const user = state.user
   if (!user) return null
   const signingOut = busy === 'logout'
@@ -67,12 +68,17 @@ export function KunAccountMenu({ state, busy, titleId, onAction, onNavigate, pla
       <div className="kun-account-menu-head">
         <span className="kun-account-glow is-a" aria-hidden="true" />
         <span className="kun-account-glow is-b" aria-hidden="true" />
-        <span className="kun-account-menu-face" aria-hidden="true"><RoomAvatar user id="user" label="" size={46} /></span>
+        <button type="button" className="kun-account-menu-face" data-kun-avatar-edit aria-expanded={picking}
+          aria-label={t('kunAccountAvatarChange')} title={t('kunAccountAvatarChange')} onClick={() => setPicking((value) => !value)}>
+          <AccountFace user={user} size={46} />
+          <span className="kun-account-menu-face-badge" aria-hidden="true"><Camera size={11} strokeWidth={2.2} /></span>
+        </button>
         <span className="kun-account-menu-who">
           <strong id={titleId}>{user.name || user.email}</strong>
           <span>{user.email}</span>
         </span>
       </div>
+      {picking ? <AccountAvatarPicker user={user} /> : null}
       <VipEntitlements owner={user.id} />
       <dl className="kun-account-stats">
         <div className="kun-account-stat" data-ready={summary.ready || undefined}>
@@ -105,6 +111,9 @@ export function KunAccountMenu({ state, busy, titleId, onAction, onNavigate, pla
           </>
         ) : null}
         <span className="kun-account-separator" />
+        {onOpenSettings ? (
+          <Row icon={<Settings size={16} aria-hidden="true" />} label={t('settings')} hint={t('kunAccountMenuSettingsHint')} onClick={onOpenSettings} />
+        ) : null}
         <Row icon={<ArrowUpRight size={16} aria-hidden="true" />} label={t('kunAccountManage')} disabled={signingOut}
           trailing={<span className="kun-account-row-tag">{t('kunAccountMenuBrowser')}</span>} onClick={onManage} />
         <Row icon={busy === 'refresh' ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={16} aria-hidden="true" />}

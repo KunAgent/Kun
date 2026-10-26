@@ -12,6 +12,7 @@ import type {
 } from '../contracts/ade.js'
 import type { AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
 import { replacedWorkerIds } from './worker-dispatch-ids.js'
+import { dispatchPreferenceSection } from './dispatch-guidance.js'
 
 export type AdeManagerContextDeps = {
   teams: { byManager(managerThreadId: string): Promise<TeamRecord | null> }
@@ -27,6 +28,8 @@ export type AdeManagerContextDeps = {
    * is otherwise invisible to the manager on its next step.
    */
   dispatchIntents?: { list(threadId: string): Promise<AgentDispatchIntent[]> }
+  /** The user's Agent/model preferences for new work, read live from settings. */
+  dispatchPreference?: () => string | undefined
   nowMs?: () => number
 }
 
@@ -176,6 +179,8 @@ export function createAdeManagerContext(
     ])
     const canStartNewWork = newWorkAllowed !== false && deps.canStartNewWork?.() !== false
     const sections: string[] = [canStartNewWork ? ROLE_GUIDANCE : EXISTING_TEAM_GUIDANCE]
+    const preference = canStartNewWork ? dispatchPreferenceSection(deps.dispatchPreference?.()) : ''
+    if (preference) sections.push(preference)
     if (team && team.status === 'active') {
       const [dispatches, openQuestions] = await Promise.all([
         deps.dispatches.list(team.teamId).catch(() => [] as DispatchRecord[]),
@@ -205,8 +210,10 @@ export function createAdeManagerContext(
     }
     if (harnessSummary) sections.push(harnessSummary)
     const block = sections.join('\n')
-    return block.length <= MAX_BLOCK_CHARS
+    // The user's own preference never squeezes out the team state it sits beside.
+    const limit = MAX_BLOCK_CHARS + preference.length
+    return block.length <= limit
       ? block
-      : `${block.slice(0, MAX_BLOCK_CHARS - 1)}…`
+      : `${block.slice(0, limit - 1)}…`
   }
 }

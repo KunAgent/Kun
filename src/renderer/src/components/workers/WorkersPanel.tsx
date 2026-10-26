@@ -13,6 +13,7 @@ import { useTeamWorkers } from './use-team-workers'
 import { busyActionFor, useWorkerActions } from './use-worker-actions'
 import { useWorkerClock } from './use-worker-clock'
 import { WorkerActionError } from './WorkerActionError'
+import { DispatchPreferenceCard } from './DispatchPreferenceCard'
 import './workers-panel.css'
 
 /** Overlapping seats shown in the summary before the rest are only counted. */
@@ -156,6 +157,7 @@ export function WorkersPanel({
           />
         ) : null}
       </div>
+      <DispatchPreferenceCard />
     </div>
   )
 }

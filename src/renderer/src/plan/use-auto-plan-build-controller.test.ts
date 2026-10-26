@@ -8,6 +8,7 @@ import {
   saveAutoPlanBuildIntent
 } from './auto-plan-build-intents'
 import {
+  AUTO_PLAN_MISSING_PLAN_ERROR,
   AUTO_PLAN_RECOVERY_MISMATCH_ERROR,
   LEGACY_AUTO_PLAN_DUPLICATE_ERROR,
   autoPlanBuildControllerTestApi,
@@ -462,7 +463,7 @@ describe('Automatic plan-build orchestration', () => {
     )
   })
 
-  it('fails closed when a terminal plan turn has no matching plan result', async () => {
+  it('retires a terminal plan turn that wrote no plan and explains why', async () => {
     installWindow()
     const intent = { ...directIntent(), planTurnId: 'turn-plan' }
     saveAutoPlanBuildIntent(intent)
@@ -476,8 +477,47 @@ describe('Automatic plan-build orchestration', () => {
     })
     await autoPlanBuildControllerTestApi.reconcileIntent(intent)
     expect(provider.sendUserMessage).not.toHaveBeenCalled()
-    expect(listAutoPlanBuildIntents()[0]?.status).toBe('needs_attention')
-    expect(useChatStore.getState().error).toContain('matching successful plan')
+    expect(listAutoPlanBuildIntents()).toEqual([])
+    expect(useChatStore.getState().error).toBe(AUTO_PLAN_MISSING_PLAN_ERROR)
+  })
+
+  it('retires an aborted plan turn without a banner', async () => {
+    installWindow()
+    const intent = { ...directIntent(), planTurnId: 'turn-plan' }
+    saveAutoPlanBuildIntent(intent)
+    useChatStore.setState({ activeThreadId: 'thread-1', error: null })
+    provider.getThreadDetail.mockResolvedValue({
+      blocks: [],
+      latestSeq: 2,
+      threadStatus: 'idle',
+      latestTurnId: 'turn-plan',
+      latestTurnStatus: 'aborted'
+    })
+    await autoPlanBuildControllerTestApi.reconcileIntent(intent)
+
+    expect(listAutoPlanBuildIntents()).toEqual([])
+    expect(useChatStore.getState().error).toBeNull()
+  })
+
+  it('does not re-raise the missing-plan banner for a retired intent', async () => {
+    installWindow()
+    const intent = { ...directIntent(), planTurnId: 'turn-plan' }
+    saveAutoPlanBuildIntent(intent)
+    useChatStore.setState({ activeThreadId: 'thread-1', error: null })
+    provider.getThreadDetail.mockResolvedValue({
+      blocks: [],
+      latestSeq: 2,
+      threadStatus: 'idle',
+      latestTurnId: 'turn-plan',
+      latestTurnStatus: 'completed'
+    })
+    await autoPlanBuildControllerTestApi.reconcileIntent(intent)
+    useChatStore.setState({ error: null })
+
+    await autoPlanBuildControllerTestApi.reconcileIntent(intent)
+
+    expect(useChatStore.getState().error).toBeNull()
+    expect(listAutoPlanBuildIntents()).toEqual([])
   })
 
   it('ignores a stale terminal status from another turn while planning', async () => {

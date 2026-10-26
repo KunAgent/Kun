@@ -114,6 +114,7 @@
   "approvalSubmitting": "กำลังส่งการตัดสินใจ...",
   "approvalFailed": "คำขอล้มเหลว",
   "approvalNativeConfirmationCancelled": "ยกเลิกการยืนยันแล้ว การดำเนินการนี้ยังรอการตัดสินใจของคุณ",
+  "approvalReviewModel": "Review model: {{model}}",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

@@ -53,7 +53,16 @@ export type WorkerProviderPoolEntry = {
  * static list; `native-login` on a `probe` harness uses the last cached probe
  * result and falls back to the static list when none is cached.
  */
-export async function resolveWorkerRoute(input: {
+export async function resolveWorkerRoute(input: Parameters<typeof resolveWorkerRouteInput>[0]): Promise<ResolvedWorkerRoute | { error: string }> {
+  const result = await resolveWorkerRouteInput(input)
+  if (input.agent?.harnessId && 'error' in result) {
+    // Omitting the pin invokes the selector, not necessarily the parent route.
+    return { error: `${result.error} Continue in the original conversation with its own Agent and model if authorized; explain the fallback. Do not bypass approval or cancellation.` }
+  }
+  return result
+}
+
+async function resolveWorkerRouteInput(input: {
   catalog: Pick<HarnessCatalog, 'get'>
   /** Manager thread's own model/provider; default for provider-sourced routes. */
   managerModel?: string

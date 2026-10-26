@@ -10,6 +10,7 @@ import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
 import { useWardrobeTabRequest } from '../wardrobe/wardrobe-tab-request'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 import { KunAccountControl } from './KunAccountControl'
+import { resetAccountAvatarForTests } from './account-avatar'
 
 const roomsRequest = vi.hoisted(() => vi.fn())
 vi.mock('../rooms/rooms-client', () => ({ roomsRequest }))
@@ -203,12 +204,59 @@ describe('sidebar Kun account card', () => {
     })
     await act(async () => root.render(footer(false)))
     expect(card().dataset.variant).toBe('card')
+    // Signed out, Focus mode shows no account at all, not even a sign-in prompt.
     await act(async () => root.render(footer(true)))
     expect(card()).toBeNull()
+    expect(text()).not.toContain('kunAccountCardSignedOut')
     expect(container.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
     await act(async () => root.render(footer(false)))
     expect(card().dataset.variant).toBe('card')
     expect(container.querySelector('.kun-account-card-login')).not.toBeNull()
+  })
+
+  it('docks Settings on the account card, in the menu, and in the tool row during Focus mode', async () => {
+    const onOpenSettings = vi.fn()
+    const footer = (focusModeEnabled: boolean) => createElement(SidebarStandardFooter, {
+      focusModeEnabled, connectPhoneSidebarOpen: false, onFocusModeChange: vi.fn(), onOpenSettings, onToggleConnectPhone: vi.fn()
+    })
+    const gear = () => container.querySelector<HTMLButtonElement>('[aria-label="settings"]')
+    current = signedIn
+    await act(async () => root.render(footer(false)))
+    expect(container.querySelector('[data-kun-account-dock]')).not.toBeNull()
+    expect(card().contains(gear())).toBe(true)
+    expect(card().querySelector('.kun-account-card-chevron')).toBeNull()
+    await act(async () => gear()!.click())
+    expect(onOpenSettings).toHaveBeenCalledOnce()
+    await act(async () => entry().click())
+    await act(async () => button('kunAccountMenuSettingsHint').click())
+    expect(onOpenSettings).toHaveBeenCalledTimes(2)
+    expect(panel()).toBeNull()
+    // Focus mode: no frame, the face alone stands for the account and Settings joins the tools.
+    await act(async () => root.render(footer(true)))
+    expect(container.querySelector('.kun-account-dock')).toBeNull()
+    expect(card().dataset.variant).toBe('mini')
+    expect(card().textContent).not.toContain('Person')
+    expect(container.querySelector('.kun-account-focus-row')?.contains(gear())).toBe(true)
+    await act(async () => entry().click())
+    expect(panel()?.dataset.view).toBe('menu')
+  })
+
+  it('opens the avatar picker from the menu face and switches to the Kun look', async () => {
+    const items = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (key: string) => items.get(key) ?? null, setItem: (key: string, value: string) => { items.set(key, value) } })
+    resetAccountAvatarForTests()
+    current = signedIn
+    await act(async () => root.render(createElement(KunAccountControl)))
+    await act(async () => entry().click())
+    expect(document.querySelector('[data-kun-avatar-picker]')).toBeNull()
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-kun-avatar-edit]')!.click())
+    const option = (kind: string) => document.querySelector<HTMLButtonElement>(`[data-kun-avatar-option="${kind}"]`)!
+    // No account photo and no picture yet: the first choice asks for one, Kun is worn.
+    expect(option('own').textContent).toContain('kunAccountAvatarUpload')
+    expect(option('kun').getAttribute('aria-checked')).toBe('true')
+    await act(async () => option('kun').click())
+    expect(JSON.parse(items.get('kun.account.avatar.v1')!).source).toBe('kun')
+    vi.unstubAllGlobals()
   })
 
   it('stays out of the remote browser client', async () => {

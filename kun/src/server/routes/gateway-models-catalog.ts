@@ -22,7 +22,7 @@ export type GatewayModelDescription = {
   native_endpoints?: string[]
 }
 
-const EFFORT_ORDER = ['off', 'low', 'medium', 'high', 'max', 'auto']
+const EFFORT_ORDER = ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'auto']
 const ENDPOINT_PATHS = { chat_completions: '/v1/chat/completions', responses: '/v1/responses', messages: '/v1/messages' } as const
 
 type Member = { providerId: string; modelId: string }

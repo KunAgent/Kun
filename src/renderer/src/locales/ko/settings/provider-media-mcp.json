@@ -57,6 +57,7 @@
   "providerModelEffortLow": "낮음",
   "providerModelEffortMedium": "중간",
   "providerModelEffortHigh": "높음",
+  "providerModelEffortXhigh": "매우 높음",
   "providerModelEffortMax": "맥스",
   "providerModelAliasesLabel": "별칭(선택 사항)",
   "providerModelAliasesPlaceholder": "쉼표로 구분됨(예: deepseek-채팅",

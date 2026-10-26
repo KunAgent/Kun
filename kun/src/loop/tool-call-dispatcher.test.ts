@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeToolResultItem } from '../domain/item.js'
 import type { ToolCallLike, ToolHostContext, ToolHostResult } from '../ports/tool-host.js'
 import type { ToolDispatchInput } from './turn-execution-types.js'
+import { ToolStormBreaker } from './tool-storm-breaker.js'
 import { ToolCallDispatcher } from './tool-call-dispatcher.js'
 import {
   FastContextSourceSemaphore,
@@ -63,6 +64,50 @@ function dispatchInput(calls: ToolCallLike[]): ToolDispatchInput {
 }
 
 describe('ToolCallDispatcher', () => {
+  it.each(['notes_read_file', 'read'])('bounds repeated failures in a large %s batch and pairs every result', async (toolName) => {
+    const persisted: string[] = []
+    const suppressed: string[] = []
+    const executeSafely = vi.fn(async ({ call: entry }: { call: ToolCallLike }) => {
+      const result = resultFor(entry)
+      if (result.item.kind === 'tool_result') result.item.isError = true
+      return result
+    })
+    const dispatcher = new ToolCallDispatcher({
+      executeSafely,
+      persistResult: async (_thread, _turn, entry) => { persisted.push(entry.callId) },
+      persistSuppressed: async ({ call: entry }) => { suppressed.push(entry.callId) }
+    })
+    const stormBreaker = new ToolStormBreaker()
+    const calls = Array.from({ length: 20 }, (_, i) => call(toolName, `call-${i}`))
+    expect(await dispatcher.dispatch({ dispatch: dispatchInput(calls), context, stormBreaker })).toBe('some_suppressed')
+    expect(executeSafely).toHaveBeenCalledTimes(3)
+    expect(suppressed).toHaveLength(17)
+    expect(new Set([...persisted, ...suppressed]).size).toBe(20)
+    expect(await dispatcher.dispatch({ dispatch: dispatchInput([call(toolName, 'again')]), context, stormBreaker })).toBe('all_suppressed')
+    expect(executeSafely).toHaveBeenCalledTimes(3)
+  })
+
+  it('records distinct parallel failures and reports suppression mixed with unrelated success', async () => {
+    const dispatcher = new ToolCallDispatcher({
+      executeSafely: async ({ call: entry }) => {
+        const result = resultFor(entry)
+        if (result.item.kind === 'tool_result') result.item.isError = entry.toolName !== 'echo'
+        return result
+      },
+      persistResult: async () => undefined,
+      persistSuppressed: async () => undefined
+    })
+    const stormBreaker = new ToolStormBreaker()
+    for (let i = 0; i < 3; i++) {
+      expect(await dispatcher.dispatch({
+        dispatch: dispatchInput([call('read', `r${i}`), call('grep', `g${i}`)]), context, stormBreaker
+      })).toBe('continue')
+    }
+    expect(await dispatcher.dispatch({
+      dispatch: dispatchInput([call('read', 'r4'), call('echo', 'ok')]), context, stormBreaker
+    })).toBe('some_suppressed')
+    expect(stormBreaker.inspect(call('grep', 'g4')).suppress).toBe(true)
+  })
   it('shares the source result budget across a parallel source batch', async () => {
     const observed: number[] = []
     const dispatcher = new ToolCallDispatcher({

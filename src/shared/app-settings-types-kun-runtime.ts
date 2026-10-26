@@ -422,6 +422,9 @@ export type KunAdeSettingsV1 = {
   dispatch: {
     autoStartSeconds: number
     autoStartWhenConfirmationRequired: boolean
+    /** User guidance on which Agent and model suit which work; '' = none. */
+    preferencePrompt: string
+    preferences: import('./ade-collaboration-settings').AdeDispatchPreferenceRule[]
   }
   tasks: import('./ade-collaboration-settings').AdeTaskSuggestionSettings
   /** GUI-only notification switches; never written into Kun config. */

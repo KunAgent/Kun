@@ -130,6 +130,8 @@ const ACP_CLI_SPECS: CliSpec[] = [
     rejectApplicationLauncher: true,
     config: ['.qoder/settings.json'], docs: 'https://docs.qoder.com/cli/acp',
     install: unixInstaller('https://qoder.com/install'), loginArgs: ['login'],
+    // ACP advertises yolo; keep the saved native preference stable.
+    policy: { modeAliases: { bypass_permissions: ['yolo', 'bypassPermissions'] } },
     permissions: [ask(), full('bypass_permissions', 'Bypass permissions')]
   },
   {
@@ -137,6 +139,7 @@ const ACP_CLI_SPECS: CliSpec[] = [
     rejectApplicationLauncher: true,
     config: ['.qoder-cn/settings.json'], docs: 'https://docs.qoder.cn/cli/acp',
     install: npm('@qodercn-ai/qoderclicn'),
+    policy: { modeAliases: { bypass_permissions: ['yolo', 'bypassPermissions'] } },
     loginArgs: ['login'], permissions: [ask(), full('bypass_permissions', 'Bypass permissions')]
   },
   {

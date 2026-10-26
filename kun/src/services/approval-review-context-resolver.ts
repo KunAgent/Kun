@@ -22,6 +22,7 @@ export function createApprovalReviewModelContextResolver(input: {
   clients: { resolve(providerId?: string): ModelClient; capture?(providerId?: string): ModelClient }
   routePoolProviderIds?: readonly string[]
   inheritedRouteAllowed?: (route: ApprovalReviewModelRoute) => boolean
+  nativeRouteAllowed?: (route: ApprovalReviewModelRoute) => boolean
 }): ApprovalReviewModelContextResolver {
   const routePoolIds = new Set(
     (input.routePoolProviderIds ?? []).map((id) => id.trim().toLowerCase())
@@ -30,6 +31,13 @@ export function createApprovalReviewModelContextResolver(input: {
     const selection = input.selection() ?? DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION
     if (selection.mode === 'inherit') {
       const route = exactRoute(actingRoute)
+      if (actingRoute?.source && actingRoute.source.harnessId !== 'kun') {
+        const gateway = actingRoute.source.credentialMode === 'kun-gateway' ||
+          route?.providerId?.trim() === LOCAL_MODEL_GATEWAY_PROVIDER_ID
+        if (!route?.providerId || (!gateway && !input.nativeRouteAllowed?.(actingRoute))) {
+          throw new Error('The third-party execution model cannot be inherited for automatic review. Configure an independent approval review model or switch to manual approval; refusing provider substitution.')
+        }
+      }
       if (!route || route.unresolvedGatewayAlias) throw new Error('the acting turn model route is unavailable until the gateway resolves its first upstream')
       if (input.inheritedRouteAllowed && !input.inheritedRouteAllowed(route)) throw new Error('The acting gateway target is no longer allowed; automatic review will not substitute another provider')
       return { source: 'inherit', route, client: input.clients.capture?.(route.providerId) ?? input.clients.resolve(route.providerId) }

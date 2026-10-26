@@ -26,7 +26,12 @@ export function useTeamWorkers(managerThreadId: string | null, active: boolean):
     () => (managerThreadId ? selectWorkerRowsForParent(activityRows, managerThreadId) : []),
     [activityRows, managerThreadId]
   )
-  const [overview, setOverview] = useState<AdeTeamOverview | null>(null)
+  const [storedOverview, setOverview] = useState<AdeTeamOverview | null>(null)
+  const [stateManagerId, setStateManagerId] = useState(managerThreadId)
+  // Scope cached data synchronously: effects reset after render, too late to
+  // prevent mounting another manager's transcript for a single frame.
+  const currentScope = stateManagerId === managerThreadId
+  const overview = currentScope && managerThreadId ? storedOverview : null
   const [loaded, setLoaded] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const loadGeneration = useRef(0)
@@ -53,8 +58,9 @@ export function useTeamWorkers(managerThreadId: string | null, active: boolean):
 
   useEffect(() => {
     if (!active) return
+    setStateManagerId(managerThreadId)
     setOverview(null)
-    setLoaded(false)
+    setLoaded(!managerThreadId)
     setLoadFailed(false)
     if (managerThreadId) void load(managerThreadId)
     return () => { loadGeneration.current += 1 }
@@ -84,5 +90,10 @@ export function useTeamWorkers(managerThreadId: string | null, active: boolean):
     () => (managerThreadId ? load(managerThreadId) : Promise.resolve()),
     [load, managerThreadId]
   )
-  return { overview, rows, loaded, loadFailed, reload }
+  return {
+    overview, rows,
+    loaded: !managerThreadId || (currentScope && loaded),
+    loadFailed: currentScope && loadFailed,
+    reload
+  }
 }

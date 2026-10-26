@@ -28,7 +28,7 @@ export type ModelInputModality = z.infer<typeof ModelInputModality>
 export const ModelMessagePartSupport = z.enum(['text', 'image_url', 'input_image'])
 export type ModelMessagePartSupport = z.infer<typeof ModelMessagePartSupport>
 
-export const ModelReasoningEffort = z.enum(['auto', 'off', 'low', 'medium', 'high', 'max'])
+export const ModelReasoningEffort = z.enum(['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'])
 export type ModelReasoningEffort = z.infer<typeof ModelReasoningEffort>
 
 export const ModelServiceTier = z.enum(['priority', 'flex'])

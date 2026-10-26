@@ -1,6 +1,7 @@
 import {
   codexLiteVisionChatProfile,
   minimaxM2ChatProfile,
+  minimaxM31FlashChatProfile,
   minimaxM3ChatProfile,
   textChatProfile,
   visionChatProfile,
@@ -116,6 +117,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     baseUrl: 'https://api.minimaxi.com/anthropic',
     endpointFormat: 'messages',
     models: [
+      'MiniMax-M3.1-Flash',
       'MiniMax-M3',
       'MiniMax-M2.7',
       'MiniMax-M2.7-highspeed',
@@ -126,6 +128,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
       'MiniMax-M2'
     ],
     modelProfiles: {
+      'MiniMax-M3.1-Flash': minimaxM31FlashChatProfile(),
       'MiniMax-M3': minimaxM3ChatProfile(),
       'MiniMax-M2.7': minimaxM2ChatProfile(),
       'MiniMax-M2.7-highspeed': minimaxM2ChatProfile(),
@@ -164,6 +167,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
       ],
       endpointFormat: 'messages',
       models: [
+        'MiniMax-M3.1-Flash',
         'MiniMax-M3',
         'MiniMax-M2.7',
         'MiniMax-M2.7-highspeed',
@@ -174,6 +178,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
         'MiniMax-M2'
       ],
       modelProfiles: {
+        'MiniMax-M3.1-Flash': minimaxM31FlashChatProfile(),
         'MiniMax-M3': minimaxM3ChatProfile(),
         'MiniMax-M2.7': minimaxM2ChatProfile(),
         'MiniMax-M2.7-highspeed': minimaxM2ChatProfile(),

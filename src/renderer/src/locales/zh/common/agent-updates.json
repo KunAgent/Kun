@@ -1,5 +1,6 @@
 {
   "agentUpdate": {
+    "nativePermissionFullAccessRequired": "{{agent}}：自定义 mode {{mode}} 需要 Full access。可在 Agent 设置中清除它，恢复跟随输入框权限。",
     "title": "Agent 版本",
     "unchecked": "尚未检查",
     "checking": "正在检查更新…",

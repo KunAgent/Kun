@@ -47,7 +47,8 @@
     "pausedHold": "Paused · won't auto-dispatch",
     "pause": "Pause",
     "executor": "Runs on",
-    "routeHint": "Switch the Agent or model for each task; any change restarts the timer.",
+    "routeHint": "Switch the Agent or model for each task; the countdown pauses while you adjust and restarts 10 seconds after you stop.",
+    "holdHint": "Adjusting, countdown paused · restarts after {{seconds}}s without changes",
     "agentMenuHint": "Changes only this task's Agent; the timer restarts.",
     "roleLabel": "Role",
     "roleNone": "No role",
@@ -71,5 +72,32 @@
       "terminal_prompt": "Waiting at a terminal prompt"
     }
   },
-  "roomsWorkbenchDispatchPolicyHint": "Code task cards follow this conversation’s permissions: confirmation, automatic review, or full access. A card with no reply starts after the window set in Settings › Collaboration. Other actions use the policy above."
+  "roomsWorkbenchDispatchPolicyHint": "Code task cards follow this conversation’s permissions: confirmation, automatic review, or full access. A card with no reply starts after the window set in Settings › Collaboration. Other actions use the policy above.",
+  "dispatchPreference": {
+    "title": "Collaboration preferences",
+    "empty": "Not set · the dispatching Agent decides",
+    "description": "Choose which Agent and model you prefer in each scenario. These are contextual suggestions, not a fixed workflow. Explicit requests in this conversation take priority.",
+    "placeholder": "For example:\n- UI and styling: Claude Code · opus\n- Code review and security checks: Codex · gpt-6.1-codex\n- Bulk small edits and test runs: Kun · deepseek-flash\n- Never send network-dependent work to Devin",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "saved": "Saved; applies to the next dispatch",
+    "conflict": "Changed elsewhere; the latest version was loaded. Your edit did not overwrite it.",
+    "summary": "{{count}} preferences",
+    "add": "Add scenario preference",
+    "remove": "Delete preference",
+    "enabled": "Enabled",
+    "scenarioLabel": "Applicable scenario",
+    "scenarioPlaceholder": "For example: architecture and difficult debugging",
+    "ruleNote": "Additional guidance (optional)",
+    "defaultModel": "Use Agent default model",
+    "notesLabel": "Additional instructions",
+    "notesPlaceholder": "Other preferences; existing free-form instructions are preserved here",
+    "preview": "Preview injected text",
+    "previewHint": "This is the actual preference body. The runtime adds guidance about autonomy, permissions and fallback.",
+    "fallbackNote": "Preferences do not define a workflow. If the preferred Agent is unavailable or dispatch fails, the original conversation Agent and model take over. Started work retains the existing failure policy.",
+    "limitReached": "Up to 8 preferences are supported.",
+    "tooLong": "Preferences and additional instructions exceed 2000 characters. Shorten them before saving.",
+    "close": "Close collaboration preferences"
+  }
 }

@@ -49,6 +49,8 @@ export class AcpLiveSteering {
   private delivery: AcpGuidanceDelivery | undefined
   private state: 'waiting' | 'running' | 'closed' = 'waiting'
   private finishing: Promise<void> | undefined
+  /** A live guidance already failed once; a failed follow-up reports, it does not fail the turn. */
+  private retryingFailedLive = false
   private readonly unsubscribe: () => void
 
   constructor(private readonly input: AcpLiveSteeringInput) {
@@ -85,7 +87,14 @@ export class AcpLiveSteering {
       return
     }
     const request: Promise<void> = delivery.send(entries)
-      .then((raw) => delivery.onResult(raw), (error) => delivery.onError(error))
+      .then((raw) => delivery.onResult(raw), (error) => {
+        // The run ended between admission and delivery. The text is already a
+        // user item of the turn, so keep it for `finish` to answer as a
+        // follow-up prompt instead of dropping what the user asked for.
+        this.deferred.push(...entries)
+        this.retryingFailedLive = true
+        this.input.debug?.(`live guidance not delivered: ${String(error).slice(0, 200)}`)
+      })
       .finally(() => { this.inflight.delete(request) })
     this.inflight.add(request)
   }
@@ -129,8 +138,15 @@ export class AcpLiveSteering {
           await delivery.onResult(await delivery.send(pending))
         } catch (error) {
           // Seal before failing the turn; later guidance is kept, not sent.
-          failure = { error }
           sending = false
+          if (this.retryingFailedLive) {
+            // This text already failed mid-run; report the second failure and
+            // let the turn settle instead of failing it over one lost guidance.
+            this.retryingFailedLive = false
+            delivery.onError(error)
+          } else {
+            failure = { error }
+          }
         }
       }
       pending = []

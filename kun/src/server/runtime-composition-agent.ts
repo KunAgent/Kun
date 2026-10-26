@@ -43,6 +43,7 @@ import {
 } from './runtime-composition-manager.js'
 import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { createAdeManagerContext } from '../ade/manager-context.js'
+import { setDispatchPreferenceSource } from '../ade/dispatch-guidance.js'
 import { createTaskSuggestionContext } from '../delegation/task-suggestion-context.js'
 import { createTaskSuggestionToolProvider } from '../adapters/tool/task-suggestion-tool-provider.js'
 import { createRuntimeAgentRoster } from './runtime-composition-roster.js'
@@ -230,8 +231,11 @@ export async function createRuntimeAgentComposition(
     ...services.adeStores,
     harnessSummary: graphHarnessSummary,
     canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false,
-    dispatchIntents: services.agentDispatchService
+    dispatchIntents: services.agentDispatchService,
+    // Read per step: the Settings window and the Collaboration panel apply it without a restart.
+    dispatchPreference: () => core.activeOptions.ade?.dispatch?.preferencePrompt
   })
+  setDispatchPreferenceSource(() => core.activeOptions.ade?.dispatch?.preferencePrompt)
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(
       buildMainDelegatedRuntime({

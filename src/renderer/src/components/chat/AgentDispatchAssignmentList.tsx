@@ -27,12 +27,13 @@ function ProgressChip({ progress }: { progress: WorkerProgress }) {
  * One row per worker. While the card waits, each row carries its own Agent and
  * model choice; once admitted, the row shows live progress and opens the worker.
  */
-export function AgentDispatchAssignmentList({ intent, assignments, editable, busy, onRouteChange, onOpenWorker }: {
+export function AgentDispatchAssignmentList({ intent, assignments, editable, busy, onRouteChange, onInteract, onOpenWorker }: {
   intent: AgentDispatchIntentView
   assignments: readonly AgentDispatchAssignmentView[]
   editable: boolean
   busy: boolean
   onRouteChange: (index: number, route: AgentDispatchAssignmentRoute) => void
+  onInteract?: () => void
   onOpenWorker: (workerId: string, label?: string) => void
 }) {
   const { t } = useTranslation('common')
@@ -55,7 +56,7 @@ export function AgentDispatchAssignmentList({ intent, assignments, editable, bus
           {editable
             ? <AgentDispatchRoutePicker route={assignment} disabled={busy} roleUse="worker"
               workspace={intent.recommendation.workspace}
-              onChange={(route) => onRouteChange(index, route)} />
+              onChange={(route) => onRouteChange(index, route)} onInteract={onInteract} />
             : <AgentDispatchRouteLabel route={assignment} agentName={assignment.agentName} />}
         </div>
         {progress ? <ProgressChip progress={progress} /> : null}

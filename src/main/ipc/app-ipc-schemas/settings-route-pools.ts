@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { MAX_MODEL_ID_LENGTH } from './common'
 
-const routeEffortSchema = z.enum(['off', 'low', 'medium', 'high', 'max', 'auto'])
+const routeEffortSchema = z.enum(['off', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'])
 const modelIdSchema = z.string().trim().min(1).max(MAX_MODEL_ID_LENGTH)
 
 /** Renderer patches for route pools, including turn rules, member effort, manual pick and nesting. */

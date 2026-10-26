@@ -11,6 +11,7 @@ import {
   usePlanWorktreePreferenceStore
 } from '../plan/plan-worktree-preference-store'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { usePlanBuildAgentStore } from '../plan/plan-build-agent-store'
 import {
   buildDraftGuiPlanTurnOverrides,
   buildGuiPlanTurnOverrides,
@@ -232,6 +233,32 @@ describe('workbench plan build orchestration', () => {
     )
     expect(setComposerMode).toHaveBeenCalledWith('agent')
     expect(useChatStore.getState().composerOrchestration).toBe('graph')
+  })
+
+  it('builds on the Agent and model picked on the plan card', async () => {
+    const writeWorkspaceFile = vi.fn(async () => ({
+      ok: true as const, path: '/Users/codex/app/.kunsdd/plan/checkout.md', savedAt: '2026-07-29T00:00:00.000Z'
+    }))
+    vi.stubGlobal('window', { kunGui: { writeWorkspaceFile } })
+    const planId = useGuiPlanStore.getState().activePlan!.id
+    usePlanBuildAgentStore.getState().setRoute(planId, { agentId: 'kun', model: 'kimi-k3', providerId: 'moonshot' })
+    const sendMessage = vi.fn(async () => true)
+    const controller = controllerHarness({ sendMessage })
+    await act(async () => { await controller.buildGuiPlan('direct') })
+    expect(sendMessage).toHaveBeenCalledWith(expect.any(String), 'agent',
+      expect.objectContaining({ harnessId: 'kun', model: 'kimi-k3', providerId: 'moonshot', orchestration: 'direct' }))
+
+    sendMessage.mockClear()
+    const dispatchExternalPlanBuild = vi.fn(async () => true)
+    useChatStore.setState({ dispatchExternalPlanBuild } as Partial<ChatState>)
+    usePlanBuildAgentStore.getState().setRoute(planId, { agentId: 'codex', model: 'gpt-6.1-codex', credentialMode: 'native-login' })
+    await act(async () => { await controller.buildGuiPlan('direct') })
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(dispatchExternalPlanBuild).toHaveBeenCalledWith(expect.objectContaining({
+      harnessId: 'codex', model: 'gpt-6.1-codex', credentialMode: 'native-login', workspaceRoot: '/Users/codex/app'
+    }))
+    expect(usePlanBuildAgentStore.getState().handoffs[planId]?.route.agentId).toBe('codex')
+    usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} })
   })
 
   it('sends an explicit Graph build without selecting Graph for later messages', async () => {

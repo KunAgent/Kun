@@ -445,7 +445,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
   })
 
   const decideRoomApproval = roomProtectedControls(options, nativeDialogs)
-  const decideApproval = protectedApprovalControls(options, nativeDialogs)
+  const decideApproval = protectedApprovalControls(options)
   ipcMain.handle('approval:decide', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()

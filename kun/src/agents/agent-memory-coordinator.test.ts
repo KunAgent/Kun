@@ -16,7 +16,7 @@ import type { ModelClient } from '../ports/model-client.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 
 const resources: Array<{ root: string; store: SqliteRoomStore; capture: AgentMemoryCoordinator }> = []
-async function fixture(compare = false) {
+async function fixture(compare = false, damaged = false) {
   const root = await mkdtemp(join(tmpdir(), 'kun-agent-capture-'))
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const agents = new AgentIdentityService(store, () => ({}))
@@ -35,12 +35,21 @@ async function fixture(compare = false) {
     calls++
     const text = input.history[0]
     const source = JSON.parse('text' in text ? text.text : '{}')
-    yield { kind: 'assistant_text_delta', text: JSON.stringify({ candidates: [{
+    const existingId = source.existing[0]?.id as string | undefined
+    const base = {
       content: 'Reports use Chinese and include source links.', type: 'preference', confidence: .9, importance: .7,
-      tags: [], sourceIds: [source.sources[0].id], durability: 'durable', comparisons: compare && source.existing[0] ? [{
-        memoryId: source.existing[0].id, relation: 'update', reason: 'Consolidate new reporting preference.'
-      }] : []
-    }] }) }
+      tags: [], sourceIds: [source.sources[0].id], durability: 'durable'
+    }
+    const candidates = damaged && existingId ? [
+      { ...base, comparisons: [{ memoryId: existingId, relation: 'supersede', reason: 'Replaces the earlier reporting preference.' }] },
+      { ...base, content: 'Reports should link every source inline.', comparisons: [
+        { memoryId: existingId, relation: 'supersede', reason: 'Also replaces the earlier reporting preference.' },
+        { memoryId: 'unrelated-memory', relation: 'replace' }
+      ] }
+    ] : [{ ...base, comparisons: compare && existingId ? [{
+      memoryId: existingId, relation: 'update', reason: 'Consolidate new reporting preference.'
+    }] : [] }]
+    yield { kind: 'assistant_text_delta', text: JSON.stringify({ candidates }) }
   } }
   const deps = { store, agentMemory: memory, memoryStore, model: () => ({ model: 'fixture' }),
     profiles: () => ({}), peerModels: { client, roles: () => undefined } } as unknown as RoomRuntimeDeps
@@ -118,6 +127,29 @@ it('leaves a conflicting inference pending instead of overwriting a user-locked 
   expect(proposals).toHaveLength(1)
   expect(proposals[0]!.value).toMatchObject({ status: 'pending', reason: 'user_locked', targetId: existing.memory.id })
   expect(proposals[0]!.value.candidate.consolidation?.sourceMemoryIds).toContain(existing.memory.id)
+})
+
+it('keeps a damaged-comparison candidate out of memory while a valid supersede stays pending', async () => {
+  const f = await fixture(false, true)
+  const existing = await f.memory.create(f.actor.id, { clientRequestId: 'earlier-preference', conversationId: f.room.id,
+    sourceMessageIds: [f.sourceMessageId], content: 'Reports must use Chinese and preserve complete source links.', type: 'preference' })
+  await f.capture.tick()
+  await f.publish('response-after-preference')
+  await f.capture.tick(); await setImmediate(); await f.capture.tick()
+  // The existing memory is neither overwritten nor superseded automatically.
+  const actual = await f.memory.find(f.actor.id, existing.memory.id)
+  expect(actual.content).toBe(existing.memory.content)
+  // The damaged candidate was not written as an unrelated new memory either.
+  expect((await f.memory.list(f.actor.id, {})).memories).toHaveLength(1)
+  // Only the clean supersede candidate is waiting for review.
+  const proposals = await f.store.list<import('./agent-memory-capture-types.js').AgentMemoryCandidate>('agent_memory_job', { phase: 'candidate' })
+  expect(proposals).toHaveLength(1)
+  expect(proposals[0]!.value).toMatchObject({ status: 'pending', action: 'supersede', targetId: existing.memory.id })
+  // The run completes and its record keeps the dropped-candidate diagnostic.
+  const runs = await f.store.list<RoomRunRecord>('room_run', { phase: 'memory' })
+  expect(runs).toHaveLength(1)
+  expect(runs[0].value.status).toBe('completed')
+  expect(runs[0].value.reason).toContain('dropped 1 invalid extraction candidate')
 })
 
 it('does not report a capture job blocked on its conversation as live work', async () => {

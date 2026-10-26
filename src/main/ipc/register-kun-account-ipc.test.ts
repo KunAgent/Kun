@@ -47,7 +47,7 @@ describe('Kun account IPC boundary', () => {
     registerKunAccountIpc(() => null, runtime)
     expect(mocks.create).not.toHaveBeenCalled()
     mocks.assertTrusted.mockImplementation(() => { throw new Error('untrusted') })
-    for (const channel of [channels.get, channels.login, channels.reopen, channels.cancel, channels.refresh, channels.logout, channels.manage]) {
+    for (const channel of [channels.get, channels.login, channels.reopen, channels.cancel, channels.refresh, channels.logout, channels.manage, channels.photo]) {
       await expect(Promise.resolve().then(() => mocks.handlers.get(channel)!({}))).rejects.toThrow('untrusted')
     }
     expect(mocks.create).not.toHaveBeenCalled()
@@ -112,4 +112,12 @@ describe('Kun account IPC boundary', () => {
     expect(mocks.save).not.toHaveBeenCalled()
   })
 
+})
+
+it('opens membership redemption on a fixed website URL without accepting renderer destinations', async () => {
+  registerKunAccountIpc(() => null, runtime)
+  await mocks.handlers.get(channels.membership)!({}, 'https://attacker.example')
+  expect(mocks.open).toHaveBeenCalledWith('https://www.kun-agent.com/account?tab=membership')
+  mocks.assertTrusted.mockImplementation(() => { throw new Error('untrusted') })
+  await expect(Promise.resolve().then(() => mocks.handlers.get(channels.membership)!({}))).rejects.toThrow('untrusted')
 })

@@ -130,6 +130,33 @@ export function acpPermissionActionKind(
   }
 }
 
+/**
+ * Execution detail the ACP agent actually declared for a tool call. The title
+ * is presentation text and must never be treated as the authorized command.
+ */
+export function acpExecutionDetail(toolCall: {
+  kind?: string | null
+  rawInput?: unknown
+}): { command?: string; cwd?: string } {
+  const raw = toolCall.rawInput
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const record = raw as { command?: unknown; args?: unknown; cwd?: unknown }
+  const argv = typeof record.command === 'string'
+    ? [record.command]
+    : Array.isArray(record.command)
+      ? record.command.filter((part): part is string => typeof part === 'string')
+      : []
+  const args = Array.isArray(record.args)
+    ? record.args.filter((part): part is string => typeof part === 'string')
+    : []
+  const command = argv.length ? [argv[0], ...args].join(' ') : ''
+  const cwd = typeof record.cwd === 'string' && record.cwd.trim() ? record.cwd.trim() : undefined
+  return {
+    ...(command ? { command } : {}),
+    ...(cwd ? { cwd } : {})
+  }
+}
+
 /** Build the approval request (envelope + request shell) for a tool call. */
 export function approvalRequestFromAcp(input: {
   params: AcpRequestPermissionParams
@@ -146,6 +173,7 @@ export function approvalRequestFromAcp(input: {
     (location): location is { path: string; line?: number | null } =>
       typeof location?.path === 'string' && location.path.length > 0
   )
+  const execution = acpExecutionDetail(toolCall)
   let action: ApprovalActionEnvelope = createApprovalActionEnvelope({
     toolName,
     providerKind: 'delegation',
@@ -159,6 +187,8 @@ export function approvalRequestFromAcp(input: {
     arguments: {
       ...(toolCall.title ? { title: toolCall.title } : {}),
       kind,
+      ...(execution.command ? { command: execution.command } : {}),
+      ...(execution.cwd ? { cwd: execution.cwd } : {}),
       ...(locations.length
         ? { locations: locations.map((l) => ({ path: l.path, ...(l.line ? { line: l.line } : {}) })) }
         : {}),
@@ -229,19 +259,8 @@ export async function acpPermissionTargets(
   const kind = toolCall.kind ?? 'other'
   const targets: Array<{ kind: 'file' | 'command'; target: string }> = []
   if (kind === 'execute') {
-    const raw = toolCall.rawInput
-    const command =
-      raw && typeof raw === 'object' && typeof (raw as { command?: unknown }).command === 'string'
-        ? (raw as { command: string }).command
-        : toolCall.title ?? ''
+    const command = acpExecutionDetail(toolCall).command
     if (command) targets.push({ kind: 'command', target: command })
-    const args =
-      raw && typeof raw === 'object' && Array.isArray((raw as { args?: unknown }).args)
-        ? (raw as { args: unknown[] }).args.filter((a): a is string => typeof a === 'string')
-        : []
-    if (command && args.length) {
-      targets.push({ kind: 'command', target: [command, ...args].join(' ') })
-    }
   }
   for (const location of toolCall.locations ?? []) {
     if (typeof location?.path === 'string' && location.path) {

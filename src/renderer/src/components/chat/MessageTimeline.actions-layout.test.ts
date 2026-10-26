@@ -17,6 +17,7 @@ import {
   GeneratedFilesPanel,
   MessageBubble,
   generatedMediaScrollAvailability,
+  assistantActionRowClass,
   settledTurnMetrics,
   turnMetricsLabel
 } from './message-timeline-bubbles'
@@ -204,6 +205,44 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     const copyIndex = html.slice(forkIndex).search(/copyMessage|Copy message|复制消息/)
     expect(forkIndex).toBeGreaterThanOrEqual(0)
     expect(copyIndex).toBeGreaterThan(0)
+  })
+
+  it('keeps wrapping footer groups bounded and actions in order with timing data', () => {
+    const html = renderToStaticMarkup(createElement(MessageBubble, {
+      block: { kind: 'assistant', id: 'assistant_footer', turnId: 'turn_1', text: 'hello', createdAt: '2026-10-26T10:00:00.000Z' },
+      forkAction: { busy: false, onFork: () => undefined },
+      rollbackAction: { busy: false, onRollback: () => undefined },
+      turnUsage: {
+        turnId: 'turn_1', requests: 1, inputTokens: 10, outputTokens: 5, reasoningTokens: 0,
+        cachedTokens: 0, cacheWriteTokens: 0, totalTokens: 15, actualCost: null,
+        referenceEstimateUsd: null, referencePriceBreakdown: null, estimateCoverage: 'unavailable',
+        providerIds: [], models: [], avgTtftMs: 6700, avgTokensPerSecond: 500
+      }
+    }))
+    const meta = html.match(/class="([^"]*)" data-assistant-action-meta/)
+    const actions = html.match(/class="([^"]*)" data-assistant-action-buttons/)
+    for (const group of [meta, actions]) {
+      expect(group?.[1].split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'max-w-full', 'flex-wrap']))
+    }
+    expect(actions?.[1].split(' ')).toEqual(expect.arrayContaining(['ml-auto', 'justify-end', 'whitespace-nowrap']))
+    expect(html).toContain('whitespace-normal break-words tabular-nums')
+    expect(html).toContain('Avg TTFT 6.7s · Avg 500.0 tok/s')
+    const positions = ['rollback', 'fork', 'export', 'copy'].map((action) => html.indexOf(`data-assistant-action="${action}"`))
+    expect(positions.every((position) => position >= 0)).toBe(true)
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
+  })
+
+  it('reveals wrapping actions on keyboard focus and keeps speaking actions visible', () => {
+    for (const speaking of [false, true]) {
+      expect(assistantActionRowClass(speaking).split(' ')).toEqual(expect.arrayContaining([
+        'flex-wrap', 'gap-y-1.5', 'focus-within:opacity-100', 'group-hover/message:opacity-100',
+        speaking ? 'opacity-100' : 'opacity-0'
+      ]))
+    }
+    const html = renderToStaticMarkup(createElement(MessageBubble, {
+      block: { kind: 'assistant', id: 'live-assistant', text: 'streaming' }
+    }))
+    expect(html).not.toContain('data-assistant-action-row')
   })
 
   it('renders an export action for completed assistant responses', () => {

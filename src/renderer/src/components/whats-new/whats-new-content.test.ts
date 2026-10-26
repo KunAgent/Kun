@@ -41,6 +41,21 @@ describe('loadWhatsNewContent', () => {
     expect(content.current?.features.length).toBeGreaterThan(0)
   })
 
+  it.each(['zh', 'en'] as const)('loads bundled 0.4.3 in %s with skipped release history', async (language) => {
+    const changelogUrl = 'https://github.com/KunAgent/Kun/compare/v0.4.2...v0.4.3'
+    const content = await loadWhatsNewContent(
+      { version: 'v0.4.3', previousVersion: '0.4.1', changelogUrl },
+      language
+    )
+    expect(content.current?.version).toBe('0.4.3')
+    expect(content.current?.features[0]?.title).toBe(
+      language === 'zh' ? '计划执行 Agent 选择' : 'Choose the plan execution Agent'
+    )
+    expect(content.current?.fixes).toHaveLength(7)
+    expect(content.older.map((summary) => summary.version)).toEqual(['0.4.2'])
+    expect(content.changelogUrl).toBe(changelogUrl)
+  })
+
   it('maps UI locales to the two release-note languages', () => {
     expect(releaseNotesLanguage('zh')).toBe('zh')
     expect(releaseNotesLanguage('zh-CN')).toBe('zh')

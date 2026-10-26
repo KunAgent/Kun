@@ -16,6 +16,7 @@ describe('subagentResumeToolGate', () => {
     expect(gate.requiredToolName).toBe('delegate_task')
     expect(gate.instruction).toContain('"child_resume"')
     expect(gate.instruction).toContain('expectedResumeCount set to 2')
+    expect(gate.instruction).toContain('omit label, profile, custom_agent, detach, and returnFormat')
     expect(gate.instruction).toContain('Do not create a new child')
   })
 

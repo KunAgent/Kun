@@ -630,4 +630,60 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('approvalDeny')
   })
 
+  it('never shows a success check for a failed automatic review', () => {
+    const html = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: {
+          kind: 'approval_review',
+          id: 'approval-review-failed',
+          reviewId: 'review_failed',
+          approvalId: 'approval_failed',
+          status: 'failed-closed',
+          toolName: 'acp:execute',
+          summary: 'Review command action acp:execute',
+          rationale:
+            'Automatic review denied because its configured model route is unavailable: model_not_found'
+        }
+      })
+    )
+    expect(html).toContain('Review failed closed')
+    expect(html).toContain('lucide-triangle-alert')
+    expect(html).not.toContain('lucide-check')
+    expect(html).toContain('[overflow-wrap:anywhere]')
+  })
+
+  it('shows the resolved review model and hides an empty route', () => {
+    const withRoute = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: {
+          kind: 'approval_review',
+          id: 'approval-review-approved',
+          reviewId: 'review_approved',
+          approvalId: 'approval_approved',
+          status: 'approved',
+          toolName: 'exec_command',
+          summary: 'Run tests',
+          reviewModelRoute: { providerId: 'deepseek', model: 'deepseek-chat' }
+        }
+      })
+    )
+    expect(withRoute).toContain('Review model: deepseek/deepseek-chat')
+    expect(withRoute).toContain('lucide-check')
+    expect(withRoute).not.toContain('lucide-triangle-alert')
+
+    const emptyRoute = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: {
+          kind: 'approval_review',
+          id: 'approval-review-empty',
+          reviewId: 'review_empty',
+          approvalId: 'approval_empty',
+          status: 'in-progress',
+          summary: 'Reviewing',
+          reviewModelRoute: { model: '  ' }
+        }
+      })
+    )
+    expect(emptyRoute).not.toContain('Review model')
+  })
 })

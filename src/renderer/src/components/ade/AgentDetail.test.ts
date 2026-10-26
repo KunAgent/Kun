@@ -6,6 +6,9 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunHarnessSettingsV1 } from '@shared/app-settings'
 import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import { useHarnessStore } from '../../store/harness-store'
+import { AgentPermissionModeField } from './AgentPermissionModeField'
+import { AgentSettingsSelect } from './AgentSettingsSelect'
+import { AgentConnectionTab } from './AgentConnectionTab'
 import { AgentDetail } from './AgentDetail'
 import { useAgentActivityStore } from './agent-center-activity-store'
 
@@ -50,6 +53,40 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('AgentDetail', () => {
+  it('blocks checks and old proofs while an ACP mode is being typed, then keeps it as a checked draft', async () => {
+    provider.testHarness.mockReset()
+    const row = agentRow('qoder')
+    row.definition.transport = 'acp'
+    row.definition.permissionModes = [{ id: 'default', label: 'Default', kunPermissionMode: 'ask-for-approval' }]
+    const { tree, patch } = mount(withHarnessReadiness(row), enabled('qoder'))
+    const editor = () => tree.root.findByType(AgentPermissionModeField)
+    act(() => editor().findByType(AgentSettingsSelect).props.onChange('custom'))
+    act(() => editor().findByType('input').props.onChange({ target: { value: ' yolo ' } }))
+    expect(patch).not.toHaveBeenCalled()
+    expect(tree.root.findByType(AgentConnectionTab).props.readiness).toBeUndefined()
+    await act(async () => { tree.root.findByType(AgentConnectionTab).props.onRecheck() })
+    expect(provider.testHarness).not.toHaveBeenCalled()
+    act(() => editor().findAllByType('button').find(node => node.children.includes('adeSettings.harnessPermissionCustomApply'))!.props.onClick())
+    expect(patch).not.toHaveBeenCalled()
+    expect(tree.root.findByType(AgentConnectionTab).props.entry.permissionMode).toBe('yolo')
+    expect(tree.root.findByType(AgentConnectionTab).props.dirty).toBe(true)
+    expect(tree.root.findByType(AgentConnectionTab).props.readiness).toBeUndefined()
+    act(() => tree.root.findByType(AgentConnectionTab).props.onDiscard())
+    expect(tree.root.findByType(AgentConnectionTab).props.entry.permissionMode).toBeUndefined()
+    act(() => tree.unmount())
+  })
+  it('offers ACP mode configuration before the first connection, never for SDK Agents', () => {
+    const row = agentRow('qoder')
+    row.definition.transport = 'acp'
+    const { tree, patch } = mount(row, defaultKunHarnessSettings())
+    const field = tree.root.findByType(AgentPermissionModeField)
+    act(() => field.props.onChange('yolo'))
+    expect(patch).toHaveBeenLastCalledWith({ defaults: { qoder: { permissionMode: 'yolo' } } })
+    act(() => tree.unmount())
+    const sdk = mount(agentRow(), defaultKunHarnessSettings()).tree
+    expect(sdk.root.findAllByType(AgentPermissionModeField)).toHaveLength(0)
+    act(() => sdk.unmount())
+  })
   it('keeps the switch locked and offers install steps while the Agent is not installed', () => {
     const { tree } = mount(agentRow('claude-code', { installed: 'no', reasonCode: 'not_installed', version: undefined }), defaultKunHarnessSettings())
     const toggle = tree.root.findByProps({ 'data-agent-enable': true })

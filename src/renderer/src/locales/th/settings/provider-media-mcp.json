@@ -57,6 +57,7 @@
   "providerModelEffortLow": "ต่ำ",
   "providerModelEffortMedium": "ปานกลาง",
   "providerModelEffortHigh": "สูง",
+  "providerModelEffortXhigh": "สูงมาก",
   "providerModelEffortMax": "สูงสุด",
   "providerModelAliasesLabel": "นามแฝง (ไม่บังคับ)",
   "providerModelAliasesPlaceholder": "คั่นด้วยเครื่องหมายจุลภาค เช่น แชทเชิงลึก",

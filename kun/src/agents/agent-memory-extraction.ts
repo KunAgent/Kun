@@ -5,7 +5,10 @@ import { collectAgentMemoryEvidence } from './agent-memory-evidence.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import { agentFastModel, assertAgentModel } from './agent-models.js'
 import { boundedRoomText } from '../rooms/room-context.js'
-import { MemoryDistillationExtractionResponse } from '../contracts/memory-distillation-runtime.js'
+import {
+  parseMemoryDistillationExtractionResponse,
+  type MemoryDistillationExtractionDroppedCandidate
+} from '../contracts/memory-distillation-runtime.js'
 import { decideMemoryCandidate } from '../memory/memory-distillation.js'
 import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
 import type { MemoryRecord } from '../contracts/memory.js'
@@ -76,7 +79,7 @@ export async function extractAgentMemories(deps: RoomRuntimeDeps, snapshot: Agen
       if (chunk.kind === 'usage') usage = chunk.usage
     }
     if (signal.aborted) throw signal.reason ?? new Error('memory extraction cancelled')
-    const result = MemoryDistillationExtractionResponse.parse(JSON.parse(output.trim().replace(/^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$/g, '')))
+    const result = parseMemoryDistillationExtractionResponse(JSON.parse(output.trim().replace(/^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$/g, '')))
     const candidates: AgentMemoryCaptureResult['candidates'] = []
     for (const value of result.candidates) {
       const { durability, comparisons, ...candidate } = value
@@ -88,8 +91,14 @@ export async function extractAgentMemories(deps: RoomRuntimeDeps, snapshot: Agen
       candidates.push({ action: decision.action, candidate: decision.candidate, targetId,
         targetFingerprint: target ? canonicalMemoryHash(target) : undefined })
     }
-    return { candidates, usage, elapsedMs: Date.now() - started }
+    return { candidates, usage, elapsedMs: Date.now() - started,
+      ...(result.dropped.length ? { diagnostics: [droppedCandidatesDiagnostic(result.dropped)] } : {}) }
   } catch (error) {
     return { candidates: [], usage, error: error instanceof Error ? error.message : String(error), elapsedMs: Date.now() - started }
   }
+}
+
+function droppedCandidatesDiagnostic(dropped: MemoryDistillationExtractionDroppedCandidate[]): string {
+  const detail = dropped.map((entry) => `#${entry.index} ${entry.error}`).join('; ')
+  return `dropped ${dropped.length} invalid extraction candidate(s): ${detail}`.slice(0, 300)
 }

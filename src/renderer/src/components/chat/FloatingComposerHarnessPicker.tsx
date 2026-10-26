@@ -1,4 +1,5 @@
-import { useCallback, useId, useState, type ReactElement } from 'react'
+import { useCallback, useContext, useEffect, useId, useState, type ReactElement } from 'react'
+import { ComposerPickerPortalContext } from './composer-picker-portal-context'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, History, Loader2, Settings2 } from 'lucide-react'
@@ -54,6 +55,7 @@ export function FloatingComposerHarnessPicker({
   hint
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const portalContainer = useContext(ComposerPickerPortalContext)
   const [open, setOpen] = useState(false)
   const [pendingSwitch, setPendingSwitch] = useState<AdeHarnessRow | null>(null)
   const menuId = useId()
@@ -69,6 +71,13 @@ export function FloatingComposerHarnessPicker({
     estimatedHeight: MENU_ESTIMATED_HEIGHT
   })
 
+  useEffect(() => {
+    if (!open || !portalContainer) return
+    const frame = requestAnimationFrame(() => menuRef.current?.querySelector<HTMLElement>(
+      '[aria-checked="true"], button:not(:disabled)')?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [open, portalContainer, menuRef])
+
   const pick = (row: AdeHarnessRow): void => {
     if (!harnessRowAvailable(row)) return
     if (row.definition.id === harnessId) {
@@ -80,6 +89,7 @@ export function FloatingComposerHarnessPicker({
       return
     }
     onSelect(row.definition.id)
+    if (portalContainer) triggerRef.current?.focus()
     setOpen(false)
   }
 
@@ -263,7 +273,7 @@ export function FloatingComposerHarnessPicker({
           )}
         </button>
       </div>
-      {menu ? createPortal(menu, document.body) : null}
+      {menu ? createPortal(menu, portalContainer ?? document.body) : null}
     </>
   )
 }

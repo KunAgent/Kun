@@ -1,3 +1,4 @@
+import { PLAN_WORKTREE_MIN_FREE_BYTES, planWorktreeLowDiskMessage } from '@shared/plan-worktree-disk'
 import type { PlanBuildOrchestration } from './plan-build'
 import { buildPlanBuildPrompt, type PromptPlanTodo } from './plan-prompts'
 import type { GuiPlanArtifact } from './plan-store'
@@ -51,6 +52,9 @@ export async function preparePlanBuild(input: {
     if (!branch.ok) throw new Error(branch.message)
     const targetBranch = branch.currentBranch?.trim()
     if (!targetBranch) throw new Error('Prompt Worktree requires a checked-out Git branch.')
+    if (typeof branch.worktreeFreeBytes === 'number' && branch.worktreeFreeBytes < PLAN_WORKTREE_MIN_FREE_BYTES) {
+      throw new Error(planWorktreeLowDiskMessage(branch.worktreeFreeBytes))
+    }
     if (input.currentPlanId() !== input.plan.id || input.currentThreadId() !== input.activeThreadId) {
       throw new Error('The active plan or conversation changed while preparing the build.')
     }

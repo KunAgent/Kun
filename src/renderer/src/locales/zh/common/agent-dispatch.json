@@ -47,7 +47,8 @@
     "pausedHold": "已暂停 · 不会自动派发",
     "pause": "暂停",
     "executor": "执行者",
-    "routeHint": "可为每个任务切换 Agent 和模型，修改后重新计时。",
+    "routeHint": "可为每个任务切换 Agent 和模型；调整时倒计时会暂停，停手 10 秒后重新开始计时。",
+    "holdHint": "正在调整，倒计时已暂停 · {{seconds}} 秒内无操作后重新开始计时",
     "agentMenuHint": "只改这一路任务的执行 Agent，修改后重新计时。",
     "roleLabel": "角色",
     "roleNone": "不指定角色",
@@ -71,5 +72,32 @@
       "terminal_prompt": "等待终端输入"
     }
   },
-  "roomsWorkbenchDispatchPolicyHint": "Code 任务卡片按当前对话权限处理：需要确认、自动审批或完全访问。无人回应的卡片会在「设置 › 协作」设定的等待时间后启动。其他操作使用上面的策略。"
+  "roomsWorkbenchDispatchPolicyHint": "Code 任务卡片按当前对话权限处理：需要确认、自动审批或完全访问。无人回应的卡片会在「设置 › 协作」设定的等待时间后启动。其他操作使用上面的策略。",
+  "dispatchPreference": {
+    "title": "协作偏好",
+    "empty": "未设置 · 由派发的 Agent 自行选择",
+    "description": "配置遇到什么场景时优先使用哪个 Agent 和模型。作为上下文建议，不是固定流程；当前对话的明确要求优先。",
+    "placeholder": "例如：\n- 前端界面和样式：Claude Code · opus\n- 代码审查、安全检查：Codex · gpt-6.1-codex\n- 批量小改动、跑测试：Kun · deepseek-flash\n- 不要用 Devin 处理需要联网的任务",
+    "save": "保存",
+    "saving": "正在保存…",
+    "cancel": "取消",
+    "saved": "已保存，下次派发生效",
+    "conflict": "偏好已在别处修改；已加载最新版本，本次编辑未覆盖它。",
+    "summary": "{{count}} 条偏好",
+    "add": "添加场景偏好",
+    "remove": "删除此偏好",
+    "enabled": "启用",
+    "scenarioLabel": "适用场景",
+    "scenarioPlaceholder": "例如：架构设计、疑难排查",
+    "ruleNote": "补充这条偏好（可选）",
+    "defaultModel": "跟随 Agent 默认模型",
+    "notesLabel": "补充说明",
+    "notesPlaceholder": "其他协作偏好；原有自由文本会保留在这里",
+    "preview": "查看注入内容",
+    "previewHint": "以下为实际偏好正文；运行时会附加非固定流程、权限边界与回退说明。",
+    "fallbackNote": "偏好不固定任务流程。优先 Agent 不可用或派发失败时，交由原会话的 Agent 和模型接手；已启动任务仍遵循现有失败处理策略。",
+    "limitReached": "最多可配置 8 条偏好。",
+    "tooLong": "偏好与补充说明合计超过 2000 字符，请精简后保存。",
+    "close": "关闭协作偏好"
+  }
 }

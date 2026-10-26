@@ -1,3 +1,4 @@
+import { redactApprovalSensitiveText } from '../../domain/approval.js'
 import type { HarnessDefinition } from '../../contracts/harness.js'
 import type { AcpConnection } from './acp-connection.js'
 import { ACP_AGENT_METHODS, AcpError, acpConfigOptionValues, type AcpConfigOption, type AcpSessionModes } from './acp-schema.js'
@@ -96,6 +97,13 @@ async function set<T>(conn: AcpConnection, mode: string, method: string, params:
     if ((error instanceof AcpError && error.code === 'request_aborted') || isAcpAuthenticationRequired(error)) throw error
     // A rejected control must never look like a missing saved session and
     // trigger a portable rebase that retains an unchecked native default.
-    throw denied(mode)
+    const details = error instanceof AcpError && error.data && typeof error.data === 'object' && 'details' in error.data
+      && typeof error.data.details === 'string' ? error.data.details : ''
+    const nativeMessage = `${error instanceof Error ? error.message : 'request failed'} ${details}`
+      .replace(/("[^"]*(?:token|secret|password|key|authorization)[^"]*"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
+    const summary = redactApprovalSensitiveText(nativeMessage)
+      .replace(/[\r\n\x00-\x1f\x7f]/g, ' ').slice(0, 300)
+    const rpcCode = error instanceof AcpError ? error.rpcCode : undefined
+    throw new AcpError('policy_denied', `${denied(mode).message} ${method}${rpcCode === undefined ? '' : ` (RPC ${rpcCode})`}: ${summary}`, { rpcCode })
   }
 }

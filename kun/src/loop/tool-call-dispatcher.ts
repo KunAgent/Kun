@@ -3,7 +3,7 @@ import { makeToolResultItem } from '../domain/item.js'
 import { exclusiveNewContextBatchError } from '../services/context-window-transition-coordinator.js'
 import type { ToolDispatchInput, ToolDispatchOutcome } from './turn-execution-types.js'
 import { collectParallelToolDispatchCandidates } from './tool-dispatch-policy.js'
-import type { ToolStormBreaker } from './tool-storm-breaker.js'
+import { toolCallFingerprint, type ToolStormBreaker } from './tool-storm-breaker.js'
 import type { ToolExecutionService } from './tool-execution-service.js'
 import {
   FAST_CONTEXT_SOURCE_TOOL_CAPACITY,
@@ -13,7 +13,7 @@ import {
 export type ToolCallDispatcherInput = {
   dispatch: ToolDispatchInput
   context: ToolHostContext
-  stormBreaker?: Pick<ToolStormBreaker, 'inspect'>
+  stormBreaker?: Pick<ToolStormBreaker, 'inspect' | 'recordResult' | 'inspectRejectedBatch'>
   onToolExecuted?: (toolName: string, result: ToolHostResult) => void
   /** Host-owned budget guard between batches; pending calls still get results. */
   canContinue?: () => boolean | Promise<boolean>
@@ -49,6 +49,7 @@ export class ToolCallDispatcher {
     const { dispatch } = input
     let index = 0
     let executedAny = false
+    let suppressedAny = false
 
     // Window transitions are exclusive: a batch mixing new_context with any
     // other call is rejected before a single side effect runs. Every call
@@ -56,6 +57,11 @@ export class ToolCallDispatcher {
     // transition on its own.
     const exclusiveError = exclusiveNewContextBatchError(dispatch.calls)
     if (exclusiveError) {
+      const storm = input.stormBreaker?.inspectRejectedBatch(dispatch.calls)
+      if (storm?.suppress) {
+        await this.suppressAll(dispatch, storm.reason ?? exclusiveError.message)
+        return 'all_suppressed'
+      }
       for (const call of dispatch.calls) {
         await this.toolExecution.persistResult(dispatch.threadId, dispatch.turnId, call, {
           item: makeToolResultItem({
@@ -86,6 +92,7 @@ export class ToolCallDispatcher {
 
       const storm = input.stormBreaker?.inspect(call)
       if (storm?.suppress) {
+        suppressedAny = true
         await this.toolExecution.persistSuppressed({
           threadId: dispatch.threadId,
           turnId: dispatch.turnId,
@@ -117,6 +124,7 @@ export class ToolCallDispatcher {
         })
         executedAny = true
         await this.toolExecution.persistResult(dispatch.threadId, dispatch.turnId, call, result)
+        input.stormBreaker?.recordResult(call, result)
         input.onToolExecuted?.(call.toolName, result)
         index += 1
         continue
@@ -127,6 +135,10 @@ export class ToolCallDispatcher {
       let suppressedAfterBatch: { call: ToolCallLike; reason?: string } | undefined
       const batchLimit = Math.max(1, input.maxParallelCalls?.() ?? parallelCandidates.calls.length)
       for (const next of parallelCandidates.calls.slice(1, batchLimit)) {
+        // Settle identical calls before admitting another so one large batch
+        // cannot run past the failure threshold before results are observed.
+        if (input.stormBreaker && batch.some((entry) =>
+          toolCallFingerprint(entry) === toolCallFingerprint(next))) break
         const nextStorm = input.stormBreaker?.inspect(next)
         if (nextStorm?.suppress) {
           suppressedAfterBatch = { call: next, reason: nextStorm.reason }
@@ -155,10 +167,12 @@ export class ToolCallDispatcher {
         if (!result || !batchCall) continue
         if (result.status === 'rejected') throw result.reason
         await this.toolExecution.persistResult(dispatch.threadId, dispatch.turnId, batchCall, result.value)
+        input.stormBreaker?.recordResult(batchCall, result.value)
         input.onToolExecuted?.(batchCall.toolName, result.value)
       }
 
       if (suppressedAfterBatch) {
+        suppressedAny = true
         await this.toolExecution.persistSuppressed({
           threadId: dispatch.threadId,
           turnId: dispatch.turnId,
@@ -168,7 +182,8 @@ export class ToolCallDispatcher {
       }
     }
 
-    return executedAny ? 'continue' : 'all_suppressed'
+    if (!executedAny) return 'all_suppressed'
+    return suppressedAny ? 'some_suppressed' : 'continue'
   }
 }
 

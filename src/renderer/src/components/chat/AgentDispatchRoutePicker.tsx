@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDispatchAssignmentRoute } from '@shared/agent-dispatch'
 import { useChatStore } from '../../store/chat-store'
@@ -35,13 +35,17 @@ export function AgentDispatchRouteLabel({ route, agentName }: { route: AgentDisp
  * reuses the composer caches; the choice stays local to the card and reaches
  * Kun only through `onChange` (a dispatch `update`).
  */
-export function AgentDispatchRoutePicker({ route, disabled, onChange, roleUse, workspace }: {
+export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract, roleUse, workspace, preference = false }: {
   route: AgentDispatchAssignmentRoute
   disabled: boolean
   onChange: (route: AgentDispatchAssignmentRoute) => void
+  /** Any pointer or key use of the pickers, menus included (React events cross the portals). */
+  onInteract?: () => void
   /** Offer agent roster roles: worker roles for dispatch cards, session roles for task cards. */
   roleUse?: 'worker' | 'session'
   workspace?: string
+  /** Advisory choices can retain an Agent before its optional model catalog resolves. */
+  preference?: boolean
 }) {
   const { t } = useTranslation('common')
   const roster = useAgentRoster(workspace, Boolean(roleUse))
@@ -56,7 +60,11 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, roleUse, w
   const providers = useHarnessStore((state) => state.providerGroups[id])
   const fingerprint = harnessModelFingerprint(row)
   const current = workbenchModelFromRoute(route)
-  const pendingAgent = useRef<string | null>(null)
+  // An Agent picked before its catalog loaded: shown at once, applied when a model is known.
+  const [pendingAgent, setPendingAgent] = useState<string | null>(null)
+  const pendingRow = pendingAgent ? rows.find((entry) => entry.definition.id === pendingAgent) : undefined
+  const pendingNative = useHarnessStore((state) => (pendingAgent ? state.models[pendingAgent] : undefined))
+  const pendingProviders = useHarnessStore((state) => (pendingAgent ? state.providerGroups[pendingAgent] : undefined))
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const labels = useMemo(() => ({ nativeLogin: t('adeCredential.nativeLogin'), provider: t('adeCredential.provider'),
@@ -73,15 +81,22 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, roleUse, w
   }, [external, id, fingerprint, row, disabled])
   // A newly chosen Agent may not have its catalog yet; pick its default model once it lands.
   useEffect(() => {
-    if (pendingAgent.current !== id || !row) return
-    const next = selectWorkbenchAgent({ row, defaults: harnessDefaultsSnapshot()[id],
-      nativeModels: native?.models ?? row.definition.staticModels,
-      nativeDefault: native?.modelInfo?.find((entry) => entry.isDefault)?.id,
-      providerGroups: providers?.groups ?? [] })
-    if (!next.model) return
-    pendingAgent.current = null
-    onChangeRef.current(withRouteRole(routeFromWorkbenchModel(next), route))
-  }, [id, row, native, providers, route])
+    if (!pendingAgent || !pendingRow) return
+    const next = selectWorkbenchAgent({ row: pendingRow, defaults: harnessDefaultsSnapshot()[pendingAgent],
+      nativeModels: pendingNative?.models ?? pendingRow.definition.staticModels,
+      nativeDefault: pendingNative?.modelInfo?.find((entry) => entry.isDefault)?.id,
+      providerGroups: pendingProviders?.groups ?? [] })
+    if (next.model) {
+      setPendingAgent(null)
+      onChangeRef.current(withRouteRole(routeFromWorkbenchModel(next), route))
+      return
+    }
+    // Both lookups settled without a usable model: drop the pick instead of hanging on it.
+    const nativeSettled = !pendingRow.definition.credentialModes.includes('native-login') || (pendingNative && !pendingNative.loading)
+    const providersSettled = !pendingRow.definition.credentialModes.some((mode) => mode !== 'native-login') ||
+      (pendingProviders && !pendingProviders.loading)
+    if (nativeSettled && providersSettled) setPendingAgent(null)
+  }, [pendingAgent, pendingRow, pendingNative, pendingProviders, route])
 
   const refresh = (): void => {
     void loadHarnesses(true, { waitMs: 3_000 })
@@ -91,15 +106,20 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, roleUse, w
   const selectAgent = (nextId: string): void => {
     const next = rows.find((entry) => entry.definition.id === nextId)
     if (!next || nextId === id || !harnessRowRunsTurns(next) || harnessRowUnavailableCode(next)) return
+    if (preference) {
+      setPendingAgent(null)
+      onChange({ agentId: nextId })
+      return
+    }
     const state = useHarnessStore.getState()
     const model = selectWorkbenchAgent({ row: next, defaults: harnessDefaultsSnapshot()[nextId],
       nativeModels: state.models[nextId]?.models ?? next.definition.staticModels,
       nativeDefault: state.models[nextId]?.modelInfo?.find((entry) => entry.isDefault)?.id,
       providerGroups: nextId === 'kun' ? kunGroups.map((group) => ({ providerId: group.providerId, label: group.label,
         models: group.modelIds })) : state.providerGroups[nextId]?.groups ?? [] })
-    if (model.model) { pendingAgent.current = null; onChange(withRouteRole(routeFromWorkbenchModel(model), route)); return }
+    if (model.model) { setPendingAgent(null); onChange(withRouteRole(routeFromWorkbenchModel(model), route)); return }
     // Wait for the catalog instead of sending a route Kun would reject for a missing model.
-    pendingAgent.current = nextId
+    setPendingAgent(nextId)
     if (next.definition.credentialModes.includes('native-login')) void loadHarnessModels(nextId)
     if (next.definition.credentialModes.some((mode) => mode !== 'native-login')) void loadHarnessProviderGroups(nextId)
   }
@@ -112,18 +132,22 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, roleUse, w
   }
   const selectRole = (profileId: string): void => {
     const next = routeForRole(route, roles.find((entry) => entry.id === profileId))
-    if (next.agentId !== route.agentId) pendingAgent.current = null
+    if (next.agentId !== route.agentId) setPendingAgent(null)
     onChange(next)
   }
   const displayModel = workbenchDisplayModel(current)
-  return <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1" data-dispatch-route-picker={id}>
-    <FloatingComposerHarnessPicker harnessId={id} harnessLabel={row?.definition.displayName ?? (id === 'kun' ? 'Kun' : id)}
-      rows={rows.filter(harnessRowRunsTurns)} loading={loading} disabled={disabled} needsConfirm={() => false}
-      hint={t('dispatchIntent.agentMenuHint')} onOpen={refresh} onSelect={selectAgent} />
+  const shownId = pendingAgent ?? id
+  const shownRow = pendingRow ?? row
+  return <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1" data-dispatch-route-picker={id}
+    data-dispatch-route-pending={pendingAgent ?? undefined}
+    onPointerDownCapture={onInteract} onKeyDownCapture={onInteract}>
+    <FloatingComposerHarnessPicker harnessId={shownId} harnessLabel={shownRow?.definition.displayName ?? (shownId === 'kun' ? 'Kun' : shownId)}
+      rows={rows.filter(harnessRowRunsTurns)} loading={loading || Boolean(pendingAgent)} disabled={disabled} needsConfirm={() => false}
+      hint={t(preference ? 'dispatchPreference.description' : 'dispatchIntent.agentMenuHint')} onOpen={refresh} onSelect={selectAgent} />
     <FloatingComposerModelPicker compact mode="select" agentHarnessId={external ? id : undefined}
       composerModel={displayModel} composerProviderId={workbenchModelGroup(current)}
       composerPickList={groups.flatMap((group) => group.modelIds)} composerModelGroups={groups}
-      emptyModelState={external && (native?.loading || providers?.loading) ? 'loading' : undefined}
+      emptyModelState={external && (native?.loading || providers?.loading) ? 'loading' : preference && !groups.length ? 'agent-default' : undefined}
       canChangeModel={!disabled} onComposerModelChange={selectModel} />
     {roleUse && (roles.length || route.profileId) ? <select value={route.profileId ?? ''} disabled={disabled}
       aria-label={t('dispatchIntent.roleLabel')} title={t('dispatchIntent.roleHint')} data-dispatch-role-picker={id}

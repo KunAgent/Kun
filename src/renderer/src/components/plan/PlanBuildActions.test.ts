@@ -6,6 +6,7 @@ import i18n from '../../i18n'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { resetPlanWorktreePreferenceStoreForTests, usePlanWorktreePreferenceStore } from '../../plan/plan-worktree-preference-store'
 import { PlanBuildActions } from './PlanBuildActions'
+import { usePlanBuildAgentStore } from '../../plan/plan-build-agent-store'
 
 function collectText(node: ReactTestInstance, into: string[]): void {
   for (const child of node.children) {
@@ -369,6 +370,64 @@ describe('PlanBuildActions panel flat toolbar', () => {
 
     expect(renderer.root.findAllByProps({ 'data-plan-build-menu': true })).toHaveLength(0)
 
+    await act(async () => renderer.unmount())
+  })
+})
+
+describe('PlanBuildActions external Agent pick', () => {
+  beforeEach(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn(), setInterval, clearInterval, kunGui: {} })
+    vi.stubGlobal('document', { visibilityState: 'visible', addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    resetPlanWorktreePreferenceStoreForTests()
+    usePlanWorktreePreferenceStore.getState().initializePlan('plan-1', true, 'codex/')
+    usePlanBuildAgentStore.getState().setRoute('plan-1', { agentId: 'codex', model: 'gpt-6.1-codex', credentialMode: 'native-login' })
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(normalizeAppSettings({} as never))
+  })
+
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} })
+    resetPlanWorktreePreferenceStoreForTests()
+    await i18n.changeLanguage('en')
+  })
+
+  it('locks the card to a task worktree, hides Graph and hands off to the Agent', async () => {
+    await i18n.changeLanguage('zh')
+    const onBuild = vi.fn()
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(PlanBuildActions, {
+        disabled: false, graphEnabled: true, variant: 'card', planId: 'plan-1', onBuild
+      }))
+    })
+    const text = rendererText(renderer)
+    expect(text).toContain('任务 Worktree')
+    expect(text).toContain('交给 codex')
+    expect(text).not.toContain('Graph 构建')
+    expect(renderer.root.findAllByProps({ 'data-plan-worktree-select': true })).toHaveLength(0)
+    await act(async () => renderer.root.findByProps({ 'data-plan-build-start': true }).props.onClick())
+    expect(onBuild).toHaveBeenCalledWith('direct')
+    await act(async () => renderer.unmount())
+  })
+
+  it('shows the handed-off state with a way back into the conversation', async () => {
+    await i18n.changeLanguage('zh')
+    usePlanBuildAgentStore.getState().setHandoff('plan-1', { threadId: 'thread-9', route: { agentId: 'codex', model: 'gpt-6.1-codex' } })
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(PlanBuildActions, {
+        disabled: false, graphEnabled: true, variant: 'card', planId: 'plan-1', onBuild: vi.fn()
+      }))
+    })
+    expect(renderer.root.findAllByProps({ 'data-plan-build-handoff': 'codex' }).length).toBeGreaterThan(0)
+    expect(rendererText(renderer)).toContain('已交给')
+    expect(renderer.root.findAllByProps({ 'data-plan-build-start': true })).toHaveLength(0)
+    await act(async () => {
+      renderer.root.findByProps({ children: '重新构建' }).props.onClick()
+    })
+    expect(renderer.root.findAllByProps({ 'data-plan-build-start': true }).length).toBeGreaterThan(0)
     await act(async () => renderer.unmount())
   })
 })

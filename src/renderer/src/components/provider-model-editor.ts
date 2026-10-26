@@ -35,7 +35,7 @@ export const PROVIDER_MODEL_KINDS: ProviderModelKind[] = ['chat', 'image', 'spee
 
 /** Reasoning effort choices offered in the editor. `auto` stays internal-only. */
 export const PROVIDER_MODEL_REASONING_EFFORT_CHOICES: ModelReasoningEffort[] =
-  ['off', 'low', 'medium', 'high', 'max']
+  ['off', 'low', 'medium', 'high', 'xhigh', 'max']
 
 export const PROVIDER_MODEL_REASONING_PROTOCOLS: ModelReasoningRequestProtocol[] = [
   'deepseek-chat-completions',

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { scanHighestSeqFromTail } from './file-session-seq-tail-scan.js'
+import { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES } from './file-session-jsonl.js'
 
 let dir: string
 
@@ -107,5 +108,45 @@ describe('scanHighestSeqFromTail', () => {
       maxLines: 10
     })
     expect(result).toEqual({ ok: true, highestSeq: 100 })
+  })
+
+  it('accepts replayable records larger than the read chunk cap', async () => {
+    const path = join(dir, 'events.jsonl')
+    const large = JSON.stringify({ ...JSON.parse(eventLine(2)), turnId: 'x'.repeat(2 * 1024 * 1024) })
+    const contents = `${eventLine(1)}\n${large}\n${eventLine(3)}\n`
+    await writeFile(path, contents)
+    expect(Buffer.byteLength(large)).toBeLessThan(DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES)
+    await expect(scanHighestSeqFromTail({ path, fileSize: Buffer.byteLength(contents) }))
+      .resolves.toEqual({ ok: true, highestSeq: 3 })
+  })
+
+  it('keeps the record byte limit independent of chunk size and UTF-8 boundaries', async () => {
+    const path = join(dir, 'events.jsonl')
+    const line = JSON.stringify({ ...JSON.parse(eventLine(2)), turnId: '\u4f60\u597d'.repeat(20) })
+    const contents = `${eventLine(1)}\n${line}\n`
+    await writeFile(path, contents)
+    await expect(scanHighestSeqFromTail({
+      path, fileSize: Buffer.byteLength(contents), chunkBytes: 7, maxChunkBytes: 7,
+      maxRecordBytes: Buffer.byteLength(line)
+    })).resolves.toEqual({ ok: true, highestSeq: 2 })
+  })
+
+  it('bounds a committed record while assembling it across chunks', async () => {
+    const path = join(dir, 'events.jsonl')
+    const line = JSON.stringify({ ...JSON.parse(eventLine(2)), turnId: 'x'.repeat(1024) })
+    const contents = `${eventLine(1)}\n${line}\n`
+    await writeFile(path, contents)
+    await expect(scanHighestSeqFromTail({
+      path, fileSize: Buffer.byteLength(contents), chunkBytes: 32, maxRecordBytes: 128
+    })).rejects.toThrow('event replay record exceeds 128 bytes')
+  })
+
+  it('discards an uncommitted tail spanning many chunks before finding the last durable event', async () => {
+    const path = join(dir, 'events.jsonl')
+    const contents = `${eventLine(1)}\n${eventLine(2)}\n${'x'.repeat(2048)}`
+    await writeFile(path, contents)
+    await expect(scanHighestSeqFromTail({
+      path, fileSize: Buffer.byteLength(contents), chunkBytes: 32, maxRecordBytes: 128
+    })).resolves.toEqual({ ok: true, highestSeq: 2 })
   })
 })

@@ -1,3 +1,6 @@
+import { HarnessPermissionModePreferenceSchema } from '../contracts/harness-permission-preference.js'
+import { HarnessTransportError } from '../session/harness-session.js'
+import { customAcpPermission } from './acp-launch-args.js'
 import type { HarnessDefinition, HarnessStatus } from '../contracts/harness.js'
 import type {
   HarnessCapabilities,
@@ -156,9 +159,9 @@ export function checkHarnessAdmission(input: {
 }
 
 /**
- * Unknown requested levels fall back to permissionModes[0] (strictest).
- * Unattended turns keep a full-access level only when the user explicitly
- * enabled `agents.kun.ade.allowUnattendedFullAccess`; otherwise [0] too.
+ * Unknown ACP modes are explicit full-access preferences, never silent defaults.
+ * Unknown modes on other transports retain the strictest fallback.
+ * Unattended full-access preferences still require explicit host authorization.
  */
 export function resolvePermissionMode(
   def: HarnessDefinition,
@@ -166,7 +169,13 @@ export function resolvePermissionMode(
   unattended: boolean,
   allowUnattendedFullAccess: boolean
 ): string {
+  requested = HarnessPermissionModePreferenceSchema.parse(requested)
   const found = def.permissionModes.find((m) => m.id === requested)
+  if (requested && def.transport === 'acp' && customAcpPermission(requested, def)) {
+    if (unattended && !allowUnattendedFullAccess) throw new HarnessTransportError('policy_denied',
+      'Custom ACP permission modes require explicitly authorized unattended full access')
+    return requested
+  }
   if (!found) return def.permissionModes[0]!.id
   if (
     unattended &&

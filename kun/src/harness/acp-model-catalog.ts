@@ -11,7 +11,7 @@ import { acpSessionSettings } from '../runtime/acp/acp-session-settings.js'
 const LEGACY_VARIANT_EFFORTS: Readonly<Record<string, string>> = {
   none: 'off', minimal: 'off', low: 'low', medium: 'medium', high: 'high', xhigh: 'max', max: 'max'
 }
-const KUN_EFFORT_ORDER = ['off', 'low', 'medium', 'high', 'max']
+const KUN_EFFORT_ORDER = ['off', 'low', 'medium', 'high', 'xhigh', 'max']
 
 /**
  * OpenCode advertises every reasoning variant as its own legacy model

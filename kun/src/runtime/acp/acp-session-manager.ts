@@ -31,7 +31,7 @@ import {
   type SessionUpdate
 } from './acp-schema.js'
 import { providerModule } from '../../harness/providers/registry.js'
-import { applyAcpSessionPermission } from './acp-session-permissions.js'
+import { applyAcpProviderPermission } from './acp-provider-permissions.js'
 import { applyAcpSessionAgent } from './acp-session-agent.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
 import { AcpModelSelectionError, acpLegacyVariantModel, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
@@ -48,6 +48,7 @@ export type AcpSessionRequest = {
   model?: string
   /** Resolved harness permission-level id. */
   permissionModeId?: string
+  customPermissionMode?: boolean
   acpPermission?: HarnessDefinition['acpPermission']
   /** Composer-selected native Agent; replaces the permission-mapped mode. */
   nativeAgentId?: string
@@ -288,10 +289,9 @@ export class AcpSessionManager {
     await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort))
     if (ctx.nativeAgentId) {
       await applyAcpSessionAgent(conn, session, ctx.nativeAgentId)
-    } else if (providerModule(ctx.harnessId)?.acp?.applyPermission) {
-      await providerModule(ctx.harnessId)!.acp!.applyPermission!(conn, session, ctx.permissionModeId)
     } else {
-      await applyAcpSessionPermission(conn, session, ctx.permissionModeId, ctx.acpPermission)
+      await applyAcpProviderPermission(conn, session, ctx.permissionModeId, providerModule(ctx.harnessId), ctx.acpPermission,
+        undefined, ctx.customPermissionMode ?? false)
     }
     const options = session.configOptions
     if (!options?.length) return

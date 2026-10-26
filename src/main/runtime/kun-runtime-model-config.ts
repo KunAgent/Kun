@@ -12,6 +12,7 @@ import {
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1
 } from '../../shared/app-settings'
+import { composeDispatchPreferencePrompt } from '../../shared/ade-collaboration-settings'
 import { legacyProviderCredentialSourceId } from '../legacy-provider-settings-migration'
 
 const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
@@ -22,7 +23,7 @@ const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
     supportsToolCalling: true, messageParts: ['text']
   },
   'deepseek-v4-flash': {
-    aliases: ['deepseek-chat', 'deepseek-reasoner'],
+    aliases: ['deepseek-flash', 'deepseek-chat', 'deepseek-reasoner'],
     contextWindowTokens: 1_000_000,
     contextCompaction: { softThreshold: 980_000, hardThreshold: 990_000 },
     inputModalities: ['text'], outputModalities: ['text'],
@@ -321,7 +322,8 @@ export function adeConfigForRuntime(
     },
     dispatch: {
       autoStartSeconds: ade?.dispatch?.autoStartSeconds ?? 60,
-      autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true
+      autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true,
+      preferencePrompt: composeDispatchPreferencePrompt(ade?.dispatch)
     },
     tasks: {
       autoStartSeconds: ade?.tasks?.autoStartSeconds ?? 0,

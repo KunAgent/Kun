@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
+  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'RecoverInstallerUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'StageExtractedUpdatePayload', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
   [string]$Action,
   [string]$ResultPath = '',
   [switch]$Bounded
@@ -13,7 +13,16 @@ Set-StrictMode -Version 2.0
 # Native recovery actions can outlive their coordinator if it is interrupted.
 # Keep the watchdog inside each process; normal installer invocations opt out.
 if ($Bounded) {
-  Add-Type -TypeDefinition @'
+  # NSIS's plugin directory contains a native System.dll. CodeDOM's default
+  # short references can bind that file instead of the framework assembly.
+  # CompilerParameters replaces those defaults; use already-loaded framework
+  # locations, never the working directory or a caller-provided assembly path.
+  $deadlineCompiler = [System.CodeDom.Compiler.CompilerParameters]::new()
+  $deadlineCompiler.GenerateInMemory = $true
+  $deadlineCompiler.CompilerOptions = '/nostdlib'
+  [void]$deadlineCompiler.ReferencedAssemblies.Add([System.Object].Assembly.Location)
+  [void]$deadlineCompiler.ReferencedAssemblies.Add([System.ComponentModel.Win32Exception].Assembly.Location)
+  Add-Type -CompilerParameters $deadlineCompiler -TypeDefinition @'
 using System;
 using System.Threading;
 public static class KunInstallerActionDeadline {
@@ -177,8 +186,14 @@ try {
     'RecoverUpdateTransaction' {
       Recover-PendingUpdateTransaction
     }
+    'RecoverInstallerUpdateTransaction' {
+      Recover-InstallerUpdateTransaction
+    }
     'PrepareUpdateTransaction' {
       Initialize-UpdateTransaction
+    }
+    'StageExtractedUpdatePayload' {
+      Stage-ExtractedUpdatePayload
     }
     'SwitchUpdatePayload' {
       Invoke-SwitchUpdatePayload

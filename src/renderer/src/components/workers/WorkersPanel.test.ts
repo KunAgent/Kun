@@ -52,6 +52,13 @@ function captureOpenedWorkers(): { opened: string[]; stop: () => void } {
 }
 
 describe('WorkersPanel', () => {
+  it('shows an empty state without an active conversation instead of loading forever', async () => {
+    useChatStore.setState({ activeThreadId: null })
+    const renderer = await render(createElement(WorkersPanel))
+    expect(byData(renderer, 'data-workers-empty')).toHaveLength(1)
+    expect(byData(renderer, 'data-workers-loading')).toHaveLength(0)
+    expect(provider.getTeamOverview).not.toHaveBeenCalled()
+  })
   it('does not fetch teams while its tool tab is hidden', async () => {
     const renderer = await render(createElement(WorkersPanel, { active: false }))
     expect(provider.getTeamOverview).not.toHaveBeenCalled()

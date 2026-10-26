@@ -4,7 +4,8 @@ import type { KunHarnessDefaultsEntryV1, KunHarnessSettingsV1 } from '@shared/ap
 import { harnessProfileKey } from '@shared/harness-enablement'
 import { useHarnessStore } from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
-import { SettingsTabPanel } from '../settings-controls'
+import { SettingRow, SettingsTabPanel } from '../settings-controls'
+import { AgentPermissionModeField } from './AgentPermissionModeField'
 import { settingsButtonClass } from '../settings-button'
 import { useHarnessUpdateStore, hasHarnessUpdate } from '../../store/harness-update-store'
 import { useAgentUpdateRunner } from '../../store/harness-update-runner'
@@ -61,6 +62,8 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, re
   const { definition, status } = row
   const id = definition.id
   const [draft, setDraft] = useState<Partial<KunHarnessDefaultsEntryV1>>({})
+  const [permissionEditing, setPermissionEditing] = useState(false)
+  const [permissionEdited, setPermissionEdited] = useState(false)
   const [tab, setTab] = useState<TabId>('connection')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -93,7 +96,8 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, re
     ? { ...(gate.result?.readiness ? { readiness: gate.result.readiness } : {}), error: gate.error, errorDetail: gate.errorDetail, at: Date.now(), profileKey }
     : undefined
   // A check running now hides the old result; otherwise the newest one for this connection shows.
-  const shown = gate.checking ? undefined : live ?? newestCheck(profileKey, storedCheck, proof ? checkFromProof(proof, profileKey) : undefined)
+  const shown = gate.checking || permissionEditing || (gate.dirty && !gate.error) ? undefined
+    : live ?? (permissionEdited ? undefined : newestCheck(profileKey, storedCheck, proof ? checkFromProof(proof, profileKey) : undefined))
   const presentation = agentPresentationFor(row, settings, { platform, modelCount, checking: gate.checking, changed: gate.dirty, install, update, updateVersion })
   const entry: KunHarnessDefaultsEntryV1 = { ...settings.defaults[id], ...draft }
   const readiness = shown?.readiness
@@ -103,14 +107,17 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, re
 
   /** Before the Agent is on, edits save at once; afterwards they wait for a re-check. */
   const change = (patch: Partial<KunHarnessDefaultsEntryV1>): void => {
+    if ('permissionMode' in patch) { gate.cancel(); setPermissionEdited(true) }
     if (gate.savedEnabled) { setDraft((current) => ({ ...current, ...patch })); return }
     gate.cancel()
     onPatchHarness({ defaults: { ...settings.defaults, [id]: { ...settings.defaults[id], ...patch } } })
   }
-  const discard = (): void => { gate.cancel(); setDraft({}) }
+  const discard = (): void => { gate.cancel(); setDraft({}); setPermissionEdited(false) }
+  const recheck = (): void => { if (!permissionEditing) void gate.enable() }
   const toggle = (): void => {
+    if (permissionEditing) return
     if (presentation.switch === 'on') gate.disable()
-    else void gate.enable()
+    else recheck()
   }
   const reportText = (): string => agentDiagnosticsText({
     name: definition.displayName, id, ...(status.version ? { version: status.version } : {}), transport: definition.transport,
@@ -131,7 +138,7 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, re
 
   const runNext = (action: AgentNextAction): void => {
     switch (action.kind) {
-      case 'enable': case 'recheck': void gate.enable(); break
+      case 'enable': case 'recheck': recheck(); break
       case 'cancelCheck': gate.cancel(); break
       case 'configureProvider': useChatStore.getState().openSettings('providers'); break
       case 'docs': void window.kunGui.openExternal(action.url).catch(() => undefined); break
@@ -194,24 +201,29 @@ export function AgentDetail({ row, settings, probing, platform, t, tSettings, re
     </div> : null}
 
     {presentation.mode === 'setup' ? <>
+      {definition.transport === 'acp' ? <SettingRow title={tSettings('adeSettings.harnessPermissionMode')}
+        control={<AgentPermissionModeField value={entry.permissionMode ?? ''} modes={definition.permissionModes}
+          disabled={busy} onChange={mode => change({ permissionMode: mode || undefined })}
+          onEditingChange={setPermissionEditing} t={tSettings} />} /> : null}
       <AgentSetupSteps row={row} presentation={presentation} settings={settings} entry={entry} profile={gate.profile}
-        modelsEnabled={gate.savedEnabled} checking={gate.checking} platform={platform} onSetupCommand={onSetupCommand} onConnectionChange={change} onEnable={() => void gate.enable()}
+        modelsEnabled={gate.savedEnabled} checking={gate.checking} platform={platform} onSetupCommand={onSetupCommand} onConnectionChange={change} onEnable={recheck}
         onSetBinaryPath={onSetBinaryPath} t={t} tSettings={tSettings} />
       {shown ? <AgentDiagnosticsCard harnessId={id} readiness={readiness} error={shownError} errorDetail={shownDetail}
-        checking={gate.checking} busy={busy} onRecheck={() => void gate.enable()} reportText={reportText} issue={issue} t={t} /> : null}
+        checking={gate.checking} busy={busy} onRecheck={recheck} reportText={reportText} issue={issue} t={t} /> : null}
     </> : <>
       <AgentTabs<TabId> baseId={`agent-${id}`} ariaLabel={t('agentCenter.tabs.label', { name: definition.displayName })}
         items={tabs} value={tab} onChange={setTab} />
       <SettingsTabPanel baseId={`agent-${id}`} tabId="connection" active={tab === 'connection'}>
         <AgentConnectionTab row={row} settings={settings} entry={entry} profile={gate.profile} dirty={gate.dirty} checking={gate.checking} busy={busy}
           readiness={readiness} error={shownError} errorDetail={shownDetail} platform={platform} onChange={change} onDiscard={discard}
-          onRecheck={() => void gate.enable()} onSetPermissionMode={onSetPermissionMode} onSetupCommand={onSetupCommand}
-          onTrial={gate.dirty ? undefined : trial} reportText={reportText}
+          onRecheck={recheck} onSetPermissionMode={onSetPermissionMode} onSetupCommand={onSetupCommand}
+          permissionEditing={permissionEditing} onPermissionEditingChange={setPermissionEditing}
+          onTrial={gate.dirty || permissionEditing ? undefined : trial} reportText={reportText}
           issue={issue} t={t} tSettings={tSettings} />
       </SettingsTabPanel>
       <SettingsTabPanel baseId={`agent-${id}`} tabId="models" active={tab === 'models'}>
         {tab === 'models' ? <AgentModelsTab row={row} entry={entry} profile={gate.profile} dirty={gate.dirty} busy={busy} onChange={change}
-          onDiscard={discard} onRecheck={() => void gate.enable()} t={t} /> : null}
+          onDiscard={discard} onRecheck={recheck} t={t} /> : null}
       </SettingsTabPanel>
       <SettingsTabPanel baseId={`agent-${id}`} tabId="launch" active={tab === 'launch'}>
         {tab === 'launch' ? <AgentLaunchTab row={row} settings={settings} probing={probing} onProbe={onProbe}

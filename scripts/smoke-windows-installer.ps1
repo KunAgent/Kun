@@ -6,6 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 . (Join-Path $PSScriptRoot 'windows-installer-registration.ps1')
+. (Join-Path $PSScriptRoot 'smoke-windows-installer-update.ps1')
 
 if (-not [Environment]::Is64BitOperatingSystem -or [Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
   throw 'This smoke test requires 64-bit Windows.'
@@ -110,6 +111,10 @@ try {
   & node (Join-Path $PSScriptRoot 'smoke-packaged-cli.cjs') `
     '--resources' (Join-Path $installLocation 'resources')
   Assert-True ($LASTEXITCODE -eq 0) 'The installed Kun CLI smoke failed.'
+
+  Invoke-SmokeAutomaticUpdate 'same-version-automatic-update'
+  Move-SmokeInstallationToActiveStageName
+  Invoke-SmokeAutomaticUpdate 'active-stage-source-automatic-update'
 
   Invoke-SmokeUninstaller
   Assert-True (-not (Test-Path -LiteralPath (Join-Path $installLocation 'Kun.exe'))) `
