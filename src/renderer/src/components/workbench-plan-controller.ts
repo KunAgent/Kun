@@ -38,6 +38,7 @@ import {
   readThreadComposerSelection
 } from '../store/chat-store-helpers'
 import { usePlanWorktreePreferenceStore } from '../plan/plan-worktree-preference-store'
+import { usePlanBuildAgentStore } from '../plan/plan-build-agent-store'
 import { usePlanWorktreePreference } from '../plan/use-plan-worktree-preference'
 
 type PlanResultMatch = {
@@ -404,7 +405,9 @@ export function useWorkbenchPlanController({
       ? (chatState.threads.find((thread) => thread.id === chatState.activeThreadId) ??
         (chatState.adeThreads ?? []).find((thread) => thread.id === chatState.activeThreadId))
       : null
-    const buildHarnessId = effectiveHarnessId(
+    // An Agent picked on the plan card wins over the composer's Agent.
+    const pickedRoute = usePlanBuildAgentStore.getState().plans[plan.id]
+    const buildHarnessId = pickedRoute?.agentId || effectiveHarnessId(
       chatState.composerHarnessId,
       activePlanThread?.harnessId
     )
@@ -445,22 +448,28 @@ export function useWorkbenchPlanController({
           ? readThreadComposerSelection(chatState.activeThreadId)
           : null
         const rememberedForHarness = remembered?.harnessId === buildHarnessId ? remembered : null
-        const composerPicked = chatState.composerHarnessId.trim().length > 0
-        const buildModel = composerPicked
-          ? chatState.composerModel
-          : rememberedForHarness?.model ?? ''
-        const buildProviderId = composerPicked
-          ? chatState.composerProviderId
-          : rememberedForHarness?.providerId ?? ''
+        const composerPicked = !pickedRoute && chatState.composerHarnessId.trim().length > 0
+        const buildModel = pickedRoute
+          ? pickedRoute.model ?? ''
+          : composerPicked
+            ? chatState.composerModel
+            : rememberedForHarness?.model ?? ''
+        const buildProviderId = pickedRoute
+          ? pickedRoute.providerId ?? ''
+          : composerPicked
+            ? chatState.composerProviderId
+            : rememberedForHarness?.providerId ?? ''
         const dispatched = await chatState.dispatchExternalPlanBuild({
           prompt: prepared.prompt,
           displayText: `${t('planBuildDirect')}: ${plan.relativePath}`,
           title: prepared.title,
           workspaceRoot: prepared.workspaceRoot,
           harnessId: buildHarnessId,
-          credentialMode: composerPicked
-            ? chatState.composerCredentialMode
-            : rememberedForHarness?.credentialMode ?? '',
+          credentialMode: pickedRoute
+            ? pickedRoute.credentialMode ?? ''
+            : composerPicked
+              ? chatState.composerCredentialMode
+              : rememberedForHarness?.credentialMode ?? '',
           model: buildModel,
           providerId: buildProviderId,
           ...(composerPicked
@@ -479,9 +488,23 @@ export function useWorkbenchPlanController({
       const displayText = prepared.prompt.includes('<prompt_managed_worktree_protocol>')
         ? t('planWorktreeBuildDisplay', { branch: prepared.displayText.match(/\((.+)\)$/)?.[1] ?? '', title: plan.featureName })
         : `${t(orchestration === 'graph' ? 'planBuildGraph' : 'planBuildDirect')}: ${plan.relativePath}`
+      const kunModel = pickedRoute?.agentId === 'kun' ? pickedRoute.model?.trim() ?? '' : ''
+      const kunProviderId = kunModel ? pickedRoute?.providerId?.trim() ?? '' : ''
       const sent = await sendMessage(prepared.prompt, 'agent', {
         displayText,
-        orchestration: prepared.orchestration
+        orchestration: prepared.orchestration,
+        ...(kunModel
+          ? {
+              harnessId: 'kun',
+              model: kunModel,
+              ...(kunProviderId
+                ? {
+                    providerId: kunProviderId,
+                    accountId: accountIdForComposerSelection(chatState.composerModelGroups, kunProviderId, kunModel)
+                  }
+                : {})
+            }
+          : {})
       })
       if (sent) await onPlanBuildStarted?.(plan)
     } catch (error) {
