@@ -343,6 +343,45 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed' })
   })
 
+  it('settles a failed local-isolation batch instead of retrying an impossible handover', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(2)
+    // The worker ran in the source checkout itself: there is no worktree to capture.
+    Object.assign(f.workspace, { isolation: 'local', path: '/repo', repositoryRoot: undefined })
+    f.taskWorkspaces.captureForDispatch.mockRejectedValue(new Error('local isolation has no host worktree to operate on'))
+    const stopWorker = vi.spyOn(f.deliverer, 'stopWorker')
+    const [original, sibling] = (await f.teams.get('parent'))!.workers
+    await f.teams.upsertWorker('parent', { ...original, selection: { reason: 'Automatic choice', score: 1,
+      alternatives: [{ route: { harnessId: 'codex', model: 'main-model', credentialMode: 'native-login' }, label: 'Codex', score: 0.9 }] } })
+    const records = await f.dispatches.list('parent')
+    await f.dispatches.update('parent', records.find((entry) => entry.workerId === original.workerId)!.dispatchId,
+      { state: 'failed', failureReason: 'turn exceeded 128 model steps' })
+    await f.dispatches.update('parent', records.find((entry) => entry.workerId === sibling.workerId)!.dispatchId,
+      { state: 'completed', verdict: { status: 'passed', checks: [] } })
+    await f.service.reconcile(); await f.service.reconcile()
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed', error: 'turn exceeded 128 model steps' })
+    expect(stopWorker).not.toHaveBeenCalled()
+    expect(f.taskWorkspaces.captureForDispatch).not.toHaveBeenCalled()
+    expect(f.runChild).toHaveBeenCalledTimes(2)
+  })
+
+  it('settles the card when inspecting a failed worker\'s checkout throws', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    const original = (await f.teams.get('parent'))!.workers[0]
+    await f.teams.upsertWorker('parent', { ...original, selection: { reason: 'Automatic choice', score: 1,
+      alternatives: [{ route: { harnessId: 'codex', model: 'main-model', credentialMode: 'native-login' }, label: 'Codex', score: 0.9 }] } })
+    f.taskWorkspaces.captureForDispatch.mockRejectedValue(new Error('task workspace not found'))
+    const dispatch = (await f.dispatches.list('parent'))[0]
+    await f.dispatches.update('parent', dispatch.dispatchId, { state: 'failed', failureReason: 'Worker unavailable' })
+    await f.childRuns.upsert({ ...(await f.childRuns.get(original.workerId))!, status: 'failed' })
+    await f.service.reconcile()
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed', replacementCount: 0 })
+  })
+
   it('keeps a user-pinned Agent fixed on failure', async () => {
     const f = await setup('full-access')
     const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, agentSelection: 'user' }, f.context)

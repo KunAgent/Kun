@@ -393,7 +393,7 @@ export class ManagerWorkerDispatch {
           const item = inputs[index]!
           // A route the user picked on the card is theirs; never swap it behind their back.
           if (item.fallbackCount || !sameAssignmentRoute(item.input.agent, intent.recommendation.assignments?.[index])) continue
-          if (await replaceFailedBatchAssignment(this.deps, intent, index, records[index]!, item)) return null
+          if (await settleReplacement(intent, () => replaceFailedBatchAssignment(this.deps, intent, index, records[index]!, item))) return null
         }
       } finally { this.replacing.delete(intent.intentId) }
     }
@@ -406,7 +406,7 @@ export class ManagerWorkerDispatch {
       if (inputs.length === 1 && !this.replacing.has(intent.intentId)) {
         this.replacing.add(intent.intentId)
         try {
-          if (await replaceFailedWorkerDispatch(this.deps, intent, failed, inputs[0].input)) return null
+          if (await settleReplacement(intent, () => replaceFailedWorkerDispatch(this.deps, intent, failed, inputs[0].input))) return null
         } finally { this.replacing.delete(intent.intentId) }
       }
       return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.' }
@@ -426,6 +426,20 @@ export class ManagerWorkerDispatch {
 }
 
 type SavedAgent = WorkerCreateInput['agent']
+
+/**
+ * A replacement attempt that throws (an uninspectable checkout, a store
+ * error) must not block the card: it settles on the ordinary failure instead
+ * of retrying the same attempt on every scan.
+ */
+async function settleReplacement(intent: AgentDispatchIntent, attempt: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return await attempt()
+  } catch (error) {
+    console.warn(`[kun] dispatch replacement skipped intent=${intent.intentId}: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+}
 
 function sameAssignmentRoute(saved: SavedAgent, assignment: AgentDispatchAssignment | undefined): boolean {
   if (!saved || !assignment) return !assignment
