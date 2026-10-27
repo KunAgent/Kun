@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { GITHUB_CALLBACK, type GitHubAuthorization } from '../contracts/github-app.js'
+import { GITHUB_CALLBACK, type GitHubAuthorization, type GitHubAuthorizationContext } from '../contracts/github-app.js'
 
 /** One-use local callback; credentials never cross the renderer/HTTP status boundary. */
 export class GitHubAuthorizationFlow {
@@ -42,7 +42,7 @@ export class GitHubAuthorizationFlow {
       .then(() => this.finish('connected'), () => this.finish('failed', 'authorization_failed'))
   })
 
-  constructor(readonly scopeId: string, private readonly clientId: string,
+  constructor(readonly context: GitHubAuthorizationContext, private readonly clientId: string,
     private readonly onCode: (code: string, verifier: string, redirect: string, assertCurrent: () => void) => Promise<void>,
     private readonly now = Date.now, private readonly port = Number(new URL(GITHUB_CALLBACK).port)) {
     this.expiresAt = now() + 10 * 60_000

@@ -186,6 +186,14 @@ export type ServerRuntime = {
   /** Native installed-app Gmail connection; credentials remain in the local encrypted store. */
   githubApp?: import('../../github-app/service.js').GitHubAppServicePort
   gmail?: import('../../gmail/ports.js').GmailServicePort
+  /** Read-only Figma REST connector shared by tools and the connections surface. */
+  figma?: {
+    credentials: import('../../figma/figma-credential-store.js').FigmaCredentialStore
+    service: import('../../figma/ports.js').FigmaReadServicePort
+    state: { connected: boolean }
+  }
+  /** App connection catalog, aggregated status, and account-level operations. */
+  appConnections?: import('../../services/app-connections-service.js').AppConnectionsService
   gmailDataPolicy?: import('../../gmail/model-data-policy.js').GmailModelDataPolicyPort
   gmailLocalModel?: Pick<import('../../gmail/local-ollama-service.js').ManagedLocalGmailOllama, 'status' | 'prepare'>
   agentDispatchService?: AgentDispatchService

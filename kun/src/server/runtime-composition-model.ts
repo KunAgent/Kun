@@ -1,4 +1,6 @@
 import { refreshPublicCatalogs } from '../services/provider-catalog-operations.js'
+import { FigmaCredentialStore } from '../figma/figma-credential-store.js'
+import { FigmaReadService } from '../figma/figma-service.js'
 import { scopedProviderOAuthFetch } from '../services/provider-request-security.js'
 import { createProviderQuotaRoutingLookup } from '../services/provider-quota-routing-cache.js'
 import { refreshRuntimeProviderIdentitySets } from './runtime-provider-identity-sets.js'
@@ -110,6 +112,14 @@ export async function createRuntimeModelComposition(
     keyProvider: extensionCredentialKeyProvider,
     nowIso
   })
+  // Read-only Figma REST connector: the PAT lives only in the encrypted store,
+  // and the provider's visibility follows the stored credential.
+  const figmaCredentials = new FigmaCredentialStore(extensionCredentials)
+  const figma = {
+    credentials: figmaCredentials,
+    service: new FigmaReadService({ credentials: figmaCredentials }),
+    state: { connected: await figmaCredentials.status().then((value) => value.stored).catch(() => false) }
+  }
   const extensionAccountAudit = new ExtensionLogWriter(
     join(core.activeOptions.dataDir, 'extensions', 'account-audit.log'),
     { maxBytes: 5 * 1024 * 1024, retention: 3 }
@@ -633,6 +643,7 @@ export async function createRuntimeModelComposition(
     modelClient,
     gmail,
     githubApp,
+    figma,
     gmailLocalModel: undefined as import('../gmail/local-ollama-service.js').ManagedLocalGmailOllama | undefined,
     gmailDataPolicy,
     timedModelClient,

@@ -105,6 +105,7 @@ import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 import { buildGitHubAppProvider } from '../adapters/tool/github-app-provider.js'
 import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
+import { buildFigmaToolProvider } from '../adapters/tool/figma-tool-provider.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -522,6 +523,7 @@ export async function createRuntimeServices(
 	  let baseToolProviders = [
     buildGmailToolProvider(gmail, core.threadStore, model.gmailDataPolicy),
     ...(model.githubApp ? [buildGitHubAppProvider(model.githubApp.service, core.threadStore, model.githubApp.mcp)] : []),
+    ...(model.figma ? [buildFigmaToolProvider(model.figma.service, model.figma.state)] : []),
     { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
       tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {

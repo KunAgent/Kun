@@ -51,6 +51,7 @@ export type SettingsCategory =
   | 'permissions'
   | 'skills'
   | 'mcp'
+  | 'connections'
   | 'memory'
   | 'subagents'
   | 'projects'
@@ -169,6 +170,10 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
     id: 'connect',
     labelKey: 'settingsIaGroupConnect',
     items: [
+      {
+        category: 'connections', labelKey: 'settingsIaConnections', icon: Plug, tone: 'teal',
+        searchKeys: ['notion', 'figma', 'github', 'gmail', 'personalAccessToken']
+      },
       { category: 'harnesses', labelKey: 'settingsIaHarnesses', icon: Cable, tone: 'blue' },
       { category: 'collaboration', labelKey: 'settingsIaCollaboration', icon: Workflow, tone: 'green' },
       { category: 'claw', labelKey: 'claw', navigationLabelKey: 'settingsNavPhone', icon: Smartphone, tone: 'green' },
@@ -240,6 +245,7 @@ const SETTINGS_CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategory, string> = {
   permissions: 'settingsIaPermissionsDesc',
   skills: 'settingsIaSkillsDesc',
   mcp: 'settingsIaMcpDesc',
+  connections: 'settingsIaConnectionsDesc',
   memory: 'memoryOverviewDesc',
   subagents: 'subagentsSettingsIntro',
   projects: 'settingsIaProjectsDesc',

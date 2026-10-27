@@ -14,6 +14,8 @@
   "settingsIaPermissions": "Разрешения",
   "settingsIaSkills": "Навыки",
   "settingsIaMcp": "Инструменты MCP",
+  "settingsIaConnections": "Подключения",
+  "settingsIaConnectionsDesc": "Аккаунты и API-токены для Notion, GitHub, Figma и Gmail.",
   "settingsIaProjects": "Настройки проекта",
   "settingsIaHarnesses": "Сторонние агенты",
   "settingsIaCollaboration": "Совместная работа",

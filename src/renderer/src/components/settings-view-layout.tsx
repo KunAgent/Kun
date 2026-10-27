@@ -70,6 +70,9 @@ const EasterEggSettingsSection = lazySection(() =>
 const ClawSettingsSection = lazySection(() =>
   import('./settings-section-claw').then((module) => ({ default: module.ClawSettingsSection }))
 )
+const ConnectionsSettingsSection = lazySection(() =>
+  import('./settings-section-connections').then((module) => ({ default: module.ConnectionsSettingsSection }))
+)
 const UpdatesSettingsSection = lazySection(() =>
   import('./settings-section-updates').then((module) => ({ default: module.UpdatesSettingsSection }))
 )
@@ -110,6 +113,7 @@ const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
   shortcuts: KeyboardShortcutsSettingsSection.preload,
   easterEgg: EasterEggSettingsSection.preload,
   claw: ClawSettingsSection.preload,
+  connections: ConnectionsSettingsSection.preload,
   updates: UpdatesSettingsSection.preload,
   terminal: TerminalSettingsSection.preload,
   debug: LlmDebugSettingsSection.preload,
@@ -254,6 +258,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={sectionContext} /> : null}
               {category === 'easterEgg' ? <EasterEggSettingsSection ctx={sectionContext} /> : null}
               {category === 'claw' ? <ClawSettingsSection ctx={sectionContext} /> : null}
+              {category === 'connections' ? <ConnectionsSettingsSection ctx={sectionContext} /> : null}
               {category === 'updates' ? <UpdatesSettingsSection ctx={sectionContext} /> : null}
               {category === 'terminal' ? <TerminalSettingsSection ctx={sectionContext} /> : null}
               {category === 'debug' ? <LlmDebugSettingsSection ctx={sectionContext} /> : null}

@@ -14,6 +14,8 @@
   "settingsIaPermissions": "สิทธิ์",
   "settingsIaSkills": "ทักษะ",
   "settingsIaMcp": "เครื่องมือ MCP",
+  "settingsIaConnections": "การเชื่อมต่อ",
+  "settingsIaConnectionsDesc": "บัญชีและโทเค็น API สำหรับ Notion, GitHub, Figma และ Gmail",
   "settingsIaProjects": "การตั้งค่าโปรเจกต์",
   "settingsIaHarnesses": "เอเจนต์ภายนอก",
   "settingsIaCollaboration": "การทำงานร่วมกัน",

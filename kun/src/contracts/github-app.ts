@@ -13,10 +13,25 @@ export type GitHubAuthorization = {
   id: string; status: 'pending' | 'connected' | 'cancelled' | 'expired' | 'failed'
   expiresAt: string; error?: string
 }
+/**
+ * A login is either an account login or a conversation consent. Account logins carry no
+ * conversation scope, so callers must never fabricate one to reach the account path.
+ */
+export type GitHubAuthorizationContext =
+  | { readonly kind: 'account' }
+  | { readonly kind: 'scope'; readonly scopeId: string }
+export const GITHUB_ACCOUNT_CONTEXT: GitHubAuthorizationContext = { kind: 'account' }
+export function githubScopeContext(scopeId: string): GitHubAuthorizationContext {
+  return { kind: 'scope', scopeId: GitHubScopeSchema.parse(scopeId) }
+}
+export function sameGitHubAuthorizationContext(a: GitHubAuthorizationContext, b: GitHubAuthorizationContext): boolean {
+  return a.kind === 'account' ? b.kind === 'account' : b.kind === 'scope' && a.scopeId === b.scopeId
+}
 export type GitHubConnectionStatus = {
   configured: boolean; connected: boolean; allowModelSharing: boolean
   reconnectRequired: boolean; login?: string; repositoryCount: number
   repositories: string[]; pendingAuthorization?: GitHubAuthorization
+  pendingAccountAuthorization?: GitHubAuthorization
 }
 export function githubReady(status: GitHubConnectionStatus): boolean {
   return status.connected && status.allowModelSharing && status.repositoryCount > 0

@@ -1,12 +1,15 @@
 import type { SecretEncryptor } from '../security/secret-store.js'
-import { GitHubScopeSchema, GITHUB_SHARING_POLICY, type GitHubConnectionStatus, type GitHubAuthorization } from '../contracts/github-app.js'
+import { GitHubScopeSchema, GITHUB_ACCOUNT_CONTEXT, GITHUB_SHARING_POLICY, githubScopeContext,
+  sameGitHubAuthorizationContext, type GitHubAuthorizationContext, type GitHubConnectionStatus,
+  type GitHubAuthorization } from '../contracts/github-app.js'
 import { GitHubAuthorizationFlow } from './authorization.js'
 import { GitHubAppClient, GitHubAppError } from './client.js'
 import type { GitHubAppConfig } from './config.js'
 import { GitHubAppStore, type GitHubTokens } from './store.js'
 
 export type GitHubAppServicePort = Pick<GitHubAppService,
-  'status' | 'authorize' | 'poll' | 'cancel' | 'sharing' | 'disconnect' | 'manageRepositories' | 'withAccess' | 'dispose'>
+  'status' | 'authorize' | 'authorizeAccount' | 'poll' | 'pollAccount' | 'cancel' | 'cancelAccount'
+  | 'sharing' | 'disconnect' | 'manageRepositories' | 'withAccess' | 'dispose'>
 export type GitHubAppOptions = {
   dataDir: string; encryptor: SecretEncryptor; config?: GitHubAppConfig; fetchImpl: typeof fetch
   openExternal: (url: URL) => Promise<void>; now?: () => number; callbackPort?: number
@@ -39,51 +42,69 @@ export class GitHubAppService {
     const state = await this.store.read()
     const connected = Boolean(this.client && state.tokens?.clientId === this.options.config?.clientId && !state.reconnectRequired)
     const inventory = this.inventory?.token === state.tokens?.accessToken ? this.inventory : undefined
-    const pending = [...this.flows.values()].reverse().find((flow) => flow.scopeId === scopeId)?.status()
+    const pendingScope = scopeId ? this.pending(githubScopeContext(scopeId)) : undefined
+    const pendingAccount = this.pending(GITHUB_ACCOUNT_CONTEXT)
     return { configured: Boolean(this.client), connected, reconnectRequired: state.reconnectRequired,
       login: connected ? state.tokens?.login : undefined,
       allowModelSharing: connected && state.grants.some((grant) => grant.scopeId === scopeId),
       repositories: inventory?.names ?? [], repositoryCount: inventory?.count ?? 0,
-      ...(pending ? { pendingAuthorization: pending } : {}) }
+      ...(pendingScope ? { pendingAuthorization: pendingScope } : {}),
+      ...(pendingAccount ? { pendingAccountAuthorization: pendingAccount } : {}) }
   }
   authorize(scopeId: string): Promise<GitHubAuthorization> {
-    return this.track(async () => {
-      GitHubScopeSchema.parse(scopeId)
-      this.assertConfigured()
-      const generation = ++this.generation
-      await Promise.all([...this.flows.values()].map((flow) => flow.dispose()))
-      this.assertGeneration(generation)
-      while (this.flows.size >= 16) this.flows.delete(this.flows.keys().next().value!)
-      const fence = this.fence(scopeId)
-      const flow = new GitHubAuthorizationFlow(scopeId, this.options.config!.clientId,
-        async (code, verifier, redirect, pending) => {
-          const current = () => { fence(); pending() }
-          const tokens = await this.client!.exchange(code, verifier, redirect, current)
-          current()
-          await this.store.update((state) => {
-            current()
-            const grants = state.tokens?.userId === tokens.userId ? state.grants : []
-            return { ...state, tokens, reconnectRequired: false,
-              grants: [...grants.filter((grant) => grant.scopeId !== scopeId), { scopeId, policy: GITHUB_SHARING_POLICY }] }
-          })
-          this.inventory = undefined
-        }, this.now, this.options.callbackPort)
-      this.flows.set(flow.id, flow)
-      let url: string
-      try { url = await flow.start(); fence() }
-      catch { await flow.cancel(); throw new GitHubAppError('callback_unavailable', 'Close another pending GitHub connection and retry') }
-      void this.options.openExternal(new URL(url)).catch(() => flow.failBrowser())
-      return flow.status()
-    })
+    return this.track(async () => this.startAuthorization(githubScopeContext(scopeId)))
   }
-  async poll(id: string, scopeId: string): Promise<GitHubAuthorization> { return this.flow(id, scopeId).status() }
-  async cancel(id: string, scopeId: string): Promise<void> { await this.flow(id, scopeId).cancel() }
+  /** Account login: explicit account context, so no conversation scope is invented for it. */
+  authorizeAccount(): Promise<GitHubAuthorization> {
+    return this.track(() => this.startAuthorization(GITHUB_ACCOUNT_CONTEXT))
+  }
+  private async startAuthorization(context: GitHubAuthorizationContext): Promise<GitHubAuthorization> {
+    this.assertConfigured()
+    const generation = ++this.generation
+    await Promise.all([...this.flows.values()].map((flow) => flow.dispose()))
+    this.assertGeneration(generation)
+    while (this.flows.size >= 16) this.flows.delete(this.flows.keys().next().value!)
+    const scopeId = context.kind === 'scope' ? context.scopeId : undefined
+    const fence = scopeId === undefined ? () => this.assertGeneration(generation) : this.fence(scopeId)
+    const flow = new GitHubAuthorizationFlow(context, this.options.config!.clientId,
+      async (code, verifier, redirect, pending) => {
+        const current = () => { fence(); pending() }
+        const tokens = await this.client!.exchange(code, verifier, redirect, current)
+        current()
+        await this.store.update((state) => {
+          current()
+          const retained = sameAccount(state.tokens, tokens) ? state.grants : []
+          return { ...state, tokens, reconnectRequired: false,
+            grants: scopeId === undefined ? retained
+              : [...retained.filter((grant) => grant.scopeId !== scopeId), { scopeId, policy: GITHUB_SHARING_POLICY }] }
+        })
+        this.inventory = undefined
+      }, this.now, this.options.callbackPort)
+    this.flows.set(flow.id, flow)
+    let url: string
+    try { url = await flow.start(); fence() }
+    catch { await flow.cancel(); throw new GitHubAppError('callback_unavailable', 'Close another pending GitHub connection and retry') }
+    void this.options.openExternal(new URL(url)).catch(() => flow.failBrowser())
+    return flow.status()
+  }
+  async poll(id: string, scopeId: string): Promise<GitHubAuthorization> {
+    return this.flow(id, githubScopeContext(scopeId)).status()
+  }
+  async cancel(id: string, scopeId: string): Promise<void> {
+    await this.flow(id, githubScopeContext(scopeId)).cancel()
+  }
+  async pollAccount(id: string): Promise<GitHubAuthorization> {
+    return this.flow(id, GITHUB_ACCOUNT_CONTEXT).status()
+  }
+  async cancelAccount(id: string): Promise<void> { await this.flow(id, GITHUB_ACCOUNT_CONTEXT).cancel() }
   sharing(scopeId: string, allow: boolean): Promise<GitHubConnectionStatus> {
     return this.track(async () => {
       GitHubScopeSchema.parse(scopeId)
       this.revisions.set(scopeId, (this.revisions.get(scopeId) ?? 0) + 1)
       const fence = this.fence(scopeId)
-      for (const flow of this.flows.values()) if (flow.scopeId === scopeId) await flow.cancel()
+      for (const flow of this.flows.values()) {
+        if (flow.context.kind === 'scope' && flow.context.scopeId === scopeId) await flow.cancel()
+      }
       await this.store.update((state) => {
         fence()
         if (allow && (!this.client || !state.tokens || state.reconnectRequired)) throw new GitHubAppError('connection_required', 'Connect GitHub first')
@@ -178,10 +199,17 @@ export class GitHubAppService {
       ? { ...state, tokens: undefined, grants: [], reconnectRequired: true } : state)
     if (this.generation === generation) { this.generation += 1; this.inventory = undefined }
   }
-  private flow(id: string, scopeId: string): GitHubAuthorizationFlow {
-    GitHubScopeSchema.parse(scopeId)
+  private pending(context: GitHubAuthorizationContext): GitHubAuthorization | undefined {
+    return [...this.flows.values()].reverse()
+      .find((flow) => sameGitHubAuthorizationContext(flow.context, context))?.status()
+  }
+  private flow(id: string, context: GitHubAuthorizationContext): GitHubAuthorizationFlow {
     const flow = this.flows.get(id)
-    if (!flow || flow.scopeId !== scopeId) throw new GitHubAppError('invalid_context', 'This GitHub authorization belongs to another conversation')
+    if (!flow || !sameGitHubAuthorizationContext(flow.context, context)) {
+      throw new GitHubAppError('invalid_context', context.kind === 'account'
+        ? 'This GitHub authorization belongs to a conversation'
+        : 'This GitHub authorization belongs to another conversation')
+    }
     return flow
   }
   private fence(scopeId: string): () => void {
@@ -203,4 +231,9 @@ export class GitHubAppService {
     void operation.finally(() => this.operations.delete(operation)).catch(() => undefined)
     return operation
   }
+}
+
+/** Conversation grants belong to one GitHub account; a different account must not inherit them. */
+function sameAccount(previous: GitHubTokens | undefined, next: GitHubTokens): boolean {
+  return previous?.userId === next.userId && previous.clientId === next.clientId
 }

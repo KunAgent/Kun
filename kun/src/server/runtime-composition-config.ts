@@ -2,6 +2,7 @@ import { buildGitHubAppProvider } from '../adapters/tool/github-app-provider.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
+import { buildFigmaToolProvider } from '../adapters/tool/figma-tool-provider.js'
 import {
   join,
   isDeepStrictEqual,
@@ -355,6 +356,7 @@ export function createRuntimeConfigController(
 	    const nextBaseToolProviders = [
 	      buildGmailToolProvider(services.gmail, core.threadStore, model.gmailDataPolicy),
         ...(model.githubApp ? [buildGitHubAppProvider(model.githubApp.service, core.threadStore, model.githubApp.mcp)] : []),
+        ...(model.figma ? [buildFigmaToolProvider(model.figma.service, model.figma.state)] : []),
 	      builtinProvider('execution-tasks', buildExecutionTaskLocalTools(threadService.executionTasks)),
 	      builtinProvider('builtin', withBackgroundShellTools(
 	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),

@@ -14,6 +14,8 @@
   "settingsIaPermissions": "権限",
   "settingsIaSkills": "スキル",
   "settingsIaMcp": "MCP ツール",
+  "settingsIaConnections": "接続",
+  "settingsIaConnectionsDesc": "Notion、GitHub、Figma、Gmail のアカウントと API トークン。",
   "settingsIaProjects": "プロジェクト設定",
   "settingsIaHarnesses": "外部エージェント",
   "settingsIaCollaboration": "コラボレーション",

@@ -10,6 +10,8 @@ import { createRuntimeAgentComposition } from './runtime-composition-agent.js'
 import { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import { createRuntimeConfigController } from './runtime-composition-config.js'
 import { createServerRuntimeComposition } from './runtime-composition-runtime.js'
+import { AppConnectionsService } from '../services/app-connections-service.js'
+import { McpCapabilityConfig } from '../contracts/capabilities-core.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { ownedProcessAdmissionClosed, resumeOwnedProcessAdmission } from '../process/owned-process.js'
 
@@ -36,6 +38,25 @@ export async function createKunServeRuntime(
     const extensions = await createRuntimeExtensionComposition(agent, () => runtime?.rooms)
     const config = createRuntimeConfigController(extensions)
     runtime = createServerRuntimeComposition(extensions, config)
+    runtime.appConnections = new AppConnectionsService({
+      ...(runtime.githubApp ? { github: runtime.githubApp } : {}),
+      ...(runtime.gmail ? { gmail: runtime.gmail } : {}),
+      ...(model.figma ? { figma: model.figma } : {}),
+      mcp: {
+        config: () => runtime!.mcpConfig?.() ?? McpCapabilityConfig.parse({}),
+        oauth: () => runtime!.mcpOAuth?.() ?? [],
+        setServer: (serverId, server) => runtime!.setMcpServer
+          ? runtime!.setMcpServer(serverId, server)
+          : Promise.resolve({ ok: false as const, code: 'invalid_config' as const, message: 'MCP configuration is unavailable' }),
+        authorize: (serverId) => {
+          if (!runtime!.authorizeMcpOAuth) throw new Error('MCP authorization is unavailable')
+          return runtime!.authorizeMcpOAuth(serverId)
+        },
+        clear: (serverId) => runtime!.clearMcpOAuth
+          ? runtime!.clearMcpOAuth(serverId)
+          : Promise.resolve({ cleared: [] })
+      }
+    })
     return runtime
   } catch (error) {
     await Promise.allSettled(startupCleanups.reverse().map(async (cleanup) => cleanup()))
