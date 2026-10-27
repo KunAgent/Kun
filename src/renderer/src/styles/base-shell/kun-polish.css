@@ -27,8 +27,9 @@
   --kun-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+/* Low enough that the desktop tint shows through the native sidebar material. */
 :root[data-platform='darwin'] {
-  --kun-ground-alpha: 86%;
+  --kun-ground-alpha: 58%;
 }
 
 @media (prefers-reduced-transparency: reduce) {
