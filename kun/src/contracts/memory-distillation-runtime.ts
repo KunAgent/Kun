@@ -19,6 +19,13 @@ export const MEMORY_DISTILLATION_PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1_000
 // - durability: anything not exactly 'durable' is treated as 'transient',
 //   so the candidate is skipped as non-durable instead of persisted.
 // - type: unknown types degrade to the generic 'fact'.
+// - confidence / importance: models routinely answer with a numeric
+//   string ('0.9') or a percentage (85, '85%') instead of a 0-1 JSON
+//   number; both are normalized to the 0-1 number the canonical schema
+//   expects. A score that is missing or not numeric at all is NOT
+//   replaced with an invented default: it still fails validation and
+//   the candidate is dropped with a diagnostic, because a fabricated
+//   confidence would silently clear the low-confidence gate.
 // Comparisons are different: they carry consolidation intent against
 // existing memories, so silently dropping a malformed comparison would
 // turn a supersede/update into a plain create that bypasses conflict
@@ -29,8 +36,14 @@ export const MEMORY_DISTILLATION_PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1_000
 const ExtractionMemoryType = MemoryType.catch('fact')
 const ExtractionDurability = MemoryCandidateDurability.catch('transient')
 
+const ExtractionScore = z.unknown()
+  .transform(normalizeExtractionScore)
+  .pipe(z.number().min(0).max(1))
+
 export const MemoryDistillationExtractionCandidate = MemoryCandidateDraft.extend({
   type: ExtractionMemoryType,
+  confidence: ExtractionScore,
+  importance: ExtractionScore,
   durability: ExtractionDurability,
   comparisons: z.array(z.object({
     memoryId: z.string().min(1).max(256),
@@ -90,6 +103,31 @@ export function parseMemoryDistillationExtractionResponse(
     else dropped.push({ index, error: summarizeExtractionIssues(parsed.error) })
   })
   return { candidates, dropped }
+}
+
+/**
+ * Normalize one raw confidence/importance value to a 0-1 number.
+ * Numbers pass through, numeric strings are parsed, and any value in
+ * (1, 100] is read as a percentage and rescaled. Anything else becomes
+ * NaN, which the piped canonical range check rejects, so the candidate
+ * is dropped with a diagnostic instead of being scored by a guess.
+ */
+function normalizeExtractionScore(value: unknown): number {
+  let numeric: number
+  let percent = false
+  if (typeof value === 'number') {
+    numeric = value
+  } else if (typeof value === 'string') {
+    const raw = value.trim()
+    percent = raw.endsWith('%')
+    const text = percent ? raw.slice(0, -1).trim() : raw
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return Number.NaN
+    numeric = Number(text)
+  } else {
+    return Number.NaN
+  }
+  if (!Number.isFinite(numeric)) return Number.NaN
+  return percent || (numeric > 1 && numeric <= 100) ? numeric / 100 : numeric
 }
 
 function summarizeExtractionIssues(error: z.ZodError): string {

@@ -44,6 +44,57 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(result.candidates[0]?.durability).toBe('transient')
   })
 
+  it('normalizes numeric-string confidence and importance to numbers', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: '0.9', importance: '0.8' }]
+    })
+    expect(result.dropped).toEqual([])
+    expect(result.candidates[0]?.confidence).toBe(0.9)
+    expect(result.candidates[0]?.importance).toBe(0.8)
+  })
+
+  it('normalizes percentage confidence and importance to the 0-1 range', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: 85, importance: '75%' }]
+    })
+    expect(result.dropped).toEqual([])
+    expect(result.candidates[0]?.confidence).toBe(0.85)
+    expect(result.candidates[0]?.importance).toBe(0.75)
+  })
+
+  it('treats explicit percentages at or below one as percentages, not full confidence', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: '1%', importance: '0.5%' }]
+    })
+    expect(result.candidates[0]?.confidence).toBe(0.01)
+    expect(result.candidates[0]?.importance).toBe(0.005)
+  })
+
+  it('drops a candidate whose score is missing or not numeric instead of inventing one', () => {
+    const { confidence: _omitted, ...withoutConfidence } = validCandidate
+    for (const damaged of [
+      withoutConfidence,
+      { ...validCandidate, confidence: 'high' },
+      { ...validCandidate, confidence: '0x10' },
+      { ...validCandidate, importance: null }
+    ]) {
+      const result = parseMemoryDistillationExtractionResponse({ candidates: [damaged] })
+      expect(result.candidates).toEqual([])
+      expect(result.dropped).toHaveLength(1)
+      expect(result.dropped[0]?.error).toMatch(/confidence|importance/)
+    }
+  })
+
+  it('drops a candidate whose normalized score stays out of range', () => {
+    for (const confidence of [150, -0.5, '120']) {
+      const result = parseMemoryDistillationExtractionResponse({
+        candidates: [{ ...validCandidate, confidence }]
+      })
+      expect(result.candidates).toEqual([])
+      expect(result.dropped[0]?.error).toContain('confidence')
+    }
+  })
+
   it('normalizes an unknown candidate type to fact', () => {
     const result = parseMemoryDistillationExtractionResponse({
       candidates: [{ ...validCandidate, type: 'note' }]
@@ -120,6 +171,11 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(() => MemoryCandidateAssessment.parse({
       candidate: draft,
       durability: 'long-term',
+      comparisons: []
+    })).toThrow()
+    expect(() => MemoryCandidateAssessment.parse({
+      candidate: { ...draft, confidence: '0.9' },
+      durability: 'durable',
       comparisons: []
     })).toThrow()
     expect(MemoryCandidateAssessment.parse({
