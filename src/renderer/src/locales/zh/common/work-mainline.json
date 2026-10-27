@@ -63,5 +63,17 @@
   "paperImportInterpretAll": "批量解读这 {{count}} 篇",
   "paperImportBrowse": "在文献库查看",
   "paperImportDone": "完成",
-  "workComposerMentionPlaceholder": "向助手提问，输入 @ 引用文件"
+  "workComposerMentionPlaceholder": "向助手提问，输入 @ 引用文件",
+  "paperDetailLabel": "论文详情",
+  "paperDetailClose": "关闭详情",
+  "paperDetailOpen": "打开阅读",
+  "paperDetailInterpret": "让 Kun 解读",
+  "paperDetailSessions": "相关会话",
+  "paperDetailNoSessions": "还没有会话",
+  "paperDetailInterpretations": "解读",
+  "paperDetailNotes": "笔记",
+  "paperDetailNotesYes": "有",
+  "paperDetailNotesNo": "无",
+  "paperDetailFolder": "分组",
+  "writeDiffKunChanges": "Kun 的修改 · {{count}} 处"
 }
