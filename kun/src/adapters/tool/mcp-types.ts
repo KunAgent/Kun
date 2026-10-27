@@ -76,7 +76,7 @@ export type McpClientLike = {
     cacheMode?: 'use' | 'refresh' | 'bypass'
   }): Promise<{ tools: McpToolDescriptor[]; nextCursor?: string }>
   callTool(
-    input: { name: string; arguments: Record<string, unknown> },
+    input: { name: string; arguments: Record<string, unknown>; _meta?: Record<string, unknown> },
     options?: McpCallOptions
   ): Promise<unknown>
   listResources?(options?: {

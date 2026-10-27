@@ -1,13 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BellRing, MoreHorizontal, PanelLeft, RefreshCw, Trash2, X } from 'lucide-react'
+import { BellRing, ListTodo, MoreHorizontal, PanelLeft, RefreshCw, Trash2, X } from 'lucide-react'
 import { wakeMessage } from '@kun/assistant-agent/prompts'
 import type { AssistantTaskView, AssistantView } from '@shared/assistant-mailbox'
 import kunCheer from '../../../../asset/img/kun_cheer.png'
 import { RoomPopover } from '../rooms/RoomPopover'
+import { AssistantTaskCenter } from './AssistantTaskCenter'
+import { AssistantConnectionDetails } from './AssistantConnectionDetails'
 import { AssistantComposer, AssistantComposerPlaceholder } from './AssistantComposer'
 import { AssistantEnrollmentFlow } from './AssistantEnrollmentFlow'
 import { AssistantLogo } from './AssistantLogo'
+import { useAssistantHistory } from './use-assistant-history'
 import { AssistantThread } from './AssistantThread'
 import { assistantProductLabel } from './assistant-catalog'
 import { recentlySeen, relativeTime } from './assistant-format'
@@ -47,6 +50,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
   const { status, busy, error } = useAssistantMailboxStore()
   const allowed = status?.availability === 'available'
   const membershipMessage = t(status?.availability === 'upgrade_required' ? 'assistantVipRequired' : 'assistantVipUnavailable')
+  const [taskCenter, setTaskCenter] = useState(false)
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState<AssistantTaskView | null>(null)
   const [focusSignal, setFocusSignal] = useState(0)
@@ -57,6 +61,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
   const assistant = selection.kind === 'assistant'
     ? status?.assistants.find((item) => item.id === selection.id)
     : enrollment ? undefined : status?.assistants.find((item) => item.enrollmentId === selection.id)
+  const history = useAssistantHistory(assistant?.id, status)
   // Approving turns the enrollment into an assistant; follow it into its conversation.
   useEffect(() => {
     if (selection.kind === 'enrollment' && assistant) openAssistantConversation({ kind: 'assistant', id: assistant.id })
@@ -111,13 +116,14 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
     if (window.confirm(t('assistantCancelTaskConfirm', { title: task.title || task.body.slice(0, 40) }))) void assistantMailbox.cancelTask(task.id)
   }
 
-  const mine = assistant && status ? status.tasks.some((task) => task.assistantId === assistant.id) || status.notes.some((note) => note.assistantId === assistant.id) : false
+  const mine = Boolean(history.tasks.length || history.notes.length)
   const missing = !status ? t('assistantLoading')
     : status.availability === 'unavailable' ? t('assistantMailboxUnavailable')
       : status.availability === 'login_required' ? t('assistantMailboxLoginRequired')
         : !subject ? (selection.kind === 'enrollment' ? t('assistantMailboxCodeExpired') : t('assistantRemoved')) : ''
 
   return <section className="ds-no-drag flex h-full min-h-0 min-w-0 flex-1 flex-col bg-ds-main" data-assistant-stage={selection.kind}>
+    {taskCenter && assistant && status ? <AssistantTaskCenter assistants={status.assistants} initialAssistantId={assistant.id} onClose={() => setTaskCenter(false)} /> : null}
     <header className="flex min-h-[56px] shrink-0 items-center gap-2.5 border-b border-ds-border px-4 py-2">
       <button type="button" className="rooms-icon-button" aria-label={t('sidebarToggle')} onClick={onToggleLeftSidebar}><PanelLeft size={16} strokeWidth={1.75} /></button>
       {subject ? <>
@@ -128,12 +134,14 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
             <span className={`min-w-0 truncate rounded-full px-2 py-px text-[11px] font-medium ${assistant ? 'bg-ds-subtle text-ds-muted' : 'bg-accent-tint/10 text-accent'}`}>{tag}</span>
           </div>
           <p className="flex min-w-0 items-center gap-1.5 truncate text-[12px] text-ds-muted">
-            {assistant ? <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${recentlySeen(assistant.lastSeenAt) ? 'bg-emerald-500' : 'bg-ds-faint'}`} /> : null}
+            {assistant ? <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${(assistant.presence ? assistant.presence.syncState === 'online' : recentlySeen(assistant.lastSeenAt)) ? 'bg-emerald-500' : 'bg-ds-faint'}`} /> : null}
             <span className="truncate">{subtitle.filter(Boolean).join(' · ')}</span>
           </p>
         </div>
       </> : <div className="flex-1" />}
       {assistant ? <>
+        <button type="button" className="rooms-icon-button" aria-label={t('assistantTaskCenter')} title={t('assistantTaskCenter')} onClick={() => setTaskCenter(true)}><ListTodo size={16} /></button>
+        <AssistantConnectionDetails assistant={assistant} />
         <button type="button" className="rooms-icon-button" aria-label={t('assistantMailboxRefresh')} title={t('assistantMailboxRefresh')} disabled={busy}
           onClick={() => void assistantMailbox.refresh()}><RefreshCw size={16} strokeWidth={1.75} className={busy ? 'animate-spin' : ''} /></button>
         <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={18} />} align="end" width={232} className="rooms-icon-button">
@@ -149,12 +157,17 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
       </> : enrollment ? <button type="button" disabled={busy} onClick={cancelEnrollment}
         className="h-8 rounded-lg border border-ds-border-muted bg-ds-card px-3 text-[12.5px] text-ds-muted transition hover:text-ds-danger">{t('assistantCancelEnrollment')}</button> : null}
     </header>
+    {status?.error ? <div role="status" className="border-b border-ds-border px-4 py-2 text-[12.5px] text-ds-muted">{status.error.includes('assistant_history_expired') ? t('assistantHistoryExpired') : t('assistantMailboxError', { message: status.error })}
+      {assistant && status.error.includes('assistant_history_expired') ? <button type="button" className="ml-3 text-accent" onClick={() => { if (window.confirm(t('assistantRecoverHistoryConfirm'))) void assistantMailbox.recoverHistory(assistant.id) }}>{t('assistantRecoverHistory')}</button> : null}
+    </div> : null}
     {error ? <div role="alert" className="flex items-center gap-2 border-b border-ds-border px-4 py-2 text-[12.5px] text-ds-danger">
       <span className="min-w-0 flex-1 break-words">{error.includes('vip_personal_assistant_required') ? t('assistantVipRequired') : t('assistantMailboxError', { message: error })}</span>
       <button type="button" aria-label={t('assistantMailboxClose')} onClick={assistantMailbox.clearError} className="text-ds-muted hover:text-ds-ink"><X size={14} /></button>
     </div> : null}
     <div ref={scroller} aria-label={t('assistantMessages')} className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-5 pb-2 pt-6"
       onScroll={(event) => { const node = event.currentTarget; stick.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80 }}>
+      {assistant && history.hasMore ? <button type="button" disabled={history.busy} onClick={() => void history.load()} className="mb-4 text-[12px] text-accent">{t(history.busy ? 'assistantLoading' : 'assistantLoadHistory')}</button> : null}
+      {history.error ? <p role="alert" className="text-ds-danger">{t('assistantMailboxError', { message: history.error })}</p> : null}
       {missing ? <div className="m-auto flex flex-col items-center gap-3 text-center text-[13px] text-ds-muted">
         <p role="status">{missing}</p>
         {status && !subject ? <button type="button" onClick={closeAssistantConversation} className="h-8 rounded-lg border border-ds-border-muted bg-ds-card px-3 text-[12.5px] text-ds-ink">{t('assistantMailboxClose')}</button> : null}
@@ -165,7 +178,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
         <p role="status">{t('assistantMailboxCodeExpired')}</p>
         <button type="button" onClick={cancelEnrollment} className="h-8 rounded-lg border border-ds-border-muted bg-ds-card px-3 text-[12.5px] text-ds-ink">{t('assistantCancelEnrollment')}</button>
       </div> : <AssistantEnrollmentFlow enrollment={enrollment} busy={busy} />
-        : assistant ? mine ? <AssistantThread assistant={assistant} tasks={status!.tasks} notes={status!.notes} busy={busy || !allowed} onReply={reply} onCancel={cancelTask} />
+        : assistant ? mine ? <AssistantThread assistant={assistant} tasks={history.tasks} notes={history.notes} busy={busy || !allowed} onReply={reply} onCancel={cancelTask} />
           : <ConnectedHero assistant={assistant} onPick={(text) => { setDraft(text); setFocusSignal((value) => value + 1) }} /> : null}
     </div>
     <footer className="flex shrink-0 justify-center px-5 pb-4 pt-2">

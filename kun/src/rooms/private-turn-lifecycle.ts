@@ -9,7 +9,7 @@ import { withManagerDataMutex } from '../manager/data-mutex.js'
 import { lifecycleRow, privateRequestCanRun } from '../agents/agent-lifecycle-state.js'
 import { roomRunId } from './room-run-recording.js'
 
-type Binding = { store: RoomStore; exclusive<T>(operation: () => Promise<T>): Promise<T>; closed?: boolean }
+type Binding = { store: RoomStore; exclusive<T>(operation: () => Promise<T>): Promise<T>; continuationAllowed?: (request: RoomRequestState) => Promise<boolean>; assistantQueuedAllowed?: (threadId: string, requestId: string) => Promise<boolean>; closed?: boolean }
 const bindings = new WeakMap<ThreadStore, Binding>()
 export const PRIVATE_QUEUE_LOCKED = Symbol('private-queue-lifecycle-locked')
 export function bindPrivateTurnLifecycle(threads: ThreadStore, binding: Binding) {
@@ -29,17 +29,26 @@ export async function withPrivateQueueAdmission<T>(threads: ThreadStore, threadI
   return withManagerDataMutex('agent-lifecycle:' + agentId, () => binding.exclusive(async () => binding.closed ? null : operation()))
 }
 export async function privateQueuedTurnAllowed(threads: ThreadStore, thread: ThreadRecord, turn: Turn): Promise<boolean> {
-  if (thread.roomContext?.kind !== 'conversation') return true
   const binding = bindings.get(threads)
-  if (!binding) return true
+  if (thread.roomContext?.kind !== 'conversation') {
+    if (!turn.clientRequestId?.startsWith('kun-assistant-handoff-')) return true
+    return Boolean(binding && !binding.closed && await binding.assistantQueuedAllowed?.(thread.id, turn.clientRequestId))
+  }
+  const personal = turn.clientRequestId?.startsWith('private-assistant-continuation-') === true
+  if (!binding) return !personal
   if (binding.closed) return false
   const room = await binding.store.get<Room>('room', thread.roomContext.roomId)
   if (!room) return false
+  const run = turn.clientRequestId ? await binding.store.get<RoomRunRecord>('room_run', roomRunId(room.id, turn.clientRequestId)) : null
+  const request = run?.value.requestId ? await binding.store.get<RoomRequestState>('request', run.value.requestId) : null
+  if (personal && !request) return false
+  if (request?.value.privateContinuation?.kind === 'personal_assistant') {
+    return Boolean(request.roomId === room.id && !request.value.cancellationRequested && run?.value.threadId === thread.id &&
+      (!run.value.turnId || run.value.turnId === turn.id) && await binding.continuationAllowed?.(request.value))
+  }
   const lifecycle = await lifecycleRow(binding.store, room.value)
   if (!lifecycle) return true // Existing users have no new fence or default-generation migration.
   if (lifecycle.value.state !== 'active' || !turn.clientRequestId) return false
-  const run = await binding.store.get<RoomRunRecord>('room_run', roomRunId(room.id, turn.clientRequestId))
-  const request = run?.value.requestId ? await binding.store.get<RoomRequestState>('request', run.value.requestId) : null
   return Boolean(request && request.roomId === room.id && request.value.privateProtocol && !request.value.cancellationRequested &&
     run?.value.threadId === thread.id && (!run.value.turnId || run.value.turnId === turn.id) &&
     turn.clientRequestId === 'private-' + request.id + '-' + (request.value.stepAttempt ?? 0) &&

@@ -5,7 +5,13 @@ export type RoomContinuation = {
   sourceTurnId: string
   key: string
   prompt: string
-  kind: 'goal' | 'restart' | 'background_subagent' | 'background_shell' | 'app_connection' | 'workbench_task'
+  kind: 'goal' | 'restart' | 'background_subagent' | 'background_shell' | 'app_connection' | 'workbench_task' | 'personal_assistant'
+  assistantTaskId?: string
+  assistantOwnerId?: string
+  assistantResultId?: string
+  sourceCallId?: string
+  goalCreatedAt?: string
+  sourceFingerprint?: string
 }
 
 type Dispatcher = (input: RoomContinuation) => Promise<'queued' | 'ignored'>

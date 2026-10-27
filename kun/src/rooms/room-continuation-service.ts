@@ -10,6 +10,8 @@ import { roomRunId } from './room-run-recording.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import type { RoomContinuation } from './room-continuation-dispatch.js'
 import type { RoomRequestState, RoomRuntimeDeps } from './room-runtime-types.js'
+import { RoomCoordinatorUnavailableError } from './room-store.js'
+import { assistantSourceEvidence } from './assistant-continuation-source.js'
 import { sourceDispatchAuthority } from '../workbench-bridge/dispatch-authority.js'
 
 /**
@@ -40,11 +42,12 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
   if (!source?.clientRequestId || source.status === 'aborted') return null
   const sourceIndex = thread.turns.indexOf(source)
   // A handed-over Code/Work task can outlive several user turns; its outcome is still owed to the user.
-  const reporting = input.kind === 'workbench_task'
+  const reporting = input.kind === 'workbench_task' || input.kind === 'personal_assistant'
   const background = input.kind === 'background_shell' || input.kind === 'background_subagent' || reporting
   if (!background && sourceIndex !== thread.turns.length - 1) return null
   if (input.kind === 'goal' && (!['completed', 'failed'].includes(source.status) || thread.goal?.status !== 'active')) return null
   if (input.kind === 'restart' && source.status !== 'failed') return null
+  if (input.kind === 'personal_assistant' && !await assistantSourceEvidence(deps, input)) return null
   const run = await deps.store.get<RoomRunRecord>('room_run', roomRunId(scope.roomId, source.clientRequestId))
   if (!run?.value.requestId || run.value.threadId !== thread.id || run.value.turnId !== source.id) return null
   const base = await deps.store.get<RoomRequestState>('request', run.value.requestId)
@@ -57,7 +60,7 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
     ['cancelled', 'stopping'].includes(root.value.status)) return null
   // Results remain owed after new topics. Goal/restart actions remain tied to
   // the latest root; background results retain their original authority below.
-  for (const later of background ? [] : thread.turns.slice(sourceIndex + 1)) {
+  for (const later of background && input.kind !== 'personal_assistant' ? [] : thread.turns.slice(sourceIndex + 1)) {
     if (!later.clientRequestId || later.status === 'aborted') return null
     const laterRun = await deps.store.get<RoomRunRecord>('room_run', roomRunId(scope.roomId, later.clientRequestId))
     if (!laterRun?.value.requestId || laterRun.value.threadId !== thread.id || laterRun.value.turnId !== later.id) return null
@@ -89,14 +92,32 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
 export async function roomContinuationIsCurrent(deps: RoomRuntimeDeps, request: RoomRequestState): Promise<boolean> {
   const continuation = request.privateContinuation
   if (!continuation) return true
-  const source = await sourceFor(deps, { ...continuation, threadId: request.threadId, prompt: request.privateInput ?? '', key: request.id })
-  return Boolean(source && (continuation.kind !== 'goal' || source.thread.goal?.createdAt === continuation.goalCreatedAt))
+  const input = { ...continuation, threadId: request.threadId, prompt: request.privateInput ?? '', key: request.id }
+  if (continuation.kind === 'personal_assistant') {
+    const authority = await deps.assistantContinuationAuthority?.(input)
+    if (authority?.unavailable) throw new RoomCoordinatorUnavailableError()
+    if (!authority?.authorized) return false
+  }
+  const source = await sourceFor(deps, input)
+  return Boolean(source && (!['goal', 'personal_assistant'].includes(continuation.kind) || source.thread.goal?.createdAt === continuation.goalCreatedAt))
+}
+
+export async function verifyPersonalAssistantSource(deps: RoomRuntimeDeps, input: RoomContinuation): Promise<{ goalCreatedAt: string; sourceFingerprint: string } | null> {
+  const evidence = await assistantSourceEvidence(deps, input)
+  if (!evidence) return null
+  if (evidence.thread.roomContext && !await sourceFor(deps, input)) return null
+  return { goalCreatedAt: evidence.goalCreatedAt, sourceFingerprint: evidence.fingerprint }
 }
 
 /** Only the room's admission queue starts work; coordinators never launch a second room turn directly. */
 export async function enqueuePrivateContinuation(deps: RoomRuntimeDeps, input: RoomContinuation): Promise<'queued' | 'ignored'> {
   await deps.assertOwnership()
-  const id = agentStableId('private-continuation', input.threadId, input.sourceTurnId, input.kind, input.key)
+  if (input.kind === 'personal_assistant') {
+    const authority = await deps.assistantContinuationAuthority?.(input)
+    if (authority?.unavailable) throw new RoomCoordinatorUnavailableError()
+    if (!authority?.authorized) return 'ignored'
+  }
+  const id = agentStableId(input.kind === 'personal_assistant' ? 'assistant-continuation' : 'private-continuation', input.threadId, input.sourceTurnId, input.kind, input.key)
   const existing = await deps.store.get<RoomRequestState>('request', id)
   if (existing) {
     // Same callback key is an immutable result identity, never a prompt update.
@@ -106,7 +127,7 @@ export async function enqueuePrivateContinuation(deps: RoomRuntimeDeps, input: R
   const current = await sourceFor(deps, input)
   if (!current) return 'ignored'
   const { thread, source, base, root, room, agent, snapshot } = current
-  const reporting = ['background_subagent', 'background_shell', 'workbench_task'].includes(input.kind)
+  const reporting = ['background_subagent', 'background_shell', 'workbench_task', 'personal_assistant'].includes(input.kind)
   const inboxId = reporting ? agentStableId('room-result', id) : undefined
   const now = new Date().toISOString()
   const model = source.model ? { model: source.model, providerId: source.providerId, accountId: source.accountId }
@@ -126,7 +147,9 @@ export async function enqueuePrivateContinuation(deps: RoomRuntimeDeps, input: R
         reasoningEffort: source.reasoningEffort, serviceTier: source.serviceTier, harnessAgentId: source.harnessAgentId,
         harnessSettings: source.harnessSettings },
       policy: sourceDispatchAuthority(thread, source),
-      ...(input.kind === 'goal' ? { goalCreatedAt: thread.goal!.createdAt } : {}) },
+      ...(['goal', 'personal_assistant'].includes(input.kind) ? { goalCreatedAt: thread.goal!.createdAt } : {}),
+      ...(input.kind === 'personal_assistant' ? { sourceCallId: input.sourceCallId, assistantTaskId: input.assistantTaskId,
+        assistantOwnerId: input.assistantOwnerId, assistantResultId: input.assistantResultId, sourceFingerprint: input.sourceFingerprint } : {}) },
     status: 'pending', threadId: thread.id, roomSnapshot: snapshot,
     message: { ...base.value.message, attachmentIds: [] }, sourceMessageId: base.value.sourceMessageId,
     continuation: (base.value.continuation ?? 0) + 1
