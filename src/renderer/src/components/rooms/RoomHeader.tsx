@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { Room } from '@shared/rooms-api'
 import { RoomAvatarGroup } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
+import { RailReopenButton } from '../workbench/rail-collapse'
 import { RoomAppearanceMenu, RoomNotificationMenu } from './RoomManagementControls'
 import { useFocusModeStore } from '../../store/focus-mode-store'
 import './conversation-manage.css'
@@ -108,5 +109,6 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
         </div>}
       </RoomPopover>
     </> : null}
+    <RailReopenButton />
   </header>
 }

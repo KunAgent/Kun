@@ -225,7 +225,7 @@ test('Code conversation readiness waits for the rendered private recipient and i
   const page = { locator: makeLocator }
   await waitForPrivateRoomSurface(page, 'room-current')
   assert.deepEqual(events, [root, root + ' .rooms-composer .rooms-rich-input',
-    root + ' .rooms-workbench-rail [data-room-tool="browser"]'].map((selector) => ({
+    '.rooms-workbench-rail [data-room-tool="browser"]'].map((selector) => ({
     selector, options: { state: 'visible', timeout: 15000 }
   })))
   const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
