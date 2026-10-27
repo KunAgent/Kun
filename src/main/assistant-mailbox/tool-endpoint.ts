@@ -6,6 +6,9 @@ import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { dirname } from 'node:path'
+import { secureWindowsDirectory, type WindowsPrivatePipe } from '@kun/assistant-agent'
+import { startWindowsToolEndpoint } from './tool-endpoint-windows'
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -41,6 +44,7 @@ async function readBody(request: IncomingMessage): Promise<Record<string, unknow
 
 export class AssistantToolEndpoint {
   private server: Server | null = null
+  private windowsServer: WindowsPrivatePipe | null = null
   private secret = ''
 
   constructor(
@@ -57,13 +61,18 @@ export class AssistantToolEndpoint {
   }
 
   async start(): Promise<void> {
-    if (this.server) return
+    if (this.server || this.windowsServer) return
     this.secret = randomBytes(32).toString('hex')
+    if (this.platform === 'win32') await secureWindowsDirectory(dirname(dirname(this.paths.secretPath)), 'desktop')
     await mkdir(join(this.paths.secretPath, '..'), { recursive: true, mode: 0o700 })
     const temporary = `${this.paths.secretPath}.${randomBytes(4).toString('hex')}.tmp`
     await writeFile(temporary, this.secret, { mode: 0o600 })
     await rename(temporary, this.paths.secretPath)
-    if (this.platform !== 'win32') await rm(this.paths.socketPath, { force: true })
+    if (this.platform === 'win32') {
+      this.windowsServer = await startWindowsToolEndpoint(this.paths.socketPath, this.secret, this.routes, this.handle)
+      return
+    }
+    await rm(this.paths.socketPath, { force: true })
     const server = createServer((request, response) => {
       const reply = (status: number, value: unknown) => {
         response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
@@ -81,11 +90,12 @@ export class AssistantToolEndpoint {
       server.once('error', reject)
       server.listen(this.paths.socketPath, () => { server.off('error', reject); resolve() })
     })
-    if (this.platform !== 'win32') await chmod(this.paths.socketPath, 0o600)
+    await chmod(this.paths.socketPath, 0o600)
     this.server = server
   }
 
   async stop(): Promise<void> {
+    if (this.windowsServer) { this.windowsServer.close(); this.windowsServer = null; return }
     const server = this.server
     this.server = null
     if (!server) return

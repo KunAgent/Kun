@@ -5,9 +5,9 @@ import { dirname } from 'node:path'
 import type { PreparedMessage } from '@kun/assistant-agent'
 import type { AssistantHistoryPage, AssistantNoteView, AssistantTaskStatus, AssistantTaskUpdate, AssistantTaskView, AssistantTaskQuery, AssistantTaskPage, AssistantTaskDetails, AssistantTaskSource } from '../../shared/assistant-mailbox'
 const TERMINAL = new Set<AssistantTaskStatus>(['done', 'failed', 'cancelled'])
-type StoredTask = Omit<AssistantTaskView, 'updates'> & { updates: Array<AssistantTaskUpdate & { messageId: string }> }
+type StoredTask = Omit<AssistantTaskView, 'updates'> & { updates: Array<AssistantTaskUpdate & { messageId: string }>; statusRevision?: number; reportedRevision?: number }
 type Delivery = { assistantId: string; taskId?: string; kind: string; restored?: boolean; storedAt?: string; receivedAt?: string; consumedAt?: string; error?: string }
-type TaskFile = { version: 1 | 2; failed?: PreparedMessage[]; tasks: StoredTask[]; notes: AssistantNoteView[]; seen: string[]; pending?: PreparedMessage[]; deliveries?: Record<string, Delivery>; cursors?: Record<string, number> }
+type TaskFile = { version: 1 | 2; statusRevision?: number; failed?: PreparedMessage[]; tasks: StoredTask[]; notes: AssistantNoteView[]; seen: string[]; pending?: PreparedMessage[]; deliveries?: Record<string, Delivery>; cursors?: Record<string, number> }
 export type IncomingAssistantMessage = {
   id: string; kind: 'task' | 'note' | 'reply' | 'cancel'; createdAt: string; body: string; title?: string; inReplyTo?: string; status?: AssistantTaskUpdate['status']
 }
@@ -35,7 +35,15 @@ export class AssistantTaskStore {
   }
   private mutate<T>(change: (file: TaskFile) => T): Promise<T> {
     const work = async (): Promise<T> => {
-      const file = structuredClone(await this.load()), result = change(file)
+      const previous = await this.load(), file = structuredClone(previous), result = change(file)
+      const old = new Map(previous.tasks.map(task => [task.id, task]))
+      for (const task of file.tasks) {
+        const prior = old.get(task.id)
+        if (!task.statusRevision || !prior || prior.status !== task.status || prior.updatedAt !== task.updatedAt || Boolean(prior.archived) !== Boolean(task.archived)) {
+          file.statusRevision = Math.max(file.statusRevision ?? 0, Date.now()) + 1
+          task.statusRevision = file.statusRevision
+        }
+      }
       await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
       const temporary = `${this.path}.${randomUUID()}.tmp`, handle = await open(temporary, 'wx', 0o600)
       try { await handle.writeFile(JSON.stringify(file)); await handle.sync() } finally { await handle.close() }
@@ -45,6 +53,31 @@ export class AssistantTaskStore {
       return structuredClone(result)
     }
     const next = this.queue.then(work, work); this.queue = next.catch(() => {}); return next
+  }
+  async statusChanges(assistantId: string) {
+    if ((await this.load()).tasks.some(task => !task.statusRevision)) await this.mutate(() => undefined)
+    const file = await this.load()
+    return structuredClone(file.tasks.filter(task => task.assistantId === assistantId && (task.statusRevision ?? 0) > (task.reportedRevision ?? 0)).map(task => ({
+      taskId: task.id, revision: task.statusRevision!, state: task.status, createdAt: task.createdAt,
+      updatedAt: task.updatedAt, archived: Boolean(task.archived)
+    })))
+  }
+  markStatusReported(revisions: Array<{ taskId: string; revision: number }>): Promise<void> {
+    return this.mutate(file => {
+      const sent = new Map(revisions.map(item => [item.taskId, item.revision]))
+      for (const task of file.tasks) {
+        const revision = sent.get(task.id)
+        if (revision && task.statusRevision === revision) task.reportedRevision = revision
+      }
+    })
+  }
+  rebaseStatusRevision(taskId: string, attempted: number, floor: number): Promise<void> {
+    return this.mutate(file => {
+      const task = file.tasks.find(item => item.id === taskId)
+      if (!task || task.statusRevision !== attempted) return
+      file.statusRevision = Math.max(file.statusRevision ?? 0, floor, Date.now()) + 1
+      task.statusRevision = file.statusRevision
+    })
   }
   private enqueue(file: TaskFile, prepared: PreparedMessage): void {
     const existing = file.pending?.find(item => item.message.id === prepared.message.id)

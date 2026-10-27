@@ -3,6 +3,7 @@ import { loadAssistantPresence } from './account-presence'
 import { validTaskQuery } from './task-query'
 import { AssistantLiveSubscriptions } from './live-subscriptions'
 import { AssistantContinuations, type AssistantContinuationBridge } from './continuations'
+import { syncTaskStatus } from './task-status-sync'
 // Main-process owner of the assistant mailbox: enrolls assistants, assigns and cancels tasks,
 // and collects replies on a timer. It acts as this desktop's remote host device (the same
 // identity the phone link uses) with the signed-in Kun account's access token.
@@ -287,6 +288,11 @@ export class AssistantMailboxService {
     const latest = received ? await session.host.list() : listed
     session.assistants = latest.assistants
     session.enrollments = latest.enrollments
+    try {
+      await syncTaskStatus({ origin: this.deps.origin, fetch: this.deps.fetch, identity: session.identity,
+        accessToken: () => this.deps.account.accessToken(), tasks: session.tasks,
+        stillCurrent: async () => (await this.currentSession()) === session }, latest.assistants.map(item => item.id))
+    } catch (error) { this.deps.log('warn', 'Assistant task status will be retried', { error: describe(error) }) }
     // Mailbox secrets of current assistants, and pairing keys of enrollments still waiting.
     await session.secrets.retain(new Set([...latest.assistants.map((a) => a.enrollmentId),
       ...latest.enrollments.map((e) => `pairing:${e.enrollmentId}`)]), this.now())

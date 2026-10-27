@@ -59,13 +59,14 @@ export function AssistantTaskCenter({ assistants, initialAssistantId, onClose }:
           {!page.tasks.length && !busy ? <p className="p-3 text-[12px] text-ds-muted">{t('assistantTaskEmpty')}</p> : null}
           {page.tasks.map(task => <button type="button" key={task.id} onClick={() => void detail(task.id)} className="block w-full rounded-xl p-3 text-left hover:bg-ds-hover">
             <span className="block truncate text-[13px] font-medium text-ds-ink">{taskHeadline(task.title, task.body)}</span>
-            <span className="text-[11px] text-ds-muted">{task.assistantName} · {t(assistantStatusKey(task.status))} · {new Date(task.updatedAt).toLocaleString()}</span>
+            <span className="text-[11px] text-ds-muted">#{task.id.slice(0, 8)}…{task.id.slice(-4)} · {task.assistantName} · {t(assistantStatusKey(task.status))} · {new Date(task.updatedAt).toLocaleString()}</span>
           </button>)}
           {page.hasMore ? <button type="button" className={button} disabled={busy} onClick={() => void load(page.nextCursor)}>{t('assistantTaskLoadMore')}</button> : null}
         </div>
         <div className="min-w-0 space-y-3 p-4 text-[12px] text-ds-ink">
           {selected ? <>
             <h3 className="text-[14px] font-semibold">{taskHeadline(selected.task.title, selected.task.body)}</h3>
+            <p className="break-all text-ds-muted">ID: {selected.task.id}</p>
             <p className="whitespace-pre-wrap break-words">{selected.task.body}</p>
             <p className="text-ds-muted">{t(assistantStatusKey(selected.task.status))} · {t('assistantTaskCreated', { time: new Date(selected.task.createdAt).toLocaleString() })}</p>
             <p className="text-ds-muted">{selected.task.delivery?.consumedAt ? t('assistantDeliveryConsumed') : selected.task.delivery?.receivedAt ? t('assistantDeliveryDownloaded') : selected.task.delivery?.storedAt ? t('assistantNoteDelivery_stored') : t('assistantNoteDelivery_queued')}</p>
