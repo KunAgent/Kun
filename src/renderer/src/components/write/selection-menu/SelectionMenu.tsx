@@ -52,7 +52,7 @@ export function SelectionMenu(props: SelectionMenuProps): ReactElement {
       </>}
       {!typing && !imageMode && props.onQuoteSelection && <>
         <MenuButton role="menuitem" className="write-selection-menu-row" label={t('writeSelectionQuote')}
-          onActivate={props.onQuoteSelection}><MessageSquareQuote /><span>{t('writeSelectionQuote')}</span></MenuButton>
+          onActivate={() => { props.onQuoteSelection?.(); onReleaseSelection?.() }}><MessageSquareQuote /><span>{t('writeSelectionQuote')}</span></MenuButton>
         <div className="write-selection-menu-separator" />
       </>}
       {typing ? <>
