@@ -3,15 +3,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
-  FileText,
-  GraduationCap,
-  MessageSquare,
   MoreHorizontal,
   PanelRight,
   PencilLine,
   Search,
-  Shapes,
-  Telescope,
   Trash2
 } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
@@ -29,7 +24,6 @@ import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import { SidebarActionDialog, type SidebarActionDialogState } from '../chat/SidebarProjectOverlays'
 import { RoomPopover } from '../rooms/RoomPopover'
 import { WorkSidebarSection } from './WorkSidebarSection'
-import { WorkOpenFileRows } from './WorkOpenFileRows'
 import { useWorkViewStore } from '../../write/work-view-store'
 import { useWorkSessions } from './use-work-sessions'
 import '../rooms/conversation-manage.css'
@@ -43,15 +37,6 @@ function anchorName(anchor: WorkSessionEntry['anchor'], boardTitle: (id: string)
   if (anchor.kind === 'file' || anchor.kind === 'paper') return writeBasenameFromPath(anchor.path)
   if (anchor.kind === 'whiteboard') return boardTitle(anchor.boardId) ?? ''
   return ''
-}
-
-function AnchorIcon({ anchor }: { anchor: WorkSessionEntry['anchor'] }): ReactElement {
-  const props = { className: 'h-3.5 w-3.5', strokeWidth: 1.8, 'aria-hidden': true as const }
-  if (anchor.kind === 'file') return <FileText {...props} />
-  if (anchor.kind === 'whiteboard') return <Shapes {...props} />
-  if (anchor.kind === 'paper') return <GraduationCap {...props} />
-  if (anchor.kind === 'research') return <Telescope {...props} />
-  return <MessageSquare {...props} />
 }
 
 /**
@@ -183,7 +168,7 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   )
 
   return (
-    <WorkSidebarSection id="sessions" label={t('workSidebarRecent')} actions={actions}>
+    <WorkSidebarSection id="sessions" label={t('workSidebarViewSessions')} actions={actions}>
       {searchOpen ? (
         <div className="work-sidebar-search">
           <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)}
@@ -196,11 +181,10 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
         </div>
       ) : null}
       <div className="work-sessions" data-work-sessions>
-        <WorkOpenFileRows />
         {draftRow ? (
           <div className="work-session-item" data-work-session-draft>
             <button type="button" className="work-session-row" aria-current="true">
-              <span className="work-session-anchor"><MessageSquare className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden /></span>
+              <span className="work-session-anchor" aria-hidden="true">K</span>
               <span className="work-session-title" data-placeholder="true">{t('workSessionNew')}</span>
               <span className="work-session-time">{t('workSessionDraft')}</span>
             </button>
@@ -230,7 +214,7 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
                   useWorkViewStore.getState().showSession()
                   void openWorkSession(session, undefined, { restoreWorkbench: false })
                 }}>
-                <span className="work-session-anchor"><AnchorIcon anchor={session.anchor} /></span>
+                <span className="work-session-anchor" aria-hidden="true">K</span>
                 <span className="work-session-title" data-placeholder={session.title ? undefined : 'true'}>
                   {sessionLabel(session)}
                 </span>
