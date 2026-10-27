@@ -128,3 +128,38 @@ export async function readXlsxSelection(
   signal?.throwIfAborted()
   return { text: grid.map((cells) => cells.join('\t')).join('\n').trim(), formulas }
 }
+
+export type XlsxSelectionSummary = {
+  /** Non-empty cells in the selection. */
+  cells: number
+  /** Cells that read as numbers (thousand separators, %, currency allowed). */
+  numbers: number
+  sum: number
+  mean: number
+}
+
+const NUMBER_CELL = /^[-+]?[$€£¥]?\s*[-+]?(\d{1,3}(,\d{3})+|\d+)?(\.\d+)?%?$/
+
+/** Spreadsheet-style status for a selection read as tab-separated text. */
+export function summarizeXlsxSelection(text: string): XlsxSelectionSummary {
+  let cells = 0
+  let numbers = 0
+  let sum = 0
+  for (const raw of text.split(/[\t\n]/)) {
+    const value = raw.trim()
+    if (!value) continue
+    cells += 1
+    if (!NUMBER_CELL.test(value) || !/\d/.test(value)) continue
+    const percent = value.endsWith('%')
+    const parsed = Number(value.replace(/[$€£¥,%\s]/g, ''))
+    if (!Number.isFinite(parsed)) continue
+    numbers += 1
+    sum += percent ? parsed / 100 : parsed
+  }
+  return { cells, numbers, sum, mean: numbers > 0 ? sum / numbers : 0 }
+}
+
+/** Compact number for the status line: up to 4 significant decimals, no float noise. */
+export function formatXlsxStat(value: number, locale?: string): string {
+  return Number(value.toPrecision(12)).toLocaleString(locale, { maximumFractionDigits: 4 })
+}

@@ -16,7 +16,8 @@ import {
   OfficeZoomStepper,
   WorkspaceOfficeToolbar
 } from './WorkspaceOfficeToolbar'
-import { readXlsxSelection, xlsxRangeLabel } from './workspace-xlsx-selection'
+import { formatXlsxStat, readXlsxSelection, summarizeXlsxSelection, xlsxRangeLabel, type XlsxSelectionSummary } from './workspace-xlsx-selection'
+import { WorkSheetSelectionAssist } from './write/WorkSheetSelectionAssist'
 
 setWasmSource(wasmUrl)
 
@@ -81,6 +82,7 @@ export function WorkspaceXlsxGrid({
   const sheetToRestoreRef = useRef<string | null>(null)
   const lastSheetRef = useRef<string | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [summary, setSummary] = useState<XlsxSelectionSummary | null>(null)
 
   const activeSheetName = controller.activeSheet?.name ?? null
   if (activeSheetName) lastSheetRef.current = activeSheetName
@@ -105,6 +107,7 @@ export function WorkspaceXlsxGrid({
   }
   const emitEmpty = (): void => {
     hadSelectionRef.current = false
+    setSummary(null)
     emitSelection({ sourceKind: 'spreadsheet', sourceFormat: result.sourceFormat, text: '', charCount: 0 })
   }
 
@@ -132,6 +135,7 @@ export function WorkspaceXlsxGrid({
           return
         }
         hadSelectionRef.current = true
+        setSummary(text ? summarizeXlsxSelection(text) : null)
         emitSelection({
           sourceKind: 'spreadsheet',
           sourceFormat: result.sourceFormat,
@@ -202,6 +206,17 @@ export function WorkspaceXlsxGrid({
             {controller.selectedRangeAddress && interactedRef.current ? (
               <span className="ml-1 truncate font-mono text-[11.5px] text-ds-ink">{controller.selectedRangeAddress}</span>
             ) : null}
+            {summary && summary.cells > 1 && interactedRef.current ? (
+              <span className="kun-xlsx-stats" data-xlsx-stats>
+                {summary.numbers > 0 ? (
+                  <>
+                    <span>{i18n.t('officeSheetStatMean', { value: formatXlsxStat(summary.mean, i18n.language) })}</span>
+                    <span>{i18n.t('officeSheetStatSum', { value: formatXlsxStat(summary.sum, i18n.language) })}</span>
+                  </>
+                ) : null}
+                <span>{i18n.t('officeSheetStatCells', { count: summary.cells })}</span>
+              </span>
+            ) : null}
           </>
         )}
         status={<OfficeToolbarStatus loading={loading} message={refreshError} />}
@@ -251,6 +266,9 @@ export function WorkspaceXlsxGrid({
           errorState={unavailable}
           fileTooLargeState={unavailable}
         />
+        {summary && summary.cells > 0 && interactedRef.current && range ? (
+          <WorkSheetSelectionAssist rangeLabel={xlsxRangeLabel(range)} numeric={summary.numbers > 1} />
+        ) : null}
       </div>
       {controller.tabs.length > 1 ? (
         <div role="tablist" aria-label={i18n.t('officeWorksheet')} className="kun-xlsx-tabs">

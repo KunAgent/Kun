@@ -127,3 +127,73 @@ html[data-theme='dark'] {
   outline: 2px solid color-mix(in srgb, var(--ds-accent) 55%, transparent);
   outline-offset: 1px;
 }
+
+/* Spreadsheet selection status (mean · sum · cells), as in a spreadsheet app. */
+.kun-xlsx-stats {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  margin-left: 10px;
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Kun beside a Work spreadsheet selection: a floating pill row over the grid. */
+.work-sheet-assist {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  display: flex;
+  max-width: calc(100% - 28px);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 18px;
+  background: var(--ds-surface-card);
+  box-shadow: 0 0 0 1px var(--ds-border), 0 12px 32px rgb(16 24 40 / 0.14);
+  animation: work-sheet-assist-in 180ms var(--kun-ease-out, ease-out) both;
+}
+.work-sheet-assist-mark {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ds-accent) 15%, transparent);
+  color: var(--ds-accent);
+  font-size: 10px;
+  font-weight: 800;
+}
+.work-sheet-assist-range {
+  margin-right: 2px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.work-sheet-assist-chip {
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ds-surface-hover);
+  padding: 0 11px;
+  color: var(--ds-text);
+  font-size: 12.5px;
+  transition: background-color 120ms, color 120ms;
+}
+.work-sheet-assist-chip:hover {
+  background: color-mix(in srgb, var(--ds-accent) 12%, transparent);
+  color: var(--ds-accent);
+}
+@keyframes work-sheet-assist-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .work-sheet-assist { animation: none; }
+}
