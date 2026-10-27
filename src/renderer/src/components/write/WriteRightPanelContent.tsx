@@ -57,9 +57,13 @@ export function WriteRightPanelContent({
   const stage = useWorkConversationStage()
   // 论文 in the stage sits beside the conversation instead of replacing it.
   const papersBeside = stage && storedActiveId === 'papers'
-  const activeId: WriteRightPanelId = papersBeside || (stage && WRITE_DOCUMENT_PANEL_IDS.has(storedActiveId))
+  // Work has no 子代理 tool any more: a stored choice falls back to the assistant.
+  const activeId: WriteRightPanelId = papersBeside || storedActiveId === 'subagents' ||
+    (stage && WRITE_DOCUMENT_PANEL_IDS.has(storedActiveId))
     ? 'assistant'
     : storedActiveId
+  // The centered stage cannot fold away, so a panel's close returns to the conversation.
+  const collapse = stage ? () => useWriteWorkspaceStore.getState().toggleWriteRightPanel('assistant') : onCollapse
   const activeThreadId = useChatStore((state) => state.activeThreadId)
   const [visited, setVisited] = useState<Set<WriteRightPanelId>>(() => new Set([activeId]))
 
@@ -72,19 +76,19 @@ export function WriteRightPanelContent({
       case 'assistant':
         return <WriteAssistantPanel {...write} className="h-full max-h-full w-full" />
       case 'outline':
-        return <WriteOutlinePanel onCollapse={onCollapse} />
+        return <WriteOutlinePanel onCollapse={collapse} />
       case 'review':
-        return <WriteReviewPanel onCollapse={onCollapse} />
+        return <WriteReviewPanel onCollapse={collapse} />
       case 'references':
-        return <WriteReferencesPanel onCollapse={onCollapse} />
+        return <WriteReferencesPanel onCollapse={collapse} />
       case 'papers':
-        return <WorkSessionPapersPanel onCollapse={onCollapse} />
+        return <WorkSessionPapersPanel onCollapse={collapse} />
       case 'subagents':
-        return <SubagentDetailPanel className="h-full max-h-full w-full" onCollapse={onCollapse} />
+        return <SubagentDetailPanel className="h-full max-h-full w-full" onCollapse={collapse} />
       case 'mcpSkills':
         return (
           <div className="flex h-full min-h-0 flex-col">
-            <WriteRightPanelHeader id="mcpSkills" onCollapse={onCollapse} />
+            <WriteRightPanelHeader id="mcpSkills" onCollapse={collapse} />
             <div className="relative min-h-0 flex-1">
               <McpSkillsPanel workspaceRoot={workspaceRoot} onOpenSettings={onOpenAgentSettings} />
             </div>
@@ -93,7 +97,7 @@ export function WriteRightPanelContent({
       case 'usage':
         return (
           <div className="flex h-full min-h-0 flex-col">
-            <WriteRightPanelHeader id="usage" onCollapse={onCollapse} />
+            <WriteRightPanelHeader id="usage" onCollapse={collapse} />
             <div className="relative min-h-0 flex-1">
               <UsageQuotaPanel activeThreadId={activeThreadId} active={activeId === 'usage'} />
             </div>
@@ -117,7 +121,7 @@ export function WriteRightPanelContent({
       {papersBeside ? (
         <aside className="work-session-papers-beside" data-write-right-panel-beside="papers">
           <Suspense fallback={null}>
-            <WorkSessionPapersPanel onCollapse={() => useWriteWorkspaceStore.getState().toggleWriteRightPanel('assistant')} />
+            <WorkSessionPapersPanel onCollapse={collapse} />
           </Suspense>
         </aside>
       ) : null}
