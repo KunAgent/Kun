@@ -102,7 +102,8 @@ describe('calculatePersonaMenuPlacement', () => {
       parentMenuRect: { left: 340, right: 564 },
       shellRect: { top: 600 },
       menuHeight: 180,
-      viewportWidth: 600
+      viewportWidth: 600,
+      preferredWidth: 224
     })
 
     expect(placement.left).toBe(108)
@@ -125,7 +126,8 @@ describe('FloatingComposerActionMenu file references', () => {
         }))
       })
       const text = renderer!.root.findAllByProps({ role: 'menuitem' })
-        .map((item) => item.findAllByType('span').map((span) => span.props.children).join(''))
+        .map((item) => item.findAllByType('span').map((span) => span.props.children)
+          .filter((child) => typeof child === 'string').join(''))
       await act(async () => renderer!.unmount())
       return text
     }
