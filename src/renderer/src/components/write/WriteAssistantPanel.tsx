@@ -245,7 +245,8 @@ export function WriteAssistantPanel({
     if (!workspaceRoot || !contextKey) return null
     const registry = readWriteThreadRegistry()
     if (paperView) {
-      if (researchActive) return { kind: 'research', key: contextKey, label: t('paperResearchContext'), sessionIds: [] }
+      // A session that took the stage from the research page is not a research run.
+      if (researchActive && !swapped) return { kind: 'research', key: contextKey, label: t('paperResearchContext'), sessionIds: [] }
       if (paperView === 'library') {
         return { kind: 'library', key: contextKey, label: t('workSidebarLibrary'),
           detail: t('workContextPaperCount', { count: libraryTotal }), sessionIds: [] }
@@ -271,7 +272,7 @@ export function WriteAssistantPanel({
     // threadCount/activeThreadId: a new session about this item joins its list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilePath, activeThreadId, activeUnitRel, activeWhiteboard, contextKey, libraryTotal, paperContextLabel,
-    paperView, readerPage, researchActive, t, threadCount, workspaceRoot])
+    paperView, readerPage, researchActive, swapped, t, threadCount, workspaceRoot])
   const presentationView = useWriteWorkspaceStore(selectFocusedPresentationView)
   const referenceProps = useWorkComposerReferenceProps(workspaceRoot)
   const {
