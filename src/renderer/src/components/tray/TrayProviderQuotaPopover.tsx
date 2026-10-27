@@ -17,8 +17,8 @@ type TrayProviderQuotaPopoverProps = {
 
 /**
  * The menu-bar popover: every provider's allowance on one scrolling page,
- * each subscription's windows as rings, balances as tiles, and what needs
- * the user at the foot. A click on any ring turns every meter between used
+ * each subscription's windows as bars, balances as tiles, and what needs
+ * the user at the foot. A click on any figure turns every meter between used
  * and left, as in the right panel.
  */
 export function TrayProviderQuotaPopover({
@@ -138,7 +138,7 @@ export function TrayProviderQuotaPopover({
             ) : null}
             <QuotaBoard
               result={result}
-              variant="rings"
+              variant="bars"
               retrying={refreshing}
               onRetry={() => void refresh(true)}
               onOpenDashboard={(url) => void api.openExternal(url)}

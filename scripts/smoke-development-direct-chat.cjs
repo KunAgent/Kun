@@ -308,8 +308,7 @@ function runtimeRequest(page, path, method = 'GET', body) {
 }
 
 async function switchMode(page, mode) {
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  await page.locator(`[role="menuitemradio"][data-workspace-mode="${mode}"]`).click()
+  await page.locator(`[role="tab"][data-workspace-mode="${mode}"]`).click()
   await page.locator(`[data-workspace-mode-trigger][data-workspace-mode="${mode}"]`).first().waitFor()
 }
 

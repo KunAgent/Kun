@@ -21,10 +21,10 @@ describe('Kun default light palette', () => {
       /html:not\(\[data-theme='dark'\]\)[\s\S]*?data-empty-task-layout='true'[\s\S]*?radial-gradient\([\s\S]*?rgba\(194, 218, 255, 0\.33\)/
     )
     expect(css).toMatch(
-      /data-empty-task-layout='true'[\s\S]*?\.ds-composer-shell\.ds-chat-composer\s*\{[\s\S]*?border-radius:\s*24px;[\s\S]*?0 16px 42px rgba\(32, 55, 90, 0\.09\)/
+      /data-empty-task-layout='true'[\s\S]*?\.ds-composer-shell\.ds-chat-composer\s*\{[\s\S]*?border-radius:\s*var\(--kun-radius-xl\);[\s\S]*?0 14px 36px rgba\(16, 24, 40, 0\.07\)/
     )
     expect(css).toMatch(
-      /\.ds-composer-shell\.ds-chat-composer\.ds-chat-composer-focus\s*\{[\s\S]*?border-color:\s*#cfd8f3;[\s\S]*?rgba\(111, 139, 255, 0\.08\)/
+      /\.ds-composer-shell\.ds-chat-composer\.ds-chat-composer-focus\s*\{[\s\S]*?box-shadow:[\s\S]*?var\(--kun-hair-3\)/
     )
   })
 })

@@ -7,13 +7,17 @@
 @media (min-width: 768px) {
   html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
     .ds-workbench-shell {
-    --ds-workbench-ground: var(--ds-bg-sidebar);
+    --ds-workbench-ground: color-mix(in srgb, var(--ds-bg-sidebar) var(--kun-ground-alpha), transparent);
     background: var(--ds-workbench-ground);
   }
 
   html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
     .ds-workbench-shell {
-    --ds-workbench-ground: color-mix(in srgb, var(--ds-bg-main) 95%, white);
+    --ds-workbench-ground: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--ds-bg-main) 95%, white) var(--kun-ground-alpha),
+      transparent
+    );
   }
 
   html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
@@ -26,12 +30,12 @@
 
   html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
     .ds-workbench-card {
-    margin: 4px 4px 4px 0;
+    margin: var(--kun-card-gutter) var(--kun-card-gutter) var(--kun-card-gutter) 0;
     overflow: hidden;
-    border: 0.5px solid color-mix(in srgb, var(--ds-border) 72%, transparent);
-    border-radius: 12px;
+    border: 0;
+    border-radius: var(--kun-radius-lg);
     background: var(--ds-bg-main);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    box-shadow: var(--kun-shadow-rest);
   }
 
   html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])

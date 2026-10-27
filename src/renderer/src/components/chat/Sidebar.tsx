@@ -32,6 +32,7 @@ import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDial
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
+import { useSidebarScopeStore } from './sidebar-scope-store'
 import { SidebarFrame } from '../sidebar/SidebarPrimitives'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 import { openArtifactsPage } from '../../artifacts/artifact-library-store'
@@ -109,6 +110,7 @@ export function Sidebar({
   onNewConversation
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
+  const sidebarScope = useSidebarScopeStore((state) => state.scope)
   const iconProps = { className: 'h-4 w-4', strokeWidth: 1.75 }
   // HTML5 drag does not scroll containers; without this, dragged sidebar rows
   // cannot reach projects above or below the visible window.
@@ -284,20 +286,22 @@ export function Sidebar({
         />
       ) : (
       <>
-      <SidebarAgentChatsSection
-        threads={threads}
-        activeThreadId={activeThreadId}
-        runtimeReady={runtimeReady}
-        conversationRoot={conversationWorkspaceRoot}
-        onNewConversation={onNewConversation}
-        onSelectThread={onSelectThread}
-        onRenameThread={onRenameThread}
-        onPinThread={onPinThread}
-        onArchiveThread={onArchiveThread}
-        onDeleteThread={onDeleteThread}
-        onRestoreThread={onRestoreThread}
-        t={t}
-      />
+      {sidebarScope === 'chats' ? (
+  <SidebarAgentChatsSection
+          threads={threads}
+          activeThreadId={activeThreadId}
+          runtimeReady={runtimeReady}
+          conversationRoot={conversationWorkspaceRoot}
+          onNewConversation={onNewConversation}
+          onSelectThread={onSelectThread}
+          onRenameThread={onRenameThread}
+          onPinThread={onPinThread}
+          onArchiveThread={onArchiveThread}
+          onDeleteThread={onDeleteThread}
+          onRestoreThread={onRestoreThread}
+          t={t}
+        />
+      ) : null}
       {!threadSearch.trim() && ['chat', 'write', 'schedule', 'workflow'].includes(activeView) ? (
         <SidebarAttentionPanel
           threads={threads}
@@ -306,39 +310,41 @@ export function Sidebar({
           t={t}
         />
       ) : null}
-      <SidebarProjectsSection
-        threads={threads}
-        activeView={activeView === 'write' ? 'write' : 'chat'}
-        activeThreadId={activeThreadId}
-        runtimeReady={runtimeReady}
-        threadListStatus={threadListStatus}
-        threadListError={threadListError}
-        onRetryThreads={() => void refreshThreads()}
-        onLoadMoreThreads={(workspacePath) => void loadMoreThreads(workspacePath)}
-        threadListCursorByWorkspace={threadListCursorByWorkspace}
-        searchQuery={threadSearch}
-        showArchived={showArchivedThreads}
-        workspaceRoot={workspaceRoot}
-        workspaceRoots={codeWorkspaceRoots}
-        conversationRoot={conversationWorkspaceRoot}
-        busy={busy}
-        watchTurnCompletion={watchTurnCompletion}
-        unreadThreadIds={unreadThreadIds}
-        scheduledThreadActivities={scheduledThreadActivities}
-        awaitingUserInputThreadIds={awaitingUserInputThreadIds}
-        locale={i18n.language}
-        onPickWorkspace={() => void chooseWorkspace()}
-        onRemoveWorkspace={removeWorkspace}
-        onCreateThreadInWorkspace={onNewChatInWorkspace}
-        onSelectThread={onSelectThread}
-        onRenameThread={onRenameThread}
-        onPinThread={onPinThread}
-        onArchiveThread={onArchiveThread}
-        onDeleteThread={onDeleteThread}
-        onRestoreThread={onRestoreThread}
-        onSearchQueryChange={onThreadSearchChange}
-        t={t}
-      />
+      {sidebarScope === 'code' ? (
+  <SidebarProjectsSection
+          threads={threads}
+          activeView={activeView === 'write' ? 'write' : 'chat'}
+          activeThreadId={activeThreadId}
+          runtimeReady={runtimeReady}
+          threadListStatus={threadListStatus}
+          threadListError={threadListError}
+          onRetryThreads={() => void refreshThreads()}
+          onLoadMoreThreads={(workspacePath) => void loadMoreThreads(workspacePath)}
+          threadListCursorByWorkspace={threadListCursorByWorkspace}
+          searchQuery={threadSearch}
+          showArchived={showArchivedThreads}
+          workspaceRoot={workspaceRoot}
+          workspaceRoots={codeWorkspaceRoots}
+          conversationRoot={conversationWorkspaceRoot}
+          busy={busy}
+          watchTurnCompletion={watchTurnCompletion}
+          unreadThreadIds={unreadThreadIds}
+          scheduledThreadActivities={scheduledThreadActivities}
+          awaitingUserInputThreadIds={awaitingUserInputThreadIds}
+          locale={i18n.language}
+          onPickWorkspace={() => void chooseWorkspace()}
+          onRemoveWorkspace={removeWorkspace}
+          onCreateThreadInWorkspace={onNewChatInWorkspace}
+          onSelectThread={onSelectThread}
+          onRenameThread={onRenameThread}
+          onPinThread={onPinThread}
+          onArchiveThread={onArchiveThread}
+          onDeleteThread={onDeleteThread}
+          onRestoreThread={onRestoreThread}
+          onSearchQueryChange={onThreadSearchChange}
+          t={t}
+        />
+      ) : null}
       </>
       )}
 

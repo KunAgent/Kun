@@ -33,8 +33,7 @@ async function workSnapshot(page) {
 }
 
 async function switchToWork(page) {
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  await page.locator('[role="menuitemradio"][data-workspace-mode="write"]').click()
+  await page.locator('[role="tab"][data-workspace-mode="write"]').click()
   await page.locator('[data-workspace-mode-trigger][data-workspace-mode="write"]').first().waitFor()
 }
 

@@ -28,8 +28,7 @@ async function verifyRoomsHarnessReadiness({ page, poll, runtimeRequest }) {
 /** Real rendered conversation -> catalog -> confirmation -> ACP -> durable result. */
 async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize, workspaceRoot, releaseFile, modelFixture }) {
   await openAgentPrivateChat({ page, switchCode: async () => {
-    await page.locator('[data-workspace-mode-trigger]').first().click()
-    await page.locator('[data-workspace-mode-option="chat"]').click()
+    await page.locator('[role="tab"][data-workspace-mode="chat"]').click()
   } })
   const entry = await runtimeRequest(page, '/v1/agents/chat-entry')
   assert(entry.initialized && entry.roomId)

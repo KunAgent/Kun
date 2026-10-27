@@ -1,0 +1,128 @@
+/*
+ * Rounded surface language: one radius ladder, see-through hairlines and three
+ * shadow levels shared by the window frame, sidebar, composer and menus.
+ * macOS draws the sidebar ground over native vibrancy; every other platform
+ * (and "reduce transparency") keeps a solid ground.
+ */
+:root {
+  --kun-radius-xs: 7px;
+  --kun-radius-sm: 10px;
+  --kun-radius-md: 14px;
+  --kun-radius-lg: 18px;
+  --kun-radius-xl: 22px;
+  --kun-radius-pill: 9999px;
+  --kun-card-gutter: 8px;
+  --kun-ground-alpha: 100%;
+  --kun-hair-1: rgba(17, 24, 28, 0.06);
+  --kun-hair-2: rgba(17, 24, 28, 0.09);
+  --kun-hair-3: rgba(17, 24, 28, 0.12);
+  --kun-sunken: #f3f5f5;
+  --kun-shadow-hair: 0 0 0 1px var(--kun-hair-1);
+  --kun-shadow-rest:
+    0 0 0 1px rgba(17, 24, 28, 0.05), 0 1px 2px rgba(16, 24, 40, 0.04),
+    0 12px 32px rgba(16, 24, 40, 0.05);
+  --kun-shadow-lift:
+    0 0 0 1px rgba(17, 24, 28, 0.08), 0 4px 10px rgba(16, 24, 40, 0.05),
+    0 16px 40px rgba(16, 24, 40, 0.12);
+  --kun-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+:root[data-platform='darwin'] {
+  --kun-ground-alpha: 86%;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='darwin'] {
+    --kun-ground-alpha: 100%;
+  }
+}
+
+[data-theme='dark'] {
+  --kun-hair-1: rgba(255, 255, 255, 0.07);
+  --kun-hair-2: rgba(255, 255, 255, 0.1);
+  --kun-hair-3: rgba(255, 255, 255, 0.14);
+  --kun-sunken: rgba(255, 255, 255, 0.06);
+  --kun-shadow-hair: 0 0 0 1px var(--kun-hair-1);
+  --kun-shadow-rest:
+    0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.3),
+    0 12px 32px rgba(0, 0, 0, 0.28);
+  --kun-shadow-lift:
+    0 0 0 1px rgba(255, 255, 255, 0.1), 0 4px 10px rgba(0, 0, 0, 0.3),
+    0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-platform='darwin'] body {
+  background-color: transparent;
+}
+
+/* Right tool rail: fold button at the top, reopen button in the top bar. */
+.kun-rail-toggle {
+  display: inline-flex;
+  width: 38px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--kun-radius-sm);
+  background: transparent;
+  color: var(--ds-text-faint);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.kun-rail-toggle:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.kun-rail-reopen {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 11px;
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent-strong);
+  animation: kun-rail-reopen-in 280ms var(--kun-ease-out) both;
+  transition: background-color 150ms ease;
+}
+
+.kun-rail-reopen:hover {
+  background: color-mix(in srgb, var(--ds-accent) 22%, transparent);
+}
+
+@keyframes kun-rail-reopen-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-rail-reopen {
+    animation: none;
+  }
+}
+
+/* Popovers and menus grow from their trigger: 180ms in, 6px rise, slight scale. */
+.kun-menu-pop {
+  animation: kun-menu-pop-in 180ms var(--kun-ease-out) both;
+  transform-origin: left bottom;
+}
+
+@keyframes kun-menu-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-menu-pop {
+    animation: none;
+  }
+}

@@ -51,10 +51,10 @@
   position: fixed;
   z-index: 250;
   overflow: auto;
-  border: 1px solid var(--ds-border);
-  border-radius: 16px;
+  border: 0;
+  border-radius: var(--kun-radius-lg);
   background: var(--ds-surface-elevated);
-  box-shadow: var(--ds-shadow-overlay), 0 2px 6px rgba(32, 55, 90, 0.06);
+  box-shadow: var(--kun-shadow-lift);
   color: var(--ds-text);
   animation: kun-account-pop 0.22s var(--kun-account-ease) both;
 }
@@ -380,13 +380,13 @@
 .kun-account-row {
   display: flex;
   width: 100%;
-  min-height: 36px;
+  min-height: 40px;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   padding: 6px 10px;
-  border-radius: 9px;
-  color: var(--ds-text-muted);
-  font-size: 13px;
+  border-radius: 11px;
+  color: var(--ds-text);
+  font-size: 14px;
   text-align: left;
 }
 
