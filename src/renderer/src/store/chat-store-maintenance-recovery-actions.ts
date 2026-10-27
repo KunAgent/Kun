@@ -30,6 +30,7 @@ import {
 import {
   forgetStoredThreadRightPanelExpansion
 } from '../lib/thread-right-panel-expansion'
+import { forgetEmptyThreadActivations } from '../lib/empty-thread-activation'
 import {
   forgetThreadWorktree,
   readThreadWorktreeRegistry,
@@ -356,6 +357,7 @@ export function createMaintenanceRecoveryActions(
       await useWriteWorkspaceStore.getState().forgetWhiteboardThread(targetId)
       saveDesignThreadRegistry(forgetDesignThread(targetId))
       saveThreadForkRegistry(forgetThreadFork(targetId))
+      forgetEmptyThreadActivations(targetId)
       forgetStoredThreadRightPanelExpansion(targetId)
       if (wtRecord) saveThreadWorktreeRegistry(forgetThreadWorktree(targetId))
       if (deletingActive) {

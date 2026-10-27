@@ -365,16 +365,18 @@ export async function findReusableEmptyThreadId(
 ): Promise<string | null> {
   const normalizedWorkspace = normalizeWorkspaceRoot(workspaceRoot)
   if (!normalizedWorkspace) return null
+  const usable = (thread: NormalizedThread): boolean =>
+    isThreadAvailableForNewSession(thread) && isReusableThread(thread)
 
   const activeThread = state.activeThreadId
     ? state.threads.find((thread) => thread.id === state.activeThreadId)
     : null
   if (
     activeThread &&
-    isReusableThread(activeThread) &&
+    usable(activeThread) &&
     shouldAutoTitleThread(activeThread) &&
     normalizeWorkspaceRoot(activeThread.workspace) === normalizedWorkspace &&
-    !threadHasUserMessage(state.blocks)
+    activeThreadIsUntouched(state)
   ) {
     return activeThread.id
   }
@@ -383,7 +385,7 @@ export async function findReusableEmptyThreadId(
     .filter(
       (thread) =>
         thread.id !== activeThread?.id &&
-        isReusableThread(thread) &&
+        usable(thread) &&
         shouldAutoTitleThread(thread) &&
         normalizeWorkspaceRoot(thread.workspace) === normalizedWorkspace
     )
@@ -407,6 +409,40 @@ export async function findReusableEmptyThreadId(
     }
   }))
   return checked.find((id): id is string => id !== null) ?? null
+}
+
+/**
+ * A thread is only reusable as a New-session landing page when it never
+ * belonged to a workflow: no side/task relation, no room, no bot origin, no
+ * team or worker binding, and no running turn. Archiving hides it entirely.
+ */
+export function isThreadAvailableForNewSession(thread: NormalizedThread): boolean {
+  if (thread.archived === true) return false
+  if (thread.roomContext || thread.workbenchOrigin || thread.taskOrigin || thread.executionUnit) return false
+  if (thread.relation === 'side' || thread.relation === 'task' || thread.relation === 'fork') return false
+  if (thread.status && runtimeStatusLooksRunning(thread.status)) return false
+  if (thread.latestTurnStatus && runtimeStatusLooksRunning(thread.latestTurnStatus)) return false
+  return true
+}
+
+/**
+ * The selected thread is reusable only while nothing is in flight on it: a
+ * queued message, an unconfirmed send, an unfinished tool block, or a pending
+ * hydration all mean the user already started something there.
+ */
+export function activeThreadIsUntouched(
+  state: Pick<ChatState,
+    'busy' | 'busyUnconfirmed' | 'blocks' | 'queuedMessages' | 'threadLoadingId' |
+    'threadRefreshingId' | 'activeThreadId' | 'lastSeq'>
+): boolean {
+  if (state.busy || state.busyUnconfirmed) return false
+  if (state.queuedMessages.length > 0) return false
+  if (state.activeThreadId && state.threadLoadingId === state.activeThreadId) return false
+  if (state.activeThreadId && state.threadRefreshingId === state.activeThreadId) return false
+  // Any recorded event means the thread is not the blank page it looks like.
+  if ((state.lastSeq ?? 0) > 0) return false
+  if (threadHasUserMessage(state.blocks)) return false
+  return !threadHasPendingRuntimeWork(state.blocks)
 }
 
 /** Legacy rows without `turnCount` still need a detail request; cap how many New task may wait on. */

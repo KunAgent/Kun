@@ -1,5 +1,10 @@
 import type { NormalizedThread } from '../../agent/types'
 import {
+  clearSidebarThreadPromotion,
+  matchingSidebarThreadPromotions,
+  threadDisplayUpdatedAtMs
+} from '../../lib/empty-thread-activation'
+import {
   sidebarThreadActivity,
   type SidebarThreadActivity,
   type SidebarThreadActivityContext
@@ -112,8 +117,8 @@ function shouldPromote(
 }
 
 function parsedUpdatedAt(thread: NormalizedThread): number {
-  const value = Date.parse(thread.updatedAt)
-  return Number.isFinite(value) ? value : 0
+  // Reused empty sessions sort by their New-session activation time.
+  return threadDisplayUpdatedAtMs(thread)
 }
 
 function promoteAttentionRows(options: {
@@ -169,12 +174,16 @@ export function createSidebarThreadOrderTracker(): SidebarThreadOrderTracker {
       const promotedIds = baselineChanged
         ? []
         : baseIds.filter((id) => shouldPromote(previous?.activityById.get(id), activityById.get(id)!))
+      // New-session reuse is an explicit user action: move that row to the head
+      // of its normal-priority bucket. Ordinary activity ticks never raise this.
+      const reusePromotedIds = matchingSidebarThreadPromotions(baseIds)
+      for (const id of reusePromotedIds) clearSidebarThreadPromotion(id)
 
       order = promoteAttentionRows({
         byId,
         order,
         previousOrder: previous?.order ?? baseIds,
-        promotedIds
+        promotedIds: [...new Set([...reusePromotedIds, ...promotedIds])]
       })
       order = partitionByActivity({ activityById, byId, order })
       snapshots.set(containerKey, {

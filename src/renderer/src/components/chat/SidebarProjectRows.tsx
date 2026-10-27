@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { formatRelativeTime } from '../../lib/format-relative-time'
+import { threadDisplayUpdatedAt } from '../../lib/empty-thread-activation'
 import type { SddDraftHistoryItem } from '../../sdd/sdd-draft-history'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
@@ -220,7 +221,9 @@ export function ThreadRow({
   const worktreeLabel = worktreeRecord
     ? t('sidebarThreadWorktree', { branch: worktreeBranch })
     : ''
-  const updatedLabel = formatRelativeTime(thread.updatedAt, locale)
+  // A New-session click that reused this empty thread counts as recent activity
+  // in the row label, while the thread's real `updatedAt` stays untouched.
+  const updatedLabel = formatRelativeTime(threadDisplayUpdatedAt(thread), locale)
   const scheduledTime = scheduledActivity?.nextRunAt
     ? (() => {
         const date = new Date(scheduledActivity.nextRunAt)

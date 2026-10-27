@@ -65,7 +65,6 @@ import {
   accountIdForComposerSelection,
   activeClawChannel,
   compactCodeWorkspaceRoots,
-  composerReasoningEffortForSelection,
   forgetCodeWorkspaceRoot,
   hydrateBlockModelLabels,
   isClawThread,
@@ -86,13 +85,20 @@ import {
   clearedThreadSelection,
   collectAssistantTextForTurn,
   findLatestUserBlockId,
-  findReusableEmptyThreadId,
   reconcileOptimisticUserBlock,
   settlePendingRuntimeWorkAfterInterrupt,
   threadHasPendingRuntimeWork,
   threadSnapshotLooksRunning,
   threadBelongsToWorkspace
 } from './chat-store-runtime-helpers'
+import {
+  adoptThreadCreationGuard,
+  pendingThreadCreation,
+  releaseThreadCreation,
+  threadCreationIntentKey,
+  trackThreadCreation
+} from './thread-creation-intent'
+import { reuseEmptySessionForNewTask } from './chat-store-new-session-reuse'
 import { restoredLiveProjection } from './chat-store-live-projection'
 import {
   WRITE_ASSISTANT_THREAD_TITLE,
@@ -126,7 +132,6 @@ import {
   forkedMessageCount,
   forkedTurnCount,
   isCodeSidebarThread,
-  isCodeThread,
   latestThread,
   looksLikeActiveTurnError,
   readActiveWriteWorkspace,
@@ -156,7 +161,6 @@ import {
 } from './thread-recovery-coordinator'
 import { GitCheckpointAvailabilityCache } from '../lib/git-checkpoint-availability'
 import { primaryAgentAvailableOnSurface } from '../lib/subagent-profile-surface'
-import { isDesignThreadId, readDesignThreadRegistry } from '../design/design-thread-registry'
 import { readSddThreadRegistry } from '../sdd/sdd-thread-registry'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { mergeChatBlocks } from '../agent/kun-mapper'
@@ -184,10 +188,12 @@ export function createThreadCreationActions(
   runtime: ThreadActionRuntime
 ): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn'> {
   const { set, get, sseAbortRef } = context
-  return {
-  createThread: async (options = {}) => {
+  const runCreateThread = async (
+    options: NonNullable<Parameters<ChatState['createThread']>[0]> = {},
+    stillWanted: () => boolean = () => options.activationGuard?.() !== false
+  ): Promise<string | null> => {
     const creationState = { ...get() }
-    const activationAllowed = (): boolean => options.activationGuard?.() !== false
+    const activationAllowed = (): boolean => stillWanted()
     if (get().runtimeConnection !== 'ready') {
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
@@ -306,53 +312,31 @@ export function createThreadCreationActions(
           stillCurrent: activationAllowed }) : undefined
       timing.step('project-defaults')
       if (workspaceIntent === null) return null
-      // Worktree pool mode always needs a fresh thread bound to a fresh pool
-      // slot, so never reuse an existing main-workspace thread in that case.
-      // ADE 不复用 Code 线程:复用池只扫 Code 清单,跨模式必须新建。
-      const reusableThreadId = isAdeThread || options.forceNew || workspaceIntent?.isolation === 'worktree' ||
-        workspaceIntent?.createFields.projectDefaultsRevision || personaProfile
-        ? null
-        : await findReusableEmptyThreadId(
-            get(),
-            p,
-            workspaceRoot,
-            (thread) =>
-              isCodeThread(thread, get().clawChannels) &&
-              !isDesignThreadId(thread.id, readDesignThreadRegistry()) &&
-              (thread.agentSurface ?? 'code') === requestedAgentSurface
-          )
-      timing.step('reuse-lookup')
-      if (reusableThreadId) {
-        if (!activationAllowed()) return null
-        if (initialModel) {
-          rememberThreadComposerSelection(
-            reusableThreadId,
-            initialModel,
-            initialProviderId,
-            'default'
-          )
-        }
-        if (get().activeThreadId !== reusableThreadId) {
-          await get().selectThread(reusableThreadId)
-          timing.step('select')
-        } else {
-          set({
-            error: null,
-            ...(initialModel
-              ? {
-                  composerModel: initialModel,
-                  composerProviderId: initialProviderId,
-                  composerReasoningEffort: composerReasoningEffortForSelection(
-                    get().composerModelGroups,
-                    initialModel,
-                    initialProviderId
-                  )
-                }
-              : {})
-          })
-        }
+      // Reuse is decided by what the thread actually is, not by whether the
+      // project has defaults: an empty, untouched thread of this project and
+      // surface is the right landing page for another New click.
+      const reuseTargetId = await reuseEmptySessionForNewTask({
+        get,
+        set,
+        provider: p,
+        workspaceRoot,
+        isAdeThread,
+        requestedAgentSurface,
+        worktreeIntent: workspaceIntent?.isolation === 'worktree',
+        forceNew: options.forceNew === true,
+        conversation: options.conversation,
+        agentId: options.agentId,
+        harnessId: options.harnessId,
+        personaProfileId: personaProfile?.id,
+        initialModel,
+        initialProviderId,
+        explicitSelection: Boolean(options.model?.trim() || personaProfile?.model?.trim()),
+        activationAllowed,
+        step: (name) => timing.step(name)
+      })
+      if (reuseTargetId) {
         timing.finish('reused a thread')
-        return reusableThreadId
+        return reuseTargetId
       }
       // Primary-agent persona snapshot: bind this thread to the picked
       // subagent profile and freeze its providerId / model / systemPrompt
@@ -425,6 +409,34 @@ export function createThreadCreationActions(
           : {})
       })
       return null
+    }
+  }
+
+  return {
+  createThread: async (options = {}) => {
+    const intentKey = threadCreationIntentKey(options, get())
+    const guard = (): boolean => options.activationGuard?.() !== false
+    const shared = pendingThreadCreation(intentKey)
+    if (shared) {
+      // This click is now the newest owner of the shared creation, so its guard
+      // decides whether the result still takes over the view.
+      adoptThreadCreationGuard(intentKey, guard)
+      const threadId = await shared.promise
+      if (threadId && guard() && get().activeThreadId !== threadId) {
+        const thread = get().threads.find((item) => item.id === threadId)
+        if (thread) seedEmptyThreadSnapshot(thread)
+        await get().selectThread(threadId)
+      }
+      return threadId
+    }
+    const creation = runCreateThread(options, () =>
+      (pendingThreadCreation(intentKey)?.guard ?? guard)()
+    )
+    trackThreadCreation(intentKey, creation, guard)
+    try {
+      return await creation
+    } finally {
+      releaseThreadCreation(intentKey, creation)
     }
   },
 
