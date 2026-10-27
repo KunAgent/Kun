@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { AlignLeft, AppWindow, ImageIcon, LayoutTemplate, LockKeyhole, MessageCircleQuestion, MessageSquare, MessageSquareQuote, PenLine, Sparkle } from 'lucide-react'
+import { SelectionActionStrip } from './SelectionActionStrip'
 import { useTranslation } from 'react-i18next'
 import { MenuButton } from './MenuButton'
 import { BlockTypeFlyout } from './BlockTypeFlyout'
@@ -40,7 +41,12 @@ export function SelectionMenu(props: SelectionMenuProps): ReactElement {
     { enabled: props.designDraftEnabled, run: props.onGenerateDesignDraft, label: 'writeDesignDraftGenerate', icon: LayoutTemplate },
     { enabled: props.prototypeEnabled, run: props.onGeneratePrototype, label: 'writePrototypeGenerate', icon: AppWindow }
   ].filter((item) => item.enabled && item.run)
+  // The four everyday moves sit on top as pills; the menu below keeps formatting and skills.
+  const strip = !typing && !imageMode && (canAsk || props.onQuoteSelection)
   return <>
+    {strip ? <SelectionActionStrip editEnabled={Boolean(editEnabled)} onAskEdit={canAsk ? props.onAskEdit : undefined}
+      onAskChat={canAsk ? props.onAskChat : undefined} onQuoteSelection={props.onQuoteSelection}
+      onDone={() => onReleaseSelection?.()} /> : null}
     <div role="menu" aria-label={t('writeSelectionSkills')} onKeyDown={navigateMenu}>
       {!typing && !imageMode && formattingEnabled && <>
         {props.onSetBlockType && <BlockTypeFlyout blockType={props.blockType} onSet={props.onSetBlockType} focusMode={props.focusMode} />}
@@ -50,7 +56,7 @@ export function SelectionMenu(props: SelectionMenuProps): ReactElement {
         }} />}
         <div className="write-selection-menu-separator" />
       </>}
-      {!typing && !imageMode && props.onQuoteSelection && <>
+      {!strip && !typing && !imageMode && props.onQuoteSelection && <>
         <MenuButton role="menuitem" className="write-selection-menu-row" label={t('writeSelectionQuote')}
           onActivate={() => { props.onQuoteSelection?.(); onReleaseSelection?.() }}><MessageSquareQuote /><span>{t('writeSelectionQuote')}</span></MenuButton>
         <div className="write-selection-menu-separator" />

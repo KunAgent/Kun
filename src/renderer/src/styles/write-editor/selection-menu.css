@@ -68,3 +68,14 @@
 .write-selection-menu kbd, .write-selection-menu-flyout code { font-size: 11.5px; color: var(--ds-text-muted); }
 @keyframes write-inline-agent-in { from { opacity: 0; transform: scale(.97) translateY(-2px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .write-selection-menu { animation: none; } }
+/* Everyday moves as a pill row on top of the menu. */
+.write-selection-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 2px 0 6px; margin-bottom: 4px; border-bottom: 1px solid var(--ds-border); }
+.write-selection-strip-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 10px;
+  border: 0; border-radius: 999px; background: var(--ds-surface-hover); color: var(--ds-text); font-size: 12.5px; font-weight: 500;
+  transition: background-color 120ms, color 120ms;
+}
+.write-selection-strip-button svg { width: 14px; height: 14px; color: var(--ds-text-muted); }
+.write-selection-strip-button:hover { background: color-mix(in srgb, var(--ds-accent) 12%, transparent); color: var(--ds-accent); }
+.write-selection-strip-button:hover svg { color: var(--ds-accent); }
+.write-selection-strip-button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }

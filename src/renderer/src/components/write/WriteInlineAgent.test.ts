@@ -79,7 +79,8 @@ describe('WriteInlineAgent', () => {
       }))
     })
 
-    renderer!.root.findByProps({ 'aria-label': 'writeSelectionQuote' }).props.onClick({ nativeEvent: {} })
+    // Quote now lives in the pill row on top of the menu.
+    renderer!.root.findByProps({ 'data-selection-action': 'quote' }).props.onClick()
     renderer!.root.findByProps({ 'aria-label': quickAction.label }).props.onClick({ nativeEvent: {} })
 
     expect(onQuoteSelection).toHaveBeenCalledOnce()

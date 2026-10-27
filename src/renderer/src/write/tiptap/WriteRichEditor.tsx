@@ -57,6 +57,7 @@ import { WriteWorkLinks } from './extensions/work-links'
 import { requestKnowledgeSourceNavigation } from '../../lib/knowledge-source-navigation'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { WriteDocumentReviewBar } from '../../components/write/WriteDocumentReviewBar'
+import { WriteDocStatusLine } from '../../components/write/WriteDocStatusLine'
 import { NodeRange } from '@tiptap/extension-node-range'
 import { Placeholder } from '@tiptap/extensions'
 import { search } from 'prosemirror-search'
@@ -569,6 +570,10 @@ export function WriteRichEditor({
               getDocumentText={() => splitFrontmatter(lastEmittedValueRef.current ?? '').body}
             />
             {fileName ? <div className="write-doc-title" aria-hidden="true">{fileName}</div> : null}
+            {fileName ? (
+              <WriteDocStatusLine filePath={filePathRef.current} value={value}
+                reviewTotal={reviewUi.active ? reviewUi.total : 0} />
+            ) : null}
           </div>
           <div ref={hostRef} className="write-rich-editor-mount" />
         </div>
