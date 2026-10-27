@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
-import type { AgentDispatchAssignmentRoute } from '@shared/agent-dispatch'
+import type { PlanBuildRoute } from '../../plan/plan-build-agent-store'
+import { planBuildEffortChoices } from '../../plan/plan-build-effort'
 import { useChatStore } from '../../store/chat-store'
 import {
   harnessModelFingerprint,
@@ -32,9 +33,9 @@ import {
  * plan only through `onChange`.
  */
 export function usePlanBuildAgentOptions(
-  route: AgentDispatchAssignmentRoute,
+  route: PlanBuildRoute,
   disabled: boolean,
-  onChange: (route: AgentDispatchAssignmentRoute) => void
+  onChange: (route: PlanBuildRoute) => void
 ) {
   const { t } = useTranslation('common')
   const baseGroups = useChatStore((state) => state.composerModelGroups)
@@ -134,7 +135,20 @@ export function usePlanBuildAgentOptions(
     const group = groups.find((entry) => entry.providerId === groupId)
     if (!group?.modelIds.includes(model)) return
     const { accountId: _account, ...next } = selectWorkbenchModel(current, model, groupId, group.accountId)
-    onChange(routeFromWorkbenchModel(next))
+    // The level carries over; the menu falls back to auto where the new model lacks it.
+    onChange({ ...routeFromWorkbenchModel(next), ...(route.reasoningEffort ? { reasoningEffort: route.reasoningEffort } : {}) })
+  }
+
+  const selectedGroupId = workbenchModelGroup(current)
+  const displayModel = workbenchDisplayModel(current)
+  const selectedGroup = groups.find((group) => group.providerId === selectedGroupId) ??
+    groups.find((group) => group.modelIds.includes(displayModel))
+  const effortChoices = planBuildEffortChoices(selectedGroup, displayModel, external,
+    external ? native?.modelInfo?.find((entry) => entry.id === displayModel) : undefined)
+  const effort = route.reasoningEffort && effortChoices.includes(route.reasoningEffort) ? route.reasoningEffort : 'auto'
+  const selectEffort = (next: string): void => {
+    if (!effortChoices.includes(next)) return
+    onChange({ ...route, reasoningEffort: next })
   }
 
   return {
@@ -143,8 +157,11 @@ export function usePlanBuildAgentOptions(
     loading,
     groups,
     external,
-    displayModel: workbenchDisplayModel(current),
-    selectedGroupId: workbenchModelGroup(current),
+    displayModel,
+    selectedGroupId,
+    effortChoices,
+    effort,
+    selectEffort,
     modelsLoading: external && Boolean(native?.loading || providers?.loading),
     pendingAgent,
     refresh,

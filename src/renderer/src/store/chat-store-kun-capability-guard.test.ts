@@ -17,9 +17,13 @@ describe('Kun product send boundary', () => {
     expect(blocked({ agentSurface: 'code' })).toBe(false)
   })
 
+  it('lets a queued external plan build handoff through', () => {
+    expect(blocked({ queued: { id: 'q', text: 'Build the plan', harnessId: 'codex', planBuild: true } })).toBe(false)
+  })
+
   it.each<SendMessageOverrides>([
     { agentSurface: 'design' }, { guiDesignMode: true }, { guiDesignCanvas: true },
-    { guiExcalidrawCanvas: true }, { planBuild: true },
+    { guiExcalidrawCanvas: true },
     { guiPlan: { operation: 'refine', workspaceRoot: '/repo', relativePath: '.kunsdd/plan/a.md', planId: 'a' } }
   ])('blocks external Kun intent even when the composer UI is bypassed: %j', (intent) => {
     expect(blocked(intent)).toBe(true)

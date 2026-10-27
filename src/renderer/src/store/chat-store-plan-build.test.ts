@@ -21,6 +21,9 @@ const worktreeMock = vi.hoisted(() => ({
 }))
 const snapshotMock = vi.hoisted(() => ({ snapshotThreadProjection: vi.fn() }))
 const watchMock = vi.hoisted(() => ({ watchPlanBuildReview: vi.fn() }))
+const composerStateMock = vi.hoisted(() => ({
+  resolveThreadComposerState: vi.fn(() => ({ composerModel: 'opus', composerHarnessId: 'claude-code', composerReasoningEffort: 'high' }))
+}))
 const runtimeMock = vi.hoisted(() => ({
   syncTurnCompletionPoll: vi.fn(),
   turnCompleteNotificationSource: vi.fn(() => null),
@@ -34,6 +37,7 @@ vi.mock('./chat-store-runtime-helpers', () => runtimeHelpersMock)
 vi.mock('./chat-store-thread-send-worktree', () => worktreeMock)
 vi.mock('./thread-snapshot-cache', () => snapshotMock)
 vi.mock('./plan-build-watch', () => watchMock)
+vi.mock('./chat-store-thread-composer-state', () => composerStateMock)
 
 import { createPlanBuildActions } from './chat-store-plan-build'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
@@ -104,6 +108,8 @@ describe('dispatchExternalPlanBuild', () => {
     }))
     expect(state.route).toBe('ade')
     expect(state.activeThreadId).toBe('thr_build')
+    // The build conversation opens on its own model and level.
+    expect(state).toMatchObject({ composerModel: 'opus', composerHarnessId: 'claude-code', composerReasoningEffort: 'high' })
     expect(state.adeThreads?.[0]?.id).toBe('thr_build')
     const queued = worktreeMock.prepareAdeThreadWorktree.mock.calls[0]?.[0]
       .submittedMessageForQueue as QueuedUserMessage

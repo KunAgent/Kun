@@ -63,6 +63,7 @@ import type { MessageTimelineProps } from './message-timeline-props'
 import { MessageSelectionToolbar } from './MessageSelectionToolbar'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
 import { RoomWardrobeDropCard } from '../rooms/RoomWardrobeDropCard'
+import { useIsPlanBuildSession } from '../plan/PlanBuildSessionCard'
 import {
   timelineTurnAllowsRecoveryContinue,
   timelineTurnIsProcessing
@@ -172,6 +173,7 @@ export function MessageTimeline({
   const heroRoute: 'chat' | 'claw' =
     route === 'claw' ? 'claw' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
+  const planBuildSession = useIsPlanBuildSession()
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null), contentRef = useRef<HTMLDivElement>(null)
   const turnRefMap = useRef(new Map<string, HTMLDivElement>())
@@ -404,7 +406,7 @@ export function MessageTimeline({
       }`}>
         {activeThread?.historyRefId ? <SourceHistoryCard referenceId={activeThread.historyRefId} /> : null}
         {shouldShowTimelineEmptyHero({
-          hasContent: Boolean(hasContent),
+          hasContent: Boolean(hasContent) || planBuildSession,
           hasHistoryReference: Boolean(activeThread?.historyRefId),
           activeThreadId,
           route: heroRoute

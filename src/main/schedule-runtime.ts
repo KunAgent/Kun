@@ -283,6 +283,7 @@ export class ScheduleRuntime {
     reasoningEffort?: ScheduleReasoningEffort
     mode?: ScheduleRunMode
     orchestration?: 'direct' | 'graph'
+    harness?: ScheduledTaskV1['harness']
     clawChannelId?: string
     enabled?: boolean
     schedule: Partial<ScheduledTaskV1['schedule']> & { kind: ScheduledTaskV1['schedule']['kind'] }
@@ -314,6 +315,7 @@ export class ScheduleRuntime {
       priority: 0,
       dependsOn: [],
       useWorktree: false,
+      ...(input.harness?.id ? { harness: input.harness } : {}),
       schedule: {
         kind: input.schedule.kind,
         everyMinutes: typeof input.schedule.everyMinutes === 'number' ? input.schedule.everyMinutes : 60,

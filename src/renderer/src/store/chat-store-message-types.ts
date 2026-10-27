@@ -221,4 +221,6 @@ export type ExternalPlanBuildRequest = {
   model?: string
   providerId?: string
   accountId?: string
+  /** Reasoning level for the build turn; omitted leaves it to the Agent. */
+  reasoningEffort?: string
 }
