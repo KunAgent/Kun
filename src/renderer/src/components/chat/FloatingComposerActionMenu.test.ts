@@ -9,10 +9,10 @@ import {
 } from './FloatingComposerActionMenu'
 
 describe('calculateActionMenuPlacement', () => {
-  it('keeps the menu above the composer shell with the requested gap', () => {
+  it('keeps the menu above the + button with the requested gap', () => {
     const placement = calculateActionMenuPlacement({
       buttonRect: { left: 24, right: 60 },
-      shellRect: { top: 420 },
+      anchorRect: { top: 420 },
       menuHeight: 220,
       viewportHeight: 800,
       viewportWidth: 1000
@@ -25,7 +25,7 @@ describe('calculateActionMenuPlacement', () => {
   it('clamps the menu horizontally inside a narrow viewport', () => {
     const placement = calculateActionMenuPlacement({
       buttonRect: { left: 260, right: 296 },
-      shellRect: { top: 500 },
+      anchorRect: { top: 500 },
       menuHeight: 200,
       viewportHeight: 700,
       viewportWidth: 300,
@@ -37,10 +37,10 @@ describe('calculateActionMenuPlacement', () => {
     expect(placement.width).toBe(236)
   })
 
-  it('shrinks the scrollable height instead of opening over the composer', () => {
+  it('shrinks the scrollable height instead of covering the + button', () => {
     const placement = calculateActionMenuPlacement({
       buttonRect: { left: 20, right: 56 },
-      shellRect: { top: 92 },
+      anchorRect: { top: 92 },
       menuHeight: 360,
       viewportHeight: 700,
       viewportWidth: 900,
@@ -53,10 +53,10 @@ describe('calculateActionMenuPlacement', () => {
     expect(placement.top + placement.maxHeight).toBe(84)
   })
 
-  it('uses zero height rather than crossing the composer when no space exists', () => {
+  it('uses zero height rather than covering the + button when no space exists', () => {
     const placement = calculateActionMenuPlacement({
       buttonRect: { left: 48, right: 120 },
-      shellRect: { top: 10 },
+      anchorRect: { top: 10 },
       menuHeight: 180,
       viewportWidth: 800,
       coordinateScale: 2
@@ -69,7 +69,7 @@ describe('calculateActionMenuPlacement', () => {
   it('normalizes anchor coordinates for non-default body zoom', () => {
     const placement = calculateActionMenuPlacement({
       buttonRect: { left: 48, right: 120 },
-      shellRect: { top: 600 },
+      anchorRect: { top: 600 },
       menuHeight: 180,
       viewportHeight: 1200,
       viewportWidth: 1600,
@@ -87,7 +87,7 @@ describe('calculatePersonaMenuPlacement', () => {
     const placement = calculatePersonaMenuPlacement({
       triggerRect: { top: 310 },
       parentMenuRect: { left: 20, right: 244 },
-      shellRect: { top: 500 },
+      anchorRect: { top: 500 },
       menuHeight: 220,
       viewportWidth: 1000
     })
@@ -100,7 +100,7 @@ describe('calculatePersonaMenuPlacement', () => {
     const placement = calculatePersonaMenuPlacement({
       triggerRect: { top: 180 },
       parentMenuRect: { left: 340, right: 564 },
-      shellRect: { top: 600 },
+      anchorRect: { top: 600 },
       menuHeight: 180,
       viewportWidth: 600,
       preferredWidth: 224
@@ -223,7 +223,7 @@ describe('FloatingComposerActionMenu persona controls', () => {
           composerMenuButtonRef: {
             current: {
               focus,
-              getBoundingClientRect: () => ({ left: 20, right: 56 })
+              getBoundingClientRect: () => ({ top: 600, left: 20, right: 56 })
             }
           }
         })
@@ -316,6 +316,7 @@ function installMenuGlobals(): void {
       return 1
     },
     cancelAnimationFrame: vi.fn(),
+    getComputedStyle: () => ({ zoom: '1' }),
     addEventListener: vi.fn(),
     removeEventListener: vi.fn()
   })
