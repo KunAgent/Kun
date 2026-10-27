@@ -63,5 +63,17 @@
   "paperImportInterpretAll": "อธิบาย {{count}} บทความนี้",
   "paperImportBrowse": "ดูในคลังเอกสาร",
   "paperImportDone": "เสร็จสิ้น",
-  "workComposerMentionPlaceholder": "ถามผู้ช่วย · พิมพ์ @ เพื่ออ้างอิงไฟล์"
+  "workComposerMentionPlaceholder": "ถามผู้ช่วย · พิมพ์ @ เพื่ออ้างอิงไฟล์",
+  "paperDetailLabel": "รายละเอียดบทความ",
+  "paperDetailClose": "ปิดรายละเอียด",
+  "paperDetailOpen": "เปิดอ่าน",
+  "paperDetailInterpret": "ให้ Kun อธิบาย",
+  "paperDetailSessions": "เซสชันที่เกี่ยวข้อง",
+  "paperDetailNoSessions": "ยังไม่มีเซสชัน",
+  "paperDetailInterpretations": "การอธิบาย",
+  "paperDetailNotes": "บันทึก",
+  "paperDetailNotesYes": "มี",
+  "paperDetailNotesNo": "ไม่มี",
+  "paperDetailFolder": "โฟลเดอร์",
+  "writeDiffKunChanges": "การแก้ไขจาก Kun · {{count}} จุด"
 }

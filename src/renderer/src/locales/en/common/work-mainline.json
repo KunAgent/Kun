@@ -63,5 +63,17 @@
   "paperImportInterpretAll": "Interpret these {{count}}",
   "paperImportBrowse": "Show in the library",
   "paperImportDone": "Done",
-  "workComposerMentionPlaceholder": "Ask the assistant · type @ to reference a file"
+  "workComposerMentionPlaceholder": "Ask the assistant · type @ to reference a file",
+  "paperDetailLabel": "Paper details",
+  "paperDetailClose": "Close details",
+  "paperDetailOpen": "Open to read",
+  "paperDetailInterpret": "Ask Kun to interpret",
+  "paperDetailSessions": "Related sessions",
+  "paperDetailNoSessions": "No sessions yet",
+  "paperDetailInterpretations": "Interpretations",
+  "paperDetailNotes": "Notes",
+  "paperDetailNotesYes": "Yes",
+  "paperDetailNotesNo": "None",
+  "paperDetailFolder": "Folder",
+  "writeDiffKunChanges": "Changes from Kun · {{count}}"
 }

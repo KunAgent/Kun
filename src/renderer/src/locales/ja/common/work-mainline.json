@@ -63,5 +63,17 @@
   "paperImportInterpretAll": "この {{count}} 本をまとめて解説",
   "paperImportBrowse": "ライブラリで表示",
   "paperImportDone": "完了",
-  "workComposerMentionPlaceholder": "アシスタントに質問 · @ でファイルを参照"
+  "workComposerMentionPlaceholder": "アシスタントに質問 · @ でファイルを参照",
+  "paperDetailLabel": "論文の詳細",
+  "paperDetailClose": "詳細を閉じる",
+  "paperDetailOpen": "開いて読む",
+  "paperDetailInterpret": "Kun に解説してもらう",
+  "paperDetailSessions": "関連セッション",
+  "paperDetailNoSessions": "まだセッションはありません",
+  "paperDetailInterpretations": "解説",
+  "paperDetailNotes": "ノート",
+  "paperDetailNotesYes": "あり",
+  "paperDetailNotesNo": "なし",
+  "paperDetailFolder": "フォルダー",
+  "writeDiffKunChanges": "Kun の変更 · {{count}} 件"
 }

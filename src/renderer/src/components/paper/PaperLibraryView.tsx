@@ -32,7 +32,8 @@ import {
 import { PaperRowMenu, type PaperRowMenuAction } from './library/PaperRowMenu'
 import { PaperMetaEditDialog } from './library/PaperMetaEditDialog'
 import { PaperMoveGroupDialog } from './library/PaperMoveGroupDialog'
-import { PaperLibraryTable } from './library/PaperLibraryTable'
+import { PaperLibraryTable, statusLabelKey } from './library/PaperLibraryTable'
+import { PaperLibraryDetailPanel, useLibraryHasRoom } from './library/PaperLibraryDetailPanel'
 import { PaperLibraryToolbar } from './library/PaperLibraryToolbar'
 import { PaperLibraryEmptyState } from './library/PaperLibraryEmptyState'
 import paperSurface from './PaperWorkspaceSurface.module.css'
@@ -47,14 +48,6 @@ import type {
 } from '@shared/paper/paper-library-types'
 import { setImportFolder } from '../../paper/paper-import-target'
 import { usePaperImportDraft } from '../../paper/paper-import-draft'
-
-function statusLabelKey(status: string | undefined): string {
-  switch (status ?? 'unread') {
-    case 'reading': return 'writePaperFilterReading'
-    case 'read': return 'writePaperFilterRead'
-    default: return 'writePaperFilterUnread'
-  }
-}
 
 /** Library tab: toolbar (search + filters + actions), bulk-action bar, and
  * the sortable/selectable paper table. */
@@ -122,6 +115,8 @@ export function PaperLibraryView({
   const [menu, setMenu] = useState<{ entry: PaperLibraryEntry; x: number; y: number } | null>(null)
   const [editEntry, setEditEntry] = useState<PaperLibraryEntry | null>(null)
   const [moveUnits, setMoveUnits] = useState<string[] | null>(null)
+  const [focusedDir, setFocusedDir] = useState<string | null>(null)
+  const [listAreaRef, hasRoomForDetail] = useLibraryHasRoom()
   // R3.1: mark-density data for the per-row heat bar; fetched once per tab
   // visit (main process mtime-caches the per-unit aggregates).
   const activityRequest = useRef(0)
@@ -312,6 +307,7 @@ export function PaperLibraryView({
     clearSelection()
   }
 
+  const detailEntry = hasRoomForDetail && focusedDir ? visible.find((entry) => entry.unitDir === focusedDir) ?? null : null
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selection.has(e.unitDir))
 
   // Drop PDFs anywhere on the library: the import dialog takes them (with a
@@ -336,21 +332,21 @@ export function PaperLibraryView({
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
-      <header className="flex shrink-0 flex-wrap items-end gap-3 px-5 pb-3 pt-4">
+      <header className="flex shrink-0 flex-wrap items-end gap-3 px-6 pb-3 pt-5">
         <div className="min-w-0 flex-1">
-          <h1 className="text-[20px] font-semibold tracking-[-0.01em] text-ds-ink">{t('workSidebarLibrary')}</h1>
+          <h1 className="text-[22px] font-bold tracking-[-0.01em] text-ds-ink">{t('workSidebarLibrary')}</h1>
           <p className="mt-0.5 truncate text-[12.5px] text-ds-faint" title={workspaceRoot}>
             {t('paperLibrarySummary', { space: spaceName, total: counts.total, unread: counts.unread, reading: counts.reading })}
           </p>
         </div>
-        <div role="tablist" aria-label={t('paperLibraryViewLabel')} className="inline-flex rounded-lg bg-ds-hover p-0.5">
+        <div role="tablist" aria-label={t('paperLibraryViewLabel')} className="inline-flex rounded-full bg-ds-hover p-[3px]">
           <button type="button" role="tab" aria-selected={!matrixOpen} onClick={() => setMatrixOpen(false)}
-            className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition ${matrixOpen ? 'text-ds-muted hover:text-ds-ink' : 'bg-ds-card font-semibold text-ds-ink shadow-sm'}`}>
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px] transition ${matrixOpen ? 'text-ds-muted hover:text-ds-ink' : 'bg-ds-card font-semibold text-ds-ink shadow-sm'}`}>
             <List className="h-3.5 w-3.5" strokeWidth={1.9} />{t('paperLibraryViewList')}
           </button>
           <button type="button" role="tab" aria-selected={matrixOpen} data-testid="paper-open-matrix" onClick={() => setMatrixOpen(true)}
             title={t('paperReadingLocalControls')}
-            className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition ${matrixOpen ? 'bg-ds-card font-semibold text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'}`}>
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px] transition ${matrixOpen ? 'bg-ds-card font-semibold text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'}`}>
             <Table2 className="h-3.5 w-3.5" strokeWidth={1.9} />{t('paperMatrixTitle')}
           </button>
         </div>
@@ -376,17 +372,17 @@ export function PaperLibraryView({
       />
 
       {selection.size > 0 ? (
-        <div className="flex items-center gap-2 border-b border-ds-border-muted bg-accent-tint/[0.05] px-4 py-2">
-          <span className="text-[12px] font-medium text-ds-ink">
+        <div data-testid="paper-batch-bar" className="paper-batch-bar mx-5 mb-1 mt-2.5 flex min-h-10 flex-wrap items-center gap-1.5 rounded-xl py-1.5 pl-3.5 pr-2 text-[13px]">
+          <span className="mr-1 text-[13px] font-medium">
             {t('writePaperSelected', { count: selection.size })}
           </span>
           <button
             type="button"
             data-testid="paper-batch-interpret"
             onClick={interpretSelected}
-            className="inline-flex h-6 items-center gap-1 rounded-full bg-accent px-2.5 text-[11.5px] font-medium text-white transition hover:brightness-110"
+            className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12.5px] transition paper-batch-button is-primary"
           >
-            <Layers className="h-3 w-3" strokeWidth={1.9} />
+            <Layers className="h-3.5 w-3.5" strokeWidth={1.9} />
             {t('paperBatchAction', { count: selection.size })}
           </button>
           {(['unread', 'reading', 'read'] as const).map((status) => (
@@ -394,7 +390,7 @@ export function PaperLibraryView({
               key={status}
               type="button"
               onClick={() => void bulkSetStatus(status)}
-              className="inline-flex h-6 items-center rounded-full border border-ds-border-muted px-2 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+              className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12.5px] transition paper-batch-button"
             >
               {t(statusLabelKey(status))}
             </button>
@@ -406,7 +402,7 @@ export function PaperLibraryView({
                 disabled={selection.size < 2}
                 title={selection.size < 2 ? t('writePaperCompareNeedsTwo') : undefined}
                 onClick={() => runMultiTask('compare')}
-                className="inline-flex h-6 items-center gap-1 rounded-full border border-accent-tint/30 px-2 text-[11.5px] text-accent transition hover:bg-accent-tint/10 disabled:opacity-50"
+                className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12.5px] transition paper-batch-button disabled:opacity-50"
               >
                 <Sparkles className="h-3 w-3" strokeWidth={1.9} />
                 {t('writePaperCompare')}
@@ -414,7 +410,7 @@ export function PaperLibraryView({
               <button
                 type="button"
                 onClick={() => runMultiTask('related-work')}
-                className="inline-flex h-6 items-center gap-1 rounded-full border border-accent-tint/30 px-2 text-[11.5px] text-accent transition hover:bg-accent-tint/10"
+                className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12.5px] transition paper-batch-button"
               >
                 <Sparkles className="h-3 w-3" strokeWidth={1.9} />
                 {t('writePaperRelatedWork')}
@@ -424,7 +420,7 @@ export function PaperLibraryView({
           <button
             type="button"
             onClick={() => setMoveUnits([...selection])}
-            className="inline-flex h-6 items-center gap-1 rounded-full border border-ds-border-muted px-2 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12.5px] transition paper-batch-button"
           >
             <FolderInput className="h-3 w-3" strokeWidth={1.9} />
             {t('writePaperMoveToGroup')}
@@ -432,7 +428,7 @@ export function PaperLibraryView({
           <button
             type="button"
             onClick={() => void bulkTrash()}
-            className="inline-flex h-6 items-center gap-1 rounded-full border border-red-200/70 px-2 text-[11.5px] text-red-600 transition hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40"
+            className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[12.5px] transition paper-batch-button is-danger"
           >
             <Trash2 className="h-3 w-3" strokeWidth={1.9} />
             {t('writePaperTrash')}
@@ -441,7 +437,7 @@ export function PaperLibraryView({
           <button
             type="button"
             onClick={clearSelection}
-            className="text-[11.5px] text-ds-faint transition hover:text-ds-ink"
+            className="paper-batch-clear h-7 rounded-full px-2.5 text-[12px] transition"
           >
             {t('writePaperClearSelection')}
           </button>
@@ -454,7 +450,8 @@ export function PaperLibraryView({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div ref={listAreaRef} className="flex min-h-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-auto pt-1">
         {entriesLoading && visible.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-16 text-ds-faint">
             <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.8} />
@@ -487,12 +484,26 @@ export function PaperLibraryView({
               allVisibleSelected ? new Set<string>() : new Set(visible.map((entry) => entry.unitDir))
             )}
             onOpen={(entry) => void openLibraryEntry(entry, workspaceRoot, t)}
+            focused={detailEntry?.unitDir ?? null}
+            onFocus={hasRoomForDetail ? (entry) => setFocusedDir(entry.unitDir) : undefined}
             onMenu={(entry, x, y) => setMenu({ entry, x, y })}
             sessionCounts={sessionCounts}
             onOpenSessions={openSessions}
             t={t}
           />
         )}
+      </div>
+      {detailEntry ? (
+        <PaperLibraryDetailPanel
+          entry={detailEntry}
+          sessions={sessionCounts[detailEntry.unitDir] ?? 0}
+          onOpen={() => void openLibraryEntry(detailEntry, workspaceRoot, t)}
+          onInterpret={() => void interpretPaperWithAssistant({ t, workspaceRoot, unitDir: detailEntry.unitDir, meta: detailEntry.meta })}
+          onOpenSessions={() => openSessions(detailEntry)}
+          onClose={() => setFocusedDir(null)}
+          t={t}
+        />
+      ) : null}
       </div>
       </>)}
       {menu ? (

@@ -432,10 +432,10 @@
 
 .write-diff-actions {
   position: absolute;
-  margin-top: -1.4em;
-  margin-left: 4px;
+  margin-top: -1.9em;
+  margin-left: 6px;
   display: inline-flex;
-  gap: 2px;
+  gap: 4px;
   z-index: 20;
 }
 
@@ -443,22 +443,35 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  border: 1px solid var(--ds-border, #d4d4d8);
-  background: var(--ds-card, #fff);
-  font-size: 11px;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1;
   cursor: pointer;
-}
-
-.write-diff-actions .write-diff-accept {
-  color: #16a34a;
+  transition: background-color 120ms ease, filter 120ms ease;
 }
 
 .write-diff-actions .write-diff-reject {
-  color: #dc2626;
+  background: var(--ds-surface-card, #fff);
+  box-shadow: 0 0 0 1px var(--ds-border, rgb(17 24 28 / 0.12)), 0 2px 6px rgb(16 24 40 / 0.06);
+  color: var(--ds-text, #1b1f23);
+}
+
+.write-diff-actions .write-diff-reject:hover {
+  background: var(--ds-surface-hover, #f3f5f5);
+}
+
+.write-diff-actions .write-diff-accept {
+  background: #1f7a4d;
+  box-shadow: 0 2px 6px rgb(16 24 40 / 0.1);
+  color: #fff;
+}
+
+.write-diff-actions .write-diff-accept:hover {
+  filter: brightness(1.08);
 }
 
 .write-diff-word-added {

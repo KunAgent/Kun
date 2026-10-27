@@ -13,10 +13,10 @@ const STATUS_TABS = [
 ] as const
 
 const selectClass =
-  'h-7 max-w-[9rem] rounded-md border border-ds-border-muted bg-ds-main px-1.5 text-[12px] text-ds-muted outline-none transition hover:text-ds-ink focus:border-[var(--ds-accent)]'
+  'h-[30px] max-w-[9rem] rounded-full border-0 bg-ds-hover px-2.5 text-[12.5px] text-ds-muted outline-none transition hover:text-ds-ink focus-visible:ring-2 focus-visible:ring-[var(--ds-accent)]/40'
 
 const iconButtonClass =
-  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink'
+  'inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink'
 
 /**
  * Library toolbar: search + status tabs + tag/group filters on the left,
@@ -63,29 +63,29 @@ export function PaperLibraryToolbar({
     read: counts.read
   }
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-ds-border-muted px-4 py-2">
-      <label className="relative flex h-7 w-56 min-w-[10rem] items-center">
-        <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
+    <div className="flex shrink-0 flex-wrap items-center gap-2 px-6 pb-1 pt-1">
+      <label className="relative flex h-[34px] w-64 min-w-[10rem] items-center">
+        <Search className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
         <input
           value={filter.query}
           onChange={(event) => onFilter({ query: event.target.value })}
           placeholder={t('writePaperSearchPlaceholder')}
           aria-label={t('writePaperSearchPlaceholder')}
-          className="h-7 w-full rounded-md border border-ds-border-muted bg-ds-main pl-7 pr-6 text-[12.5px] text-ds-ink outline-none transition placeholder:text-ds-faint focus:border-[var(--ds-accent)]"
+          className="h-[34px] w-full rounded-full border-0 bg-ds-hover pl-8 pr-7 text-[13px] text-ds-ink outline-none transition placeholder:text-ds-faint focus:bg-ds-main focus:shadow-[0_0_0_1.5px_var(--ds-accent)]"
         />
         {filter.query ? (
           <button
             type="button"
             aria-label={t('clearSearch')}
             onClick={() => onFilter({ query: '' })}
-            className="absolute right-1 rounded p-0.5 text-ds-faint hover:text-ds-ink"
+            className="absolute right-2 rounded-full p-0.5 text-ds-faint hover:text-ds-ink"
           >
             <X className="h-3 w-3" strokeWidth={2} />
           </button>
         ) : null}
       </label>
 
-      <div role="tablist" aria-label={t('writePaperFilterStatus')} className="flex h-7 items-center rounded-md border border-ds-border-muted bg-ds-subtle p-0.5">
+      <div role="tablist" aria-label={t('writePaperFilterStatus')} className="flex items-center gap-0.5">
         {STATUS_TABS.map(({ key, labelKey }) => {
           const active = activeTab === key
           const count = countFor[key]
@@ -100,12 +100,12 @@ export function PaperLibraryToolbar({
                   ? { recent: true, status: '' }
                   : { recent: false, status: key === 'all' ? '' : key }
               )}
-              className={`inline-flex h-6 items-center gap-1 rounded px-2 text-[12px] transition ${
-                active ? 'bg-ds-main font-medium text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'
+              className={`inline-flex h-[30px] items-center gap-1 rounded-full px-3 text-[12.5px] transition ${
+                active ? 'bg-ds-hover font-semibold text-ds-ink' : 'text-ds-muted hover:bg-ds-hover/60 hover:text-ds-ink'
               }`}
             >
               {t(labelKey)}
-              {typeof count === 'number' ? <span className="text-[11px] tabular-nums text-ds-faint">{count}</span> : null}
+              {typeof count === 'number' ? <span className="text-[12px] font-normal tabular-nums text-ds-faint">{count}</span> : null}
             </button>
           )
         })}
@@ -150,7 +150,7 @@ export function PaperLibraryToolbar({
             type="button"
             onClick={onDownloadMissing}
             title={t('writePaperDownloadMissingHint')}
-            className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950"
+            className="inline-flex h-[30px] items-center gap-1 rounded-full px-2.5 text-[12px] text-amber-700 transition hover:bg-amber-500/10 dark:text-amber-300"
           >
             <FileWarning className="h-3.5 w-3.5" strokeWidth={1.8} />
             {t('writePaperDownloadMissing', { count: missingPdf })}
@@ -162,7 +162,7 @@ export function PaperLibraryToolbar({
         <button
           type="button"
           onClick={onImport}
-          className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[var(--ds-control)] px-2.5 text-[12px] font-medium text-[var(--ds-control-foreground)] transition hover:opacity-90"
+          className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[var(--ds-control)] px-3.5 text-[13px] font-medium text-[var(--ds-control-foreground)] transition hover:opacity-90"
         >
           <Import className="h-3.5 w-3.5" strokeWidth={1.9} />
           {t('writePaperImport')}

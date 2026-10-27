@@ -61,17 +61,16 @@ function actionButtonsDom(view: EditorView, chunk: ReviewChunkState): HTMLElemen
   const accept = document.createElement('button')
   accept.type = 'button'
   accept.className = 'write-diff-accept'
-  accept.textContent = '✓'
-  accept.title = i18n.t('common:writeDiffAccept')
+  accept.textContent = i18n.t('common:writeDiffAccept')
   accept.addEventListener('click', () => resolvers.get(view)?.(chunk.id, 'accept'))
   const reject = document.createElement('button')
   reject.type = 'button'
   reject.className = 'write-diff-reject'
-  reject.textContent = '✕'
-  reject.title = i18n.t('common:writeDiffReject')
+  reject.textContent = i18n.t('common:writeDiffReject')
   reject.addEventListener('click', () => resolvers.get(view)?.(chunk.id, 'reject'))
   dom.addEventListener('mousedown', (event) => event.preventDefault())
-  dom.append(accept, reject)
+  // Quiet reject first, the strong accept last — same order as the review bar.
+  dom.append(reject, accept)
   return dom
 }
 

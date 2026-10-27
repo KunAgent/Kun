@@ -63,5 +63,17 @@
   "paperImportInterpretAll": "इन {{count}} की व्याख्या करें",
   "paperImportBrowse": "लाइब्रेरी में दिखाएँ",
   "paperImportDone": "हो गया",
-  "workComposerMentionPlaceholder": "सहायक से पूछें · फ़ाइल जोड़ने के लिए @ लिखें"
+  "workComposerMentionPlaceholder": "सहायक से पूछें · फ़ाइल जोड़ने के लिए @ लिखें",
+  "paperDetailLabel": "पेपर विवरण",
+  "paperDetailClose": "विवरण बंद करें",
+  "paperDetailOpen": "पढ़ने के लिए खोलें",
+  "paperDetailInterpret": "Kun से व्याख्या करवाएँ",
+  "paperDetailSessions": "संबंधित सत्र",
+  "paperDetailNoSessions": "अभी कोई सत्र नहीं",
+  "paperDetailInterpretations": "व्याख्याएँ",
+  "paperDetailNotes": "नोट्स",
+  "paperDetailNotesYes": "हाँ",
+  "paperDetailNotesNo": "कोई नहीं",
+  "paperDetailFolder": "फ़ोल्डर",
+  "writeDiffKunChanges": "Kun के बदलाव · {{count}}"
 }

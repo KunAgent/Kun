@@ -63,5 +63,17 @@
   "paperImportInterpretAll": "이 {{count}}편 일괄 해설",
   "paperImportBrowse": "라이브러리에서 보기",
   "paperImportDone": "완료",
-  "workComposerMentionPlaceholder": "어시스턴트에게 질문 · @로 파일 참조"
+  "workComposerMentionPlaceholder": "어시스턴트에게 질문 · @로 파일 참조",
+  "paperDetailLabel": "논문 상세",
+  "paperDetailClose": "상세 닫기",
+  "paperDetailOpen": "열어서 읽기",
+  "paperDetailInterpret": "Kun에게 해설 요청",
+  "paperDetailSessions": "관련 세션",
+  "paperDetailNoSessions": "아직 세션이 없습니다",
+  "paperDetailInterpretations": "해설",
+  "paperDetailNotes": "노트",
+  "paperDetailNotesYes": "있음",
+  "paperDetailNotesNo": "없음",
+  "paperDetailFolder": "폴더",
+  "writeDiffKunChanges": "Kun의 변경 · {{count}}건"
 }
