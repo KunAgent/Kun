@@ -72,10 +72,10 @@ jobs:
       DEEPSEEK_GUI_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
       DEEPSEEK_GUI_UPDATE_CHANNEL: frontier
       RELEASE_CHANNEL: frontier
-      # The 0.3.11 renderer build peaks just above 4 GiB of live heap. 5 GiB
-      # clears it while leaving ~2 GiB of the 7 GB macOS ARM runner for the OS
-      # and esbuild; do not raise further without shrinking the renderer.
-      NODE_OPTIONS: '--max-old-space-size=5120'
+      # Renderer chunk generation now exceeds the former 5 GiB heap ceiling.
+      # Match the 6 GiB budget already exercised by pr-checks package-macos on
+      # the same 7 GB runner; do not raise further without shrinking the renderer.
+      NODE_OPTIONS: '--max-old-space-size=6144'
     steps:
       - name: Check out develop commit
         uses: actions/checkout@v4
