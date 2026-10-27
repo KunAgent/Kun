@@ -11,6 +11,10 @@ import { PaperImportDialogHost } from '../paper/PaperImportDialogHost'
 import { PaperMetadataDrawer } from '../paper/sidebar/PaperMetadataDrawer'
 import { PaperTaskRing } from '../paper/PaperTaskRing'
 import { PaperBatchInterpretDialogHost } from '../paper/batch/PaperBatchInterpretDialog'
+import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useWorkViewStore } from '../../write/work-view-store'
+import { WorkSideDocumentHeader, WorkTabStrip } from './WorkTabStrip'
+import './work-tabs.css'
 
 export type WorkPaperHostProps = {
   leftSidebarCollapsed: boolean
@@ -58,6 +62,12 @@ export function WorkPaperHost({
   const setEntriesResult = usePaperModeStore((s) => s.setEntriesResult)
   const setEntriesError = usePaperModeStore((s) => s.setEntriesError)
   const infoDrawerOpen = usePaperModeStore((s) => s.infoDrawerOpen)
+  const remoteMobile = useRemoteMobileLayout()
+  const split = useWorkViewStore((s) => s.split)
+  const peek = useWorkViewStore((s) => s.peek)
+  // Swapped means the session owns the stage while files are open: alone, peeking at
+  // one file in a floating sheet, or split beside it.
+  const sessionView = swapped ? (split ? 'split' : peek ? 'peek' : 'solo') : undefined
   const setInfoDrawerOpen = usePaperModeStore((s) => s.setInfoDrawerOpen)
 
   // Reader layout presets and immersive mode collapse the left sidebar
@@ -131,17 +141,22 @@ export function WorkPaperHost({
   return (
     <PaperWorkbenchChromeContext.Provider value={chrome}>
       <WritePdfRendererProvider value={PaperPdfReader}>
+        <div className={`work-tab-host flex min-h-0 flex-1 flex-col${remoteMobile ? '' : ' has-tab-strip'}`}>
+        {remoteMobile ? null : <WorkTabStrip />}
         <div className={`relative flex min-h-0 flex-1${conversationStage ? ' work-stage-conversation' : ''}${swapped ? ' is-swapped' : ''}`}
-          data-work-stage={swapped ? 'swapped' : conversationStage ? 'conversation' : 'documents'}>
+          data-work-stage={swapped ? 'swapped' : conversationStage ? 'conversation' : 'documents'}
+          data-work-session-view={sessionView}>
           {/* Kept mounted while hidden: the editor owns lifecycle effects. */}
           <div className={swapped
             ? 'work-side-document relative flex min-h-0 min-w-0 flex-col'
             : conversationStage ? 'hidden' : 'relative flex min-h-0 min-w-0 flex-1 flex-col'}>
+            {sessionView === 'peek' || sessionView === 'split' ? <WorkSideDocumentHeader mode={sessionView} /> : null}
             {children(onSubmitPrompt ? submitPaperPrompt : undefined)}
             {workspaceRoot && infoDrawerOpen ? <PaperMetadataDrawer onClose={() => setInfoDrawerOpen(false)} /> : null}
           </div>
           {rightPanel}
           {workspaceRoot ? <PaperTaskRing /> : null}
+        </div>
         </div>
       </WritePdfRendererProvider>
       {workspaceRoot ? <PaperBatchInterpretDialogHost /> : null}

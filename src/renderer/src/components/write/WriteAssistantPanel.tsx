@@ -61,6 +61,7 @@ import './work-stage.css'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { useChildThreadViewer } from './useChildThreadViewer'
 import { useWorkComposerReferenceProps } from './use-work-composer-references'
+import { WorkSessionFileChips } from './WorkSessionFileChips'
 
 type Props = {
   input: string
@@ -497,6 +498,7 @@ export function WriteAssistantPanel({
       </div>
 
       <div className="write-assistant-footer ds-sidebar-surface-chrome shrink-0 border-t border-ds-border-muted px-3 pb-3 pt-3">
+        {stage ? <WorkSessionFileChips /> : null}
         {!viewingChildThread && presentationView ? (
           <WritePresentationViewChip view={presentationView} />
         ) : null}

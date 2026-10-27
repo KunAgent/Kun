@@ -101,11 +101,12 @@ export function WriteSidebar({
           />
         ) : (
           <div className="work-sidebar-body ds-no-drag px-1" data-work-sidebar>
-            <WorkArtifactsSection workspaceRoot={workspaceRoot} />
             <WorkSessionsSection onOpenArchives={() => onOpenSettings('archives')} />
+            <div className="work-materials-label">{t('workSidebarMaterials')}</div>
             <WorkFilesSection actions={actions} />
             {/* Phones keep their own paper home. */}
             {remoteMobile ? null : <WorkPapersSection />}
+            <WorkArtifactsSection workspaceRoot={workspaceRoot} />
           </div>
         )}
       </SidebarFrame>
