@@ -70,7 +70,8 @@
       "user_input": "等待输入",
       "question": "等待回答",
       "terminal_prompt": "等待终端输入"
-    }
+    },
+    "agentNoModel": "{{agent}} 没有可用的模型，已保留原来的选择。请先在 Agent 设置里登录或配置模型。"
   },
   "roomsWorkbenchDispatchPolicyHint": "Code 任务卡片按当前对话权限处理：需要确认、自动审批或完全访问。无人回应的卡片会在「设置 › 协作」设定的等待时间后启动。其他操作使用上面的策略。",
   "dispatchPreference": {

@@ -19,7 +19,9 @@ type Act = (action: AgentDispatchAction,
  * DISPATCH_HOLD_IDLE_MS without another touch is one `update` (or `resume`)
  * sent, which starts a fresh no-response window.
  */
-export function useDispatchInteractionHold(intent: AgentDispatchIntentView | undefined, act: Act) {
+export function useDispatchInteractionHold(intent: AgentDispatchIntentView | undefined, act: Act,
+  /** Outcome of the held picks' `update`, so a refusal is shown instead of silently reverting. */
+  onUpdated?: (ok: boolean) => void) {
   const [routes, setRoutes] = useState<AgentDispatchAssignmentRoute[]>()
   const [resumeAt, setResumeAt] = useState<number>()
   const [now, setNow] = useState(() => Date.now())
@@ -30,6 +32,10 @@ export function useDispatchInteractionHold(intent: AgentDispatchIntentView | und
   intentRef.current = intent
   const actRef = useRef(act)
   actRef.current = act
+  const onUpdatedRef = useRef(onUpdated)
+  onUpdatedRef.current = onUpdated
+  // Rows whose Agent pick still waits for a model catalog; the hold stays open for them.
+  const pendingRef = useRef(new Set<number>())
 
   const setHeld = (next: AgentDispatchAssignmentRoute[] | undefined): void => {
     routesRef.current = next
@@ -51,7 +57,8 @@ export function useDispatchInteractionHold(intent: AgentDispatchIntentView | und
     if (!held || !current) return
     const changed = held.some((route, index) => !sameAssignmentRoute(route, dispatchAssignments(current)[index]))
     if (changed && ['paused', 'countdown', 'pending_confirmation'].includes(current.state)) {
-      await actRef.current('update', { recommendation: { assignments: held } })
+      const next = await actRef.current('update', { recommendation: { assignments: held } })
+      onUpdatedRef.current?.(Boolean(next))
     } else if (paused && current.state === 'paused') {
       await actRef.current('resume')
     }
@@ -64,7 +71,11 @@ export function useDispatchInteractionHold(intent: AgentDispatchIntentView | und
     const at = Date.now() + DISPATCH_HOLD_IDLE_MS
     setResumeAt(at)
     setNow(Date.now())
-    timerRef.current = setTimeout(() => { void flushRef.current() }, DISPATCH_HOLD_IDLE_MS)
+    timerRef.current = setTimeout(() => {
+      // A pick still loading its models is part of what the user is doing.
+      if (pendingRef.current.size) arm()
+      else void flushRef.current()
+    }, DISPATCH_HOLD_IDLE_MS)
   }
 
   /** Any use of the card's route controls. Starts a hold only on a counting-down card. */
@@ -95,6 +106,16 @@ export function useDispatchInteractionHold(intent: AgentDispatchIntentView | und
     return true
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [touch])
+
+  /** A row's Agent pick started or stopped waiting for its catalog. */
+  const setPending = useCallback((index: number, pending: boolean): void => {
+    const rows = pendingRef.current
+    if (pending === rows.has(index)) return
+    if (pending) rows.add(index)
+    else rows.delete(index)
+    if (routesRef.current) arm()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /** Hand the held routes to the full editor; the card stays paused until the user saves or resumes. */
   const release = useCallback((): AgentDispatchAssignmentRoute[] | undefined => {
@@ -128,6 +149,7 @@ export function useDispatchInteractionHold(intent: AgentDispatchIntentView | und
     secondsLeft: resumeAt === undefined ? 0 : Math.max(0, Math.ceil((resumeAt - now) / 1000)),
     touch,
     changeRoute,
+    setPending,
     release
   }
 }

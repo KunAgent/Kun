@@ -55,7 +55,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const [draft, setDraft] = useState<Draft>()
   const [saveError, setSaveError] = useState('')
   const [routeFailed, setRouteFailed] = useState(false)
-  const hold = useDispatchInteractionHold(intent, act)
+  const hold = useDispatchInteractionHold(intent, act, (ok) => setRouteFailed(!ok))
   const intentState = intent?.state
   // The editor belongs to a paused card; any other transition (resume elsewhere, cancel) closes it.
   useEffect(() => { if (intentState && intentState !== 'paused') setDraft(undefined) }, [intentState])
@@ -77,6 +77,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const workerIds = intent.target?.workerIds ?? (intent.target?.threadId ? [intent.target.threadId] : [])
   const openWorker = (workerId: string, label?: string) => openWorkerSession(workerId, label)
   const changeRoute = (index: number, route: AgentDispatchAssignmentRoute) => {
+    setRouteFailed(false)
     if (draft) { setDraft({ ...draft, routes: replaceAssignmentRoute(draft.routes, index, route) }); return }
     // A counting-down card holds the pick until the user stops for a moment.
     if (hold.changeRoute(index, route)) return
@@ -120,8 +121,9 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
         placeholder={batch ? t('dispatchIntent.batchTaskHint') : undefined}
         onChange={(event) => setDraft({ ...draft, task: event.target.value })} className={`${fieldClass} text-[12.5px] leading-5`} />
     </div> : null}
-    <AgentDispatchAssignmentList intent={intent} assignments={shown} editable={canEditRoutes} busy={busy}
-      onRouteChange={changeRoute} onInteract={hold.touch} onOpenWorker={openWorker} />
+    {/* Held picks stay local, so the hold's own pause must not lock the pickers (a disabled chip eats the click). */}
+    <AgentDispatchAssignmentList intent={intent} assignments={shown} editable={canEditRoutes} busy={busy && !hold.holding}
+      onRouteChange={changeRoute} onInteract={hold.touch} onPendingChange={hold.setPending} onOpenWorker={openWorker} />
     <footer className="space-y-2.5 border-t border-ds-border-muted px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ds-faint">
         {workspaceName ? <span className="inline-flex min-w-0 items-center gap-1" title={recommendation.workspace}>

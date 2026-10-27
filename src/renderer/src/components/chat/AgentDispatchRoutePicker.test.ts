@@ -41,6 +41,24 @@ afterEach(async () => {
 })
 
 describe('AgentDispatchRoutePicker', () => {
+  it('says so when a picked Agent turns out to have no usable model', async () => {
+    const onChange = vi.fn()
+    const onPendingChange = vi.fn()
+    const route = { agentId: 'kun', model: 'deepseek-v4', providerId: 'deepseek', credentialMode: 'provider' as const }
+    await act(async () => {
+      renderer = create(createElement(AgentDispatchRoutePicker, { route, disabled: false, onChange, onPendingChange }))
+    })
+    await act(async () => { renderer!.root.findByType('button').props.onClick() })
+    expect(onPendingChange).toHaveBeenLastCalledWith(true)
+    await act(async () => {
+      useHarnessStore.setState({ models: { codex: { models: [], loading: false } } })
+    })
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onPendingChange).toHaveBeenLastCalledWith(false)
+    expect(renderer!.root.findAll((node) => node.props['data-dispatch-route-dropped'])).toHaveLength(1)
+    expect(renderer!.root.findByType('button').props['data-harness']).toBe('kun')
+  })
+
   it('finishes an Agent switch once the new Agent\'s catalog arrives', async () => {
     const onChange = vi.fn()
     const route = { agentId: 'kun', model: 'deepseek-v4', providerId: 'deepseek', credentialMode: 'provider' as const }
