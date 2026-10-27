@@ -3,6 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { RoomHeader } from './RoomHeader'
+import { RoomAvatarGroup } from './RoomAvatar'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import type { Room } from '@shared/rooms-api'
 
 vi.mock('./RoomAvatar', () => ({ RoomAvatarGroup: () => null }))
@@ -124,7 +126,26 @@ describe('RoomHeader inline rename', () => {
 describe('RoomHeader conversation management', () => {
   let renderer: ReactTestRenderer
   beforeEach(async () => { await i18n.changeLanguage('en') })
-  afterEach(() => { if (renderer) act(() => renderer.unmount()) })
+  afterEach(() => {
+    if (renderer) act(() => renderer.unmount())
+    useFocusModeStore.getState().setEnabled(false)
+  })
+
+  it('keeps the member list reachable when focus mode hides the avatar group', async () => {
+    const onMembers = vi.fn()
+    useFocusModeStore.getState().setEnabled(true)
+    await act(async () => { renderer = create(createElement(RoomHeader, { ...baseProps(), onMembers })) })
+    expect(renderer.root.findAllByType(RoomAvatarGroup)).toHaveLength(0)
+    const members = renderer.root.findByProps({ 'aria-label': i18n.t('roomsMembers') })
+    await act(async () => { members.props.onClick() })
+    expect(onMembers).toHaveBeenCalledOnce()
+  })
+
+  it('restores the member avatar group when focus mode is off', async () => {
+    await act(async () => { renderer = create(createElement(RoomHeader, baseProps())) })
+    expect(renderer.root.findAllByType(RoomAvatarGroup)).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ 'aria-label': i18n.t('roomsMembers') })).toHaveLength(0)
+  })
 
   it('opens group info first and keeps group deletion last in the menu', async () => {
     const onInfo = vi.fn(), onRemove = vi.fn()

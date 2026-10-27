@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { ChevronDown, IdCard, MoreHorizontal, PanelLeft, PanelRight, Pencil, Pin, Search, Settings, Archive, PlugZap, Trash2 } from 'lucide-react'
+import { ChevronDown, IdCard, MoreHorizontal, PanelLeft, PanelRight, Pencil, Pin, Search, Settings, Archive, PlugZap, Trash2, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room } from '@shared/rooms-api'
 import { RoomAvatarGroup } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
 import { RoomAppearanceMenu, RoomNotificationMenu } from './RoomManagementControls'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import './conversation-manage.css'
 
 /** Collaboration mode stays visible in a group header; it applies to new topics. */
@@ -33,6 +34,7 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
   onUpdate: (patch: { name?: string; collaborationMode?: Room['collaborationMode']; pinned?: boolean; archived?: boolean }) => void
 }) {
   const { t } = useTranslation('common')
+  const focusMode = useFocusModeStore((state) => state.enabled)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const enabled = room?.members.filter((member) => member.enabled && !member.removedAt) ?? []
@@ -73,7 +75,12 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
     </div>
     {room ? <>
       <div className="rooms-header-members" title={t('roomsMembers')}>
-        <RoomAvatarGroup members={enabled} avatar={room.avatar} id={room.id} label={room.name} size={30} onClick={onMembers} />
+        {focusMode ? (
+          <button type="button" className="rooms-icon-button" aria-label={t('roomsMembers')} title={t('roomsMembers')}
+            onClick={onMembers}><Users size={18} aria-hidden="true" /></button>
+        ) : (
+          <RoomAvatarGroup members={enabled} avatar={room.avatar} id={room.id} label={room.name} size={30} onClick={onMembers} />
+        )}
       </div>
       {group ? <RoomModeControl room={room} busy={busy} onUpdate={onUpdate} />
         : <span className="rooms-run-note">{t('agentsConversation_' + room.conversationKind)}</span>}

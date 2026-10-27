@@ -14,6 +14,7 @@ import { RoomProposalCard } from './RoomProposalCard'
 import { RoomAppConnectionCard } from './RoomAppConnectionCard'
 import { RoomWorkbenchTaskCard } from './RoomWorkbenchTaskCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import { RoomTurnClock, RoomTurnResult, RoomTurnTrail } from './RoomTurnParts'
 import type { RoomTurnPosition } from './room-turn-steps'
 import './rooms-reminders.css'
@@ -66,6 +67,7 @@ export function RoomMessageRow({
   turn?: RoomTurnPosition
 }) {
   const { t } = useTranslation('common')
+  const focusMode = useFocusModeStore((state) => state.enabled)
   useLayoutEffect(() => { noteRoomMessageRendered(message); noteAnalyticsRoomRendered(message) }, [message])
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
@@ -79,6 +81,10 @@ export function RoomMessageRow({
     finally { setPinBusy(false) }
   }
   const system = message.authorKind === 'system'
+  // The avatar opens the author's member card; focus mode hides the avatar, so
+  // the name keeps that entry instead of leaving the row without one.
+  const authorId = message.authorMemberId && member && !member.removedAt ? message.authorMemberId : undefined
+  const openAuthor = authorId && onMember ? () => onMember(authorId, message.rootRequestId) : undefined
   const progressPrefix = message.taskId ? `progress-${message.taskId}-` : ''
   const legacyTaskProgress = Boolean(message.taskId &&
     message.id.startsWith(progressPrefix) &&
@@ -129,16 +135,18 @@ export function RoomMessageRow({
           member={member}
           id={message.authorMemberId ?? message.authorKind}
           label={message.authorLabelSnapshot}
-          onClick={
-            message.authorMemberId && member && !member.removedAt && onMember
-              ? () => onMember(message.authorMemberId!, message.rootRequestId)
-              : undefined
-          }
+          onClick={openAuthor}
         />
       ) : null}
       <div className="rooms-message-content">
         <div className="rooms-message-meta">
-          <strong>{message.authorLabelSnapshot}</strong>
+          {focusMode && !continuation && openAuthor ? (
+            <button type="button" className="rooms-message-author" onClick={openAuthor}>
+              {message.authorLabelSnapshot}
+            </button>
+          ) : (
+            <strong>{message.authorLabelSnapshot}</strong>
+          )}
           {member && !system ? (
             <span className="rooms-message-role">{member.agentTitle || t(roles[member.role])}</span>
           ) : null}
