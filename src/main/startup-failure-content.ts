@@ -1,5 +1,7 @@
 import { join } from 'node:path'
 import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
+import { ManagerStartLockError } from '../../kun/src/manager/manager-start-lock-support.js'
+import { WindowsStartupIntegrityError } from '../../kun/src/process/windows-startup-native.js'
 import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
 import { OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
 import { KunHandoffError } from './runtime/kun-installed-build-handoff'
@@ -37,6 +39,20 @@ export function sanitizeStartupFailureMessage(error: unknown): string {
 }
 
 export function startupFailurePresentation(error: unknown): StartupFailurePresentation {
+  if (error instanceof WindowsStartupIntegrityError) {
+    return { message: sanitizeStartupFailureMessage(error), handoff: false, retryable: false }
+  }
+  if (error instanceof ManagerStartLockError) {
+    const hint = error.reason === 'busy'
+      ? 'Another Kun window or terminal may still be starting or closing. Let it finish, or quit that client, then Recheck Kun.'
+      : error.reason === 'io'
+        ? 'Check that your Windows account can access the lock directory and that it is available. Recheck after correcting the access problem.'
+        : 'Kun could not safely confirm the previous startup owner. Quit the other Kun client and Recheck, or share the startup log for diagnosis.'
+    return {
+      message: sanitizeStartupFailureMessage(`${hint}\n\n${error.message}\n\nRecheck preserves saved conversations and settings. It does not delete unknown ownership records or stop another live client.`),
+      handoff: false, retryable: true, recheck: true
+    }
+  }
   if (error instanceof OrphanedAppSessionError) {
     return {
       message: sanitizeStartupFailureMessage(`${error.message}\n\nRecover Kun verifies the previous application has exited, stops its recorded leftover Runtime processes, then stops its data service. Processes whose ownership cannot be verified are left untouched. Saved conversations and settings are preserved.`),

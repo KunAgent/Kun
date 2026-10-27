@@ -1,18 +1,15 @@
-import { execFile, spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
-import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, isAbsolute, join, resolve } from 'node:path'
-import { promisify } from 'node:util'
-import { WINDOWS_OWNED_LAUNCHER_SOURCE } from './owned-process-windows-launcher.js'
+import { windowsOwnedLauncherPath } from './windows-startup-native.js'
 
 type StopOptions = { graceMs?: number; timeoutMs?: number }
 type LaunchOptions = SpawnOptions & { ownerLossGraceMs?: number; beforeLaunch?: () => Promise<unknown> }
 type Launch = { directory: string; stopPath: string; launcherPid: number; stop?: Promise<void> }
 const launches = new Map<ChildProcess, Launch>()
 const retired = new WeakSet<ChildProcess>()
-let launcherBuild: Promise<string> | undefined
 let stopping = false
 
 export function beginWindowsOwnedProcessShutdown(): void { stopping = true }
@@ -21,30 +18,6 @@ export function beginWindowsOwnedProcessShutdown(): void { stopping = true }
 export function quoteWindowsArgument(value: string): string {
   if (value && !/[\s"]/u.test(value)) return value
   return `"${value.replace(/(\\*)"/gu, '$1$1\\"').replace(/(\\+)$/u, '$1$1')}"`
-}
-
-async function buildLauncher(): Promise<string> {
-  const hash = createHash('sha256').update(WINDOWS_OWNED_LAUNCHER_SOURCE).digest('hex').slice(0, 20)
-  const cache = join(tmpdir(), 'kun-owned-process', hash)
-  const output = join(cache, 'kun-owned-launcher.exe')
-  try { await access(output); return output } catch { /* first launch */ }
-  await mkdir(cache, { recursive: true, mode: 0o700 })
-  const work = await mkdtemp(join(cache, 'build-'))
-  try {
-    const source = join(work, 'launcher.cs')
-    const compiled = join(work, 'launcher.exe')
-    await writeFile(source, WINDOWS_OWNED_LAUNCHER_SOURCE, { mode: 0o600 })
-    const script = '$ErrorActionPreference="Stop"; Add-Type -Path $env:KUN_LAUNCHER_SOURCE -OutputAssembly $env:KUN_LAUNCHER_OUTPUT -OutputType ConsoleApplication'
-    await promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
-      Buffer.from(script, 'utf16le').toString('base64')], {
-      windowsHide: true, timeout: 15_000,
-      env: { ...process.env, KUN_LAUNCHER_SOURCE: source, KUN_LAUNCHER_OUTPUT: compiled }
-    })
-    try { await rename(compiled, output) } catch (error) {
-      try { await access(output) } catch { throw error }
-    }
-    return output
-  } finally { await rm(work, { recursive: true, force: true }) }
 }
 
 export async function resolveWindowsExecutablePath(command: string, options: SpawnOptions): Promise<string> {
@@ -74,7 +47,7 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
     commandLine = `${quoteWindowsArgument(process.env.ComSpec ?? 'cmd.exe')} /d /s /c "${commandLine}"`
     executable = await resolveWindowsExecutablePath(process.env.ComSpec ?? 'cmd.exe', options)
   }
-  const launcher = await (launcherBuild ??= buildLauncher().catch((error) => { launcherBuild = undefined; throw error }))
+  const launcher = windowsOwnedLauncherPath()
   if (stopping) throw new Error('Owned process admission is closed')
   const directory = await mkdtemp(join(tmpdir(), 'kun-owned-job-'))
   const statusPath = join(directory, 'started')

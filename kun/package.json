@@ -64,7 +64,9 @@
     "kun-dv": "./dist/cli/serve-entry.js"
   },
   "scripts": {
-    "build": "node ./scripts/clean-build-output.mjs && tsc -p tsconfig.build.json && vite build -c vite.tui.config.ts && node ./scripts/check-tui-import-graph.mjs && node ./scripts/write-runtime-build-manifest.mjs",
+    "build": "node ./scripts/clean-build-output.mjs && tsc -p tsconfig.build.json && node ./scripts/build-windows-startup.mjs && vite build -c vite.tui.config.ts && node ./scripts/check-tui-import-graph.mjs && node ./scripts/write-runtime-build-manifest.mjs",
+    "build:windows-startup": "node ./scripts/build-windows-startup.mjs",
+    "pretest": "node ./scripts/build-windows-startup.mjs",
     "build:tui-app": "vite build -c vite.tui.config.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test ./scripts/runtime-build-manifest.test.mjs ./scripts/test-execution-plan.test.mjs ./scripts/run-tests.test.mjs && node ./scripts/run-tests.mjs",
@@ -123,6 +125,7 @@
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
     "@xterm/headless": "5.5.0",
+    "node-gyp": "12.4.0",
     "selfsigned": "5.5.0",
     "vite": "^8.3.4",
     "vite-plugin-solid": "2.11.14",

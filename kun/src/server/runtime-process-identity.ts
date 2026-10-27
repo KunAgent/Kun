@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { windowsStartupNative, WindowsStartupIntegrityError } from '../process/windows-startup-native.js'
 
 export type RuntimeProcessRecordIdentity = {
   startedAt: string
@@ -57,31 +57,10 @@ function boundedExec(executable: string, args: string[]): string {
 }
 
 function inspectWindowsProcess(pid: number): RuntimeProcessInspection | undefined {
-  const systemRoot = process.env.SystemRoot?.trim()
-  const powershell = systemRoot
-    ? join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-    : 'powershell.exe'
-  const command = [
-    '$ErrorActionPreference = "Stop"',
-    // Process.StartTime uses GetProcessTimes instead of the WMI/CIM service.
-    `try { $p = [System.Diagnostics.Process]::GetProcessById(${pid}) } catch [System.ArgumentException] { exit 3 }`,
-    'try { $startedAt = $p.StartTime.ToUniversalTime() } finally { $p.Dispose() }',
-    // win32-v1 was written from CIM datetime (microseconds). Keep that exact
-    // precision rather than changing the identity of an existing live owner.
-    '$startedAt = $startedAt.AddTicks(-($startedAt.Ticks % 10))',
-    `[Console]::Out.Write($startedAt.ToString('O'))`
-  ].join('; ')
-  const startedAt = boundedExec(powershell, [
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    command
-  ])
-  const startedAtMs = Date.parse(startedAt)
-  if (!startedAt || !Number.isFinite(startedAtMs)) return undefined
-  return { identity: `win32-v1:${startedAt}`, startedAtMs }
+  const result = windowsStartupNative().inspectProcess(pid)
+  if (result.state === 'dead') throw Object.assign(new Error('Process exited'), { status: 3 })
+  if (result.state !== 'alive' || !result.identity || !Number.isFinite(result.startedAtMs)) return undefined
+  return { identity: result.identity, startedAtMs: result.startedAtMs }
 }
 
 function inspectProcProcess(pid: number): RuntimeProcessInspection | undefined {
@@ -143,6 +122,7 @@ export function requireRuntimeProcessIdentity(pid = process.pid): string {
   // only a timeout; not-found and invalid answers are definitive.
   for (let attempt = 1; attempt <= PROCESS_ADMISSION_ATTEMPTS; attempt += 1) {
     try { return inspectRuntimeProcessOrThrow(pid).identity! } catch (caught) {
+      if (caught instanceof WindowsStartupIntegrityError) throw caught
       error = caught
       if (errnoCode(caught) !== 'ETIMEDOUT') break
     }
