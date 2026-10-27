@@ -24,8 +24,12 @@
     .ds-workbench-shell
     > [data-workbench-left-sidebar]
     .ds-sidebar-shell {
+    /* The shell already paints the ground; a second coat would stack to near-opaque. */
+    --ds-sidebar-field-bg: color-mix(in srgb, var(--ds-text) 5%, transparent);
+    --ds-sidebar-field-focus: color-mix(in srgb, var(--ds-surface-card) 88%, transparent);
+    --ds-sidebar-divider: var(--kun-hair-2);
     border-right-width: 0;
-    background: var(--ds-workbench-ground);
+    background: transparent;
   }
 
   html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])

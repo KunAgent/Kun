@@ -70,7 +70,7 @@ export type WorkbenchLeftSidebarProps = {
 }
 
 function SidebarFallback(): ReactElement {
-  return <div className="h-full bg-ds-sidebar" />
+  return <div className="h-full" />
 }
 
 export function WorkbenchLeftSidebar({
