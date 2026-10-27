@@ -13,6 +13,16 @@ export type ActivityUnitKind =
 
 export type { ActivityRollupState as ActivityState }
 
+/** Who launched a child unit; mirrors the kun childLauncher contract. */
+export type ActivityChildLauncher =
+  | 'delegate_task'
+  | 'fast_context'
+  | 'ppt_agent'
+  | 'component_design'
+  | 'diagram_design'
+  | 'graph'
+  | 'manager-worker'
+
 export type ActivityRow = {
   unitId: string
   kind: ActivityUnitKind
@@ -20,6 +30,8 @@ export type ActivityRow = {
   roomId?: string
   metadataPending?: boolean
   parentThreadId?: string
+  /** Child-run source; absent on rows restored without it. */
+  childLauncher?: ActivityChildLauncher
   teamId?: string
   harnessId: string
   title: string

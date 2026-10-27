@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityRow } from '@shared/activity-row'
 import { useActivityStore } from '../../store/activity-store'
-import { SidebarTaskThreadsProvider, TaskThreadChildren, useSidebarTaskGroup } from './SidebarTaskThreads'
+import { SidebarTaskThreadsProvider, TaskGroupChip, TaskThreadChildren, useSidebarTaskGroup } from './SidebarTaskThreads'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 vi.mock('../../store/activity-store', async (importOriginal) => {
@@ -76,5 +76,52 @@ describe('sidebar worker agent logos', () => {
     expect(html).toContain('aria-selected="true"')
     expect(html).toContain(label)
     expect(html).toContain('min-w-0 flex-1 truncate')
+  })
+})
+
+describe('sidebar task group counts', () => {
+  function GroupView() {
+    const group = useSidebarTaskGroup('parent')
+    return group
+      ? createElement('div', null,
+        createElement(TaskGroupChip, { group }),
+        createElement(TaskThreadChildren, { parentId: 'parent', group }))
+      : null
+  }
+
+  function renderWorkers(rows: Array<{ unitId: string; childLauncher?: ActivityRow['childLauncher'] }>) {
+    const now = new Date().toISOString()
+    const record: Record<string, ActivityRow> = {}
+    for (const entry of rows) {
+      record[entry.unitId] = {
+        unitId: entry.unitId, kind: 'worker', threadId: `thr_${entry.unitId}`, parentThreadId: 'parent',
+        harnessId: 'kun', title: entry.unitId, workspace: { path: '/w', kind: 'worktree' },
+        state: 'working', mainState: 'working', children: { working: 0, waiting: 0, done: 0, failed: 0 },
+        stateSince: now, updatedAt: now, provenance: 'runtime', restoredUnconfirmed: false, stalled: false,
+        visibility: 'active', residency: 'live', pinned: false, reviewRequired: false,
+        ...(entry.childLauncher ? { childLauncher: entry.childLauncher } : {})
+      } as ActivityRow
+    }
+    useActivityStore.setState({ rows: record })
+    return renderToStaticMarkup(createElement(SidebarTaskThreadsProvider, {
+      value: {
+        childrenByParent: new Map(), activityOf: () => 'read' as const, activeThreadId: null,
+        onSelect: vi.fn(), onContextMenu: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn()
+      },
+      children: createElement(GroupView)
+    }))
+  }
+
+  it('counts only ordinary tasks when Fast Context rows share the parent', () => {
+    const html = renderWorkers([{ unitId: 'worker' }, { unitId: 'search', childLauncher: 'fast_context' }])
+    expect(html.match(/data-worker-row=/g)).toHaveLength(1)
+    expect(html).toContain('data-worker-row="worker"')
+    expect(html).not.toContain('data-worker-row="search"')
+    const chip = /data-task-group-chip[^>]*>([\s\S]*?)<\/span>/.exec(html)
+    expect(chip?.[1].replace(/<[^>]+>/g, '').trim()).toBe('1')
+  })
+
+  it('renders no task group when only Fast Context ran', () => {
+    expect(renderWorkers([{ unitId: 'search', childLauncher: 'fast_context' }])).toBe('')
   })
 })

@@ -19,6 +19,25 @@ export const ChildRunActivity = z.object({
 }).strict()
 export type ChildRunActivity = z.infer<typeof ChildRunActivity>
 
+/**
+ * Who launched a child run. `explore_agent` is the retired name of the
+ * read-only explorer, normalized here so replayed events still parse.
+ */
+export const ChildLauncherSchema = z.preprocess(
+  (value) => (value === 'explore_agent' ? 'fast_context' : value),
+  // `ppt_agent` is the retired PPT sub-agent, kept so replayed events still parse.
+  z.enum([
+    'delegate_task',
+    'fast_context',
+    'ppt_agent',
+    'component_design',
+    'diagram_design',
+    'graph',
+    'manager-worker'
+  ])
+)
+export type ChildLauncher = z.infer<typeof ChildLauncherSchema>
+
 export const RuntimeEventBase = z.object({
   seq: z.number().int().nonnegative(),
   timestamp: z.string(),
@@ -32,11 +51,7 @@ export const RuntimeEventBase = z.object({
     childLabel: z.string().optional(),
     childStatus: z.enum(['queued', 'running', 'completed', 'failed', 'aborted']),
     childSeq: z.number().int().nonnegative(),
-    childLauncher: z.preprocess(
-      (value) => (value === 'explore_agent' ? 'fast_context' : value),
-      // `ppt_agent` is the retired PPT sub-agent, kept so replayed events still parse.
-      z.enum(['delegate_task', 'fast_context', 'ppt_agent', 'component_design', 'diagram_design', 'graph', 'manager-worker'])
-    ).optional(),
+    childLauncher: ChildLauncherSchema.optional(),
     childTerminationReason: z.enum(['user_stop', 'manual_stop', 'runtime_restart', 'child_error']).optional(),
     resumable: z.boolean().optional(),
     resumeCount: z.number().int().nonnegative().optional(),
