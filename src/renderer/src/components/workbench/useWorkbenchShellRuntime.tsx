@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { paperResearchStageActive } from '../../paper/paper-view'
+import { paperResearchStageOnStage } from '../../paper/paper-view'
+import { useWorkSlotsStore } from '../../write/work-slots-store'
 import type { WriteAssistantStageProps } from '../write/WriteAssistantStageContext'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import { extraRootsForWorkspace } from '../../lib/code-workspace-folder-lookup'
@@ -181,7 +182,8 @@ export function useWorkbenchShellRuntime(context: Context): {
   })
   // The paper Agent research stage hosts the Work assistant conversation in
   // the center; the rail steps aside so only one composer is on screen.
-  const researchStageActive = useWriteWorkspaceStore(paperResearchStageActive)
+  const assistantMain = useWorkSlotsStore((state) => state.assistantMain)
+  const researchStageActive = useWriteWorkspaceStore((state) => paperResearchStageOnStage(state, assistantMain))
   const rightPanelDockedVisible = rightPanelVisible && !planPanelInOverlay &&
     !(route === 'write' && researchStageActive)
   // The Work assistant is Code's agent: one Agent/model selection and one
