@@ -1,6 +1,7 @@
 import { useEffect, useMemo, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
+import { RailSlot } from './rail-slot'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
 import { EXTERNAL_SUBAGENT_SOURCE_LABELS, externalSubagentSourceForThread } from '../../agent/external-subagent'
 import { AgentBrowserFloatingPreview } from '../AgentBrowserFloatingPreview'
@@ -322,6 +323,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         </div>
       ) : null}
       </div>
+      <RailSlot />
       <DeclarativeContextMenuOverlay
         contributions={extensionHostContextMenus.filter(
           (contribution: any) => contribution.payload.location === workspaceContextMenu?.location)}

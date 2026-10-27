@@ -39,7 +39,8 @@ export function kunAccountCardCopy(state: KunAccountState): KunAccountCardCopy {
   }
   if (state.error === 'expired') return { title: 'kunAccountCardExpired', hint: 'kunAccountCardExpiredHint', tone: 'bad' }
   if (kunAccountBadge(state) === 'attention') return { title: 'kunAccountCardSignedOut', hint: 'kunAccountCardFailedHint', tone: 'bad' }
-  return { title: 'kunAccountCardSignedOut', hint: 'kunAccountCardSignedOutHint', tone: 'plain' }
+  // Signed out the card invites rather than reports: "Sign in to Kun", not "Not signed in".
+  return { title: 'kunAccountSignInLabel', hint: 'kunAccountCardSignedOutHint', tone: 'plain' }
 }
 
 type ErrorCopy = { title: string; body: string; action: KunAccountErrorAction; art: KunAccountArt }
