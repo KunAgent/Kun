@@ -27,6 +27,16 @@ describe('resolveWriteRailItems', () => {
     expect(items.map((item) => item.id)).toEqual(['assistant', 'subagents', 'mcpSkills', 'usage'])
   })
 
+  it('adds 论文 with a count once the session has surfaced papers, even in the stage', () => {
+    const items = resolveWriteRailItems({
+      reviewCount: 0, referenceCount: 0, assistantRunning: false, paperCount: 12, documentTools: false
+    })
+    expect(items.map((item) => item.id)).toEqual(['assistant', 'papers', 'subagents', 'mcpSkills', 'usage'])
+    expect(items.find((item) => item.id === 'papers')?.badge).toEqual({ count: 12, tone: 'neutral' })
+    expect(resolveWriteRailItems({ reviewCount: 0, referenceCount: 0, assistantRunning: false })
+      .some((item) => item.id === 'papers')).toBe(false)
+  })
+
   it('caps badge text', () => {
     expect(formatWriteRailBadge(7)).toBe('7')
     expect(formatWriteRailBadge(120)).toBe('99+')

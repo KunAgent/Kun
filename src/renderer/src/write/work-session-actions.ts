@@ -11,6 +11,7 @@ import { readWorkSessionTabs, workSessionTabTarget } from './work-session-tabs'
 import type { WorkSessionEntry } from './work-sessions-model'
 import { workAssistantThreadRoute } from './work-assistant-agent'
 import { useWorkViewStore } from './work-view-store'
+import { useWorkPaperSearchMode } from './work-paper-search-mode'
 
 /** Mount a space; every space is a folder with its documents, boards and papers. */
 export async function mountWorkSpace(root: string): Promise<boolean> {
@@ -34,6 +35,17 @@ export async function ensureWorkSpaceMounted(): Promise<boolean> {
 export async function openPaperView(view: WritePaperViewId): Promise<void> {
   if (!(await ensureWorkSpaceMounted())) return
   useWriteWorkspaceStore.getState().openPaperViewTab(view)
+}
+
+/**
+ * 找论文 happens in a session: bring the session to the stage (the assistant
+ * docks open beside any open file) and switch the composer chip on.
+ */
+export async function startWorkPaperSearch(): Promise<void> {
+  if (!(await ensureWorkSpaceMounted())) return
+  useWorkViewStore.getState().showSession()
+  useWriteWorkspaceStore.getState().setAssistantOpen(true)
+  useWorkPaperSearchMode.getState().start()
 }
 
 /** The import dialog files papers into the current space's papers folder. */

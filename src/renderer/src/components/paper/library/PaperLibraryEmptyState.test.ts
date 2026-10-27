@@ -4,8 +4,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PaperLibraryEmptyState } from './PaperLibraryEmptyState'
 
-const openView = vi.hoisted(() => vi.fn())
-vi.mock('../../../paper/paper-view', () => ({ openPaperViewTab: openView }))
+const startSearch = vi.hoisted(() => vi.fn())
+vi.mock('../../../write/work-session-actions', () => ({ startWorkPaperSearch: startSearch }))
 vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-i18next')>()),
   useTranslation: () => ({ t: (key: string) => key })
@@ -36,11 +36,11 @@ describe('PaperLibraryEmptyState', () => {
   it('offers PDF import and search without starting an automatic network request', async () => {
     await render(false)
     expect(host.querySelector('h2')?.textContent).toBe('paperWorkspaceEmptyTitle')
-    expect(openView).not.toHaveBeenCalled()
+    expect(startSearch).not.toHaveBeenCalled()
     await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="paper-empty-import"]')!.click())
     expect(onImport).toHaveBeenCalledOnce()
     await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="paper-empty-search"]')!.click())
-    expect(openView).toHaveBeenCalledWith('discover:search')
+    expect(startSearch).toHaveBeenCalledOnce()
   })
 
   it('offers filter recovery instead of first-run import when papers exist', async () => {

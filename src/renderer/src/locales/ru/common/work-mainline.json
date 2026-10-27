@@ -75,5 +75,14 @@
   "paperDetailNotesYes": "Есть",
   "paperDetailNotesNo": "Нет",
   "paperDetailFolder": "Папка",
-  "writeDiffKunChanges": "Изменения от Kun · {{count}}"
+  "writeDiffKunChanges": "Изменения от Kun · {{count}}",
+  "workPaperSearchChip": "Найти статьи",
+  "workPaperSearchOff": "Выключить поиск статей",
+  "workPaperSearchHint": "Ищите статьи в этой сессии — результаты появятся в разговоре",
+  "workPaperSearchDeep": "Глубокое исследование",
+  "workPaperSearchDeepHint": "Разбить вопрос, искать параллельно и идти по цитированиям",
+  "paperLibraryFeeds": "Подписки и рейтинги",
+  "workRailPapers": "Статьи",
+  "workRailPapersCount": "Статьи · {{count}}",
+  "workSessionPapersEmpty": "Здесь появятся статьи, найденные в этой сессии."
 }

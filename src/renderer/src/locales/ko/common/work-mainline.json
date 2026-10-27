@@ -75,5 +75,14 @@
   "paperDetailNotesYes": "있음",
   "paperDetailNotesNo": "없음",
   "paperDetailFolder": "폴더",
-  "writeDiffKunChanges": "Kun의 변경 · {{count}}건"
+  "writeDiffKunChanges": "Kun의 변경 · {{count}}건",
+  "workPaperSearchChip": "논문 찾기",
+  "workPaperSearchOff": "논문 찾기 끄기",
+  "workPaperSearchHint": "이 세션에서 논문을 검색하고 결과는 대화에 표시됩니다",
+  "workPaperSearchDeep": "심층 조사",
+  "workPaperSearchDeepHint": "질문을 나누고 병렬로 검색하며 인용을 따라갑니다",
+  "paperLibraryFeeds": "구독과 순위",
+  "workRailPapers": "논문",
+  "workRailPapersCount": "논문 · {{count}}편",
+  "workSessionPapersEmpty": "이 세션에서 찾은 논문이 여기에 표시됩니다."
 }

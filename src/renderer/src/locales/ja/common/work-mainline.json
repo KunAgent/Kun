@@ -75,5 +75,14 @@
   "paperDetailNotesYes": "あり",
   "paperDetailNotesNo": "なし",
   "paperDetailFolder": "フォルダー",
-  "writeDiffKunChanges": "Kun の変更 · {{count}} 件"
+  "writeDiffKunChanges": "Kun の変更 · {{count}} 件",
+  "workPaperSearchChip": "論文を探す",
+  "workPaperSearchOff": "論文検索をやめる",
+  "workPaperSearchHint": "このセッションで論文を検索し、結果は会話に表示されます",
+  "workPaperSearchDeep": "深い調査",
+  "workPaperSearchDeepHint": "問いを分割し、並列に検索して引用をたどる",
+  "paperLibraryFeeds": "フィードとランキング",
+  "workRailPapers": "論文",
+  "workRailPapersCount": "論文 · {{count}} 件",
+  "workSessionPapersEmpty": "このセッションで見つけた論文がここに表示されます。"
 }

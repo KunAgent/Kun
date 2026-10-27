@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { BookOpen, FileUp, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { openPaperViewTab } from '../../../paper/paper-view'
+import { startWorkPaperSearch } from '../../../write/work-session-actions'
 
 export function PaperLibraryEmptyState({
   filtered,
@@ -43,7 +43,7 @@ export function PaperLibraryEmptyState({
             <button
               type="button"
               data-testid="paper-empty-search"
-              onClick={() => openPaperViewTab('discover:search')}
+              onClick={() => void startWorkPaperSearch()}
               className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-ds-border-muted px-4 py-2 text-[12.5px] font-medium text-ds-ink transition hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               <Search className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />

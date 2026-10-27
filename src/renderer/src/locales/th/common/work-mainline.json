@@ -75,5 +75,14 @@
   "paperDetailNotesYes": "มี",
   "paperDetailNotesNo": "ไม่มี",
   "paperDetailFolder": "โฟลเดอร์",
-  "writeDiffKunChanges": "การแก้ไขจาก Kun · {{count}} จุด"
+  "writeDiffKunChanges": "การแก้ไขจาก Kun · {{count}} จุด",
+  "workPaperSearchChip": "ค้นหาบทความ",
+  "workPaperSearchOff": "ปิดการค้นหาบทความ",
+  "workPaperSearchHint": "ค้นหาบทความในเซสชันนี้ ผลลัพธ์จะแสดงในบทสนทนา",
+  "workPaperSearchDeep": "ค้นคว้าเชิงลึก",
+  "workPaperSearchDeepHint": "แยกคำถาม ค้นหาแบบขนาน และตามการอ้างอิง",
+  "paperLibraryFeeds": "ฟีดและการจัดอันดับ",
+  "workRailPapers": "บทความ",
+  "workRailPapersCount": "บทความ · {{count}}",
+  "workSessionPapersEmpty": "บทความที่พบในเซสชันนี้จะแสดงที่นี่"
 }

@@ -7,7 +7,7 @@ import kunLaptopUrl from '../../../../asset/img/kun_laptop.png'
 import { RoomAvatarPortrait } from '../rooms/RoomAvatar'
 import { RoomPopover } from '../rooms/RoomPopover'
 import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../write/write-workspace-store'
-import { createWorkDraftDocument, ensureWorkSpaceMounted, mountWorkSpace, openPaperImport, openPaperView } from '../../write/work-session-actions'
+import { createWorkDraftDocument, ensureWorkSpaceMounted, mountWorkSpace, openPaperImport, startWorkPaperSearch } from '../../write/work-session-actions'
 import { useWorkWhiteboardCreation } from './use-work-whiteboard-creation'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 
@@ -40,7 +40,7 @@ export function WorkHomeHero(): ReactElement {
     { id: 'whiteboard', label: t('writeCreateWhiteboard'), Icon: Shapes,
       run: () => void ensureWorkSpaceMounted().then((ok) => { if (ok) void whiteboard.openNewWhiteboardDialog() }) },
     { id: 'import', label: t('workSidebarImportPaper'), Icon: Import, run: () => void openPaperImport() },
-    { id: 'search', label: t('writePaperDiscoverTab_search'), Icon: Search, run: () => void openPaperView('discover:search') }
+    { id: 'search', label: t('writePaperDiscoverTab_search'), Icon: Search, run: () => void startWorkPaperSearch() }
   ]
   return (
     <div className="work-home-hero" data-work-home>
