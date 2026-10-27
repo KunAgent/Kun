@@ -58,6 +58,43 @@ it.each([['failed', 'passed'], ['cancelled', 'passed'], ['completed', 'failed']]
   expect(memoryEvidenceStatus(evidence.sources)).not.toBe('observed-success')
 })
 
+it('reports decision skips in diagnostics instead of dropping them silently', async () => {
+  const output = JSON.stringify({ candidates: [{
+    content: 'User prefers tea in the morning', type: 'preference', confidence: 0.5, importance: 0.8,
+    tags: [], sourceIds: ['source-1'], durability: 'durable', comparisons: []
+  }] })
+  const deps = { peerModels: { client: { async *stream() {
+    yield { kind: 'assistant_text_delta', text: output }
+  } } } } as unknown as RoomRuntimeDeps
+  const snapshot = { model: 'fixture', input: '{}', observedAt: at,
+    sources: [{ id: 'source-1', kind: 'user', trust: 'explicit-user' }],
+    comparisonRecords: [] } as unknown as AgentMemoryCaptureSnapshot
+  const result = await extractAgentMemories(deps, snapshot, 'run', new AbortController().signal)
+  expect(result.candidates).toEqual([])
+  expect(result.error).toBeUndefined()
+  expect(result.diagnostics).toEqual([
+    'skipped 1 extracted candidate(s) during decision: low-confidence x1'
+  ])
+})
+
+it('keeps a candidate whose scores arrive as numeric strings', async () => {
+  const output = JSON.stringify({ candidates: [{
+    content: 'User prefers tea in the morning', type: 'preference', confidence: '0.9', importance: '0.8',
+    tags: [], sourceIds: ['source-1'], durability: 'durable', comparisons: []
+  }] })
+  const deps = { peerModels: { client: { async *stream() {
+    yield { kind: 'assistant_text_delta', text: output }
+  } } } } as unknown as RoomRuntimeDeps
+  const snapshot = { model: 'fixture', input: '{}', observedAt: at,
+    sources: [{ id: 'source-1', kind: 'user', trust: 'explicit-user' }],
+    comparisonRecords: [] } as unknown as AgentMemoryCaptureSnapshot
+  const result = await extractAgentMemories(deps, snapshot, 'run', new AbortController().signal)
+  expect(result.error).toBeUndefined()
+  expect(result.diagnostics).toBeUndefined()
+  expect(result.candidates).toHaveLength(1)
+  expect(result.candidates[0]?.candidate.confidence).toBe(0.9)
+})
+
 it('rejects tool execution from the extraction model', async () => {
   const deps = { peerModels: { client: { async *stream() {
     yield { kind: 'tool_call_complete', callId: 'malicious', toolName: 'shell', arguments: { command: 'echo not allowed' } }
