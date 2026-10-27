@@ -10,6 +10,7 @@ import { RoomAgentBrowser } from './RoomAgentBrowser'
 import { RoomDirectFiles } from './RoomDirectChat'
 import { RoomWorkbenchRightPanel } from './RoomWorkbenchRightPanel'
 import { useRoomWorkbenchPanel, type RoomWorkbenchPanel } from './useRoomWorkbenchPanel'
+import { useRailCollapseStore } from '../workbench/rail-collapse'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -41,7 +42,7 @@ describe('private Agent Code sidebar', () => {
     expect(shell().props.width).toBe(560)
     expect(shell().props.dividerProps['data-room-workbench-resize']).toBe(true)
     expect(rail().findAllByType('button').map((button) => button.props['aria-label']))
-      .toEqual(['rightPanelChanges', 'rightPanelBrowserTool', 'rightPanelFiles', 'roomsAgentSession', 'rightPanelWardrobe'])
+      .toEqual(['railCollapse', 'rightPanelFiles', 'rightPanelChanges', 'rightPanelBrowserTool', 'roomsAgentSession', 'rightPanelWardrobe'])
     expect(rail().findByProps({ 'data-room-tool': 'browser' }).props.className).toBe(sideRailButtonClass(true))
     expect(renderer.root.findByType(RoomAgentBrowser).props.active).toBe(true)
     act(() => panel.collapse())
@@ -73,6 +74,13 @@ describe('private Agent Code sidebar', () => {
     act(() => workspace.props.onClick())
     expect(renderer.root.findByType(WorkbenchFileTreeSidePanel).props.showViewTabs).toBe(false)
     expect(renderer.root.findByType(WorkbenchFileTreeSidePanel).props.view).toBe('workspace')
+  })
+  it('folds away with the shared Code and Work rail collapse', async () => {
+    await act(async () => { renderer = create(createElement(Harness)) })
+    act(() => rail().findByProps({ 'aria-label': 'railCollapse' }).props.onClick())
+    expect(renderer.root.findAllByType(WorkbenchSideRailSurface)).toHaveLength(0)
+    act(() => useRailCollapseStore.getState().setCollapsed(false))
+    expect(renderer.root.findAllByType(WorkbenchSideRailSurface)).toHaveLength(1)
   })
   it('opens the wardrobe from the rail without an unread badge', async () => {
     await act(async () => { renderer = create(createElement(Harness)) })

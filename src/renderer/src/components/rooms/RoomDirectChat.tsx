@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
+import { RailReopenButton } from '../workbench/rail-collapse'
 import { RoomExecutionGates } from './RoomTaskGates'
 import { agentPath, useAgentResource } from './agent-client'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
@@ -106,6 +107,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
         </> : null}
       </div>}
     </RoomPopover>
+    {embedded ? <RailReopenButton /> : null}
   </header>
 }
 export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, activityInTimeline = false, gatesInTimeline = false }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; openRunId?: string; onModels: () => void; activityInTimeline?: boolean; gatesInTimeline?: boolean }) {

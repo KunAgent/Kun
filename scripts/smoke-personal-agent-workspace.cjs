@@ -488,7 +488,8 @@ async function waitForPrivateRoomSurface(page, roomId) {
   const ready = { state: 'visible', timeout: 15000 }
   await surface.waitFor(ready)
   await surface.locator('.rooms-composer .rooms-rich-input').waitFor(ready)
-  await surface.locator('.rooms-workbench-rail [data-room-tool="browser"]').waitFor(ready)
+  // The tool rail lives in the work card's shared rail column, outside the room surface.
+  await page.locator('.rooms-workbench-rail [data-room-tool="browser"]').waitFor(ready)
   return surface
 }
 // Start by proving the product default, then explicitly select the restricted
