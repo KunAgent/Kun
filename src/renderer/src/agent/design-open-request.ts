@@ -7,6 +7,7 @@ export const DESIGN_OPEN_TOOL_NAME = 'design_open'
 
 const TITLE_MAX_CHARS = 120
 const MAX_SCREENS = 12
+const SECTION_MAX_CHARS = 60
 const REQUEST_ID_PATTERN = /^design_[0-9a-f]{16}$/
 const DOCUMENT_ID_PATTERN = /^[0-9a-f]{8}$/
 
@@ -16,6 +17,7 @@ export type DesignOpenScreenMetadata = {
   relativePath: string
   width: number
   height: number
+  section?: string
 }
 
 /**
@@ -64,12 +66,14 @@ function readyScreens(value: unknown, documentId: string): DesignOpenScreenMetad
     const relativePath = text(entry?.relativePath, 200)
     if (!/^[0-9a-f]{8}$/.test(artifactId) || !name) continue
     if (relativePath !== `.kun-design/${documentId}/${artifactId}/v1.html`) continue
+    const section = text(entry?.section, SECTION_MAX_CHARS)
     screens.push({
       artifactId,
       name,
       relativePath,
       width: positive(entry?.width, 1280),
-      height: positive(entry?.height, 800)
+      height: positive(entry?.height, 800),
+      ...(section ? { section } : {})
     })
   }
   return screens
@@ -181,4 +185,52 @@ export function designOpenStatusOverride(
 
 export function isDesignOpenBlock(block: ChatBlock): block is ToolBlock {
   return block.kind === 'tool' && Boolean(readDesignOpenRequest(block))
+}
+
+function titleKey(title: string): string {
+  return title.trim().toLowerCase().replace(/\s+/gu, ' ')
+}
+
+/**
+ * An agent builds a multi-board design over several `design_open` calls with
+ * the same title (Kun maps that title to one document). The transcript shows
+ * one card per design, in the order each design first appeared.
+ */
+export function groupDesignOpenBlocks(blocks: readonly ToolBlock[]): ToolBlock[][] {
+  const groups = new Map<string, ToolBlock[]>()
+  for (const block of blocks) {
+    const request = readDesignOpenRequest(block)
+    const key = request ? titleKey(request.title) : block.id
+    const group = groups.get(key)
+    if (group) group.push(block)
+    else groups.set(key, [block])
+  }
+  return [...groups.values()]
+}
+
+/**
+ * One view of a design built across calls: every written board (a later call
+ * that rewrites a board wins), the newest call's status, and a pending call's
+ * boards counted while it streams. Earlier boards stay openable when a later
+ * call fails or is still running.
+ */
+export function mergeDesignOpenRequests(
+  requests: readonly DesignOpenRequestMetadata[]
+): DesignOpenRequestMetadata | undefined {
+  const last = requests[requests.length - 1]
+  if (!last || requests.length === 1) return last
+  const screens = new Map<string, DesignOpenScreenMetadata>()
+  let latestReady: DesignOpenRequestMetadata | undefined
+  for (const request of requests) {
+    if (request.status !== 'ready') continue
+    latestReady = request
+    for (const screen of request.screens) screens.set(screen.artifactId, screen)
+  }
+  if (!latestReady) return last
+  const merged = [...screens.values()]
+  const base: DesignOpenRequestMetadata = { ...latestReady, screens: merged, screenCount: merged.length }
+  if (last.status === 'pending') {
+    return { ...base, status: 'pending', screenCount: merged.length + last.screenCount }
+  }
+  return base
 }

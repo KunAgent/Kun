@@ -13,6 +13,7 @@ export const DESIGN_OPEN_TITLE_MAX_CHARS = 120
 export const DESIGN_OPEN_NOTE_MAX_CHARS = 2_000
 export const DESIGN_OPEN_MAX_SCREENS = 6
 export const DESIGN_OPEN_SCREEN_MAX_CHARS = 400_000
+export const DESIGN_OPEN_SECTION_MAX_CHARS = 60
 const DESIGN_DIR = '.kun-design'
 
 const DEFAULT_SIZE = {
@@ -26,6 +27,8 @@ export type DesignOpenScreenPayload = {
   relativePath: string
   width: number
   height: number
+  /** Canvas section (one labelled row of boards) this screen belongs to. */
+  section?: string
 }
 
 export type DesignOpenRequestPayload = {
@@ -119,7 +122,7 @@ function clampSize(value: unknown, fallback: number, min: number, max: number): 
     : fallback
 }
 
-type ScreenInput = { name: string; html: string; width: number; height: number }
+type ScreenInput = { name: string; html: string; width: number; height: number; section?: string }
 
 function normalizeScreens(raw: unknown, target: 'web' | 'app'): ScreenInput[] | string {
   if (!Array.isArray(raw) || raw.length === 0) return 'design_open requires at least one screen with a name and html'
@@ -136,11 +139,13 @@ function normalizeScreens(raw: unknown, target: 'web' | 'app'): ScreenInput[] | 
     const key = normalizedKey(name)
     if (seen.has(key)) return `screen names must be unique; "${name}" appears twice`
     seen.add(key)
+    const section = stringArg(entry.section)?.slice(0, DESIGN_OPEN_SECTION_MAX_CHARS)
     screens.push({
       name,
       html,
       width: clampSize(entry.width, DEFAULT_SIZE[target].width, 240, 2400),
-      height: clampSize(entry.height, DEFAULT_SIZE[target].height, 240, 4000)
+      height: clampSize(entry.height, DEFAULT_SIZE[target].height, 240, 4000),
+      ...(section ? { section } : {})
     })
   }
   return screens
@@ -153,10 +158,14 @@ export function createDesignOpenTool(): LocalTool {
       'Put a visual design on the Design canvas beside this conversation, in this turn.',
       'Use it when the user asks to design, mock up, prototype, redesign, or visually compare UI, or wants to see a design before code is written.',
       'Do not use it for code-only changes, bug fixes, diagrams of existing code, or a single inline component (use design_component for that).',
-      'Gather the code context first (current UI, components, tokens, constraints), then write every screen yourself as one complete, self-contained HTML document: inline CSS, realistic content in the user\'s language, clear hierarchy and states; no external scripts beyond well-known CDNs or web fonts.',
-      'The conversation shows a card the user clicks to open the canvas. Calling again with the same title updates the same canvas; a screen with the same name replaces that screen.',
+      'The canvas holds many boards. Before writing, plan the board set the request needs and decide the count yourself: one board per distinct screen, key state, variant, theme, or spec sheet, never several screens squeezed into one long page.',
+      'A small tweak may need one board; a feature redesign usually needs several, for example an overview of the flow, each main screen, important states (empty, loading, error, success), light and dark, and a component or token sheet.',
+      'Group related boards with the same `section` label (for example "01 Home", "02 States", "Components"); each section becomes its own labelled row on the canvas, in the order you send them.',
+      'Gather the code context first (current UI, components, tokens, constraints), then write every board yourself as one complete, self-contained HTML document: inline CSS, realistic content in the user\'s language, clear hierarchy; no external scripts beyond well-known CDNs or web fonts. Keep boards in one design consistent: same tokens, type scale, and components.',
+      `Send at most ${DESIGN_OPEN_MAX_SCREENS} boards per call; for a larger set, call again with the same title, one or two sections per call, until the plan is complete. Each call adds to the same canvas, and a board with an existing name is replaced.`,
+      'The conversation shows a card the user clicks to open the canvas.',
       'To revise one screen you can also edit its HTML file directly (paths are returned); the canvas reloads.',
-      'After calling it, summarise the design in a sentence or two. Do not implement the design in code until the user approves it.'
+      'After the last call, summarise the board set in a sentence or two. Do not implement the design in code until the user approves it.'
     ].join(' '),
     toolKind: 'file_change',
     policy: 'auto',
@@ -174,14 +183,19 @@ export function createDesignOpenTool(): LocalTool {
           type: 'array',
           minItems: 1,
           maxItems: DESIGN_OPEN_MAX_SCREENS,
-          description: 'Screens or states to place on the canvas, in reading order.',
+          description: 'Boards to place on the canvas in this call, in reading order.',
           items: {
             type: 'object',
             properties: {
-              name: { type: 'string', minLength: 1, description: 'Screen label shown above the board.' },
+              name: { type: 'string', minLength: 1, description: 'Board label shown above the board, unique within the design.' },
               html: { type: 'string', minLength: 1, description: 'Complete standalone HTML document for this screen.' },
               width: { type: 'number', description: 'Board width in px (default 1280 for web, 390 for app).' },
-              height: { type: 'number', description: 'Board height in px (default 800 for web, 844 for app).' }
+              height: { type: 'number', description: 'Board height in px (default 800 for web, 844 for app).' },
+              section: {
+                type: 'string',
+                maxLength: DESIGN_OPEN_SECTION_MAX_CHARS,
+                description: 'Optional section label; boards sharing it sit in one labelled row.'
+              }
             },
             required: ['name', 'html'],
             additionalProperties: false
@@ -217,7 +231,14 @@ export function createDesignOpenTool(): LocalTool {
         assertCanWritePath(resolved.absolutePath, context)
         await mkdir(dirname(resolved.absolutePath), { recursive: true })
         await writeFile(resolved.absolutePath, normalizeDesignScreenHtml(screen.html), 'utf8')
-        written.push({ artifactId, name: screen.name, relativePath, width: screen.width, height: screen.height })
+        written.push({
+          artifactId,
+          name: screen.name,
+          relativePath,
+          width: screen.width,
+          height: screen.height,
+          ...(screen.section ? { section: screen.section } : {})
+        })
       }
       const designRequest: DesignOpenRequestPayload = {
         version: DESIGN_OPEN_REQUEST_VERSION,
@@ -235,9 +256,9 @@ export function createDesignOpenTool(): LocalTool {
           status: 'ready',
           designRequest,
           message: [
-            `"${title}" is on the design canvas with ${written.length} screen(s):`,
-            ...written.map((screen) => `- ${screen.name}: ${screen.relativePath}`),
-            'Edit a file above to revise that screen, or call design_open again with the same title. Do not implement the design in code until the user approves it.'
+            `Added ${written.length} board(s) to "${title}" on the design canvas:`,
+            ...written.map((screen) => `- ${screen.section ? `[${screen.section}] ` : ''}${screen.name}: ${screen.relativePath}`),
+            'If your board plan has more boards, call design_open again with the same title now. Edit a file above to revise that board. Do not implement the design in code until the user approves it.'
           ].join('\n')
         }
       }

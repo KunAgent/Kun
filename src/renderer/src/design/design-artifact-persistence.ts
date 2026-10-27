@@ -273,6 +273,7 @@ export function parseArtifactMeta(raw: string, dirId: string, actualArtifactDir?
       ? o.previewStatus
       : undefined
   const role = o.role === 'design-system' || o.role === 'logo' ? o.role : undefined
+  const boardSection = isStr(o.boardSection) ? o.boardSection.trim().slice(0, 60) : ''
   const prototypeLinks = parsePrototypeLinks(o.prototypeLinks)
   const direction = parseDirection(o.direction)
   const importedFromPath = (() => {
@@ -304,7 +305,8 @@ export function parseArtifactMeta(raw: string, dirId: string, actualArtifactDir?
     implementedAt: isStr(o.implementedAt) ? o.implementedAt : undefined,
     implementedThreadId: isStr(o.implementedThreadId) ? o.implementedThreadId : undefined,
     implementedDesignSystemHash: isStr(o.implementedDesignSystemHash) ? o.implementedDesignSystemHash : undefined,
-    ...(role ? { role } : {})
+    ...(role ? { role } : {}),
+    ...(boardSection ? { boardSection } : {})
   }
 }
 

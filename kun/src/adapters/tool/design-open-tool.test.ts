@@ -132,6 +132,39 @@ describe('design_open tool', () => {
     }
   })
 
+  it('keeps section labels and adds boards to the same document across calls', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-design-open-'))
+    try {
+      const tool = createDesignOpenTool()
+      type Output = { designRequest: { documentId: string; screens: { name: string; section?: string }[] }; message: string }
+      const first = (await tool.execute({
+        title: 'Toast system',
+        screens: [
+          { name: 'Overview', html: '<p>o</p>', section: '  01 Flow  ' },
+          { name: 'Plain', html: '<p>p</p>' }
+        ]
+      }, codeContext({ workspace }))).output as Output
+      const second = (await tool.execute({
+        title: 'Toast system',
+        screens: [{ name: 'Dark', html: '<p>d</p>', section: '02 Themes' }]
+      }, codeContext({ workspace, activeToolCallId: 'call_2' }))).output as Output
+      expect(first.designRequest.screens).toMatchObject([{ name: 'Overview', section: '01 Flow' }, { name: 'Plain' }])
+      expect(first.designRequest.screens[1]).not.toHaveProperty('section')
+      expect(first.message).toContain('[01 Flow] Overview')
+      expect(second.designRequest.documentId).toBe(first.designRequest.documentId)
+      expect(second.designRequest.screens).toMatchObject([{ name: 'Dark', section: '02 Themes' }])
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('asks the agent to plan a multi-board set instead of one long page', () => {
+    const description = createDesignOpenTool().description
+    expect(description).toContain('plan the board set')
+    expect(description).toContain('section')
+    expect(description).toContain('call again with the same title')
+  })
+
   it('rejects a missing title, empty screens, blank html and duplicate names', async () => {
     const tool = createDesignOpenTool()
     const screen = { name: 'A', html: '<p>a</p>' }

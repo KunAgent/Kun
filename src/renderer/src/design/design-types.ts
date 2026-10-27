@@ -130,6 +130,11 @@ export type DesignArtifact = {
    * label them in the sibling manifest.
    */
   role?: 'design-system' | 'logo'
+  /**
+   * Canvas section label an agent gave this board (design_open `section`).
+   * Boards sharing it are laid out as one labelled row.
+   */
+  boardSection?: string
 }
 
 /** A logical Design-sidebar directory. It does not alter on-disk artifact paths. */
