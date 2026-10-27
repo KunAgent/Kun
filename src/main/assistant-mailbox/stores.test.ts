@@ -40,7 +40,7 @@ describe('assistant mailbox stores', () => {
     await store.applyIncoming({ id: 'as-2', name: 'Grok' }, { ...reply, id: 'm-3' })
     await store.applyIncoming(assistant, { id: 'm-4', kind: 'note', createdAt: '2026-10-22T00:20:00Z', body: 'Hello', title: 'Hi' })
     const view = await new AssistantTaskStore(path).view(new Map([['as-1', 'Cue (renamed)']]))
-    expect(view.tasks[0]).toMatchObject({ status: 'cancelled', assistantName: 'Cue (renamed)' })
+    expect(view.tasks[0]).toMatchObject({ status: 'done', assistantName: 'Cue (renamed)' })
     expect(view.tasks[0].updates.map((update) => update.status)).toEqual(['done', 'working'])
     expect(view.notes.map((note) => [note.assistantName, note.body])).toEqual([['Cue (renamed)', 'Hello'], ['Grok', 'Booked']])
   })

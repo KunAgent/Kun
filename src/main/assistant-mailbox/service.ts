@@ -1,3 +1,4 @@
+import { taskRevision } from './task-revision'
 // Main-process owner of the assistant mailbox: enrolls assistants, assigns and cancels tasks,
 // and collects replies on a timer. It acts as this desktop's remote host device (the same
 // identity the phone link uses) with the signed-in Kun account's access token.
@@ -76,6 +77,10 @@ export class AssistantMailboxService {
   private lastSyncAt?: string
   private error?: string
   private timer: unknown = null
+  private disposed = false
+  private readonly changeListeners = new Set<() => void>()
+  private refreshing: Promise<AssistantMailboxStatus> | null = null
+  private receiptOffset = 0
   private failures = 0
   private forceToken = false
   private queue: Promise<unknown> = Promise.resolve()
@@ -93,6 +98,7 @@ export class AssistantMailboxService {
       const owner = hasKunAccountSession(state) ? state.user?.id : undefined
       if (this.session && owner !== this.session.owner) {
         this.session = null
+        for (const listener of this.changeListeners) listener()
         void this.refresh().catch(() => {})
       } else if (!this.session && owner && this.availability === 'login_required') {
         void this.refresh().catch(() => {})
@@ -101,9 +107,18 @@ export class AssistantMailboxService {
   }
 
   dispose(): void {
+    this.disposed = true; this.session = null; this.availability = 'disabled'
     this.unsubscribe()
     if (this.timer) this.timers.clear(this.timer)
     this.timer = null
+    for (const listener of this.changeListeners) listener()
+    this.changeListeners.clear()
+  }
+
+  private publish(status: AssistantMailboxStatus): void {
+    if (this.disposed) return
+    this.deps.emit(status)
+    for (const listener of this.changeListeners) listener()
   }
 
   private serial<T>(work: () => Promise<T>): Promise<T> {
@@ -113,7 +128,9 @@ export class AssistantMailboxService {
   }
 
   private async currentSession(): Promise<Session | null> {
+    if (this.disposed) throw new AssistantMailboxError('DISPOSED')
     const state = await this.deps.account.getState()
+    if (this.disposed) throw new AssistantMailboxError('DISPOSED')
     if (!hasKunAccountSession(state) || !state.user) {
       this.session = null
       return null
@@ -123,7 +140,12 @@ export class AssistantMailboxService {
     const dir = join(this.deps.storageDir, owner)
     const secrets = new AssistantSecretStore(join(dir, 'secrets.enc'), this.deps.cipher)
     const identity = await this.deps.identity(owner)
+    const latest = await this.deps.account.getState()
+    if (this.disposed || !hasKunAccountSession(latest) || latest.user?.id !== owner) throw new AssistantMailboxError('ACCOUNT_CHANGED')
+    const tasks = new AssistantTaskStore(join(dir, 'tasks.json'))
     const host = new AssistantHost({
+      restoreOutgoing: item => tasks.restoreOutgoing(item),
+      historyState: { get: id => tasks.getCursor(id), set: (id, sequence) => tasks.setCursor(id, sequence) },
       server: this.deps.origin,
       fetch: this.deps.fetch,
       now: this.now,
@@ -138,7 +160,7 @@ export class AssistantMailboxService {
         return { accessToken, deviceId: identity.id, deviceCredential: identity.credential }
       }
     })
-    const session: Session = { owner, identity, host, secrets, tasks: new AssistantTaskStore(join(dir, 'tasks.json')),
+    const session: Session = { owner, identity, host, secrets, tasks,
       profiles: new AssistantProfileStore(join(dir, 'profiles.json')), assistants: [], enrollments: [] }
     this.session = session
     return session
@@ -180,11 +202,16 @@ export class AssistantMailboxService {
   private async probe(force = false): Promise<boolean> {
     if (!force && this.availability === 'available') return true
     if (!force && this.availability === 'unavailable' && Date.now() - this.probedAt < PROBE_TTL_MS) return false
-    const response = await this.deps.fetch(`${this.deps.origin}/api/assistants/v1/status`, { method: 'GET', redirect: 'error' })
+    const response = await this.deps.fetch(`${this.deps.origin}/api/assistants/v1/capabilities`, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(5000) })
     await response.body?.cancel().catch(() => {})
     this.probedAt = Date.now()
-    if (response.status === 404) this.availability = 'unavailable'
-    return response.ok
+    if (response.status !== 404) { if (!response.ok) throw new AssistantMailboxError('SERVICE_UNAVAILABLE'); return true }
+    const legacy = await this.deps.fetch(`${this.deps.origin}/api/assistants/v1/status`, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(5000) })
+    await legacy.body?.cancel().catch(() => {})
+    if (legacy.status === 404) this.availability = 'unavailable'
+    if (legacy.ok || legacy.status === 401) return true
+    if (legacy.status !== 404) throw new AssistantMailboxError('SERVICE_UNAVAILABLE')
+    return false
   }
 
   private async checkMembership(session: Session): Promise<void> {
@@ -196,7 +223,7 @@ export class AssistantMailboxService {
       this.availability = code === 'vip_personal_assistant_required' ? 'upgrade_required' : 'entitlements_unavailable'
       this.error = code ?? 'ENTITLEMENTS_UNAVAILABLE'
       this.schedule()
-      this.deps.emit(await this.snapshot())
+      this.publish(await this.snapshot())
       throw error
     }
   }
@@ -210,7 +237,7 @@ export class AssistantMailboxService {
     const names = new Map(listed.assistants.map((assistant) => [assistant.id, assistant.name]))
     let received = 0
     let rejected = 0
-    await session.host.receive(async (item) => {
+    const incoming = await session.host.receive(async (item) => {
       if (item.error) {
         rejected++
         return
@@ -218,6 +245,14 @@ export class AssistantMailboxService {
       received++
       await session.tasks.applyIncoming({ id: item.assistant.id, name: names.get(item.assistant.id) ?? item.assistant.name }, item.message)
     })
+    const deliveryIds = await session.tasks.deliveryIds()
+    if (deliveryIds.length) {
+      this.receiptOffset %= deliveryIds.length
+      const ids = [...deliveryIds, ...deliveryIds].slice(this.receiptOffset, this.receiptOffset + Math.min(64, deliveryIds.length))
+      this.receiptOffset += ids.length
+      await session.tasks.applyReceipts((await session.host.delivery(ids)).receipts)
+    }
+    if (incoming.complete !== false) await session.tasks.finalizeCancellations()
     if (rejected) this.deps.log('warn', 'Discarded assistant messages that failed authentication', { rejected })
     const latest = received ? await session.host.list() : listed
     session.assistants = latest.assistants
@@ -242,7 +277,7 @@ export class AssistantMailboxService {
         await session.tasks.finishDelivery(pending.message.id)
       } catch (error) {
         if (error instanceof MailboxRequestError &&
-            (error.status === 400 || error.status === 404 || (error.status === 409 && error.code === 'conflict'))) {
+            (error.status === 400 || error.status === 404 || error.status === 410 || (error.status === 409 && error.code === 'conflict'))) {
           await session.tasks.finishDelivery(pending.message.id, describe(error))
           continue
         }
@@ -257,8 +292,8 @@ export class AssistantMailboxService {
     if (this.timer) this.timers.clear(this.timer)
     this.timer = null
     const session = this.session
-    if (!session || this.availability !== 'available') return
-    const base = session.enrollments.length ? ENROLLING_POLL_MS : session.assistants.length || this.failures ? ACTIVE_POLL_MS : 0
+    if (this.disposed || ['disabled', 'login_required', 'unavailable', 'upgrade_required'].includes(this.availability)) return
+    const base = session?.enrollments.length ? ENROLLING_POLL_MS : session?.assistants.length || this.failures || this.availability === 'entitlements_unavailable' ? ACTIVE_POLL_MS : 0
     if (!base) return
     const delay = Math.min(MAX_BACKOFF_MS, base * 2 ** this.failures)
     this.timer = this.timers.set(() => { this.timer = null; void this.refresh().catch(() => {}) }, delay)
@@ -266,7 +301,9 @@ export class AssistantMailboxService {
 
   /** Pulls replies and the assistant list, then publishes a fresh snapshot. Never throws for remote failures. */
   refresh(options: { probe?: boolean } = {}): Promise<AssistantMailboxStatus> {
-    return this.serial(async () => {
+    if (this.refreshing) return this.refreshing
+    if (this.disposed) return this.snapshot()
+    const operation = this.serial(async () => {
       try {
         if (!(await this.deps.enabled())) {
           this.availability = 'disabled'
@@ -297,9 +334,11 @@ export class AssistantMailboxService {
       }
       const status = await this.snapshot()
       this.schedule()
-      this.deps.emit(status)
+      this.publish(status)
       return status
-    })
+    }).finally(() => { this.refreshing = null })
+    this.refreshing = operation
+    return operation
   }
 
   async snapshot(): Promise<AssistantMailboxStatus> {
@@ -356,11 +395,11 @@ export class AssistantMailboxService {
         void this.deps.fetchIcon(website).then(async (icon) => {
           if (!icon || this.session !== session) return
           await session.profiles.update(created.enrollmentId, { icon })
-          this.deps.emit(await this.snapshot())
+          this.publish(await this.snapshot())
         }).catch(() => {})
       }
       this.schedule()
-      this.deps.emit(await this.snapshot())
+      this.publish(await this.snapshot())
       return created
     })
   }
@@ -381,11 +420,14 @@ export class AssistantMailboxService {
       const task = await session.tasks.task(taskId)
       if (!task) throw new AssistantMailboxError('TASK_NOT_FOUND')
       const assistant = await this.findAssistant(session, task.assistantId)
-      const message = await session.host.send(assistant, { kind: 'note', inReplyTo: taskId, body: text })
-      await session.tasks.addOutgoingNote({ id: message.id, assistantId: assistant.id, assistantName: assistant.name, body: text, at: message.createdAt, inReplyTo: taskId })
+      if (!await session.tasks.pendingNote(taskId, text)) {
+        const prepared = await session.host.prepareMessage(assistant, { kind: 'note', inReplyTo: taskId, body: text })
+        await session.tasks.queueNote(prepared, assistant.name)
+      }
+      await this.flushTasks(session)
     }, true))
     const status = await this.snapshot()
-    this.deps.emit(status)
+    this.publish(status)
     return status
   }
 
@@ -427,6 +469,61 @@ export class AssistantMailboxService {
     return assistant
   }
 
+  async history(assistantId: string, before?: string) {
+    if (before !== undefined && (typeof before !== 'string' || before.length > 100)) throw new AssistantMailboxError('INVALID_CURSOR')
+    return this.serial(() => this.withHost(async session => {
+      await this.findAssistant(session, assistantId)
+      return session.tasks.history(assistantId, before)
+    }))
+  }
+
+  async waitForTask(id: string, after: string | undefined, timeoutMs: number) {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 0 || timeoutMs > 30000 || (after !== undefined && !/^[a-f0-9]{64}$/.test(after))) throw new AssistantMailboxError('INVALID_WAIT')
+    const { session, initial } = await this.serial(async () => {
+      const session = await this.currentSession()
+      if (!session || !await this.deps.enabled()) throw new AssistantMailboxError('LOGIN_REQUIRED')
+      const initial = await session.tasks.findTask(id)
+      if (!initial) throw new AssistantMailboxError('TASK_NOT_FOUND')
+      return { session, initial }
+    })
+    if (!after || taskRevision(initial) !== after || timeoutMs === 0) return { task: initial, updateToken: taskRevision(initial), timedOut: Boolean(after && taskRevision(initial) === after) }
+    return new Promise<{ task: AssistantTaskView; updateToken: string; timedOut: boolean }>((resolve, reject) => {
+      let active = true, polling: ReturnType<typeof setTimeout> | undefined
+      const finish = (work: () => void) => { if (!active) return; active = false; clearTimeout(deadline); clearTimeout(polling); this.changeListeners.delete(changed); work() }
+      const inspect = async (timedOut: boolean) => {
+        try {
+          const account = await this.deps.account.getState()
+          if (!hasKunAccountSession(account) || account.user?.id !== session.owner || this.session !== session) throw new AssistantMailboxError('ACCOUNT_CHANGED')
+          const task = await session.tasks.task(initial.id)
+          if (!task) throw new AssistantMailboxError('TASK_NOT_FOUND')
+          const token = taskRevision(task)
+          if (timedOut || token !== after) finish(() => resolve({ task, updateToken: token, timedOut }))
+        } catch (error) { finish(() => reject(error)) }
+      }
+      const changed = () => { void inspect(false) }
+      const deadline = setTimeout(() => void inspect(true), timeoutMs)
+      const poll = async () => {
+        if (!active) return
+        try { await this.refresh(); if (active) polling = setTimeout(() => void poll(), 10000) }
+        catch (error) { finish(() => reject(error)) }
+      }
+      this.changeListeners.add(changed)
+      void inspect(false); void poll()
+    })
+  }
+
+  async taskById(id: string) {
+    return this.serial(() => this.withHost(session => session.tasks.findTask(id)))
+  }
+
+  async recoverHistory(assistantId: string) {
+    await this.serial(() => this.withHost(async session => {
+      await this.findAssistant(session, assistantId)
+      await session.host.recoverHistory(assistantId)
+    }, true))
+    return this.refresh()
+  }
+
   async assign(request: AssistantAssignRequest): Promise<AssistantTaskView> {
     const title = String(request?.title ?? '').trim()
     const body = String(request?.body ?? '')
@@ -442,7 +539,7 @@ export class AssistantMailboxService {
         await this.flushTasks(session)
         return (await session.tasks.task(queued.id))!
       }, true)
-      this.deps.emit(await this.snapshot())
+      this.publish(await this.snapshot())
       return task
     })
   }
@@ -453,12 +550,13 @@ export class AssistantMailboxService {
         const existing = await session.tasks.task(taskId)
         if (!existing) throw new AssistantMailboxError('TASK_NOT_FOUND')
         if (existing.status === 'cancelled') return existing
+        if (['done', 'failed'].includes(existing.status)) throw new AssistantMailboxError('TASK_ALREADY_FINISHED')
         const assistant = await this.findAssistant(session, existing.assistantId)
+        if (!existing.cancellationId) await session.tasks.queueCancel(await session.host.prepareMessage(assistant, { kind: 'cancel', inReplyTo: taskId, body: reason }))
         await this.flushTasks(session)
-        await session.host.cancel(assistant, taskId, reason)
-        return (await session.tasks.markCancelled(taskId, this.now()))!
+        return (await session.tasks.task(taskId))!
       }, true)
-      this.deps.emit(await this.snapshot())
+      this.publish(await this.snapshot())
       return task
     })
   }

@@ -1,10 +1,11 @@
+import { taskRevision } from './task-revision'
 // What the Kun tools may do with the assistant mailbox. Inputs come from the model, so every
 // field is checked here before it reaches the service; results are compact projections.
 import { wakeMessage } from '@kun/assistant-agent'
 import type { AssistantMailboxStatus, AssistantTaskView, AssistantView } from '../../shared/assistant-mailbox'
 import { AssistantMailboxError, type AssistantMailboxService } from './service'
 
-export const ASSISTANT_TOOL_ROUTES = new Set(['/assistants', '/tasks/assign', '/tasks/cancel', '/tasks/results'])
+export const ASSISTANT_TOOL_ROUTES = new Set(['/assistants', '/tasks/assign', '/tasks/cancel', '/tasks/results', '/tasks/wait'])
 
 const text = (value: unknown, max: number): string | undefined =>
   typeof value === 'string' && value.trim() ? value.slice(0, max) : undefined
@@ -29,7 +30,7 @@ function pickAssistant(assistants: AssistantView[], wanted: unknown): AssistantV
 
 function taskSummary(task: AssistantTaskView) {
   return {
-    taskId: task.id, assistant: task.assistantName, assistantId: task.assistantId, title: task.title, status: task.status,
+    updateToken: taskRevision(task), taskId: task.id, assistant: task.assistantName, assistantId: task.assistantId, title: task.title, status: task.status,
     createdAt: task.createdAt, updatedAt: task.updatedAt, ...(task.deadline ? { deadline: task.deadline } : {}),
     updates: task.updates
   }
@@ -37,6 +38,12 @@ function taskSummary(task: AssistantTaskView) {
 
 export function assistantToolHandler(service: AssistantMailboxService) {
   return async (route: string, body: Record<string, unknown>): Promise<unknown> => {
+    if (route === '/tasks/wait') {
+      const id = text(body.taskId, 64)
+      if (!id) throw new AssistantMailboxError('TASK_REQUIRED')
+      const result = await service.waitForTask(id, text(body.after, 64), typeof body.timeoutMs === 'number' ? body.timeoutMs : 30000)
+      return { ...result, task: taskSummary(result.task) }
+    }
     const status = await service.refresh()
     if (status.availability !== 'available') unavailable(status)
     if (route === '/assistants') {
@@ -67,7 +74,8 @@ export function assistantToolHandler(service: AssistantMailboxService) {
     const limit = Math.min(20, Math.max(1, Number.isInteger(body.limit) ? Number(body.limit) : 10))
     const assistant = body.assistant === undefined ? undefined : pickAssistant(status.assistants, body.assistant)
     const taskId = text(body.taskId, 64)
-    const tasks = status.tasks
+    const lookup = taskId ? await service.taskById(taskId) : undefined
+    const tasks = (taskId ? lookup ? [lookup] : [] : status.tasks)
       .filter((task) => (!taskId || task.id === taskId || task.id.startsWith(taskId)) && (!assistant || task.assistantId === assistant.id))
       .slice(0, limit)
     if (taskId && !tasks.length) throw new AssistantMailboxError('TASK_NOT_FOUND', `No task ${taskId}.`)

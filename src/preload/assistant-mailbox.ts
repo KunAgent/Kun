@@ -6,6 +6,8 @@ import {
 } from '../shared/assistant-mailbox'
 
 export const assistantMailboxApi: AssistantMailboxApi = {
+  history: (id, before) => ipcRenderer.invoke(channels.history, id, before),
+  recoverHistory: id => ipcRenderer.invoke(channels.recoverHistory, id),
   status: () => ipcRenderer.invoke(channels.status),
   refresh: () => ipcRenderer.invoke(channels.refresh),
   updatePrompt: (id, locale) => ipcRenderer.invoke(channels.updatePrompt, id, locale),

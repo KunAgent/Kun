@@ -1,168 +1,222 @@
-// Local record of tasks Kun assigned to assistants and of what came back. It is the desktop's
-// copy of the conversation: the mailbox server deletes each message once it is acknowledged.
+// Durable desktop projection and outbox. History is paged for display, never trimmed by count.
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename } from 'node:fs/promises'
-import type { PreparedMessage } from '@kun/assistant-agent'
 import { dirname } from 'node:path'
-import type {
-  AssistantNoteView, AssistantTaskStatus, AssistantTaskUpdate, AssistantTaskView
-} from '../../shared/assistant-mailbox'
-
-const MAX_TASKS = 200
-const MAX_NOTES = 200
-const MAX_SEEN = 2000
-
-type StoredUpdate = AssistantTaskUpdate & { messageId: string }
-type StoredTask = Omit<AssistantTaskView, 'updates'> & { updates: StoredUpdate[] }
-type TaskFile = { version: 1; tasks: StoredTask[]; notes: AssistantNoteView[]; seen: string[]; pending?: PreparedMessage[] }
-
-/** A decrypted message from an assistant, as delivered by `AssistantHost.receive`. */
+import type { PreparedMessage } from '@kun/assistant-agent'
+import type { AssistantHistoryPage, AssistantNoteView, AssistantTaskStatus, AssistantTaskUpdate, AssistantTaskView } from '../../shared/assistant-mailbox'
+const TERMINAL = new Set<AssistantTaskStatus>(['done', 'failed', 'cancelled'])
+type StoredTask = Omit<AssistantTaskView, 'updates'> & { updates: Array<AssistantTaskUpdate & { messageId: string }> }
+type Delivery = { assistantId: string; taskId?: string; kind: string; restored?: boolean; storedAt?: string; receivedAt?: string; consumedAt?: string; error?: string }
+type TaskFile = { version: 1; tasks: StoredTask[]; notes: AssistantNoteView[]; seen: string[]; pending?: PreparedMessage[]; deliveries?: Record<string, Delivery>; cursors?: Record<string, number> }
 export type IncomingAssistantMessage = {
-  id: string
-  kind: 'task' | 'note' | 'reply' | 'cancel'
-  createdAt: string
-  body: string
-  title?: string
-  inReplyTo?: string
-  status?: AssistantTaskUpdate['status']
+  id: string; kind: 'task' | 'note' | 'reply' | 'cancel'; createdAt: string; body: string; title?: string; inReplyTo?: string; status?: AssistantTaskUpdate['status']
 }
-
+function advance(current: AssistantTaskStatus, incoming: AssistantTaskUpdate['status']): AssistantTaskStatus {
+  if (TERMINAL.has(current)) return current
+  if (incoming === 'received' && !['queued', 'sent', 'received'].includes(current)) return current
+  if (current === 'cancel_requested' && !['done', 'failed'].includes(incoming)) return current
+  return incoming
+}
 export class AssistantTaskStore {
   private cache: TaskFile | null = null
   private queue: Promise<unknown> = Promise.resolve()
-
   constructor(private readonly path: string) {}
-
   private async load(): Promise<TaskFile> {
     if (this.cache) return this.cache
     try {
       const parsed = JSON.parse(await readFile(this.path, 'utf8')) as TaskFile
-      this.cache = parsed.version === 1 ? parsed : { version: 1, tasks: [], notes: [], seen: [] }
+      if (parsed.version !== 1 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.notes) || !Array.isArray(parsed.seen)) throw new Error('ASSISTANT_STORE_UNSUPPORTED')
+      this.cache = parsed
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       this.cache = { version: 1, tasks: [], notes: [], seen: [] }
     }
     return this.cache
   }
-
   private mutate<T>(change: (file: TaskFile) => T): Promise<T> {
     const work = async (): Promise<T> => {
-      const file = structuredClone(await this.load())
-      const result = change(file)
-      const recent = new Set(file.tasks.slice(-MAX_TASKS).map((task) => task.id))
-      const pending = new Set(file.pending?.map((item) => item.message.id))
-      file.tasks = file.tasks.filter((task) => recent.has(task.id) || pending.has(task.id))
-      file.notes = file.notes.slice(-MAX_NOTES)
-      file.seen = file.seen.slice(-MAX_SEEN)
+      const file = structuredClone(await this.load()), result = change(file)
       await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
-      const temporary = `${this.path}.${randomUUID()}.tmp`
-      const handle = await open(temporary, 'w', 0o600)
+      const temporary = `${this.path}.${randomUUID()}.tmp`, handle = await open(temporary, 'wx', 0o600)
       try { await handle.writeFile(JSON.stringify(file)); await handle.sync() } finally { await handle.close() }
       await rename(temporary, this.path)
+      if (process.platform !== 'win32') { const directory = await open(dirname(this.path), 'r'); try { await directory.sync() } finally { await directory.close() } }
       this.cache = file
-      return result
+      return structuredClone(result)
     }
-    const next = this.queue.then(work, work)
-    this.queue = next.catch(() => {})
-    return next
+    const next = this.queue.then(work, work); this.queue = next.catch(() => {}); return next
   }
-
-  /** The task and exact sealed envelope are committed together before any network send. */
+  private enqueue(file: TaskFile, prepared: PreparedMessage): void {
+    const existing = file.pending?.find(item => item.message.id === prepared.message.id)
+    if (existing) { if (existing.envelope !== prepared.envelope) throw new Error('ASSISTANT_REQUEST_CONFLICT'); return }
+    ;(file.pending ??= []).push(prepared)
+    ;(file.deliveries ??= {})[prepared.message.id] = { assistantId: prepared.assistantId, kind: prepared.message.kind,
+      taskId: prepared.message.kind === 'task' ? prepared.message.id : prepared.message.inReplyTo }
+  }
   queueTask(prepared: PreparedMessage, assistantName: string): Promise<AssistantTaskView> {
-    return this.mutate((file) => {
-      const { message } = prepared
-      const existing = file.tasks.find((task) => task.id === message.id)
+    return this.mutate(file => {
+      const { message } = prepared, existing = file.tasks.find(t => t.id === message.id)
       if (existing) return existing
-      const task: StoredTask = {
-        id: message.id, assistantId: prepared.assistantId, assistantName,
-        title: message.title ?? '', body: message.body, createdAt: message.createdAt,
-        updatedAt: message.createdAt, status: 'queued', updates: [],
-        ...(message.deadline ? { deadline: message.deadline } : {})
-      }
-      file.tasks.push(task)
-      ;(file.pending ??= []).push(prepared)
+      const task: StoredTask = { id: message.id, assistantId: prepared.assistantId, assistantName, title: message.title ?? '', body: message.body,
+        createdAt: message.createdAt, updatedAt: message.createdAt, status: 'queued', updates: [], ...(message.deadline ? { deadline: message.deadline } : {}) }
+      file.tasks.push(task); this.enqueue(file, prepared); return task
+    })
+  }
+  queueNote(prepared: PreparedMessage, assistantName: string): Promise<void> {
+    return this.mutate(file => {
+      if (file.notes.some(n => n.id === prepared.message.id)) return
+      const message = prepared.message
+      file.notes.push({ id: message.id, from: 'you', assistantId: prepared.assistantId, assistantName, body: message.body,
+        at: message.createdAt, inReplyTo: message.inReplyTo, delivery: 'queued' })
+      this.enqueue(file, prepared)
+    })
+  }
+  queueCancel(prepared: PreparedMessage): Promise<AssistantTaskView> {
+    return this.mutate(file => {
+      const task = file.tasks.find(t => t.id === prepared.message.inReplyTo && t.assistantId === prepared.assistantId)
+      if (!task) throw new Error('TASK_NOT_FOUND')
+      if (TERMINAL.has(task.status)) throw new Error('TASK_ALREADY_FINISHED')
+      if (task.cancellationId) return task
+      this.enqueue(file, prepared)
+      task.cancellationId = prepared.message.id; task.status = 'cancel_requested'; task.updatedAt = prepared.message.createdAt
       return task
     })
   }
-
-  async pendingTasks(): Promise<PreparedMessage[]> {
-    return structuredClone((await this.load()).pending ?? [])
+  async pendingNote(taskId: string, body: string): Promise<boolean> {
+    return (await this.load()).pending?.some(p => p.message.kind === 'note' && p.message.inReplyTo === taskId && p.message.body === body) ?? false
   }
-
+  async pendingTasks(): Promise<PreparedMessage[]> { return structuredClone((await this.load()).pending ?? []) }
   finishDelivery(id: string, error?: string): Promise<void> {
-    return this.mutate((file) => {
-      file.pending = (file.pending ?? []).filter((item) => item.message.id !== id)
-      const task = file.tasks.find((item) => item.id === id)
-      if (task?.status === 'queued') {
-        task.status = error ? 'failed' : 'sent'
-        task.updatedAt = new Date().toISOString()
-        if (error) task.updates.push({ messageId: id, status: 'failed', body: error, at: task.updatedAt })
+    return this.mutate(file => {
+      const pending = file.pending?.find(p => p.message.id === id)
+      file.pending = (file.pending ?? []).filter(p => p.message.id !== id)
+      const now = new Date().toISOString()
+      const delivery = (file.deliveries ??= {})[id] ?? (pending ? { assistantId: pending.assistantId, taskId: pending.message.kind === 'task' ? id : pending.message.inReplyTo, kind: pending.message.kind } : undefined)
+      if (delivery) { file.deliveries[id] = delivery; if (error) delivery.error = error; else delivery.storedAt = now }
+      const task = file.tasks.find(t => t.id === id)
+      if (task?.status === 'queued') { task.status = error ? 'failed' : 'sent'; task.updatedAt = now }
+      if (task && error) task.updates.push({ messageId: id, status: 'failed', body: error, at: now })
+      const note = file.notes.find(n => n.id === id)
+      if (note) { note.delivery = error ? 'failed' : 'stored'; note.deliveryError = error }
+      if (delivery?.kind === 'cancel' && error) {
+        const target = file.tasks.find(t => t.id === delivery.taskId)
+        if (target) target.cancellationError = error
       }
     })
   }
-
-  async task(taskId: string): Promise<AssistantTaskView | undefined> {
-    return (await this.load()).tasks.find((task) => task.id === taskId)
+  async deliveryIds(): Promise<string[]> {
+    const file = await this.load()
+    const current = Object.entries(file.deliveries ?? {}).filter(([, d]) => !d.consumedAt && !d.error && d.storedAt).map(([id]) => id)
+    return [...new Set([...current, ...file.tasks.filter(t => !TERMINAL.has(t.status) && !file.deliveries?.[t.id]).map(t => t.id)])]
   }
+  applyReceipts(receipts: Array<{ messageId: string; expired?: boolean; storedAt: string; receivedAt: string | null; consumedAt: string | null }>): Promise<void> {
+    if (!receipts.length) return Promise.resolve()
+    return this.mutate(file => {
+      for (const receipt of receipts) {
+        const legacyTask = file.tasks.find(t => t.id === receipt.messageId)
+        const delivery = (file.deliveries ??= {})[receipt.messageId] ?? (legacyTask ? { assistantId: legacyTask.assistantId, taskId: legacyTask.id, kind: 'task' } : undefined)
+        if (!delivery) continue
+        file.deliveries[receipt.messageId] = delivery
+        if (receipt.expired) {
+          delivery.error = 'assistant_delivery_expired'
+          if (legacyTask && !TERMINAL.has(legacyTask.status)) { legacyTask.status = 'failed'; legacyTask.updates.push({ messageId: receipt.messageId, status: 'failed', body: 'assistant_delivery_expired', at: new Date().toISOString() }) }
+          continue
+        }
+        delivery.storedAt = receipt.storedAt
+        if (receipt.receivedAt) delivery.receivedAt = receipt.receivedAt
+        if (receipt.consumedAt) delivery.consumedAt = receipt.consumedAt
+        const task = file.tasks.find(t => t.id === delivery.taskId && t.assistantId === delivery.assistantId)
+        if (delivery.kind === 'task' && task) {
+          task.delivery = { storedAt: delivery.storedAt, receivedAt: delivery.receivedAt, consumedAt: delivery.consumedAt }
+          if (delivery.consumedAt && ['queued', 'sent'].includes(task.status)) task.status = 'received'
+        }
 
+        const note = file.notes.find(n => n.id === receipt.messageId)
+        if (note) note.delivery = delivery.consumedAt ? 'consumed' : delivery.receivedAt ? 'downloaded' : 'stored'
+      }
+    })
+  }
+  async task(taskId: string): Promise<AssistantTaskView | undefined> { return structuredClone((await this.load()).tasks.find(t => t.id === taskId)) }
+  async findTask(prefix: string): Promise<AssistantTaskView | undefined> {
+    const matches = (await this.load()).tasks.filter(t => t.id === prefix || prefix.length >= 4 && t.id.startsWith(prefix))
+    if (matches.length > 1) throw new Error('AMBIGUOUS_TASK_ID')
+    return structuredClone(matches[0])
+  }
   addTask(task: Omit<AssistantTaskView, 'updates' | 'updatedAt' | 'status'>): Promise<AssistantTaskView> {
-    return this.mutate((file) => {
-      const stored: StoredTask = { ...task, status: 'sent', updatedAt: task.createdAt, updates: [] }
-      file.tasks.push(stored)
-      return stored
-    })
+    return this.mutate(file => { const stored: StoredTask = { ...task, status: 'sent', updatedAt: task.createdAt, updates: [] }; file.tasks.push(stored); return stored })
   }
-
   markCancelled(taskId: string, now = new Date()): Promise<AssistantTaskView | undefined> {
-    return this.mutate((file) => {
-      const task = file.tasks.find((item) => item.id === taskId)
-      if (!task) return undefined
-      task.status = 'cancelled'
-      task.updatedAt = now.toISOString()
-      return task
-    })
+    return this.mutate(file => { const task = file.tasks.find(t => t.id === taskId); if (task && !TERMINAL.has(task.status)) { task.status = 'cancelled'; task.updatedAt = now.toISOString() }; return task })
   }
-
-  /** Applies one incoming message once; replies update their task, anything else is a note. */
   applyIncoming(assistant: { id: string; name: string }, message: IncomingAssistantMessage): Promise<void> {
-    return this.mutate((file) => {
+    return this.mutate(file => {
       if (file.seen.includes(message.id)) return
       file.seen.push(message.id)
-      const task = message.kind === 'reply' && message.inReplyTo
-        ? file.tasks.find((item) => item.id === message.inReplyTo && item.assistantId === assistant.id)
-        : undefined
+      const task = message.kind === 'reply' && message.inReplyTo ? file.tasks.find(t => t.id === message.inReplyTo && t.assistantId === assistant.id) : undefined
       if (task && message.status) {
         task.updates.push({ messageId: message.id, status: message.status, body: message.body, at: message.createdAt })
-        if (task.status !== 'cancelled') task.status = message.status as AssistantTaskStatus
-        task.updatedAt = message.createdAt
-        return
+        task.status = advance(task.status, message.status); task.updatedAt = new Date().toISOString(); return
       }
-      file.notes.push({
-        id: message.id, from: 'assistant', assistantId: assistant.id, assistantName: assistant.name, body: message.body, at: message.createdAt,
-        ...(message.title ? { title: message.title } : {}), ...(message.inReplyTo ? { inReplyTo: message.inReplyTo } : {})
-      })
+      file.notes.push({ id: message.id, from: 'assistant', assistantId: assistant.id, assistantName: assistant.name, body: message.body,
+        at: message.createdAt, ...(message.title ? { title: message.title } : {}), ...(message.inReplyTo ? { inReplyTo: message.inReplyTo } : {}) })
     })
   }
-
-  /** Records a message the user sent about a task, so it shows in that assistant's conversation. */
   addOutgoingNote(note: Omit<AssistantNoteView, 'from'>): Promise<void> {
-    return this.mutate((file) => {
-      if (file.seen.includes(note.id)) return
-      file.seen.push(note.id)
-      file.notes.push({ ...note, from: 'you' })
+    return this.mutate(file => { if (file.seen.includes(note.id)) return; file.seen.push(note.id); file.notes.push({ ...note, from: 'you' }) })
+  }
+  restoreOutgoing(item: { assistant: { id: string; name: string }; message: PreparedMessage['message']; storedAt: string; receivedAt: string | null; consumedAt: string | null }): Promise<void> {
+    return this.mutate(file => {
+      const { message, assistant } = item
+      if (file.deliveries?.[message.id]?.restored) return
+      const delivery = (file.deliveries ??= {})[message.id] ?? { assistantId: assistant.id, kind: message.kind, taskId: message.kind === 'task' ? message.id : message.inReplyTo }
+      file.deliveries[message.id] = { ...delivery, storedAt: item.storedAt, receivedAt: item.receivedAt ?? delivery.receivedAt, consumedAt: item.consumedAt ?? delivery.consumedAt, restored: true }
+      if (message.kind === 'task' && !file.tasks.some(t => t.id === message.id)) {
+        file.tasks.push({ id: message.id, assistantId: assistant.id, assistantName: assistant.name, title: message.title ?? '', body: message.body,
+          createdAt: message.createdAt, updatedAt: message.createdAt, status: item.consumedAt ? 'received' : 'sent', updates: [], deadline: message.deadline })
+      }
+      if (message.kind === 'task') {
+        const task = file.tasks.find(t => t.id === message.id)!
+        task.delivery = { storedAt: item.storedAt, receivedAt: item.receivedAt ?? undefined, consumedAt: item.consumedAt ?? undefined }
+        if (item.consumedAt && ['queued', 'sent'].includes(task.status)) task.status = 'received'
+      } else if (message.kind === 'note' && !file.notes.some(n => n.id === message.id)) {
+        file.notes.push({ id: message.id, assistantId: assistant.id, assistantName: assistant.name, from: 'you', body: message.body, at: message.createdAt,
+          inReplyTo: message.inReplyTo, delivery: item.consumedAt ? 'consumed' : item.receivedAt ? 'downloaded' : 'stored' })
+      } else if (message.kind === 'cancel') {
+        const task = file.tasks.find(t => t.id === message.inReplyTo && t.assistantId === assistant.id)
+        if (task && !TERMINAL.has(task.status)) { task.cancellationId = message.id; task.status = 'cancel_requested' }
+      }
     })
   }
-
-  /** Most recent first; `names` refreshes display names of assistants that were renamed. */
+  async finalizeCancellations(): Promise<void> {
+    const current = await this.load()
+    if (!current.tasks.some(t => t.status === 'cancel_requested' && t.cancellationId && current.deliveries?.[t.cancellationId]?.consumedAt)) return
+    await this.mutate(file => {
+      for (const task of file.tasks) {
+        const receipt = task.cancellationId ? file.deliveries?.[task.cancellationId] : undefined
+        if (task.status === 'cancel_requested' && receipt?.consumedAt) { task.status = 'cancelled'; task.updatedAt = receipt.consumedAt }
+      }
+    })
+  }
+  async getCursor(assistantId: string): Promise<number> { return (await this.load()).cursors?.[assistantId] ?? 0 }
+  setCursor(assistantId: string, sequence: number): Promise<void> {
+    if (!Number.isSafeInteger(sequence) || sequence < 0) return Promise.reject(new Error('INVALID_HISTORY_CURSOR'))
+    return this.mutate(file => { (file.cursors ??= {})[assistantId] = sequence })
+  }
   async view(names: ReadonlyMap<string, string>, limit = 50): Promise<{ tasks: AssistantTaskView[]; notes: AssistantNoteView[] }> {
-    const file = await this.load()
-    const name = (id: string, fallback: string) => names.get(id) ?? fallback
+    const file = await this.load(), name = (id: string, fallback: string) => names.get(id) ?? fallback
     return {
-      tasks: file.tasks.slice(-limit).reverse().map(({ updates, ...task }) => ({
-        ...task, assistantName: name(task.assistantId, task.assistantName),
-        updates: updates.map(({ status, body, at }) => ({ status, body, at }))
-      })),
-      notes: file.notes.slice(-limit).reverse().map((note) => ({ ...note, from: note.from ?? 'assistant', assistantName: name(note.assistantId, note.assistantName) }))
+      tasks: [...file.tasks].sort((a,b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id)).slice(0,limit).map(({ updates, ...task }) => ({
+        ...task, assistantName: name(task.assistantId,task.assistantName), updates: updates.map(({status,body,at})=>({status,body,at})) })),
+      notes: file.notes.slice(-limit).reverse().map(note=>({...note,from:note.from??'assistant',assistantName:name(note.assistantId,note.assistantName)}))
     }
+  }
+  async history(assistantId: string, before?: string, limit = 50): Promise<AssistantHistoryPage> {
+    const file = await this.load()
+    const entries = [...file.tasks.filter(t=>t.assistantId===assistantId).map(task=>({key:task.createdAt+'|'+task.id,task})),
+      ...file.notes.filter(n=>n.assistantId===assistantId).map(note=>({key:note.at+'|'+note.id,note}))]
+      .filter(entry=>!before||entry.key<before).sort((a,b)=>b.key.localeCompare(a.key))
+    const selected=entries.slice(0,limit)
+    return { tasks:selected.flatMap(entry=>'task' in entry?[structuredClone(entry.task)]:[]),notes:selected.flatMap(entry=>'note' in entry?[structuredClone(entry.note)]:[]),
+      hasMore:entries.length>limit,nextCursor:entries.length>limit?selected.at(-1)?.key:undefined }
   }
 }

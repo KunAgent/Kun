@@ -120,5 +120,18 @@
   "assistantVipRequired": "Personal assistants require Pro or Max. Refresh after activating or renewing membership to resume the existing connection.",
   "assistantVipFeature": "Included with Pro / Max membership",
   "assistantVipUnavailable": "Membership could not be verified. Personal assistants are paused. Refresh membership and try again.",
-  "assistantVipPaused": "Paused"
+  "assistantVipPaused": "Paused",
+  "assistantMailboxStatusCancelRequested": "Cancellation requested · awaiting confirmation",
+  "assistantDeliveryDownloaded": "Saved on the assistant; awaiting consumption confirmation",
+  "assistantDeliveryConsumed": "The assistant adapter confirmed receipt. Execution results determine completion.",
+  "assistantCancellationNeedsAttention": "Cancellation could not be delivered. Check the connection or ask the assistant to stop directly.",
+  "assistantNoteDelivery_queued": "Queued · retries when connected",
+  "assistantNoteDelivery_stored": "Saved by server",
+  "assistantNoteDelivery_downloaded": "Saved on assistant",
+  "assistantNoteDelivery_consumed": "Receipt confirmed by assistant",
+  "assistantNoteDelivery_failed": "Delivery failed · attention required",
+  "assistantHistoryExpired": "Some server history is outside its retention window. Local history is preserved.",
+  "assistantRecoverHistoryConfirm": "Resume from retained server history and keep all local tasks. Expired history without a local copy cannot be recovered.",
+  "assistantRecoverHistory": "Recover retained history",
+  "assistantLoadHistory": "Load earlier tasks and messages"
 }

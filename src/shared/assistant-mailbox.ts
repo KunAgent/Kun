@@ -10,7 +10,7 @@ export type AssistantKind = string
 export type AssistantPromptLocale = 'zh' | 'en'
 
 /** `queued` until accepted by the server, then `sent` until acknowledged; `cancelled` stays. */
-export type AssistantTaskStatus = 'queued' | 'sent' | 'received' | 'working' | 'done' | 'blocked' | 'failed' | 'cancelled'
+export type AssistantTaskStatus = 'queued' | 'sent' | 'received' | 'working' | 'done' | 'blocked' | 'failed' | 'cancelled' | 'cancel_requested'
 
 /** `unavailable` means the server has not enabled the mailbox (it answers 404). */
 export type AssistantMailboxAvailability = 'unknown' | 'available' | 'unavailable' | 'login_required' | 'disabled' | 'upgrade_required' | 'entitlements_unavailable'
@@ -58,7 +58,7 @@ export type AssistantEnrollmentView = {
 }
 
 export type AssistantTaskUpdate = {
-  status: Exclude<AssistantTaskStatus, 'queued' | 'sent' | 'cancelled'>
+  status: Exclude<AssistantTaskStatus, 'queued' | 'sent' | 'cancelled' | 'cancel_requested'>
   body: string
   at: string
 }
@@ -73,12 +73,17 @@ export type AssistantTaskView = {
   createdAt: string
   updatedAt: string
   status: AssistantTaskStatus
+  delivery?: { storedAt?: string; receivedAt?: string; consumedAt?: string }
+  cancellationId?: string
+  cancellationError?: string
   updates: AssistantTaskUpdate[]
 }
 
 export type AssistantNoteView = {
   id: string
   /** `you`: a reply the user sent from Kun; `assistant`: a message the assistant sent. */
+  delivery?: 'queued' | 'stored' | 'downloaded' | 'consumed' | 'failed'
+  deliveryError?: string
   from: 'assistant' | 'you'
   assistantId: string
   assistantName: string
@@ -111,7 +116,11 @@ export type AssistantEnrollmentRequest = {
 export type AssistantEnrollmentResult = { enrollmentId: string; code: string; expiresAt: string; prompt: string }
 export type AssistantAssignRequest = { assistantId: string; title?: string; body: string; deadline?: string }
 
+export type AssistantHistoryPage = { tasks: AssistantTaskView[]; notes: AssistantNoteView[]; hasMore: boolean; nextCursor?: string }
+
 export type AssistantMailboxApi = {
+  history?(assistantId: string, before?: string): Promise<AssistantHistoryPage>
+  recoverHistory?(assistantId: string): Promise<AssistantMailboxStatus>
   status(): Promise<AssistantMailboxStatus>
   refresh(): Promise<AssistantMailboxStatus>
   updatePrompt(assistantId: string, locale: AssistantPromptLocale): Promise<{ version: string; releaseId: string; prompt: string }>
@@ -132,6 +141,8 @@ export type AssistantMailboxApi = {
 export const ASSISTANT_MAILBOX_CHANNELS = {
   status: 'assistant-mailbox:status',
   refresh: 'assistant-mailbox:refresh',
+  history: 'assistant-mailbox:history',
+  recoverHistory: 'assistant-mailbox:recover-history',
   updatePrompt: 'assistant-mailbox:update-prompt',
   enroll: 'assistant-mailbox:enroll',
   approve: 'assistant-mailbox:approve',

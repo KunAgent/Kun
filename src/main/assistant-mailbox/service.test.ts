@@ -17,7 +17,7 @@ afterEach(async () => {
 })
 
 async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetchIcon?: (website: string) => Promise<string | null> } = {}) {
-  const server = fakeMailbox({ origin: ORIGIN })
+  const server = fakeMailbox({ origin: ORIGIN, reliable: true })
   const host = await server.credentials()
   const dir = await mkdtemp(join(tmpdir(), 'kun-assistant-service-'))
   cleanup.push(dir)
@@ -28,7 +28,7 @@ async function setup(options: { enabled?: boolean; serverEnabled?: boolean; fetc
   const sends: Array<{ messageId: string; envelope: string }> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(String(input))
-    if (!membershipActive && url.pathname.startsWith('/api/assistants/') && (url.pathname.endsWith('/messages') || url.pathname.endsWith('/host/inbox'))) {
+    if (!membershipActive && url.pathname.startsWith('/api/assistants/') && (url.pathname.endsWith('/messages') || url.pathname.endsWith('/host/inbox') || url.pathname.endsWith('/history'))) {
       return Response.json({ error: 'vip_personal_assistant_required' }, { status: 403 })
     }
     if (options.serverEnabled === false && url.pathname.startsWith('/api/assistants/')) return Response.json({ error: 'not_found' }, { status: 404 })
@@ -161,7 +161,7 @@ describe('assistant mailbox service', () => {
     expect(status.notes.map((note) => note.body)).toEqual(['Anything else today?'])
 
     const second = await t.service.assign({ assistantId: status.assistants[0].id, body: 'Draft a reply' })
-    expect((await t.service.cancel(second.id)).status).toBe('cancelled')
+    expect((await t.service.cancel(second.id)).status).toBe('cancel_requested')
     expect((await t.run(['inbox'])).stdout).toContain('Kun cancelled the task above')
 
     status = await t.service.revoke(status.assistants[0].id)
@@ -347,7 +347,7 @@ describe('durable task delivery', () => {
     t.setDelivery('offline')
     const task = await t.service.assign({ assistantId, body: 'Cancel while pending' })
     t.setDelivery('normal')
-    expect((await t.service.cancel(task.id)).status).toBe('cancelled')
+    expect((await t.service.cancel(task.id)).status).toBe('cancel_requested')
     const inbox = await t.run(['inbox'])
     expect(inbox.stdout).not.toContain('Cancel while pending')
     expect(inbox.stdout).toContain('Kun cancelled')
@@ -356,13 +356,68 @@ describe('durable task delivery', () => {
 })
 
 describe('assistant program migration', () => {
-  it('requires a configured release trust root before producing executable update instructions', async () => {
+  it('pins explicit migration to the desktop build and rejects a changed network installer', async () => {
     const t = await setup()
     const enrollment = await t.service.createEnrollment({ name: 'Existing', kind: 'cue', locale: 'en' })
     await t.connect(enrollment.code)
     const status = await t.service.refresh()
     expect(status.assistants[0].reportedVersion).toBe(AGENT_VERSION)
-    await expect(t.service.updatePrompt(status.assistants[0].id, 'en')).rejects.toThrow('updates_not_configured')
+    const update = await t.service.updatePrompt(status.assistants[0].id, 'en')
+    expect(update.version).toBe(AGENT_VERSION)
+    expect(update.prompt).toContain('verification failed')
+    expect(update.prompt).toContain('Do not run forget or login')
+    const fetch = t.server.fetch
+    t.server.fetch = async (url, init) => String(url).endsWith('/assistant/install.sh') ? new Response('changed') : fetch(url, init)
+    await expect(t.service.updatePrompt(status.assistants[0].id, 'en')).rejects.toThrow('installer_changed_update_desktop')
     expect((await t.service.snapshot()).assistants[0].id).toBe(status.assistants[0].id)
   })
+})
+
+
+describe('reliable conversation delivery', () => {
+  it('persists follow-ups and cancellation across outages and waits for consumer cancellation acknowledgement', async () => {
+    const t = await setup()
+    const enrollment = await t.service.createEnrollment({ name: 'Reliable', kind: 'other', locale: 'en' })
+    await t.connect(enrollment.code)
+    const assistantId = (await t.service.refresh()).assistants[0].id
+    const task = await t.service.assign({ assistantId, body: 'Keep my work' })
+    t.setDelivery('offline')
+    await t.service.reply(task.id, 'Additional detail')
+    const first = await t.persisted()
+    expect(first.pending).toHaveLength(1)
+    expect(first.pending[0].message.kind).toBe('note')
+    expect(first.notes[0].delivery).toBe('queued')
+    await t.service.cancel(task.id)
+    const queued = await t.persisted()
+    expect(queued.pending.map((p: any) => p.message.kind)).toEqual(['note', 'cancel'])
+    expect(queued.tasks[0].status).toBe('cancel_requested')
+    t.restart(); t.setDelivery('normal')
+    await t.service.refresh()
+    expect((await t.persisted()).pending).toEqual([])
+    const batch = JSON.parse((await t.run(['inbox', '--json'])).stdout)
+    expect(batch.items.some((r: any) => r.message.kind === 'cancel')).toBe(true)
+    expect((await t.service.refresh()).tasks[0].status).toBe('cancel_requested')
+    await t.run(['ack', batch.leaseId])
+    expect((await t.service.refresh()).tasks[0].status).toBe('cancelled')
+  }, 20000)
+})
+
+
+it('wait cursors time out without mutation and wake when cancellation state changes', async () => {
+  const t = await setup()
+  const enrollment = await t.service.createEnrollment({ name: 'Waiting', kind: 'other', locale: 'en' })
+  await t.connect(enrollment.code)
+  const assistantId = (await t.service.refresh()).assistants[0].id
+  const task = await t.service.assign({ assistantId, body: 'Observe task progress' })
+  await t.service.refresh()
+  const baseline = await t.service.waitForTask(task.id, undefined, 0)
+  expect(baseline.updateToken).toMatch(/^[a-f0-9]{64}$/)
+  const timedOut = await t.service.waitForTask(task.id, baseline.updateToken, 5)
+  expect(timedOut.timedOut).toBe(true)
+  const waiting = t.service.waitForTask(task.id, baseline.updateToken, 5000)
+  await t.service.cancel(task.id)
+  const changed = await waiting
+  expect(changed.timedOut).toBe(false)
+  expect(changed.task.status).toBe('cancel_requested')
+  t.service.dispose(); await t.service.refresh()
 })

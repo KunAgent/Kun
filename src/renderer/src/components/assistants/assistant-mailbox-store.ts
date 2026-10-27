@@ -66,6 +66,7 @@ const withStatus = (work: () => Promise<AssistantMailboxStatus> | undefined) => 
 export const assistantMailbox = {
   clearError: () => useAssistantMailboxStore.setState({ error: '' }),
   refresh: () => withStatus(() => api()?.refresh()),
+  recoverHistory: (id: string) => withStatus(() => api()?.recoverHistory?.(id)),
   updatePrompt: (id: string, locale: AssistantPromptLocale) => run(async () => api()!.updatePrompt(id, locale)),
   createEnrollment: (request: AssistantEnrollmentRequest): Promise<AssistantEnrollmentResult | undefined> =>
     run(async () => api()!.createEnrollment(request)),

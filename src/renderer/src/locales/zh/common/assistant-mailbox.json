@@ -120,5 +120,18 @@
   "assistantVipRequired": "个人助手需要 Pro 或 Max 会员。开通或续期后刷新即可恢复原连接。",
   "assistantVipFeature": "Pro / Max 会员功能",
   "assistantVipUnavailable": "暂时无法确认会员权益，个人助手已暂停。请刷新会员状态后再试。",
-  "assistantVipPaused": "已暂停"
+  "assistantVipPaused": "已暂停",
+  "assistantMailboxStatusCancelRequested": "正在取消，等待助手确认",
+  "assistantDeliveryDownloaded": "消息已保存到助手端，等待消费确认",
+  "assistantDeliveryConsumed": "助手接入层已确认收到；任务完成以执行结果为准",
+  "assistantCancellationNeedsAttention": "取消请求未能送达，请检查连接或直接联系助手停止任务。",
+  "assistantNoteDelivery_queued": "等待发送，恢复连接后自动重试",
+  "assistantNoteDelivery_stored": "服务端已保存",
+  "assistantNoteDelivery_downloaded": "助手端已保存",
+  "assistantNoteDelivery_consumed": "助手已确认收到",
+  "assistantNoteDelivery_failed": "发送失败，需要处理",
+  "assistantHistoryExpired": "部分服务端历史已超出保留范围，本机历史仍保留。",
+  "assistantRecoverHistoryConfirm": "将从服务端仍保留的位置继续同步，本机任务不会删除。已过期且无本地副本的历史无法恢复。",
+  "assistantRecoverHistory": "恢复保留的历史",
+  "assistantLoadHistory": "加载更早的任务与消息"
 }

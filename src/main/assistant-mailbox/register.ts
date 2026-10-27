@@ -90,6 +90,15 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return service.cancelEnrollment(ids(enrollmentId)[0])
   })
+  ipcMain.handle(channels.history, (event, id: unknown, before: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    if (before !== undefined && typeof before !== 'string') throw new Error('INVALID_CURSOR')
+    return service.history(ids(id)[0], before)
+  })
+  ipcMain.handle(channels.recoverHistory, (event, id: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.recoverHistory(ids(id)[0])
+  })
   ipcMain.handle(channels.reply, (event, taskId: unknown, body: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     if (typeof body !== 'string') throw new Error('INVALID_REQUEST')
