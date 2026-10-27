@@ -1,14 +1,12 @@
 import { useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Compass, FolderPlus, Import, LibraryBig, Newspaper, Rss, Search, Trophy } from 'lucide-react'
+import { FolderPlus, Import, LibraryBig } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { normalizePath } from '../../write/write-workspace-store-helpers'
-import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { focusedPaperViewId } from '../../paper/paper-view'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { openPaperImport, openPaperView } from '../../write/work-session-actions'
-import { SidebarMenuRow } from '../chat/SidebarCodeNav'
 import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import { PaperTree } from '../paper/sidebar/PaperTree'
 import { WorkSidebarSection } from './WorkSidebarSection'
@@ -17,8 +15,10 @@ import '../chat/sidebar-code-nav.css'
 const iconProps = { className: 'h-4 w-4', strokeWidth: 1.75 }
 
 /**
- * 论文: the current space's papers (`<space>/papers`). The library and the
- * discover pages open as tabs next to documents; paper rows open the reader.
+ * 论文: the current space's papers (`<space>/papers`). The library opens as a
+ * tab next to documents; paper rows open the reader. Finding new papers
+ * happens in a session (the composer's 找论文), and the arXiv / venue /
+ * subscription feeds live in the library header.
  */
 export function WorkPapersSection(): ReactElement {
   const { t } = useTranslation('common')
@@ -32,12 +32,6 @@ export function WorkPapersSection(): ReactElement {
     loading: s.entriesLoading
   })))
   const root = normalizePath(workspaceRoot)
-  const discover: Array<{ id: WritePaperViewId; label: string; Icon: typeof Search }> = [
-    { id: 'discover:search', label: t('writePaperDiscoverTab_search'), Icon: Search },
-    { id: 'discover:arxiv', label: t('writePaperDiscoverNav_arxiv'), Icon: Newspaper },
-    { id: 'discover:venue', label: t('writePaperDiscoverNav_venue'), Icon: Trophy },
-    { id: 'discover:feeds', label: t('writePaperDiscoverNav_feeds'), Icon: Rss }
-  ]
   const libraryActive = activeView === 'library'
 
   const actions = (
@@ -65,17 +59,6 @@ export function WorkPapersSection(): ReactElement {
             <span className="sidebar-menu-row-trailing work-papers-unread">{t('workPapersUnread', { count: counts.unread })}</span>
           ) : null}
         </button>
-        <SidebarMenuRow
-          icon={<Compass {...iconProps} />}
-          label={t('workSidebarDiscover')}
-          items={discover.map(({ id, label, Icon }) => ({
-            id,
-            label,
-            icon: <Icon {...iconProps} />,
-            active: activeView === id,
-            onSelect: () => void openPaperView(id)
-          }))}
-        />
       </nav>
       {root ? (
         entries.length === 0 && groups.length === 0 && !creatingFolder ? (

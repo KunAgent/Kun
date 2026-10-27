@@ -13,8 +13,9 @@ export type WriteRailItem = {
 }
 
 /**
- * Work rail order (design: assistant, outline, review, references,
- * subagents, then shared MCP/usage tools under a divider). The sessions of
+ * Work rail order (design: assistant, outline, review, references, the
+ * session's papers, subagents, then shared MCP/usage tools under a divider).
+ * 论文 appears once a search in the session has surfaced papers. The sessions of
  * an open item are listed by the assistant's context chip, not a panel. Pending review
  * chunks get an accent badge; reference counts stay neutral.
  */
@@ -22,11 +23,14 @@ export function resolveWriteRailItems({
   reviewCount,
   referenceCount,
   assistantRunning,
+  paperCount = 0,
   documentTools = true
 }: {
   reviewCount: number
   referenceCount: number
   assistantRunning: boolean
+  /** Papers the current session's searches surfaced. */
+  paperCount?: number
   /** False while the assistant fills the center with nothing open. */
   documentTools?: boolean
 }): WriteRailItem[] {
@@ -43,6 +47,9 @@ export function resolveWriteRailItems({
       group: 'primary',
       ...(referenceCount > 0 ? { badge: { count: referenceCount, tone: 'neutral' as const } } : {})
     },
+    ...(paperCount > 0
+      ? [{ id: 'papers' as const, group: 'primary' as const, badge: { count: paperCount, tone: 'neutral' as const } }]
+      : []),
     { id: 'subagents', group: 'primary' },
     { id: 'mcpSkills', group: 'secondary' },
     { id: 'usage', group: 'secondary' }

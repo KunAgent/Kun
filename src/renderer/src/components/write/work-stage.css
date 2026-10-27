@@ -14,7 +14,6 @@
   background: var(--ds-bg-main);
 }
 .work-stage-conversation.is-swapped > [data-workbench-right-panel] { order: 1; }
-.work-stage-conversation.is-swapped > .write-side-rail { order: 3; }
 .write-assistant-panel.is-stage {
   border-left: 0;
   background: var(--ds-bg-main);
@@ -224,3 +223,64 @@
 .work-home-pill { border-color: var(--kun-hair-2); }
 .work-home-card { border-radius: var(--kun-radius-lg); }
 .work-context-chip { border-radius: var(--kun-radius-pill); border-color: var(--kun-hair-2); }
+
+/* 论文 beside the centered conversation (rail tool in the stage). */
+.work-session-papers-beside {
+  display: flex;
+  width: min(360px, 38%);
+  min-width: 280px;
+  flex: none;
+  flex-direction: column;
+  border-left: 1px solid var(--ds-border-muted);
+  background: var(--ds-bg-main);
+}
+
+/* 找论文 above the Work composer. */
+.work-paper-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.write-assistant-panel.is-stage .work-paper-search-row {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+.work-paper-search-chip {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--ds-text-muted);
+  font-size: 12.5px;
+  transition: background-color 120ms, color 120ms;
+}
+button.work-paper-search-chip:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.work-paper-search-chip.is-on {
+  padding-right: 4px;
+  background: color-mix(in srgb, var(--ds-accent) 11%, transparent);
+  color: var(--ds-accent);
+  font-weight: 600;
+}
+.work-paper-search-chip.is-selected {
+  background: var(--ds-surface-card);
+  box-shadow: 0 0 0 1px var(--ds-border);
+  color: var(--ds-text);
+  font-weight: 600;
+}
+.work-paper-search-remove {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+}
+.work-paper-search-remove:hover { background: color-mix(in srgb, var(--ds-accent) 16%, transparent); }

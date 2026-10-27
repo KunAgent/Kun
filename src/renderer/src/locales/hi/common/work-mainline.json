@@ -75,5 +75,14 @@
   "paperDetailNotesYes": "हाँ",
   "paperDetailNotesNo": "कोई नहीं",
   "paperDetailFolder": "फ़ोल्डर",
-  "writeDiffKunChanges": "Kun के बदलाव · {{count}}"
+  "writeDiffKunChanges": "Kun के बदलाव · {{count}}",
+  "workPaperSearchChip": "पेपर खोजें",
+  "workPaperSearchOff": "पेपर खोज बंद करें",
+  "workPaperSearchHint": "इस सत्र में पेपर खोजें; परिणाम बातचीत में दिखेंगे",
+  "workPaperSearchDeep": "गहन शोध",
+  "workPaperSearchDeepHint": "प्रश्न बाँटें, समानांतर खोजें और उद्धरणों का पीछा करें",
+  "paperLibraryFeeds": "सदस्यता और रैंकिंग",
+  "workRailPapers": "पेपर",
+  "workRailPapersCount": "पेपर · {{count}}",
+  "workSessionPapersEmpty": "इस सत्र में मिले पेपर यहाँ दिखेंगे।"
 }

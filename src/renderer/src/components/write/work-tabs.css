@@ -114,6 +114,7 @@
 }
 .work-tab-add:hover,
 .work-tab-split:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.work-tab-rail-reopen { display: contents; }
 .work-tab-split[aria-pressed='true'] {
   background: var(--ds-surface-card);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px var(--kun-hair-2);

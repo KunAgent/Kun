@@ -62,6 +62,7 @@ import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { useChildThreadViewer } from './useChildThreadViewer'
 import { useWorkComposerReferenceProps } from './use-work-composer-references'
 import { WorkSessionFileChips } from './WorkSessionFileChips'
+import { WorkPaperSearchChip } from './WorkPaperSearchChip'
 
 type Props = {
   input: string
@@ -559,6 +560,7 @@ export function WriteAssistantPanel({
           </div>
         ) : null}
         {home ? <WorkHomeSpaceChip /> : null}
+        {viewingChildThread ? null : <WorkPaperSearchChip />}
         {viewingChildThread ? (
           <SubagentReturnBar
             parentTitle={t('writeAssistant')}

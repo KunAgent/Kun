@@ -36,6 +36,7 @@ import { PaperLibraryTable, statusLabelKey } from './library/PaperLibraryTable'
 import { PaperLibraryDetailPanel, useLibraryHasRoom } from './library/PaperLibraryDetailPanel'
 import { PaperLibraryToolbar } from './library/PaperLibraryToolbar'
 import { PaperLibraryEmptyState } from './library/PaperLibraryEmptyState'
+import { PaperLibraryFeedsMenu } from './library/PaperLibraryFeedsMenu'
 import paperSurface from './PaperWorkspaceSurface.module.css'
 import { PaperMatrixWorkspace } from './evidence/PaperMatrixWorkspace'
 import { buildPaperMultiPrompt, paperMultiOutputPath, type PaperMultiTask } from '../../paper/paper-multi-prompt'
@@ -339,6 +340,7 @@ export function PaperLibraryView({
             {t('paperLibrarySummary', { space: spaceName, total: counts.total, unread: counts.unread, reading: counts.reading })}
           </p>
         </div>
+        <PaperLibraryFeedsMenu />
         <div role="tablist" aria-label={t('paperLibraryViewLabel')} className="inline-flex rounded-full bg-ds-hover p-[3px]">
           <button type="button" role="tab" aria-selected={!matrixOpen} onClick={() => setMatrixOpen(false)}
             className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px] transition ${matrixOpen ? 'text-ds-muted hover:text-ds-ink' : 'bg-ds-card font-semibold text-ds-ink shadow-sm'}`}>

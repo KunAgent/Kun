@@ -12,6 +12,7 @@ import { writeWorkspaceKey } from '../../write/write-thread-registry'
 import { openWorkSession, startWorkSession } from '../../write/work-session-actions'
 import { useOpenSessionTabs, useWorkViewStore } from '../../write/work-view-store'
 import { WorkStageChromeContext } from '../../write/work-conversation-stage'
+import { RailReopenButton } from '../workbench/rail-collapse'
 import {
   isWriteFileTab,
   isWritePaperViewTab,
@@ -187,6 +188,8 @@ export function WorkTabStrip(): ReactElement | null {
           <Columns2 className="h-4 w-4" strokeWidth={1.8} />
         </button>
       ) : null}
+      {/* The folded tool rail comes back from here, as in Code's top bar. */}
+      <span className="work-tab-rail-reopen"><RailReopenButton /></span>
     </div>
   )
 }

@@ -75,5 +75,14 @@
   "paperDetailNotesYes": "Yes",
   "paperDetailNotesNo": "None",
   "paperDetailFolder": "Folder",
-  "writeDiffKunChanges": "Changes from Kun · {{count}}"
+  "writeDiffKunChanges": "Changes from Kun · {{count}}",
+  "workPaperSearchChip": "Find papers",
+  "workPaperSearchOff": "Stop finding papers",
+  "workPaperSearchHint": "Search papers in this session; results land in the conversation",
+  "workPaperSearchDeep": "Deep research",
+  "workPaperSearchDeepHint": "Split the question, sweep sources in parallel and follow citations",
+  "paperLibraryFeeds": "Feeds",
+  "workRailPapers": "Papers",
+  "workRailPapersCount": "Papers · {{count}}",
+  "workSessionPapersEmpty": "Papers found in this session show up here."
 }

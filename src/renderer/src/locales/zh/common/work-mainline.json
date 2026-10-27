@@ -75,5 +75,14 @@
   "paperDetailNotesYes": "有",
   "paperDetailNotesNo": "无",
   "paperDetailFolder": "分组",
-  "writeDiffKunChanges": "Kun 的修改 · {{count}} 处"
+  "writeDiffKunChanges": "Kun 的修改 · {{count}} 处",
+  "workPaperSearchChip": "找论文",
+  "workPaperSearchOff": "关闭找论文",
+  "workPaperSearchHint": "在这个会话里搜论文，结果直接出现在对话里",
+  "workPaperSearchDeep": "深度调研",
+  "workPaperSearchDeepHint": "拆分问题、并行检索并追引用",
+  "paperLibraryFeeds": "订阅与榜单",
+  "workRailPapers": "论文",
+  "workRailPapersCount": "论文 · {{count}} 篇",
+  "workSessionPapersEmpty": "这个会话里找到的论文会出现在这里。"
 }
