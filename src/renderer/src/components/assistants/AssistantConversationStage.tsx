@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { BellRing, MoreHorizontal, PanelLeft, RefreshCw, Trash2, X } from 'lucide-react'
+import { BellRing, ListTodo, MoreHorizontal, PanelLeft, RefreshCw, Trash2, X } from 'lucide-react'
 import { wakeMessage } from '@kun/assistant-agent/prompts'
 import type { AssistantTaskView, AssistantView } from '@shared/assistant-mailbox'
 import kunCheer from '../../../../asset/img/kun_cheer.png'
 import { RoomPopover } from '../rooms/RoomPopover'
+import { AssistantTaskCenter } from './AssistantTaskCenter'
+import { AssistantConnectionDetails } from './AssistantConnectionDetails'
 import { AssistantComposer, AssistantComposerPlaceholder } from './AssistantComposer'
 import { AssistantEnrollmentFlow } from './AssistantEnrollmentFlow'
 import { AssistantLogo } from './AssistantLogo'
@@ -48,6 +50,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
   const { status, busy, error } = useAssistantMailboxStore()
   const allowed = status?.availability === 'available'
   const membershipMessage = t(status?.availability === 'upgrade_required' ? 'assistantVipRequired' : 'assistantVipUnavailable')
+  const [taskCenter, setTaskCenter] = useState(false)
   const [draft, setDraft] = useState('')
   const [replyTo, setReplyTo] = useState<AssistantTaskView | null>(null)
   const [focusSignal, setFocusSignal] = useState(0)
@@ -120,6 +123,7 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
         : !subject ? (selection.kind === 'enrollment' ? t('assistantMailboxCodeExpired') : t('assistantRemoved')) : ''
 
   return <section className="ds-no-drag flex h-full min-h-0 min-w-0 flex-1 flex-col bg-ds-main" data-assistant-stage={selection.kind}>
+    {taskCenter && assistant && status ? <AssistantTaskCenter assistants={status.assistants} initialAssistantId={assistant.id} onClose={() => setTaskCenter(false)} /> : null}
     <header className="flex min-h-[56px] shrink-0 items-center gap-2.5 border-b border-ds-border px-4 py-2">
       <button type="button" className="rooms-icon-button" aria-label={t('sidebarToggle')} onClick={onToggleLeftSidebar}><PanelLeft size={16} strokeWidth={1.75} /></button>
       {subject ? <>
@@ -130,12 +134,14 @@ export function AssistantConversationStage({ selection, onToggleLeftSidebar }: {
             <span className={`min-w-0 truncate rounded-full px-2 py-px text-[11px] font-medium ${assistant ? 'bg-ds-subtle text-ds-muted' : 'bg-accent-tint/10 text-accent'}`}>{tag}</span>
           </div>
           <p className="flex min-w-0 items-center gap-1.5 truncate text-[12px] text-ds-muted">
-            {assistant ? <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${recentlySeen(assistant.lastSeenAt) ? 'bg-emerald-500' : 'bg-ds-faint'}`} /> : null}
+            {assistant ? <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${(assistant.presence ? assistant.presence.syncState === 'online' : recentlySeen(assistant.lastSeenAt)) ? 'bg-emerald-500' : 'bg-ds-faint'}`} /> : null}
             <span className="truncate">{subtitle.filter(Boolean).join(' · ')}</span>
           </p>
         </div>
       </> : <div className="flex-1" />}
       {assistant ? <>
+        <button type="button" className="rooms-icon-button" aria-label={t('assistantTaskCenter')} title={t('assistantTaskCenter')} onClick={() => setTaskCenter(true)}><ListTodo size={16} /></button>
+        <AssistantConnectionDetails assistant={assistant} />
         <button type="button" className="rooms-icon-button" aria-label={t('assistantMailboxRefresh')} title={t('assistantMailboxRefresh')} disabled={busy}
           onClick={() => void assistantMailbox.refresh()}><RefreshCw size={16} strokeWidth={1.75} className={busy ? 'animate-spin' : ''} /></button>
         <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={18} />} align="end" width={232} className="rooms-icon-button">

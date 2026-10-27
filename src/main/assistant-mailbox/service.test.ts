@@ -146,7 +146,7 @@ describe('assistant mailbox service', () => {
     let status = await t.service.refresh()
     expect(status.assistants).toMatchObject([{ name: 'My Cue', kind: 'cue', keyAvailable: true }])
     expect(status.enrollments).toEqual([])
-    expect(t.timers.at(-1)?.ms).toBe(60_000)
+    expect(t.timers.at(-1)?.ms).toBe(30_000)
 
     const task = await t.service.assign({ assistantId: status.assistants[0].id, title: 'Find a dentist', body: 'Open on Saturday' })
     expect(task.status).toBe('sent')
@@ -182,6 +182,10 @@ describe('assistant mailbox service', () => {
     }
     expect(assigned.task.title).toBe('Plan weekend')
     expect(assigned.wakeMessage).toContain('/workspace/.kun/bin/kun-agent inbox')
+    const source = { threadId: 'thread-1', turnId: 'turn-1', callId: 'call-1' }
+    const sourced = await tools('/tasks/assign', { assistant: 'grok', instructions: 'A second task', __kunSource: source, autoContinue: true }) as { task: { taskId: string } }
+    expect((await t.service.taskDetails(sourced.task.taskId)).task).toMatchObject({ source, continuation: { enabled: false, state: 'disabled' } })
+    await expect(t.service.setContinuation(sourced.task.taskId, true)).rejects.toThrow('CONTINUATION_SOURCE_UNAVAILABLE')
     await t.run(['inbox'])
     await t.run(['reply', assigned.task.taskId.slice(0, 8), '--status', 'blocked', 'Which city?'])
     const results = await tools('/tasks/results', { taskId: assigned.task.taskId.slice(0, 8) }) as {
@@ -367,7 +371,7 @@ describe('assistant program migration', () => {
     expect(update.prompt).toContain('verification failed')
     expect(update.prompt).toContain('Do not run forget or login')
     const fetch = t.server.fetch
-    t.server.fetch = async (url, init) => String(url).endsWith('/assistant/install.sh') ? new Response('changed') : fetch(url, init)
+    t.server.fetch = async (url, init) => String(url).endsWith(`/assistant/versions/${AGENT_VERSION}/install.sh`) ? new Response('changed') : fetch(url, init)
     await expect(t.service.updatePrompt(status.assistants[0].id, 'en')).rejects.toThrow('installer_changed_update_desktop')
     expect((await t.service.snapshot()).assistants[0].id).toBe(status.assistants[0].id)
   })

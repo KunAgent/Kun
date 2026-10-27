@@ -15,6 +15,18 @@ export type AssistantTaskStatus = 'queued' | 'sent' | 'received' | 'working' | '
 /** `unavailable` means the server has not enabled the mailbox (it answers 404). */
 export type AssistantMailboxAvailability = 'unknown' | 'available' | 'unavailable' | 'login_required' | 'disabled' | 'upgrade_required' | 'entitlements_unavailable'
 
+export type AssistantPresenceView = {
+  instanceId: string
+  platform: string
+  agentVersion: string
+  capabilities: string[]
+  syncState: 'online' | 'reconnecting' | 'stopped' | 'error' | 'offline'
+  listening: boolean
+  reportedAt: string
+  lastConsumerAt: string | null
+  lastError: string | null
+}
+
 export type AssistantView = {
   id: string
   enrollmentId: string
@@ -31,6 +43,8 @@ export type AssistantView = {
   updateError?: string
   createdAt: string
   lastSeenAt: string | null
+  presence?: AssistantPresenceView
+  presenceUnavailable?: boolean
   pendingToAssistant: number
   pendingToHost: number
   /** False when this desktop no longer holds the enrollment key (another computer enrolled it). */
@@ -63,6 +77,9 @@ export type AssistantTaskUpdate = {
   at: string
 }
 
+export type AssistantTaskSource = { threadId: string; turnId: string; callId: string }
+export type AssistantContinuation = { enabled: boolean; state: 'disabled' | 'enabled' | 'queued' | 'completed' | 'failed' | 'revoked'; reason?: string; goalCreatedAt?: string; sourceFingerprint?: string }
+
 export type AssistantTaskView = {
   id: string
   assistantId: string
@@ -76,6 +93,11 @@ export type AssistantTaskView = {
   delivery?: { storedAt?: string; receivedAt?: string; consumedAt?: string }
   cancellationId?: string
   cancellationError?: string
+  archived?: boolean
+  retryOf?: string
+  terminalResultId?: string
+  source?: AssistantTaskSource
+  continuation?: AssistantContinuation
   updates: AssistantTaskUpdate[]
 }
 
@@ -116,9 +138,19 @@ export type AssistantEnrollmentRequest = {
 export type AssistantEnrollmentResult = { enrollmentId: string; code: string; expiresAt: string; prompt: string }
 export type AssistantAssignRequest = { assistantId: string; title?: string; body: string; deadline?: string }
 
+export type AssistantTaskQuery = { assistantId?: string; status?: AssistantTaskStatus; query?: string; from?: string; to?: string; archived?: boolean; cursor?: string; limit?: number }
+export type AssistantTaskPage = { tasks: AssistantTaskView[]; hasMore: boolean; nextCursor?: string }
+export type AssistantTaskDetails = { task: AssistantTaskView; notes: AssistantNoteView[]; retryable: Array<{ messageId: string; kind: 'task' | 'note' | 'cancel' }> }
+
 export type AssistantHistoryPage = { tasks: AssistantTaskView[]; notes: AssistantNoteView[]; hasMore: boolean; nextCursor?: string }
 
 export type AssistantMailboxApi = {
+  listTasks?(query: AssistantTaskQuery): Promise<AssistantTaskPage>
+  taskDetails?(id: string): Promise<AssistantTaskDetails>
+  archiveTask?(id: string, archived: boolean): Promise<void>
+  retryDelivery?(id: string): Promise<AssistantMailboxStatus>
+  rerunTask?(id: string): Promise<AssistantTaskView>
+  setContinuation?(id: string, enabled: boolean): Promise<AssistantTaskView>
   history?(assistantId: string, before?: string): Promise<AssistantHistoryPage>
   recoverHistory?(assistantId: string): Promise<AssistantMailboxStatus>
   status(): Promise<AssistantMailboxStatus>
@@ -139,6 +171,12 @@ export type AssistantMailboxApi = {
 }
 
 export const ASSISTANT_MAILBOX_CHANNELS = {
+  listTasks: 'assistant-mailbox:list-tasks',
+  taskDetails: 'assistant-mailbox:task-details',
+  archiveTask: 'assistant-mailbox:archive-task',
+  retryDelivery: 'assistant-mailbox:retry-delivery',
+  rerunTask: 'assistant-mailbox:rerun-task',
+  setContinuation: 'assistant-mailbox:set-continuation',
   status: 'assistant-mailbox:status',
   refresh: 'assistant-mailbox:refresh',
   history: 'assistant-mailbox:history',

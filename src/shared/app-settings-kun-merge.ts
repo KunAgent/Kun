@@ -530,7 +530,7 @@ export function mergeKunLabSettings(
     projectBoard: {
       enabled: legacyCurrent?.projectBoard?.enabled ?? defaults.projectBoard.enabled
     },
-    assistantMailbox: { enabled: legacyCurrent?.assistantMailbox?.enabled === true }
+    assistantMailbox: { enabled: legacyCurrent?.assistantMailbox?.enabled === true, autoContinueEnabled: legacyCurrent?.assistantMailbox?.autoContinueEnabled === true }
   }
   if (!patch) return base
   return {
@@ -586,7 +586,7 @@ export function mergeKunLabSettings(
     projectBoard: {
       enabled: patch.projectBoard?.enabled ?? base.projectBoard.enabled
     },
-    assistantMailbox: { enabled: patch.assistantMailbox?.enabled ?? base.assistantMailbox.enabled }
+    assistantMailbox: { enabled: patch.assistantMailbox?.enabled ?? base.assistantMailbox.enabled, autoContinueEnabled: patch.assistantMailbox?.autoContinueEnabled ?? base.assistantMailbox.autoContinueEnabled }
   }
 }
 

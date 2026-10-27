@@ -122,7 +122,7 @@
   "dependencies": {
     "@computer-use/nut-js": "^4.2.0",
     "@google/design.md": "0.3.0",
-    "@kun/assistant-agent": "file:vendor/kun-assistant/kun-assistant-agent-0.6.0.tgz",
+    "@kun/assistant-agent": "file:vendor/kun-assistant/kun-assistant-agent-0.7.0.tgz",
     "@kun/extension-api": "1.5.0",
     "@kun/provider-catalog": "0.1.0",
     "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.22.0.tgz",

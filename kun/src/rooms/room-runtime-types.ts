@@ -21,6 +21,11 @@ export type RoomRequestState = {
   /** Immutable provenance for a host-queued continuation, never supplied by a model. */
   privateContinuation?: {
     sourceTurnId: string
+    sourceCallId?: string
+    sourceFingerprint?: string
+    assistantTaskId?: string
+    assistantOwnerId?: string
+    assistantResultId?: string
     kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
     goalCreatedAt?: string
     inboxId?: string
@@ -117,6 +122,8 @@ export type RoomTaskExecution = {
   contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
+  assistantContinuationAuthority?: (input: import('./room-continuation-dispatch.js').RoomContinuation) => Promise<{ authorized: boolean; unavailable?: boolean; result?: { id: string; body: string } }>
+
   /** Global execution ceiling; per-room limits remain independently enforced. */
   maxConcurrentTasks?: number
   eventBus?: import('../ports/event-bus.js').EventBus

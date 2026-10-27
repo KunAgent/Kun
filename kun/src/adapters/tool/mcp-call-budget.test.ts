@@ -44,6 +44,17 @@ describe('mcpCallTimeoutMs', () => {
     )
   })
 
+  it('attaches source metadata only from the runtime context for the assistant assignment tool', async () => {
+    const callTool = vi.fn(async () => ({ content: [] }))
+    const state = { ...connectedState(serverConfig({}), callTool), serverId: 'kun_assistants' }
+    const context = { threadId: 'thread', turnId: 'turn', activeToolCallId: 'call', abortSignal: new AbortController().signal } as never
+    await callMcpToolWithReconnect(state, { name: 'assign_assistant_task', arguments: { instructions: 'work' } }, context)
+    expect(callTool).toHaveBeenCalledWith({ name: 'assign_assistant_task', arguments: { instructions: 'work' },
+      _meta: { kunSource: { threadId: 'thread', turnId: 'turn', callId: 'call' } } }, expect.anything())
+    await callMcpToolWithReconnect(state, { name: 'assign_assistant_task', arguments: {} }, undefined)
+    expect(callTool).toHaveBeenLastCalledWith({ name: 'assign_assistant_task', arguments: {} }, expect.anything())
+  })
+
   it('keeps the connect budget for calls when no call budget is configured', async () => {
     const callTool = vi.fn(async () => ({ content: [] }))
     const state = connectedState(serverConfig({ timeoutMs: 5_000 }), callTool)

@@ -9,9 +9,10 @@ import { logInfo, logWarn } from '../logger'
 import { loadIdentity } from '../mobile-link/identity'
 import {
   ASSISTANT_MAILBOX_CHANNELS as channels, isAssistantKind,
-  type AssistantAssignRequest, type AssistantEnrollmentRequest
+  type AssistantAssignRequest, type AssistantEnrollmentRequest, type AssistantTaskQuery
 } from '../../shared/assistant-mailbox'
 import { assistantMailboxEnabled } from './mcp-config'
+import { getKunRuntimeSettings } from '../../shared/app-settings-kun-defaults'
 import { electronSecretCipher, type SecretCipher } from './secret-store'
 import { fetchSiteIcon } from './site-icon'
 import { AssistantMailboxService } from './service'
@@ -35,6 +36,30 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
     origin: ORIGIN,
     account,
     requireMembership: (owner) => requireAccountFeature(account, fetchViaNet, 'personalAssistant', owner, ORIGIN),
+    continuationEnabled: async () => getKunRuntimeSettings(await options.store.load()).lab.assistantMailbox?.autoContinueEnabled === true,
+    continuation: {
+      verify: async input => {
+        const result = await options.runtimeRequest('/v1/assistant-continuations/verify', 'POST', JSON.stringify(input))
+        if (!result.ok) throw new Error('CONTINUATION_SOURCE_UNAVAILABLE')
+        const verified = JSON.parse(result.body) as { goalCreatedAt?: unknown; sourceFingerprint?: unknown }
+        if (typeof verified.goalCreatedAt !== 'string' || Number.isNaN(Date.parse(verified.goalCreatedAt)) || typeof verified.sourceFingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(verified.sourceFingerprint)) throw new Error('CONTINUATION_SOURCE_UNAVAILABLE')
+        return { goalCreatedAt: verified.goalCreatedAt, sourceFingerprint: verified.sourceFingerprint }
+      },
+      enqueue: async input => {
+        const response = await options.runtimeRequest('/v1/assistant-continuations/enqueue', 'POST', JSON.stringify(input))
+        if (!response.ok) throw new Error('CONTINUATION_RUNTIME_UNAVAILABLE')
+        const result = JSON.parse(response.body) as { outcome?: unknown }
+        if (result.outcome !== 'queued' && result.outcome !== 'ignored') throw new Error('CONTINUATION_RUNTIME_INVALID')
+        return result.outcome
+      },
+      status: async input => {
+        const response = await options.runtimeRequest('/v1/assistant-continuations/status', 'POST', JSON.stringify(input))
+        if (!response.ok) throw new Error('CONTINUATION_RUNTIME_UNAVAILABLE')
+        const result = JSON.parse(response.body) as { state?: unknown }
+        if (!['queued', 'completed', 'failed', 'revoked'].includes(String(result.state))) throw new Error('CONTINUATION_RUNTIME_INVALID')
+        return result.state as 'queued' | 'completed' | 'failed' | 'revoked'
+      }
+    },
     identity: (owner) => loadIdentity(join(userData, 'mobile-link', owner, 'identity.enc')),
     storageDir: join(userData, 'assistant-mailbox'),
     cipher: () => (cipher ??= electronSecretCipher().catch((error: unknown) => { cipher = null; throw error })),
@@ -89,6 +114,32 @@ export function registerAssistantMailbox(options: RegisterAppIpcHandlersOptions,
   ipcMain.handle(channels.cancelEnrollment, (event, enrollmentId: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return service.cancelEnrollment(ids(enrollmentId)[0])
+  })
+  ipcMain.handle(channels.listTasks, (event, query: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.listTasks(record(query) as AssistantTaskQuery)
+  })
+  ipcMain.handle(channels.taskDetails, (event, id: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.taskDetails(ids(id)[0])
+  })
+  ipcMain.handle(channels.archiveTask, (event, id: unknown, archived: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    if (typeof archived !== 'boolean') throw new Error('INVALID_REQUEST')
+    return service.archiveTask(ids(id)[0], archived)
+  })
+  ipcMain.handle(channels.retryDelivery, (event, id: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.retryDelivery(ids(id)[0])
+  })
+  ipcMain.handle(channels.setContinuation, (event, id: unknown, enabled: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    if (typeof enabled !== 'boolean') throw new Error('INVALID_REQUEST')
+    return service.setContinuation(ids(id)[0], enabled)
+  })
+  ipcMain.handle(channels.rerunTask, (event, id: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    return service.rerunTask(ids(id)[0])
   })
   ipcMain.handle(channels.history, (event, id: unknown, before: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

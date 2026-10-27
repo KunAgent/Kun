@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { PreparedMessage } from '@kun/assistant-agent'
-import type { AssistantHistoryPage, AssistantNoteView, AssistantTaskStatus, AssistantTaskUpdate, AssistantTaskView } from '../../shared/assistant-mailbox'
+import type { AssistantHistoryPage, AssistantNoteView, AssistantTaskStatus, AssistantTaskUpdate, AssistantTaskView, AssistantTaskQuery, AssistantTaskPage, AssistantTaskDetails, AssistantTaskSource } from '../../shared/assistant-mailbox'
 const TERMINAL = new Set<AssistantTaskStatus>(['done', 'failed', 'cancelled'])
 type StoredTask = Omit<AssistantTaskView, 'updates'> & { updates: Array<AssistantTaskUpdate & { messageId: string }> }
 type Delivery = { assistantId: string; taskId?: string; kind: string; restored?: boolean; storedAt?: string; receivedAt?: string; consumedAt?: string; error?: string }
-type TaskFile = { version: 1; tasks: StoredTask[]; notes: AssistantNoteView[]; seen: string[]; pending?: PreparedMessage[]; deliveries?: Record<string, Delivery>; cursors?: Record<string, number> }
+type TaskFile = { version: 1 | 2; failed?: PreparedMessage[]; tasks: StoredTask[]; notes: AssistantNoteView[]; seen: string[]; pending?: PreparedMessage[]; deliveries?: Record<string, Delivery>; cursors?: Record<string, number> }
 export type IncomingAssistantMessage = {
   id: string; kind: 'task' | 'note' | 'reply' | 'cancel'; createdAt: string; body: string; title?: string; inReplyTo?: string; status?: AssistantTaskUpdate['status']
 }
@@ -25,11 +25,11 @@ export class AssistantTaskStore {
     if (this.cache) return this.cache
     try {
       const parsed = JSON.parse(await readFile(this.path, 'utf8')) as TaskFile
-      if (parsed.version !== 1 || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.notes) || !Array.isArray(parsed.seen)) throw new Error('ASSISTANT_STORE_UNSUPPORTED')
-      this.cache = parsed
+      if (![1, 2].includes(parsed.version) || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.notes) || !Array.isArray(parsed.seen)) throw new Error('ASSISTANT_STORE_UNSUPPORTED')
+      this.cache = { ...parsed, version: 2, failed: parsed.failed ?? [] }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-      this.cache = { version: 1, tasks: [], notes: [], seen: [] }
+      this.cache = { version: 2, tasks: [], notes: [], seen: [], failed: [] }
     }
     return this.cache
   }
@@ -53,12 +53,12 @@ export class AssistantTaskStore {
     ;(file.deliveries ??= {})[prepared.message.id] = { assistantId: prepared.assistantId, kind: prepared.message.kind,
       taskId: prepared.message.kind === 'task' ? prepared.message.id : prepared.message.inReplyTo }
   }
-  queueTask(prepared: PreparedMessage, assistantName: string): Promise<AssistantTaskView> {
+  queueTask(prepared: PreparedMessage, assistantName: string, retryOf?: string, source?: AssistantTaskSource): Promise<AssistantTaskView> {
     return this.mutate(file => {
       const { message } = prepared, existing = file.tasks.find(t => t.id === message.id)
       if (existing) return existing
       const task: StoredTask = { id: message.id, assistantId: prepared.assistantId, assistantName, title: message.title ?? '', body: message.body,
-        createdAt: message.createdAt, updatedAt: message.createdAt, status: 'queued', updates: [], ...(message.deadline ? { deadline: message.deadline } : {}) }
+        createdAt: message.createdAt, updatedAt: message.createdAt, status: 'queued', updates: [], ...(message.deadline ? { deadline: message.deadline } : {}), ...(retryOf ? { retryOf } : {}), ...(source ? { source, continuation: { enabled: false, state: 'disabled' as const } } : {}) }
       file.tasks.push(task); this.enqueue(file, prepared); return task
     })
   }
@@ -90,6 +90,8 @@ export class AssistantTaskStore {
     return this.mutate(file => {
       const pending = file.pending?.find(p => p.message.id === id)
       file.pending = (file.pending ?? []).filter(p => p.message.id !== id)
+      if (error && pending && !(file.failed ?? []).some(item => item.message.id === id)) (file.failed ??= []).push(pending)
+      if (!error) file.failed = (file.failed ?? []).filter(item => item.message.id !== id)
       const now = new Date().toISOString()
       const delivery = (file.deliveries ??= {})[id] ?? (pending ? { assistantId: pending.assistantId, taskId: pending.message.kind === 'task' ? id : pending.message.inReplyTo, kind: pending.message.kind } : undefined)
       if (delivery) { file.deliveries[id] = delivery; if (error) delivery.error = error; else delivery.storedAt = now }
@@ -154,6 +156,7 @@ export class AssistantTaskStore {
       file.seen.push(message.id)
       const task = message.kind === 'reply' && message.inReplyTo ? file.tasks.find(t => t.id === message.inReplyTo && t.assistantId === assistant.id) : undefined
       if (task && message.status) {
+        if (message.status === 'done' && !TERMINAL.has(task.status)) task.terminalResultId = message.id
         task.updates.push({ messageId: message.id, status: message.status, body: message.body, at: message.createdAt })
         task.status = advance(task.status, message.status); task.updatedAt = new Date().toISOString(); return
       }
@@ -196,6 +199,77 @@ export class AssistantTaskStore {
         if (task.status === 'cancel_requested' && receipt?.consumedAt) { task.status = 'cancelled'; task.updatedAt = receipt.consumedAt }
       }
     })
+  }
+
+  setContinuation(id: string, enabled: boolean, goalCreatedAt?: string, sourceFingerprint?: string): Promise<AssistantTaskView> {
+    return this.mutate(file => {
+      const task = file.tasks.find(item => item.id === id)
+      if (!task) throw new Error('TASK_NOT_FOUND')
+      if (!task.source) throw new Error('CONTINUATION_SOURCE_UNAVAILABLE')
+      if (enabled && ['completed', 'failed', 'revoked'].includes(task.continuation?.state ?? '')) throw new Error('CONTINUATION_ALREADY_FINISHED')
+      task.continuation = { enabled, state: enabled ? 'enabled' : 'disabled', ...(enabled && goalCreatedAt && sourceFingerprint ? { goalCreatedAt, sourceFingerprint } : {}) }
+      return task
+    })
+  }
+  markContinuation(id: string, state: 'queued' | 'completed' | 'failed' | 'revoked', reason?: string): Promise<void> {
+    return this.mutate(file => {
+      const task = file.tasks.find(item => item.id === id)
+      if (!task?.continuation?.enabled) return
+      task.continuation = { ...task.continuation, enabled: state === 'queued', state, ...(reason ? { reason } : {}) }
+    })
+  }
+  async continuationResult(id: string): Promise<{ id: string; body: string } | undefined> {
+    const task = (await this.load()).tasks.find(item => item.id === id)
+    const update = task?.updates.find(item => item.messageId === task.terminalResultId && item.status === 'done')
+    return update ? { id: update.messageId, body: update.body } : undefined
+  }
+  async queuedContinuations(): Promise<AssistantTaskView[]> {
+    return structuredClone((await this.load()).tasks.filter(task => task.source && task.continuation?.enabled && task.continuation.state === 'queued'))
+  }
+  async pendingContinuations(): Promise<AssistantTaskView[]> {
+    return structuredClone((await this.load()).tasks.filter(task => task.source && task.status === 'done' && task.continuation?.enabled && task.continuation.state === 'enabled'))
+  }
+  retryDelivery(id: string): Promise<void> {
+    return this.mutate(file => {
+      const failed = (file.failed ?? []).find(item => item.message.id === id)
+      if (!failed) throw new Error('RETRY_ENVELOPE_UNAVAILABLE')
+      file.failed = (file.failed ?? []).filter(item => item.message.id !== id)
+      this.enqueue(file, failed)
+      const delivery = file.deliveries?.[id]
+      if (delivery) { delete delivery.error; delete delivery.storedAt }
+      const task = file.tasks.find(item => item.id === id)
+      if (task?.status === 'failed' && !task.updates.some(update => update.messageId !== id && ['done', 'failed'].includes(update.status))) task.status = 'queued'
+      const note = file.notes.find(item => item.id === id)
+      if (note) { note.delivery = 'queued'; delete note.deliveryError }
+      const target = failed.message.kind === 'cancel' ? file.tasks.find(item => item.id === failed.message.inReplyTo) : undefined
+      if (target) delete target.cancellationError
+    })
+  }
+  archiveTask(id: string, archived: boolean): Promise<void> {
+    return this.mutate(file => {
+      const task = file.tasks.find(item => item.id === id)
+      if (!task) throw new Error('TASK_NOT_FOUND')
+      task.archived = archived
+    })
+  }
+  async taskDetails(id: string): Promise<AssistantTaskDetails | undefined> {
+    const file = await this.load(), task = file.tasks.find(item => item.id === id)
+    if (!task) return undefined
+    return structuredClone({ task, notes: file.notes.filter(note => note.assistantId === task.assistantId && note.inReplyTo === task.id),
+      retryable: (file.failed ?? []).filter(item => item.assistantId === task.assistantId && (item.message.id === task.id || item.message.inReplyTo === task.id))
+        .map(item => ({ messageId: item.message.id, kind: item.message.kind as 'task' | 'note' | 'cancel' })) })
+  }
+  async listTasks(query: AssistantTaskQuery): Promise<AssistantTaskPage> {
+    const file = await this.load(), needle = query.query?.trim().toLocaleLowerCase()
+    const rows = file.tasks.filter(task => (!query.assistantId || task.assistantId === query.assistantId)
+      && (!query.status || task.status === query.status) && (query.archived === true ? task.archived === true : task.archived !== true)
+      && (!needle || (task.title + '\n' + task.body).toLocaleLowerCase().includes(needle))
+      && (!query.from || task.createdAt >= query.from) && (!query.to || task.createdAt <= query.to))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id))
+      .filter(task => !query.cursor || `${task.updatedAt}|${task.id}` < query.cursor)
+    const limit = query.limit ?? 50, selected = rows.slice(0, limit)
+    return { tasks: structuredClone(selected), hasMore: rows.length > limit,
+      ...(rows.length > limit && selected.length ? { nextCursor: `${selected.at(-1)!.updatedAt}|${selected.at(-1)!.id}` } : {}) }
   }
   async getCursor(assistantId: string): Promise<number> { return (await this.load()).cursors?.[assistantId] ?? 0 }
   setCursor(assistantId: string, sequence: number): Promise<void> {
