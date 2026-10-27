@@ -9,6 +9,8 @@ import {
   watchTurnCompletionNotification
 } from './chat-store-runtime'
 import { rememberThreadComposerSelection } from './chat-store-helpers'
+import { resolveThreadComposerState } from './chat-store-thread-composer-state'
+import type { ModelReasoningEffort } from '@shared/app-settings'
 import { prepareAdeThreadWorktree } from './chat-store-thread-send-worktree'
 import { snapshotThreadProjection } from './thread-snapshot-cache'
 import { watchPlanBuildReview } from './plan-build-watch'
@@ -69,7 +71,8 @@ export function createPlanBuildActions(
             'user',
             harnessId
               ? { harnessId, credentialMode: input.credentialMode?.trim() ?? '' }
-              : undefined
+              : undefined,
+            (input.reasoningEffort?.trim() || undefined) as ModelReasoningEffort | undefined
           )
         }
         const clientRequestId = createClientTurnRequestId()
@@ -87,7 +90,8 @@ export function createPlanBuildActions(
             : {}),
           ...(input.model?.trim() ? { model: input.model.trim() } : {}),
           ...(input.providerId?.trim() ? { providerId: input.providerId.trim() } : {}),
-          ...(input.accountId?.trim() ? { accountId: input.accountId.trim() } : {})
+          ...(input.accountId?.trim() ? { accountId: input.accountId.trim() } : {}),
+          ...(input.reasoningEffort?.trim() ? { reasoningEffort: input.reasoningEffort.trim() } : {})
         }
         // Same activation semantics as a fresh selectThread: park the outgoing
         // projection, drop the old SSE subscription, and clear the view before
@@ -109,8 +113,12 @@ export function createPlanBuildActions(
             turnCompleteNotificationSource(previous.activeThreadId, previous)
           )
         }
+        // The build conversation opens on the picked model and level, not the
+        // previous composer's.
+        const composerState = resolveThreadComposerState(get(), thread)
         set((s) => ({
           ...clearedThreadSelection(),
+          ...composerState,
           route: 'ade',
           activeThreadId: thread.id,
           lastAdeThreadId: thread.id,

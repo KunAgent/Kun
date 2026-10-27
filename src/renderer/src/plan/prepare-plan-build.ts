@@ -1,6 +1,7 @@
 import { PLAN_WORKTREE_MIN_FREE_BYTES, planWorktreeLowDiskMessage } from '@shared/plan-worktree-disk'
 import type { PlanBuildOrchestration } from './plan-build'
 import { buildPlanBuildPrompt, type PromptPlanTodo } from './plan-prompts'
+import type { PlanTaskWorktreeContext } from '@shared/plan-build-prompt'
 import type { GuiPlanArtifact } from './plan-store'
 
 export type PreparedPlanBuild = {
@@ -27,6 +28,8 @@ export async function preparePlanBuild(input: {
   currentPlanId: () => string | undefined
   currentThreadId: () => string | null
   getGitBranches: typeof window.kunGui.getGitBranches
+  /** External Agent started in a host-managed task worktree. */
+  taskWorktreeAgentName?: string
 }): Promise<PreparedPlanBuild> {
   if (input.orchestration === 'graph' && !input.graphEnabled) {
     throw new Error('Graph build is disabled.')
@@ -38,15 +41,19 @@ export async function preparePlanBuild(input: {
     throw new Error('The active plan or conversation changed while preparing the build.')
   }
 
+  const taskWorktree = input.taskWorktreeAgentName
+    ? await taskWorktreeContext(input.taskWorktreeAgentName, input.plan.workspaceRoot, input.getGitBranches)
+    : undefined
   let prompt = buildPlanBuildPrompt(
     input.plan.relativePath,
     input.content,
     input.orchestration,
     undefined,
-    input.getPlanTodos?.()
+    input.getPlanTodos?.(),
+    taskWorktree
   )
   let displayText = `${input.orchestration === 'graph' ? 'Graph build' : 'Direct build'}: ${input.plan.relativePath}`
-  if (input.orchestration === 'direct' && input.usePromptWorktree &&
+  if (!taskWorktree && input.orchestration === 'direct' && input.usePromptWorktree &&
     (!input.workspaceAlreadyIsolated || input.usePromptWorktreeExplicit)) {
     const branch = await input.getGitBranches(input.plan.workspaceRoot)
     if (!branch.ok) throw new Error(branch.message)
@@ -75,5 +82,25 @@ export async function preparePlanBuild(input: {
     workspaceRoot: input.plan.workspaceRoot,
     orchestration: input.orchestration,
     planId: input.plan.id
+  }
+}
+
+/** Branch facts are best effort: the isolation rule holds without them. */
+async function taskWorktreeContext(
+  agentName: string,
+  workspaceRoot: string,
+  getGitBranches: typeof window.kunGui.getGitBranches
+): Promise<PlanTaskWorktreeContext> {
+  let branch: Awaited<ReturnType<typeof getGitBranches>> | null = null
+  try {
+    branch = await getGitBranches(workspaceRoot)
+  } catch {
+    branch = null
+  }
+  const baseBranch = branch?.ok ? branch.currentBranch?.trim() : ''
+  return {
+    agentName,
+    sourceRepositoryRoot: branch?.ok && branch.repositoryRoot ? branch.repositoryRoot : workspaceRoot,
+    ...(baseBranch ? { baseBranch } : {})
   }
 }

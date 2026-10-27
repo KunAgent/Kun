@@ -42,7 +42,7 @@ async function createHarness(harnessId?: string, providerId?: string) {
 
 const intents: Partial<StartTurnRequest>[] = [design, { guiDesignMode: true },
   { guiDesignCanvas: true }, { guiExcalidrawCanvas: true }, { mode: 'plan' },
-  { orchestration: 'graph' }, { planBuild: true },
+  { orchestration: 'graph' },
   { guiPlan: { operation: 'refine', workspaceRoot: '/repo', relativePath: '.kunsdd/plan/a.md', planId: 'a' } }]
 
 describe('Kun workflow admission', () => {
@@ -83,6 +83,14 @@ describe('Kun workflow admission', () => {
       expect(await h.sessionStore.loadItems('thread')).toEqual(before)
       expect(h.createGraphPlanningDraft).not.toHaveBeenCalled()
     }
+  })
+
+  it('does not treat an external plan build handoff as a Kun-only workflow', async () => {
+    const h = await createHarness('claude-code')
+    await h.turns.startTurn({ threadId: 'thread', request: { prompt: 'Build the plan', planBuild: true } })
+      .then(() => undefined, (error: unknown) => {
+        expect(String(error)).not.toContain('require Kun Agent')
+      })
   })
 
   it('preserves old unpinned provider-kind inference for admission', async () => {

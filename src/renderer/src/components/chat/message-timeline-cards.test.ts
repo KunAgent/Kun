@@ -105,7 +105,7 @@ describe('plan build actions', () => {
     resetPlanWorktreePreferenceStoreForTests()
   })
 
-  it('selects a rounded card build mode before starting the requested orchestration', async () => {
+  it('starts a direct build from the card and Graph from its menu', async () => {
     const onBuild = vi.fn()
     let renderer: ReactTestRenderer
 
@@ -127,20 +127,15 @@ describe('plan build actions', () => {
     expect(card.props.className).toContain('flex-col')
     expect(actions.props.className).toContain('flex-wrap')
 
-    const direct = renderer!.root.findByProps({ 'data-plan-build-mode': true })
-    expect(direct.props.value).toBe('direct')
     expect(start.props.disabled).toBe(false)
     expect(JSON.stringify(renderer!.toJSON())).toContain('Plan ready')
     expect(JSON.stringify(renderer!.toJSON())).toContain('Start build')
 
     await act(async () => {
-      direct.props.onChange({ target: { value: 'graph' } })
+      renderer!.root.findByProps({ 'data-plan-build-menu-toggle': true }).props.onClick()
     })
-    expect(renderer!.root.findByProps({ 'data-plan-build-mode': true }).props.value).toBe('graph')
-
     await act(async () => {
-      renderer!.root.findByProps({ 'data-plan-build-start': true }).props.onClick()
-      renderer!.root.findByProps({ 'data-plan-build-mode': true }).props.onChange({ target: { value: 'direct' } })
+      renderer!.root.findByProps({ 'data-plan-build-menu-graph': true }).props.onClick()
     })
     await act(async () => {
       renderer!.root.findByProps({ 'data-plan-build-start': true }).props.onClick()
@@ -218,20 +213,8 @@ describe('plan build actions', () => {
     expect(selects().map((item) => item.props.value)).toEqual(['worktree', 'worktree'])
     await act(async () => selects()[1]!.props.onChange({ target: { value: 'workspace' } }))
     expect(selects().map((item) => item.props.value)).toEqual(['workspace', 'workspace'])
-    expect(renderer!.root.findAllByProps({ 'data-plan-build-mode': true }))
-      .toHaveLength(1)
-
-    const cardMode = renderer!.root.findByProps({ 'data-plan-build-mode': true })
-    await act(async () => cardMode.props.onChange({ target: { value: 'graph' } }))
-    expect(selects()[1]!.props.disabled).toBe(true)
-    expect(JSON.stringify(renderer!.toJSON())).toContain(
-      'Execute this plan with Graph delegation and supervision'
-    )
-    await act(async () => renderer!.root.findByProps({
-      'data-plan-build-mode': true
-    }).props.onChange({ target: { value: 'direct' } }))
-    expect(selects()[1]!.props.disabled).toBe(false)
-    expect(selects()[1]!.props.value).toBe('workspace')
+    await act(async () => selects()[0]!.props.onChange({ target: { value: 'worktree' } }))
+    expect(selects().map((item) => item.props.value)).toEqual(['worktree', 'worktree'])
 
     act(() => renderer!.unmount())
   })

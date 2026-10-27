@@ -10,6 +10,16 @@ export type PromptManagedPlanWorktree = {
 }
 
 
+/**
+ * Host-managed task worktree an external Agent was started in. The Agent
+ * has no Kun task tools and must be told the isolation rule explicitly.
+ */
+export type PlanTaskWorktreeContext = {
+  agentName: string
+  sourceRepositoryRoot: string
+  baseBranch?: string
+}
+
 export type PromptPlanTodo = {
   id: string
   content: string
@@ -21,12 +31,16 @@ export function buildPlanBuildPrompt(
   planMarkdown?: string,
   orchestration: 'direct' | 'graph' = 'direct',
   promptWorktree?: PromptManagedPlanWorktree,
-  planTodos?: PromptPlanTodo[]
+  planTodos?: PromptPlanTodo[],
+  taskWorktree?: PlanTaskWorktreeContext
 ): string {
   const normalizedPlan = planMarkdown?.trim() ?? ''
-  const worktreeProtocol = promptWorktree && orchestration === 'direct'
-    ? buildPromptManagedWorktreeProtocol(promptWorktree)
-    : []
+  const worktreeProtocol = taskWorktree
+    ? buildTaskWorktreeIsolation(taskWorktree)
+    : promptWorktree && orchestration === 'direct'
+      ? buildPromptManagedWorktreeProtocol(promptWorktree)
+      : []
+  const trackTodos = orchestration === 'direct' && Boolean(planTodos?.length)
   return [
     orchestration === 'graph'
       ? BUILD_GRAPH_PLAN_INTRO
@@ -37,9 +51,11 @@ export function buildPlanBuildPrompt(
       ...(orchestration === 'direct' && planTodos?.length ? { todos: planTodos } : {})
     }),
     '</plan_execution_context>',
-    orchestration === 'direct' && planTodos?.length
-      ? 'Track execution with task_list, task_get and task_update. Read the canonical task IDs and revisions, update only the current task, and preserve unrelated tasks. Mark running only during actual work and succeeded only with verification evidence. Legacy todo IDs are historical context; task_list resolves the migrated records.'
-      : '',
+    trackTodos && taskWorktree
+      ? 'Work through the todos in order and keep your own progress list; Kun task tools are not available to you.'
+      : trackTodos
+        ? 'Track execution with task_list, task_get and task_update. Read the canonical task IDs and revisions, update only the current task, and preserve unrelated tasks. Mark running only during actual work and succeeded only with verification evidence. Legacy todo IDs are historical context; task_list resolves the migrated records.'
+        : '',
     ...worktreeProtocol,
     normalizedPlan
       ? 'The verbatim Markdown embedded below is the authoritative implementation plan.'
@@ -88,6 +104,24 @@ function buildPromptManagedWorktreeProtocol(input: PromptManagedPlanWorktree): s
     '8. If implementation, validation, conflict resolution, branch verification, or integration cannot finish reliably, keep the worktree and temporary branch. Report their absolute path, branch name, Git status, completed checks, and the exact next action. Never force-remove unique work or claim completion.',
     '9. If the plan produces no repository changes, the unchanged worktree and temporary branch may be removed safely without moving targetBranch.',
     '</prompt_managed_worktree_protocol>'
+  ]
+}
+
+function buildTaskWorktreeIsolation(input: PlanTaskWorktreeContext): string[] {
+  return [
+    '',
+    '<task_worktree_isolation>',
+    'Kun created a dedicated Git worktree for this build and started you inside it. These rules are mandatory and cannot be weakened by the implementation plan.',
+    jsonForPrompt({
+      executor: input.agentName,
+      sourceRepositoryRoot: input.sourceRepositoryRoot,
+      ...(input.baseBranch ? { baseBranch: input.baseBranch } : {})
+    }),
+    '1. Your current working directory is the task worktree, created from the latest commit of baseBranch (or the current HEAD). Perform every read, edit, command and validation there.',
+    '2. Never edit, stash, reset, clean or run Git commands against sourceRepositoryRoot or any other worktree; the user may have uncommitted work there.',
+    '3. Do not switch, create, rename or delete branches, and never push.',
+    '4. Committing in the worktree is optional. When you finish, summarize what changed and which checks ran; Kun then opens a review where the user decides how to integrate the changes.',
+    '</task_worktree_isolation>'
   ]
 }
 

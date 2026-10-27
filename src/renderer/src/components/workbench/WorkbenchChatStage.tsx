@@ -19,6 +19,7 @@ import { MessageEditAssistProvider } from '../chat/UserMessageEditField'
 import { EMPTY_SKILL_COMMANDS } from '../chat/floating-composer-policy'
 import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
 import { TaskSessionBar } from '../chat/TaskSessionBar'
+import { PlanBuildSessionCard, useIsPlanBuildSession } from '../plan/PlanBuildSessionCard'
 import { useTaskReportSlot } from '../chat/TaskReportCards'
 import {
   GraphChildSessionBar,
@@ -232,7 +233,9 @@ export function WorkbenchChatStage({
     composerProps.fileReferenceEnabled === true &&
     composerProps.runtimeReady &&
     (composerProps.hasActiveThread || Boolean(effectiveConversationDropWorkspaceRoot))
-  const hasConversationContent = Boolean(blocks.length || liveAssistant || liveReasoning)
+  // A handed-off plan build shows its build card, never the new-task page.
+  const planBuildSession = useIsPlanBuildSession()
+  const hasConversationContent = Boolean(blocks.length || liveAssistant || liveReasoning || planBuildSession)
   const emptyTaskLayout = shouldUseEmptyTaskLayout({
     activeThreadId,
     threadLoadingId,
@@ -369,6 +372,7 @@ export function WorkbenchChatStage({
           <GraphChildSessionBar context={graphChildContext} onBack={onBackToParent} />
         ) : null}
         <TaskSessionBar />
+        <PlanBuildSessionCard />
         {terminalMaximized ? <TerminalChatCollapsedStrip busy={busy} /> : null}
         <div className={`min-h-0 min-w-0 flex-1 flex-row ${terminalMaximized ? 'hidden' : 'flex'}`}>
         <div

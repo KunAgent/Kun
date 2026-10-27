@@ -26,7 +26,8 @@ export function kunWorkflowSendBlocked(input: {
     intent?.agentSurface === 'design' || (!intent?.agentSurface && thread?.agentSurface === 'design') ||
     intent?.guiDesignMode || intent?.guiDesignCanvas || intent?.guiExcalidrawCanvas ||
     intent?.designProfile || intent?.designDocumentTarget || intent?.designImagePlacementTarget ||
-    intent?.guiDesignArtifact || intent?.guiPlan || intent?.planBuild ||
+    // A plan build is the external-Agent handoff itself (host task worktree).
+    intent?.guiDesignArtifact || intent?.guiPlan ||
     input.mode === 'plan' || input.mode === 'auto' || input.orchestration === 'graph'
   )
 }

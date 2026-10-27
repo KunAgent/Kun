@@ -130,7 +130,7 @@ describe('thread send model memory', () => {
 
   it.each([
     { agentSurface: 'design' as const }, { guiDesignCanvas: true },
-    { guiDesignMode: true }, { orchestration: 'graph' as const }, { planBuild: true }
+    { guiDesignMode: true }, { orchestration: 'graph' as const }
   ])('blocks bypassed Kun product input before submitting to an external Agent: %j', async (intent) => {
     const sendUserMessage = vi.fn()
     registryMock.getProvider.mockReturnValue({ sendUserMessage })

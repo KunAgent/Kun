@@ -1,3 +1,4 @@
+import type { ScheduledTaskHarnessV1 } from './schedule-task-harness'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
@@ -533,6 +534,7 @@ export type ScheduleTaskCreateInput = {
   reasoningEffort: ScheduleReasoningEffort
   mode: ScheduleRunMode
   orchestration: ScheduleTaskOrchestration
+  harness?: ScheduledTaskHarnessV1
   schedule: {
     kind: 'at'
     atTime: string
@@ -545,6 +547,7 @@ export type ScheduleTaskUpdateInput = {
   providerId: string
   model: string
   reasoningEffort: ScheduleReasoningEffort
+  harness?: ScheduledTaskHarnessV1
   schedule: {
     kind: 'at'
     atTime: string
@@ -584,6 +587,8 @@ export type ScheduledTaskV1 = {
   dependsOn?: string[]
   /** Run the task in an isolated worktree from workspaceRoot. */
   useWorktree?: boolean
+  /** External Agent for a handed-off plan build; absent = Kun. */
+  harness?: ScheduledTaskHarnessV1
   schedule: ScheduledTaskScheduleV1
   createdAt: string
   updatedAt: string

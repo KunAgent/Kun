@@ -33,12 +33,11 @@ import { BUILTIN_RIGHT_PANEL_IDS } from '../extensions/contribution-ids'
 import type { GuiPlanMessageContext, SendMessageOverrides } from '../store/chat-store-types'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { effectiveHarnessId } from '../lib/ade-composer-harness'
-import {
-  accountIdForComposerSelection,
-  readThreadComposerSelection
-} from '../store/chat-store-helpers'
+import { accountIdForComposerSelection } from '../store/chat-store-helpers'
+import { useHarnessStore } from '../store/harness-store'
+import { externalPlanBuildRoute, handOffPlanBuild, planBuildHandoffBlocker } from '../plan/plan-build-handoff'
 import { usePlanWorktreePreferenceStore } from '../plan/plan-worktree-preference-store'
-import { usePlanBuildAgentStore } from '../plan/plan-build-agent-store'
+import { planBuildReasoningEffort, usePlanBuildAgentStore } from '../plan/plan-build-agent-store'
 import { usePlanWorktreePreference } from '../plan/use-plan-worktree-preference'
 
 type PlanResultMatch = {
@@ -360,6 +359,9 @@ export function useWorkbenchPlanController({
     return plan
   }, [openGuiPlanPanel])
 
+  const harnessDisplayName = (agentId: string): string =>
+    useHarnessStore.getState().rows.find((row) => row.definition.id === agentId)?.definition.displayName || agentId
+
   const buildGuiPlan = async (
     orchestration: PlanBuildOrchestration,
     meta?: GuiPlanToolMeta
@@ -418,6 +420,11 @@ export function useWorkbenchPlanController({
       setError(t('planBuildExternalGraphUnsupported'))
       return
     }
+    if (externalBuild) {
+      const blocker = planBuildHandoffBlocker(buildHarnessId, useHarnessStore.getState().rows, t)
+      usePlanBuildAgentStore.getState().setFailure(plan.id, blocker ? { agentId: buildHarnessId, message: blocker } : null)
+      if (blocker) return
+    }
     try {
       const prepared = await preparePlanBuild({
         plan,
@@ -436,66 +443,23 @@ export function useWorkbenchPlanController({
         save: savePlanContentToDisk,
         currentPlanId: () => useGuiPlanStore.getState().activePlan?.id,
         currentThreadId: () => useChatStore.getState().activeThreadId,
-        getGitBranches: window.kunGui.getGitBranches
+        getGitBranches: window.kunGui.getGitBranches,
+        ...(externalBuild ? { taskWorktreeAgentName: harnessDisplayName(buildHarnessId) } : {})
       })
       setComposerMode('agent')
       if (externalBuild) {
-        // external path: dispatch to a fresh ADE thread bound to a
-        // host-managed worktree; the Review panel opens on settle. Reuse the
-        // composer's harness pick when set, else the thread's remembered
-        // selection for the pinned harness.
-        const remembered = chatState.activeThreadId
-          ? readThreadComposerSelection(chatState.activeThreadId)
-          : null
-        const rememberedForHarness = remembered?.harnessId === buildHarnessId ? remembered : null
-        const composerPicked = !pickedRoute && chatState.composerHarnessId.trim().length > 0
-        const buildModel = pickedRoute
-          ? pickedRoute.model ?? ''
-          : composerPicked
-            ? chatState.composerModel
-            : rememberedForHarness?.model ?? ''
-        const buildProviderId = pickedRoute
-          ? pickedRoute.providerId ?? ''
-          : composerPicked
-            ? chatState.composerProviderId
-            : rememberedForHarness?.providerId ?? ''
-        const dispatched = await chatState.dispatchExternalPlanBuild({
-          prompt: prepared.prompt,
+        // External path: a fresh ADE conversation bound to a host task
+        // worktree; the Review panel opens on settle.
+        const handedOff = await handOffPlanBuild({
+          plan,
+          prepared,
+          route: externalPlanBuildRoute({ agentId: buildHarnessId, picked: pickedRoute, chatState }),
           displayText: `${t('planBuildDirect')}: ${plan.relativePath}`,
-          title: prepared.title,
-          workspaceRoot: prepared.workspaceRoot,
-          harnessId: buildHarnessId,
-          credentialMode: pickedRoute
-            ? pickedRoute.credentialMode ?? ''
-            : composerPicked
-              ? chatState.composerCredentialMode
-              : rememberedForHarness?.credentialMode ?? '',
-          model: buildModel,
-          providerId: buildProviderId,
-          ...(composerPicked
-            ? {
-                accountId: accountIdForComposerSelection(
-                  chatState.composerModelGroups,
-                  buildProviderId,
-                  buildModel
-                )
-              }
-            : {})
+          chatState,
+          getChatState: useChatStore.getState,
+          t
         })
-        if (dispatched) {
-          const threadId = useChatStore.getState().activeThreadId
-          if (threadId) {
-            usePlanBuildAgentStore.getState().setHandoff(plan.id, {
-              threadId,
-              route: {
-                agentId: buildHarnessId,
-                ...(buildModel ? { model: buildModel } : {}),
-                ...(buildProviderId ? { providerId: buildProviderId } : {})
-              }
-            })
-          }
-          await onPlanBuildStarted?.(plan)
-        }
+        if (handedOff) await onPlanBuildStarted?.(plan)
         return
       }
       const displayText = prepared.prompt.includes('<prompt_managed_worktree_protocol>')
@@ -503,9 +467,11 @@ export function useWorkbenchPlanController({
         : `${t(orchestration === 'graph' ? 'planBuildGraph' : 'planBuildDirect')}: ${plan.relativePath}`
       const kunModel = pickedRoute?.agentId === 'kun' ? pickedRoute.model?.trim() ?? '' : ''
       const kunProviderId = kunModel ? pickedRoute?.providerId?.trim() ?? '' : ''
+      const kunEffort = pickedRoute?.agentId === 'kun' ? planBuildReasoningEffort(pickedRoute) : undefined
       const sent = await sendMessage(prepared.prompt, 'agent', {
         displayText,
         orchestration: prepared.orchestration,
+        ...(kunEffort ? { reasoningEffort: kunEffort } : {}),
         ...(kunModel
           ? {
               harnessId: 'kun',
