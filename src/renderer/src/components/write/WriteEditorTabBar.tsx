@@ -189,7 +189,6 @@ export function WriteEditorTabBar({
       >
         {group.tabs.map((tab, index) => {
           const key = writeEditorItemKey(tab)
-          const pinned = isWritePaperViewTab(tab) && tab.view === 'library'
           const board = isWriteWhiteboardTab(tab) ? whiteboards[tab.boardId] : undefined
           const document = isWriteFileTab(tab) ? documentsByPath[tab.path] : undefined
           const active = group.activePath === key
@@ -237,7 +236,7 @@ export function WriteEditorTabBar({
                 if (nextTab) onActivate(writeEditorItemKey(nextTab))
               }}
               onAuxClick={(event) => {
-                if (event.button === 1 && !pinned) onClose(key)
+                if (event.button === 1) onClose(key)
               }}
               className={`write-editor-tab group relative flex max-w-[220px] shrink-0 cursor-default items-center gap-2 ${
                 active ? 'is-active' : ''
@@ -247,23 +246,19 @@ export function WriteEditorTabBar({
                 <WriteEditorTabTitle tab={tab} document={document} board={board} />
               </span>
               <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                {pinned ? null : (
-                  <>
-                    <span className="group-hover:hidden">{statusMark(document)}</span>
-                    <button
-                      type="button"
-                      className="hidden h-5 w-5 items-center justify-center rounded-md text-ds-faint hover:bg-ds-hover hover:text-ds-ink group-hover:flex"
-                      title={t('writeCloseTab')}
-                      aria-label={t('writeCloseTab')}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onClose(key)
-                      }}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </>
-                )}
+                <span className="group-hover:hidden">{statusMark(document)}</span>
+                <button
+                  type="button"
+                  className="hidden h-5 w-5 items-center justify-center rounded-md text-ds-faint hover:bg-ds-hover hover:text-ds-ink group-hover:flex"
+                  title={t('writeCloseTab')}
+                  aria-label={t('writeCloseTab')}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onClose(key)
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </span>
             </div>
           )
