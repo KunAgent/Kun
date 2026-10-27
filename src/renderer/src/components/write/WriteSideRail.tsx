@@ -43,9 +43,10 @@ export function WriteSideRail(): ReactElement | null {
   const renderItem = (item: WriteRailItem): ReactElement => {
     // In the centered stage the document tools fold into the assistant, and
     // 论文 sits beside the conversation rather than replacing it.
+    const shownId = panel.activeId === 'subagents' ? 'assistant' : panel.activeId
     const active = stage
-      ? (WRITE_DOCUMENT_PANEL_IDS.has(panel.activeId) ? 'assistant' : panel.activeId) === item.id
-      : panel.expanded && panel.activeId === item.id
+      ? (WRITE_DOCUMENT_PANEL_IDS.has(shownId) ? 'assistant' : shownId) === item.id
+      : panel.expanded && shownId === item.id
     const label = t(writeRightPanelLabelKey(item.id))
     const description = item.badge
       ? t(item.id === 'review' ? 'workRailReviewCount' : item.id === 'papers' ? 'workRailPapersCount' : 'workRailReferencesCount',

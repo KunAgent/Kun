@@ -71,10 +71,12 @@ export function createWindow(options: {
     icon: appIcon.isEmpty() ? undefined : appIcon,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : usesCustomDesktopTitleBar ? 'hidden' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 31, y: 22 } : undefined,
-    // The sidebar ground is painted translucent over the native sidebar material;
-    // the renderer drops the alpha when "reduce transparency" is on.
+    // The sidebar ground is painted translucent over the native material; the
+    // under-window material lets a faint, blurred trace of what is behind the
+    // window through (the light sidebar material is nearly opaque). The
+    // renderer drops the alpha when "reduce transparency" is on.
     ...(process.platform === 'darwin'
-      ? { vibrancy: 'sidebar' as const, visualEffectState: 'followWindow' as const, backgroundColor: '#00000000' }
+      ? { vibrancy: 'under-window' as const, visualEffectState: 'followWindow' as const, backgroundColor: '#00000000' }
       : {}),
     autoHideMenuBar: usesCustomDesktopTitleBar || process.platform === 'linux',
     show: false,

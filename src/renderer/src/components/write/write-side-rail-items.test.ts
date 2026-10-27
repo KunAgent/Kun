@@ -5,7 +5,7 @@ describe('resolveWriteRailItems', () => {
   it('orders primary tools before shared tools', () => {
     const items = resolveWriteRailItems({ reviewCount: 0, referenceCount: 0, assistantRunning: false })
     expect(items.map((item) => item.id)).toEqual([
-      'assistant', 'outline', 'review', 'references', 'subagents', 'mcpSkills', 'usage'
+      'assistant', 'outline', 'review', 'references', 'mcpSkills', 'usage'
     ])
     expect(items.filter((item) => item.group === 'secondary').map((item) => item.id))
       .toEqual(['mcpSkills', 'usage'])
@@ -24,14 +24,14 @@ describe('resolveWriteRailItems', () => {
     const items = resolveWriteRailItems({
       reviewCount: 4, referenceCount: 1, assistantRunning: false, documentTools: false
     })
-    expect(items.map((item) => item.id)).toEqual(['assistant', 'subagents', 'mcpSkills', 'usage'])
+    expect(items.map((item) => item.id)).toEqual(['assistant', 'mcpSkills', 'usage'])
   })
 
   it('adds 论文 with a count once the session has surfaced papers, even in the stage', () => {
     const items = resolveWriteRailItems({
       reviewCount: 0, referenceCount: 0, assistantRunning: false, paperCount: 12, documentTools: false
     })
-    expect(items.map((item) => item.id)).toEqual(['assistant', 'papers', 'subagents', 'mcpSkills', 'usage'])
+    expect(items.map((item) => item.id)).toEqual(['assistant', 'papers', 'mcpSkills', 'usage'])
     expect(items.find((item) => item.id === 'papers')?.badge).toEqual({ count: 12, tone: 'neutral' })
     expect(resolveWriteRailItems({ reviewCount: 0, referenceCount: 0, assistantRunning: false })
       .some((item) => item.id === 'papers')).toBe(false)

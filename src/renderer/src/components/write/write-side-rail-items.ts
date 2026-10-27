@@ -14,7 +14,8 @@ export type WriteRailItem = {
 
 /**
  * Work rail order (design: assistant, outline, review, references, the
- * session's papers, subagents, then shared MCP/usage tools under a divider).
+ * session's papers, then shared MCP/usage tools under a divider). Work has no
+ * 子代理 tool: delegated work already shows as cards in the conversation.
  * 论文 appears once a search in the session has surfaced papers. The sessions of
  * an open item are listed by the assistant's context chip, not a panel. Pending review
  * chunks get an accent badge; reference counts stay neutral.
@@ -50,7 +51,6 @@ export function resolveWriteRailItems({
     ...(paperCount > 0
       ? [{ id: 'papers' as const, group: 'primary' as const, badge: { count: paperCount, tone: 'neutral' as const } }]
       : []),
-    { id: 'subagents', group: 'primary' },
     { id: 'mcpSkills', group: 'secondary' },
     { id: 'usage', group: 'secondary' }
   ]
