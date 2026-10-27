@@ -141,3 +141,14 @@
     display: none;
   }
 }
+
+[data-theme='dark'] .kun-account-dock {
+  background: color-mix(in srgb, var(--ds-surface-card) 55%, transparent);
+  box-shadow: inset 0 0 0 1px var(--kun-hair-1);
+}
+
+[data-theme='dark'] .kun-account-dock:hover,
+[data-theme='dark'] .kun-account-dock:has(.kun-account-card[data-open]) {
+  background: color-mix(in srgb, var(--ds-surface-card) 92%, transparent);
+  box-shadow: 0 0 0 1px var(--kun-hair-2);
+}

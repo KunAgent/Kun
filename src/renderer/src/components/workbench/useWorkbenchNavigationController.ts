@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
 import { useWorkbenchChatStarters } from './use-workbench-chat-starters'
+import { OPEN_PLUGINS_EVENT } from '../chat/FloatingComposerActionFlyout'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
@@ -436,6 +437,13 @@ export function useWorkbenchNavigationController({
     setConnectPhoneSidebarOpen(false)
     openPlugins(sidebarView === 'claw' ? 'claw' : 'chat')
   }, [beginNavigation, openPlugins, setConnectPhoneSidebarOpen, sidebarView])
+
+  useEffect(() => {
+    // The composer's + menu asks for the Plugins page through a window event.
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
+    window.addEventListener(OPEN_PLUGINS_EVENT, openPluginsView)
+    return () => window.removeEventListener(OPEN_PLUGINS_EVENT, openPluginsView)
+  }, [openPluginsView])
 
   const openExtensionsView = useCallback((): void => {
     beginNavigation()

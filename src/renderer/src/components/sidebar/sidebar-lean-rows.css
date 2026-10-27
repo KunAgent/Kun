@@ -166,3 +166,9 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-
   background: transparent;
   color: var(--ds-text);
 }
+
+[data-theme='dark'] .ds-sidebar-shell .ds-sidebar-command-row[data-active='true'],
+[data-theme='dark'] .ds-sidebar-shell .ds-sidebar-tree-row[data-active='true'],
+[data-theme='dark'] .ds-sidebar-shell .sidebar-menu-row.is-active {
+  box-shadow: 0 0 0 1px var(--kun-hair-2);
+}

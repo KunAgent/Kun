@@ -41,7 +41,8 @@ const text = () => document.body.textContent ?? ''
 const card = () => container.querySelector<HTMLElement>('[data-kun-account-card]')!
 const entry = () => container.querySelector<HTMLButtonElement>('[data-kun-account-login]')!
 const panel = () => document.querySelector<HTMLElement>('.kun-account-panel')
-const button = (label: string) => [...document.querySelectorAll('button')].find((item) => item.textContent?.includes(label))!
+const button = (label: string) => [...document.querySelectorAll('button')].find((item) => item.textContent?.trim() === label)
+  ?? [...document.querySelectorAll('button')].find((item) => item.textContent?.includes(label))!
 /** The account's wardrobe mirror, as a refresh after sign-in would deliver it. */
 const seed = () => acceptWardrobe({ wardrobe: { ...createKunWardrobe(1), feathers: 40, pending: [1, 2, 3].map(drop) }, revision: 1, mode: 'account' })
 const drop = (index: number): KunWardrobeDrop => ({ id: `drop-${index}`, kind: 'item', rarity: 'common', item: { category: 'prop', id: 'book' },
@@ -65,7 +66,7 @@ describe('sidebar Kun account card', () => {
   it('starts the browser sign-in from the card and follows it live', async () => {
     await act(async () => root.render(createElement(KunAccountControl)))
     expect(card().dataset.account).toBe('signed-out')
-    expect(card().textContent).toContain('kunAccountCardSignedOut')
+    expect(card().textContent).toContain('kunAccountSignInLabel')
     await act(async () => button('kunAccountSignIn').click())
     expect(bridge.login).toHaveBeenCalledOnce()
     expect(card().dataset.account).toBe('busy')
@@ -207,7 +208,7 @@ describe('sidebar Kun account card', () => {
     // Signed out, Focus mode shows no account at all, not even a sign-in prompt.
     await act(async () => root.render(footer(true)))
     expect(card()).toBeNull()
-    expect(text()).not.toContain('kunAccountCardSignedOut')
+    expect(text()).not.toContain('kunAccountSignInLabel')
     expect(container.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe('true')
     await act(async () => root.render(footer(false)))
     expect(card().dataset.variant).toBe('card')

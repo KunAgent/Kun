@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, type ComponentProps, type ReactElement, type 
 import { WorkbenchSideRail } from '../chat/WorkbenchTopBar'
 import { WorkbenchChatStage, type WorkbenchChatStageProps } from './WorkbenchChatStage'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { RailPortal } from './rail-slot'
 
 const SddDraftEditorView = lazy(() =>
   import('../sdd/SddDraftEditorView').then((module) => ({ default: module.SddDraftEditorView }))
@@ -70,12 +71,18 @@ export function WorkbenchConversationStage({
 
         {rightPanel}
         {showRail ? (
-          <WorkbenchSideRail
-            {...sideRail}
-            presentation={remoteMobile ? 'sheet' : 'rail'}
-            sheetOpen={mobileRailOpen}
-            onCloseSheet={() => setMobileRailOpen(false)}
-          />
+          remoteMobile ? (
+            <WorkbenchSideRail
+              {...sideRail}
+              presentation="sheet"
+              sheetOpen={mobileRailOpen}
+              onCloseSheet={() => setMobileRailOpen(false)}
+            />
+          ) : (
+            <RailPortal>
+              <WorkbenchSideRail {...sideRail} presentation="rail" />
+            </RailPortal>
+          )
         ) : null}
       </div>
     </>

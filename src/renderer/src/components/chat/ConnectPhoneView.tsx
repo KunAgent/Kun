@@ -314,15 +314,16 @@ export function ConnectPhoneView({
 
       <div className="grid min-h-0 w-full grid-cols-1 gap-8 px-5 py-4 lg:grid-cols-[minmax(520px,1fr)_minmax(430px,0.76fr)] lg:px-4">
         <div className="flex min-h-0 items-center justify-center pb-4 pt-2">
-          <div className="w-full max-w-[560px] text-center">
+          <div className="w-full max-w-[640px] text-left">
             <h1 className="text-[28px] font-semibold tracking-normal text-ds-ink">
               {t('connectPhoneTitle')}
             </h1>
-            <p className="mx-auto mt-2 max-w-[460px] text-[14px] leading-6 text-[#9299a3] dark:text-white/40">
+            <p className="mt-2 max-w-[520px] text-[14px] leading-6 text-ds-muted">
               {t('connectPhoneSubtitle')}
             </p>
 
-            <div className="mx-auto mt-7 grid w-full max-w-[760px] grid-cols-4 gap-2 rounded-full bg-[#f0f1ef] p-2 shadow-inner dark:bg-white/[0.08]">
+            <div className="mt-8 text-[12.5px] font-medium text-ds-faint">{t('connectPhoneStepChoose')}</div>
+            <div role="radiogroup" aria-label={t('connectPhoneStepChoose')} className="mt-2.5 grid w-full grid-cols-4 gap-2.5">
               {CONNECT_PHONE_TARGETS.map((item) => {
                 const active = target === item
                 const provider = connectPhoneProviderForTarget(item)
@@ -330,23 +331,30 @@ export function ConnectPhoneView({
                   <button
                     key={item}
                     type="button"
+                    role="radio"
+                    aria-checked={active}
                     onClick={() => setTarget(item)}
-                    className={`inline-flex h-10 w-full min-w-0 items-center justify-center gap-2.5 rounded-full px-4 text-[13px] font-semibold whitespace-nowrap transition ${
+                    className={`flex h-16 min-w-0 items-center gap-2.5 rounded-[16px] bg-ds-card px-3.5 text-left text-[13.5px] font-semibold text-ds-ink transition-shadow duration-150 ${
                       active
-                        ? 'bg-white text-ds-ink shadow-sm dark:bg-white/[0.14] dark:text-white'
-                        : 'text-[#727985] hover:text-ds-ink dark:hover:text-white'
+                        ? 'shadow-[0_0_0_2px_var(--ds-accent),var(--kun-shadow-rest)]'
+                        : 'shadow-[var(--kun-shadow-hair)] hover:shadow-[var(--kun-shadow-rest)]'
                     }`}
-                    aria-pressed={active}
                   >
-                  {connectPhoneTargetIcon(provider, 'h-4 w-4')}
-                  {connectPhoneTopTargetLabel(t, item)}
-                </button>
-              )
-            })}
+                    {connectPhoneTargetIcon(provider, 'h-5 w-5 shrink-0')}
+                    <span className="min-w-0 flex-1 truncate">{connectPhoneTopTargetLabel(t, item)}</span>
+                    <span
+                      aria-hidden="true"
+                      className={`h-[18px] w-[18px] shrink-0 rounded-full ${active ? 'shadow-[inset_0_0_0_5px_var(--ds-accent)]' : 'shadow-[inset_0_0_0_1.5px_var(--kun-hair-3)]'}`}
+                    />
+                  </button>
+                )
+              })}
             </div>
 
+            <div className="mt-8 text-[12.5px] font-medium text-ds-faint">{t('connectPhoneStepScan')}</div>
+
             {target === 'telegram' ? (
-              <div className="mx-auto mt-9 flex w-full max-w-[400px] flex-col items-center rounded-[22px] border-0 bg-white p-6 shadow-[var(--kun-shadow-rest)]">
+              <div className="mt-2.5 flex w-full max-w-[400px] flex-col items-center rounded-[22px] border-0 bg-ds-card p-6 shadow-[var(--kun-shadow-rest)]">
                 <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#26A5E4]/10">
                   <ClawProviderLogo provider="telegram" className="h-8 w-8" />
                 </span>
@@ -373,7 +381,7 @@ export function ConnectPhoneView({
               </div>
             ) : (
               <>
-                <div className="mx-auto mt-9 flex h-[226px] w-[226px] flex-col items-center justify-center rounded-[22px] border-0 bg-white p-3 shadow-[var(--kun-shadow-rest)]">
+                <div className="mt-2.5 flex h-[226px] w-[226px] flex-col items-center justify-center rounded-[22px] border-0 bg-ds-card p-3 shadow-[var(--kun-shadow-rest)]">
                   {installQr.status === 'idle' ? (
                     <div className="grid justify-items-center gap-4">
                       <div className="flex h-20 w-20 items-center justify-center rounded-[18px] bg-[#f3f4f2] text-[#9aa2ad]">

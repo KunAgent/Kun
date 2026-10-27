@@ -10,9 +10,11 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  Blocks,
   Bot,
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   CircleHelp,
   CircleSlash,
@@ -24,6 +26,7 @@ import {
   Paperclip,
   Settings2,
   Share2,
+  Sparkles,
   Target,
   UserRound,
   Users
@@ -31,6 +34,10 @@ import {
 import { LucideIconByName } from '../lucide-icon-by-name'
 import { bodyZoom } from '../../lib/body-zoom'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
+import {
+  ComposerActionFlyout, OPEN_PLUGINS_EVENT, useComposerPluginItems,
+  type ComposerFlyoutItem, type ComposerFlyoutKind
+} from './FloatingComposerActionFlyout'
 
 const ACTION_MENU_WIDTH = 224
 const ACTION_MENU_MAX_HEIGHT = 440
@@ -162,6 +169,12 @@ export function FloatingComposerActionMenu({
     onOpenFileReferencePicker, onOpenDesignReferencePicker
   } = context
   const [personaOpen, setPersonaOpen] = useState(false)
+  const [flyout, setFlyout] = useState<ComposerFlyoutKind | null>(null)
+  const flyoutTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const pluginItems = useComposerPluginItems(
+    composerMenuOpen && flyout === 'plugins',
+    String(context.effectiveWorkspaceRoot ?? '')
+  )
   const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' })
   const [personaStyle, setPersonaStyle] = useState<CSSProperties>({ visibility: 'hidden' })
   const initialFocusAppliedRef = useRef(false)
@@ -254,6 +267,7 @@ export function FloatingComposerActionMenu({
     if (!composerMenuOpen) {
       initialFocusAppliedRef.current = false
       setPersonaOpen(false)
+      setFlyout(null)
       return
     }
     updatePosition()
@@ -288,6 +302,13 @@ export function FloatingComposerActionMenu({
     onComposerPersonaChange?.(presetId)
     close(true)
   }
+
+  const skillCommands = (context.skillCommands ?? []) as Array<{ id: string; name: string; description?: string }>
+  const disabledSkills = new Set(((context.disabledSkillIds ?? []) as string[]).map((id) => id.trim().toLowerCase()))
+  const skillItems: ComposerFlyoutItem[] = skillCommands
+    .filter((skill) => skill.id.trim() && skill.name.trim() && !disabledSkills.has(skill.id.trim().toLowerCase()))
+    .map((skill) => ({ id: skill.id, name: skill.name, description: skill.description ?? '' }))
+  const flyoutKinds: ComposerFlyoutKind[] = context.route === 'claw' || context.side ? [] : ['plugins', 'skills']
 
   const menu = (
     <div
@@ -434,7 +455,10 @@ export function FloatingComposerActionMenu({
             aria-haspopup="menu"
             aria-controls="floating-composer-persona-menu"
             onClick={() => {
-              if (canCompose) setPersonaOpen((open) => !open)
+              if (canCompose) {
+                setFlyout(null)
+                setPersonaOpen((open) => !open)
+              }
             }}
             className={rowClass}
           >
@@ -449,8 +473,71 @@ export function FloatingComposerActionMenu({
           </button>
         </>
       ) : null}
+      {flyoutKinds.length > 0 ? <div className="my-1 h-px bg-ds-border-muted/70" /> : null}
+      {flyoutKinds.map((kind) => (
+        <button
+          key={kind}
+          type="button"
+          role="menuitem"
+          tabIndex={-1}
+          aria-haspopup="menu"
+          aria-expanded={flyout === kind}
+          data-composer-flyout-trigger={kind}
+          onClick={(event) => {
+            flyoutTriggerRef.current = event.currentTarget
+            setPersonaOpen(false)
+            setFlyout((current) => (current === kind ? null : kind))
+          }}
+          className={`${rowClass} ${flyout === kind ? 'bg-ds-hover text-ds-ink' : ''}`}
+        >
+          {kind === 'plugins'
+            ? <Blocks className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+            : <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />}
+          <span className="min-w-0 flex-1 truncate">{t(kind === 'plugins' ? 'composerMenuPlugins' : 'composerMenuSkills')}</span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
+        </button>
+      ))}
     </div>
   )
+  const placeFlyout = (menuHeight: number) => {
+    const triggerRect = flyoutTriggerRef.current?.getBoundingClientRect()
+    const parentMenuRect = mainMenuRef.current?.getBoundingClientRect()
+    const shellRect = composerShellRef.current?.getBoundingClientRect()
+    if (!triggerRect || !parentMenuRect || !shellRect) return null
+    return calculatePersonaMenuPlacement({
+      triggerRect, parentMenuRect, shellRect, menuHeight, preferredWidth: 340,
+      viewportWidth: window.innerWidth, coordinateScale: bodyZoom()
+    })
+  }
+  const pickSkill = (item: ComposerFlyoutItem): void => {
+    const current = String(context.input ?? '')
+    context.setInput(`${current && !/\s$/.test(current) ? `${current} ` : current}/skill:${item.id} `)
+    close(true)
+  }
+  const openPlugins = (): void => {
+    close(false)
+    window.dispatchEvent(new CustomEvent(OPEN_PLUGINS_EVENT))
+  }
+  const flyoutMenu = flyout ? (
+    <ComposerActionFlyout
+      key={flyout}
+      kind={flyout}
+      items={flyout === 'plugins' ? pluginItems.items : skillItems}
+      loading={flyout === 'plugins' && pluginItems.loading}
+      labels={{
+        title: t(flyout === 'plugins' ? 'composerMenuPlugins' : 'composerMenuSkills'),
+        search: t(flyout === 'plugins' ? 'composerPluginsSearch' : 'composerSkillsSearch'),
+        empty: t(flyout === 'plugins' ? 'composerPluginsEmpty' : 'composerSkillsEmpty'),
+        manage: t(flyout === 'plugins' ? 'composerPluginsManage' : 'composerSkillsManage'),
+        explore: t(flyout === 'plugins' ? 'composerPluginsExplore' : 'composerSkillsExplore')
+      }}
+      place={placeFlyout}
+      onPick={flyout === 'plugins' ? openPlugins : pickSkill}
+      onManage={flyout === 'plugins' ? openPlugins : () => { close(false); openSettings('skills') }}
+      onExplore={openPlugins}
+      onClose={() => setFlyout(null)}
+    />
+  ) : null
   const personaMenu = personaAvailable && personaOpen ? (
     <div
       ref={personaMenuRef}
@@ -496,6 +583,7 @@ export function FloatingComposerActionMenu({
     <div ref={composerMenuPanelRef} className="contents">
       {menu}
       {personaMenu}
+      {flyoutMenu}
     </div>
   )
   const portalHost = typeof Element !== 'undefined' && document.body instanceof Element
