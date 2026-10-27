@@ -58,7 +58,7 @@ function clamp(value: number, min: number, max: number): number {
 
 export function calculateActionMenuPlacement({
   buttonRect,
-  shellRect,
+  anchorRect,
   menuHeight,
   viewportWidth,
   preferredWidth = ACTION_MENU_WIDTH,
@@ -68,7 +68,7 @@ export function calculateActionMenuPlacement({
   coordinateScale = 1
 }: {
   buttonRect: Pick<DOMRect, 'left' | 'right'>
-  shellRect: Pick<DOMRect, 'top'>
+  anchorRect: Pick<DOMRect, 'top'>
   menuHeight: number
   viewportHeight?: number
   viewportWidth: number
@@ -84,7 +84,7 @@ export function calculateActionMenuPlacement({
     left: buttonRect.left / scale,
     right: buttonRect.right / scale
   }
-  const anchorTop = shellRect.top / scale
+  const anchorTop = anchorRect.top / scale
   const width = Math.min(preferredWidth, Math.max(1, viewportWidthNormalized - margin * 2))
   const left = clamp(
     button.left,
@@ -102,7 +102,7 @@ export function calculateActionMenuPlacement({
 export function calculatePersonaMenuPlacement({
   triggerRect,
   parentMenuRect,
-  shellRect,
+  anchorRect,
   menuHeight,
   viewportWidth,
   preferredWidth = ACTION_MENU_WIDTH,
@@ -113,7 +113,7 @@ export function calculatePersonaMenuPlacement({
 }: {
   triggerRect: Pick<DOMRect, 'top'>
   parentMenuRect: Pick<DOMRect, 'left' | 'right'>
-  shellRect: Pick<DOMRect, 'top'>
+  anchorRect: Pick<DOMRect, 'top'>
   menuHeight: number
   viewportWidth: number
   preferredWidth?: number
@@ -136,7 +136,7 @@ export function calculatePersonaMenuPlacement({
     : leftSideLeft >= margin
       ? leftSideLeft
       : clamp(parentMenu.left, margin, Math.max(margin, viewportWidthNormalized - margin - width))
-  const anchorTop = shellRect.top / scale
+  const anchorTop = anchorRect.top / scale
   const availableHeight = Math.max(0, anchorTop - margin - gap)
   const maxHeight = Math.min(maximumHeight, availableHeight)
   const visibleHeight = Math.min(Math.max(0, menuHeight), maxHeight)
@@ -167,7 +167,7 @@ export function FloatingComposerActionMenu({
     attachmentUploadBusy, attachmentUploadEnabled, busy, canCompose, canOpenGoalPanel,
     canPickAttachment, canPickDesignReference, canPickFileReference, canPickLocalFileReference,
     canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, codeAgentPresets, composerMenuButtonRef,
-    composerMenuOpen, composerMenuPanelRef, composerPersonaId, composerShellRef,
+    composerMenuOpen, composerMenuPanelRef, composerPersonaId,
     fileReferenceEnabled, graphEnabled, handleAttachmentMenuClick, handleDesignReferenceMenuClick,
     handleFileReferenceMenuClick, handleGoalMenuClick, handleGraphToolbarClick,
     handleLocalFileReferenceMenuClick, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, mode, onComposerPersonaChange,
@@ -192,11 +192,10 @@ export function FloatingComposerActionMenu({
 
   const updatePosition = useCallback((): void => {
     const buttonRect = composerMenuButtonRef.current?.getBoundingClientRect()
-    const composerRect = composerShellRef.current?.getBoundingClientRect()
-    if (!buttonRect || !composerRect) return
+    if (!buttonRect) return
     const placement = calculateActionMenuPlacement({
       buttonRect,
-      shellRect: composerRect,
+      anchorRect: buttonRect,
       menuHeight: mainMenuRef.current?.offsetHeight ?? ACTION_MENU_ESTIMATED_HEIGHT,
       viewportWidth: window.innerWidth,
       coordinateScale: bodyZoom()
@@ -212,7 +211,7 @@ export function FloatingComposerActionMenu({
     const personaPlacement = calculatePersonaMenuPlacement({
       triggerRect,
       parentMenuRect,
-      shellRect: composerRect,
+      anchorRect: buttonRect,
       menuHeight: personaMenuRef.current?.offsetHeight ?? PERSONA_MENU_ESTIMATED_HEIGHT,
       viewportWidth: window.innerWidth,
       coordinateScale: bodyZoom()
@@ -221,7 +220,7 @@ export function FloatingComposerActionMenu({
       ...personaPlacement,
       visibility: personaPlacement.maxHeight > 0 ? 'visible' : 'hidden'
     })
-  }, [composerMenuButtonRef, composerShellRef, personaOpen])
+  }, [composerMenuButtonRef, personaOpen])
 
   useEffect(() => {
     if (!canCompose) setPersonaOpen(false)
@@ -486,10 +485,10 @@ export function FloatingComposerActionMenu({
   const placeFlyout = (menuHeight: number) => {
     const triggerRect = flyoutTriggerRef.current?.getBoundingClientRect()
     const parentMenuRect = mainMenuRef.current?.getBoundingClientRect()
-    const shellRect = composerShellRef.current?.getBoundingClientRect()
-    if (!triggerRect || !parentMenuRect || !shellRect) return null
+    const anchorRect = composerMenuButtonRef.current?.getBoundingClientRect()
+    if (!triggerRect || !parentMenuRect || !anchorRect) return null
     return calculatePersonaMenuPlacement({
-      triggerRect, parentMenuRect, shellRect, menuHeight, preferredWidth: 340,
+      triggerRect, parentMenuRect, anchorRect, menuHeight, preferredWidth: 340,
       viewportWidth: window.innerWidth, coordinateScale: bodyZoom()
     })
   }
