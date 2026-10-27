@@ -1,5 +1,5 @@
 import type { DragEvent as ReactDragEvent, ReactElement, ReactNode } from 'react'
-import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, PanelRight, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { SidebarActivityIndicator, type SidebarActivity } from '../sidebar/SidebarActivityIndicator'
@@ -168,13 +168,20 @@ export function WriteFileTree({
             active={selected}
             draggable={Boolean(dragReferenceRoot)}
             onDragStart={(event) => startReferenceDrag(event, entry)}
-            onClick={() => (isDirectory ? onToggleDir(entry.path) : onSelectFile(entry.path))}
+            onClick={(event) => {
+              if (isDirectory) onToggleDir(entry.path)
+              // Alt-click opens the file in the side slot; a hover button would cover the name.
+              else if (event?.altKey && onOpenBeside) onOpenBeside(entry.path)
+              else onSelectFile(entry.path)
+            }}
             className="min-h-[30px]"
             buttonClassName="items-center gap-1.5 py-1.5 pr-2"
             buttonStyle={{ paddingLeft: 8 + depth * 14 }}
             actionsVisibility="hidden"
             actionsLayout="overlay"
-            title={relativeDisplayPath(rootDirectory, entry.path)}
+            title={isDirectory || !onOpenBeside
+              ? relativeDisplayPath(rootDirectory, entry.path)
+              : `${relativeDisplayPath(rootDirectory, entry.path)} · ${t('workOpenBeside')}: ⌥`}
             trailing={(
               <SidebarActivityIndicator
                 activity={activity}
@@ -206,11 +213,6 @@ export function WriteFileTree({
                       </TreeActionButton>
                     ) : null}
                   </>
-                ) : null}
-                {!isDirectory && onOpenBeside ? (
-                  <TreeActionButton title={t('workOpenBeside')} onClick={() => onOpenBeside(entry.path)}>
-                    <PanelRight className="h-3.5 w-3.5" strokeWidth={1.85} />
-                  </TreeActionButton>
                 ) : null}
                 {!isDirectory && onOpenPdfAsPaper && isPdfEntry(entry) ? (
                   <TreeActionButton

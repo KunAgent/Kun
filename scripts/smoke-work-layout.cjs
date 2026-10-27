@@ -158,6 +158,26 @@ async function exerciseWorkLayout({ page, poll, capture, recordDiagnostic, resiz
   assert.equal(steps.otherDocument.activeThreadId, sessionId, 'session stays when another document opens')
   await capture('work-03-session-doc')
 
+  // Swap slots: the session takes the main area and the files dock beside it.
+  await page.locator('[data-work-swap-slots="session"]').click()
+  await poll(async () => (await workSnapshot(page)).stage === 'swapped', 15_000, 'swapped stage')
+  await page.locator('.work-side-document').waitFor({ timeout: 15_000 })
+  await page.locator('[data-work-context="file"]').waitFor({ timeout: 15_000 })
+  const swapBox = await page.evaluate(() => {
+    const side = document.querySelector('.work-side-document')?.getBoundingClientRect()
+    const main = document.querySelector('[data-work-assistant="stage"]')?.getBoundingClientRect()
+    return { sideLeft: side?.left ?? 0, sideWidth: side?.width ?? 0, mainRight: main?.right ?? 0, mainWidth: main?.width ?? 0 }
+  })
+  assert.ok(swapBox.sideWidth > 300 && swapBox.mainWidth > swapBox.sideWidth, 'session is wider main slot, file is the side slot')
+  assert.ok(swapBox.mainRight <= swapBox.sideLeft + 1, 'session sits left of the docked file')
+  steps.swapped = await workSnapshot(page)
+  assert.equal(steps.swapped.activeThreadId, sessionId, 'swapping keeps the session')
+  await page.waitForTimeout(600)
+  await capture('work-03b-swapped')
+  // Picking a file in the sidebar puts it back in the main slot.
+  await page.locator('[data-work-directory]').getByText('README.md', { exact: true }).click()
+  await poll(async () => (await workSnapshot(page)).stage === 'documents', 15_000, 'documents stage after file pick')
+
   // The library is a tab of the space, next to the documents.
   await page.locator('[data-work-nav="library"]').click()
   await poll(async () => (await workSnapshot(page)).paperView === 'library', 15_000, 'library tab')

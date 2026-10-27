@@ -295,7 +295,7 @@ export function SidebarSearchField({
 
 type SidebarTreeRowProps = {
   children: ReactNode
-  onClick?: () => void
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void
   title?: string
   ariaLabel?: string
   onContextMenu?: (event: ReactMouseEvent<HTMLDivElement>) => void
