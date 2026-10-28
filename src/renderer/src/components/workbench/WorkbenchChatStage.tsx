@@ -55,9 +55,6 @@ import { prefetchSharedDefaultModelSelection } from '../../agent/kun-runtime-sha
 import { useTerminalDockStore } from '../terminal/terminal-dock-store'
 import { TerminalChatCollapsedStrip } from '../terminal/TerminalDrawer'
 
-const CodeTour = lazy(() =>
-  import('../code-tour/CodeTour').then((module) => ({ default: module.CodeTour }))
-)
 const TerminalDrawer = lazy(() =>
   import('../terminal/TerminalDrawer').then((module) => ({ default: module.TerminalDrawer }))
 )
@@ -470,11 +467,6 @@ export function WorkbenchChatStage({
                 />
                 {emptyTaskLayout && onOpenThread ? (
                   <CodeHomeQuickStart disabled={runtimeConnection !== 'ready'} onOpenThread={onOpenThread} />
-                ) : null}
-                {emptyTaskLayout && onOpenThread && !focusModeEnabled ? (
-                  <Suspense fallback={null}>
-                    <CodeTour setInput={composerProps.setInput} />
-                  </Suspense>
                 ) : null}
               </div>
             )}

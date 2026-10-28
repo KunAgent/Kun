@@ -529,7 +529,7 @@ export function WorkbenchSideRail({
   if (railCollapsed) return null
 
   return (
-    <WorkbenchSideRailSurface>
+    <WorkbenchSideRailSurface className="code-side-rail">
       <RailCollapseButton />
       <WorkbenchSideRailDivider />
       {groups.map((group, index) => (

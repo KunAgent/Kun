@@ -155,8 +155,11 @@ export function WorkbenchStageRouter({
       <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {normalizedRoute === 'agent-chat' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            <AgentChatStage onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins}
-              onToggleLeftSidebar={onToggleLeftSidebar} />
+            {/* The 对话 tour points at the whole conversation area, whichever kind is open. */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-agent-chat-stage>
+              <AgentChatStage onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins}
+                onToggleLeftSidebar={onToggleLeftSidebar} />
+            </div>
           </Suspense>
         ) : normalizedRoute === 'extensions' ? (
           <Suspense fallback={<div className="h-full bg-ds-main" />}>
