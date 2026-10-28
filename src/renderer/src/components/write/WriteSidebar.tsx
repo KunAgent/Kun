@@ -33,10 +33,11 @@ type Props = {
 }
 
 /**
- * Work sidebar, shaped like Code's: mode menu and primary actions, then the
- * space you are in and its map — 会话 / 文件 / 论文, all visible at once.
- * Spaces are folders; their papers live in `<space>/papers`, so there is no
- * separate library list, view switch or paper mode.
+ * Work sidebar, shaped like Code's: mode menu and primary actions, the
+ * cross-space entries (产物), then the space you are in and its map —
+ * 会话 / 资料 / 文件, all visible at once. Spaces are folders; their papers
+ * live in `<space>/papers`, so there is no separate library list, view switch
+ * or paper mode.
  */
 export function WriteSidebar({
   activeView,
@@ -86,6 +87,10 @@ export function WriteSidebar({
             onNewSession={() => void startWorkSession()}
             onNewDocument={() => void actions.openCreateFileDialog()}
           />
+          {/* Artifacts span spaces, so the entry sits above the space switcher. */}
+          <nav className="work-sidebar-nav" aria-label={t('artifactsNav')}>
+            <WorkArtifactsSection workspaceRoot={workspaceRoot} />
+          </nav>
           <WorkSpaceSwitcher onAddSpace={() => void actions.pickWriteWorkspace()} />
         </div>
 
@@ -106,7 +111,6 @@ export function WriteSidebar({
             <div className="work-materials">
               {/* Phones keep their own paper home. */}
               {remoteMobile ? null : <WorkPapersSection />}
-              <WorkArtifactsSection workspaceRoot={workspaceRoot} />
               {/* Last, so the tree takes the remaining height. */}
               <WorkFilesSection actions={actions} />
             </div>

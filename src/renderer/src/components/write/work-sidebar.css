@@ -1,5 +1,13 @@
 /* Work sidebar: same rhythm as the Code sidebar (sidebar-code-nav.css). */
 
+/* Cross-space entries sit under the primary actions, above the space row. */
+.work-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 2px 0;
+}
+
 /* The space you are in: one row, the map below belongs to it. */
 .work-space-switcher {
   display: flex;
