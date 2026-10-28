@@ -20,6 +20,7 @@ describe('parseMemoryDistillationExtractionResponse', () => {
   it('keeps a fully valid response unchanged and drops nothing', () => {
     const result = parseMemoryDistillationExtractionResponse({ candidates: [validCandidate] })
     expect(result.dropped).toEqual([])
+    expect(result.salvaged).toEqual([])
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]?.type).toBe('preference')
     expect(result.candidates[0]?.durability).toBe('durable')
@@ -51,7 +52,7 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(result.candidates[0]?.type).toBe('fact')
   })
 
-  it('drops a candidate whose comparisons are malformed and reports why', () => {
+  it('salvages a candidate whose only failures are in comparisons, stripped for review', () => {
     const damaged = {
       ...validCandidate,
       content: 'User now lives in Shanghai',
@@ -62,9 +63,36 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     }
     const result = parseMemoryDistillationExtractionResponse({ candidates: [damaged] })
     expect(result.candidates).toEqual([])
+    expect(result.dropped).toEqual([])
+    expect(result.salvaged).toHaveLength(1)
+    expect(result.salvaged[0]?.index).toBe(0)
+    expect(result.salvaged[0]?.candidate.content).toBe('User now lives in Shanghai')
+    // The quarantined comparisons never ride along, not even the valid one.
+    expect(result.salvaged[0]?.candidate.comparisons).toEqual([])
+    expect(result.salvaged[0]?.relations).toEqual(['replace'])
+    expect(result.salvaged[0]?.error).toContain('comparisons')
+  })
+
+  it('salvages a candidate with a single out-of-enum relation and reports the raw value', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, comparisons: [{ memoryId: 'memory-1', relation: 'related' }] }]
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.dropped).toEqual([])
+    expect(result.salvaged).toHaveLength(1)
+    expect(result.salvaged[0]?.relations).toEqual(['related'])
+    expect(result.salvaged[0]?.candidate.comparisons).toEqual([])
+  })
+
+  it('still drops a candidate that also fails outside comparisons', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: 'high',
+        comparisons: [{ memoryId: 'memory-1', relation: 'related' }] }]
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.salvaged).toEqual([])
     expect(result.dropped).toHaveLength(1)
-    expect(result.dropped[0]?.index).toBe(0)
-    expect(result.dropped[0]?.error).toContain('comparisons')
+    expect(result.dropped[0]?.error).toContain('confidence')
   })
 
   it('keeps a valid supersede comparison intact when a sibling candidate is damaged', () => {
@@ -84,7 +112,9 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(result.candidates[0]?.comparisons).toEqual([
       { memoryId: 'memory-1', relation: 'supersede', reason: 'User moved' }
     ])
-    expect(result.dropped.map((entry) => entry.index)).toEqual([1])
+    expect(result.dropped).toEqual([])
+    expect(result.salvaged.map((entry) => entry.index)).toEqual([1])
+    expect(result.salvaged[0]?.relations).toEqual(['replace'])
   })
 
   it('keeps every candidate when only one has an out-of-enum durability', () => {

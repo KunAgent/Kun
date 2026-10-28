@@ -214,27 +214,34 @@ export class AgentMemoryCoordinator {
     let saved = 0, pending = 0
     if (allowed && !result.error) {
       for (const value of result.candidates) {
-        if (await this.deps.agentMemory!.store().isForgotten?.(agentMemoryCaptureInput(job, value.candidate))) continue
-        const candidateId = agentStableId('agent-memory-candidate', job.runId!, value.candidate.content)
+        const { reviewReason, ...decided } = value
+        if (await this.deps.agentMemory!.store().isForgotten?.(agentMemoryCaptureInput(job, decided.candidate))) continue
+        const candidateId = agentStableId('agent-memory-candidate', job.runId!, decided.candidate.content)
         const record: AgentMemoryCandidate = { id: candidateId, phase: 'candidate', participantAgentId: job.participantAgentId,
-          roomId: job.roomId, rootRequestId: job.rootRequestId, status: 'pending', ...value,
+          roomId: job.roomId, rootRequestId: job.rootRequestId, status: 'pending', ...decided,
           runId: job.runId!, sourceMessageIds: job.messageIds }
-        if (value.action === 'create') {
+        if (decided.action === 'create' && !reviewReason) {
           const id = agentStableId('mem-agent-auto', job.participantAgentId, job.memoryConversationId ?? job.roomId, job.taskScopeId ?? '', job.handoffId ?? '',
-            value.candidate.sources.map((source) => source.id + ':' + source.contentHash).sort().join('|'), value.candidate.content)
+            decided.candidate.sources.map((source) => source.id + ':' + source.contentHash).sort().join('|'), decided.candidate.content)
           const store = this.deps.agentMemory!.store()
           if (!store.createWithId) throw new Error('idempotent memory storage unavailable')
-          const memory = await store.createWithId(id, { ...value.candidate, scope: 'user',
+          const memory = await store.createWithId(id, { ...decided.candidate, scope: 'user',
             agentContext: { schemaVersion: 1, agentId: job.participantAgentId, sourceConversationId: job.memoryConversationId ?? job.roomId,
               sourceHandoffId: job.memoryConversationId === job.roomId ? job.handoffId : undefined,
               sourceRootRequestId: job.rootRequestId, sourceTaskId: job.taskScopeId, shared: false, sharedConversationIds: [], sharedProjectRoots: [], locked: false,
-              originFingerprint: createHash('sha256').update(JSON.stringify(value.candidate.sources)).digest('hex') },
+              originFingerprint: createHash('sha256').update(JSON.stringify(decided.candidate.sources)).digest('hex') },
             provenance: { kind: 'inference', origin: 'agent-memory-capture:' + job.runId } })
           record.status = 'completed'; record.memoryId = memory.id; saved++
+        } else if (reviewReason) {
+          // Held for human review (e.g. its comparisons were quarantined at
+          // the extraction boundary): never auto-apply, even when the
+          // underlying decision was a plain create.
+          record.reason = reviewReason
+          pending++
         } else {
-          const target = value.targetId ? await this.deps.agentMemory!.find(job.participantAgentId, value.targetId) : null
+          const target = decided.targetId ? await this.deps.agentMemory!.find(job.participantAgentId, decided.targetId) : null
           record.reason = target && target.agentContext?.locked ? 'user_locked' :
-            target && canonicalMemoryHash(target) !== value.targetFingerprint ? 'source_changed' : 'conflicting_memory'
+            target && canonicalMemoryHash(target) !== decided.targetFingerprint ? 'source_changed' : 'conflicting_memory'
           pending++
         }
         await this.deps.store.commit({ requestId: candidateId,

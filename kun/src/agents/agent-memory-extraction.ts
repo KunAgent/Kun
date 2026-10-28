@@ -7,7 +7,8 @@ import { agentFastModel, assertAgentModel } from './agent-models.js'
 import { boundedRoomText } from '../rooms/room-context.js'
 import {
   parseMemoryDistillationExtractionResponse,
-  type MemoryDistillationExtractionDroppedCandidate
+  type MemoryDistillationExtractionDroppedCandidate,
+  type MemoryDistillationExtractionSalvagedCandidate
 } from '../contracts/memory-distillation-runtime.js'
 import { decideMemoryCandidate } from '../memory/memory-distillation.js'
 import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
@@ -91,8 +92,25 @@ export async function extractAgentMemories(deps: RoomRuntimeDeps, snapshot: Agen
       candidates.push({ action: decision.action, candidate: decision.candidate, targetId,
         targetFingerprint: target ? canonicalMemoryHash(target) : undefined })
     }
+    for (const entry of result.salvaged) {
+      // The candidate's comparisons were quarantined at the parse boundary,
+      // so decide sees none of them; whatever it decides, the coordinator is
+      // told to hold the candidate for human review instead of applying it.
+      const { durability, comparisons: _quarantined, ...candidate } = entry.candidate
+      const decision = decideMemoryCandidate({ candidate, durability, comparisons: [] }, snapshot.comparisonRecords,
+        { observedAt: snapshot.observedAt, sources: snapshot.sources })
+      if (decision.action === 'skip') continue
+      const targetId = 'memoryId' in decision ? decision.memoryId : undefined
+      const target = snapshot.comparisonRecords.find((record) => record.id === targetId)
+      candidates.push({ action: decision.action, candidate: decision.candidate, targetId,
+        targetFingerprint: target ? canonicalMemoryHash(target) : undefined,
+        reviewReason: invalidRelationReviewReason(entry) })
+    }
+    const diagnostics: string[] = []
+    if (result.dropped.length) diagnostics.push(droppedCandidatesDiagnostic(result.dropped))
+    if (result.salvaged.length) diagnostics.push(salvagedCandidatesDiagnostic(result.salvaged))
     return { candidates, usage, elapsedMs: Date.now() - started,
-      ...(result.dropped.length ? { diagnostics: [droppedCandidatesDiagnostic(result.dropped)] } : {}) }
+      ...(diagnostics.length ? { diagnostics } : {}) }
   } catch (error) {
     return { candidates: [], usage, error: error instanceof Error ? error.message : String(error), elapsedMs: Date.now() - started }
   }
@@ -101,4 +119,21 @@ export async function extractAgentMemories(deps: RoomRuntimeDeps, snapshot: Agen
 function droppedCandidatesDiagnostic(dropped: MemoryDistillationExtractionDroppedCandidate[]): string {
   const detail = dropped.map((entry) => `#${entry.index} ${entry.error}`).join('; ')
   return `dropped ${dropped.length} invalid extraction candidate(s): ${detail}`.slice(0, 300)
+}
+
+function formatSalvagedRelations(entry: MemoryDistillationExtractionSalvagedCandidate): string {
+  return entry.relations.length
+    ? entry.relations.map((relation) => `'${relation}'`).join(', ')
+    : 'malformed'
+}
+
+function invalidRelationReviewReason(entry: MemoryDistillationExtractionSalvagedCandidate): string {
+  return `invalid-relation ${formatSalvagedRelations(entry)} (candidate #${entry.index}): ` +
+    'comparisons quarantined; review required before this candidate can be saved'
+}
+
+function salvagedCandidatesDiagnostic(salvaged: MemoryDistillationExtractionSalvagedCandidate[]): string {
+  const detail = salvaged.map((entry) =>
+    `#${entry.index} invalid comparison relation ${formatSalvagedRelations(entry)}`).join('; ')
+  return `routed ${salvaged.length} candidate(s) to review: ${detail}`.slice(0, 300)
 }

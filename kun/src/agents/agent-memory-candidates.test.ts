@@ -50,6 +50,29 @@ it('shows the old value and creates one protected new version only after explici
   expect(newer.content).toBe(f.candidate.candidate.content)
   expect(records.find((record) => record.id === f.saved.memory.id)?.supersededAt).toBeTruthy()
 })
+it('saves a target-less reviewed candidate as a new memory only after explicit acceptance', async () => {
+  const f = await fixture()
+  const held: AgentMemoryCandidate = { id: 'held-candidate', phase: 'candidate', participantAgentId: f.agent.id,
+    roomId: f.candidate.roomId, rootRequestId: f.candidate.rootRequestId, status: 'pending',
+    candidate: { content: 'Reports should link every source inline.', type: 'preference', confidence: .9, importance: .7,
+      observedAt: new Date().toISOString(), tags: [], sources: f.saved.memory.sources },
+    action: 'create',
+    reason: "invalid-relation 'related' (candidate #0): comparisons quarantined; review required before this candidate can be saved",
+    runId: 'memory-run', sourceMessageIds: f.candidate.sourceMessageIds }
+  await f.store.commit({ requestId: 'held-candidate', checks: [{ kind: 'agent_memory_job', id: held.id, expectedRevision: null }],
+    puts: [{ kind: 'agent_memory_job', id: held.id, roomId: held.roomId, value: held }] })
+  const listed = await listAgentMemoryCandidates(f.service, f.agent.id)
+  const entry = listed.candidates.find((item) => item.candidate.id === 'held-candidate')!
+  expect(entry.target).toBeUndefined()
+  await decideAgentMemoryCandidate(f.service, f.agent.id, 'held-candidate', {
+    clientRequestId: 'accept-held', expectedRevision: entry.revision, decision: 'allow' })
+  const records = await f.storage.list({ agent: { agentId: f.agent.id, manage: true } })
+  expect(records).toHaveLength(2)
+  const created = records.find((record) => record.content === 'Reports should link every source inline.')!
+  expect(created.agentContext?.locked).toBe(true)
+  // The pre-existing memory is untouched: approval did not supersede it.
+  expect(records.find((record) => record.id === f.saved.memory.id)?.supersededAt).toBeFalsy()
+})
 it('rejects another Agent and stale decisions without overwriting a user correction', async () => {
   const f = await fixture()
   await expect(decideAgentMemoryCandidate(f.service, 'other-agent', f.candidate.id, {

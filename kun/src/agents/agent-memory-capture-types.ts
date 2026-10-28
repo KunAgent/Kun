@@ -24,6 +24,10 @@ export type AgentMemoryCandidate = {
 }
 export type AgentMemoryCaptureResult = {
   candidates: Array<{ candidate: MemoryCandidate; action: 'create' | 'update' | 'supersede';
-    targetId?: string; targetFingerprint?: string }>;
+    targetId?: string; targetFingerprint?: string;
+    /** When set, the coordinator must hold this candidate as a pending
+     * review record with this reason instead of applying it automatically,
+     * even when the decision action is 'create'. */
+    reviewReason?: string }>;
   usage?: UsageSnapshot; error?: string; diagnostics?: string[]; elapsedMs: number
 }

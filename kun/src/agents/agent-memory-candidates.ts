@@ -46,21 +46,34 @@ export async function decideAgentMemoryCandidate(service: AgentMemoryService, ag
   let memoryId: string | undefined
   if (input.decision === 'allow') {
     if (!await service.available()) throw new RoomStoreConflictError('agent memory is disabled')
-    if (!row.value.targetId) throw new RoomStoreConflictError('candidate has no valid target')
-    const target = await service.find(agentId, row.value.targetId)
     memoryId = agentStableId('mem-agent-approved', candidateId)
     const existing = await service.store().getById?.(memoryId, { agent: { agentId, manage: true } }).catch(() => undefined)
     if (!existing) {
-      if (!input.expectedTargetFingerprint || canonicalMemoryHash(target) !== input.expectedTargetFingerprint ||
-        target.deletedAt || target.disabledAt || target.supersededAt) throw new RoomStoreConflictError('target memory changed or is unavailable')
       if (!service.store().createWithId) throw new Error('idempotent memory storage unavailable')
-      await service.store().createWithId!(memoryId, {
-        ...row.value.candidate, scope: target.scope, workspace: target.workspace, project: target.project,
-        supersedes: target.id, supersedesExpectedRevision: target.revision,
-        provenance: { kind: 'user', origin: 'agent-memory-candidate:' + candidateId },
-        agentContext: { ...target.agentContext!, locked: true, lastOperationId: key,
-          originFingerprint: createHash('sha256').update(candidateId).digest('hex') }
-      })
+      if (row.value.targetId) {
+        const target = await service.find(agentId, row.value.targetId)
+        if (!input.expectedTargetFingerprint || canonicalMemoryHash(target) !== input.expectedTargetFingerprint ||
+          target.deletedAt || target.disabledAt || target.supersededAt) throw new RoomStoreConflictError('target memory changed or is unavailable')
+        await service.store().createWithId!(memoryId, {
+          ...row.value.candidate, scope: target.scope, workspace: target.workspace, project: target.project,
+          supersedes: target.id, supersedesExpectedRevision: target.revision,
+          provenance: { kind: 'user', origin: 'agent-memory-candidate:' + candidateId },
+          agentContext: { ...target.agentContext!, locked: true, lastOperationId: key,
+            originFingerprint: createHash('sha256').update(candidateId).digest('hex') }
+        })
+      } else {
+        // A candidate held for review without a target (e.g. its extraction
+        // comparisons were quarantined): approving saves it as a new memory
+        // and leaves every existing memory untouched.
+        await service.store().createWithId!(memoryId, {
+          ...row.value.candidate, scope: 'user',
+          provenance: { kind: 'user', origin: 'agent-memory-candidate:' + candidateId },
+          agentContext: { schemaVersion: 1, agentId, sourceConversationId: row.value.roomId,
+            sourceRootRequestId: row.value.rootRequestId, shared: false, sharedConversationIds: [],
+            sharedProjectRoots: [], locked: true, lastOperationId: key,
+            originFingerprint: createHash('sha256').update(candidateId).digest('hex') }
+        })
+      }
     } else if (service.store().createWithId) {
       // Complete the old-record tombstone if canonical creation committed before its acknowledgement.
       await service.store().createWithId!(memoryId, {
