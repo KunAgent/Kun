@@ -1,12 +1,12 @@
 import { officeDocumentPreviewFormatFromName } from '@shared/office-document'
 
-export type LibraryArtifactKind = 'design' | 'doc' | 'slides' | 'sheet' | 'board' | 'image'
+export type LibraryArtifactKind = 'design' | 'doc' | 'slides' | 'report' | 'sheet' | 'board' | 'image'
 
 export const LIBRARY_ARTIFACT_KINDS: readonly LibraryArtifactKind[] = [
-  'design', 'doc', 'slides', 'board', 'sheet', 'image'
+  'design', 'doc', 'slides', 'report', 'board', 'sheet', 'image'
 ]
 
-/** One thing Kun produced in a project: a design draft, an office file, a whiteboard or an image. */
+/** One thing Kun produced in a project: a design draft, an office file, a data report, a whiteboard or an image. */
 export type LibraryArtifact = {
   /** Stable across scans: kind, project and location. */
   id: string
@@ -23,6 +23,8 @@ export type LibraryArtifact = {
   designDocumentId?: string
   /** Work whiteboard id inside `.kun-whiteboards`. */
   whiteboardId?: string
+  /** Data report id inside `.kun-reports`. */
+  reportId?: string
   /** Conversation that produced it, when the source records one. */
   sourceThreadId?: string
 }
@@ -46,6 +48,10 @@ export const LIBRARY_ARTIFACT_KIND_STYLE: Record<LibraryArtifactKind, LibraryArt
   slides: {
     chip: 'bg-orange-50 text-orange-700 dark:bg-orange-400/15 dark:text-orange-200',
     tile: 'bg-orange-50 text-orange-600 dark:bg-orange-400/15 dark:text-orange-300'
+  },
+  report: {
+    chip: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-200',
+    tile: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-400/15 dark:text-indigo-300'
   },
   sheet: {
     chip: 'bg-green-50 text-green-700 dark:bg-green-400/15 dark:text-green-200',

@@ -28,11 +28,11 @@ import { WriteEntryDialog, type WriteEntryDialogKind } from '../components/write
 const RESCAN_THROTTLE_MS = 4_000
 
 const NEW_HINT_KEYS: Record<LibraryArtifactKind, string> = {
-  design: 'artifactsNewDesignHint', doc: 'artifactsNewDocHint', slides: 'artifactsNewSlidesHint',
+  design: 'artifactsNewDesignHint', doc: 'artifactsNewDocHint', slides: 'artifactsNewSlidesHint', report: 'artifactsNewReportHint',
   board: 'artifactsNewBoardHint', sheet: 'artifactsNewDocHint', image: 'artifactsNewDesignHint'
 }
 const NEW_PROMPT_KEYS: Record<LibraryArtifactKind, string> = {
-  design: 'artifactsNewDesignPrompt', doc: 'artifactsNewDocPrompt', slides: 'artifactsNewSlidesPrompt',
+  design: 'artifactsNewDesignPrompt', doc: 'artifactsNewDocPrompt', slides: 'artifactsNewSlidesPrompt', report: 'artifactsNewReportPrompt',
   board: 'artifactsNewBoardPrompt', sheet: 'artifactsNewDocPrompt', image: 'artifactsNewDesignPrompt'
 }
 

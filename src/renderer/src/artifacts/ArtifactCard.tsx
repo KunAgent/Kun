@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FileText, Image as ImageIcon, MessageSquare, Palette, Presentation, Shapes, Table2, type LucideIcon } from 'lucide-react'
+import { ChartLine, FileText, Image as ImageIcon, MessageSquare, Palette, Presentation, Shapes, Table2, type LucideIcon } from 'lucide-react'
 import { useBoardPreview } from './artifact-board-preview'
+import { DataReportThumbnail } from './DataReportThumbnail'
 import { LIBRARY_ARTIFACT_KIND_STYLE, type LibraryArtifact, type LibraryArtifactKind } from './artifact-types'
 import { ARTIFACT_KIND_LABEL_KEYS, fileTypeLabel, formatArtifactSize, formatArtifactTime } from './artifact-view-model'
 
@@ -9,6 +10,7 @@ export const ARTIFACT_KIND_ICONS: Record<LibraryArtifactKind, LucideIcon> = {
   design: Palette,
   doc: FileText,
   slides: Presentation,
+  report: ChartLine,
   sheet: Table2,
   board: Shapes,
   image: ImageIcon
@@ -70,6 +72,7 @@ function Thumbnail({ artifact }: { artifact: LibraryArtifact }): ReactElement {
       </div>
     )
   }
+  if (artifact.kind === 'report') return <DataReportThumbnail artifact={artifact} />
   if (artifact.kind === 'sheet') {
     return (
       <div className="grid w-[200px] grid-cols-4 overflow-hidden rounded border border-zinc-300 bg-white dark:border-zinc-600 dark:bg-ds-card">

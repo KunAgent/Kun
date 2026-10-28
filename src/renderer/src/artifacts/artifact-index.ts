@@ -8,6 +8,8 @@ import type {
 import { parseDocumentsIndex } from '../design/design-document-persistence'
 import { parseWorkWhiteboardRegistry, WORK_WHITEBOARD_DIR, WORK_WHITEBOARD_INDEX } from '../write/work-whiteboard'
 import { KUN_GENERATED_IMAGE_DIR, LEGACY_GENERATED_IMAGE_DIR } from '@shared/generated-image-path'
+import { DATA_REPORT_DIR, isDataReportId } from '../../../../kun/src/contracts/data-report'
+import { parseDataReportFile } from './data-report-file'
 import { isImageExt, officeKindForExt, type LibraryArtifact } from './artifact-types'
 
 export type ArtifactScanApi = {
@@ -23,6 +25,8 @@ export type ArtifactScanApi = {
 export const OFFICE_SCAN_DIRS = ['', 'docs', 'reports', 'exports', 'output', 'outputs', 'slides', 'presentations'] as const
 export const IMAGE_SCAN_DIRS = [KUN_GENERATED_IMAGE_DIR, LEGACY_GENERATED_IMAGE_DIR] as const
 const MAX_ROOTS = 16
+/** Reports are read to get their titles; newest first, so old ones fall off a huge folder. */
+const MAX_REPORTS_PER_ROOT = 60
 const MAX_ARTIFACTS = 400
 
 export function projectNameForRoot(workspaceRoot: string): string {
@@ -112,6 +116,34 @@ async function scanWhiteboards(api: ArtifactScanApi, workspaceRoot: string, proj
   })
 }
 
+async function scanReports(api: ArtifactScanApi, workspaceRoot: string, projectName: string): Promise<LibraryArtifact[]> {
+  const files = (await listFiles(api, workspaceRoot, DATA_REPORT_DIR))
+    .filter((entry) => entry.name.endsWith('.json') && isDataReportId(stem(entry.name)))
+    .sort((left, right) => (right.mtimeMs ?? 0) - (left.mtimeMs ?? 0))
+    .slice(0, MAX_REPORTS_PER_ROOT)
+  const reports = await Promise.all(files.map(async (entry) => {
+    const path = joinPath(DATA_REPORT_DIR, entry.name)
+    const raw = await readText(api, workspaceRoot, path)
+    const report = raw ? parseDataReportFile(raw) : null
+    if (!report || report.reportId !== stem(entry.name)) return null
+    const artifact: LibraryArtifact = {
+      id: artifactId('report', workspaceRoot, path),
+      kind: 'report',
+      title: report.title,
+      workspaceRoot,
+      projectName,
+      path,
+      ext: '',
+      updatedAt: timeOf(report.updatedAt) || timeOf(entry.mtimeMs),
+      reportId: report.reportId,
+      ...(typeof entry.size === 'number' ? { size: entry.size } : {}),
+      ...(report.threadId ? { sourceThreadId: report.threadId } : {})
+    }
+    return artifact
+  }))
+  return reports.filter((artifact): artifact is LibraryArtifact => artifact !== null)
+}
+
 async function scanFiles(
   api: ArtifactScanApi,
   workspaceRoot: string,
@@ -144,6 +176,7 @@ export async function scanWorkspaceArtifacts(api: ArtifactScanApi, workspaceRoot
   const groups = await Promise.all([
     scanDesigns(api, workspaceRoot, projectName),
     scanWhiteboards(api, workspaceRoot, projectName),
+    scanReports(api, workspaceRoot, projectName),
     scanFiles(api, workspaceRoot, projectName, OFFICE_SCAN_DIRS, officeKindForExt),
     scanFiles(api, workspaceRoot, projectName, IMAGE_SCAN_DIRS, (ext) => isImageExt(ext) ? 'image' : null)
   ])

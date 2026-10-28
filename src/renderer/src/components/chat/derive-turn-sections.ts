@@ -8,6 +8,7 @@ import {
 } from '../../lib/diff-stats'
 import { isAppSurfaceBlock } from '../../app-surfaces/app-surface-tool-meta'
 import { isDesignOpenBlock } from '../../agent/design-open-request'
+import { isReportOpenBlock } from '../../agent/report-open-request'
 import { isPendingRenderChartTool } from '../../agent/chart-spec-adapter'
 import { isPendingPaperReportTool } from '../../agent/paper-list-adapter'
 import {
@@ -60,6 +61,7 @@ export type TurnSections = {
   pendingPaperListBlocks: ToolBlock[]
   componentPrototypeBlocks: ToolBlock[]
   designOpenBlocks: ToolBlock[]
+  reportOpenBlocks: ToolBlock[]
   diagramPrototypeBlocks: ToolBlock[]
   conversationVisualizationBlocks: ToolBlock[]
   /** Gen UI widgets and MCP App pages, rendered after the conclusion. */
@@ -286,6 +288,8 @@ export function deriveTurnSections({
     if (isPendingPaperReportTool(block)) continue
     // The design card is the only view of a design_open call; its arguments carry whole screens of HTML.
     if (isDesignOpenBlock(block)) continue
+    // The report card renders the whole report; its arguments carry the data.
+    if (isReportOpenBlock(block)) continue
     if (isProcessBlock(block)) {
       processBlocks.push(block)
       processTimelineBlocks.push(block)
@@ -349,6 +353,7 @@ export function deriveTurnSections({
     Boolean(block.meta.componentPrototype)
   ))
   const designOpenBlocks: ToolBlock[] = turn.blocks.filter(isDesignOpenBlock)
+  const reportOpenBlocks: ToolBlock[] = turn.blocks.filter(isReportOpenBlock)
   const diagramPrototypeBlocks: ToolBlock[] = turn.blocks.filter((block): block is ToolBlock => (
     block.kind === 'tool' &&
     block.meta?.toolName === 'show_diagram' &&
@@ -378,6 +383,7 @@ export function deriveTurnSections({
     runtimeErrorsAfterFinalContent,
     componentPrototypeBlocks,
     designOpenBlocks,
+    reportOpenBlocks,
     diagramPrototypeBlocks,
     conversationVisualizationBlocks,
     appSurfaceBlocks,

@@ -63,5 +63,22 @@
   "artifactsNoScreens": "งานออกแบบนี้ยังไม่มีหน้าจอ HTML เปิดแคนวาสเพื่อดู",
   "artifactsWhiteboardHint": "ไวท์บอร์ดจะเปิดใน Work และแก้ไขได้ที่นั่น",
   "artifactsScreenVersions_one": "{{count}} เวอร์ชัน",
-  "artifactsScreenVersions_other": "{{count}} เวอร์ชัน"
+  "artifactsScreenVersions_other": "{{count}} เวอร์ชัน",
+  "artifactsKindReport": "แผนภูมิ",
+  "artifactsNewReportHint": "ตัวชี้วัด แนวโน้ม แดชบอร์ด",
+  "artifactsNewReportPrompt": "ทำแผนภูมิจากข้อมูลนี้: ",
+  "reportCardBuilding": "กำลังสร้างรายงาน…",
+  "reportCardInterrupted": "รายงานยังไม่เสร็จ",
+  "reportCardFailed": "สร้างรายงานไม่สำเร็จ: {{error}}",
+  "reportCardStats": "ตัวชี้วัด {{n}} รายการ",
+  "reportCardCharts": "แผนภูมิ {{n}} รายการ",
+  "reportCardAsOf": "ณ {{time}}",
+  "reportCardRevision": "เวอร์ชัน {{n}}",
+  "reportCardSaved": "บันทึกในผลงานแล้ว",
+  "reportCardOpen": "เปิดในผลงาน",
+  "reportCardShowMore": "แสดงอีก {{n}} บล็อก",
+  "reportCardShowLess": "ย่อ",
+  "reportCardSources": "แหล่งที่มา: {{sources}}",
+  "reportCardLoadFailed": "อ่านรายงานที่บันทึกไว้ไม่ได้",
+  "toolBuiltinReportOpen": "สร้างรายงานข้อมูล"
 }

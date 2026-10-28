@@ -63,5 +63,22 @@
   "artifactsNoScreens": "इस डिज़ाइन में अभी HTML स्क्रीन नहीं है। कैनवास खोलें।",
   "artifactsWhiteboardHint": "व्हाइटबोर्ड Work में खुलते हैं, वहाँ उन्हें बदला जा सकता है।",
   "artifactsScreenVersions_one": "{{count}} संस्करण",
-  "artifactsScreenVersions_other": "{{count}} संस्करण"
+  "artifactsScreenVersions_other": "{{count}} संस्करण",
+  "artifactsKindReport": "चार्ट",
+  "artifactsNewReportHint": "मेट्रिक्स, रुझान, डैशबोर्ड",
+  "artifactsNewReportPrompt": "इस डेटा के चार्ट बनाओ: ",
+  "reportCardBuilding": "रिपोर्ट बन रही है…",
+  "reportCardInterrupted": "रिपोर्ट पूरी नहीं हुई",
+  "reportCardFailed": "रिपोर्ट नहीं बन सकी: {{error}}",
+  "reportCardStats": "{{n}} मेट्रिक्स",
+  "reportCardCharts": "{{n}} चार्ट",
+  "reportCardAsOf": "{{time}} तक",
+  "reportCardRevision": "संस्करण {{n}}",
+  "reportCardSaved": "आर्टिफ़ैक्ट्स में सहेजा गया",
+  "reportCardOpen": "आर्टिफ़ैक्ट्स में खोलें",
+  "reportCardShowMore": "{{n}} और ब्लॉक दिखाएँ",
+  "reportCardShowLess": "कम दिखाएँ",
+  "reportCardSources": "स्रोत: {{sources}}",
+  "reportCardLoadFailed": "सहेजी गई रिपोर्ट पढ़ी नहीं जा सकी",
+  "toolBuiltinReportOpen": "डेटा रिपोर्ट बनाएँ"
 }

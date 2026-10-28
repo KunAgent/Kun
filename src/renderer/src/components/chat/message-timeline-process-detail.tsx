@@ -126,6 +126,8 @@ export function builtInToolLabel(
       return t('toolBuiltinDesignComponent')
     case 'design_open':
       return t('toolBuiltinDesignOpen')
+    case 'report_open':
+      return t('toolBuiltinReportOpen')
     default:
       return undefined
   }

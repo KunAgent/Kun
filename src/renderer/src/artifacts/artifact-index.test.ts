@@ -70,6 +70,34 @@ describe('artifact library scan', () => {
     expect(items[0].title).toBe('Update entry')
   })
 
+  it('lists saved data reports with their source conversation', async () => {
+    const root = '/work/kun-account'
+    const report = (reportId: string, title: string): string => JSON.stringify({
+      version: 1, reportId, threadId: 'thread_users', revision: 2,
+      createdAt: '2026-10-27T00:00:00.000Z', updatedAt: '2026-10-28T01:00:00.000Z',
+      title, blocks: [{ type: 'stats', items: [{ label: '注册用户', value: 502 }] }]
+    })
+    const api = fakeApi({
+      [root]: {
+        '.kun-reports': {
+          files: {
+            'aaaaaaaaaa.json': { content: report('aaaaaaaaaa', 'Kun 用户概况'), mtimeMs: 5, size: 300 },
+            // Id mismatch, broken JSON and stray files are skipped.
+            'bbbbbbbbbb.json': { content: report('cccccccccc', 'Moved'), mtimeMs: 4 },
+            'dddddddddd.json': { content: '{oops', mtimeMs: 3 },
+            'notes.txt': { content: 'x', mtimeMs: 2 }
+          }
+        }
+      }
+    })
+    const items = await scanArtifactLibrary(api, [root])
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      kind: 'report', title: 'Kun 用户概况', path: '.kun-reports/aaaaaaaaaa.json', reportId: 'aaaaaaaaaa',
+      sourceThreadId: 'thread_users', updatedAt: Date.parse('2026-10-28T01:00:00.000Z'), size: 300
+    })
+  })
+
   it('treats missing folders and broken indexes as empty', async () => {
     const root = '/work/empty'
     const api = fakeApi({ [root]: { '.kun-design': { files: { 'documents.json': { content: '{broken' } } } } })
