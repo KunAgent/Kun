@@ -40,6 +40,8 @@ export const CODEX_INITIALIZED_NOTIFICATION = 'initialized'
 
 export const CODEX_SERVER_REQUESTS = {
   commandExecutionApproval: 'item/commandExecution/requestApproval',
+  /** Answered only for Kun's own MCP server (codex-kun-tools.ts); others are declined. */
+  mcpServerElicitation: 'mcpServer/elicitation/request',
   fileChangeApproval: 'item/fileChange/requestApproval',
   permissionsApproval: 'item/permissions/requestApproval',
   toolRequestUserInput: 'item/tool/requestUserInput'
@@ -47,7 +49,8 @@ export const CODEX_SERVER_REQUESTS = {
 
 /**
  * Server → client requests Kun deliberately refuses (method-not-found is
- * safer than pretending support): dynamic tool calls, MCP elicitation, legacy
+ * safer than pretending support): dynamic tool calls, MCP elicitation from
+ * servers other than Kun's own (see codex-kun-tools.ts), legacy
  * exec/patch approvals, ChatGPT token refresh, attestation.
  */
 export const CODEX_DECLINED_SERVER_REQUESTS = [
