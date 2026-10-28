@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ArtifactCard } from './ArtifactCard'
 import type { LibraryArtifact } from './artifact-types'
 
-const previews = vi.hoisted(() => ({ useBoardPreview: vi.fn() }))
+const previews = vi.hoisted(() => ({ useArtifactThumbnail: vi.fn() }))
 
-vi.mock('./artifact-board-preview', () => ({
-  useBoardPreview: previews.useBoardPreview
+vi.mock('./artifact-thumbnail', () => ({
+  useArtifactThumbnail: previews.useArtifactThumbnail
 }))
 
 vi.mock('react-i18next', () => ({
@@ -52,8 +52,8 @@ const createNodeMock = (): { nodeType: number } => ({ nodeType: 1 })
 let renderer: ReactTestRenderer | null = null
 
 beforeEach(() => {
-  previews.useBoardPreview.mockReset()
-  previews.useBoardPreview.mockReturnValue({ url: '' })
+  previews.useArtifactThumbnail.mockReset()
+  previews.useArtifactThumbnail.mockReturnValue({ status: 'loading' })
   observe.mockClear()
   disconnect.mockClear()
   observerCallback = null
@@ -73,7 +73,7 @@ describe('ArtifactCard thumbnails', () => {
       renderer = create(createElement(ArtifactCard, { artifact: board, onOpen: vi.fn() }), { createNodeMock })
     })
 
-    expect(previews.useBoardPreview).not.toHaveBeenCalled()
+    expect(previews.useArtifactThumbnail).not.toHaveBeenCalled()
     expect(observe).toHaveBeenCalledTimes(1)
     expect(disconnect).not.toHaveBeenCalled()
   })
@@ -87,8 +87,35 @@ describe('ArtifactCard thumbnails', () => {
       observerCallback?.([{ isIntersecting: true }])
     })
 
-    expect(previews.useBoardPreview).toHaveBeenCalledTimes(1)
-    expect(previews.useBoardPreview).toHaveBeenCalledWith(board)
+    expect(previews.useArtifactThumbnail).toHaveBeenCalledTimes(1)
+    expect(previews.useArtifactThumbnail).toHaveBeenCalledWith(board)
     expect(disconnect).toHaveBeenCalled()
+  })
+
+  it('shows the real preview image inside the page frame once loaded', async () => {
+    previews.useArtifactThumbnail.mockReturnValue({ status: 'image', url: 'data:image/webp;base64,AAAA' })
+    await act(async () => {
+      renderer = create(createElement(ArtifactCard, { artifact: board, onOpen: vi.fn() }), { createNodeMock })
+    })
+    await act(async () => {
+      observerCallback?.([{ isIntersecting: true }])
+    })
+
+    const images = renderer!.root.findAll((node) => node.type === 'img')
+    expect(images.map((node) => node.props.src)).toEqual(['data:image/webp;base64,AAAA'])
+  })
+
+  it('lays out several design screens with a screen count', async () => {
+    const design: LibraryArtifact = { ...board, id: 'design:/work:.kun-design/d1', kind: 'design', path: '.kun-design/d1', whiteboardId: undefined, designDocumentId: 'd1' }
+    previews.useArtifactThumbnail.mockReturnValue({ status: 'screens', urls: ['a', 'b', 'c'], total: 8 })
+    await act(async () => {
+      renderer = create(createElement(ArtifactCard, { artifact: design, onOpen: vi.fn() }), { createNodeMock })
+    })
+    await act(async () => {
+      observerCallback?.([{ isIntersecting: true }])
+    })
+
+    expect(renderer!.root.findAll((node) => node.type === 'img')).toHaveLength(3)
+    expect(JSON.stringify(renderer!.toJSON())).toContain('artifactsScreenCount')
   })
 })

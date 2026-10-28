@@ -58,6 +58,7 @@
   "artifactsZoomIn": "확대",
   "artifactsZoomOut": "축소",
   "artifactsFit": "창에 맞추기",
+  "artifactsScreenCount": "{{n}}개 화면",
   "artifactsPreviewLoading": "미리보기 불러오는 중…",
   "artifactsPreviewUnavailable": "이 파일은 아직 여기서 미리볼 수 없습니다.",
   "artifactsNoScreens": "이 디자인에는 아직 HTML 화면이 없습니다. 캔버스를 열어 확인하세요.",

@@ -58,6 +58,7 @@
   "artifactsZoomIn": "ซูมเข้า",
   "artifactsZoomOut": "ซูมออก",
   "artifactsFit": "พอดีหน้าต่าง",
+  "artifactsScreenCount": "{{n}} หน้าจอ",
   "artifactsPreviewLoading": "กำลังโหลดตัวอย่าง…",
   "artifactsPreviewUnavailable": "ยังแสดงตัวอย่างไฟล์นี้ที่นี่ไม่ได้",
   "artifactsNoScreens": "งานออกแบบนี้ยังไม่มีหน้าจอ HTML เปิดแคนวาสเพื่อดู",

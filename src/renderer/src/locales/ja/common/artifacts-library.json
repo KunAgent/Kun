@@ -58,6 +58,7 @@
   "artifactsZoomIn": "拡大",
   "artifactsZoomOut": "縮小",
   "artifactsFit": "ウィンドウに合わせる",
+  "artifactsScreenCount": "{{n}} 画面",
   "artifactsPreviewLoading": "プレビューを読み込み中…",
   "artifactsPreviewUnavailable": "このファイルはまだここでプレビューできません。",
   "artifactsNoScreens": "このデザインにはまだ HTML 画面がありません。キャンバスを開いてください。",

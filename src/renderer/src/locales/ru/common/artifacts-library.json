@@ -58,6 +58,7 @@
   "artifactsZoomIn": "Увеличить",
   "artifactsZoomOut": "Уменьшить",
   "artifactsFit": "По размеру окна",
+  "artifactsScreenCount": "Экранов: {{n}}",
   "artifactsPreviewLoading": "Загрузка предпросмотра…",
   "artifactsPreviewUnavailable": "Kun пока не может показать этот файл здесь.",
   "artifactsNoScreens": "В этом макете пока нет HTML-экранов. Откройте холст.",
