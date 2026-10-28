@@ -36,8 +36,13 @@ export function usePluginMcp({ t, active }: { t: Translate; active: boolean }) {
   /** Latest config text, reading it first if this view has not loaded it yet. */
   const current = useCallback(async (): Promise<string> => (loaded ? textRef.current : read()), [loaded, read])
 
-  const write = useCallback(async (text: string): Promise<{ path: string }> => {
-    const result = await window.kunGui.setKunConfigFile(text)
+  /**
+   * Save the edited text. `baseText` is the content the edit was derived from;
+   * the IPC write rejects it when the file changed underneath (for example a
+   * Runtime disable that finished after the panel loaded the snapshot).
+   */
+  const write = useCallback(async (text: string, baseText: string): Promise<{ path: string }> => {
+    const result = await window.kunGui.setKunConfigFile(text, baseText)
     textRef.current = text
     setConfigText(text)
     setLoaded(true)

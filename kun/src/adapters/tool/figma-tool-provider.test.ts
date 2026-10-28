@@ -26,7 +26,7 @@ function service(overrides: Partial<FigmaReadServicePort> = {}): FigmaReadServic
     })),
     readNodes: vi.fn(async () => ({ fileKey: 'abcdefghij', nodes: [], missingNodeIds: [] })),
     exportImages: vi.fn(async () => ({
-      fileKey: 'abcdefghij', images: [], missingNodeIds: [], download: { supported: false, reason: 'gap' }
+      fileKey: 'abcdefghij', images: [], missingNodeIds: [], download: { supported: false as const, reason: 'gap' }
     })),
     ...overrides
   }

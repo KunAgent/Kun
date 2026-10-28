@@ -119,13 +119,14 @@ export function usePluginMcpActions(input: {
     if (!item.mcpConfig) return
     const audit = auditMarketplaceInstall(item, workspaceRoot)
     if (!audit.ok) throw new Error(audit.errors.join('\n'))
-    const merged = mergeMcpJsonConfig(await mcp.current(), item.mcpConfig(workspaceRoot))
+    const currentText = await mcp.current()
+    const merged = mergeMcpJsonConfig(currentText, item.mcpConfig(workspaceRoot))
     const name = itemTitle(item, t)
     if (merged.alreadyExists) {
       notify({ tone: 'info', message: t('pluginAlreadyAdded') })
       return
     }
-    await mcp.write(merged.text)
+    await mcp.write(merged.text, currentText)
     notify({ tone: 'success', message: t('pluginsToastMcpEnabled', { name }) })
     void mcp.refreshOverlay()
   }, [mcp, notify, t, workspaceRoot])
@@ -138,7 +139,7 @@ export function usePluginMcpActions(input: {
     }
     const text = await mcp.current()
     if (state.mode === 'install' && readMcpServer(text, form.id)) throw new Error(t('pluginAlreadyAdded'))
-    await mcp.write(applyMcpServerForm(text, form, { requiredKeys: state.requiredKeys }))
+    await mcp.write(applyMcpServerForm(text, form, { requiredKeys: state.requiredKeys }), text)
     if (state.marketSourceId) market.setMcpOrigin(form.id, state.marketSourceId)
     const missing = missingEnvKeys(form.env, state.requiredKeys)
     if (state.mode === 'edit') {
@@ -227,7 +228,8 @@ export function usePluginMcpActions(input: {
     }
     setToggleBusyId(row.id)
     try {
-      await mcp.write(setMcpServerEnabled(await mcp.current(), row.id, enabled))
+      const currentText = await mcp.current()
+      await mcp.write(setMcpServerEnabled(currentText, row.id, enabled), currentText)
       notify({ tone: 'success', message: enabled ? t('pluginMcpEnabled') : t('pluginMcpDisabled') })
       void mcp.refreshOverlay()
     } catch (error) {
@@ -239,7 +241,8 @@ export function usePluginMcpActions(input: {
 
   const remove = useCallback(async (row: InstalledMcpRow): Promise<void> => {
     try {
-      await mcp.write(removeMcpServer(await mcp.current(), row.id))
+      const currentText = await mcp.current()
+      await mcp.write(removeMcpServer(currentText, row.id), currentText)
       market.setMcpOrigin(row.id, null)
       setConfirmRow(null)
       setSheet(null)

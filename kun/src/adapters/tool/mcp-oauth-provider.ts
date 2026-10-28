@@ -14,6 +14,8 @@ import type { McpCapabilityConfig, McpServerConfig } from '../../contracts/capab
 import { hashText, slug } from './mcp-naming.js'
 import { FileMcpOAuthStore, type McpOAuthState } from './mcp-oauth-store.js'
 import type { SecretEncryptor } from '../../security/secret-store.js'
+import type { McpOAuthLifetime } from './mcp-oauth-lifetime.js'
+import { McpOAuthRefreshCoordinator, type McpOAuthTokenSnapshot } from './mcp-oauth-refresh.js'
 import {
   McpAuthorizationRequiredError,
   type McpOAuthClearResult,
@@ -40,6 +42,7 @@ export type McpOAuthProviderOptions = {
   interactive?: boolean
   /** Optional encryptor; when present, persisted OAuth tokens are encrypted at rest. */
   encryptor?: SecretEncryptor
+  lifetime?: McpOAuthLifetime
 }
 
 type McpOAuthDiagnosticDetail = Omit<
@@ -61,6 +64,31 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   private readonly store: FileMcpOAuthStore
   private pendingAuthorizationCallback: Promise<URLSearchParams> | null = null
   private pendingState: string | null = null
+  /**
+   * Clear epoch captured when an interactive authorization starts. `saveTokens`
+   * drops a result that arrives after the user cleared credentials, so a slow
+   * browser round-trip cannot restore a revoked grant.
+   */
+  private authorizationClearEpoch: number | null = null
+  /**
+   * Credential state the SDK based its current request on. Recorded whenever
+   * tokens are handed out; the refresh transaction compares it against the
+   * persisted state to tell that a peer already moved the grant, including
+   * across processes and for servers that never rotate the refresh token.
+   */
+  private lastTokenSnapshot: McpOAuthTokenSnapshot | undefined
+  /**
+   * Credential set this connection's coordinator persisted, keyed by access
+   * token. The SDK's follow-up `saveTokens` acknowledges it instead of
+   * rewriting the row, and the entry pins the `clearEpoch` the transaction ran
+   * under. It is a map rather than a single slot because one provider can have
+   * several `auth()` calls in flight that share one refresh result: every
+   * acknowledgement must stay tied to that transaction, so that an
+   * acknowledgement arriving after a revocation is dropped instead of
+   * recreating the credentials.
+   */
+  private readonly coordinatedWrites = new Map<string, { clearEpoch: number }>()
+  private refreshCoordinator: McpOAuthRefreshCoordinator | null = null
 
   constructor(
     private readonly serverId: string,
@@ -75,9 +103,10 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
      */
     private readonly interactive: boolean = false,
     /** Optional encryptor; when present, persisted tokens are encrypted at rest. */
-    encryptor?: SecretEncryptor
+    encryptor?: SecretEncryptor,
+    private readonly lifetime?: McpOAuthLifetime
   ) {
-    this.store = new FileMcpOAuthStore(storagePath, encryptor)
+    this.store = new FileMcpOAuthStore(storagePath, encryptor, lifetime)
   }
 
   get redirectUrl(): URL {
@@ -125,25 +154,35 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
 
   async tokens(ctx?: OAuthClientInformationContext): Promise<StoredOAuthTokens | undefined> {
     this.assertExpectedIssuer(ctx?.issuer)
-    const tokens = (await this.store.read()).tokens
+    const state = await this.store.read()
+    const tokens = issuerCompatible(state.tokens, ctx?.issuer ?? this.server.oauth?.expectedIssuer)
     // Transports read without context for resource requests. Only credentials
     // already bound to an issuer may be used, including on that initial request.
-    return issuerCompatible(tokens, ctx?.issuer ?? this.server.oauth?.expectedIssuer)
+    if (tokens?.access_token) {
+      this.lastTokenSnapshot = {
+        accessToken: tokens.access_token,
+        mutationEpoch: state.mutationEpoch ?? 0,
+        clearEpoch: state.clearEpoch ?? 0
+      }
+    }
+    return tokens
   }
 
   async saveTokens(tokens: StoredOAuthTokens, ctx?: OAuthClientInformationContext): Promise<void> {
     this.assertExpectedIssuer(ctx?.issuer ?? tokens.issuer)
-    await this.store.update((state) => {
-      const next: McpOAuthState = {
-        ...state,
-        tokens: stampIssuer(tokens, ctx?.issuer),
-        tokensObtainedAt: this.now()
-      }
-      // A fresh token set means the prior authorization failure (if any) is
-      // resolved; clear it so diagnostics flip from "error" to "authorized".
-      delete next.lastError
-      delete next.lastErrorAt
-      return next
+    const stamped = stampIssuer(tokens, ctx?.issuer)
+    // Acknowledgements are matched by access token, not consumed from a single
+    // slot: two `auth()` calls may acknowledge the same coordinated result, and
+    // each one carries the clear epoch of the transaction that produced it.
+    const coordinated = this.coordinatedWrites.get(stamped.access_token)
+    const observedClearEpoch = coordinated?.clearEpoch
+      ?? this.authorizationClearEpoch
+      ?? undefined
+    this.authorizationClearEpoch = null
+    await this.store.saveTokens({
+      tokens: stamped,
+      obtainedAt: this.now(),
+      ...(observedClearEpoch !== undefined ? { observedClearEpoch } : {})
     })
   }
 
@@ -165,11 +204,18 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
     if (authorizationUrl.protocol !== 'http:' && authorizationUrl.protocol !== 'https:') {
       throw new Error(`MCP OAuth authorization URL must use http or https for server "${this.serverId}"`)
     }
+    this.lifetime?.signal.throwIfAborted()
+    this.authorizationClearEpoch = (await this.store.read()).clearEpoch ?? 0
     const callback = this.startCallbackServer()
+    const cancel = () => callback.cancel()
+    this.lifetime?.signal.addEventListener('abort', cancel, { once: true })
+    void callback.params.finally(() => this.lifetime?.signal.removeEventListener('abort', cancel)).catch(() => undefined)
     this.pendingAuthorizationCallback = callback.params
     try {
       await callback.ready
+      this.lifetime?.signal.throwIfAborted()
       await this.openExternal(authorizationUrl)
+      this.lifetime?.signal.throwIfAborted()
     } catch (error) {
       callback.cancel()
       this.pendingAuthorizationCallback = null
@@ -219,9 +265,30 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
     return (await this.store.read()).discoveryState
   }
 
+  /** Whether the stored grant moved past what this connection last read. */
+  private async credentialsMovedSinceSnapshot(): Promise<boolean> {
+    const snapshot = this.lastTokenSnapshot
+    if (!snapshot) return false
+    const state = await this.store.read()
+    if (!state.tokens?.access_token) return false
+    return state.tokens.access_token !== snapshot.accessToken
+  }
+
   async invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery'): Promise<void> {
+    if (scope === 'all' || scope === 'tokens') {
+      // The SDK calls this after a refresh it saw fail. If another connection
+      // has since authorized a newer grant for this server, that failure
+      // belongs to the old grant: dropping the new tokens here would revoke
+      // credentials the user just approved.
+      if (await this.credentialsMovedSinceSnapshot()) return
+      // A still-running refresh for this file is doomed too, so stop it
+      // instead of queueing the revocation behind its network round trip.
+      this.store.cancelInFlightRefresh()
+    }
     if (scope === 'all') {
       await this.store.clear()
+      this.lastTokenSnapshot = undefined
+      this.authorizationClearEpoch = null
       return
     }
     await this.store.update((state) => {
@@ -230,11 +297,20 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
       if (scope === 'tokens') {
         delete next.tokens
         delete next.tokensObtainedAt
+        delete next.lastRefresh
+        // Removing tokens is a revocation: in-flight refreshes started before
+        // it must not write their result back, and peers must see that the
+        // grant moved.
+        next.clearEpoch = (state.clearEpoch ?? 0) + 1
+        next.mutationEpoch = (state.mutationEpoch ?? 0) + 1
       }
       if (scope === 'verifier') delete next.codeVerifier
       if (scope === 'discovery') delete next.discoveryState
       return next
     })
+    if (scope === 'tokens') {
+      this.lastTokenSnapshot = undefined
+    }
   }
 
   /**
@@ -298,7 +374,45 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   }
 
   async clearCredentials(): Promise<void> {
+    this.lastTokenSnapshot = undefined
+    this.authorizationClearEpoch = null
+    // Deliberately keep `coordinatedWrites`: an acknowledgement still in flight
+    // must still be recognised as belonging to the revoked transaction, so its
+    // epoch mismatch drops it instead of writing the credentials back.
     await this.store.clear()
+  }
+
+  /**
+   * Fetch implementation for the SDK transports of this server.
+   *
+   * The SDK performs its OAuth token-endpoint calls through the transport's
+   * `fetch` option, so handing it this wrapper is what puts the refresh POST,
+   * token rotation, and credential write inside one grant-scoped transaction
+   * shared by every connection and runtime process for the same server.
+   */
+  get oauthFetch(): typeof fetch {
+    if (!this.refreshCoordinator) {
+      this.refreshCoordinator = new McpOAuthRefreshCoordinator({
+        serverId: this.serverId,
+        storePath: this.store.path,
+        store: this.store,
+        ...(this.server.oauth?.expectedIssuer ? { expectedIssuer: this.server.oauth.expectedIssuer } : {}),
+        ...(this.lifetime ? { lifetime: this.lifetime } : {}),
+        now: this.now,
+        snapshot: () => this.lastTokenSnapshot,
+        beginRefreshWrite: (write) => {
+          this.coordinatedWrites.set(write.accessToken, { clearEpoch: write.clearEpoch })
+          // Bounded: an acknowledgement always follows its own response within
+          // the same `auth()` call, so only recently coordinated sets matter.
+          while (this.coordinatedWrites.size > 32) {
+            const oldest = this.coordinatedWrites.keys().next().value
+            if (oldest === undefined) break
+            this.coordinatedWrites.delete(oldest)
+          }
+        }
+      })
+    }
+    return this.refreshCoordinator.fetch
   }
 
   private configuredClientInformation(): StoredOAuthClientInformation | undefined {
@@ -392,6 +506,7 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
       })
       server.listen(this.redirectPort(), MCP_OAUTH_REDIRECT_HOST, () => {
         listening = true
+        if (completed) closeServer()
         resolve()
       })
     })
@@ -453,7 +568,8 @@ export function createMcpOAuthProvider(
     options.openExternal,
     undefined,
     options.interactive ?? false,
-    options.encryptor
+    options.encryptor,
+    options.lifetime
   )
 }
 
@@ -474,8 +590,9 @@ export async function listMcpOAuthDiagnostics(
 
 export async function clearMcpOAuthCredentials(
   config: McpCapabilityConfig,
-  options: { storageDir?: string; serverId?: string } = {}
+  options: { storageDir?: string; serverId?: string; lifetime?: McpOAuthLifetime } = {}
 ): Promise<McpOAuthClearResult> {
+  options.lifetime?.signal.throwIfAborted()
   const providers = createConfiguredMcpOAuthProviders(config, options)
     .filter((entry) => !options.serverId || entry.serverId === options.serverId)
   await Promise.all(providers.map((entry) => entry.provider.clearCredentials()))
@@ -488,13 +605,15 @@ export function createConfiguredMcpOAuthProviders(
     storageDir?: string
     openExternal?: (url: URL) => void | Promise<void>
     encryptor?: SecretEncryptor
+    lifetime?: McpOAuthLifetime
   } = {}
 ): Array<{ serverId: string; server: McpServerConfig; provider: FileMcpOAuthProvider }> {
   return Object.entries(config.servers).flatMap(([serverId, server]) => {
     const provider = createMcpOAuthProvider(serverId, server, {
       storageDir: options.storageDir ?? '',
       openExternal: options.openExternal,
-      encryptor: options.encryptor
+      encryptor: options.encryptor,
+      lifetime: options.lifetime
     })
     return provider ? [{ serverId, server, provider }] : []
   })

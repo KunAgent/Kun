@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
+import { isDeepStrictEqual } from 'node:util'
 import type { AppSettingsV1 } from '../../shared/app-settings'
-import { McpServerConfig } from '../../../kun/src/contracts/capabilities.js'
+import { McpCapabilityConfig, McpServerConfig } from '../../../kun/src/contracts/capabilities.js'
+import type { McpServersUpdatePayload } from '../../../kun/src/contracts/runtime-config.js'
 import {
   buildClawScheduleMcpArgs,
   GUI_SCHEDULE_MCP_SERVER_NAME,
@@ -81,6 +83,34 @@ function isHistoricalBundledAgentSkillsRoot(path: string): boolean {
   return comparableSkillRootPath(path)
     .replace(/\\/g, '/')
     .endsWith('/bundled-agent-skills/skills')
+}
+
+/**
+ * Schema-canonical MCP server map. Persisted entries can be builder-shaped and
+ * miss defaults (args/env/headers/...), while validation and the Runtime always
+ * fill them; both sides of a version decision must use the same form.
+ */
+export function canonicalMcpServers(
+  servers: Record<string, unknown>
+): NonNullable<McpServersUpdatePayload['base']> {
+  const parsed = McpCapabilityConfig.safeParse({ servers })
+  return (parsed.success ? parsed.data.servers : servers) as NonNullable<McpServersUpdatePayload['base']>
+}
+
+/**
+ * Hot-apply decision for the MCP server set. Both sides are compared in schema
+ * form because persisted entries can be builder-shaped and miss defaults that
+ * validation (and the Runtime) always fill; a raw comparison would report a
+ * change on every synchronization.
+ */
+export function mcpServersUpdateFromConfig(
+  before: Record<string, unknown>,
+  written: Record<string, unknown>
+): McpServersUpdatePayload {
+  const base = canonicalMcpServers(before)
+  return isDeepStrictEqual(base, canonicalMcpServers(written))
+    ? { mode: 'preserve' }
+    : { mode: 'replace', base }
 }
 
 export async function readGuiManagedMcpServers(

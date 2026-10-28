@@ -53,7 +53,6 @@ export async function addRemoteMcpApp(
   if (!runtime.mcpConfig || !runtime.setMcpServer) return ERRORS.unavailable('MCP configuration management is unavailable')
   const id = ServerId.safeParse(serverId)
   if (!id.success) return ERRORS.validation('invalid MCP server id', id.error.issues)
-  if (runtime.mcpConfig().servers[id.data]) return ERRORS.conflict(`MCP server already exists: ${id.data}`)
   const body = await readJsonBody(request)
   if (!body.ok) return body.response
   const parsed = RemoteAppRequest.safeParse(body.value)
@@ -66,7 +65,7 @@ export async function addRemoteMcpApp(
     enabled: true, transport: 'streamable-http', url: url.toString(), trustScope: 'user',
     oauth: { enabled: true, scopes: [], callbackTimeoutMs: 120_000 }
   })
-  const result = await runtime.setMcpServer(id.data, server)
+  const result = await runtime.setMcpServer(id.data, (current) => current ? 'exists' : server)
   if (!result.ok) return ERRORS.conflict(result.message)
   return listMcpConfig(runtime)
 }
@@ -93,14 +92,12 @@ export async function patchMcpConfig(
   }
   const id = ServerId.safeParse(serverId)
   if (!id.success) return ERRORS.validation('invalid MCP server id', id.error.issues)
-  const current = runtime.mcpConfig().servers[id.data]
-  if (!current) return ERRORS.notFound(`MCP server not found: ${id.data}`)
   const body = await readJsonBody(request)
   if (!body.ok) return body.response
   const parsed = EnabledRequest.safeParse(body.value)
   if (!parsed.success) return ERRORS.validation('invalid MCP server update', parsed.error.issues)
-  const result = await runtime.setMcpServer(id.data, { ...current, enabled: parsed.data.enabled })
-  if (!result.ok) return ERRORS.conflict(result.message)
+  const result = await runtime.setMcpServer(id.data, (current) => current ? { ...current, enabled: parsed.data.enabled } : 'missing')
+  if (!result.ok) return result.message === `MCP server not found: ${id.data}` ? ERRORS.notFound(result.message) : ERRORS.conflict(result.message)
   return listMcpConfig(runtime)
 }
 

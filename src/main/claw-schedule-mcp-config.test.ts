@@ -263,6 +263,30 @@ describe('claw schedule MCP config', () => {
     })
   })
 
+  it('keeps unrelated servers when two shared-file syncs overlap', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'ds-gui-mcp-race-'))
+    const kunDir = join(root, '.kun')
+    const configTomlPath = join(kunDir, 'config.toml')
+    const mcpJsonPath = join(kunDir, 'mcp.json')
+    await mkdir(kunDir, { recursive: true })
+    await writeFile(configTomlPath, 'provider = "deepseek"\n', 'utf8')
+    await writeFile(mcpJsonPath, JSON.stringify({
+      servers: { docs: { command: 'docs-mcp', enabled: false } }
+    }), 'utf8')
+
+    await Promise.all([
+      syncClawScheduleMcpConfig(createSettings({ port: 19787 }), launch, { configTomlPath, mcpJsonPath }),
+      syncClawScheduleMcpConfig(createSettings({ port: 19876 }), launch, { configTomlPath, mcpJsonPath })
+    ])
+
+    const json = JSON.parse(await readFile(mcpJsonPath, 'utf8')) as {
+      servers: Record<string, unknown>
+    }
+    expect(json.servers.docs).toMatchObject({ command: 'docs-mcp', enabled: false })
+    expect(json.servers.gui_schedule).toBeDefined()
+    expect(Object.keys(json.servers).sort()).toEqual(['docs', 'gui_schedule'])
+  })
+
   it('migrates old claw_schedule JSON entries to gui_schedule', () => {
     const synced = buildSyncedClawScheduleMcpJson(
       {

@@ -257,9 +257,10 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
         const fragment = customMcpConfigFragment(id, fields.config, fallback)
         const audit = auditMcpConfigSupplyChain(fragment)
         if (!audit.ok) throw new Error(audit.errors.join('\n'))
-        const merged = mergeMcpJsonConfig(await mcp.current(), fragment)
+        const currentText = await mcp.current()
+        const merged = mergeMcpJsonConfig(currentText, fragment)
         if (merged.alreadyExists) throw new Error(t('pluginAlreadyAdded'))
-        const result = await mcp.write(merged.text)
+        const result = await mcp.write(merged.text, currentText)
         notify({ tone: 'success', message: t('pluginMcpAdded', { path: result.path }) })
         void mcp.refreshOverlay()
       } else {

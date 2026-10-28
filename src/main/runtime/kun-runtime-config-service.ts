@@ -1,6 +1,5 @@
 import { buildCanvasKunMcpServer, CANVAS_MCP_SERVER_ID } from '../canvas-mcp/canvas-mcp-config'
 import { ASSISTANT_MCP_SERVER_ID, assistantMailboxEnabled, buildAssistantKunMcpServer } from '../assistant-mailbox/mcp-config'
-import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -21,6 +20,7 @@ import {
 import {
   RuntimeConfigApplyRequest,
   type BrowserUseHostBinding,
+  type McpServersUpdatePayload,
   type RuntimeConfigApplyRequest as RuntimeConfigApplyPayload
 } from '../../../kun/src/contracts/runtime-config.js'
 import { HooksConfigSchema } from '../../../kun/src/hooks/hook-config.js'
@@ -79,6 +79,7 @@ import {
 } from './kun-runtime-capability-config'
 import {
   buildGuiScheduleKunMcpServer,
+  mcpServersUpdateFromConfig,
   GUI_SCHEDULE_MCP_SERVER_NAME,
   readGuiManagedMcpServers,
   readJsonObjectIfExists,
@@ -109,6 +110,8 @@ import {
   stripGeneratedProjectMcpServers
 } from '../services/project-config-service'
 import { assertManagedKunDataDirIsCurrent } from '../kun-data-dir-paths'
+import { mcpDataLockPath, withMcpLock } from '../../../kun/src/server/runtime-mcp-lock.js'
+import { recoverPendingMcpTransaction } from '../../../kun/src/server/runtime-mcp-transaction.js'
 import { atomicWriteFile } from '../atomic-json-file'
 
 export type ManagedRuntimeHotApplyResult = 'applied' | 'restart_required' | 'failed'
@@ -122,26 +125,43 @@ export type ManagedRuntimeHotApplyResponse = {
   sections?: Record<string, ManagedRuntimeHotApplySection>
 }
 
+type SyncGuiManagedKunConfigOptions = {
+  scheduleMcp?: { settings: AppSettingsV1; launch: ClawScheduleMcpLaunchConfig }
+  mcpConfigPath?: string
+  appSettings?: AppSettingsV1
+  builtinSkillsRoot?: string
+  /** MCP hot-apply decision for the serialized apply that follows this sync. */
+  onMcpServersUpdate?: (update: McpServersUpdatePayload) => void
+}
+
 export async function syncGuiManagedKunConfig(
   dataDir: string,
   runtime: KunRuntimeConfigSettings,
-  options?: {
-    scheduleMcp?: { settings: AppSettingsV1; launch: ClawScheduleMcpLaunchConfig }
-    mcpConfigPath?: string
-    appSettings?: AppSettingsV1
-    builtinSkillsRoot?: string
-    /** Internal bounded retry after a concurrent config.json commit. */
-    retryAttempt?: number
-  }
+  options?: SyncGuiManagedKunConfigOptions
 ): Promise<KunConfig> {
   assertManagedKunDataDirIsCurrent(dataDir)
   const configPath = join(dataDir, 'config.json')
-  const baseText = readConfigText(configPath)
+  const sharedMcpPath = options?.mcpConfigPath ?? resolveKunMcpJsonPath()
+  // One cross-process lock covers recovery, the read-merge and the commit: a
+  // snapshot read outside it could be written over a Runtime mutation that
+  // finished in between, resurrecting an enabled server.
+  return withMcpLock(mcpDataLockPath(dataDir), async () => {
+    // Recovery runs under this same lock; acquiring it again would deadlock.
+    await recoverPendingMcpTransaction({ dataDir, configPath, sharedMcpConfigPath: sharedMcpPath })
+    return writeGuiManagedKunConfig(dataDir, configPath, sharedMcpPath, runtime, options)
+  })
+}
+
+async function writeGuiManagedKunConfig(
+  dataDir: string,
+  configPath: string,
+  sharedMcpPath: string,
+  runtime: KunRuntimeConfigSettings,
+  options?: SyncGuiManagedKunConfigOptions
+): Promise<KunConfig> {
   const existing = sanitizeKunConfigSections(await readJsonObjectIfExists(configPath))
   const importedMcpServers = stripGeneratedProjectMcpServers(
-    await readGuiManagedMcpServers(
-      options?.mcpConfigPath ?? resolveKunMcpJsonPath()
-    )
+    await readGuiManagedMcpServers(sharedMcpPath)
   )
   const appSettings = options?.appSettings ?? options?.scheduleMcp?.settings
   const modelProfiles = {
@@ -157,6 +177,9 @@ export async function syncGuiManagedKunConfig(
   const serve = objectValue(existing?.serve)
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
+  // MCP servers this sync starts from. The hot apply may only replace the live
+  // set when it derives from exactly this state.
+  const baseMcpServersRaw = structuredClone(objectValue(mcp.servers))
   const retainedMcpServers = stripGeneratedProjectMcpServers(objectValue(mcp.servers))
   // The built-in canvas MCP App is host-owned: rebuilt on every sync.
   delete retainedMcpServers[CANVAS_MCP_SERVER_ID]
@@ -199,6 +222,20 @@ export async function syncGuiManagedKunConfig(
     : undefined
   const workflowHooks = buildWorkflowHookEntries(appSettings?.workflow)
   const roles = rolesConfigForRuntime(runtime)
+  const mergedMcpServers: Record<string, unknown> = {
+    ...managedGitHubServer,
+    ...retainedMcpServers,
+    ...importedMcpServers,
+    ...projectMcpServers,
+    ...canvasMcpServer,
+    ...assistantMcpServer,
+    ...(options?.scheduleMcp ? {
+      [GUI_SCHEDULE_MCP_SERVER_NAME]: buildGuiScheduleKunMcpServer(
+        options.scheduleMcp.settings,
+        options.scheduleMcp.launch
+      )
+    } : {})
+  }
   const next = {
     serve: {
       ...serve,
@@ -287,20 +324,7 @@ export async function syncGuiManagedKunConfig(
       mcp: {
         ...mcp,
         enabled: mcp.enabled === false ? false : true,
-        servers: {
-          ...managedGitHubServer,
-          ...retainedMcpServers,
-          ...importedMcpServers,
-          ...projectMcpServers,
-          ...canvasMcpServer,
-          ...assistantMcpServer,
-          ...(options?.scheduleMcp ? {
-            [GUI_SCHEDULE_MCP_SERVER_NAME]: buildGuiScheduleKunMcpServer(
-              options.scheduleMcp.settings,
-              options.scheduleMcp.launch
-            )
-          } : {})
-        },
+        servers: mergedMcpServers,
         search: { ...search, ...runtime.mcpSearch }
       }
     },
@@ -312,6 +336,11 @@ export async function syncGuiManagedKunConfig(
       `Refusing to write invalid GUI-managed Kun config at ${configPath}: ${JSON.stringify(parsed.error.issues, null, 2)}`
     )
   }
+  // Canonical comparison: persisted entries are builder-shaped while validation
+  // and the Runtime fill schema defaults.
+  options?.onMcpServersUpdate?.(
+    mcpServersUpdateFromConfig(baseMcpServersRaw, parsed.data.capabilities?.mcp?.servers ?? {})
+  )
   if (existing) {
     const parsedExisting = KunConfigSchema.safeParse(existing)
     if (
@@ -325,33 +354,10 @@ export async function syncGuiManagedKunConfig(
     }
   }
   const nextText = `${JSON.stringify(next, null, 2)}\n`
-  try {
-    await atomicWriteFile(configPath, nextText, {
-      beforeCommit: () => {
-        if (readConfigText(configPath) !== baseText) throw new ConcurrentConfigWriteError()
-      }
-    })
-  } catch (error) {
-    if (error instanceof ConcurrentConfigWriteError && (options?.retryAttempt ?? 0) < 2) {
-      return syncGuiManagedKunConfig(dataDir, runtime, {
-        ...options,
-        retryAttempt: (options?.retryAttempt ?? 0) + 1
-      })
-    }
-    throw error
-  }
+  // The lock is the mutual exclusion primitive here; no read-then-rename can
+  // provide compare-and-swap across processes for a plain JSON file.
+  await atomicWriteFile(configPath, nextText)
   return parsed.data
-}
-
-class ConcurrentConfigWriteError extends Error {
-  constructor() {
-    super('config.json changed while GUI settings were being synchronized')
-  }
-}
-
-function readConfigText(path: string): string | null {
-  if (!existsSync(path)) return null
-  return readFileSync(path, 'utf8')
 }
 
 function fastContextConfigForRuntime(fastContext: KunFastContextSettingsV1 | undefined): KunConfig['fastContext'] {
@@ -428,7 +434,8 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
 export function buildManagedRuntimeHotApplyBody(
   settings: AppSettingsV1,
   config: KunConfig,
-  browserUseHostBinding?: BrowserUseHostBinding | null
+  browserUseHostBinding?: BrowserUseHostBinding | null,
+  mcpServers?: McpServersUpdatePayload
 ): RuntimeConfigApplyPayload {
   const runtime = resolveKunRuntimeSettings(settings)
   const serve = config.serve ?? {}
@@ -448,6 +455,7 @@ export function buildManagedRuntimeHotApplyBody(
   const defaultClientApiKey = resolveCodexOAuthApiKey(runtime.apiKey).apiKey
   return RuntimeConfigApplyRequest.parse({
     ...config,
+    ...(mcpServers ? { mcpServers } : {}),
     ...(browserUseHostBinding !== undefined ? { browserUseHostBinding } : {}),
     capabilities: {
       ...config.capabilities,

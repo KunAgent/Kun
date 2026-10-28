@@ -56,6 +56,7 @@ import { composeDelegatedTurnRuntimes } from '../runtime/delegated-turn-runtime.
 import {
   buildPptDeckRuntimeProvider,
   builtinToolOptionsForOptions,
+  applyMcpServersUpdate,
   contextWindowModeFor,
   llmDebugCaptureEnabled,
   localModelGatewayApplyIssue,
@@ -241,14 +242,14 @@ export function createRuntimeConfigController(
   const officeCliReuse = new OfficeCliRunnerReuse()
   officeCliReuse.seed(process.env.KUN_OFFICECLI_BINARY, join(activeOptions.dataDir, 'officecli-profile'), services.officeCli)
 	  const rebuildCapabilities = (): typeof capabilities => buildCapabilities(capabilitySnapshot())
-	  let applyConfigQueue: Promise<RuntimeConfigApplyResponse> = Promise.resolve({ ok: true })
-	  const applyConfig = (request: RuntimeConfigApplyRequest): Promise<RuntimeConfigApplyResponse> => {
-	    const task = applyConfigQueue
-	      .catch(() => ({ ok: true }) as RuntimeConfigApplyResponse)
-	      .then(() => applyConfigOnce(request))
-	    applyConfigQueue = task
+	  let applyConfigQueue: Promise<void> = Promise.resolve()
+	  const withConfigLock = <T>(operation: (apply: typeof applyConfigOnce) => Promise<T>): Promise<T> => {
+	    const task = applyConfigQueue.then(() => operation(applyConfigOnce))
+	    applyConfigQueue = task.then(() => undefined, () => undefined)
 	    return task
 	  }
+	  const applyConfig = (request: RuntimeConfigApplyRequest): Promise<RuntimeConfigApplyResponse> =>
+	    withConfigLock((apply) => apply(request))
 	  const applyConfigOnce = async (
 	    request: RuntimeConfigApplyRequest
 	  ): Promise<RuntimeConfigApplyResponse> => {
@@ -269,6 +270,10 @@ export function createRuntimeConfigController(
 	      }
 	    }
 	    const mergedOptions = mergeRuntimeConfigApplyOptions(activeOptions, request)
+	    const mcpUpdate = applyMcpServersUpdate(activeOptions, mergedOptions, request.mcpServers)
+	    if (mcpUpdate.conflict) {
+	      return { ok: false, code: 'invalid_config', message: mcpUpdate.conflict }
+	    }
 	    if (llmDebugCaptureEnabled(mergedOptions) !== llmDebugCaptureEnabled(activeOptions)) {
 	      return {
 	        ok: false,
@@ -277,7 +282,7 @@ export function createRuntimeConfigController(
 	      }
 	    }
 	    let nextOptions = await hydrateLegacyCredentialOptions(
-	      mergedOptions,
+	      mcpUpdate.options,
 	      legacyCredentialMigration
 	    )
 	    const nextSubagentsEnabled = nextOptions.capabilities?.subagents.enabled === true
@@ -673,6 +678,7 @@ export function createRuntimeConfigController(
 	  }
   return {
     applyConfig,
+    withConfigLock,
     rebuildCapabilities,
     startedAt,
     get activeOptions() { return activeOptions },

@@ -429,7 +429,7 @@
     },
     openSkillRoot: function (rootPath) { return invoke('skill:open-root', [rootPath]) },
     getKunConfigFile: invokeRaw('kun:config:read'),
-    setKunConfigFile: function (content) { return invoke('kun:config:write', [content]) },
+    setKunConfigFile: function (content, baseContent) { return invoke('kun:config:write', [content, baseContent]) },
     openKunConfigDir: invokeRaw('kun:config:open-dir'),
     getKunProjectConfigFile: function (workspaceRoot) {
       return invoke('kun:project-config:read', [{ workspaceRoot: workspaceRoot }])

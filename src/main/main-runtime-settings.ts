@@ -1,4 +1,5 @@
 import { resolveNativeAgentNetworkSnapshot } from './runtime/native-agent-network'
+import type { McpServersUpdatePayload } from '../../kun/src/contracts/runtime-config.js'
 import { syncModelConnectionGlobals } from './runtime/model-connection-globals-sync'
 import { BrowserWindow } from 'electron'
 import {
@@ -332,12 +333,16 @@ export async function applyManagedRuntimeSettingsHot(
 
   const runtime = resolveKunRuntimeSettings(effectiveSettings)
   const dataDir = resolveKunDataDir(runtime)
+  // The sync decides whether this apply may replace the Runtime's live MCP
+  // server set; the decision is bound to the exact snapshot it read.
+  let mcpServersUpdate: McpServersUpdatePayload | undefined
   const config = await syncGuiManagedKunConfig(dataDir, runtime, {
     scheduleMcp: {
       settings: effectiveSettings,
       launch: getClawScheduleMcpLaunchConfig()
     },
-    builtinSkillsRoot: bundledSkillsDirectory()
+    builtinSkillsRoot: bundledSkillsDirectory(),
+    onMcpServersUpdate: (update) => { mcpServersUpdate = update }
   })
   if (!shouldApply()) return { result: 'superseded' }
   const browserUseHost = await reconcileBrowserUseHostForRuntime(
@@ -355,7 +360,8 @@ export async function applyManagedRuntimeSettingsHot(
           bridgeToken: browserUseHostBinding.token,
           approvalSigningKey: browserUseHostBinding.approvalSigningKey
         }
-      : null
+      : null,
+    mcpServersUpdate
   )
 
   const headers = runtimeAuthHeaders(effectiveSettings)

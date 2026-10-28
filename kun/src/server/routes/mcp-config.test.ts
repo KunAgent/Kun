@@ -29,6 +29,8 @@ describe('MCP configuration routes', () => {
     })
     const setMcpServer = vi.fn(async (id: string, server: unknown) => {
       const servers = { ...config.servers }
+      if (typeof server === 'function') server = server(servers[id])
+      if (server === 'missing' || server === 'exists') return { ok: false as const, message: `MCP server ${server === 'missing' ? 'not found' : 'already exists'}: ${id}` }
       if (server) servers[id] = server as typeof servers[string]
       else delete servers[id]
       config = McpCapabilityConfig.parse({ ...config, enabled: Object.keys(servers).length > 0, servers })
@@ -76,6 +78,8 @@ describe('MCP configuration routes', () => {
   it('only installs new HTTPS OAuth apps through the renderer route', async () => {
     let config = McpCapabilityConfig.parse({ enabled: false, servers: {} })
     const setMcpServer = vi.fn(async (id: string, server: unknown) => {
+      if (typeof server === 'function') server = server(config.servers[id])
+      if (server === 'exists') return { ok: false as const, message: `MCP server already exists: ${id}` }
       config = McpCapabilityConfig.parse({ enabled: true, servers: { ...config.servers, [id]: server } })
       return { ok: true as const }
     })
@@ -90,6 +94,6 @@ describe('MCP configuration routes', () => {
     expect((await submit({ url: 'https://example.com/mcp' })).status).toBe(200)
     expect(config.servers.gmail).toMatchObject({ transport: 'streamable-http', trustScope: 'user', oauth: { enabled: true } })
     expect((await submit({ url: 'https://another.example/mcp' })).status).toBe(409)
-    expect(setMcpServer).toHaveBeenCalledTimes(1)
+    expect(setMcpServer).toHaveBeenCalledTimes(2)
   })
 })

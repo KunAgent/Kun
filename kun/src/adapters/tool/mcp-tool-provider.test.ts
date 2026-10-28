@@ -485,6 +485,28 @@ describe('mcp tool provider reliability', () => {
     expect(built.search.active).toBe(true)
   })
 
+  it('reconciles an OAuth threshold transition that occurs before live hooks are installed', async () => {
+    const clientFactory = vi.fn()
+      .mockResolvedValueOnce(new MockMcpClient(descriptors(1, 'a'), vi.fn(async () => ({ ok: true }))))
+      .mockRejectedValueOnce(new McpAuthorizationRequiredError('b'))
+      .mockResolvedValueOnce(new MockMcpClient(descriptors(5, 'b'), vi.fn(async () => ({ ok: true }))))
+    const built = await buildMcpToolProviders(autoSearchConfig(3), {
+      clientFactory,
+      authorize: async () => ({ serverId: 'b', status: 'authorized', authorized: true }),
+      oauthStorageDir: 'C:/tmp/oauth'
+    })
+    const registry = new Set(built.providers.map((provider) => provider.id))
+    await built.authorizeOAuth('b')
+    expect(registry.has('mcp:a')).toBe(true)
+    await built.startBackgroundReconnect({
+      register: (provider) => { registry.add(provider.id) },
+      unregister: (providerId) => { registry.delete(providerId) }
+    })
+    expect(built.search.active).toBe(true)
+    expect(registry.has('mcp:a')).toBe(false)
+    await built.close()
+  })
+
   it('does not register direct providers for a late server when already in search mode', async () => {
     const clientFactory = vi.fn()
       .mockResolvedValueOnce(new MockMcpClient(descriptors(5, 'a'), vi.fn(async () => ({ ok: true }))))

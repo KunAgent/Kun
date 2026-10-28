@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AppConnectionError } from '../contracts/app-connections.js'
 import { AppConnectionsService } from './app-connections-service.js'
+import { McpCapabilityConfig, McpServerConfig } from '../contracts/capabilities.js'
+import { appPreset } from '../contracts/app-connection-catalog.js'
+import type { AppPreset } from '../contracts/app-connections.js'
+import type { McpServerMutation } from '../server/routes/server-runtime.js'
 import { FigmaCredentialStore } from '../figma/figma-credential-store.js'
 import type { FigmaReadServicePort } from '../figma/ports.js'
 import type { ExtensionCredentialPayload } from './extension-credential-store.js'
@@ -42,7 +46,7 @@ function github(overrides: Record<string, unknown> = {}) {
 function gmail() {
   return {
     status: vi.fn(async () => ({
-      configured: false, connected: false, allowModelSharing: false, reconnectRequired: false
+      configured: false, connected: false, allowModelSharing: false, reconnectRequired: false, scopes: []
     }))
   }
 }
@@ -62,6 +66,38 @@ function build(options: { github?: ReturnType<typeof github>; figmaToken?: strin
   })
   return { service, credentials, state, github: githubDeps }
 }
+
+describe('MCP connection mutation decisions', () => {
+  it('checks conflicts against the descriptor supplied under the mutation lock', async () => {
+    const current = McpServerConfig.parse({ enabled: true, transport: 'streamable-http', url: 'https://other.example/mcp', trustScope: 'user' })
+    const authorize = vi.fn()
+    const service = new AppConnectionsService({ mcp: {
+      config: () => McpCapabilityConfig.parse({ servers: {} }), oauth: () => [], authorize,
+      clear: vi.fn(),
+      setServer: async (_id: string, mutation: McpServerMutation) => {
+        expect(typeof mutation).toBe('function')
+        expect((mutation as (value: typeof current) => unknown)(current)).toBe('exists')
+        return { ok: false, code: 'invalid_config', message: 'exists' }
+      }
+    } as never })
+    const connectMcp = (service as unknown as { connectMcp(preset: AppPreset): Promise<unknown> }).connectMcp.bind(service)
+    await expect(connectMcp(appPreset('notion')!)).rejects.toThrow('different MCP server')
+    expect(authorize).not.toHaveBeenCalled()
+  })
+
+  it('disables the locked current descriptor and reports a failed disable', async () => {
+    const current = McpServerConfig.parse({ enabled: true, transport: 'stdio', command: 'new-target', trustScope: 'user' })
+    const service = new AppConnectionsService({ mcp: {
+      config: () => McpCapabilityConfig.parse({ servers: {} }), oauth: () => [], authorize: vi.fn(), clear: async () => ({}),
+      setServer: async (_id: string, mutation: McpServerMutation) => {
+        expect(typeof mutation).toBe('function')
+        expect((mutation as (value: typeof current) => unknown)(current)).toMatchObject({ command: 'new-target', enabled: false })
+        return { ok: false, code: 'invalid_config', message: 'disable failed' }
+      }
+    } as never })
+    await expect(service.disconnect('notion')).rejects.toThrow('disable failed')
+  })
+})
 
 describe('app connections service', () => {
   it('projects account readiness without implying a conversation grant', async () => {

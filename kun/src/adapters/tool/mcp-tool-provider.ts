@@ -1,4 +1,5 @@
 import { McpCatalogCache, withDeferredStdioConnect } from './mcp-deferred-client.js'
+import { McpOAuthLifetime } from './mcp-oauth-lifetime.js'
 import type { McpCapabilityConfig, McpServerConfig } from '../../contracts/capabilities.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
@@ -233,10 +234,12 @@ export async function buildMcpToolProviders(
   const searchCatalog = new McpSearchCatalogController([])
   const mcp = config
   const nowIso = options.nowIso ?? (() => new Date().toISOString())
+  const lifetime = new McpOAuthLifetime()
   const baseClientFactory = options.clientFactory ?? ((serverId, server) =>
     createSdkMcpClient(serverId, server, {
       storageDir: options.oauthStorageDir,
       openExternal: options.openExternal,
+      lifetime,
       ...(options.oauthEncryptor ? { encryptor: options.oauthEncryptor } : {})
     }))
   const clientFactory = options.catalogCachePath
@@ -405,13 +408,12 @@ export async function buildMcpToolProviders(
         if (liveUnregister) {
           try {
             liveUnregister(`mcp:${serverId}`)
+            exposedDirectServerIds.delete(serverId)
           } catch {
-            // Registry removal failure must not break the connect flow; the
-            // exposure decision below is authoritative for future syncs.
+            // Keep failed removals for a later reconciliation.
           }
         }
       }
-      exposedDirectServerIds.clear()
     } else {
       for (const state of connected) {
         if (state.status !== 'connected') continue
@@ -430,11 +432,11 @@ export async function buildMcpToolProviders(
         if (liveRegister) {
           try {
             liveRegister(provider)
+            exposedDirectServerIds.add(state.serverId)
           } catch {
-            // ignore duplicate/colliding registration
+            // Keep failed registrations eligible for a later reconciliation.
           }
         }
-        exposedDirectServerIds.add(state.serverId)
       }
     }
     updateSearchDiagnostic()
@@ -524,6 +526,7 @@ export async function buildMcpToolProviders(
   for (const state of connected) state.onCatalogChanged = catalogChanged
   if (!isSearchActive()) {
     providers.push(...directToolsByServer.values())
+    for (const serverId of directToolsByServer.keys()) exposedDirectServerIds.add(serverId)
   }
 
   const refreshOAuthDiagnostics = async (): Promise<void> => {
@@ -531,7 +534,7 @@ export async function buildMcpToolProviders(
       storageDir: options.oauthStorageDir,
       encryptor: options.oauthEncryptor
     })
-    oauthDiagnostics.splice(0, oauthDiagnostics.length, ...nextDiagnostics)
+    if (!lifetime.signal.aborted) oauthDiagnostics.splice(0, oauthDiagnostics.length, ...nextDiagnostics)
   }
 
   /**
@@ -539,16 +542,38 @@ export async function buildMcpToolProviders(
    * tools, register the provider, and flip its diagnostic to `connected` — no
    * runtime restart required after a successful authorization.
    */
+  const pendingAuthorizationClients = new Set<McpClientLike>()
   const connectAndRegisterServer = async (serverId: string, server: McpServerConfig): Promise<void> => {
-    const { state, listed } = await connectAndLoadCatalog(serverId, server, clientFactory, nowIso)
-    connected.push(state)
-    listedByServer.set(serverId, listed)
-    state.onCatalogChanged = catalogChanged
-    commitCatalog(listedByServer)
-    const diagnostic = syncMcpDiagnostic(state, 'connected', listed.length)
-    const index = diagnostics.findIndex((entry) => entry.id === serverId)
-    if (index >= 0) diagnostics[index] = diagnostic
-    else diagnostics.push(diagnostic)
+    let candidate: McpClientLike | undefined
+    const guardedFactory = async (id: string, srv: McpServerConfig): Promise<McpClientLike> => {
+      lifetime.signal.throwIfAborted()
+      const client = await clientFactory(id, srv)
+      if (lifetime.signal.aborted) {
+        await client.close().catch(() => undefined)
+        lifetime.signal.throwIfAborted()
+      }
+      candidate = client
+      pendingAuthorizationClients.add(client)
+      return client
+    }
+    try {
+      const { state, listed } = await connectAndLoadCatalog(serverId, server, guardedFactory, nowIso)
+      if (lifetime.signal.aborted) {
+        if (pendingAuthorizationClients.delete(state.client)) await state.client.close().catch(() => undefined)
+        return
+      }
+      pendingAuthorizationClients.delete(state.client)
+      connected.push(state)
+      listedByServer.set(serverId, listed)
+      state.onCatalogChanged = catalogChanged
+      commitCatalog(listedByServer)
+      const diagnostic = syncMcpDiagnostic(state, 'connected', listed.length)
+      const index = diagnostics.findIndex((entry) => entry.id === serverId)
+      if (index >= 0) diagnostics[index] = diagnostic
+      else diagnostics.push(diagnostic)
+    } finally {
+      if (candidate) pendingAuthorizationClients.delete(candidate)
+    }
   }
 
   const authorizeOAuth = (serverId: string): Promise<McpOAuthAuthorizeResult> => {
@@ -556,17 +581,20 @@ export async function buildMcpToolProviders(
     if (inflight) return inflight
     const run = (async (): Promise<McpOAuthAuthorizeResult> => {
       const server = mcp.servers[serverId]
-      if (!server || !options.oauthStorageDir) {
+      if (lifetime.signal.aborted || !server || !options.oauthStorageDir) {
         return { serverId, status: 'disabled', authorized: false }
       }
       const authorize = options.authorize ??
         ((id: string, srv: McpServerConfig) => authorizeMcpServerOAuth(id, srv, {
           storageDir: options.oauthStorageDir as string,
           openExternal: options.openExternal,
-          encryptor: options.oauthEncryptor
+          encryptor: options.oauthEncryptor,
+          lifetime
         }))
       const result = await authorize(serverId, server)
+      if (lifetime.signal.aborted) return { serverId, status: 'disabled', authorized: false }
       await refreshOAuthDiagnostics()
+      if (lifetime.signal.aborted) return { serverId, status: 'disabled', authorized: false }
       // On success, connect + register immediately so tools are live without a
       // runtime restart. Skip if the server is already connected.
       if (result.authorized && !connected.some((state) => state.serverId === serverId)) {
@@ -576,6 +604,7 @@ export async function buildMcpToolProviders(
           // Leave the server in its prior diagnostic state; the user can retry.
         }
       }
+      if (lifetime.signal.aborted) return { serverId, status: 'disabled', authorized: false }
       return result
     })()
     authorizeInFlight.set(serverId, run)
@@ -598,6 +627,7 @@ export async function buildMcpToolProviders(
       return [...listedByServer.values()].reduce((total, listed) => total + listed.length, 0)
     },
     startBackgroundReconnect: (hooks) => {
+      if (lifetime.signal.aborted) return Promise.resolve()
       liveRegister = hooks.register
       liveUnregister = hooks.unregister
       liveReplace = hooks.replace ?? null
@@ -630,7 +660,8 @@ export async function buildMcpToolProviders(
     clearOAuthCredentials: async (serverId) => {
       const result = await clearMcpOAuthCredentials(mcp, {
         storageDir: options.oauthStorageDir,
-        serverId
+        serverId,
+        lifetime
       })
       await refreshOAuthDiagnostics()
       return result
@@ -638,7 +669,11 @@ export async function buildMcpToolProviders(
     authorizeOAuth,
     close: async () => {
       reconnectAborted = true
-      await Promise.all(connected.map((state) => state.client.close().catch(() => undefined)))
+      const stoppedWrites = lifetime.close()
+      const pending = [...pendingAuthorizationClients]
+      pendingAuthorizationClients.clear()
+      await Promise.all([stoppedWrites, ...connected.map((state) => state.client.close().catch(() => undefined)),
+        ...pending.map((client) => client.close().catch(() => undefined))])
     }
   }
 }

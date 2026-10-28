@@ -621,7 +621,7 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
         onKunMcpConfigWritten
       }))
 
-      await expect(handlers.get('kun:config:write')?.({}, content)).resolves.toEqual({
+      await expect(handlers.get('kun:config:write')?.({}, content, '')).resolves.toEqual({
         ok: true,
         path: configPath
       })
@@ -651,6 +651,41 @@ describe('registerAppIpcHandlers workspace and MCP', () => {
       )
       expect(existsSync(configPath)).toBe(false)
       expect(onKunMcpConfigWritten).not.toHaveBeenCalled()
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('requires the loaded base and refuses to overwrite a changed MCP file', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'deepseek-gui-ipc-'))
+    const configPath = join(tempRoot, 'mcp.json')
+    const onKunMcpConfigWritten = vi.fn(async () => undefined)
+    const loaded = '{"servers":{}}\n'
+    const disabled = '{"servers":{"app":{"enabled":false}}}\n'
+    const stale = '{"servers":{"app":{"enabled":true}}}\n'
+
+    try {
+      registerAppIpcHandlers(registerOptions({
+        resolveKunConfigPath: () => configPath,
+        onKunMcpConfigWritten
+      }))
+
+      // No base is a programming error, not an implicit full overwrite.
+      await expect(handlers.get('kun:config:write')?.({}, stale)).rejects.toThrow(/base content/)
+      expect(existsSync(configPath)).toBe(false)
+
+      // The Runtime disabled the server after the panel loaded `loaded`.
+      writeFileSync(configPath, disabled, 'utf8')
+      await expect(handlers.get('kun:config:write')?.({}, stale, loaded))
+        .rejects.toThrow(/changed on disk/)
+      expect(readFileSync(configPath, 'utf8')).toBe(disabled)
+      expect(onKunMcpConfigWritten).not.toHaveBeenCalled()
+
+      await expect(handlers.get('kun:config:write')?.({}, stale, disabled)).resolves.toEqual({
+        ok: true,
+        path: configPath
+      })
+      expect(readFileSync(configPath, 'utf8')).toBe(stale)
     } finally {
       rmSync(tempRoot, { recursive: true, force: true })
     }

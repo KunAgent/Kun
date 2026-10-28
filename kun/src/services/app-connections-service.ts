@@ -3,7 +3,7 @@ import { APP_PRESETS, appPreset } from '../contracts/app-connection-catalog.js'
 import type { GitHubAuthorization, GitHubConnectionStatus } from '../contracts/github-app.js'
 import type { GmailConnectionStatus } from '../contracts/gmail.js'
 import type { McpCapabilityConfig, McpServerConfig } from '../contracts/capabilities-core.js'
-import type { RuntimeConfigApplyResponse } from '../contracts/runtime-config.js'
+import type { McpServerMutation } from '../server/routes/server-runtime.js'
 import type { McpOAuthAuthorizeResult, McpOAuthClearResult, McpOAuthDiagnostic } from '../adapters/tool/mcp-types.js'
 import type { FigmaAccount, FigmaReadServicePort } from '../figma/ports.js'
 import type { FigmaCredentialStore } from '../figma/figma-credential-store.js'
@@ -31,7 +31,7 @@ export type AppConnectionsGmail = {
 export type AppConnectionsMcp = {
   config(): McpCapabilityConfig
   oauth(): McpOAuthDiagnostic[] | Promise<McpOAuthDiagnostic[]>
-  setServer(serverId: string, server: McpServerConfig | null): Promise<RuntimeConfigApplyResponse>
+  setServer(serverId: string, server: McpServerMutation): Promise<import('../contracts/runtime-config.js').RuntimeConfigApplyResponse>
   authorize(serverId: string): Promise<McpOAuthAuthorizeResult>
   clear(serverId: string): Promise<McpOAuthClearResult>
 }
@@ -207,8 +207,8 @@ export class AppConnectionsService {
       const mcp = this.deps.mcp
       if (!mcp) throw new AppConnectionError('connect_failed', 'MCP configuration is unavailable')
       await mcp.clear(preset.id)
-      const server = mcp.config().servers[preset.id]
-      if (server) await mcp.setServer(preset.id, { ...server, enabled: false })
+      const result = await mcp.setServer(preset.id, (server) => server ? { ...server, enabled: false } : 'unchanged')
+      if (!result.ok) throw new AppConnectionError('connect_failed', result.message)
     } else {
       throw new AppConnectionError(
         'unsupported_operation',
@@ -226,26 +226,27 @@ export class AppConnectionsService {
     }
     const endpoint = preset.endpoint
     if (!endpoint) throw new AppConnectionError('not_ready', 'This app has no verified endpoint yet')
-    const existing = mcp.config().servers[preset.id]
-    if (existing && !sameTarget(existing, endpoint)) {
-      throw new AppConnectionError(
-        'connect_failed',
-        `A different MCP server already uses the id ${preset.id}; rename it before connecting ${preset.name}`
-      )
-    }
-    if (!existing) {
-      const server: McpServerConfig = {
-        enabled: true,
-        transport: 'streamable-http',
-        url: endpoint,
-        trustScope: 'user',
-        ...(preset.kind === 'mcp_oauth'
-          ? { oauth: { enabled: true, scopes: [], callbackTimeoutMs: 120_000 } }
-          : {})
-      } as McpServerConfig
-      const applied = await mcp.setServer(preset.id, server)
-      if (!applied.ok) throw new AppConnectionError('connect_failed', applied.message)
-    }
+    const server: McpServerConfig = {
+      enabled: true,
+      transport: 'streamable-http',
+      url: endpoint,
+      trustScope: 'user',
+      ...(preset.kind === 'mcp_oauth'
+        ? { oauth: { enabled: true, scopes: [], callbackTimeoutMs: 120_000 } }
+        : {})
+    } as McpServerConfig
+    let conflict = false
+    const applied = await mcp.setServer(preset.id, (existing) => {
+      if (!existing) return server
+      if (sameTarget(existing, endpoint)) return 'unchanged'
+      conflict = true
+      return 'exists'
+    })
+    if (conflict) throw new AppConnectionError(
+      'connect_failed',
+      `A different MCP server already uses the id ${preset.id}; rename it before connecting ${preset.name}`
+    )
+    if (!applied.ok) throw new AppConnectionError('connect_failed', applied.message)
     if (preset.kind === 'mcp_local') return { presetId: preset.id, attemptId: preset.id, url: endpoint }
     const result = await mcp.authorize(preset.id)
     if (!result.authorized) {

@@ -26,14 +26,22 @@ import { WorkbenchHarnessService } from '../workbench-bridge/harnesses.js'
 import { bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import {
   persistRuntimeCapabilitySection,
-  persistRuntimeMcpConfig,
-  persistRuntimeSkillsConfig,
-  persistSharedMcpConfig
+  persistRuntimeSkillsConfig
 } from './runtime-factory-config.js'
+import {
+  abandonMcpTransaction,
+  beginMcpTransaction,
+  endMcpTransaction,
+  recoverPendingMcpTransaction
+} from './runtime-mcp-transaction.js'
+import { persistMcpServerChange, readMcpServerSnapshots } from './runtime-mcp-persist.js'
+import { assertMcpLockHeld, mcpDataLockPath, withMcpLock } from './runtime-mcp-lock.js'
+import { kunConfigPathForDataDir } from '../config/kun-config.js'
 import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
+import { mutateMcpServer } from './runtime-mcp-mutation.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
 import { CodeWardrobeObserver } from '../rooms/code-wardrobe-observer.js'
 import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
@@ -495,46 +503,67 @@ export function createServerRuntimeComposition(
     mcpConfig: () => structuredClone(
       (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp
     ),
-    setMcpServer: async (serverId, server) => {
-      const capabilities = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
-      const mcp = capabilities.mcp
-      const servers = { ...mcp.servers }
-      if (server) {
-        servers[serverId] = {
-          ...server,
-          planModeReadOnlyTools: server.planModeReadOnlyTools ?? []
+    setMcpServer: async (serverId, mutation) => {
+      const dataDir = config.activeOptions.dataDir
+      const lockPath = mcpDataLockPath(dataDir)
+      // The data lock serializes this mutation against GUI synchronization and
+      // startup recovery, so a stale GUI snapshot can never be committed over
+      // a transaction that already finished here.
+      return withMcpLock(lockPath, async (lockOwner) => config.withConfigLock(async (apply) => {
+        const sharedMcpConfigPath = config.activeOptions.sharedMcpConfigPath
+        // Finish an interrupted mutation before reading the state it left.
+        const recovered = await recoverPendingMcpTransaction({
+          dataDir,
+          configPath: config.activeOptions.configPath ?? kunConfigPathForDataDir(dataDir),
+          sharedMcpConfigPath
+        })
+        const currentOptions = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
+        const servers = { ...currentOptions.mcp.servers }
+        for (const id of recovered.serverIds) {
+          const server = servers[id]
+          if (server && server.enabled !== false) servers[id] = { ...server, enabled: false }
         }
-      }
-      else delete servers[serverId]
-      const result = await applyConfig({
-        capabilities: {
-          ...capabilities,
-          mcp: { ...mcp, enabled: Object.keys(servers).length > 0, servers }
+        const mcp = recovered.serverIds.length
+          ? { ...currentOptions.mcp, servers }
+          : currentOptions.mcp
+        if (recovered.serverIds.length > 0) {
+          const result = await apply({ capabilities: { ...currentOptions, mcp } })
+          capabilitiesMemo = undefined
+          if (!result.ok) {
+            throw new Error(`interrupted MCP mutation could not be rolled back: ${result.message}`)
+          }
         }
-      })
-      if (result.ok) {
-        const updatedMcp = (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp
-        await Promise.all([
-          persistRuntimeMcpConfig(config.activeOptions.dataDir, updatedMcp),
-          ...(config.activeOptions.sharedMcpConfigPath
-            ? [persistSharedMcpConfig(config.activeOptions.sharedMcpConfigPath, updatedMcp)]
-            : [])
-        ])
-      }
-      return result
+        return mutateMcpServer({
+          mcp, serverId, mutation,
+          apply: async (next) => {
+            try { return await apply({ capabilities: { ...currentOptions, mcp: next } }) }
+            finally { capabilitiesMemo = undefined }
+          },
+          readExpected: (id) => readMcpServerSnapshots(dataDir, sharedMcpConfigPath, id),
+          persist: (target, stage) => persistMcpServerChange({
+            dataDir, sharedMcpConfigPath, target, ...stage
+          }),
+          fence: () => assertMcpLockHeld(lockPath, lockOwner),
+          transaction: {
+            begin: (ids) => beginMcpTransaction(dataDir, ids),
+            end: (txnId) => endMcpTransaction(dataDir, txnId),
+            abandon: (txnId) => abandonMcpTransaction(dataDir, txnId)
+          }
+        })
+      }))
     },
     skills: (workspace) => workspace
       ? services.skillRuntime.diagnosticsForWorkspace(workspace)
       : services.skillRuntime.diagnostics(),
     refreshSkills: async () => services.skillRuntime.refresh(),
-    setSkillsEnabled: async (enabled) => {
+    setSkillsEnabled: async (enabled) => config.withConfigLock(async (apply) => {
       const capabilities = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
-      const result = await applyConfig({
+      const result = await apply({
         capabilities: {
           ...capabilities,
           skills: { ...capabilities.skills, enabled }
         }
-      })
+      }).finally(() => { capabilitiesMemo = undefined })
       if (result.ok) {
         await persistRuntimeSkillsConfig(
           config.activeOptions.dataDir,
@@ -542,15 +571,15 @@ export function createServerRuntimeComposition(
         )
       }
       return result
-    },
-    setLocalCapabilityEnabled: async (id, enabled) => {
+    }),
+    setLocalCapabilityEnabled: async (id, enabled) => config.withConfigLock(async (apply) => {
       const capabilities = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
-      const result = await applyConfig({
+      const result = await apply({
         capabilities: {
           ...capabilities,
           [id]: { ...capabilities[id], enabled }
         }
-      })
+      }).finally(() => { capabilitiesMemo = undefined })
       if (result.ok) {
         await persistRuntimeCapabilitySection(
           config.activeOptions.dataDir,
@@ -559,7 +588,7 @@ export function createServerRuntimeComposition(
         )
       }
       return result
-    },
+    }),
     registerRemoteCleanup(cleanup) { remoteCleanups.add(cleanup) },
     shutdown: async () => {
       beginOwnedProcessShutdown()

@@ -207,8 +207,8 @@ const api = {
     ipcRenderer.invoke('ui-plugin:theme:deactivate'),
   getKunConfigFile: () =>
     ipcRenderer.invoke('kun:config:read'),
-  setKunConfigFile: (content) =>
-    ipcRenderer.invoke('kun:config:write', content),
+  setKunConfigFile: (content: string, baseContent: string) =>
+    ipcRenderer.invoke('kun:config:write', content, baseContent),
   ...createGitHubMcpAuthorizationPreloadApi(ipcRenderer),
   openKunConfigDir: () =>
     ipcRenderer.invoke('kun:config:open-dir'),

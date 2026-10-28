@@ -21,6 +21,8 @@ import type {
   McpServerConfig
 } from '../../contracts/capabilities.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities-core.js'
+export type McpServerMutation = McpServerConfig | null | ((current: McpServerConfig | undefined) => McpServerConfig | null | 'exists' | 'missing' | 'unchanged')
+
 import type {
   RuntimeConfigApplyRequest,
   RuntimeConfigApplyResponse
@@ -509,7 +511,7 @@ export type ServerRuntime = {
   clearMcpOAuth?(serverId?: string): Promise<McpOAuthClearResult>
   authorizeMcpOAuth?(serverId: string): Promise<McpOAuthAuthorizeResult>
   mcpConfig?(): McpCapabilityConfig
-  setMcpServer?(serverId: string, server: McpServerConfig | null): Promise<RuntimeConfigApplyResponse>
+  setMcpServer?(serverId: string, server: McpServerMutation): Promise<RuntimeConfigApplyResponse>
   skills?(workspace?: string): SkillRuntimeDiagnostics | Promise<SkillRuntimeDiagnostics>
   refreshSkills?(): Promise<void>
   setSkillsEnabled?(enabled: boolean): Promise<RuntimeConfigApplyResponse>

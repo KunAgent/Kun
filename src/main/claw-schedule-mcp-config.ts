@@ -1,7 +1,9 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile as readFileAsync, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, join, posix } from 'node:path'
+import { basename, join, posix } from 'node:path'
 import type { AppSettingsV1 } from '../shared/app-settings'
+import { withSharedMcpLock } from '../../kun/src/server/runtime-mcp-lock.js'
+import { atomicWriteFile } from './atomic-json-file'
 
 const CLAW_SCHEDULE_MCP_MARKER_START = '# DeepSeek GUI plugin:mcp:claw-schedule START'
 const CLAW_SCHEDULE_MCP_MARKER_END = '# DeepSeek GUI plugin:mcp:claw-schedule END'
@@ -196,17 +198,17 @@ export function removeLegacyClawScheduleTomlConfig(content: string): string {
   return withoutLegacyTable ? `${withoutLegacyTable}\n` : ''
 }
 
-async function readJsonFile(path: string): Promise<unknown | null> {
+async function readJsonFile(path: string): Promise<{ value: unknown | null; text: string | null }> {
   let raw = ''
   try {
-    raw = await readFile(path, 'utf8')
+    raw = await readFileAsync(path, 'utf8')
   } catch (error) {
-    if (isErrnoException(error) && error.code === 'ENOENT') return null
+    if (isErrnoException(error) && error.code === 'ENOENT') return { value: null, text: null }
     throw error
   }
 
   try {
-    return JSON.parse(raw) as unknown
+    return { value: JSON.parse(raw) as unknown, text: raw }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to parse Kun MCP config at ${path}: ${message}`, { cause: error })
@@ -216,7 +218,7 @@ async function readJsonFile(path: string): Promise<unknown | null> {
 async function cleanupLegacyTomlConfig(path: string): Promise<void> {
   let current = ''
   try {
-    current = await readFile(path, 'utf8')
+    current = await readFileAsync(path, 'utf8')
   } catch (error) {
     if (isErrnoException(error) && error.code === 'ENOENT') return
     throw error
@@ -247,12 +249,16 @@ export async function syncClawScheduleMcpConfig(
 
   await cleanupLegacyTomlConfig(configTomlPath)
 
-  const current = await readJsonFile(mcpJsonPath)
-  const next = buildSyncedClawScheduleMcpJson(current, settings, launch)
-  const nextText = `${JSON.stringify(next, null, 2)}\n`
-  const currentText = current === null ? '' : `${JSON.stringify(current, null, 2)}\n`
-  if (nextText === currentText) return
-
-  await mkdir(dirname(mcpJsonPath), { recursive: true })
-  await writeFile(mcpJsonPath, nextText, 'utf8')
+  // mcp.json is shared with the Runtime and with the user. This writer takes
+  // the same cross-process lock as the Runtime's shared-file writes and reads
+  // the document inside it, so a concurrent enable/disable is never replaced
+  // by a patch computed from a stale snapshot.
+  await withSharedMcpLock(mcpJsonPath, async () => {
+    const { value: current } = await readJsonFile(mcpJsonPath)
+    const next = buildSyncedClawScheduleMcpJson(current, settings, launch)
+    const nextText = `${JSON.stringify(next, null, 2)}\n`
+    const currentText = current === null ? '' : `${JSON.stringify(current, null, 2)}\n`
+    if (nextText === currentText) return
+    await atomicWriteFile(mcpJsonPath, nextText)
+  })
 }
