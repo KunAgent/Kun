@@ -63,5 +63,22 @@
   "artifactsNoScreens": "このデザインにはまだ HTML 画面がありません。キャンバスを開いてください。",
   "artifactsWhiteboardHint": "ホワイトボードは Work で開いて編集できます。",
   "artifactsScreenVersions_one": "{{count}} バージョン",
-  "artifactsScreenVersions_other": "{{count}} バージョン"
+  "artifactsScreenVersions_other": "{{count}} バージョン",
+  "artifactsKindReport": "グラフ",
+  "artifactsNewReportHint": "指標・推移・ダッシュボード",
+  "artifactsNewReportPrompt": "このデータをグラフにして：",
+  "reportCardBuilding": "レポートを作成中…",
+  "reportCardInterrupted": "レポートは完成しませんでした",
+  "reportCardFailed": "レポートを作成できませんでした：{{error}}",
+  "reportCardStats": "指標 {{n}} 件",
+  "reportCardCharts": "グラフ {{n}} 件",
+  "reportCardAsOf": "{{time}} 時点",
+  "reportCardRevision": "第 {{n}} 版",
+  "reportCardSaved": "成果物に保存済み",
+  "reportCardOpen": "成果物で開く",
+  "reportCardShowMore": "残り {{n}} ブロックを表示",
+  "reportCardShowLess": "折りたたむ",
+  "reportCardSources": "出典：{{sources}}",
+  "reportCardLoadFailed": "保存したレポートを読み込めません",
+  "toolBuiltinReportOpen": "データレポートを作成"
 }

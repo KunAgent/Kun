@@ -32,6 +32,7 @@ import {
   DESIGN_OPEN_EXCALIDRAW_TOOL_NAME
 } from './design-excalidraw-tool.js'
 import { createDesignOpenTool } from './design-open-tool.js'
+import { createReportOpenTool } from './report-open-tool.js'
 
 export { DESIGN_UPDATE_SHAPES_MAX_OPS } from './design-canvas-normalization.js'
 export { createDesignCreateDiagramTool, DESIGN_CREATE_DIAGRAM_TOOL_NAME } from './design-diagram-tool.js'
@@ -104,7 +105,9 @@ export function buildDesignCanvasLocalTools(): LocalTool[] {
     createDesignOpenExcalidrawTool(),
     createWorkRenameWhiteboardTool(),
     // Code-turn entry point; gated to Kun-native GUI Code turns, never canvas turns.
-    createDesignOpenTool()
+    createDesignOpenTool(),
+    // Conversation data reports (charts saved as artifacts); gated to GUI turns with a workspace.
+    createReportOpenTool()
   ]
 }
 

@@ -72,5 +72,22 @@
   "artifactsWorkNoSpace": "Choose a space to see its artifacts.",
   "artifactsWorkEmptyTitle": "No artifacts in this space yet",
   "artifactsWorkEmptyBody": "Create a whiteboard, or ask Kun to produce one in a conversation.",
-  "artifactsMoreActions": "More actions"
+  "artifactsMoreActions": "More actions",
+  "artifactsKindReport": "Charts",
+  "artifactsNewReportHint": "Metrics, trends, dashboards",
+  "artifactsNewReportPrompt": "Turn this data into charts: ",
+  "reportCardBuilding": "Building the report…",
+  "reportCardInterrupted": "The report was not finished",
+  "reportCardFailed": "Report failed: {{error}}",
+  "reportCardStats": "{{n}} metrics",
+  "reportCardCharts": "{{n}} charts",
+  "reportCardAsOf": "As of {{time}}",
+  "reportCardRevision": "Revision {{n}}",
+  "reportCardSaved": "Saved to Artifacts",
+  "reportCardOpen": "Open in Artifacts",
+  "reportCardShowMore": "Show {{n}} more blocks",
+  "reportCardShowLess": "Show less",
+  "reportCardSources": "Sources: {{sources}}",
+  "reportCardLoadFailed": "Couldn't read the saved report",
+  "toolBuiltinReportOpen": "Build a data report"
 }

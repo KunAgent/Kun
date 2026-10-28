@@ -65,5 +65,22 @@
   "artifactsScreenVersions_one": "{{count}} версия",
   "artifactsScreenVersions_few": "{{count}} версии",
   "artifactsScreenVersions_many": "{{count}} версий",
-  "artifactsScreenVersions_other": "{{count}} версии"
+  "artifactsScreenVersions_other": "{{count}} версии",
+  "artifactsKindReport": "Графики",
+  "artifactsNewReportHint": "Метрики, тренды, дашборды",
+  "artifactsNewReportPrompt": "Сделай графики по этим данным: ",
+  "reportCardBuilding": "Собираем отчёт…",
+  "reportCardInterrupted": "Отчёт не был завершён",
+  "reportCardFailed": "Не удалось построить отчёт: {{error}}",
+  "reportCardStats": "Метрик: {{n}}",
+  "reportCardCharts": "Графиков: {{n}}",
+  "reportCardAsOf": "По состоянию на {{time}}",
+  "reportCardRevision": "Версия {{n}}",
+  "reportCardSaved": "Сохранено в артефакты",
+  "reportCardOpen": "Открыть в артефактах",
+  "reportCardShowMore": "Показать ещё блоков: {{n}}",
+  "reportCardShowLess": "Свернуть",
+  "reportCardSources": "Источники: {{sources}}",
+  "reportCardLoadFailed": "Не удалось прочитать сохранённый отчёт",
+  "toolBuiltinReportOpen": "Построить отчёт по данным"
 }

@@ -114,7 +114,11 @@ function exportChartPng(source: SVGSVGElement, filename: string): void {
   image.src = objectUrl
 }
 
-export function ChartRenderer({ spec }: { spec: RendererChartSpec }): ReactElement {
+export function ChartRenderer({ spec, embedded = false }: {
+  spec: RendererChartSpec
+  /** Inside a report grid: no outer margin, the grid spaces the charts. */
+  embedded?: boolean
+}): ReactElement {
   const [table, setTable] = useState(spec.type === 'table')
   const [expanded, setExpanded] = useState(false)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -150,7 +154,7 @@ export function ChartRenderer({ spec }: { spec: RendererChartSpec }): ReactEleme
       data-chart-type={spec.type}
       data-chart-orientation={shouldUseHorizontalBar(spec) ? 'horizontal' : 'vertical'}
       data-chart-stacked={usesStackedBars(spec) ? 'true' : 'false'}
-      className="my-3 min-w-0 rounded-xl border border-ds-border bg-ds-card p-4 text-ds-ink"
+      className={`${embedded ? 'h-full' : 'my-3'} min-w-0 rounded-xl border border-ds-border bg-ds-card p-4 text-ds-ink`}
     >
       <figcaption>
         <h3 className="text-sm font-semibold">{spec.title}</h3>

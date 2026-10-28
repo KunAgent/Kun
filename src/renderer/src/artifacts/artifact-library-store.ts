@@ -123,3 +123,9 @@ export function returnToWorkFromArtifacts(): void {
   const { setRoute } = useChatStore.getState()
   setRoute('write')
 }
+
+/** Opens one artifact straight in the library viewer, e.g. from a conversation card. */
+export function openLibraryArtifact(id: string): void {
+  openArtifactsPage()
+  useArtifactLibraryStore.setState({ openId: id })
+}

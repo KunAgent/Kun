@@ -63,5 +63,22 @@
   "artifactsNoScreens": "이 디자인에는 아직 HTML 화면이 없습니다. 캔버스를 열어 확인하세요.",
   "artifactsWhiteboardHint": "화이트보드는 Work에서 열어 편집할 수 있습니다.",
   "artifactsScreenVersions_one": "버전 {{count}}개",
-  "artifactsScreenVersions_other": "버전 {{count}}개"
+  "artifactsScreenVersions_other": "버전 {{count}}개",
+  "artifactsKindReport": "차트",
+  "artifactsNewReportHint": "지표, 추세, 대시보드",
+  "artifactsNewReportPrompt": "이 데이터를 차트로 만들어 줘: ",
+  "reportCardBuilding": "보고서를 만드는 중…",
+  "reportCardInterrupted": "보고서가 완성되지 않았습니다",
+  "reportCardFailed": "보고서를 만들지 못했습니다: {{error}}",
+  "reportCardStats": "지표 {{n}}개",
+  "reportCardCharts": "차트 {{n}}개",
+  "reportCardAsOf": "{{time}} 기준",
+  "reportCardRevision": "{{n}}번째 버전",
+  "reportCardSaved": "산출물에 저장됨",
+  "reportCardOpen": "산출물에서 열기",
+  "reportCardShowMore": "나머지 {{n}}개 블록 보기",
+  "reportCardShowLess": "접기",
+  "reportCardSources": "출처: {{sources}}",
+  "reportCardLoadFailed": "저장된 보고서를 읽지 못했습니다",
+  "toolBuiltinReportOpen": "데이터 보고서 만들기"
 }

@@ -72,5 +72,22 @@
   "artifactsWorkNoSpace": "先选择一个空间，再查看产物。",
   "artifactsWorkEmptyTitle": "这个空间还没有产物",
   "artifactsWorkEmptyBody": "新建一块白板，或让 Kun 在对话里生成一份。",
-  "artifactsMoreActions": "更多操作"
+  "artifactsMoreActions": "更多操作",
+  "artifactsKindReport": "图表",
+  "artifactsNewReportHint": "指标、趋势、看板",
+  "artifactsNewReportPrompt": "把这些数据做成图表：",
+  "reportCardBuilding": "正在生成图表…",
+  "reportCardInterrupted": "图表没有生成完",
+  "reportCardFailed": "图表没有生成：{{error}}",
+  "reportCardStats": "{{n}} 项指标",
+  "reportCardCharts": "{{n}} 张图",
+  "reportCardAsOf": "截至 {{time}}",
+  "reportCardRevision": "第 {{n}} 版",
+  "reportCardSaved": "已存入产物",
+  "reportCardOpen": "在产物中打开",
+  "reportCardShowMore": "展开其余 {{n}} 块",
+  "reportCardShowLess": "收起",
+  "reportCardSources": "来源：{{sources}}",
+  "reportCardLoadFailed": "读取图表文件失败",
+  "toolBuiltinReportOpen": "生成图表产物"
 }
