@@ -7,15 +7,50 @@ import { useCodeCanvasDesignSurface } from './code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../lib/code-canvas-panel-event'
 
 const SCREEN_GAP = 160
+/** Space between section rows: room for the section label and boards that grow after they render. */
+const SECTION_GAP = 400
 
-/** Where the next new screen goes: one row, to the right of the document's existing screens. */
-export function nextAgentScreenX(artifacts: readonly DesignArtifact[]): number {
-  let right = Number.NEGATIVE_INFINITY
-  for (const artifact of artifacts) {
-    if (artifact.kind !== 'html' || !artifact.node) continue
-    right = Math.max(right, artifact.node.x + artifact.node.width)
+type SectionRow = { y: number; right: number }
+
+function sectionKey(section: string | undefined): string {
+  return section?.trim().toLowerCase().replace(/\s+/gu, ' ') ?? ''
+}
+
+/**
+ * Board placement for an agent-built design: every section is one row, rows
+ * stack downward in the order sections first appear, and new boards of a
+ * known section continue its row. Boards without a section share one row.
+ */
+export class AgentBoardLayout {
+  private readonly rows = new Map<string, SectionRow>()
+  private left = 0
+  private bottom = Number.NEGATIVE_INFINITY
+
+  constructor(artifacts: readonly DesignArtifact[]) {
+    let left = Number.POSITIVE_INFINITY
+    for (const artifact of artifacts) {
+      if (artifact.kind !== 'html' || !artifact.node) continue
+      const { x, y, width, height } = artifact.node
+      left = Math.min(left, x)
+      this.bottom = Math.max(this.bottom, y + height)
+      const key = sectionKey(artifact.boardSection)
+      const row = this.rows.get(key)
+      if (row) this.rows.set(key, { y: Math.min(row.y, y), right: Math.max(row.right, x + width) })
+      else this.rows.set(key, { y, right: x + width })
+    }
+    if (Number.isFinite(left)) this.left = left
   }
-  return Number.isFinite(right) ? right + SCREEN_GAP : 0
+
+  place(section: string | undefined, width: number, height: number): { x: number; y: number } {
+    const key = sectionKey(section)
+    const row = this.rows.get(key)
+    const slot = row
+      ? { x: row.right + SCREEN_GAP, y: row.y }
+      : { x: this.left, y: Number.isFinite(this.bottom) ? this.bottom + SECTION_GAP : 0 }
+    this.rows.set(key, { y: slot.y, right: slot.x + width })
+    this.bottom = Math.max(this.bottom, slot.y + height)
+    return slot
+  }
 }
 
 /** New and refreshed screens for a `design_open` result, keeping existing board positions. */
@@ -26,12 +61,13 @@ export function agentDesignArtifacts(
 ): DesignArtifact[] {
   if (request.status !== 'ready' || !request.documentId) return []
   const byId = new Map(existing.map((artifact) => [artifact.id, artifact]))
-  let x = nextAgentScreenX(existing)
+  const layout = new AgentBoardLayout(existing)
   return request.screens.map((screen) => {
     const current = byId.get(screen.artifactId)
-    if (current) return { ...current, title: screen.name, updatedAt: now }
-    const node = { x, y: 0, width: screen.width, height: screen.height, sizeMode: 'manual-width-auto-height' as const, viewMode: 'preview' as const }
-    x += screen.width + SCREEN_GAP
+    const section = screen.section ? { boardSection: screen.section } : {}
+    if (current) return { ...current, title: screen.name, updatedAt: now, ...section }
+    const { x, y } = layout.place(screen.section, screen.width, screen.height)
+    const node = { x, y, width: screen.width, height: screen.height, sizeMode: 'manual-width-auto-height' as const, viewMode: 'preview' as const }
     return {
       id: screen.artifactId,
       kind: 'html' as const,
@@ -42,7 +78,8 @@ export function agentDesignArtifacts(
       versions: [{ id: `${screen.artifactId}-v1`, relativePath: screen.relativePath, createdAt: now, summary: '' }],
       designMdPath: artifactDesignMdPath(request.documentId!, screen.artifactId),
       previewStatus: 'pending' as const,
-      node
+      node,
+      ...section
     }
   })
 }

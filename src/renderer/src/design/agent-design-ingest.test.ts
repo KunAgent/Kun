@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { DesignOpenRequestMetadata } from '../agent/design-open-request'
 import type { ChatBlock } from '../agent/types'
 import type { DesignArtifact } from './design-types'
-import { agentDesignArtifacts, nextAgentScreenX } from './agent-design-ingest'
+import { agentDesignArtifacts } from './agent-design-ingest'
 import { takeLiveDesignRequests } from '../components/workbench/useAgentDesignAutoOpen'
 
 const NOW = '2026-10-24T08:00:00.000Z'
 
-function request(screens: { id: string; name: string; width?: number }[]): DesignOpenRequestMetadata {
+function request(screens: { id: string; name: string; width?: number; height?: number; section?: string }[]): DesignOpenRequestMetadata {
   return {
     status: 'ready',
     title: 'Tray',
@@ -19,12 +19,13 @@ function request(screens: { id: string; name: string; width?: number }[]): Desig
       name: screen.name,
       relativePath: `.kun-design/0a1b2c3d/${screen.id}/v1.html`,
       width: screen.width ?? 1280,
-      height: 800
+      height: screen.height ?? 800,
+      ...(screen.section ? { section: screen.section } : {})
     }))
   }
 }
 
-function existing(id: string, x: number, width: number): DesignArtifact {
+function existing(id: string, x: number, width: number, extra: Partial<DesignArtifact> = {}): DesignArtifact {
   return {
     id,
     kind: 'html',
@@ -33,14 +34,19 @@ function existing(id: string, x: number, width: number): DesignArtifact {
     createdAt: '2026-10-23T00:00:00.000Z',
     updatedAt: '2026-10-23T00:00:00.000Z',
     versions: [],
-    node: { x, y: 0, width, height: 800 }
+    node: { x, y: 0, width, height: 800 },
+    ...extra
   }
 }
 
 describe('agent design ingest', () => {
   it('lays new screens out in one row after the existing ones', () => {
-    expect(nextAgentScreenX([])).toBe(0)
-    expect(nextAgentScreenX([existing('aaaaaaaa', 0, 1280), existing('bbbbbbbb', 1440, 390)])).toBe(1990)
+    const appended = agentDesignArtifacts(
+      request([{ id: '33333333', name: 'Next' }]),
+      [existing('aaaaaaaa', 0, 1280), existing('bbbbbbbb', 1440, 390)],
+      NOW
+    )
+    expect(appended[0].node).toMatchObject({ x: 1990, y: 0 })
 
     const artifacts = agentDesignArtifacts(
       request([{ id: '11111111', name: 'Tray' }, { id: '22222222', name: 'Open', width: 390 }]),
@@ -59,6 +65,27 @@ describe('agent design ingest', () => {
       previewStatus: 'pending',
       node: { sizeMode: 'manual-width-auto-height', viewMode: 'preview' }
     })
+  })
+
+  it('gives every section its own row, stacked in the order sections appear', () => {
+    const first = agentDesignArtifacts(request([
+      { id: '11111111', name: 'Overview', section: '01 Flow' },
+      { id: '22222222', name: 'Detail', section: '01 Flow', width: 390, height: 1200 },
+      { id: '33333333', name: 'Light', section: '02 Themes' },
+      { id: '44444444', name: 'Dark', section: '02 Themes' }
+    ]), [], NOW)
+    expect(first.map((artifact) => [artifact.boardSection, artifact.node?.x, artifact.node?.y])).toEqual([
+      ['01 Flow', 0, 0],
+      ['01 Flow', 1440, 0],
+      ['02 Themes', 0, 1600],
+      ['02 Themes', 1440, 1600]
+    ])
+    // A later call continues a known section's row and opens new sections below everything.
+    const later = agentDesignArtifacts(request([
+      { id: '55555555', name: 'Error', section: ' 01  flow ' },
+      { id: '66666666', name: 'Tokens', section: 'Components' }
+    ]), first, NOW)
+    expect(later.map((artifact) => [artifact.node?.x, artifact.node?.y])).toEqual([[1990, 0], [0, 2800]])
   })
 
   it('keeps a known screen where the user put it and only refreshes it', () => {

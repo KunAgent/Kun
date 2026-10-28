@@ -21,6 +21,7 @@ import {
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
 import { DesignOpenCard } from './DesignOpenCard'
+import { groupDesignOpenBlocks } from '../../agent/design-open-request'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
 import { AppSurfaceBlocks } from '../../app-surfaces/AppSurfaceBlocks'
 import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
@@ -429,8 +430,8 @@ export function ConversationTurn({
         />
       ))}
 
-      {designOpenBlocks.map((block) => (
-        <DesignOpenCard key={block.id} block={block} threadId={threadId} requestTurnLive={isProcessing} />
+      {groupDesignOpenBlocks(designOpenBlocks).map((group) => (
+        <DesignOpenCard key={group[0].id} blocks={group} threadId={threadId} requestTurnLive={isProcessing} />
       ))}
 
       {assistantContentBlocks.map((block) => (

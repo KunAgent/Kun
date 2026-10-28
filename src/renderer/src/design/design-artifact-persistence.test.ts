@@ -9,6 +9,21 @@ import { currentDesignArtifactVersion, defaultDesignArtifactNode, type DesignArt
 
 describe('design artifact persistence', () => {
   afterEach(() => vi.unstubAllGlobals())
+  it('keeps the agent section label of a board across restarts', () => {
+    const meta = (boardSection: unknown) => JSON.stringify({
+      id: 'draft',
+      kind: 'html',
+      title: 'Draft',
+      relativePath: '.kun-design/draft/v1.html',
+      createdAt: '2026-06-20T00:00:00.000Z',
+      updatedAt: '2026-06-20T00:00:00.000Z',
+      boardSection
+    })
+    expect(parseArtifactMeta(meta('  02 Themes '), 'draft')?.boardSection).toBe('02 Themes')
+    expect(parseArtifactMeta(meta(''), 'draft')).not.toHaveProperty('boardSection')
+    expect(parseArtifactMeta(meta(7), 'draft')).not.toHaveProperty('boardSection')
+  })
+
   it('keeps old artifact meta valid when node placement is absent', () => {
     const artifact = parseArtifactMeta(
       JSON.stringify({
