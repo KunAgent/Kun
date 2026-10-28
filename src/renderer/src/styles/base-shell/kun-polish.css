@@ -32,8 +32,16 @@
   --kun-ground-alpha: 32%;
 }
 
+/* Dark glass: the native material follows the app theme (main syncs
+ * nativeTheme.themeSource), so a heavier dark tint keeps the sidebar dark even
+ * over a light wallpaper while a trace of it still shows through. */
+:root[data-platform='darwin'][data-theme='dark'] {
+  --kun-ground-alpha: 76%;
+}
+
 @media (prefers-reduced-transparency: reduce) {
-  :root[data-platform='darwin'] {
+  :root[data-platform='darwin'],
+  :root[data-platform='darwin'][data-theme='dark'] {
     --kun-ground-alpha: 100%;
   }
 }

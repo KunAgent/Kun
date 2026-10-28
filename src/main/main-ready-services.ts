@@ -18,6 +18,7 @@ import {
 } from './settings-store'
 import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import { registerTrayQuotaIpc } from './tray-quota-ipc'
+import { syncNativeThemeSource } from './native-theme-source'
 import { syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath } from './main-paths'
 import {
@@ -260,6 +261,7 @@ export async function initializeMainServices(input: {
         })
     traceStartup('settings load:start')
     const initial = await mainState.store.load()
+    syncNativeThemeSource(initial.theme)
     desktopProcessStack.assertCanStart()
     mainState.settledRuntimeSettings = initial
     runtimeSupervisor.noteLatest(initial)
