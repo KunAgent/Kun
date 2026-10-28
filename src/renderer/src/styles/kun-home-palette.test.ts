@@ -29,6 +29,21 @@ describe('Kun default light palette', () => {
   })
 })
 
+describe('Kun macOS sidebar material', () => {
+  it('clears the default desktop underlay and retains the accessibility fallback', async () => {
+    const css = await readStylesheetBundle(new URL('./base-shell/kun-polish.css', import.meta.url))
+
+    expect(css).toContain(
+      "html[data-platform='darwin']:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on']) body::before {\n    background: transparent;"
+    )
+    expect(css).toMatch(/@media \(min-width: 768px\)\s*\{\s*html\[data-platform='darwin'\]/)
+    expect(css).toMatch(/:root\[data-platform='darwin'\]\s*\{\s*--kun-ground-alpha: 32%;/)
+    expect(css).toMatch(
+      /@media \(prefers-reduced-transparency: reduce\)\s*\{\s*:root\[data-platform='darwin'\]\s*\{\s*--kun-ground-alpha: 100%;/
+    )
+  })
+})
+
 describe('Kun customizable dark palette', () => {
   it('uses Graphite source fallbacks and derives surface and border hierarchy', async () => {
     const css = await readStylesheetBundle(

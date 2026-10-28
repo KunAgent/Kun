@@ -27,9 +27,9 @@
   --kun-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* Low enough that the desktop tint shows through the native sidebar material. */
+/* Keep the tint light: the native material already supplies blur and contrast. */
 :root[data-platform='darwin'] {
-  --kun-ground-alpha: 58%;
+  --kun-ground-alpha: 32%;
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -54,6 +54,14 @@
 
 :root[data-platform='darwin'] body {
   background-color: transparent;
+}
+
+/* A transparent body cannot reveal vibrancy while its full-window underlay is
+ * opaque. Match the floating workbench's scope; branded scenes keep their base. */
+@media (min-width: 768px) {
+  html[data-platform='darwin']:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on']) body::before {
+    background: transparent;
+  }
 }
 
 /* Right tool rail: fold button at the top, reopen button in the top bar. */
