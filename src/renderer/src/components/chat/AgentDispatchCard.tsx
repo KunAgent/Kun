@@ -1,3 +1,4 @@
+import { useTeamWorkers } from '../workers/use-team-workers'
 import { useChatStore } from '../../store/chat-store'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -52,6 +53,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const id = block.meta!.dispatchIntentId as string
   const parsed = AgentDispatchIntentPublicSchema.safeParse(block.meta?.dispatchIntent)
   const { intent, act, busy, error } = useAgentDispatchIntent(id, parsed.success ? parsed.data : undefined)
+  const { overview } = useTeamWorkers(intent?.source.threadId ?? null, Boolean(intent?.target?.dispatchIds?.length))
   const [draft, setDraft] = useState<Draft>()
   const [saveError, setSaveError] = useState('')
   const [routeFailed, setRouteFailed] = useState(false)
@@ -112,7 +114,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
           {batch ? t('dispatchIntent.batchTitle', { n: assignments.length }) : recommendation.title}
         </h4>
       </div>
-      <AgentDispatchStatusBadge intent={intent} />
+      <AgentDispatchStatusBadge intent={intent} dispatches={overview?.dispatches} />
     </header>
     {draft ? <div className="space-y-2 border-t border-ds-border-muted px-4 py-3 text-[13px]">
       {!batch ? <input value={draft.title} maxLength={512} aria-label={t('dispatchIntent.title')}
@@ -122,7 +124,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
         onChange={(event) => setDraft({ ...draft, task: event.target.value })} className={`${fieldClass} text-[12.5px] leading-5`} />
     </div> : null}
     {/* Held picks stay local, so the hold's own pause must not lock the pickers (a disabled chip eats the click). */}
-    <AgentDispatchAssignmentList intent={intent} assignments={shown} editable={canEditRoutes} busy={busy && !hold.holding}
+    <AgentDispatchAssignmentList intent={intent} dispatches={overview?.dispatches} assignments={shown} editable={canEditRoutes} busy={busy && !hold.holding}
       onRouteChange={changeRoute} onInteract={hold.touch} onPendingChange={hold.setPending} onOpenWorker={openWorker} />
     <footer className="space-y-2.5 border-t border-ds-border-muted px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ds-faint">

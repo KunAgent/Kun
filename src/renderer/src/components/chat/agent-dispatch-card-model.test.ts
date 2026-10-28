@@ -1,8 +1,9 @@
+import type { AdeDispatchRecord } from '@shared/ade-teams'
 import { describe, expect, it } from 'vitest'
 import type { ActivityRow } from '@shared/activity-row'
 import { AgentDispatchIntentPublicSchema, type AgentDispatchIntentView } from '@shared/agent-dispatch'
 import {
-  dispatchAssignments, dispatchCountdown, dispatchPhase, dispatchRoutesEditable, formatDispatchClock,
+  dispatchReviewState, dispatchAssignments, dispatchCountdown, dispatchPhase, dispatchRoutesEditable, formatDispatchClock,
   replaceAssignmentRoute, routeForRole, routeFromWorkbenchModel, sameAssignmentRoute, withRouteRole,
   workbenchModelFromRoute, workerProgress
 } from './agent-dispatch-card-model'
@@ -27,6 +28,28 @@ function row(workerId: string, patch: Partial<ActivityRow>): ActivityRow {
 }
 
 describe('dispatch card view model', () => {
+  it.each(['pending', 'needs_changes', 'rejected', 'passed', 'waived'] as const)(
+    'shows the original dispatch verdict %s instead of a later worker run', (status) => {
+      const card = intent({ state: 'completed', target: { workerIds: ['w1'], dispatchIds: ['d1'] } })
+      const original: AdeDispatchRecord = { dispatchId: 'd1', workerId: 'w1', teamId: 'parent',
+        title: 'original', state: 'completed', createdAt: '', updatedAt: '', verdict: { status, checks: [] } }
+      const later: AdeDispatchRecord = { ...original, dispatchId: 'd2', state: 'accepted', verdict: { status: 'pending', checks: [] } }
+      const expected = status === 'pending' ? 'awaiting_review' : status
+      expect(workerProgress(card, 0, { w1: row('w1', { state: 'working' }) }, [later, original]).state).toBe(expected)
+      expect(dispatchReviewState(card, [later, original])).toBe(expected)
+      expect(dispatchReviewState(card, [later])).toBeUndefined()
+      expect(workerProgress(card, 0, { w1: row('w1', { state: 'working' }) }, [later]).state).toBe('done')
+      expect(dispatchReviewState(card, [{ ...original, workerId: 'another' }])).toBeUndefined()
+    })
+
+  it('does not claim batch acceptance when any original dispatch is missing', () => {
+    const card = intent({ state: 'completed', target: { workerIds: ['w1', 'w2'], dispatchIds: ['d1', 'd2'] } })
+    const record: AdeDispatchRecord = { dispatchId: 'd1', workerId: 'w1', teamId: 'parent', title: 'first',
+      state: 'completed', createdAt: '', updatedAt: '', verdict: { status: 'passed', checks: [] } }
+    expect(dispatchReviewState(card, [record])).toBeUndefined()
+    expect(dispatchReviewState(card, [record, { ...record, dispatchId: 'd2', workerId: 'w2',
+      verdict: { status: 'needs_changes', checks: [] } }])).toBe('needs_changes')
+  })
   it('uses per-worker routes when the card carries them', () => {
     const assignments = [{ label: 'Review A', agentId: 'kun', model: 'deepseek-flash' },
       { label: 'Review B', agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' as const }]

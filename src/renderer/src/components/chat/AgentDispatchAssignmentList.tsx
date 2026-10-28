@@ -1,3 +1,4 @@
+import type { AdeDispatchRecord } from '@shared/ade-teams'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight, CircleCheck, CircleSlash, CircleX, Clock3, Hand, Loader2 } from 'lucide-react'
 import type { AgentDispatchAssignmentRoute, AgentDispatchAssignmentView, AgentDispatchIntentView } from '@shared/agent-dispatch'
@@ -15,7 +16,9 @@ function ProgressChip({ progress }: { progress: WorkerProgress }) {
     case 'waiting': return <span className={`${base} text-ds-status-warning`}>
       <Hand size={12} className="shrink-0" aria-hidden />
       <span className="truncate">{progress.waitingReason ? t(`dispatchIntent.waitingReason.${progress.waitingReason}`) : label}</span></span>
-    case 'done': return <span className={`${base} text-ds-status-success`}><CircleCheck size={12} className="shrink-0" aria-hidden />{label}</span>
+    case 'passed': case 'waived': return <span className={`${base} text-ds-status-success`}><CircleCheck size={12} className="shrink-0" aria-hidden />{label}</span>
+    case 'needs_changes': case 'awaiting_review': return <span className={`${base} text-ds-status-warning`} title={progress.detail}><Clock3 size={12} className="shrink-0" aria-hidden />{label}</span>
+    case 'rejected':
     case 'failed': return <span className={`${base} text-ds-status-danger`} title={progress.detail}>
       <CircleX size={12} className="shrink-0" aria-hidden />{label}</span>
     case 'cancelled': return <span className={`${base} text-ds-faint`}><CircleSlash size={12} className="shrink-0" aria-hidden />{label}</span>
@@ -27,8 +30,9 @@ function ProgressChip({ progress }: { progress: WorkerProgress }) {
  * One row per worker. While the card waits, each row carries its own Agent and
  * model choice; once admitted, the row shows live progress and opens the worker.
  */
-export function AgentDispatchAssignmentList({ intent, assignments, editable, busy, onRouteChange, onInteract, onPendingChange, onOpenWorker }: {
+export function AgentDispatchAssignmentList({ intent, dispatches, assignments, editable, busy, onRouteChange, onInteract, onPendingChange, onOpenWorker }: {
   intent: AgentDispatchIntentView
+  dispatches?: readonly AdeDispatchRecord[]
   assignments: readonly AgentDispatchAssignmentView[]
   editable: boolean
   busy: boolean
@@ -44,7 +48,7 @@ export function AgentDispatchAssignmentList({ intent, assignments, editable, bus
   const batch = assignments.length > 1
   return <ol className="divide-y divide-ds-border-muted border-t border-ds-border-muted" data-dispatch-assignments>
     {assignments.map((assignment, index) => {
-      const progress = showProgress ? workerProgress(intent, index, rows) : undefined
+      const progress = showProgress ? workerProgress(intent, index, rows, dispatches) : undefined
       return <li key={index} className="flex min-w-0 items-center gap-3 px-4 py-2.5" data-dispatch-assignment={index}>
         <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-ds-subtle px-1 text-[11px] font-semibold tabular-nums text-ds-muted">
           {batch ? index + 1 : <span aria-hidden>→</span>}

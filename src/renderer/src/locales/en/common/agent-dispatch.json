@@ -25,7 +25,7 @@
       "uncertain": "Checking task startup",
       "running": "Agent is working",
       "awaiting_parent": "Waiting for the main Agent to review",
-      "completed": "Completed",
+      "completed": "Execution finished",
       "failed": "Could not complete task",
       "cancelled": "Cancelled",
       "stopping": "Stopping"
@@ -61,7 +61,12 @@
       "pending": "Not started",
       "working": "Working",
       "waiting": "Needs attention",
-      "done": "Done",
+      "done": "Execution finished",
+      "awaiting_review": "Finished · awaiting review",
+      "needs_changes": "Needs changes",
+      "rejected": "Review rejected",
+      "passed": "Review passed",
+      "waived": "Review waived",
       "failed": "Failed",
       "cancelled": "Cancelled"
     },

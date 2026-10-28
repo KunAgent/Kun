@@ -286,6 +286,7 @@ export async function createRuntimeAgentComposition(
   // worker_* tool surface; AbortControllers outlive the manager turn.
   const childRunStore = new FileDelegationStore(join(core.activeOptions.dataDir, 'child-runs'))
   const dispatchDeliverer = new DispatchDeliverer({
+    notices: { enqueue: (notice) => workerNoticeCoordinator.enqueue(notice) },
     agentDispatchService: services.agentDispatchService,
     teams: services.adeStores.teams,
     dispatches: services.adeStores.dispatches,

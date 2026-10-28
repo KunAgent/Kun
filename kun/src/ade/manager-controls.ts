@@ -87,6 +87,7 @@ export type WorkerSendResult = {
   dispatchId?: string
   dispatched?: boolean
   deliveryPending?: DeliverOutcome['pendingReason']
+  failureReason?: string
   refusal?: string
   userReport: string
 }
@@ -197,10 +198,11 @@ export class ManagerControls {
       ...(input.mode ? { mode: input.mode } : {})
     })
     return {
-      ok: true,
+      ok: dispatch.state !== 'failed' && dispatch.state !== 'cancelled',
       workerId: worker.workerId,
       dispatchId: dispatch.dispatchId,
       dispatched: delivered.accepted,
+      ...(delivered.failureReason ? { failureReason: delivered.failureReason } : {}),
       ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),
       userReport: this.sendReport(worker, delivered, language)
     }

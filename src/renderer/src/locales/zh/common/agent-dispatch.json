@@ -25,7 +25,7 @@
       "uncertain": "正在核对启动状态",
       "running": "Agent 正在执行",
       "awaiting_parent": "等待主 Agent 验收",
-      "completed": "已完成",
+      "completed": "执行结束",
       "failed": "任务未能完成",
       "cancelled": "已取消",
       "stopping": "正在停止"
@@ -61,7 +61,12 @@
       "pending": "等待启动",
       "working": "执行中",
       "waiting": "需要处理",
-      "done": "已完成",
+      "done": "执行结束",
+      "awaiting_review": "执行结束 · 待验收",
+      "needs_changes": "需返工",
+      "rejected": "验收拒绝",
+      "passed": "验收通过",
+      "waived": "验收已豁免",
       "failed": "失败",
       "cancelled": "已取消"
     },

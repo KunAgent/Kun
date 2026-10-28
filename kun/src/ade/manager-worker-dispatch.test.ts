@@ -454,3 +454,12 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
   })
 
 })
+
+// Unit fixtures intentionally use a virtual checkout; keep store I/O real.
+// dispatch-deliverer.test.ts covers real checkout and missing-path behavior.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, stat: (path: string) =>
+    path === '/repo/.worktrees/fix-login' || path === '/repo'
+      ? Promise.resolve({ isDirectory: () => true }) : actual.stat(path) }
+})
