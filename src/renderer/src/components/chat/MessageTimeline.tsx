@@ -23,6 +23,7 @@ import { WorkerControlBanner } from '../workers/WorkerControlBanner'
 import {
   activeTimelineTurnIndex,
   groupTurns,
+  timelineTaskStartedAtMs,
   sameTurnContent,
   stableTurnKey,
   turnTaskSurface,
@@ -450,10 +451,12 @@ export function MessageTimeline({
           const absoluteTurnIndex = hiddenTurnCount + index
           const userId = turn.user?.id
           const isActiveTurn = index === activeTurnIndex
-          const startedAt = busy && isActiveTurn ? liveStartedAtMs : undefined
+          const sourceHistory = isSourceHistoryTurn(turn)
+          const turnPending = !sourceHistory && threadHasPendingRuntimeWork(turn.blocks)
+          const startedAt = (busy && isActiveTurn) || turnPending
+            ? timelineTaskStartedAtMs(turn, turnStartedAtByUserId, isActiveTurn ? liveStartedAtMs : undefined)
+            : undefined
           const recordedDuration = userId ? turnDurationByUserId[userId] : undefined
-          // Continuations can share an older user bubble. Keep its recorded
-          // duration separate from the current runtime turn's live clock.
           const durationMs =
             recordedDuration ??
             (typeof startedAt === 'number'
@@ -465,8 +468,6 @@ export function MessageTimeline({
             typeof reasoningFirst === 'number' && typeof reasoningLast === 'number'
               ? Math.max(0, reasoningLast - reasoningFirst)
               : undefined
-          const sourceHistory = isSourceHistoryTurn(turn)
-          const turnPending = !sourceHistory && threadHasPendingRuntimeWork(turn.blocks)
           const turnContributions = messageContributionsForSurface?.(turnTaskSurface(turn))
           const turnMessageActions = turnContributions?.actions ?? extensionMessageActions
           const turnContextMenus = turnContributions?.contextMenus ?? extensionContextMenus

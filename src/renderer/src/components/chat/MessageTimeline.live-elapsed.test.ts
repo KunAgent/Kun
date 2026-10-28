@@ -88,6 +88,72 @@ describe('MessageTimeline live elapsed time', () => {
     }
   )
 
+  it.each(['background_shell', 'background_subagent', 'worker_update'] as const)(
+    'counts the original task and waiting gap across repeated %s wake-ups', async (source) => {
+      useChatStore.setState({
+        currentTurnId: 'continuation', currentTurnUserId: 'notice',
+        currentTurnStartedAtMs: now - 10_000,
+        turnStartedAtByUserId: { 'original-user': startedAt, notice: now - 10_000 },
+        turnDurationByUserId: { 'original-user': 30_000 }
+      })
+      const blocks: ChatBlock[] = [user, {
+        kind: 'user', id: 'notice', turnId: 'continuation', text: 'Finished',
+        meta: { messageSource: source }
+      }]
+      await render(blocks)
+      expect(elapsed()).toBe('3m 53s')
+      await act(async () => { vi.advanceTimersByTime(60_000) })
+      await act(async () => useChatStore.setState({
+        currentTurnId: 'second-continuation', currentTurnUserId: 'second-notice',
+        currentTurnStartedAtMs: Date.now()
+      }))
+      await render([...blocks, {
+        kind: 'user', id: 'second-notice', turnId: 'second-continuation', text: 'More results',
+        meta: { messageSource: source }
+      }])
+      expect(elapsed()).toBe('4m 53s')
+    }
+  )
+
+  it('restores the original task anchor from history after a reload during continuation', async () => {
+    useChatStore.setState({
+      currentTurnId: 'continuation', currentTurnUserId: 'notice',
+      currentTurnStartedAtMs: now - 10_000
+    })
+    await render([{ ...user, createdAt: new Date(startedAt).toISOString() }, {
+      kind: 'user', id: 'notice', turnId: 'continuation', text: 'Finished',
+      meta: { messageSource: 'worker_update' }
+    }])
+    expect(elapsed()).toBe('3m 53s')
+  })
+
+  it('starts a new user task independently and excludes time queued before execution', async () => {
+    useChatStore.setState({
+      currentTurnId: 'new-turn', currentTurnUserId: 'new-user',
+      currentTurnStartedAtMs: now - 10_000,
+      turnStartedAtByUserId: { 'original-user': startedAt }
+    })
+    await render([user, {
+      kind: 'user', id: 'new-user', turnId: 'new-turn', text: 'New task',
+      createdAt: new Date(startedAt).toISOString()
+    }])
+    expect(elapsed()).toBe('10s')
+  })
+
+  it('keeps ticking during pending work even when the foreground turn is idle', async () => {
+    useChatStore.setState({
+      busy: false, currentTurnStartedAtMs: null,
+      turnStartedAtByUserId: { 'original-user': startedAt },
+      turnDurationByUserId: { 'original-user': 30_000 }
+    })
+    await render([user, {
+      kind: 'compaction', id: 'compaction', turnId: 'original-turn', status: 'running'
+    }])
+    expect(elapsed()).toBe('3m 53s')
+    await act(async () => { vi.advanceTimersByTime(1000) })
+    expect(elapsed()).toBe('3m 54s')
+  })
+
   it('uses the restored runtime start when the per-user timing map is empty', async () => {
     await render([user])
     expect(elapsed()).toBe('3m 53s')
