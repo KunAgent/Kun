@@ -1,76 +1,40 @@
-import { useEffect, type ReactElement } from 'react'
-import { X } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+import type { ReactElement } from 'react'
 import { usePaperStore } from '../../write/paper/paper-store'
+import { usePublishedToast } from '../../toast/use-published-toast'
+import type { ToastAction, ToastInput } from '../../toast/toast-types'
 
-const PAPER_NOTICE_MS = 6000
+const PAPER_NOTICE_MS = 6_000
 /** Notices that offer Undo stay long enough to be used. */
-const PAPER_NOTICE_ACTION_MS = 12000
+const PAPER_NOTICE_ACTION_MS = 12_000
 
 /**
- * Single renderer for `usePaperStore.notice` on both Work surfaces. Paper
- * actions run from the library, discover view, onboarding, the sidebar and
- * the docs-surface "add to paper library" action, and session actions offer
- * Undo here, so the notice cannot live inside the reader-only paper bar.
+ * Publishes `usePaperStore.notice` to the global dock on both Work surfaces.
+ * Paper actions run from the library, discover view, onboarding, the sidebar
+ * and the docs-surface "add to paper library" action, and session actions
+ * offer Undo here, so the notice cannot live inside the reader-only paper bar.
  */
 export function PaperNoticeToast(): ReactElement | null {
-  const { t } = useTranslation('common')
-  const notice = usePaperStore((s) => s.notice)
+  const notice = usePaperStore((state) => state.notice)
+  const clear = (): void => usePaperStore.getState().setNotice(null)
 
-  useEffect(() => {
-    if (!notice) return
-    const timer = window.setTimeout(() => {
-      if (usePaperStore.getState().notice === notice) usePaperStore.getState().setNotice(null)
-    }, notice.action ? PAPER_NOTICE_ACTION_MS : PAPER_NOTICE_MS)
-    return () => window.clearTimeout(timer)
-  }, [notice])
+  let input: ToastInput | null = null
+  if (notice) {
+    const actions: ToastAction[] = []
+    // Running a follow-up dismisses the notice first, as it always has.
+    for (const followUp of [notice.action, notice.secondaryAction]) {
+      if (!followUp) continue
+      actions.push({ label: followUp.label, run: () => { clear(); followUp.run() } })
+    }
+    input = {
+      id: 'paper',
+      tone: notice.tone,
+      title: notice.message,
+      durationMs: actions.length ? PAPER_NOTICE_ACTION_MS : PAPER_NOTICE_MS,
+      onDismiss: clear,
+      ...(actions.length ? { actions } : {})
+    }
+  }
 
-  if (!notice) return null
-  const toneClass = notice.tone === 'error'
-    ? 'border-red-200/70 bg-red-50/95 text-red-700 dark:border-red-900/60 dark:bg-red-950/90 dark:text-red-200'
-    : notice.tone === 'success'
-      ? 'border-emerald-200/80 bg-emerald-50/95 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/90 dark:text-emerald-200'
-      : 'border-ds-border-muted bg-ds-card text-ds-ink'
-  return (
-    <div
-      role={notice.tone === 'error' ? 'alert' : 'status'}
-      className={`ds-no-drag fixed bottom-5 left-1/2 z-50 flex max-w-[min(560px,calc(100vw-32px))] -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${toneClass}`}
-    >
-      <span className="min-w-0 flex-1 truncate" title={notice.message}>{notice.message}</span>
-      {notice.secondaryAction ? (
-        <button
-          type="button"
-          data-work-notice-secondary-action
-          onClick={() => {
-            usePaperStore.getState().setNotice(null)
-            notice.secondaryAction?.run()
-          }}
-          className="shrink-0 rounded-full px-2 py-0.5 font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-        >
-          {notice.secondaryAction.label}
-        </button>
-      ) : null}
-      {notice.action ? (
-        <button
-          type="button"
-          data-work-notice-action
-          onClick={() => {
-            usePaperStore.getState().setNotice(null)
-            notice.action?.run()
-          }}
-          className="shrink-0 rounded-full px-2 py-0.5 font-semibold text-accent transition hover:bg-accent/10"
-        >
-          {notice.action.label}
-        </button>
-      ) : null}
-      <button
-        type="button"
-        aria-label={t('close')}
-        onClick={() => usePaperStore.getState().setNotice(null)}
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full opacity-70 transition hover:opacity-100"
-      >
-        <X className="h-3.5 w-3.5" strokeWidth={2} />
-      </button>
-    </div>
-  )
+  usePublishedToast(input)
+  return null
 }

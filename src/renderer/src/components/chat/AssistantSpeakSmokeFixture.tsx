@@ -4,6 +4,7 @@ import type { ChatBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { useSpeakStore } from '../../stores/speak-store'
 import { SpeakDownloadToast } from '../SpeakDownloadToast'
+import { ToastDock } from '../../toast/ToastDock'
 import { speakStoredPlaybackCount, speakingDroppedSeconds } from './speak-controller'
 import { MessageBubble } from './message-timeline-bubbles'
 
@@ -84,6 +85,8 @@ function AssistantSpeakFixture(): ReactElement {
     >
       <MessageBubble block={assistantBlock()} />
       <SpeakDownloadToast />
+      {/* The Speak cards live in the global dock, which this standalone stage has to mount itself. */}
+      <ToastDock />
     </main>
   )
 }

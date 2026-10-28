@@ -6,8 +6,8 @@
 .write-selection-edit-count { font-size: 12.5px; color: var(--ds-text-muted); white-space: nowrap; }
 .write-selection-edit-controls { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
 .write-selection-edit button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 30px; height: 30px; padding: 0 8px; border-radius: 7px; color: var(--ds-text-muted); font-size: 13px; white-space: nowrap; }
-.write-selection-edit button:hover, .write-edit-toast button:hover { background: var(--ds-surface-hover); }
-.write-selection-edit button:focus-visible, .write-edit-toast button:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: -2px; }
+.write-selection-edit button:hover { background: var(--ds-surface-hover); }
+.write-selection-edit button:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: -2px; }
 .write-selection-edit button.is-primary { padding: 0 10px; background: var(--ds-accent-strong); color: white; }
 .write-selection-edit kbd { padding: 1px 4px; border-radius: 4px; font-size: 11.5px; color: var(--ds-text-muted); background: var(--ds-surface-subtle); }
 .write-selection-edit .is-primary kbd { color: inherit; background: rgba(255, 255, 255, .2); }
@@ -22,10 +22,6 @@
 .write-selection-edit-dots i { font-style: normal; animation: write-edit-dot 1.2s infinite; }
 .write-selection-edit-dots i:nth-child(2) { animation-delay: .2s; }
 .write-selection-edit-dots i:nth-child(3) { animation-delay: .4s; }
-.write-edit-toast { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 14px; border-radius: 999px; bottom: 24px; left: 50%; transform: translateX(-50%); font-size: 13px; }
-.write-edit-toast svg { width: 16px; height: 16px; color: var(--ds-accent); }
-.write-edit-toast button { height: 26px; padding: 0 8px; border-radius: 999px; }
-.write-edit-toast kbd { margin-left: 4px; font-size: 11.5px; color: var(--ds-text-muted); }
 @container (max-width: 520px) {
   .write-selection-edit-controls button:not(.is-primary) span, .write-selection-edit-controls kbd { display: none; }
   .write-selection-edit .compact-only { display: block; }

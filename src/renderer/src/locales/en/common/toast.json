@@ -1,0 +1,6 @@
+{
+  "toastRegion": "Notifications",
+  "toastWaiting": "{{hidden}} more waiting",
+  "runtimeStatusRecovered": "Kun reconnected",
+  "runtimeStatusRecoveredDetail": "The local runtime is ready again."
+}

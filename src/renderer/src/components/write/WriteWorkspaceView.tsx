@@ -2,6 +2,7 @@ import { clearAbandonedSelectionReview } from '../../write/selection-review-stat
 import { useFrozenSelection } from './selection-menu/use-frozen-selection'
 import { useSelectionEdit } from './selection-menu/use-selection-edit'
 import { SelectionEditLayer } from './selection-menu/SelectionEditLayer'
+import { WriteExportToast } from './WriteExportToast'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { saveWorkDocumentExplicitly } from '../../product-analytics/work'
@@ -671,18 +672,7 @@ export function WriteWorkspaceView({
           {fileError}
         </div>
       ) : null}
-      {exportNotice ? (
-        <div
-          className={`pointer-events-none fixed left-1/2 -translate-x-1/2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${writeFocusModeFloatingLayerClassName(documentFocusMode, 'z-40')} ${
-            exportNotice.tone === 'error'
-              ? 'border-red-200/70 bg-red-50/92 text-red-700 dark:border-red-900/60 dark:bg-red-950/84 dark:text-red-200'
-              : 'border-emerald-200/80 bg-emerald-50/92 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/84 dark:text-emerald-200'
-          }`}
-          style={{ bottom: fileError ? 68 : 20 }}
-        >
-          {exportNotice.message}
-        </div>
-      ) : null}
+      <WriteExportToast notice={exportNotice} onDismiss={() => setExportNotice(null)} />
     </div>
   )
 }

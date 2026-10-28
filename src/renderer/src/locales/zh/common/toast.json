@@ -1,0 +1,6 @@
+{
+  "toastRegion": "通知",
+  "toastWaiting": "还有 {{hidden}} 条通知待显示",
+  "runtimeStatusRecovered": "Kun 已重新连接",
+  "runtimeStatusRecoveredDetail": "本地运行时已恢复，可以继续使用。"
+}

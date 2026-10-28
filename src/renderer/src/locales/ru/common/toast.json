@@ -1,0 +1,6 @@
+{
+  "toastRegion": "Уведомления",
+  "toastWaiting": "Ещё {{hidden}} в очереди",
+  "runtimeStatusRecovered": "Kun снова подключён",
+  "runtimeStatusRecoveredDetail": "Локальная среда выполнения снова готова."
+}

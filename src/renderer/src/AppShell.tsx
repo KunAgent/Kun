@@ -6,7 +6,8 @@ import { resolveDesktopTitleBarMode, usesCustomDesktopTitleBar } from '@shared/d
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
 import { startBackgroundThreadSync } from './store/chat-background-sync'
-import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
+import { RuntimeStatusToast } from './components/RuntimeStatusToast'
+import { ToastDock } from './toast/ToastDock'
 import i18n from './i18n'
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
@@ -199,7 +200,6 @@ export default function AppShell(): React.ReactElement {
           <DesktopShellChrome platform={platform} titleBar={hasDesktopTitleBar} />
         </Suspense> : null}
         <div className="flex min-h-0 flex-1 flex-col">
-          <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
           <Suspense fallback={<RouteFallback />}>
             {route === 'settings' && surface !== 'mobile' ? (
@@ -213,6 +213,8 @@ export default function AppShell(): React.ReactElement {
             ) : surface === 'mobile' ? <MobileApp /> : <WorkbenchView />}
           </Suspense>
         </div>
+        <ToastDock />
+        <RuntimeStatusToast />
         <SpeakDownloadToast />
         {surface === 'desktop' ? <AgentActivityToasts /> : null}
         {surface === 'desktop' && !window.kunGui?.isRemoteWeb ? <MobilePairingDialog /> : null}

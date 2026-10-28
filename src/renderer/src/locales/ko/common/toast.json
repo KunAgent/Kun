@@ -1,0 +1,6 @@
+{
+  "toastRegion": "알림",
+  "toastWaiting": "{{hidden}}개 더 대기 중",
+  "runtimeStatusRecovered": "Kun이 다시 연결되었습니다",
+  "runtimeStatusRecoveredDetail": "로컬 런타임이 다시 준비되었습니다."
+}

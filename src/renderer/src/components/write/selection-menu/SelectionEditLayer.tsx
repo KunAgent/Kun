@@ -41,7 +41,7 @@ export function SelectionEditLayer({ controller, focusMode = false }: {
     window.addEventListener('resize', schedule)
     return () => { if (frame !== null) cancelAnimationFrame(frame); observer.disconnect(); unsubscribe(); window.removeEventListener('scroll', schedule, true); window.removeEventListener('resize', schedule) }
   }, [handle, session])
-  if (!session) return controller.applied ? <WriteEditToast onUndo={controller.undo} onDismiss={controller.dismissToast} focusMode={focusMode} /> : null
+  if (!session) return controller.applied ? <WriteEditToast onUndo={controller.undo} onDismiss={controller.dismissToast} /> : null
   const running = session.phase === 'running'
   const submit = (): void => { if (followUp.trim()) { controller.followUp(followUp); setFollowUp('') } }
   return <div ref={ref} className={`write-selection-edit ${running ? 'is-running' : 'is-review'} ${writeFocusModeFloatingLayerClassName(focusMode, 'z-50')}`}

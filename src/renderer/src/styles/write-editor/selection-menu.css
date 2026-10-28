@@ -1,7 +1,6 @@
 .write-selection-menu,
 .write-selection-menu-flyout,
-.write-selection-edit,
-.write-edit-toast {
+.write-selection-edit {
   --selection-shadow: 0 0 0 1px rgba(15, 23, 42, .05), 0 2px 4px rgba(15, 23, 42, .04), 0 14px 36px -10px rgba(15, 23, 42, .22);
   position: fixed;
   color: var(--ds-text);
@@ -13,7 +12,7 @@
   line-height: 1.4;
   box-sizing: border-box;
 }
-[data-theme='dark'] :is(.write-selection-menu, .write-selection-menu-flyout, .write-selection-edit, .write-edit-toast) {
+[data-theme='dark'] :is(.write-selection-menu, .write-selection-menu-flyout, .write-selection-edit) {
   --selection-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 16px 40px -10px rgba(0, 0, 0, .7);
 }
 .write-selection-menu { animation: write-inline-agent-in 150ms ease-out; }
