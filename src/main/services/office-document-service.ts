@@ -61,7 +61,7 @@ export type OfficeCliResult = {
 
 type OfficePreviewSelection = { page?: number; sheetIndex?: number }
 
-type OfficeDocumentSemanticReadResult =
+export type OfficeDocumentSemanticReadResult =
   | OfficeDocumentReadSuccess<OfficeDocumentPreviewFormat>
   | OfficeDocumentReadFailure
 
@@ -88,6 +88,14 @@ export async function readLocalOfficeDocument(
   // workspace route opts into legacy conversion below without widening uploads.
   const result = await readOfficeDocument(target, dependencies, false)
   return result as LocalOfficeDocumentReadResult
+}
+
+/** First page (or first sheet) of a workspace document, for library thumbnails. */
+export async function readOfficeDocumentFirstPage(
+  target: LocalOfficeDocumentTarget,
+  dependencies: OfficeDocumentServiceDependencies = {}
+): Promise<OfficeDocumentSemanticReadResult> {
+  return readOfficeDocument(target, dependencies, true, { page: 1 })
 }
 
 async function readOfficeDocument(

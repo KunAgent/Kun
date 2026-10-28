@@ -58,6 +58,7 @@
   "artifactsZoomIn": "ज़ूम इन",
   "artifactsZoomOut": "ज़ूम आउट",
   "artifactsFit": "विंडो में फ़िट",
+  "artifactsScreenCount": "{{n}} स्क्रीन",
   "artifactsPreviewLoading": "पूर्वावलोकन लोड हो रहा है…",
   "artifactsPreviewUnavailable": "यह फ़ाइल अभी यहाँ नहीं दिख सकती।",
   "artifactsNoScreens": "इस डिज़ाइन में अभी HTML स्क्रीन नहीं है। कैनवास खोलें।",

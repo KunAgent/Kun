@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChartLine, FileText, Image as ImageIcon, MessageSquare, Palette, Presentation, Shapes, Table2, type LucideIcon } from 'lucide-react'
-import { useBoardPreview } from './artifact-board-preview'
+import { useArtifactThumbnail } from './artifact-thumbnail'
 import { DataReportThumbnail } from './DataReportThumbnail'
 import { LIBRARY_ARTIFACT_KIND_STYLE, type LibraryArtifact, type LibraryArtifactKind } from './artifact-types'
 import { ARTIFACT_KIND_LABEL_KEYS, fileTypeLabel, formatArtifactSize, formatArtifactTime } from './artifact-view-model'
@@ -41,65 +41,86 @@ export function useArtifactImage(artifact: LibraryArtifact | null): string {
   return dataUrl
 }
 
-function Thumbnail({ artifact }: { artifact: LibraryArtifact }): ReactElement {
-  const image = useArtifactImage(artifact)
-  const board = useBoardPreview(artifact.kind === 'board' ? artifact : null)
-  if (artifact.kind === 'image') {
-    return image
-      ? <img src={image} alt="" className="h-full w-full object-cover" draggable={false} />
-      : <div className="h-full w-full bg-pink-50 dark:bg-pink-400/10" />
-  }
-  if (artifact.kind === 'design') {
-    return (
-      <div className="flex items-start gap-2.5">
-        <div className="flex h-[118px] w-[86px] flex-col gap-1.5 rounded-md border border-ds-border bg-white p-2 dark:bg-ds-card">
-          <div className="h-2 w-10 rounded bg-zinc-300 dark:bg-zinc-600" /><div className="flex-1 rounded bg-zinc-100 dark:bg-zinc-800" />
-          <div className="h-3.5 w-12 self-end rounded-full bg-violet-500" />
-        </div>
-        <div className="flex h-[118px] w-[86px] flex-col gap-1.5 rounded-md border border-ds-border bg-white p-2 dark:bg-ds-card">
-          <div className="h-2 w-14 rounded bg-zinc-300 dark:bg-zinc-600" /><div className="h-1.5 rounded bg-zinc-200 dark:bg-zinc-700" />
-          <div className="h-1.5 w-2/3 rounded bg-zinc-200 dark:bg-zinc-700" /><div className="mt-auto h-6 rounded bg-violet-50 dark:bg-violet-400/15" />
-        </div>
-      </div>
-    )
-  }
-  if (artifact.kind === 'slides') {
-    return (
-      <div className="flex h-[118px] w-[210px] flex-col gap-2 rounded-md bg-zinc-900 p-4">
-        <div className="h-1.5 w-8 rounded bg-orange-400" /><div className="h-3 w-32 rounded bg-white" />
-        <div className="h-2 w-24 rounded bg-zinc-500" />
-        <div className="mt-auto flex gap-1.5"><div className="h-6 flex-1 rounded bg-zinc-700" /><div className="h-6 flex-1 rounded bg-zinc-700" /><div className="h-6 flex-1 rounded bg-zinc-700" /></div>
-      </div>
-    )
-  }
-  if (artifact.kind === 'report') return <DataReportThumbnail artifact={artifact} />
-  if (artifact.kind === 'sheet') {
-    return (
-      <div className="grid w-[200px] grid-cols-4 overflow-hidden rounded border border-zinc-300 bg-white dark:border-zinc-600 dark:bg-ds-card">
-        {Array.from({ length: 16 }, (_, index) => (
-          <div key={index} className={`h-5 border-b border-r border-zinc-200 dark:border-zinc-700 ${index < 4 ? 'bg-green-50 dark:bg-green-400/15' : ''}`} />
-        ))}
-      </div>
-    )
-  }
-  if (artifact.kind === 'board' && board.url) {
-    return <img src={board.url} alt="" className="h-full w-full bg-white object-contain p-3" draggable={false} />
-  }
-  if (artifact.kind === 'board') {
-    return (
-      <div className="flex items-center">
-        <div className="h-8 w-14 rounded-md border-[1.5px] border-teal-600 bg-white dark:bg-ds-card" /><div className="h-[1.5px] w-7 bg-teal-600" />
-        <div className="h-8 w-14 rounded-md border-[1.5px] border-teal-600 bg-teal-50 dark:bg-teal-400/15" /><div className="h-[1.5px] w-7 bg-teal-600" />
-        <div className="h-12 w-12 rounded-full border-[1.5px] border-teal-600 bg-white dark:bg-ds-card" />
-      </div>
-    )
-  }
+/** White "sheet" that holds a preview; it rises from the bottom edge of the tinted ground. */
+const FRAME = 'absolute overflow-hidden border border-b-0 border-black/[0.08] bg-white shadow-[0_6px_20px_rgba(24,24,27,0.08)] dark:border-white/10 dark:bg-zinc-900'
+const PAGE_FRAME = `${FRAME} inset-x-7 bottom-0 top-[22px] rounded-t-[10px]`
+const PAPER_FRAME = `${FRAME} inset-x-16 bottom-0 top-[22px]`
+const SHEET_FRAME = `${FRAME} bottom-0 left-7 right-0 top-[22px] rounded-tl-[10px] border-r-0`
+
+function ScreensThumbnail({ urls, total }: { urls: string[]; total: number }): ReactElement {
+  const { t } = useTranslation('common')
   return (
-    <div className="mt-8 flex h-[148px] w-[112px] flex-col gap-1.5 rounded border border-ds-border bg-white px-3 py-3.5 dark:bg-ds-card">
-      <div className="h-2 w-16 rounded bg-blue-600" />
-      {[100, 100, 80, 100, 60].map((width, index) => <div key={index} className="h-1.5 rounded bg-zinc-200 dark:bg-zinc-700" style={{ width: `${width}%` }} />)}
-    </div>
+    <>
+      <span className={`${PAGE_FRAME} grid grid-cols-3 content-start gap-2.5 bg-zinc-100 p-4 dark:bg-zinc-800`}>
+        {urls.map((url, index) => (
+          <img key={index} src={url} alt="" draggable={false}
+            className="aspect-[16/10] w-full rounded-[3px] bg-white object-cover object-top shadow-[0_1px_2px_rgba(24,24,27,0.14)]" />
+        ))}
+      </span>
+      <span className="absolute right-3 top-2.5 rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-medium text-violet-800 dark:bg-zinc-900/80 dark:text-violet-200">
+        {t('artifactsScreenCount', { n: total })}
+      </span>
+    </>
   )
+}
+
+function CsvThumbnail({ rows }: { rows: string[][] }): ReactElement {
+  const columns = Math.max(...rows.map((row) => row.length))
+  return (
+    <span className={`${SHEET_FRAME} block`}>
+      <table className="w-full table-fixed border-collapse text-[10px] leading-tight text-zinc-700 dark:text-zinc-300">
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex} className={rowIndex === 0 ? 'bg-green-50 font-semibold dark:bg-green-400/10' : ''}>
+              {Array.from({ length: columns }, (_, column) => (
+                <td key={column} className="truncate border-b border-r border-zinc-200 px-1.5 py-1 dark:border-zinc-700">{row[column] ?? ''}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </span>
+  )
+}
+
+function Thumbnail({ artifact }: { artifact: LibraryArtifact }): ReactElement {
+  // Reports draw their own figures and charts from the report file.
+  if (artifact.kind === 'report') return <DataReportThumbnail artifact={artifact} />
+  return <RenderedThumbnail artifact={artifact} />
+}
+
+function RenderedThumbnail({ artifact }: { artifact: LibraryArtifact }): ReactElement {
+  const thumbnail = useArtifactThumbnail(artifact)
+  const Icon = ARTIFACT_KIND_ICONS[artifact.kind]
+  if (thumbnail.status === 'loading') {
+    return <span aria-hidden className={`${artifact.kind === 'image' ? 'absolute inset-0 bg-white/50 dark:bg-white/5' : PAGE_FRAME} animate-pulse`} />
+  }
+  if (thumbnail.status === 'empty') {
+    return (
+      <span className="flex h-[52px] w-[52px] rounded-[14px] bg-white shadow-[0_4px_14px_rgba(24,24,27,0.08)] dark:bg-zinc-900">
+        <span className={`flex h-full w-full items-center justify-center rounded-[14px] ${LIBRARY_ARTIFACT_KIND_STYLE[artifact.kind].tile}`}>
+          <Icon className="h-6 w-6" aria-hidden />
+        </span>
+      </span>
+    )
+  }
+  if (thumbnail.status === 'screens') return <ScreensThumbnail urls={thumbnail.urls} total={thumbnail.total} />
+  if (thumbnail.status === 'table') return <CsvThumbnail rows={thumbnail.rows} />
+  const { url } = thumbnail
+  switch (artifact.kind) {
+    case 'image':
+      return <img src={url} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+    case 'slides':
+      return <img src={url} alt="" draggable={false} className="max-h-[148px] max-w-[80%] rounded-md bg-white shadow-[0_10px_28px_rgba(24,24,27,0.22)]" />
+    case 'doc':
+      return <span className={PAPER_FRAME}><img src={url} alt="" draggable={false} className="h-full w-full object-cover object-top" /></span>
+    case 'sheet':
+      return <span className={SHEET_FRAME}><img src={url} alt="" draggable={false} className="h-full w-full object-cover object-left-top" /></span>
+    case 'board':
+      return <span className={PAGE_FRAME}><img src={url} alt="" draggable={false} className="h-full w-full object-contain p-3" /></span>
+    default:
+      return <span className={PAGE_FRAME}><img src={url} alt="" draggable={false} className="h-full w-full object-cover object-left-top" /></span>
+  }
 }
 
 /**
@@ -147,6 +168,8 @@ export function ArtifactCard({ artifact, sourceTitle, onOpen }: {
   const { i18n } = useTranslation('common')
   const meta = [artifact.projectName, fileTypeLabel(artifact) || null].filter(Boolean).join(' · ')
   const thumbnailVisible = useLazyThumbnail()
+  const style = LIBRARY_ARTIFACT_KIND_STYLE[artifact.kind]
+  const Icon = ARTIFACT_KIND_ICONS[artifact.kind]
   return (
     <button
       type="button"
@@ -156,18 +179,28 @@ export function ArtifactCard({ artifact, sourceTitle, onOpen }: {
     >
       <span
         ref={thumbnailVisible.ref}
-        className="relative flex h-[176px] items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-900/60"
+        data-artifact-thumbnail
+        className={`relative flex h-[200px] items-center justify-center overflow-hidden ${style.canvas}`}
       >
         {thumbnailVisible.visible ? <Thumbnail artifact={artifact} /> : null}
-        <ArtifactKindChip kind={artifact.kind} className="absolute bottom-3 left-3 ring-1 ring-white dark:ring-transparent" />
       </span>
-      <span className="flex min-w-0 flex-col gap-1.5 px-4 pb-4 pt-3.5">
-        <span className="truncate text-[15px] font-semibold text-ds-ink">{artifact.title}</span>
-        <span className="truncate text-[12.5px] text-ds-muted">{meta}</span>
-        <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-ds-muted">
-          {sourceTitle ? <MessageSquare className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
-          <span className="truncate">{sourceTitle ?? ''}</span>
-          <span className="ml-auto shrink-0">{formatArtifactTime(artifact.updatedAt, i18n.language)}</span>
+      <span className="flex min-w-0 items-center gap-3 px-4 pb-4 pt-3.5">
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ${style.tile}`}>
+          <Icon className="h-4 w-4" aria-hidden />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate text-[15px] font-semibold text-ds-ink">{artifact.title}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-ds-muted">
+            <span className="truncate">{meta}</span>
+            <span aria-hidden className="shrink-0">·</span>
+            <span className="shrink-0">{formatArtifactTime(artifact.updatedAt, i18n.language)}</span>
+          </span>
+          {sourceTitle ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-ds-muted">
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{sourceTitle}</span>
+            </span>
+          ) : null}
         </span>
       </span>
     </button>

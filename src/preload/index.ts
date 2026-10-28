@@ -114,6 +114,7 @@ const api = {
   listOfficeVersions: (payload) => ipcRenderer.invoke('file:office-version-list', payload),
   readOfficeVersion: (payload) => ipcRenderer.invoke('file:office-version-read', payload),
   restoreOfficeVersion: (payload) => ipcRenderer.invoke('file:office-version-restore', payload),
+  renderArtifactThumbnail: (request) => ipcRenderer.invoke('artifacts:render-thumbnail', request),
   resolveKunApproval: (request) => ipcRenderer.invoke('approval:decide', request),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   restartKunServe: () => ipcRenderer.invoke('runtime:restart-serve'),

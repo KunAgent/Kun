@@ -58,6 +58,7 @@
   "artifactsZoomIn": "放大",
   "artifactsZoomOut": "缩小",
   "artifactsFit": "适应窗口",
+  "artifactsScreenCount": "{{n}} 屏",
   "artifactsPreviewLoading": "正在加载预览…",
   "artifactsPreviewUnavailable": "暂时无法在这里预览这个文件。",
   "artifactsNoScreens": "这个设计稿还没有 HTML 页面，打开画布查看。",

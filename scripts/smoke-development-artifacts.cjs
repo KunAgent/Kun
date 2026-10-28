@@ -115,8 +115,13 @@ async function runFlow({ page, capture, timeoutMs, model, workspaceRoot }) {
   await poll(async () => (await page.locator('[data-artifact-card]').count()) === 7, timeoutMs, 'seven seeded artifacts')
   diagnostics.cards = await page.locator('[data-artifact-card]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-artifact-card')))
   assert.deepEqual([...diagnostics.cards].sort(), ['board', 'design', 'doc', 'doc', 'image', 'sheet', 'slides'])
+  // Every seeded artifact has real content, so each card must end up showing a rendered image, not an icon.
+  await poll(async () => (await page.locator('[data-artifact-thumbnail] img').count()) === 7, timeoutMs * 2, 'a real thumbnail on every card')
+  diagnostics.thumbnails = await page.locator('[data-artifact-thumbnail] img').evaluateAll((nodes) =>
+    nodes.map((node) => ({ src: node.getAttribute('src').slice(0, 22), width: node.naturalWidth, height: node.naturalHeight })))
+  assert.ok(diagnostics.thumbnails.every((image) => image.width > 0 && image.height > 0), 'thumbnails decode')
   await capture('artifacts-1-grid')
-  checks.push('The sidebar entry opens the library and indexes the design draft, whiteboard, image, spreadsheet, document and deck')
+  checks.push('The sidebar entry opens the library, indexes every artifact type and shows a real thumbnail for each')
 
   await page.getByRole('tab', { name: /Spreadsheet/ }).click()
   assert.equal(await page.locator('[data-artifact-card]').count(), 1)

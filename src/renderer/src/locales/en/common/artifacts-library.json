@@ -58,6 +58,7 @@
   "artifactsZoomIn": "Zoom in",
   "artifactsZoomOut": "Zoom out",
   "artifactsFit": "Fit",
+  "artifactsScreenCount": "{{n}} screens",
   "artifactsPreviewLoading": "Loading preview…",
   "artifactsPreviewUnavailable": "Kun can't preview this file here yet.",
   "artifactsNoScreens": "This design has no HTML screens yet. Open the canvas to see the board.",
