@@ -1,0 +1,13 @@
+{
+  "workTabMenuLabel": "탭 작업",
+  "workTabMenuClose": "탭 닫기",
+  "workTabMenuCloseOthers": "다른 탭 닫기",
+  "workTabMenuCloseRight": "오른쪽 탭 닫기",
+  "workTabMenuCloseAll": "모든 탭 닫기",
+  "workTabMenuMoveLeft": "왼쪽으로 이동",
+  "workTabMenuMoveRight": "오른쪽으로 이동",
+  "workTabMenuOpenBeside": "세션 옆에 열기",
+  "workTabMenuCopyPath": "경로 복사",
+  "workTabMenuReveal": "폴더에서 보기",
+  "workTabMenuCopyTitle": "제목 복사"
+}

@@ -1,0 +1,13 @@
+{
+  "workTabMenuLabel": "Действия с вкладкой",
+  "workTabMenuClose": "Закрыть вкладку",
+  "workTabMenuCloseOthers": "Закрыть другие вкладки",
+  "workTabMenuCloseRight": "Закрыть вкладки справа",
+  "workTabMenuCloseAll": "Закрыть все вкладки",
+  "workTabMenuMoveLeft": "Переместить влево",
+  "workTabMenuMoveRight": "Переместить вправо",
+  "workTabMenuOpenBeside": "Открыть рядом с сеансом",
+  "workTabMenuCopyPath": "Копировать путь",
+  "workTabMenuReveal": "Показать в папке",
+  "workTabMenuCopyTitle": "Копировать название"
+}

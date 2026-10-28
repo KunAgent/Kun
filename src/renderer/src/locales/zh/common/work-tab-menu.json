@@ -1,0 +1,13 @@
+{
+  "workTabMenuLabel": "标签操作",
+  "workTabMenuClose": "关闭标签页",
+  "workTabMenuCloseOthers": "关闭其他标签页",
+  "workTabMenuCloseRight": "关闭右侧标签页",
+  "workTabMenuCloseAll": "关闭全部标签页",
+  "workTabMenuMoveLeft": "向左移动",
+  "workTabMenuMoveRight": "向右移动",
+  "workTabMenuOpenBeside": "在会话旁并排打开",
+  "workTabMenuCopyPath": "复制路径",
+  "workTabMenuReveal": "在文件夹中显示",
+  "workTabMenuCopyTitle": "复制标题"
+}
