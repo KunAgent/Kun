@@ -9,5 +9,7 @@
   "workTabMenuOpenBeside": "セッションの横に開く",
   "workTabMenuCopyPath": "パスをコピー",
   "workTabMenuReveal": "フォルダーで表示",
-  "workTabMenuCopyTitle": "タイトルをコピー"
+  "workTabMenuCopyTitle": "タイトルをコピー",
+  "workMenuOpen": "開く",
+  "workMenuOpenBesideFiles": "ファイルの横に開く"
 }

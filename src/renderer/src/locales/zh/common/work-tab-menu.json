@@ -9,5 +9,7 @@
   "workTabMenuOpenBeside": "在会话旁并排打开",
   "workTabMenuCopyPath": "复制路径",
   "workTabMenuReveal": "在文件夹中显示",
-  "workTabMenuCopyTitle": "复制标题"
+  "workTabMenuCopyTitle": "复制标题",
+  "workMenuOpen": "打开",
+  "workMenuOpenBesideFiles": "在文件旁打开"
 }

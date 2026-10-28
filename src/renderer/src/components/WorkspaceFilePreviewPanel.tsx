@@ -64,6 +64,7 @@ import {
   type PreviewStatusItem
 } from './WorkspaceFilePreviewStatusBar'
 import type { ImageDimensions, ImageViewerZoom } from './WorkspaceImageViewer'
+import { contextMenuPoint, contextMenuPointBelow, type KunContextMenuPoint } from './context-menu/KunContextMenu'
 import {
   buildFilePreviewHostTabs,
   filePreviewHostTabsSignature
@@ -117,13 +118,12 @@ export function WorkspaceFilePreviewPanel({
   const [imageDimensions, setImageDimensions] = useState<ImageDimensions | null>(null)
   const [mediaFailed, setMediaFailed] = useState(false)
   const [textOptions, setTextOptions] = useState<TextReadOptions>({ key: '', encoding: null, maxBytes: null, nonce: 0 })
-  const [tabMenu, setTabMenu] = useState<{ target: WorkspaceFileTarget; x: number; y: number } | null>(null)
+  const [tabMenu, setTabMenu] = useState<{ target: WorkspaceFileTarget; point: KunContextMenuPoint } | null>(null)
   const [pendingCloseTarget, setPendingCloseTarget] = useState<WorkspaceFileTarget | null>(null)
   const [highlightHtml, setHighlightHtml] = useState(() => renderFallbackCodeHtml(''))
   const scrollRef = useRef<HTMLDivElement>(null)
   const tabsScrollRef = useRef<HTMLDivElement>(null)
   const scrollPositionsRef = useRef(readPreviewScrollPositions())
-  const tabMenuRef = useRef<HTMLDivElement>(null)
   const tabMenuTriggerRef = useRef<HTMLElement | null>(null)
   const tabButtonRefs = useRef(new Map<string, HTMLButtonElement>())
   const panelRef = useRef<HTMLElement>(null)
@@ -133,7 +133,7 @@ export function WorkspaceFilePreviewPanel({
   const visibleTargets = openTargets.length ? openTargets : target ? [target] : []
   const visibleTargetKeySignature = visibleTargets.map((item) => targetKey(item)).join('\0')
   const pinnedTargetKeySet = useMemo(() => new Set(pinnedTargetKeys), [pinnedTargetKeys])
-  const tabActionsEnabled = Boolean(onTogglePinnedTarget || onCloseOtherTargets)
+  const tabActionsEnabled = Boolean(onTogglePinnedTarget || onCloseOtherTargets || onCloseTarget)
   const previewKind = workspaceFilePreviewKind(target?.path ?? '')
   const activeOptions = textOptions.key === activeTargetKey ? textOptions : null
   const {
@@ -190,27 +190,6 @@ export function WorkspaceFilePreviewPanel({
     document.addEventListener('keydown', exitReadingMode)
     return () => document.removeEventListener('keydown', exitReadingMode)
   }, [readingMode, tabMenu])
-
-  useEffect(() => {
-    if (!tabMenu) return
-    tabMenuRef.current?.querySelector<HTMLButtonElement>('[role^="menuitem"]')?.focus()
-    const closeMenu = (event: PointerEvent): void => {
-      if (typeof Node !== 'undefined' && event.target instanceof Node && tabMenuRef.current?.contains(event.target)) return
-      setTabMenu(null)
-    }
-    const closeMenuWithKeyboard = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      setTabMenu(null)
-      tabMenuTriggerRef.current?.focus()
-    }
-    document.addEventListener('pointerdown', closeMenu)
-    document.addEventListener('keydown', closeMenuWithKeyboard)
-    return () => {
-      document.removeEventListener('pointerdown', closeMenu)
-      document.removeEventListener('keydown', closeMenuWithKeyboard)
-    }
-  }, [tabMenu])
 
   useEffect(() => {
     if (!tabMenu) return
@@ -276,14 +255,9 @@ export function WorkspaceFilePreviewPanel({
     event.preventDefault()
     event.stopPropagation()
     tabMenuTriggerRef.current = event.currentTarget
-    const rect = event.currentTarget.getBoundingClientRect()
-    const requestedX = position?.x ?? ('clientX' in event ? event.clientX : rect.left)
-    const requestedY = position?.y ?? ('clientY' in event ? event.clientY : rect.bottom)
-    setTabMenu({
-      target: item,
-      x: Math.max(8, Math.min(requestedX, window.innerWidth - 200)),
-      y: Math.max(8, Math.min(requestedY, window.innerHeight - 112))
-    })
+    const point = position ? contextMenuPoint({ clientX: position.x, clientY: position.y })
+      : 'clientX' in event ? contextMenuPoint(event) : contextMenuPointBelow(event.currentTarget)
+    setTabMenu({ target: item, point })
   }
 
   const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, item: WorkspaceFileTarget, index: number): void => {
@@ -615,7 +589,11 @@ export function WorkspaceFilePreviewPanel({
       <WorkspaceFilePreviewDialogs
         t={t}
         tabMenu={tabMenu}
-        tabMenuRef={tabMenuRef}
+        workspaceRoot={workspaceRoot}
+        requestCloseTarget={onCloseTarget ? (item) => {
+          const key = targetKey(item)
+          requestCloseTarget(item, dirtyTargetKeys.has(key) || (key === activeTargetKey && textDirty))
+        } : undefined}
         pinnedTargetKeySet={pinnedTargetKeySet}
         onTogglePinnedTarget={onTogglePinnedTarget}
         setTabMenu={setTabMenu}

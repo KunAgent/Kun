@@ -146,6 +146,7 @@
   text-align: left;
 }
 .work-session-row:hover { background: var(--ds-sidebar-row-hover); }
+.work-session-item[data-menu-target='true'] > .work-session-row { box-shadow: inset 0 0 0 1.5px var(--ds-accent); }
 .work-session-row:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -2px; }
 .work-session-row[aria-current='true'] {
   border-color: var(--ds-sidebar-row-ring);

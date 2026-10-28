@@ -9,5 +9,7 @@
   "workTabMenuOpenBeside": "เปิดข้างเซสชัน",
   "workTabMenuCopyPath": "คัดลอกเส้นทาง",
   "workTabMenuReveal": "แสดงในโฟลเดอร์",
-  "workTabMenuCopyTitle": "คัดลอกชื่อ"
+  "workTabMenuCopyTitle": "คัดลอกชื่อ",
+  "workMenuOpen": "เปิด",
+  "workMenuOpenBesideFiles": "เปิดข้างไฟล์"
 }

@@ -1,12 +1,15 @@
 import {
+  useCallback,
   type Dispatch,
   type MutableRefObject,
   type ReactElement,
-  type RefObject,
   type SetStateAction
 } from 'react'
 import { createPortal } from 'react-dom'
+import { Copy, FolderSearch, Pin, PinOff, X } from 'lucide-react'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
+import { KunContextMenu, type KunContextMenuEntry, type KunContextMenuPoint } from './context-menu/KunContextMenu'
+import type { FilePreviewCloseScope } from './workbench/file-preview-close-scope'
 import {
   fileNameFromPath,
   targetKey,
@@ -14,17 +17,32 @@ import {
 } from './workspace-file-preview-support'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
-type TabMenu = { target: WorkspaceFileTarget; x: number; y: number }
+type TabMenu = { target: WorkspaceFileTarget; point: KunContextMenuPoint }
+
+function isAbsolutePath(path: string): boolean {
+  return /^([a-zA-Z]:[\\/]|[\\/])/.test(path)
+}
+
+/** Absolute and root-relative forms of a preview target's path. */
+export function filePreviewTargetPaths(target: WorkspaceFileTarget, workspaceRoot: string): { absolute: string; relative: string } {
+  const root = (target.workspaceRoot ?? workspaceRoot).replace(/[\\/]+$/, '')
+  const path = target.path
+  if (!isAbsolutePath(path)) return { absolute: root ? `${root}/${path}` : path, relative: path }
+  const normalized = path.replaceAll('\\', '/')
+  const prefix = `${root.replaceAll('\\', '/')}/`
+  return { absolute: path, relative: root && normalized.startsWith(prefix) ? normalized.slice(prefix.length) : path }
+}
 
 type WorkspaceFilePreviewDialogsProps = {
   t: Translate
   tabMenu: TabMenu | null
-  tabMenuRef: RefObject<HTMLDivElement | null>
+  workspaceRoot: string
+  requestCloseTarget?: (target: WorkspaceFileTarget) => void
   pinnedTargetKeySet: Set<string>
   onTogglePinnedTarget?: (target: WorkspaceFileTarget) => void
   setTabMenu: Dispatch<SetStateAction<TabMenu | null>>
   tabMenuTriggerRef: MutableRefObject<HTMLElement | null>
-  onCloseOtherTargets?: (target: WorkspaceFileTarget) => void
+  onCloseOtherTargets?: (target: WorkspaceFileTarget, scope?: FilePreviewCloseScope) => void
   visibleTargets: WorkspaceFileTarget[]
   pendingCloseTarget: WorkspaceFileTarget | null
   setPendingCloseTarget: Dispatch<SetStateAction<WorkspaceFileTarget | null>>
@@ -39,7 +57,8 @@ export function WorkspaceFilePreviewDialogs(props: WorkspaceFilePreviewDialogsPr
   const {
     t,
     tabMenu,
-    tabMenuRef,
+    workspaceRoot,
+    requestCloseTarget,
     pinnedTargetKeySet,
     onTogglePinnedTarget,
     setTabMenu,
@@ -54,61 +73,60 @@ export function WorkspaceFilePreviewDialogs(props: WorkspaceFilePreviewDialogsPr
     savingText,
     savePendingCloseTarget
   } = props
+  const dismissTabMenu = useCallback(() => {
+    setTabMenu(null)
+    // Escape or a menu action leaves focus nowhere: hand it back to the tab.
+    window.requestAnimationFrame(() => {
+      if (!document.activeElement || document.activeElement === document.body) tabMenuTriggerRef.current?.focus()
+    })
+  }, [setTabMenu, tabMenuTriggerRef])
+  const tabMenuEntries = (target: WorkspaceFileTarget): KunContextMenuEntry[] => {
+    const key = targetKey(target)
+    const index = visibleTargets.findIndex((item) => targetKey(item) === key)
+    const unpinned = (items: WorkspaceFileTarget[]): number =>
+      items.filter((item) => targetKey(item) !== key && !pinnedTargetKeySet.has(targetKey(item))).length
+    const othersCount = unpinned(visibleTargets)
+    const rightCount = index < 0 ? 0 : unpinned(visibleTargets.slice(index + 1))
+    const allCount = othersCount + (pinnedTargetKeySet.has(key) ? 0 : 1)
+    const paths = filePreviewTargetPaths(target, workspaceRoot)
+    const copy = (value: string): void => {
+      if (value) void navigator.clipboard?.writeText?.(value)?.catch(() => undefined)
+    }
+    const pinned = pinnedTargetKeySet.has(key)
+    return [
+      ...(requestCloseTarget ? [{ id: 'close', label: t('workTabMenuClose'), icon: <X aria-hidden />, onSelect: () => requestCloseTarget(target) }] : []),
+      ...(onCloseOtherTargets
+        ? [
+            { id: 'closeOthers', label: t('filePreviewCloseOtherTabs'), count: othersCount, disabled: !othersCount, onSelect: () => onCloseOtherTargets(target, 'others') },
+            { id: 'closeRight', label: t('workTabMenuCloseRight'), count: rightCount, disabled: !rightCount, onSelect: () => onCloseOtherTargets(target, 'right') },
+            { id: 'closeAll', label: t('workTabMenuCloseAll'), count: allCount, disabled: !allCount, onSelect: () => onCloseOtherTargets(target, 'all') }
+          ]
+        : []),
+      'separator',
+      ...(onTogglePinnedTarget
+        ? [{
+            id: 'pin',
+            label: pinned ? t('filePreviewUnpinTab') : t('filePreviewPinTab'),
+            icon: pinned ? <PinOff aria-hidden /> : <Pin aria-hidden />,
+            onSelect: () => onTogglePinnedTarget(target)
+          }]
+        : []),
+      'separator',
+      { id: 'copyPath', label: t('fileTreeCopyAbsolutePath'), icon: <Copy aria-hidden />, onSelect: () => copy(paths.absolute) },
+      { id: 'copyRelativePath', label: t('fileTreeCopyRelativePath'), onSelect: () => copy(paths.relative) },
+      {
+        id: 'reveal',
+        label: window.kunGui?.platform === 'darwin' ? t('fileTreeRevealInFinder') : t('fileTreeRevealInFileManager'),
+        icon: <FolderSearch aria-hidden />,
+        onSelect: () => void window.kunGui?.revealWorkspaceFileInFolder?.({ ...target, workspaceRoot: target.workspaceRoot ?? workspaceRoot })
+      }
+    ]
+  }
   return (
     <>
-      {tabMenu && typeof document !== 'undefined' ? createPortal(
-        <div
-          ref={tabMenuRef}
-          role="menu"
-          aria-label={t('filePreviewTabActions')}
-          className="fixed z-[10000] min-w-[184px] rounded-lg border border-ds-border bg-ds-card p-1 shadow-xl"
-          style={{ left: tabMenu.x, top: tabMenu.y }}
-          onKeyDown={(event) => {
-            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-            event.preventDefault()
-            const items = Array.from(
-              event.currentTarget.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]:not(:disabled)')
-            )
-            if (items.length === 0) return
-            const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
-            const direction = event.key === 'ArrowDown' ? 1 : -1
-            items[(currentIndex + direction + items.length) % items.length]?.focus()
-          }}
-        >
-          {onTogglePinnedTarget ? (
-            <button
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={pinnedTargetKeySet.has(targetKey(tabMenu.target))}
-              className="block w-full rounded-md px-2.5 py-2 text-left text-[12px] text-ds-ink hover:bg-ds-hover"
-              onClick={() => {
-                onTogglePinnedTarget(tabMenu.target)
-                setTabMenu(null)
-                window.requestAnimationFrame(() => tabMenuTriggerRef.current?.focus())
-              }}
-            >
-              {pinnedTargetKeySet.has(targetKey(tabMenu.target))
-                ? t('filePreviewUnpinTab')
-                : t('filePreviewPinTab')}
-            </button>
-          ) : null}
-          {onCloseOtherTargets ? (
-            <button
-              type="button"
-              role="menuitem"
-              disabled={visibleTargets.length < 2}
-              className="block w-full rounded-md px-2.5 py-2 text-left text-[12px] text-ds-ink hover:bg-ds-hover disabled:cursor-default disabled:opacity-45"
-              onClick={() => {
-                onCloseOtherTargets(tabMenu.target)
-                setTabMenu(null)
-                window.requestAnimationFrame(() => tabMenuTriggerRef.current?.focus())
-              }}
-            >
-              {t('filePreviewCloseOtherTabs')}
-            </button>
-          ) : null}
-        </div>,
-        document.body
+      {tabMenu ? (
+        <KunContextMenu point={tabMenu.point} label={t('filePreviewTabActions')} onDismiss={dismissTabMenu}
+          entries={tabMenuEntries(tabMenu.target)} />
       ) : null}
       {pendingCloseTarget && typeof document !== 'undefined' ? createPortal(
         <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/20 p-4 backdrop-blur-[1px]">

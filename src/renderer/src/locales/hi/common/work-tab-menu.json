@@ -9,5 +9,7 @@
   "workTabMenuOpenBeside": "सत्र के बगल में खोलें",
   "workTabMenuCopyPath": "पथ कॉपी करें",
   "workTabMenuReveal": "फ़ोल्डर में दिखाएँ",
-  "workTabMenuCopyTitle": "शीर्षक कॉपी करें"
+  "workTabMenuCopyTitle": "शीर्षक कॉपी करें",
+  "workMenuOpen": "खोलें",
+  "workMenuOpenBesideFiles": "फ़ाइलों के बगल में खोलें"
 }

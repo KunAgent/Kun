@@ -9,5 +9,7 @@
   "workTabMenuOpenBeside": "세션 옆에 열기",
   "workTabMenuCopyPath": "경로 복사",
   "workTabMenuReveal": "폴더에서 보기",
-  "workTabMenuCopyTitle": "제목 복사"
+  "workTabMenuCopyTitle": "제목 복사",
+  "workMenuOpen": "열기",
+  "workMenuOpenBesideFiles": "파일 옆에 열기"
 }
