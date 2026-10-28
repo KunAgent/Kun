@@ -32,12 +32,14 @@ const electron = vi.hoisted(() => {
     app: {
       isPackaged: true,
       getVersion: vi.fn(() => '0.3.10'),
+      getLocale: vi.fn(() => 'en-US'),
       relaunch: vi.fn(),
       quit: vi.fn()
     },
     BrowserWindow: vi.fn(function MockBrowserWindow(_options?: unknown) {
       return window
     }),
+    clipboard: { writeText: vi.fn() },
     dialog: { showErrorBox: vi.fn() },
     shell: { openPath: vi.fn().mockResolvedValue('') },
     webHandlers,
@@ -49,6 +51,7 @@ const electron = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: electron.app,
   BrowserWindow: electron.BrowserWindow,
+  clipboard: electron.clipboard,
   dialog: electron.dialog,
   shell: electron.shell
 }))
@@ -471,5 +474,27 @@ describe('showStartupFailureWindow', () => {
 
     expect(recoverHandoff).not.toHaveBeenCalled()
     expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+  it('copies a sanitized diagnostics report and confirms it on the page', () => {
+    showStartupFailureWindow(new Error('Owned Manager exited before readiness; managerToken=secret'), '/tmp/kun-missing-logs')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:copy-diagnostics')
+
+    const report = electron.clipboard.writeText.mock.calls[0]?.[0] as string
+    expect(report).toContain('Kind: manager-exited')
+    expect(report).toContain('Version: 0.3.10')
+    expect(report).not.toContain('secret')
+    expect(lastRenderedHtml()).toContain('Diagnostics copied to the clipboard.')
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('opens only the log file named by the diagnostic message', async () => {
+    showStartupFailureWindow(
+      new Error('Owned Manager exited before readiness; inspect /tmp/kun-missing/control/manager.log'),
+      '/tmp/kun-logs'
+    )
+    expect(lastRenderedHtml()).toContain('No log file was found.')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:open-log-file')
+    await Promise.resolve()
+    expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/kun-missing/control/manager.log')
   })
 })
