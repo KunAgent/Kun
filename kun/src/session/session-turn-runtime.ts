@@ -55,6 +55,8 @@ import { AcpDraftEmitter } from '../runtime/acp/acp-turn-emitter.js'
 import { maybeExternalSubagentRouting } from '../runtime/external-subagent-routing.js'
 
 import { HarnessAgentPool } from './harness-pool.js'
+import type { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
+import type { McpServer } from '../runtime/acp/acp-schema.js'
 import {
   resolveDelegatedCredentialContext
 } from './delegated-credentials.js'
@@ -115,6 +117,8 @@ export type SessionTurnRuntimeDeps = SessionTurnContextDeps & {
   buildTurnInput?: (ctx: SessionTurnContext, session: HarnessSession) => HarnessTurnInput
   /** Images support declared by the transport (static for now). */
   imageCapable?: boolean
+  /** Turn-scoped Kun Tools MCP grants (main runtime only; dispatched workers get none). */
+  kunToolsMcp?: KunToolsMcpProvider
 }
 
 export class SessionTurnRuntime implements DelegatedTurnRuntime {
@@ -243,6 +247,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       await validateLaunch()
       session = await this.ensureSession(agent, ctx, signal)
     } catch (error) {
+      this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
       if (signal.aborted) {
         await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
@@ -431,6 +436,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       if (interruptTimer) clearTimeout(interruptTimer)
       signal.removeEventListener('abort', onAbort)
       session.detach()
+      this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
     }
   }
@@ -482,6 +488,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         buildClientSurfaceInstruction(resolveTurnClientSurface(ctx.turn))
       ],
       preparation,
+      ...this.kunToolServers(ctx),
       signal
     }
     const validateSession = async (): Promise<void> => {
@@ -501,6 +508,25 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       }
     }
     return agent.startSession(input)
+  }
+
+  /**
+   * Kun Tools for this turn: one descriptor per Kun thread (same bearer every
+   * turn, so a native session keeps working after resume) whose grant is
+   * re-pinned to the running turn and revoked when it ends.
+   */
+  private kunToolServers(ctx: SessionTurnContext): { kunToolServers?: McpServer[] } {
+    const provider = this.deps.kunToolsMcp
+    if (!provider?.canDeliver()) return {}
+    const servers = provider.servers({
+      threadId: ctx.thread.id,
+      turnId: ctx.turn.id,
+      harnessId: ctx.definition.id,
+      credentialIdentity: `${this.deps.transport}:${ctx.definition.id}`,
+      sessionKey: `session-turn:${ctx.thread.id}`,
+      mcpCapabilities: { http: true }
+    })
+    return servers.length > 0 ? { kunToolServers: servers } : {}
   }
 
   private async commitBinding(

@@ -14,6 +14,7 @@ import type {
 import { HarnessTransportError } from '../../session/harness-session.js'
 import type { CodexClient } from './codex-client.js'
 import { CodexEventMapper } from './codex-event-mapper.js'
+import { isKunToolsElicitation } from './codex-kun-tools.js'
 import {
   CODEX_NOTIFICATIONS,
   CODEX_SERVER_REQUESTS,
@@ -339,6 +340,13 @@ export class CodexSession implements HarnessSession {
         return {
           decision: response.decision === 'accept' ? 'accept' : 'decline'
         }
+      }
+      case CODEX_SERVER_REQUESTS.mcpServerElicitation: {
+        if (!isKunToolsElicitation(params)) {
+          throw new HarnessTransportError('harness_protocol_error', `unsupported codex server request ${method}`)
+        }
+        // Kun's ToolHost applies the turn's approval policy to the call itself.
+        return { action: 'accept', content: {} }
       }
       case CODEX_SERVER_REQUESTS.toolRequestUserInput: {
         const p = CodexToolRequestUserInputParamsSchema.parse(params)

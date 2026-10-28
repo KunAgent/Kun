@@ -20,6 +20,7 @@ import type {
 import { HarnessTransportError } from '../../session/harness-session.js'
 import { CodexClient, type CodexDebugLog } from './codex-client.js'
 import { CodexSession, type CodexRequestRouter } from './codex-session.js'
+import { codexKunToolsConfig } from './codex-kun-tools.js'
 
 export type CodexAgentOptions = {
   /** Test seam: pre-built client/process pair skips spawn + handshake. */
@@ -268,8 +269,11 @@ function threadParams(
   approvalsReviewer: 'user'
   sandbox: 'read-only'
   developerInstructions?: string
+  config?: Record<string, unknown>
 } {
+  const config = codexKunToolsConfig(input.kunToolServers)
   return {
+    ...(config ? { config } : {}),
     cwd: input.workspacePath,
     ...(input.systemInstructions ? { developerInstructions: input.systemInstructions.join('\n\n') } : {}),
     ...(input.model ? { model: input.model } : {}),

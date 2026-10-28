@@ -14,7 +14,7 @@ vi.mock('./session-turn-context.js', () => ({ resolveSessionTurnContext: vi.fn()
 const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
 
-async function runTwoTurns(models: [string | undefined, string | undefined]) {
+async function runTwoTurns(models: [string | undefined, string | undefined], extraDeps: Partial<SessionTurnRuntimeDeps> = {}) {
   const root = await mkdtemp(join(tmpdir(), 'kun-codex-continuation-'))
   const pool = new HarnessAgentPool<HarnessAgent>()
   cleanup.push(() => pool.dispose(), () => rm(root, { recursive: true, force: true }))
@@ -44,7 +44,8 @@ async function runTwoTurns(models: [string | undefined, string | undefined]) {
     readiness: { validateTurn: vi.fn(async () => 'proof'), commandForTurn: () => 'fake-codex' }, capabilities: {}, capabilitiesV2: {},
     sessionCoordinator: new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root)),
     turns: { finishTurn: vi.fn(async () => undefined) }, events,
-    sessionStore: { loadItems: async () => [...stored] }, ids: { next: () => 'id' }
+    sessionStore: { loadItems: async () => [...stored] }, ids: { next: () => 'id' },
+    ...extraDeps
   } as unknown as SessionTurnRuntimeDeps
   const runtime = new SessionTurnRuntime(deps)
 
@@ -78,4 +79,18 @@ it('starts a fresh Codex thread when the model goes back to the Agent default', 
   expect(agent.startSession).toHaveBeenCalledTimes(2)
   expect(agent.resumeSession).not.toHaveBeenCalled()
   expect(vi.mocked(agent.startSession).mock.calls[1]![0].preparation).toMatchObject({ resumed: false, rebaseReason: 'route_changed' })
+})
+
+it('hands Codex the Kun Tools server every turn and revokes each turn grant when it ends', async () => {
+  const servers = vi.fn(() => [{ type: 'http', name: 'kun-tools', url: 'http://k/mcp/kun', headers: [] }])
+  const revokeTurn = vi.fn()
+  const kunToolsMcp = { canDeliver: () => true, servers, revokeTurn }
+  const { agent } = await runTwoTurns(['gpt-6.1-sol', 'gpt-6.1-sol'], { kunToolsMcp } as never)
+  expect(vi.mocked(agent.startSession).mock.calls[0]![0].kunToolServers).toHaveLength(1)
+  expect(vi.mocked(agent.resumeSession!).mock.calls[0]![0].kunToolServers).toHaveLength(1)
+  const calls = servers.mock.calls as unknown as Array<[{ turnId: string; sessionKey: string }]>
+  expect(calls.map(([input]) => input.turnId)).toEqual(['turn-1', 'turn-2'])
+  // One stable descriptor per Kun thread, so a resumed native thread keeps working.
+  expect(new Set(calls.map(([input]) => input.sessionKey))).toEqual(new Set(['session-turn:thread']))
+  expect(revokeTurn.mock.calls).toEqual([['turn-1'], ['turn-2']])
 })

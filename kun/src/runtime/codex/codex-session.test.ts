@@ -341,6 +341,26 @@ describe('CodexSession', () => {
     await run
   })
 
+  it('accepts the Kun Tools server approval prompt and declines other MCP elicitations', async () => {
+    const { writes, emit, session } = setup()
+    const { sink, approvals } = makeSink()
+    const run = startTurn(session, sink, emit, writes)
+    const elicit = (id: string, serverName: string) => emit({
+      id,
+      method: 'mcpServer/elicitation/request',
+      params: { threadId: 'cx-thread-1', turnId: 'cx-turn-1', serverName, mode: 'form', message: 'Allow design_open?', requestedSchema: { type: 'object', properties: {} } }
+    })
+    elicit('srv-kun', 'kun')
+    await new Promise((r) => setImmediate(r))
+    expect(writes.at(-1)).toMatchObject({ id: 'srv-kun', result: { action: 'accept', content: {} } })
+    elicit('srv-other', 'github')
+    await new Promise((r) => setImmediate(r))
+    expect(writes.at(-1)).toMatchObject({ id: 'srv-other', error: expect.anything() })
+    expect(approvals).toHaveLength(0)
+    emit({ method: 'turn/completed', params: COMPLETED_TURN })
+    await run
+  })
+
   it('passes codex questions verbatim to the user-input gate', async () => {
     const { writes, emit, session } = setup()
     const { sink, userInputRequests, setUserInputResponse } = makeSink()
@@ -520,6 +540,24 @@ describe('CodexAgent', () => {
       'user'
     )
     expect(req.params).toMatchObject({ sandbox: 'read-only', approvalPolicy: 'untrusted' })
+  })
+
+  it('registers Kun Tools as a per-thread MCP server when the session carries them', async () => {
+    const { client, proc, writes, emit } = newClient()
+    const agent = await agentWith(client, proc)
+    const pending = agent.startSession(sessionInput({ kunToolServers: [{
+      type: 'http', name: 'kun-tools', url: 'http://127.0.0.1:18899/mcp/kun',
+      headers: [{ name: 'Authorization', value: 'Bearer kgw_a.b' }]
+    }] }))
+    expect(writes.at(-1)).toMatchObject({ method: 'thread/start', params: { config: { 'mcp_servers.kun': {
+      url: 'http://127.0.0.1:18899/mcp/kun', http_headers: { Authorization: 'Bearer kgw_a.b' }
+    } } } })
+    respondToLast(writes, emit, { thread: { id: 'cx-tools' } })
+    await pending
+    const plain = agent.startSession(sessionInput())
+    expect((writes.at(-1) as { params: Record<string, unknown> }).params).not.toHaveProperty('config')
+    respondToLast(writes, emit, { thread: { id: 'cx-plain' } })
+    await plain
   })
 
   it('keeps a live native thread and stores host context in developer instructions', async () => {

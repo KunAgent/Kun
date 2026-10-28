@@ -13,6 +13,7 @@ import type { TurnItem, UserFileReference } from '../contracts/items.js'
 import type { TurnRunOutcome } from '../loop/turn-execution-types.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { DelegatedSessionPreparation } from '../runtime/delegated-session-binding.js'
+import type { McpServer } from '../runtime/acp/acp-schema.js'
 import type { SpawnOwnedProcessOptions } from '../process/owned-process.js'
 import type { ChildProcess } from 'node:child_process'
 
@@ -83,6 +84,12 @@ export type HarnessSessionStartInput = {
   /** Prior items snapshot for coordinator.prepare. */
   items: readonly TurnItem[]
   preparation: DelegatedSessionPreparation
+  /**
+   * Kun Tools MCP descriptors for this session (stable per Kun thread; the
+   * grant behind them is re-pinned every turn). Transports that can register
+   * MCP servers on their native session pass them on.
+   */
+  kunToolServers?: readonly McpServer[]
   signal: AbortSignal
 }
 

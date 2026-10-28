@@ -253,6 +253,7 @@ export function buildMainDelegatedRuntime(
       attachmentStore: input.attachmentStore,
       taskWorkspaces: input.taskWorkspaces,
       debugSink: llmDebug,
+      kunToolsMcp: services.kunToolsMcp,
       nowIso
     }),
     // native `pi --mode rpc` transport on the shared session layer;

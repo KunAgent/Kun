@@ -36,7 +36,7 @@ describe('design_open tool', () => {
     expect(buildDesignCanvasLocalTools().map((tool) => tool.name)).toContain(DESIGN_OPEN_TOOL_NAME)
   })
 
-  it('advertises only on Kun-native GUI Code turns', () => {
+  it('advertises on GUI Code turns, delegated Code harnesses included', () => {
     expect(shouldAdvertiseDesignOpen(codeContext())).toBe(true)
     expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'kun' }))).toBe(true)
     expect(shouldAdvertiseDesignOpen(codeContext({ clientSurface: 'api' }))).toBe(false)
@@ -53,7 +53,9 @@ describe('design_open tool', () => {
     expect(shouldAdvertiseDesignOpen(codeContext({ roomStepKind: 'conversation' }))).toBe(false)
     expect(shouldAdvertiseDesignOpen(codeContext({ roomAgent: true }))).toBe(false)
     expect(shouldAdvertiseDesignOpen(codeContext({ executionUnitKind: 'worker' }))).toBe(false)
-    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'claude-code' }))).toBe(false)
+    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'claude-code' }))).toBe(true)
+    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'codex' }))).toBe(true)
+    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'opencode', agentSurface: 'design' }))).toBe(false)
     expect(shouldAdvertiseDesignOpen(codeContext({ workspace: '  ' }))).toBe(false)
   })
 

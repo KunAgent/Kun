@@ -5,6 +5,40 @@ import { payloadFor } from './kun-mapper-core'
 /** Kun tool the Code agent calls to put finished screens on the Design canvas. */
 export const DESIGN_OPEN_TOOL_NAME = 'design_open'
 
+/**
+ * Delegated harnesses report the bridged tool under their own names: Claude
+ * Code (Agent SDK) as `mcp__kun__design_open`, Codex as `mcp:kun/design_open`.
+ */
+export function isDesignOpenToolName(name: unknown): boolean {
+  return name === DESIGN_OPEN_TOOL_NAME ||
+    name === `mcp__kun__${DESIGN_OPEN_TOOL_NAME}` ||
+    name === `mcp:kun/${DESIGN_OPEN_TOOL_NAME}`
+}
+
+/** Codex wraps MCP call arguments as `{ arguments, server }`. */
+function callArguments(item: CoreTurnItemJson): Record<string, unknown> {
+  const args = record(item.arguments) ?? {}
+  return item.toolName === DESIGN_OPEN_TOOL_NAME ? args : record(args.arguments) ?? args
+}
+
+/** An MCP CallToolResult (`{ content: [{ type: 'text', text }] }`) carries Kun's JSON result as text. */
+function resultPayload(item: CoreTurnItemJson): Record<string, unknown> {
+  const payload = payloadFor(item)
+  if (item.toolName === DESIGN_OPEN_TOOL_NAME || payload.designRequest) return payload
+  const content = Array.isArray(payload.content) ? payload.content : []
+  for (const entry of content) {
+    const text = record(entry)?.text
+    if (typeof text !== 'string') continue
+    try {
+      const parsed = record(JSON.parse(text))
+      if (parsed) return parsed
+    } catch {
+      // Plain-text result.
+    }
+  }
+  return payload
+}
+
 const TITLE_MAX_CHARS = 120
 const MAX_SCREENS = 12
 const SECTION_MAX_CHARS = 60
@@ -128,13 +162,13 @@ function fromRequest(request: Record<string, unknown>): DesignOpenRequestMetadat
 }
 
 export function extractDesignOpenRequest(item: CoreTurnItemJson): DesignOpenRequestMetadata | undefined {
-  if (item.toolName !== DESIGN_OPEN_TOOL_NAME) return undefined
-  if (item.kind !== 'tool_result') return pendingRequest(record(item.arguments) ?? {})
-  const payload = payloadFor(item)
+  if (!isDesignOpenToolName(item.toolName)) return undefined
+  if (item.kind !== 'tool_result') return pendingRequest(callArguments(item))
+  const payload = resultPayload(item)
   const request = record(payload.designRequest)
   const parsed = !item.isError && payload.ok !== false && request ? fromRequest(request) : undefined
   if (parsed) return parsed
-  const fallback = pendingRequest(record(item.arguments) ?? request ?? {})
+  const fallback = pendingRequest(item.arguments ? callArguments(item) : request ?? {})
   return {
     status: 'failed',
     title: fallback?.title || 'Design',
@@ -146,8 +180,8 @@ export function extractDesignOpenRequest(item: CoreTurnItemJson): DesignOpenRequ
 
 /** Validated read of the metadata the mapper attached to a tool block. */
 export function readDesignOpenRequest(block: ChatBlock): DesignOpenRequestMetadata | undefined {
-  if (block.kind !== 'tool' || block.meta?.toolName !== DESIGN_OPEN_TOOL_NAME) return undefined
-  const meta = record(block.meta.designOpenRequest)
+  if (block.kind !== 'tool' || !isDesignOpenToolName(block.meta?.toolName)) return undefined
+  const meta = record(block.meta?.designOpenRequest)
   if (!meta) return undefined
   if (meta.status === 'failed') {
     return {
@@ -177,7 +211,7 @@ export function designOpenStatusOverride(
   item: CoreTurnItemJson,
   request: DesignOpenRequestMetadata | undefined
 ): ToolBlock['status'] | undefined {
-  if (item.toolName !== DESIGN_OPEN_TOOL_NAME || !request) return undefined
+  if (!isDesignOpenToolName(item.toolName) || !request) return undefined
   if (request.status === 'failed') return 'error'
   // A pending call keeps the runtime item status so an aborted call settles.
   return request.status === 'pending' ? undefined : 'success'

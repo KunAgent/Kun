@@ -52,6 +52,10 @@ export type DesignOpenRequestPayload = {
  * GUI agent turns advertise the union of a stable Code-canvas context and a
  * Design-mode context (see modelToolDiscoveryContexts), so the canvas flags
  * are allowed here; execution re-checks the real turn and rejects Design turns.
+ *
+ * Delegated Code harnesses (Claude Code via the Agent SDK bridge, Codex and
+ * ACP agents via the Kun Tools MCP server) reach it too: the tool only writes
+ * workspace files, and the transcript card comes from its result item.
  */
 export function shouldAdvertiseDesignOpen(context: ToolHostContext): boolean {
   return context.clientSurface === 'gui' &&
@@ -63,13 +67,7 @@ export function shouldAdvertiseDesignOpen(context: ToolHostContext): boolean {
     context.roomPeer !== true &&
     context.roomStepKind === undefined &&
     context.executionUnitKind === undefined &&
-    isNativeKunHarness(context.harnessId) &&
     Boolean(context.workspace.trim())
-}
-
-function isNativeKunHarness(harnessId: string | undefined): boolean {
-  const normalized = harnessId?.trim()
-  return !normalized || normalized === 'kun'
 }
 
 function shortHash(...parts: string[]): string {

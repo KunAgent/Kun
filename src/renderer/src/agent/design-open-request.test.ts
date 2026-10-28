@@ -124,6 +124,23 @@ describe('design_open request mapping', () => {
       .toMatchObject({ status: 'failed', error: 'design_open requires at least one screen' })
   })
 
+  it('reads the bridged tool from Claude Code and Codex transcripts', () => {
+    const sdkResult = { ...resultItem(readyOutput), toolName: 'mcp__kun__design_open' } as CoreTurnItemJson
+    expect(extractDesignOpenRequest(sdkResult)).toMatchObject({ status: 'ready', documentId: DOCUMENT_ID, screenCount: 1 })
+
+    const codexCall = callItem({
+      toolName: 'mcp:kun/design_open',
+      arguments: { server: 'kun', arguments: callItem().arguments }
+    })
+    expect(extractDesignOpenRequest(codexCall)).toMatchObject({ status: 'pending', title: 'Update entry', screenCount: 2 })
+    const codexResult = {
+      ...resultItem({ content: [{ type: 'text', text: JSON.stringify(readyOutput) }] }),
+      toolName: 'mcp:kun/design_open'
+    } as CoreTurnItemJson
+    expect(extractDesignOpenRequest(codexResult)).toMatchObject({ status: 'ready', requestId: REQUEST_ID, screenCount: 1 })
+    expect(extractDesignOpenRequest({ ...codexResult, toolName: 'mcp:other/design_open' } as CoreTurnItemJson)).toBeUndefined()
+  })
+
   it('ignores other tools', () => {
     expect(extractDesignOpenRequest(callItem({ toolName: 'design_component' }))).toBeUndefined()
   })
