@@ -35,12 +35,14 @@ export function AgentDispatchRouteLabel({ route, agentName }: { route: AgentDisp
  * reuses the composer caches; the choice stays local to the card and reaches
  * Kun only through `onChange` (a dispatch `update`).
  */
-export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract, roleUse, workspace, preference = false }: {
+export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract, onPendingChange, roleUse, workspace, preference = false }: {
   route: AgentDispatchAssignmentRoute
   disabled: boolean
   onChange: (route: AgentDispatchAssignmentRoute) => void
   /** Any pointer or key use of the pickers, menus included (React events cross the portals). */
   onInteract?: () => void
+  /** An Agent pick is waiting for its model catalog; the card must not settle without it. */
+  onPendingChange?: (pending: boolean) => void
   /** Offer agent roster roles: worker roles for dispatch cards, session roles for task cards. */
   roleUse?: 'worker' | 'session'
   workspace?: string
@@ -62,6 +64,12 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
   const current = workbenchModelFromRoute(route)
   // An Agent picked before its catalog loaded: shown at once, applied when a model is known.
   const [pendingAgent, setPendingAgent] = useState<string | null>(null)
+  // A pick whose catalog settled without a usable model: say so instead of silently reverting.
+  const [droppedAgent, setDroppedAgent] = useState<string | null>(null)
+  const onPendingChangeRef = useRef(onPendingChange)
+  onPendingChangeRef.current = onPendingChange
+  useEffect(() => { onPendingChangeRef.current?.(Boolean(pendingAgent)) }, [pendingAgent])
+  useEffect(() => () => { onPendingChangeRef.current?.(false) }, [])
   const pendingRow = pendingAgent ? rows.find((entry) => entry.definition.id === pendingAgent) : undefined
   const pendingNative = useHarnessStore((state) => (pendingAgent ? state.models[pendingAgent] : undefined))
   const pendingProviders = useHarnessStore((state) => (pendingAgent ? state.providerGroups[pendingAgent] : undefined))
@@ -95,7 +103,10 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
     const nativeSettled = !pendingRow.definition.credentialModes.includes('native-login') || (pendingNative && !pendingNative.loading)
     const providersSettled = !pendingRow.definition.credentialModes.some((mode) => mode !== 'native-login') ||
       (pendingProviders && !pendingProviders.loading)
-    if (nativeSettled && providersSettled) setPendingAgent(null)
+    if (nativeSettled && providersSettled) {
+      setDroppedAgent(pendingRow.definition.displayName)
+      setPendingAgent(null)
+    }
   }, [pendingAgent, pendingRow, pendingNative, pendingProviders, route])
 
   const refresh = (): void => {
@@ -106,6 +117,7 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
   const selectAgent = (nextId: string): void => {
     const next = rows.find((entry) => entry.definition.id === nextId)
     if (!next || nextId === id || !harnessRowRunsTurns(next) || harnessRowUnavailableCode(next)) return
+    setDroppedAgent(null)
     if (preference) {
       setPendingAgent(null)
       onChange({ agentId: nextId })
@@ -149,6 +161,8 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
       composerPickList={groups.flatMap((group) => group.modelIds)} composerModelGroups={groups}
       emptyModelState={external && (native?.loading || providers?.loading) ? 'loading' : preference && !groups.length ? 'agent-default' : undefined}
       canChangeModel={!disabled} onComposerModelChange={selectModel} />
+    {droppedAgent ? <span role="alert" className="basis-full text-[11.5px] text-ds-status-warning" data-dispatch-route-dropped>
+      {t('dispatchIntent.agentNoModel', { agent: droppedAgent })}</span> : null}
     {roleUse && (roles.length || route.profileId) ? <select value={route.profileId ?? ''} disabled={disabled}
       aria-label={t('dispatchIntent.roleLabel')} title={t('dispatchIntent.roleHint')} data-dispatch-role-picker={id}
       onChange={(event) => selectRole(event.target.value)}

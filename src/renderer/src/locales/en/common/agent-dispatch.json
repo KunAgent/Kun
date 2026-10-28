@@ -70,7 +70,8 @@
       "user_input": "Waiting for input",
       "question": "Waiting for an answer",
       "terminal_prompt": "Waiting at a terminal prompt"
-    }
+    },
+    "agentNoModel": "{{agent}} has no usable model, so the previous choice was kept. Sign in or set up a model in Agent settings first."
   },
   "roomsWorkbenchDispatchPolicyHint": "Code task cards follow this conversation’s permissions: confirmation, automatic review, or full access. A card with no reply starts after the window set in Settings › Collaboration. Other actions use the policy above.",
   "dispatchPreference": {

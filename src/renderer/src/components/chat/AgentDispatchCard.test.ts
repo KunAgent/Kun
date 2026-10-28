@@ -24,9 +24,12 @@ vi.mock('./FloatingComposerWorkersPill', () => ({ OPEN_WORKERS_PANEL_EVENT: 'ope
 vi.mock('./AgentDispatchIntentControls', () => ({ AgentDispatchIntentControls: (props: { readOnly: boolean }) =>
   createElement('div', { 'data-controls': props.readOnly ? 'read-only' : 'interactive' }) }))
 vi.mock('./AgentDispatchRoutePicker', () => ({
-  AgentDispatchRoutePicker: (props: { route: { agentId: string }; disabled: boolean; onChange: (route: unknown) => void }) =>
-    createElement('button', { 'data-route-picker': props.route.agentId, disabled: props.disabled,
-      onClick: () => props.onChange({ agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }) }),
+  AgentDispatchRoutePicker: (props: { route: { agentId: string }; disabled: boolean; onChange: (route: unknown) => void
+    onPendingChange?: (pending: boolean) => void }) =>
+    createElement('span', null,
+      createElement('button', { 'data-route-picker': props.route.agentId, disabled: props.disabled,
+        onClick: () => props.onChange({ agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }) }),
+      createElement('i', { 'data-route-pending': true, onClick: (pending: boolean) => props.onPendingChange?.(pending) })),
   AgentDispatchRouteLabel: (props: { route: { agentId: string } }) => createElement('span', { 'data-route-label': props.route.agentId })
 }))
 
@@ -39,6 +42,7 @@ beforeEach(() => {
   state.activeThreadId = 'parent'
   state.rows = {}
   state.error = ''
+  state.busy = false
   preview.mockReset()
 })
 afterEach(async () => {
@@ -173,6 +177,59 @@ describe('Agent dispatch card', () => {
     expect(state.act).toHaveBeenCalledTimes(2)
     expect(state.act).toHaveBeenLastCalledWith('update', { recommendation: { assignments: [routes[0],
       { agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }] } })
+  })
+
+  it('keeps the pickers usable while the hold\'s own pause is in flight', async () => {
+    state.intent = fixture()
+    await render()
+    let resolvePause!: (value: AgentDispatchIntentView) => void
+    state.act.mockImplementation((action: string) => action === 'pause'
+      ? new Promise<AgentDispatchIntentView>((resolve) => { resolvePause = resolve }) : Promise.resolve(undefined))
+    const picker = () => renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[0]
+    await act(async () => { picker().props.onClick() })
+    state.busy = true
+    await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
+    // A disabled chip would swallow the click that opened its menu.
+    expect(picker().props.disabled).toBe(false)
+    state.busy = false
+    await act(async () => { resolvePause(fixture({ state: 'paused', revision: 3, deadline: undefined })) })
+  })
+
+  it('shows why Kun refused a held switch instead of silently reverting', async () => {
+    state.intent = fixture()
+    await render()
+    state.act.mockImplementation(async (action: string) => {
+      if (action === 'pause') {
+        state.intent = fixture({ state: 'paused', revision: 3, deadline: undefined })
+        return state.intent
+      }
+      state.error = 'Codex is signed out'
+      return undefined
+    })
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[0].props.onClick() })
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+    expect(state.act).toHaveBeenLastCalledWith('update', expect.anything())
+    await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
+    expect(JSON.stringify(renderer!.toJSON())).toContain('dispatchIntent.routeUpdateFailed:{\\"message\\":\\"Codex is signed out\\"}')
+  })
+
+  it('keeps the hold open while a picked Agent still loads its models', async () => {
+    state.intent = fixture()
+    await render()
+    state.act.mockImplementation(async (action: string) => {
+      if (action !== 'pause') return undefined
+      state.intent = fixture({ state: 'paused', revision: 3, deadline: undefined })
+      return state.intent
+    })
+    await act(async () => { renderer!.root.findAll((node) => node.props['data-route-pending'])[0].props.onClick(true) })
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[1].props.onClick() })
+    await act(async () => { renderer!.root.findAll((node) => node.props['data-route-pending'])[0].props.onClick(true) })
+    await act(async () => { vi.advanceTimersByTime(30_000) })
+    // Neither an update nor a resume while the pick is still loading.
+    expect(state.act).toHaveBeenCalledTimes(1)
+    await act(async () => { renderer!.root.findAll((node) => node.props['data-route-pending'])[0].props.onClick(false) })
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+    expect(state.act).toHaveBeenLastCalledWith('update', expect.anything())
   })
 
   it('updates a waiting card at once when no countdown is running', async () => {
