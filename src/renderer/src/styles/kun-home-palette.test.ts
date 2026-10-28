@@ -39,8 +39,9 @@ describe('Kun macOS sidebar material', () => {
     expect(css).toMatch(/@media \(min-width: 768px\)\s*\{\s*html\[data-platform='darwin'\]/)
     expect(css).toMatch(/:root\[data-platform='darwin'\]\s*\{\s*--kun-ground-alpha: 32%;/)
     expect(css).toMatch(
-      /@media \(prefers-reduced-transparency: reduce\)\s*\{\s*:root\[data-platform='darwin'\]\s*\{\s*--kun-ground-alpha: 100%;/
+      /@media \(prefers-reduced-transparency: reduce\)\s*\{\s*:root\[data-platform='darwin'\],\s*:root\[data-platform='darwin'\]\[data-theme='dark'\]\s*\{\s*--kun-ground-alpha: 100%;/
     )
+    expect(css).toMatch(/:root\[data-platform='darwin'\]\[data-theme='dark'\]\s*\{\s*--kun-ground-alpha: 76%;/)
   })
 })
 

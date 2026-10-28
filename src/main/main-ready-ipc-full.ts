@@ -14,6 +14,7 @@ import {
 } from './settings-store'
 import { preserveRedactedProviderCredentials } from './settings-credential-redaction'
 import { syncLoginItemSettings } from './desktop-behavior'
+import { syncNativeThemeSource } from './native-theme-source'
 import {
   getKunRuntimeSettings,
   getModelProviderSettings,
@@ -217,6 +218,7 @@ export function registerMainIpc(services: MainServices): void {
           })
       }
       syncAppKeepAwake(saved)
+      syncNativeThemeSource(saved.theme)
       try {
         mainState.scheduleRuntime?.sync(saved)
         mainState.workflowRuntime?.sync(saved)
@@ -321,6 +323,7 @@ export function registerMainIpc(services: MainServices): void {
         return saved
       })
       syncAppKeepAwake(saved)
+      syncNativeThemeSource(saved.theme)
       void remoteAccessService.sync()
       requestExtensionWorkbenchEnvironmentPublish()
       return saved

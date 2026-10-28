@@ -15,7 +15,7 @@
     .ds-workbench-shell {
     --ds-workbench-ground: color-mix(
       in srgb,
-      color-mix(in srgb, var(--ds-bg-main) 95%, white) var(--kun-ground-alpha),
+      color-mix(in srgb, var(--ds-bg-main) 88%, black) var(--kun-ground-alpha),
       transparent
     );
   }
@@ -30,6 +30,17 @@
     --ds-sidebar-divider: var(--kun-hair-2);
     border-right-width: 0;
     background: transparent;
+  }
+
+  /* Dark rows tint the glass instead of covering it with an opaque panel. */
+  html[data-theme='dark']:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell
+    > [data-workbench-left-sidebar]
+    .ds-sidebar-shell {
+    --ds-sidebar-row-hover: rgba(255, 255, 255, 0.055);
+    --ds-sidebar-row-active: rgba(255, 255, 255, 0.09);
+    --ds-sidebar-row-ring: var(--kun-hair-1);
+    --ds-sidebar-divider: var(--kun-hair-1);
   }
 
   html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
