@@ -5,17 +5,21 @@ import type {
   SandboxMode
 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
+import { syncThreadPermissionPolicy } from '../../agent/thread-permission-policy'
 import { useChatStore } from '../../store/chat-store'
 import type { ComposerExecutionSettings } from '../chat/FloatingComposer'
 
 type UseWorkbenchExecutionSettingsInput = {
   setError: (message: string | null) => void
   onSettingsUpdated: () => void
+  /** Conversation whose stored authority follows the chip; drafts keep defaults. */
+  activeThreadId?: string | null
 }
 
 export function useWorkbenchExecutionSettings({
   setError,
-  onSettingsUpdated
+  onSettingsUpdated,
+  activeThreadId
 }: UseWorkbenchExecutionSettingsInput) {
   const [composerExecutionSettings, setComposerExecutionSettings] =
     useState<ComposerExecutionSettings | null>(null)
@@ -73,12 +77,22 @@ export function useWorkbenchExecutionSettings({
       setComposerExecutionSettings(saved)
       syncStoreExecutionSettings(saved)
       onSettingsUpdated()
+      // The chip only writes global defaults; the conversation keeps its own
+      // authority, which worker dispatches and override-free turns inherit.
+      // Without this write the chip can claim full access while those turns
+      // still ask for approval under the previous policy.
+      const threadId = activeThreadId?.trim()
+      if (threadId) {
+        void syncThreadPermissionPolicy(threadId, saved).catch((error: unknown) => {
+          setError(error instanceof Error ? error.message : String(error))
+        })
+      }
     }).catch((error: unknown) => {
       setComposerExecutionSettings(previous)
       syncStoreExecutionSettings(previous)
       setError(error instanceof Error ? error.message : String(error))
     }).finally(() => setComposerExecutionApplying(false))
-  }, [composerExecutionApplying, composerExecutionSettings, onSettingsUpdated, setError, syncStoreExecutionSettings])
+  }, [activeThreadId, composerExecutionApplying, composerExecutionSettings, onSettingsUpdated, setError, syncStoreExecutionSettings])
 
   return {
     composerExecutionSettings,

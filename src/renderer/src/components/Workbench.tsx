@@ -180,6 +180,7 @@ export function Workbench(): ReactElement {
     updateComposerExecutionSettings
   } = useWorkbenchExecutionSettings({
     setError,
+    activeThreadId,
     onSettingsUpdated: () => void probeRuntime('background')
   })
   const busyRef = useRef(busy)

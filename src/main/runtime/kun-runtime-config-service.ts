@@ -494,6 +494,14 @@ export function buildManagedRuntimeHotApplyBody(
   })
 }
 
+/**
+ * Sections that carry the process authority the GUI shows in the permission
+ * chip. A rejected authority section leaves the running runtime on the previous
+ * approval/sandbox policy while settings already hold the new one, so it must
+ * never be reported as an applied change.
+ */
+const AUTHORITY_CONFIG_SECTIONS = new Set(['serve'])
+
 /** Pure response policy: callers own logging, retry, restart, and status effects. */
 export function classifyManagedRuntimeHotApplyResponse(
   status: number,
@@ -509,6 +517,9 @@ export function classifyManagedRuntimeHotApplyResponse(
     const message = sections
       ? Object.values(sections).map((section) => section.message).join('; ')
       : ''
+    if (sections && Object.keys(sections).some((name) => AUTHORITY_CONFIG_SECTIONS.has(name))) {
+      return { result: 'restart_required', message, sections }
+    }
     return { result: 'applied', message, ...(sections ? { sections } : {}) }
   }
   const message = String(parsed?.message ?? text).trim()
