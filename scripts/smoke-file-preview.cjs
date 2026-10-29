@@ -236,6 +236,21 @@ async function runFlow({ application, page, capture, timeoutMs, cspErrors, works
   await capture('preview-15-missing')
   checks.push('"Changed" shows the git changes as a tree; a deleted file opens the missing-file card')
 
+  // Right-click a file tab: the shared menu closes the tabs to its right, then all of them.
+  const fileTabs = page.locator('.ds-right-tab[data-kind="file"] .ds-right-tab__select')
+  const tabCount = await fileTabs.count()
+  assert(tabCount >= 3, `expected several open file tabs, found ${tabCount}`)
+  await fileTabs.nth(1).click({ button: 'right' })
+  await page.locator('.kun-context-menu').waitFor({ state: 'visible' })
+  assert.equal(await page.locator('.kun-context-menu [data-action="copyRelativePath"]').count(), 1)
+  await capture('preview-16-tab-menu')
+  await page.locator('.kun-context-menu [data-action="closeRight"]').click()
+  await poll(async () => (await fileTabs.count()) === 2, timeoutMs, 'tabs to the right closed')
+  await fileTabs.first().click({ button: 'right' })
+  await page.locator('.kun-context-menu [data-action="closeAll"]').click()
+  await poll(async () => (await fileTabs.count()) === 0, timeoutMs, 'all file tabs closed')
+  checks.push('The file tab menu closes the tabs to the right and all tabs')
+
   diagnostics.cspErrors = [...cspErrors]
   assert.deepEqual(cspErrors, [], 'Content Security Policy blocked a preview resource')
   return checks

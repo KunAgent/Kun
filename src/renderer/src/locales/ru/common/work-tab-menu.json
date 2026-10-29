@@ -9,5 +9,7 @@
   "workTabMenuOpenBeside": "Открыть рядом с сеансом",
   "workTabMenuCopyPath": "Копировать путь",
   "workTabMenuReveal": "Показать в папке",
-  "workTabMenuCopyTitle": "Копировать название"
+  "workTabMenuCopyTitle": "Копировать название",
+  "workMenuOpen": "Открыть",
+  "workMenuOpenBesideFiles": "Открыть рядом с файлами"
 }

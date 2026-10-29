@@ -1,5 +1,5 @@
-import type { DragEvent as ReactDragEvent, ReactElement, ReactNode } from 'react'
-import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { useCallback, useState, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, Columns2, Copy, FileText, FilePlus2, Folder, FolderOpen, FolderPlus, FolderSearch, GraduationCap, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { SidebarActivityIndicator, type SidebarActivity } from '../sidebar/SidebarActivityIndicator'
@@ -17,6 +17,7 @@ import {
 import { WorkFileTypeIcon, workFileKindForName } from './WorkFileTypeIcon'
 import { chatFileTreeEntryReference } from '../chat/chat-file-tree-helpers'
 import { COMPOSER_FILE_REFERENCE_DRAG_MIME, formatComposerFileMentionToken } from '../../lib/composer-file-references'
+import { contextMenuPoint, KunContextMenu, type KunContextMenuEntry, type KunContextMenuPoint } from '../context-menu/KunContextMenu'
 
 type Props = {
   rootDirectory: string
@@ -149,6 +150,47 @@ export function WriteFileTree({
     event.dataTransfer.setData('text/plain', `${formatComposerFileMentionToken(reference.relativePath, reference.type === 'directory')} `)
     event.dataTransfer.setData(COMPOSER_FILE_REFERENCE_DRAG_MIME, JSON.stringify(reference))
   }
+  const [rowMenu, setRowMenu] = useState<{ entry: WorkspaceEntry; point: KunContextMenuPoint } | null>(null)
+  const dismissRowMenu = useCallback(() => setRowMenu(null), [])
+  const openRowMenu = (event: ReactMouseEvent<HTMLElement>, entry: WorkspaceEntry): void => {
+    event.preventDefault()
+    setRowMenu({ entry, point: contextMenuPoint(event) })
+  }
+  const copyText = (value: string): void => {
+    if (value) void navigator.clipboard?.writeText?.(value)?.catch(() => undefined)
+  }
+  const rowMenuEntries = (entry: WorkspaceEntry): KunContextMenuEntry[] => {
+    const isDirectory = entry.type === 'directory'
+    const entries: KunContextMenuEntry[] = isDirectory
+      ? [
+          ...(onCreateFile ? [{ id: 'newFile', label: t('writeCreateFileInFolder'), icon: <FilePlus2 aria-hidden />, onSelect: () => onCreateFile(entry.path) }] : []),
+          ...(onCreateDirectory ? [{ id: 'newFolder', label: t('writeCreateFolderInFolder'), icon: <FolderPlus aria-hidden />, onSelect: () => onCreateDirectory(entry.path) }] : [])
+        ]
+      : [
+          { id: 'open', label: t('workMenuOpen'), icon: <FileText aria-hidden />, onSelect: () => onSelectFile(entry.path) },
+          ...(onOpenBeside ? [{ id: 'openBeside', label: t('workTabMenuOpenBeside'), icon: <Columns2 aria-hidden />, onSelect: () => onOpenBeside(entry.path) }] : []),
+          ...(onOpenPdfAsPaper && isPdfEntry(entry)
+            ? [{ id: 'paper', label: openPdfAsPaperTitle ?? t('writePaperOpenAsPaper'), icon: <GraduationCap aria-hidden />, onSelect: () => onOpenPdfAsPaper(entry) }]
+            : [])
+        ]
+    return [
+      ...entries,
+      'separator',
+      { id: 'copyPath', label: t('fileTreeCopyAbsolutePath'), icon: <Copy aria-hidden />, onSelect: () => copyText(entry.path) },
+      { id: 'copyRelativePath', label: t('fileTreeCopyRelativePath'), onSelect: () => copyText(relativeDisplayPath(rootDirectory, entry.path)) },
+      {
+        id: 'reveal',
+        label: window.kunGui?.platform === 'darwin' ? t('fileTreeRevealInFinder') : t('fileTreeRevealInFileManager'),
+        icon: <FolderSearch aria-hidden />,
+        onSelect: () => onRevealEntry(entry)
+      },
+      'separator',
+      ...(onRenameEntry ? [{ id: 'rename', label: t('writeRenameEntry'), icon: <Pencil aria-hidden />, onSelect: () => onRenameEntry(entry) }] : []),
+      ...(onDeleteEntry
+        ? [{ id: 'delete', label: isDirectory ? t('writeDeleteFolder') : t('writeDeleteFile'), icon: <Trash2 aria-hidden />, danger: true, onSelect: () => onDeleteEntry(entry) }]
+        : [])
+    ]
+  }
   const hasRootSnapshot = Object.prototype.hasOwnProperty.call(entriesByDir, rootDirectory)
   const rootEntries = (entriesByDir[rootDirectory] ?? []).filter(isWriteDocument)
 
@@ -174,7 +216,8 @@ export function WriteFileTree({
               else if (event?.altKey && onOpenBeside) onOpenBeside(entry.path)
               else onSelectFile(entry.path)
             }}
-            className="min-h-[30px]"
+            onContextMenu={(event) => openRowMenu(event, entry)}
+            className={`min-h-[30px]${rowMenu?.entry.path === entry.path ? ' kun-context-menu-target' : ''}`}
             buttonClassName="items-center gap-1.5 py-1.5 pr-2"
             buttonStyle={{ paddingLeft: 8 + depth * 14 }}
             actionsVisibility="hidden"
@@ -375,6 +418,9 @@ export function WriteFileTree({
           <div>{renderEntries(rootDirectory, 0)}</div>
         )}
       </div>
+      {rowMenu ? (
+        <KunContextMenu point={rowMenu.point} label={rowMenu.entry.name} entries={rowMenuEntries(rowMenu.entry)} onDismiss={dismissRowMenu} />
+      ) : null}
     </div>
   )
 }

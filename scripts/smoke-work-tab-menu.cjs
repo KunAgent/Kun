@@ -12,13 +12,13 @@ async function documentTabs(page) {
 async function openMenu(page, label) {
   const tab = page.locator('.work-tab[data-kind="document"]', { hasText: label })
   await tab.click({ button: 'right' })
-  await page.locator('.work-tab-menu').waitFor({ state: 'visible' })
+  await page.locator('.kun-context-menu').waitFor({ state: 'visible' })
   return tab
 }
 
 async function pick(page, action) {
-  await page.locator(`.work-tab-menu [data-action="${action}"]`).click()
-  await page.locator('.work-tab-menu').waitFor({ state: 'detached' })
+  await page.locator(`.kun-context-menu [data-action="${action}"]`).click()
+  await page.locator('.kun-context-menu').waitFor({ state: 'detached' })
 }
 
 async function exerciseWorkTabMenu({ page, poll, capture, resize, workspaceRoot }) {
@@ -29,9 +29,15 @@ async function exerciseWorkTabMenu({ page, poll, capture, resize, workspaceRoot 
   await mkdir(space, { recursive: true })
   const names = ['alpha.md', 'beta.md', 'gamma.md']
   for (const name of names) await writeFile(join(space, name), `# ${name}\n\nTab menu smoke.\n`)
+  // The default space can still be mounting at startup; open the files only once ours owns the stage.
+  await poll(async () => page.evaluate(async (space) => {
+    const { useWriteWorkspaceStore } = await import('/src/write/write-workspace-store.ts')
+    const store = useWriteWorkspaceStore.getState()
+    if (store.workspaceRoot !== space) await store.addWriteWorkspace(space)
+    return useWriteWorkspaceStore.getState().workspaceRoot === space
+  }, space), 30_000, 'tab-menu space mounted')
   await page.evaluate(async ({ space, files }) => {
     const { useWriteWorkspaceStore } = await import('/src/write/write-workspace-store.ts')
-    await useWriteWorkspaceStore.getState().addWriteWorkspace(space)
     for (const file of files) await useWriteWorkspaceStore.getState().openFile(space, file)
   }, { space, files: names.map((name) => join(space, name)) })
   await poll(async () => (await documentTabs(page)).length === 3, 30_000, 'three document tabs')
@@ -40,22 +46,22 @@ async function exerciseWorkTabMenu({ page, poll, capture, resize, workspaceRoot 
   const tab = await openMenu(page, 'beta.md')
   assert.equal(await tab.getAttribute('data-menu-target'), 'true')
   const tabBox = await tab.boundingBox()
-  const menuBox = await page.locator('.work-tab-menu').boundingBox()
+  const menuBox = await page.locator('.kun-context-menu').boundingBox()
   assert(menuBox && tabBox && Math.abs(menuBox.x - (tabBox.x + tabBox.width / 2)) < 24, 'menu opens at the pointer')
-  assert(menuBox.y >= tabBox.y + tabBox.height / 2, 'menu opens below the pointer')
-  assert.equal(await page.locator('.work-tab-menu [data-action="closeRight"] .work-tab-menu-count').innerText(), '1')
-  assert.equal(await page.locator('.work-tab-menu [data-action="copyPath"]').count(), 1)
+  assert(Math.abs(menuBox.y - (tabBox.y + tabBox.height / 2)) < 4, 'menu opens at the pointer height')
+  assert.equal(await page.locator('.kun-context-menu [data-action="closeRight"] .kun-context-menu-count').innerText(), '1')
+  assert.equal(await page.locator('.kun-context-menu [data-action="copyPath"]').count(), 1)
   await page.waitForTimeout(250)
   await capture('work-tab-menu-01-open')
   await page.keyboard.press('Escape')
-  await page.locator('.work-tab-menu').waitFor({ state: 'detached' })
+  await page.locator('.kun-context-menu').waitFor({ state: 'detached' })
 
   await openMenu(page, 'beta.md')
   await pick(page, 'closeRight')
   assert.deepEqual(await documentTabs(page), ['alpha.md', 'beta.md'])
 
   await openMenu(page, 'alpha.md')
-  assert.equal(await page.locator('.work-tab-menu [data-action="moveLeft"]').isDisabled(), true)
+  assert.equal(await page.locator('.kun-context-menu [data-action="moveLeft"]').isDisabled(), true)
   await pick(page, 'moveRight')
   assert.deepEqual(await documentTabs(page), ['beta.md', 'alpha.md'])
 
@@ -67,6 +73,18 @@ async function exerciseWorkTabMenu({ page, poll, capture, resize, workspaceRoot 
   await pick(page, 'closeAll')
   await poll(async () => (await documentTabs(page)).length === 0, 10_000, 'all tabs closed')
   await capture('work-tab-menu-02-closed')
+
+  // Sidebar file rows: right-click opens the row menu; Open brings the file back as a tab.
+  const fileRow = page.locator('[data-work-directory] button', { hasText: 'beta.md' }).first()
+  await fileRow.click({ button: 'right' })
+  await page.locator('.kun-context-menu').waitFor({ state: 'visible' })
+  for (const action of ['open', 'openBeside', 'copyPath', 'copyRelativePath', 'reveal', 'rename', 'delete']) {
+    assert.equal(await page.locator(`.kun-context-menu [data-action="${action}"]`).count(), 1, `file row menu has ${action}`)
+  }
+  await capture('work-tab-menu-03-file-row')
+  await pick(page, 'open')
+  await poll(async () => JSON.stringify(await documentTabs(page)) === JSON.stringify(['beta.md']), 10_000, 'file opened from row menu')
+
   return { ok: true }
 }
 

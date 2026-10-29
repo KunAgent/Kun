@@ -9,5 +9,7 @@
   "workTabMenuOpenBeside": "Open beside the session",
   "workTabMenuCopyPath": "Copy path",
   "workTabMenuReveal": "Reveal in folder",
-  "workTabMenuCopyTitle": "Copy title"
+  "workTabMenuCopyTitle": "Copy title",
+  "workMenuOpen": "Open",
+  "workMenuOpenBesideFiles": "Open beside the files"
 }

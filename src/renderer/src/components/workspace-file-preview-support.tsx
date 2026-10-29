@@ -36,7 +36,7 @@ export type Props = {
   pinnedTargetKeys?: string[]
   preserveAcrossThreads?: boolean
   onTogglePinnedTarget?: (target: WorkspaceFileTarget) => void
-  onCloseOtherTargets?: (target: WorkspaceFileTarget) => void
+  onCloseOtherTargets?: (target: WorkspaceFileTarget, scope?: import('./workbench/file-preview-close-scope').FilePreviewCloseScope) => void
   onTogglePreserveAcrossThreads?: () => void
   onClose: () => void
   /** The host draws the open-file tabs; the preview keeps only its toolbar. */

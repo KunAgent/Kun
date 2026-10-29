@@ -1,9 +1,11 @@
-import { useRef, useState, type ReactElement } from 'react'
+import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
   ChevronDown,
+  Copy,
+  MessageSquare,
   MoreHorizontal,
   PanelRight,
   PencilLine,
@@ -29,6 +31,7 @@ import { useWorkViewStore } from '../../write/work-view-store'
 import { useWorkSessions } from './use-work-sessions'
 import '../rooms/conversation-manage.css'
 import { readSessionsExpanded, writeSessionsExpanded } from './work-sidebar-layout'
+import { contextMenuPoint, KunContextMenu, type KunContextMenuPoint } from '../context-menu/KunContextMenu'
 
 /** Folded, the list shows the latest few; the open session always stays in view. */
 export const VISIBLE_SESSIONS = 5
@@ -53,6 +56,8 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
   const [actionDialog, setActionDialog] = useState<SidebarActionDialogState | null>(null)
+  const [rowMenu, setRowMenu] = useState<{ session: WorkSessionEntry; point: KunContextMenuPoint } | null>(null)
+  const dismissRowMenu = useCallback(() => setRowMenu(null), [])
   const searching = searchOpen && query.trim().length > 0
   const { root, sessions, loading, patchThread, forgetThread, reload } = useWorkSessions(searching ? query : '')
   const whiteboards = useWriteWorkspaceStore((state) => state.whiteboards)
@@ -141,6 +146,17 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
       }
     })
   }
+  const openSession = (session: WorkSessionEntry): void => {
+    useWorkViewStore.getState().showSession()
+    void openWorkSession(session, undefined, { restoreWorkbench: false })
+  }
+  // Beside: the file keeps the stage and the session joins it in the split.
+  const openSessionBeside = (session: WorkSessionEntry): void => {
+    const view = useWorkViewStore.getState()
+    if (!view.split) view.toggleSplit()
+    view.showDocument()
+    void openWorkSession(session, undefined, { restoreWorkbench: false })
+  }
   const confirmActionDialog = async (): Promise<void> => {
     const dialog = actionDialog
     if (!dialog || dialog.submitting) return
@@ -224,12 +240,14 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
             )
           }
           return (
-            <div key={session.id} className="work-session-item" data-work-session={session.id}>
+            <div key={session.id} className="work-session-item" data-work-session={session.id}
+              data-menu-target={rowMenu?.session.id === session.id ? 'true' : undefined}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setRowMenu({ session, point: contextMenuPoint(event) })
+              }}>
               <button type="button" className="work-session-row" aria-current={isCurrent ? 'true' : undefined}
-                title={sessionLabel(session)} onClick={() => {
-                  useWorkViewStore.getState().showSession()
-                  void openWorkSession(session, undefined, { restoreWorkbench: false })
-                }}>
+                title={sessionLabel(session)} onClick={() => openSession(session)}>
                 <span className="work-session-anchor" aria-hidden="true">K</span>
                 <span className="work-session-title" data-placeholder={session.title ? undefined : 'true'}>
                   {sessionLabel(session)}
@@ -243,13 +261,7 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
                 ) : null}
               </button>
               <button type="button" className="work-session-side rooms-icon-button" data-work-session-side
-                title={t('workOpenBeside')} aria-label={t('workOpenBeside')} onClick={() => {
-                  // Beside: the file keeps the stage and the session joins it in the split.
-                  const view = useWorkViewStore.getState()
-                  if (!view.split) view.toggleSplit()
-                  view.showDocument()
-                  void openWorkSession(session, undefined, { restoreWorkbench: false })
-                }}>
+                title={t('workOpenBeside')} aria-label={t('workOpenBeside')} onClick={() => openSessionBeside(session)}>
                 <PanelRight size={14} aria-hidden="true" />
               </button>
               <RoomPopover label={t('workSessionMore')} trigger={<MoreHorizontal size={14} />}
@@ -297,6 +309,22 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
           )
         ) : null}
       </div>
+      {rowMenu ? (
+        <KunContextMenu point={rowMenu.point} label={sessionLabel(rowMenu.session)} onDismiss={dismissRowMenu} entries={[
+          { id: 'open', label: t('workMenuOpen'), icon: <MessageSquare aria-hidden="true" />, onSelect: () => openSession(rowMenu.session) },
+          { id: 'openBeside', label: t('workMenuOpenBesideFiles'), icon: <PanelRight aria-hidden="true" />,
+            onSelect: () => openSessionBeside(rowMenu.session) },
+          'separator',
+          { id: 'rename', label: t('sidebarThreadRename'), icon: <PencilLine aria-hidden="true" />,
+            onSelect: () => setRenaming({ id: rowMenu.session.id, value: rowMenu.session.title }) },
+          { id: 'copyTitle', label: t('workTabMenuCopyTitle'), icon: <Copy aria-hidden="true" />,
+            onSelect: () => void navigator.clipboard?.writeText?.(sessionLabel(rowMenu.session))?.catch(() => undefined) },
+          { id: 'archive', label: t('sidebarThreadArchive'), icon: <Archive aria-hidden="true" />, onSelect: () => archiveSession(rowMenu.session) },
+          'separator',
+          { id: 'delete', label: t('sidebarThreadDelete'), icon: <Trash2 aria-hidden="true" />, danger: true,
+            onSelect: () => requestDelete(rowMenu.session) }
+        ]} />
+      ) : null}
       {actionDialog ? (
         <SidebarActionDialog
           state={actionDialog}

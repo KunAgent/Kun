@@ -21,12 +21,12 @@ import {
 } from '../../write/write-editor-layout'
 import type { WriteEditorGroupId, WriteEditorItem } from '../../write/write-workspace-store-types'
 import { WorkTabContextMenu, type WorkTabMenuAction, type WorkTabMenuState } from './WorkTabContextMenu'
+import { contextMenuPoint, type KunContextMenuPoint } from '../context-menu/KunContextMenu'
 import { workTabCloseTargets, workTabMoveNeighbor, type WorkStripEntry, type WorkTabCloseScope } from './work-tab-menu-model'
 
 type DocumentTab = { key: string; groupId: WriteEditorGroupId; item: WriteEditorItem }
 
 const DRAFT_KEY = 'session:draft'
-const MENU_WIDTH = 236
 
 const CLOSE_SCOPES: Partial<Record<WorkTabMenuAction, WorkTabCloseScope>> = {
   close: 'self',
@@ -76,8 +76,7 @@ export function WorkTabStrip(): ReactElement | null {
     closeSessionTab: state.closeSessionTab,
     reorderSessionTabs: state.reorderSessionTabs
   })))
-  const stripRef = useRef<HTMLDivElement | null>(null)
-  const [menu, setMenu] = useState<{ key: string; left: number; top: number } | null>(null)
+  const [menu, setMenu] = useState<{ key: string; point: KunContextMenuPoint } | null>(null)
   const dismissMenu = useCallback(() => setMenu(null), [])
   // A file opened from anywhere else (home cards, the library, an Agent) must come on
   // stage; only the session's own chips peek or split instead.
@@ -159,14 +158,8 @@ export function WorkTabStrip(): ReactElement | null {
     return entry.kind === 'session' ? titles[entry.id] || t('workSessionNew') : t('workSessionNew')
   }
   const openMenu = (event: MouseEvent<HTMLElement>, key: string): void => {
-    const strip = stripRef.current
-    if (!strip) return
     event.preventDefault()
-    // The body is zoomed: map the pointer into the strip's own layout pixels.
-    const box = strip.getBoundingClientRect()
-    const scale = box.width ? strip.offsetWidth / box.width : 1
-    const left = Math.min(Math.max(8, (event.clientX - box.left) * scale), Math.max(8, strip.offsetWidth - MENU_WIDTH - 8))
-    setMenu({ key, left, top: (event.clientY - box.top) * scale + 6 })
+    setMenu({ key, point: contextMenuPoint(event) })
   }
   const menuEntry = menu ? entries.find((entry) => entry.key === menu.key) : undefined
   const menuState = (entry: WorkStripEntry): WorkTabMenuState => {
@@ -203,7 +196,6 @@ export function WorkTabStrip(): ReactElement | null {
     if (value) void navigator.clipboard?.writeText?.(value)?.catch(() => undefined)
   }
   const runMenuAction = (entry: WorkStripEntry, action: WorkTabMenuAction): void => {
-    setMenu(null)
     const scope = CLOSE_SCOPES[action]
     if (scope) {
       void closeEntries(workTabCloseTargets(entries, entry.key, scope))
@@ -233,7 +225,7 @@ export function WorkTabStrip(): ReactElement | null {
   }
 
   return (
-    <div ref={stripRef} className="work-tab-strip ds-no-drag" data-work-tab-strip data-menu-open={menu ? 'true' : undefined}>
+    <div className="work-tab-strip ds-no-drag" data-work-tab-strip>
       {chrome ? (
         <div className={`flex shrink-0 items-center ${chrome.leftSidebarCollapsed ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
           <SidebarTitlebarToggleButton
@@ -307,7 +299,7 @@ export function WorkTabStrip(): ReactElement | null {
       {/* The folded tool rail comes back from here, as in Code's top bar. */}
       <span className="work-tab-rail-reopen"><RailReopenButton /></span>
       {menu && menuEntry ? (
-        <WorkTabContextMenu left={menu.left} top={menu.top} state={menuState(menuEntry)}
+        <WorkTabContextMenu point={menu.point} state={menuState(menuEntry)}
           onAction={(action) => runMenuAction(menuEntry, action)} onDismiss={dismissMenu} />
       ) : null}
     </div>
