@@ -13,10 +13,13 @@ export function SidebarNewConversationMenu({ title, disabled, assistants, onNewC
   onAddAssistant: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
+  // The 对话 tour points at this ＋ whichever form it takes.
   if (!assistants) {
-    return <SidebarIconButton title={title} disabled={disabled} className="h-6 w-6" onClick={onNewChat}><Plus size={14} /></SidebarIconButton>
+    return <span className="inline-flex" data-agent-chats-new>
+      <SidebarIconButton title={title} disabled={disabled} className="h-6 w-6" onClick={onNewChat}><Plus size={14} /></SidebarIconButton>
+    </span>
   }
-  return <RoomPopover label={title} trigger={<Plus size={14} />} disabled={disabled}
+  return <span className="inline-flex" data-agent-chats-new><RoomPopover label={title} trigger={<Plus size={14} />} disabled={disabled}
     className="sidebar-agent-chats-list-menu rooms-icon-button" align="end" width={232}>
     {(close) => <div className="rooms-menu-list sidebar-agent-chats-menu">
       <button type="button" onClick={() => { close(); onNewChat() }}>
@@ -27,5 +30,5 @@ export function SidebarNewConversationMenu({ title, disabled, assistants, onNewC
         <Cloud size={15} aria-hidden="true" /><span>{t('assistantAddMenu')}</span>
       </button>
     </div>}
-  </RoomPopover>
+  </RoomPopover></span>
 }

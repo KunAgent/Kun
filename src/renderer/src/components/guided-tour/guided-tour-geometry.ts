@@ -1,24 +1,4 @@
-export type CodeTourStepId = 'newTask' | 'projects' | 'where' | 'controls' | 'chats'
-export type CodeTourArt = 'magic' | 'clip' | 'laptop' | 'wrench' | 'headset'
-export type CodeTourSide = 'right' | 'left' | 'top' | 'bottom'
-
-export type CodeTourStep = {
-  id: CodeTourStepId
-  /** Existing Code chrome the step points at; the tour adds no markup to its targets. */
-  selector: string
-  art: CodeTourArt
-  side: CodeTourSide
-}
-
-const HOME_COMPOSER = '[data-primary-floating-composer]'
-
-export const CODE_TOUR_STEPS: readonly CodeTourStep[] = [
-  { id: 'newTask', selector: '.sidebar-primary-actions', art: 'magic', side: 'right' },
-  { id: 'projects', selector: '[data-sidebar-section="projects"]', art: 'clip', side: 'right' },
-  { id: 'where', selector: `${HOME_COMPOSER} [data-composer-workspace-controls]`, art: 'laptop', side: 'top' },
-  { id: 'controls', selector: `${HOME_COMPOSER} .ds-composer-toolbar`, art: 'wrench', side: 'bottom' },
-  { id: 'chats', selector: '.sidebar-agent-chats', art: 'headset', side: 'right' }
-]
+export type GuidedTourSide = 'right' | 'left' | 'top' | 'bottom'
 
 export type Box = { left: number; top: number; width: number; height: number }
 export type Size = { width: number; height: number }
@@ -26,7 +6,7 @@ export type Size = { width: number; height: number }
 export type CoachPlacement = {
   spot: Box
   popover: { left: number; top: number }
-  side: CodeTourSide
+  side: GuidedTourSide
   /** Caret position along the popover edge that faces the spot, in px. */
   caret: number
 }
@@ -34,8 +14,8 @@ export type CoachPlacement = {
 const SPOT_PAD = 6
 const EDGE = 12
 const GAP = 14
-/** A long project list only needs its top shown; the bubble explains the rest. */
-const MAX_SPOT_HEIGHT = 220
+/** A long list only needs its top shown; the bubble explains the rest. */
+const MAX_SPOT_HEIGHT = 260
 
 /**
  * Converts a target's client rect into the overlay's own layout pixels. The
@@ -65,7 +45,7 @@ export function spotFor(target: Box, viewport: Size): Box {
   return { left, top, width: right - left, height: Math.min(bottom - top, MAX_SPOT_HEIGHT) }
 }
 
-function fits(side: CodeTourSide, spot: Box, pop: Size, viewport: Size): boolean {
+function fits(side: GuidedTourSide, spot: Box, pop: Size, viewport: Size): boolean {
   switch (side) {
     case 'right': return spot.left + spot.width + GAP + pop.width <= viewport.width - EDGE
     case 'left': return spot.left - GAP - pop.width >= EDGE
@@ -74,7 +54,7 @@ function fits(side: CodeTourSide, spot: Box, pop: Size, viewport: Size): boolean
   }
 }
 
-const FALLBACKS: Record<CodeTourSide, CodeTourSide[]> = {
+const FALLBACKS: Record<GuidedTourSide, GuidedTourSide[]> = {
   right: ['right', 'bottom', 'left', 'top'],
   left: ['left', 'bottom', 'right', 'top'],
   top: ['top', 'bottom', 'left', 'right'],
@@ -82,7 +62,7 @@ const FALLBACKS: Record<CodeTourSide, CodeTourSide[]> = {
 }
 
 /** Puts the bubble beside the spot on the preferred side, flipping when it would leave the window. */
-export function placeCoach(target: Box, viewport: Size, pop: Size, preferred: CodeTourSide): CoachPlacement {
+export function placeCoach(target: Box, viewport: Size, pop: Size, preferred: GuidedTourSide): CoachPlacement {
   const spot = spotFor(target, viewport)
   const side = FALLBACKS[preferred].find((candidate) => fits(candidate, spot, pop, viewport)) ?? preferred
   let left: number

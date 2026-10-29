@@ -5,6 +5,7 @@ import { SidebarCommandRow, SidebarIconButton } from './SidebarPrimitives'
 import { SidebarFocusModeControl } from './SidebarFocusModeControl'
 import { SidebarFocusModeSwitch, SidebarKunStatus, useSidebarSceneFooter } from './SidebarKunFooter'
 import { SidebarGuiUpdate } from './SidebarGuiUpdate'
+import { GuidedToursButton } from '../guided-tour/GuidedToursButton'
 import { KunAccountControl, kunAccountAvailable } from '../account/KunAccountControl'
 import '../account/kun-account-dock.css'
 
@@ -55,7 +56,9 @@ export function SidebarStandardFooter({
   )
   const tools = (
     <>
-      <SidebarIconButton title={t('claw')} ariaLabel={t('claw')} onClick={onToggleConnectPhone} active={connectPhoneSidebarOpen}>
+      {window.kunGui?.isRemoteWeb ? null : <GuidedToursButton />}
+      <SidebarIconButton title={t('claw')} ariaLabel={t('claw')} onClick={onToggleConnectPhone} active={connectPhoneSidebarOpen}
+        className="kun-sidebar-phone-button">
         <Smartphone className="h-4 w-4" strokeWidth={1.75} />
       </SidebarIconButton>
       {onToggleTheme ? (

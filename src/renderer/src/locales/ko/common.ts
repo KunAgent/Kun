@@ -34,7 +34,7 @@ import wardrobeAccount from './common/wardrobe-account.json'
 import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
 import wardrobeInvite from './common/wardrobe-invite.json'
-import codeTour from './common/code-tour.json'
+import guidedTours from './common/guided-tours.json'
 import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
 import designAgent from './common/design-agent.json'
@@ -99,7 +99,7 @@ const common = {
   ...wardrobeShare,
   ...whatsNew,
   ...wardrobeInvite,
-  ...codeTour,
+  ...guidedTours,
   ...messageQuote,
   ...appSurfaces,
   ...designAgent,

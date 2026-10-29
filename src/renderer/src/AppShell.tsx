@@ -35,6 +35,7 @@ import { KunLoader } from './components/KunLoader'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
+const GuidedTourHost = lazy(() => import('./components/guided-tour/GuidedTourHost').then((module) => ({ default: module.GuidedTourHost })))
 const DesktopShellChrome = lazy(() => import('./DesktopShellChrome').then((module) => ({ default: module.DesktopShellChrome })))
 
 type WorkbenchComponent = (typeof import('./components/Workbench'))['Workbench']
@@ -219,6 +220,7 @@ export default function AppShell(): React.ReactElement {
         {surface === 'desktop' ? <AgentActivityToasts /> : null}
         {surface === 'desktop' && !window.kunGui?.isRemoteWeb ? <MobilePairingDialog /> : null}
         {surface === 'desktop' ? <WhatsNewHost /> : null}
+        {surface === 'desktop' && !initialSetupOpen ? <Suspense fallback={null}><GuidedTourHost /></Suspense> : null}
         <WorkbenchFlash />
         {initialSetupOpen ? (
           surface === 'mobile' ? (
