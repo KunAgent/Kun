@@ -1,11 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import type { NormalizedThread } from '../../agent/types'
-import { splitSidebarTaskThreads, strongestTaskActivity, taskGroupCounts } from './sidebar-task-threads'
+import { splitSidebarTaskThreads, strongestTaskActivity, taskGroupCounts, taskGroupIsFinished } from './sidebar-task-threads'
 
 const thread = (id: string, extra: Partial<NormalizedThread> = {}): NormalizedThread =>
   ({ id, title: id, model: 'm', mode: 'agent', updatedAt: '2026-10-22T00:00:00.000Z', ...extra }) as NormalizedThread
 const task = (id: string, parent: string, index: number, total = 3) =>
   thread(id, { relation: 'task', parentThreadId: parent, taskOrigin: { intentId: 'tsg', taskId: `t${index}`, index, total } })
+
+describe('taskGroupIsFinished', () => {
+  it.each([
+    ['read'], ['unread'], ['failed'], ['read', 'unread', 'failed']
+  ] as const)('defaults settled activities %j closed', (...activities) => {
+    expect(taskGroupIsFinished(activities)).toBe(true)
+  })
+
+  it.each(['running', 'awaiting-input', 'scheduled'] as const)('keeps a group with %s open despite a failed sibling', (activity) => {
+    expect(taskGroupIsFinished([activity])).toBe(false)
+    expect(taskGroupIsFinished(['read', 'failed', activity])).toBe(false)
+  })
+
+  it('does not treat an empty group as finished', () => {
+    expect(taskGroupIsFinished([])).toBe(false)
+  })
+})
 
 describe('splitSidebarTaskThreads', () => {
   it('nests task sessions under a listed parent in card order and keeps orphans flat', () => {

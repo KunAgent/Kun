@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Archive, ChevronDown, ChevronRight, CircleAlert, CircleCheck, CircleHelp, CornerUpLeft, Split, Square, Trash2 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
@@ -6,7 +6,7 @@ import { useActivityStore } from '../../store/activity-store'
 import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
 import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import type { SidebarThreadActivity } from './sidebar-project-selectors'
-import { loadCollapsedTaskGroups, saveCollapsedTaskGroups, strongestTaskActivity, taskGroupCounts } from './sidebar-task-threads'
+import { loadCollapsedTaskGroups, saveCollapsedTaskGroups, strongestTaskActivity, taskGroupCounts, taskGroupIsFinished } from './sidebar-task-threads'
 import { AgentIcon } from '../agent-icon'
 import { selectSidebarWorkerRows, type SidebarWorkerRow } from './sidebar-worker-rows'
 
@@ -23,7 +23,7 @@ type SidebarTaskThreadsValue = {
 
 type TaskGroupState = {
   collapsed: ReadonlySet<string>
-  toggle: (parentId: string) => void
+  setGroupCollapsed: (parentId: string, collapsed: boolean) => void
   /** Dispatched workers by parent thread; they are side threads the thread list omits. */
   workersByParent: ReadonlyMap<string, SidebarWorkerRow[]>
 }
@@ -32,16 +32,16 @@ const TaskThreadsContext = createContext<(SidebarTaskThreadsValue & TaskGroupSta
 
 export function SidebarTaskThreadsProvider({ value, children }: { value: SidebarTaskThreadsValue; children: ReactNode }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(loadCollapsedTaskGroups)
-  const toggle = useCallback((parentId: string) => setCollapsed((current) => {
+  const setGroupCollapsed = useCallback((parentId: string, collapsed: boolean) => setCollapsed((current) => {
     const next = new Set(current)
-    if (next.has(parentId)) next.delete(parentId)
-    else next.add(parentId)
+    if (collapsed) next.add(parentId)
+    else next.delete(parentId)
     saveCollapsedTaskGroups(next)
     return next
   }), [])
   const activityRows = useActivityStore((state) => state.rows)
   const workersByParent = useMemo(() => selectSidebarWorkerRows(activityRows), [activityRows])
-  const merged = useMemo(() => ({ ...value, collapsed, toggle, workersByParent }), [value, collapsed, toggle, workersByParent])
+  const merged = useMemo(() => ({ ...value, collapsed, setGroupCollapsed, workersByParent }), [value, collapsed, setGroupCollapsed, workersByParent])
   return <TaskThreadsContext.Provider value={merged}>{children}</TaskThreadsContext.Provider>
 }
 
@@ -60,14 +60,23 @@ export function useSidebarTaskGroup(parentId: string): SidebarTaskGroup | null {
   const context = useContext(TaskThreadsContext)
   const children = context?.childrenByParent.get(parentId) ?? NO_THREADS
   const workers = context?.workersByParent.get(parentId) ?? NO_WORKERS
+  const activities = [...children.map((child) => context!.activityOf(child)), ...workers.map((worker) => worker.activity)]
+  const finished = taskGroupIsFinished(activities)
+  const [expanded, setExpanded] = useState(false)
+  // A finished group's manual expansion lasts only for this execution cycle.
+  useEffect(() => { setExpanded(false) }, [finished, parentId])
   if (!context || (!children.length && !workers.length)) return null
   const activeChild = children.some((child) => child.id === context.activeThreadId) ||
     workers.some((worker) => worker.threadId === context.activeThreadId)
-  // A collapsed group reopens while one of its sessions is the open conversation.
-  const collapsed = context.collapsed.has(parentId) && !activeChild
+  // Keep the open conversation visible while working, not after it has ended.
+  const collapsed = finished ? context.collapsed.has(parentId) || !expanded
+    : context.collapsed.has(parentId) && !activeChild
   return {
-    children, workers, collapsed, toggle: () => context.toggle(parentId),
-    activity: strongestTaskActivity([...children.map((child) => context.activityOf(child)), ...workers.map((worker) => worker.activity)]),
+    children, workers, collapsed, toggle: () => {
+      context.setGroupCollapsed(parentId, !collapsed)
+      setExpanded(finished && collapsed)
+    },
+    activity: strongestTaskActivity(activities),
     ...taskGroupCounts(children)
   }
 }

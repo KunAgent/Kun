@@ -41,6 +41,12 @@ export function strongestTaskActivity(activities: readonly SidebarThreadActivity
   return activities.reduce<SidebarThreadActivity>((best, next) => SEVERITY[next] > SEVERITY[best] ? next : best, 'read')
 }
 
+/** Only settled groups default closed; an error must not hide a still-running sibling. */
+export function taskGroupIsFinished(activities: readonly SidebarThreadActivity[]): boolean {
+  return activities.length > 0 && activities.every((activity) =>
+    activity === 'read' || activity === 'unread' || activity === 'failed')
+}
+
 /** Started / suggested counts for the parent chip. */
 export function taskGroupCounts(children: readonly NormalizedThread[]): { started: number; total: number } {
   const total = Math.max(children.length, ...children.map((child) => child.taskOrigin?.total ?? 0))
