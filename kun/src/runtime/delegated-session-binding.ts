@@ -139,6 +139,8 @@ export class DelegatedSessionCoordinator {
     priorItems: readonly TurnItem[]
     /** An adapter with compatible native restore can validate a client-version change on resume. */
     allowNativeCapabilityResume?: boolean
+    /** Observability hook runs before stale provider state is cleared or parked. */
+    beforeRebase?: (binding: DelegatedSessionBinding, reason: NonNullable<DelegatedSessionPreparation['rebaseReason']>) => Promise<void>
   }): Promise<DelegatedSessionPreparation> {
     const priorHistoryDigest = delegatedHistoryDigest(input.priorItems)
     const binding = await this.store.load(input.threadId)
@@ -179,6 +181,7 @@ export class DelegatedSessionCoordinator {
         resumed: false
       }
     }
+    if (binding) await input.beforeRebase?.(binding, rebaseReason(binding, input.route, priorHistoryDigest))
     if (binding && !routeMatches) {
       // Route switch: park the displaced session (bounded to the newest 3
       // within 7 days), then try to restore a parked session for the new route.
@@ -622,7 +625,7 @@ function rebaseReason(
   binding: DelegatedSessionBinding | null,
   route: DelegatedSessionRoute,
   historyDigest: string
-): DelegatedSessionPreparation['rebaseReason'] {
+): NonNullable<DelegatedSessionPreparation['rebaseReason']> {
   if (!binding) return 'new'
   if (
     binding.providerKind !== route.providerKind ||

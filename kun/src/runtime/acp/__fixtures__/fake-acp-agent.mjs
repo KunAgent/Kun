@@ -210,13 +210,19 @@ async function handleRequest(id, method, params) {
     }
     case 'session/load': {
       const load = scenario.loadSession
+      if (load?.crash) {
+        if (load.crash.stderr) process.stderr.write(load.crash.stderr + '\n')
+        process.stderr.end(() => process.exit(load.crash.code ?? 3))
+        return
+      }
+      if (load?.neverRespond) return
       if (load?.error) {
         respondError(id, load.error.code, load.error.message)
         return
       }
       sessions.add(params.sessionId)
       for (const update of scenario.onLoad?.updates ?? []) emitUpdate(params.sessionId, update)
-      respond(id, load ?? {})
+      respond(id, load && 'result' in load ? load.result : load ?? {})
       return
     }
     case 'session/prompt':

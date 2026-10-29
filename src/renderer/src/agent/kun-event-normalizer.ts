@@ -329,6 +329,7 @@ function normalizeKunRuntimeEventPayload(
           recentTurns: event.stats?.recentTurns ?? 0,
           files: event.stats?.files ?? 0,
           briefDigest: event.briefDigest ?? '',
+          ...(event.continuationFailure ? { continuationFailure: event.continuationFailure } : {}),
           ...(event.timestamp ? { createdAt: event.timestamp } : {})
         }
       }]

@@ -122,6 +122,17 @@ describe('handoff_injected normalization', () => {
 })
 
 describe('handoff_received projection', () => {
+  it('retains continuation failure details across replay and marker updates', () => {
+    const failure = { stage: 'session/load', code: 'agent_error', rpcCode: -32002,
+      message: 'session not found', detailsAvailable: true }
+    const event = handoffEvent({ reason: 'rebase', continuationFailure: failure })
+    const actions = normalizeKunRuntimeEvent(event, {} as KunEventNormalizerDeps)
+    const projected = project(state(), actions)
+    expect(projected.blocks[0]).toMatchObject({ kind: 'handoff', continuationFailure: failure })
+    const replayed = project(projected, actions)
+    expect(replayed.blocks).toHaveLength(1)
+    expect(replayed.blocks[0]).toMatchObject({ continuationFailure: failure })
+  })
   it('inserts a handoff marker block into the timeline', () => {
     const actions = normalizeKunRuntimeEvent(
       handoffEvent(),

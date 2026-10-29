@@ -16,10 +16,8 @@ import { makeDelegatedAwaitApproval } from '../../ade/delegated-approval.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
-import {
-  recordHandoffInjected,
-  resolveTurnHandoff
-} from '../../handoff/turn-handoff.js'
+import { resolveTurnHandoff } from '../../handoff/turn-handoff.js'
+import { recordAcpHandoff } from './acp-continuation.js'
 import type {
   DelegatedRuntimeCapabilities,
   DelegatedTurnRuntime
@@ -316,6 +314,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           reasoningEffort: turn.reasoningEffort,
           ...(turn.harnessSettings ? { harnessSettings: turn.harnessSettings } : {}),
           sessionMcpServers,
+          recordContinuationEvent: (event) => this.deps.events.record(event),
           items,
           validateLaunch: async () => {
             await this.deps.readiness?.validateTurn(threadId, turnId, signal)
@@ -360,10 +359,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           harnessName: definition.displayName
         })
       : undefined
-    await recordHandoffInjected(
-      (event) => this.deps.events.record(event),
+    await recordAcpHandoff(
+      this.deps.events,
       { threadId, turnId, harnessId: definition.id },
-      turnHandoff
+      turnHandoff,
+      session
     )
     await recordAcpDelegatedRuntime(this.deps.events, {
       threadId,

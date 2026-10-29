@@ -21,6 +21,7 @@
  * `{id, method}` dialect used by app-server-style transports (Codex, Pi) —
  * do not port one dialect onto the other.
  */
+import { acpDiagnosticText } from './acp-diagnostic-text.js'
 import { StringDecoder } from 'node:string_decoder'
 import type { Readable, Writable } from 'node:stream'
 import { redactApprovalSensitiveText } from '../../domain/approval.js'
@@ -374,7 +375,7 @@ export class AcpJsonRpc {
     this.dropPending(id)
     if (frame.error) {
       entry.reject(
-        new AcpError('agent_error', frame.error.message, {
+        new AcpError('agent_error', acpDiagnosticText(frame.error.message), {
           rpcCode: frame.error.code,
           data: frame.error.data
         })

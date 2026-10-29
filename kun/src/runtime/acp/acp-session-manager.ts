@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import type { HarnessContinuationFailure, HarnessContinuationPayload } from '../../contracts/harness-continuation.js'
+import { acpContinuationDiagnostic, acpContinuationFailure, recordAcpContinuation, type AcpContinuationContext } from './acp-continuation.js'
 /**
  * Thread ↔ ACP session management. Reuses
  * DelegatedSessionCoordinator for route matching, parked sessions, and
@@ -39,7 +41,7 @@ import { applyAcpSessionSettings } from './acp-session-settings.js'
 import type { HarnessSettingValues } from '../../contracts/harness-session-settings.js'
 
 /** Per-turn input the runtime hands to the session manager. */
-export type AcpSessionRequest = {
+export type AcpSessionRequest = AcpContinuationContext & {
   threadId: string
   turnId: string
   /** Absolute workspace path — always the task workspace root. */
@@ -80,6 +82,8 @@ export type AcpSessionHandle = {
    * session is fresh and has none of Kun's prior history.
    */
   replayedHistory: boolean
+  /** First failure, retained even if recovery succeeds. Not reused on later turns. */
+  continuation?: HarnessContinuationPayload
   /** Config options reported by session/new or session/load. */
   configOptions?: AcpConfigOption[] | null
   modes?: AcpSessionModes | null
@@ -117,6 +121,7 @@ export class AcpSessionManager {
     sink?: AcpSessionUpdateSink
   ): Promise<AcpSessionHandle> {
     const capabilities = conn.initResult?.agentCapabilities
+    let preparedDiagnostic: HarnessContinuationPayload | undefined
     const preparation = await this.deps.coordinator.prepare({
       threadId: ctx.threadId,
       route: {
@@ -133,15 +138,25 @@ export class AcpSessionManager {
         // only determines whether it can be restored after process exit.
         continuationMode: 'native'
       },
-      priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turnId)
+      priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turnId),
+      beforeRebase: async (binding, reason) => {
+        if (reason !== 'history_changed' && reason !== 'capabilities_changed' && reason !== 'native_state_unavailable') return
+        await ctx.validateLaunch?.()
+        preparedDiagnostic = acpContinuationDiagnostic({ ...binding, rebaseReason: reason }, ctx.harnessId,
+          acpContinuationFailure(conn, 'binding_validation', undefined, reason))
+        await recordAcpContinuation(ctx, 'harness_continuation_failed', preparedDiagnostic)
+      }
     })
 
+    if (preparedDiagnostic) {
+      return this.recreate(conn, ctx, preparation, preparedDiagnostic.failure, sink, preparedDiagnostic)
+    }
     if (preparation.resumed && preparation.nativeSessionId) {
       const cached = this.live.get(conn)?.get(preparation.nativeSessionId)
       if (cached && !conn.closed) {
         await ctx.validateLaunch?.()
         if (cached.mcpSessionKey) ctx.sessionMcpServers?.(cached.mcpSessionKey)
-        const handle = { ...cached, preparation, replayedHistory: false, detach: () => unsubscribe() }
+        const handle = { ...cached, preparation, continuation: undefined, replayedHistory: false, detach: () => unsubscribe() }
         const unsubscribe = conn.subscribeSession(handle.sessionId, {
           onUpdate: (update) => { absorbLoadingUpdate(handle, update); sink?.(update) }
         })
@@ -155,9 +170,10 @@ export class AcpSessionManager {
         }
       }
       if (!capabilities?.loadSession) {
-        const rebased = await this.deps.coordinator.rejectResume(preparation)
-        return this.createFresh(conn, ctx, rebased, sink)
+        return this.recreate(conn, ctx, preparation,
+          acpContinuationFailure(conn, 'binding_validation', undefined, 'load_session_unsupported'), sink)
       }
+      await ctx.validateLaunch?.()
       const handle: AcpSessionHandle = {
         sessionId: preparation.nativeSessionId,
         mcpSessionKey: randomUUID(),
@@ -175,8 +191,8 @@ export class AcpSessionManager {
           sink?.(update)
         }
       })
+      let stage: HarnessContinuationFailure['stage'] = 'session/load'
       try {
-        await ctx.validateLaunch?.()
         const raw = await conn.rpc.request(
           ACP_AGENT_METHODS.sessionLoad,
           {
@@ -186,6 +202,7 @@ export class AcpSessionManager {
           },
           { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
         )
+        stage = 'session/load_result'
         const parsed = AcpLoadSessionResultSchema.safeParse(raw)
         if (!parsed.success) {
           throw new AcpError(
@@ -198,6 +215,7 @@ export class AcpSessionManager {
         handle.models = parseAcpLegacyModels(parsed.data.models)
         handle.phase = 'ready'
         conn.registerSession(handle.sessionId, ctx.threadId)
+        stage = 'session/configure'
         await this.applyConfigOptions(conn, handle, ctx)
         this.remember(conn, handle)
         return handle
@@ -212,13 +230,37 @@ export class AcpSessionManager {
           conn.unregisterSession(handle.sessionId)
           throw error
         }
-        this.debug(`session/load failed, rebasing to session/new: ${String(error)}`)
         unsubscribe()
-        const rebased = await this.deps.coordinator.rejectResume(preparation)
-        return this.createFresh(conn, ctx, rebased, sink)
+        conn.unregisterSession(handle.sessionId)
+        return this.recreate(conn, ctx, preparation, acpContinuationFailure(conn, stage, error), sink)
       }
     }
     return this.createFresh(conn, ctx, preparation, sink)
+  }
+
+  private async recreate(
+    conn: AcpConnection,
+    ctx: AcpSessionRequest,
+    preparation: DelegatedSessionPreparation,
+    failure: HarnessContinuationFailure,
+    sink?: AcpSessionUpdateSink,
+    recordedDiagnostic?: HarnessContinuationPayload
+  ): Promise<AcpSessionHandle> {
+    await ctx.validateLaunch?.()
+    const diagnostic = recordedDiagnostic ?? acpContinuationDiagnostic(preparation, ctx.harnessId, failure)
+    // Persist before rejectResume clears state, and before session/new can fail differently.
+    if (!recordedDiagnostic) await recordAcpContinuation(ctx, 'harness_continuation_failed', diagnostic)
+    try {
+      const rebased = preparation.resumed ? await this.deps.coordinator.rejectResume(preparation) : preparation
+      const handle = await this.createFresh(conn, ctx, rebased, sink)
+      handle.continuation = diagnostic
+      return handle
+    } catch (error) {
+      await recordAcpContinuation(ctx, 'harness_session_recreation_failed', diagnostic, {
+        recreationError: acpContinuationFailure(conn, 'session/new', error)
+      })
+      throw error
+    }
   }
 
   private async createFresh(
