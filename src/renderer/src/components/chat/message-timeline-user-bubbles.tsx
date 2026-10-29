@@ -18,7 +18,8 @@ import { CopyFeedbackButton, RuntimeMetaChips } from './message-timeline-bubble-
 import { metaUserFileReferences } from './message-timeline-bubble-meta'
 import { useTimelineSurface } from './timeline-surface'
 import { RewindFileResetChoice } from './rewind-file-reset-choice'
-import { editedFileReferences, userToComposerFileReferences, UserMessageEditField } from './UserMessageEditField'
+import { autosizeEditTextarea, editedFileReferences, userToComposerFileReferences } from './UserMessageEditField'
+import { UserMessageEditCard } from './UserMessageEditCard'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
 import { isPendingSteerUserBlock, PendingSteerStatus } from './timeline-pending-steer-record'
 
@@ -382,9 +383,7 @@ export function UserMessageBubble({
     el.focus()
     const len = el.value.length
     el.setSelectionRange(len, len)
-    // Auto-size to content
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 360)}px`
+    autosizeEditTextarea(el)
   }, [editing])
 
   useEffect(() => {
@@ -417,38 +416,16 @@ export function UserMessageBubble({
     return (
       <div className="ds-user-message">
         <UserAttachmentPreviews meta={block.meta} />
-        <div className="ds-user-message-bubble min-w-0 border border-accent/35 ring-1 ring-accent/15">
-          <UserMessageEditField
-            value={draft}
-            onChange={setDraft}
-            references={editReferences}
-            onReferencesChange={setEditReferences}
-            textareaRef={textareaRef}
-            onSubmit={() => void submit()}
-            onCancel={cancelEdit}
-          />
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="text-[12px] text-ds-faint">{t('rewindHint')}</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={cancelEdit}
-                className="rounded-md px-3 py-1 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-              >
-                {t('rewindCancel')}
-              </button>
-              <button
-                type="button"
-                onClick={() => void submit()}
-                disabled={!draft.trim() || busy}
-                data-rewind-resend
-                className="rounded-md bg-accent px-3 py-1 text-[13px] font-medium text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t('rewindResend')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <UserMessageEditCard
+          value={draft}
+          onChange={setDraft}
+          references={editReferences}
+          onReferencesChange={setEditReferences}
+          textareaRef={textareaRef}
+          onSubmit={() => void submit()}
+          onCancel={cancelEdit}
+          submitDisabled={!draft.trim() || busy}
+        />
         {block.meta?.workspaceCheckpointId ? (
           <RewindFileResetChoice blockId={block.id} resetFiles={resetFiles} onChange={setResetFiles} />
         ) : null}

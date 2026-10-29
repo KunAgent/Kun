@@ -69,6 +69,16 @@ export function editedFileReferences(text: string, references: ComposerFileRefer
     }))
 }
 
+const EDIT_TEXTAREA_MAX_HEIGHT = 360
+
+/** Grows the edit textarea with its content; it scrolls only past the cap. */
+export function autosizeEditTextarea(element: HTMLTextAreaElement): void {
+  element.style.height = 'auto'
+  const height = Math.min(element.scrollHeight, EDIT_TEXTAREA_MAX_HEIGHT)
+  element.style.height = `${height}px`
+  element.style.overflowY = element.scrollHeight > EDIT_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
+}
+
 function useEditSkillMenu(input: string, setInput: (value: string) => void) {
   const { t } = useTranslation('common')
   const { skillCommands, disabledSkillIds } = useContext(MessageEditAssistContext)
@@ -176,10 +186,6 @@ export function UserMessageEditField({
     onRemove: (relativePath) => onReferencesChange(references.filter((item) => item.relativePath !== relativePath))
   })
 
-  const autosize = (element: HTMLTextAreaElement): void => {
-    element.style.height = 'auto'
-    element.style.height = `${Math.min(element.scrollHeight, 360)}px`
-  }
 
   return (
     <div className="relative">
@@ -207,7 +213,7 @@ export function UserMessageEditField({
         value={value}
         onChange={(event) => {
           fileMentions.updateInput(event.target.value, event.target.selectionStart ?? event.target.value.length)
-          autosize(event.currentTarget)
+          autosizeEditTextarea(event.currentTarget)
         }}
         onSelect={(event) => fileMentions.syncCursor(event.currentTarget)}
         onKeyDown={(event) => {
@@ -223,7 +229,7 @@ export function UserMessageEditField({
           }
         }}
         rows={2}
-        className="block w-full min-w-0 resize-none break-words bg-transparent text-[15px] font-medium leading-[1.58] text-ds-ink outline-none [overflow-wrap:anywhere]"
+        className="block w-full min-w-0 resize-none overflow-y-hidden break-words bg-transparent text-[15px] leading-[1.6] text-ds-ink outline-none [overflow-wrap:anywhere] [scrollbar-width:thin] focus:outline-none focus-visible:outline-none"
       />
     </div>
   )
