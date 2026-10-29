@@ -1,0 +1,13 @@
+{
+  "workTabMenuLabel": "टैब क्रियाएँ",
+  "workTabMenuClose": "टैब बंद करें",
+  "workTabMenuCloseOthers": "अन्य टैब बंद करें",
+  "workTabMenuCloseRight": "दाईं ओर के टैब बंद करें",
+  "workTabMenuCloseAll": "सभी टैब बंद करें",
+  "workTabMenuMoveLeft": "बाएँ ले जाएँ",
+  "workTabMenuMoveRight": "दाएँ ले जाएँ",
+  "workTabMenuOpenBeside": "सत्र के बगल में खोलें",
+  "workTabMenuCopyPath": "पथ कॉपी करें",
+  "workTabMenuReveal": "फ़ोल्डर में दिखाएँ",
+  "workTabMenuCopyTitle": "शीर्षक कॉपी करें"
+}

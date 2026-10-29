@@ -32,6 +32,8 @@ type WorkViewState = {
   peek: boolean
   openSessionTab: (workspaceRoot: string, threadId: string) => void
   closeSessionTab: (workspaceRoot: string, threadId: string) => void
+  /** Replace the space's session tab order (the strip's move left / right). */
+  reorderSessionTabs: (workspaceRoot: string, threadIds: string[]) => void
   showSession: () => void
   showDocument: () => void
   toggleSplit: () => void
@@ -57,6 +59,14 @@ export const useWorkViewStore = create<WorkViewState>((set, get) => ({
     const current = get().sessionTabs[key] ?? []
     if (!key || !current.includes(threadId)) return
     const sessionTabs = { ...get().sessionTabs, [key]: current.filter((id) => id !== threadId) }
+    writeBrowserStorageItem(SESSION_TABS_KEY, JSON.stringify(sessionTabs))
+    set({ sessionTabs })
+  },
+  reorderSessionTabs: (workspaceRoot, threadIds) => {
+    const key = writeWorkspaceKey(workspaceRoot)
+    if (!key) return
+    const ids = [...new Set(threadIds.map((id) => id.trim()).filter(Boolean))].slice(-MAX_SESSION_TABS)
+    const sessionTabs = { ...get().sessionTabs, [key]: ids }
     writeBrowserStorageItem(SESSION_TABS_KEY, JSON.stringify(sessionTabs))
     set({ sessionTabs })
   },

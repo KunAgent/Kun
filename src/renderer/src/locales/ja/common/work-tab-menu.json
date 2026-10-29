@@ -1,0 +1,13 @@
+{
+  "workTabMenuLabel": "タブの操作",
+  "workTabMenuClose": "タブを閉じる",
+  "workTabMenuCloseOthers": "他のタブを閉じる",
+  "workTabMenuCloseRight": "右側のタブを閉じる",
+  "workTabMenuCloseAll": "すべてのタブを閉じる",
+  "workTabMenuMoveLeft": "左へ移動",
+  "workTabMenuMoveRight": "右へ移動",
+  "workTabMenuOpenBeside": "セッションの横に開く",
+  "workTabMenuCopyPath": "パスをコピー",
+  "workTabMenuReveal": "フォルダーで表示",
+  "workTabMenuCopyTitle": "タイトルをコピー"
+}

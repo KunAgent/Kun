@@ -61,6 +61,7 @@ import composerAsk from './common/composer-ask.json'
 import composerApproval from './common/composer-approval.json'
 import composerRecords from './common/composer-records.json'
 import toast from './common/toast.json'
+import workTabMenu from './common/work-tab-menu.json'
 
 const common = {
   ...writeSelectionMenu,
@@ -124,7 +125,8 @@ const common = {
   ...composerAsk,
   ...composerApproval,
   ...composerRecords,
-  ...toast
+  ...toast,
+  ...workTabMenu
 }
 
 export default common

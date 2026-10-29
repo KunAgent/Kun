@@ -1,0 +1,13 @@
+{
+  "workTabMenuLabel": "การทำงานของแท็บ",
+  "workTabMenuClose": "ปิดแท็บ",
+  "workTabMenuCloseOthers": "ปิดแท็บอื่น",
+  "workTabMenuCloseRight": "ปิดแท็บทางขวา",
+  "workTabMenuCloseAll": "ปิดแท็บทั้งหมด",
+  "workTabMenuMoveLeft": "ย้ายไปทางซ้าย",
+  "workTabMenuMoveRight": "ย้ายไปทางขวา",
+  "workTabMenuOpenBeside": "เปิดข้างเซสชัน",
+  "workTabMenuCopyPath": "คัดลอกเส้นทาง",
+  "workTabMenuReveal": "แสดงในโฟลเดอร์",
+  "workTabMenuCopyTitle": "คัดลอกชื่อ"
+}

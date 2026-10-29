@@ -1,0 +1,13 @@
+{
+  "workTabMenuLabel": "Tab actions",
+  "workTabMenuClose": "Close tab",
+  "workTabMenuCloseOthers": "Close other tabs",
+  "workTabMenuCloseRight": "Close tabs to the right",
+  "workTabMenuCloseAll": "Close all tabs",
+  "workTabMenuMoveLeft": "Move left",
+  "workTabMenuMoveRight": "Move right",
+  "workTabMenuOpenBeside": "Open beside the session",
+  "workTabMenuCopyPath": "Copy path",
+  "workTabMenuReveal": "Reveal in folder",
+  "workTabMenuCopyTitle": "Copy title"
+}

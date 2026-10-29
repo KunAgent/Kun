@@ -17,6 +17,7 @@ const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-contro
 const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
 const { exerciseWorkSelectionMenu } = require('./smoke-work-selection-menu.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
+const { exerciseWorkTabMenu } = require('./smoke-work-tab-menu.cjs')
 const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
 const { exerciseWhatsNew } = require('./smoke-whats-new.cjs')
@@ -204,6 +205,7 @@ async function main() {
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
       : process.argv.includes('--work-selection-only') ? exerciseWorkSelectionMenu
       : process.argv.includes('--work-only') ? exerciseWorkLayout
+      : process.argv.includes('--work-tab-menu-only') ? exerciseWorkTabMenu
       : process.argv.includes('--work-assistant-only') ? exerciseWorkAssistantAgent
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
