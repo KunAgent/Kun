@@ -188,6 +188,7 @@ export const turnServiceQueueOperations = {
       paperContext: input.request.paperContext,
       messageSource: input.request.messageSource,
       subagentResume: input.request.subagentResume,
+      interruptedResume: input.request.interruptedResume,
       model: turnModel,
       providerId: turnProviderId,
       harnessId: turnHarnessId,

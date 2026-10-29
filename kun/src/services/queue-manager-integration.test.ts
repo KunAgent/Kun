@@ -21,7 +21,7 @@ import { SteeringQueue } from '../loop/steering-queue.js'
 import { SequentialIdGenerator } from '../ports/id-generator.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
-import { makeUserItem } from '../domain/item.js'
+import { makeAssistantTextItem, makeUserItem } from '../domain/item.js'
 import { resumeQueuedTurns } from '../server/routes/turns.js'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { RuntimeEventRecorder } from './runtime-event-recorder.js'
@@ -271,6 +271,11 @@ describe('restart continuation and queued model history', () => {
   it('executes recovery before queued input and presents B as the next user request', async () => {
     const h = await harness()
     const a = await h.turns.startTurn({ threadId: 'thread-test', request: { prompt: 'A' } })
+    // Restart auto-resume requires evidence of unfinished work.
+    await h.sessionStore.appendItem('thread-test', makeAssistantTextItem({
+      id: 'item_a_progress', turnId: a.turnId, threadId: 'thread-test',
+      text: 'A is half done.', status: 'completed'
+    }))
     const b = await h.turns.enqueueTurn({ threadId: 'thread-test', request: { prompt: 'B' } })
     await h.turns.pauseQueuedTurns('thread-test', 'restart_recovery', a.turnId)
     await h.turns.finishTurn({ threadId: 'thread-test', turnId: a.turnId, status: 'failed', code: 'orphaned_after_restart' })

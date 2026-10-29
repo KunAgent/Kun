@@ -6,6 +6,7 @@ import type {
   ActingTurnModelRoute,
   GuiDesignArtifactContextJson,
   GuiPlanContextJson,
+  InterruptedTurnResume,
   Turn,
   TurnClientSurface,
   TurnReasoningEffort,
@@ -41,6 +42,7 @@ export function createTurnRecord(input: {
   prompt: string
   messageSource?: UserMessageSource
   subagentResume?: SubagentResumeRequest
+  interruptedResume?: InterruptedTurnResume
   model?: string
   providerId?: string
   harnessId?: string
@@ -106,6 +108,7 @@ export function createTurnRecord(input: {
     } : {}),
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(input.subagentResume ? { subagentResume: { ...input.subagentResume } } : {}),
+    ...(input.interruptedResume ? { interruptedResume: { ...input.interruptedResume } } : {}),
     orchestration: input.orchestration ?? 'direct',
     steering: [],
     items: [],

@@ -178,6 +178,7 @@ export abstract class AgentLoopBase {
       nowIso: opts.nowIso,
       nowMs: () => opts.nowMs?.() ?? Date.now(),
       runTurn: runContinuationTurn,
+      loadSessionItems: (threadId) => opts.sessionStore.loadItems(threadId),
       ...(opts.interruptedResume ? { interruptedResume: opts.interruptedResume } : {})
     })
     this.modelRoundEngine = new ModelRoundEngine({

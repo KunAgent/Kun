@@ -64,6 +64,16 @@ export const SubagentResumeRequestSchema = z.object({
   expectedResumeCount: z.number().int().nonnegative()
 }).strict()
 export type SubagentResumeRequest = z.infer<typeof SubagentResumeRequestSchema>
+/**
+ * Runtime-authored provenance for a restart auto-resume turn. It keeps the
+ * continuation chain bounded: a turn that only exists to recover an interrupted
+ * turn must never be auto-resumed again.
+ */
+export const InterruptedTurnResumeSchema = z.object({
+  /** The interrupted turn this continuation was launched for. */
+  sourceTurnId: z.string().trim().min(1).max(256)
+}).strict()
+export type InterruptedTurnResume = z.infer<typeof InterruptedTurnResumeSchema>
 /** Canonical Codex/API request value. The legacy UI label is "fast". */
 export const TurnServiceTierSchema = z.literal('priority')
 export type TurnServiceTier = z.infer<typeof TurnServiceTierSchema>
@@ -120,6 +130,8 @@ export const TurnSchema = z.object({
   messageSource: UserMessageSource.optional(),
   /** Explicit one-click continuation request for an interrupted generic child. */
   subagentResume: SubagentResumeRequestSchema.optional(),
+  /** Set only on restart auto-resume turns. */
+  interruptedResume: InterruptedTurnResumeSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
   /** Frozen harness identity; inferred at admission when absent on legacy records. */
@@ -259,6 +271,8 @@ export const StartTurnRequest = z.object({
   messageSource: UserMessageSource.optional(),
   /** Binds this turn to one interrupted child and its last observed attempt. */
   subagentResume: SubagentResumeRequestSchema.optional(),
+  /** Marks a restart auto-resume turn and the turn it continues. */
+  interruptedResume: InterruptedTurnResumeSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
   /**
