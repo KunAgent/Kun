@@ -4,6 +4,10 @@ import type { Turn } from '../contracts/turns.js'
 import { MemoryRecord } from '../contracts/memory.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
+import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
+import { buildDesignCanvasLocalTools } from '../adapters/tool/design-canvas-tool.js'
+import { buildDesignMotionLocalTools } from '../adapters/tool/design-motion-tool.js'
 import {
   TurnContextResolver,
   resolveTurnClientSurface,
@@ -61,6 +65,89 @@ function turn(overrides: Partial<Turn> = {}): Turn {
 }
 
 describe('TurnContextResolver', () => {
+  it.each<{
+    name: string
+    overrides: Partial<Turn>
+    expected: string[]
+  }>([
+    { name: 'Code conversation', overrides: {}, expected: ['design_open'] },
+    {
+      name: 'Code whiteboard', overrides: { guiDesignCanvas: true },
+      expected: ['design_open', 'design_system', 'design_canvas', 'design_export_canvas']
+    },
+    {
+      name: 'Code Excalidraw', overrides: { guiExcalidrawCanvas: true },
+      expected: ['design_open', 'design_apply_excalidraw']
+    },
+    {
+      name: 'Design canvas',
+      overrides: { agentSurface: 'design', guiDesignCanvas: true, guiDesignMode: true },
+      expected: ['design_system', 'design_canvas', 'design_motion_set_timeline']
+    },
+    {
+      name: 'Work conversation', overrides: { agentSurface: 'write' },
+      expected: ['design_apply_excalidraw']
+    },
+    { name: 'TUI conversation', overrides: { clientSurface: 'tui' }, expected: [] },
+    { name: 'API conversation', overrides: { clientSurface: 'api' }, expected: [] },
+    { name: 'plan conversation', overrides: { mode: 'plan' }, expected: [] },
+    {
+      name: 'reserved HTML page',
+      overrides: {
+        agentSurface: 'design', guiDesignCanvas: true, guiDesignMode: true,
+        guiDesignArtifact: { kind: 'html', artifactId: 'page_1', relativePath: '.kun-design/doc/page_1/v1.html' }
+      },
+      expected: []
+    },
+    {
+      name: 'dedicated SVG artifact',
+      overrides: {
+        agentSurface: 'design', guiDesignCanvas: true, guiDesignMode: true,
+        guiDesignArtifact: { kind: 'svg', artifactId: 'svg_1', relativePath: '.kun-design/doc/svg_1/v1.svg' }
+      },
+      expected: []
+    }
+  ])('advertises only executable design tools for a $name', async ({ overrides, expected }) => {
+    const registry = new CapabilityRegistry([{
+      id: 'gui', kind: 'gui', enabled: true, available: true,
+      tools: [...buildDesignCanvasLocalTools(), ...buildDesignMotionLocalTools()]
+    }])
+    const host = new LocalToolHost({ registry })
+    const listTools = vi.spyOn(host, 'listTools')
+    const resolver = new TurnContextResolver({
+      toolHost: host,
+      resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
+    })
+    const currentTurn = turn({ clientSurface: 'gui', agentSurface: 'code', ...overrides })
+    const currentThread = thread()
+    const resolved = await resolver.resolve({
+      threadId: currentThread.id, turnId: currentTurn.id,
+      thread: currentThread, turn: currentTurn, history: [],
+      model: 'model_1', modelCapabilities: capabilities(['text']),
+      signal: new AbortController().signal,
+      mode: resolveTurnModeContext({ turn: currentTurn, workspace: currentThread.workspace, threadMode: currentThread.mode }),
+      goalNoToolRecoverySteps: 0
+    })
+
+    const names = resolved.tools.map((tool) => tool.name)
+    const designTools = [
+      'design_open', 'design_system', 'design_canvas', 'design_apply_excalidraw',
+      'design_export_canvas', 'design_motion_set_timeline'
+    ]
+    expect(names.filter((name) => designTools.includes(name)).sort()).toEqual([...expected].sort())
+    expect(names).toEqual(registry.listTools(resolved.toolDiscoveryContext).map((tool) => tool.name).sort())
+    expect(listTools).toHaveBeenCalledExactlyOnceWith(resolved.toolDiscoveryContext)
+    for (const name of names) {
+      expect(() => registry.resolveTool(name, resolved.toolDiscoveryContext)).not.toThrow()
+    }
+    if (Object.keys(overrides).length === 0) {
+      await expect(host.execute({
+        callId: 'call_design_system', toolName: 'design_system', arguments: {}
+      }, resolved.toolDiscoveryContext)).rejects.toThrow('tool design_system is not advertised in this turn context')
+    }
+  })
+
   it('uses an explicit client surface and preserves legacy GUI/IM inference', () => {
     expect(resolveTurnClientSurface(turn({ clientSurface: 'tui', agentSurface: 'code' }))).toBe('tui')
     expect(resolveTurnClientSurface(turn({ imContext: { channel: 'lark' } as never }))).toBe('im')
@@ -221,24 +308,13 @@ describe('TurnContextResolver', () => {
     expect(started).toBe(4)
   })
 
-  it('discovers GUI code and design tool catalogs concurrently in stable name order', async () => {
-    let started = 0
-    let release!: () => void
-    const barrier = new Promise<void>((resolve) => { release = resolve })
-    const listTools = vi.fn(async (context) => {
-      started += 1
-      if (started === 2) release()
-      await barrier
-      return context.agentSurface === 'code'
-        ? [
-            { name: 'zeta', description: 'zeta', inputSchema: {}, providerId: 'gui' },
-            { name: 'shared', description: 'code shared', inputSchema: {}, providerId: 'gui' }
-          ]
-        : [
-            { name: 'alpha', description: 'alpha', inputSchema: {}, providerId: 'gui' },
-            { name: 'shared', description: 'design shared', inputSchema: {}, providerId: 'gui' }
-          ]
-    })
+  it('sorts the real turn catalog without mutating the host listing', async () => {
+    const listing = [
+      { name: 'zeta', description: 'zeta', inputSchema: {}, providerId: 'gui' },
+      { name: 'shared', description: 'code shared', inputSchema: {}, providerId: 'gui' },
+      { name: 'alpha', description: 'alpha', inputSchema: {}, providerId: 'gui' }
+    ]
+    const listTools = vi.fn(async () => listing)
     const resolver = new TurnContextResolver({
       toolHost: { listTools },
       resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
@@ -254,7 +330,8 @@ describe('TurnContextResolver', () => {
       goalNoToolRecoverySteps: 0
     })
 
-    expect(started).toBe(2)
+    expect(listTools).toHaveBeenCalledExactlyOnceWith(resolved.toolDiscoveryContext)
+    expect(listing.map((tool) => tool.name)).toEqual(['zeta', 'shared', 'alpha'])
     expect(resolved.tools).toEqual([
       expect.objectContaining({ name: 'alpha' }),
       expect.objectContaining({ name: 'shared', description: 'code shared' }),

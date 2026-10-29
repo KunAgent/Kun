@@ -3,10 +3,7 @@ import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
 import { createApprovalRequest } from '../domain/approval.js'
 import type { ToolTurnContextInput } from './turn-execution-types.js'
-import {
-  createToolDiscoveryContext,
-  modelToolDiscoveryContexts
-} from './tool-discovery-context-factory.js'
+import { createToolDiscoveryContext } from './tool-discovery-context-factory.js'
 
 function turnContextInput(signal: AbortSignal): ToolTurnContextInput {
   return {
@@ -128,71 +125,23 @@ describe('createToolDiscoveryContext', () => {
     expect(context.messageSource).toBeUndefined()
   })
 
-  it('uses one stable model catalog scope without widening execution authority', async () => {
-    const signal = new AbortController().signal
-    const {
-      activePlanContext: _activePlanContext,
-      allowedToolNames: _allowedToolNames,
-      ...normalInput
-    } = turnContextInput(signal)
-    const base = createToolDiscoveryContext({
-      ...normalInput,
+  it('does not invent canvas capabilities for a Code conversation', () => {
+    const context = createToolDiscoveryContext({
+      ...turnContextInput(new AbortController().signal),
       threadMode: 'agent',
-      agentSurface: 'design'
+      agentSurface: 'code',
+      activePlanContext: undefined,
+      guiDesignCanvas: false,
+      guiExcalidrawCanvas: false,
+      guiDesignMode: false
     }, {
       memoryEnabled: false,
       interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
     })
-    const contexts = modelToolDiscoveryContexts(base)
 
-    expect(contexts).toEqual([
-      expect.objectContaining({
-        agentSurface: 'code',
-        guiDesignCanvas: true,
-        guiExcalidrawCanvas: true
-      }),
-      expect.objectContaining({
-        agentSurface: 'design',
-        guiDesignCanvas: true,
-        guiExcalidrawCanvas: true,
-        guiDesignMode: true
-      })
-    ])
-    expect(contexts[0]).not.toHaveProperty('guiDesignMode')
-    expect(modelToolDiscoveryContexts({
-      ...base,
-      orchestration: 'graph'
-    })).toEqual([expect.objectContaining({ orchestration: 'graph' })])
-    expect(modelToolDiscoveryContexts({
-      ...base,
-      agentSurface: 'write'
-    })).toEqual([expect.objectContaining({ agentSurface: 'write' })])
-    const page = {
-      ...base,
-      guiDesignArtifact: { kind: 'html' as const, artifactId: 'page_1', relativePath: '.kun-design/doc/page_1/v1.html' }
-    }
-    expect(modelToolDiscoveryContexts(page)).toEqual([page])
-
-    const designOnly = LocalToolHost.defineTool({
-      name: 'design_only',
-      description: 'Design-only tool.',
-      inputSchema: { type: 'object', properties: {} },
-      policy: 'auto',
-      shouldAdvertise: (context) => context.agentSurface === 'design',
-      execute: async () => ({ output: { ok: true } })
-    })
-    const host = new LocalToolHost({ tools: [designOnly] })
-    const advertised = (await Promise.all(contexts.map((context) => host.listTools(context))))
-      .flat()
-      .map((tool) => tool.name)
-    expect(advertised).toContain('design_only')
-    const { guiDesignMode: _guiDesignMode, ...codeContext } = base
-    await expect(host.execute({
-      callId: 'call_design', toolName: 'design_only', arguments: {}
-    }, {
-      ...codeContext,
-      agentSurface: 'code',
-      guiDesignCanvas: false
-    })).rejects.toThrow('tool design_only is not advertised in this turn context')
+    expect(context.agentSurface).toBe('code')
+    expect(context).not.toHaveProperty('guiDesignCanvas')
+    expect(context).not.toHaveProperty('guiExcalidrawCanvas')
+    expect(context).not.toHaveProperty('guiDesignMode')
   })
 })

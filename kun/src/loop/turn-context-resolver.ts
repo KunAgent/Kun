@@ -30,12 +30,8 @@ import {
   todoContinuationInstruction
 } from './continuation-instructions.js'
 import { isStalePlanContext } from './plan-mode.js'
-import {
-  createToolDiscoveryContext,
-  modelToolDiscoveryContexts
-} from './tool-discovery-context-factory.js'
+import { createToolDiscoveryContext } from './tool-discovery-context-factory.js'
 import type {
-  DiscoveredTool,
   PreparedTurnContext,
   ResolvedTurnAttachments
 } from './turn-execution-types.js'
@@ -254,10 +250,10 @@ export class TurnContextResolver {
       ...(this.deps.fastContextTaskCount ? { fastContextTaskCount: this.deps.fastContextTaskCount } : {}),
       interactiveToolBridge: this.deps.interactiveToolBridge
     }), input.thread)
-    const tools = await listModelTools(
-      this.deps.toolHost,
-      modelToolDiscoveryContexts(toolDiscoveryContext)
-    )
+    // Discover against the real turn: a cache-stable union of Code/Design
+    // contexts advertises canvas tools that dispatch must then reject.
+    const tools = [...await this.deps.toolHost.listTools(toolDiscoveryContext)]
+      .sort((left, right) => left.name.localeCompare(right.name))
     return {
       threadId: input.threadId,
       turnId: input.turnId,
@@ -300,20 +296,6 @@ export class TurnContextResolver {
       tools
     }
   }
-}
-
-async function listModelTools(
-  toolHost: Pick<ToolHost, 'listTools'>,
-  contexts: readonly ToolHostContext[]
-): Promise<DiscoveredTool[]> {
-  const listings = await Promise.all(contexts.map((context) => toolHost.listTools(context)))
-  const byName = new Map<string, DiscoveredTool>()
-  for (const tools of listings) {
-    for (const tool of tools) {
-      if (!byName.has(tool.name)) byName.set(tool.name, tool)
-    }
-  }
-  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name))
 }
 
 export function resolveTurnClientSurface(turn: Pick<

@@ -49,9 +49,8 @@ export type DesignOpenRequestPayload = {
  * desktop workbench registers the screens on the canvas and shows a card in
  * the transcript; no separate design pass runs.
  *
- * GUI agent turns advertise the union of a stable Code-canvas context and a
- * Design-mode context (see modelToolDiscoveryContexts), so the canvas flags
- * are allowed here; execution re-checks the real turn and rejects Design turns.
+ * Code whiteboard turns can use this entry too, but Design canvas turns edit
+ * their existing document instead. Discovery and execution use the same gate.
  *
  * Delegated Code harnesses (Claude Code via the Agent SDK bridge, Codex and
  * ACP agents via the Kun Tools MCP server) reach it too: the tool only writes

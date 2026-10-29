@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { buildDesignCanvasLocalTools } from './design-canvas-tool.js'
-import { modelToolDiscoveryContexts } from '../../loop/tool-discovery-context-factory.js'
 import {
   createDesignOpenTool,
   DESIGN_OPEN_TOOL_NAME,
@@ -57,20 +56,6 @@ describe('design_open tool', () => {
     expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'codex' }))).toBe(true)
     expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'opencode', agentSurface: 'design' }))).toBe(false)
     expect(shouldAdvertiseDesignOpen(codeContext({ workspace: '  ' }))).toBe(false)
-  })
-
-  it('stays in the cache-stable GUI catalog but only executes in a real Code turn', () => {
-    const codeTurn = codeContext({ threadMode: 'agent' })
-    const designTurn = codeContext({
-      threadMode: 'agent', agentSurface: 'design', guiDesignCanvas: true, guiDesignMode: true
-    })
-    for (const turn of [codeTurn, designTurn]) {
-      const listing = modelToolDiscoveryContexts(turn)
-      expect(listing.length).toBeGreaterThan(1)
-      expect(listing.some(shouldAdvertiseDesignOpen)).toBe(true)
-    }
-    expect(shouldAdvertiseDesignOpen(codeTurn)).toBe(true)
-    expect(shouldAdvertiseDesignOpen(designTurn)).toBe(false)
   })
 
   it('writes every screen into a stable design document in the same turn', async () => {
