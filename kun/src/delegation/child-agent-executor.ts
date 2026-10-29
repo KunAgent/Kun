@@ -337,7 +337,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(options.tokenEconomy ? { tokenEconomy: options.tokenEconomy } : {}),
       turnLimits: resolveChildEpisodeLimits(
         options.runtime?.turnLimits,
-        shouldUseFastContextEpisodeBudget({ fastContext: input.fastContext, profile: input.profile })
+        shouldUseFastContextEpisodeBudget({ fastContext: input.fastContext })
       ),
       ...(input.fastContext
         ? {
