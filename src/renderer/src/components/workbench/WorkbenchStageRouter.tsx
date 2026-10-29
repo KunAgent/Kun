@@ -45,6 +45,9 @@ const WardrobePageView = lazy(() =>
 const ArtifactsPage = lazy(() =>
   import('../../artifacts/ArtifactsPage').then((module) => ({ default: module.ArtifactsPage }))
 )
+const PapersSurface = lazy(() =>
+  import('../paper/PapersSurface').then((module) => ({ default: module.PapersSurface }))
+)
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
     default: module.ExtensionManagementCenter
@@ -87,9 +90,9 @@ function WorkbenchPaneFallback(): ReactElement {
 }
 
 /**
- * Work stage: one space, one set of tabs. Documents, whiteboards, the paper
- * library, discover pages and readers all open in the editor groups; with
- * nothing open the assistant fills the center instead.
+ * Work stage: one space, one set of tabs. Documents and whiteboards open in
+ * the editor groups; the global paper library and readers use their own
+ * route, while the assistant fills the center when no Work file is open.
  */
 function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
   // The Work rail sits right of the panel; phone-sized remote layouts keep the
@@ -210,6 +213,15 @@ export function WorkbenchStageRouter({
         ) : normalizedRoute === 'artifacts' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
             <ArtifactsPage leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={conversation.chat} />
+          </Suspense>
+        ) : normalizedRoute === 'papers' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <PapersSurface
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+              onSubmitPrompt={write.onSubmitPrompt}
+              onAttachImage={write.onAttachImage}
+            />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

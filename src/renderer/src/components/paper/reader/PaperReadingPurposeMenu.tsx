@@ -1,9 +1,10 @@
+import { usePaperReaderHost } from './paper-reader-host'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { bodyZoom } from '../../../lib/body-zoom'
-import { askAssistantForPaperPurpose } from '../../../paper/paper-assistant-ask'
+import { askAssistantForPaperPurpose, paperPurposePrompt } from '../../../paper/paper-assistant-ask'
 import { PAPER_READING_PURPOSES } from '../../../paper/paper-reading-request'
 
 const MENU_WIDTH = 208
@@ -14,6 +15,7 @@ const MENU_WIDTH = 208
  */
 export function PaperReadingPurposeMenu({ title }: { title: string }): ReactElement {
   const { t } = useTranslation('common')
+  const host = usePaperReaderHost()
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -73,7 +75,7 @@ export function PaperReadingPurposeMenu({ title }: { title: string }): ReactElem
             <button key={purpose} type="button" role="menuitem" data-paper-reading-purpose={purpose}
               onClick={() => {
                 setAnchor(null)
-                askAssistantForPaperPurpose({ t, purpose, title })
+                host ? host.onSubmitPrompt?.(paperPurposePrompt(t, purpose, title)) : askAssistantForPaperPurpose({ t, purpose, title })
               }}
               className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30">
               {t(`paperReading_${purpose}`)}

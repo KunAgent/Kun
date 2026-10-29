@@ -1,3 +1,4 @@
+import { usePaperSpaceStore } from '../../paper/paper-space-store'
 import { useEffect, useState, type ReactElement } from 'react'
 import {
   ExternalLink,
@@ -23,7 +24,6 @@ import {
 import { ExpandableAbstract, ImportButton } from './discover/PaperDiscoverParts'
 import { PaperVenuePane } from './discover/PaperVenuePane'
 import { PaperHeaderIconButton, PaperViewHeader } from './PaperViewHeader'
-import { PaperImportFolderPicker } from './import/PaperImportFolderPicker'
 
 export type PaperDiscoverSource = 'arxiv' | 'feeds' | 'venue'
 
@@ -54,7 +54,7 @@ const SOURCE_ICONS: Record<PaperDiscoverSource, ReactElement> = {
  */
 export function PaperDiscoverView({ source }: { source?: PaperDiscoverSource }): ReactElement {
   const { t } = useTranslation('common')
-  const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
+  const workspaceRoot = usePaperSpaceStore((s) => s.workspaceRoot)
   const feeds = useWriteWorkspaceStore((s) => s.paperMode.discover.feeds)
   const activeFeedId = usePaperModeStore((s) => s.discover.activeFeedId)
   const feedTitle = feeds.find((feed) => feed.id === activeFeedId)?.title ?? ''
@@ -79,7 +79,6 @@ export function PaperDiscoverView({ source }: { source?: PaperDiscoverSource }):
         meta={meta || undefined}
         actions={(
           <>
-            <PaperImportFolderPicker />
             <PaperHeaderIconButton label={t('writePaperDiscoverRefresh')} onClick={() => setReloadKey((value) => value + 1)}>
               <RotateCw className="h-3.5 w-3.5" strokeWidth={1.9} />
             </PaperHeaderIconButton>

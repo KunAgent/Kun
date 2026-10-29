@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { useChatStore } from '../../store/chat-store'
+import { ensurePaperSpace, paperSpaceReadingSettings } from '../../paper/paper-space'
 import { DEFAULT_PAPER_SEARCH_SOURCES, PAPER_SEARCH_SOURCE_LABELS,
   type PaperSearchHit, type PaperSearchSource } from '@shared/paper/paper-search'
 import { listResearchSessions, newResearchSessionId, readLastResearchSession,
@@ -100,26 +101,27 @@ export function MobilePaperDiscover({ onBack, onSettings, onBusyChange }: Props)
     finally { if (serial === requestSeq.current) setLoading(false) }
   }
   const importSelected = async (): Promise<void> => {
-    const targetRoot = root
+    const viewRoot = activeRootRef.current
+    const targetRoot = await ensurePaperSpace().catch((cause: unknown) => { setError(String(cause)); return '' })
     const batch = (tab === 'research' ? pool.entries : hits)
       .filter((hit) => selected.includes(hit.key)).slice(0, 20)
-    if (!targetRoot || !paperMode.libraries.includes(targetRoot) || !batch.length || importing) return
+    if (!targetRoot || activeRootRef.current !== viewRoot || !batch.length || importing) return
     setImporting(true); setError('')
     cancelBatch.current = false
     const failures: string[] = []
     let imported = 0
     try {
       for (const hit of batch) {
-        if (cancelBatch.current || activeRootRef.current !== targetRoot) break
+        if (cancelBatch.current) break
         const input = hit.arxivId || hit.doi || hit.coolId || hit.pdfUrl || hit.url
         if (!input) { failures.push(t('mobileWorkPaperMissingIdentifier', { title: hit.title })); continue }
         const requestId = crypto.randomUUID()
         jobRef.current = requestId
-        jobRootRef.current = targetRoot
+        jobRootRef.current = viewRoot
         setMessage(t('mobileWorkPaperImportProgress', { current: imported + failures.length + 1, total: batch.length, title: hit.title }))
         try {
           const result = await window.kunGui.paperImport({ workspaceRoot: targetRoot,
-            input, parentDir: papersDir, requestId,
+            input, parentDir: paperSpaceReadingSettings().papersDir, requestId,
             meta: { title: hit.title, authors: hit.authors, abstract: hit.abstract,
               year: hit.year ? String(hit.year) : undefined, venue: hit.venue,
               doi: hit.doi, arxivId: hit.arxivId, coolId: hit.coolId, pdfUrl: hit.pdfUrl } })
@@ -128,7 +130,7 @@ export function MobilePaperDiscover({ onBack, onSettings, onBusyChange }: Props)
         } catch (cause) { failures.push(`${hit.title}: ${String(cause)}`) }
         jobRef.current = null
       }
-      if (activeRootRef.current !== targetRoot) return
+      if (activeRootRef.current !== viewRoot) return
       setMessage(cancelBatch.current
         ? t('mobileWorkPaperImportCancelled', { imported, failed: failures.length })
         : t('mobileWorkPaperImportSummary', { imported, failed: failures.length }))

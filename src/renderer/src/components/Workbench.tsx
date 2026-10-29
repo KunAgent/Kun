@@ -687,7 +687,7 @@ export function Workbench(): ReactElement {
       shortcutContext={{ composerMode, setComposerMode, handleGuiPlanCommand, createThread,
         chooseWorkspace, toggleTerminal, openSettings, useWorktreePool, setUseWorktreePool,
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
-      actions={{ routes: { chat: openCodeMode, 'agent-chat': () => setRoute('agent-chat'), ade: openAdeMode, write: openWriteMode, design: openDesignMode, rooms: () => setRoute('rooms'),
+      actions={{ routes: { chat: openCodeMode, 'agent-chat': () => setRoute('agent-chat'), ade: openAdeMode, write: openWriteMode, papers: () => setRoute('papers'), design: openDesignMode, rooms: () => setRoute('rooms'),
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
         claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView, wardrobe: () => setRoute('wardrobe'), artifacts: () => setRoute('artifacts') },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,

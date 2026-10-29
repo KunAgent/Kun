@@ -41,10 +41,17 @@ describe('parsePaperImportInput', () => {
     expect(lines.map((line) => line.kind)).toEqual(['arxiv', 'doi', 'title'])
   })
 
-  it('treats a leading-@ blob as one bibtex line', () => {
+  it('keeps each BibTeX entry as one independently retryable item', () => {
     const lines = parsePaperImportInput('@article{a, title={X}}\n\n@book{b, title={Y}}')
-    expect(lines).toHaveLength(1)
-    expect(lines[0].kind).toBe('bibtex')
+    expect(lines.map((line) => [line.kind, line.raw])).toEqual([['bibtex', 'X'], ['bibtex', 'Y']])
+    expect(lines[0].ref).toBe('@article{a, title={X}}')
+    expect(lines[1].ref).toBe('@book{b, title={Y}}')
+  })
+
+  it('preserves mixed DOI, multiline BibTeX, arXiv and title input in source order', () => {
+    const lines = parsePaperImportInput('10.1038/nature14539\n@article{a,\n title={Nested {Title}},\n year={2026}\n}\n1706.03762\nSome title')
+    expect(lines.map((line) => line.kind)).toEqual(['doi', 'bibtex', 'arxiv', 'title'])
+    expect(lines[1].ref).toContain('year={2026}')
   })
 
   it('creates localPdf lines for picked files', () => {

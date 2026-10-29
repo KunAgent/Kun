@@ -21,6 +21,7 @@ import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
 import paperWorkspace from './common/paper-workspace.json'
+import paperSpace from './common/paper-space.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 import workSidebar from './common/work-sidebar.json'
@@ -87,6 +88,7 @@ const common = {
   ...remoteAccess,
   ...paper,
   ...paperWorkspace,
+  ...paperSpace,
   ...ade,
   ...workLayout,
   ...workSidebar,

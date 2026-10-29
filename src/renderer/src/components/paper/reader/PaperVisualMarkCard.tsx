@@ -1,3 +1,4 @@
+import { usePaperReaderHost } from './paper-reader-host'
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Image as ImageIcon, Link2, MessageSquareShare, Pencil, Trash2 } from 'lucide-react'
 import type { TFunction } from 'i18next'
@@ -37,6 +38,7 @@ export function PaperVisualMarkCard({
   const editing = usePaperMarksStore((s) => s.editingMarkId === mark.id)
   const cachedImage = usePaperMarksStore((s) => s.visualMarkImages[mark.id])
   const [imageSrc, setImageSrc] = useState<string | null>(cachedImage ?? null)
+  const host = usePaperReaderHost()
   const [busy, setBusy] = useState(false)
   const cardImageRef = useRef<string | null>(null)
   cardImageRef.current = imageSrc
@@ -61,7 +63,7 @@ export function PaperVisualMarkCard({
   }, [imageSrc, workspaceRoot, unitDir, mark.id, mark.image.path])
 
   const sendToAssistant = async (): Promise<void> => {
-    const bridge = usePaperModeStore.getState().composerBridge
+    const bridge = host ? { submit: host.onSubmitPrompt, attachImage: host.onAttachImage, setInput: undefined } : usePaperModeStore.getState().composerBridge
     if (!bridge) return
     setBusy(true)
     try {
@@ -81,7 +83,7 @@ export function PaperVisualMarkCard({
       }
       const text = attached ? prompt : `${prompt}\n${t('writePaperReaderRegionNoImage')}`
       if (bridge.submit) bridge.submit(text)
-      else bridge.setInput(text)
+      else bridge.setInput?.(text)
     } finally {
       setBusy(false)
     }

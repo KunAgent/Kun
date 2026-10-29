@@ -4,13 +4,13 @@ import type { TFunction } from 'i18next'
 import type { PDFDocumentProxy, PDFOutlineItem } from 'pdfjs-dist/build/pdf.mjs'
 import type { PaperReferenceItem } from '@shared/paper/paper-library-types'
 import { usePaperMarksStore } from '../../../paper/paper-marks-store'
-import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { openLibraryEntry } from '../../../paper/paper-library-actions'
+import { findPaperReferenceEntry, usePaperReferenceLibrary } from './use-paper-reference-library'
 import { paperCitationMarkdown } from '../../../paper/paper-citation-copy'
 import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-store'
 import { PaperFiguresPane } from './PaperFiguresPane'
 import { PaperCitationGraph } from './PaperCitationGraph'
-import { currentImportParentDir } from '../../../paper/paper-import-target'
+import { ensurePaperSpace, paperSpaceReadingSettings } from '../../../paper/paper-space'
+import { paperImportParentDir } from '../../../paper/paper-import-target'
 import { promotePaperEvidence } from '../../../paper/paper-evidence-actions'
 import { PaperEvidencePane } from '../evidence/PaperEvidencePane'
 
@@ -338,7 +338,7 @@ function ReferencesPane({
   kind: 'references' | 'citations'
   t: TFunction
 }): ReactElement {
-  const entries = usePaperModeStore((s) => s.entries)
+  const { entries, openEntry, refresh } = usePaperReferenceLibrary(workspaceRoot)
   const [importing, setImporting] = useState<number | null>(null)
   const [state, setState] = useState<
     | { phase: 'idle' }
@@ -364,27 +364,27 @@ function ReferencesPane({
   }, [workspaceRoot, unitDir, kind])
 
   // "已在库中" is computed at render time against the library entries.
-  const findInLibrary = (ref: PaperReferenceItem) =>
-    entries.find((entry) =>
-      (ref.arxivId && entry.meta.arxivId === ref.arxivId)
-      || (ref.doi && entry.meta.doi?.toLowerCase() === ref.doi.toLowerCase())
-    )
+  const findInLibrary = (ref: PaperReferenceItem) => findPaperReferenceEntry(entries, ref)
 
   const importRef = async (ref: PaperReferenceItem): Promise<void> => {
     const input = ref.arxivId ?? ref.doi
     if (!input || typeof window.kunGui?.paperImport !== 'function') return
     setImporting(ref.n)
     try {
+      const targetRoot = await ensurePaperSpace()
+      const targetPapersDir = paperSpaceReadingSettings().papersDir
       const result = await window.kunGui.paperImport({
-        workspaceRoot,
+        workspaceRoot: targetRoot,
         input,
-        parentDir: currentImportParentDir(),
+        parentDir: paperImportParentDir(targetPapersDir, ''),
         requestId: newPaperRequestId()
       })
-      if (result.ok) usePaperModeStore.getState().refreshEntries()
+      if (result.ok) await refresh()
       else {
         usePaperStore.getState().setNotice({ tone: 'error', message: result.message })
       }
+    } catch (error) {
+      usePaperStore.getState().setNotice({ tone: 'error', message: String(error) })
     } finally {
       setImporting(null)
     }
@@ -428,7 +428,7 @@ function ReferencesPane({
               {inLibrary ? (
                 <button
                   type="button"
-                  onClick={() => void openLibraryEntry(inLibrary)}
+                  onClick={() => void openEntry(inLibrary)}
                   className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300"
                 >
                   <BookMarked className="h-2.5 w-2.5" strokeWidth={2} />
@@ -459,6 +459,7 @@ function ReferencesPane({
           centerTitle={paperTitle ?? ''}
           items={state.items}
           entries={entries}
+          onOpenEntry={openEntry}
           t={t}
         />
       ) : null}

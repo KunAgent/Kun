@@ -143,6 +143,7 @@ export function WorkbenchLeftSidebar({
           onClose={wrapCloseOpt(onCloseExtensionView)}
         />
       ) : normalizedRoute === 'write'
+        || (normalizedRoute === 'papers' && !remoteMobile)
         || (wardrobe && wardrobeFromWork)
         || (normalizedRoute === 'artifacts' && artifactsFromWork) ? (
         <Suspense fallback={<SidebarFallback />}>

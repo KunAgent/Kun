@@ -34,10 +34,9 @@ type Props = {
 
 /**
  * Work sidebar, shaped like Code's: mode menu and primary actions, the
- * cross-space entries (产物), then the space you are in and its map —
- * 会话 / 资料 / 文件, all visible at once. Spaces are folders; their papers
- * live in `<space>/papers`, so there is no separate library list, view switch
- * or paper mode.
+ * cross-space entries (产物、论文), then the space you are in and its map —
+ * 会话 / 资料 / 文件, all visible at once. Spaces are folders; the global
+ * paper library is not part of the current Work space.
  */
 export function WriteSidebar({
   activeView,
@@ -56,14 +55,15 @@ export function WriteSidebar({
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const runtimeReady = useChatStore((s) => s.runtimeConnection === 'ready')
   const loadWriteSettings = useWriteWorkspaceStore((s) => s.loadWriteSettings)
+  const papersActive = useChatStore((s) => s.route === 'papers')
   const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const remoteMobile = useRemoteMobileLayout()
   const actions = useWorkDirectoryActions()
   const { whiteboardCreation, entryDialog, setEntryDialog } = actions
 
   useEffect(() => {
-    void loadWriteSettings()
-  }, [loadWriteSettings])
+    if (!papersActive) void loadWriteSettings()
+  }, [loadWriteSettings, papersActive])
 
   return (
     <>
@@ -91,6 +91,7 @@ export function WriteSidebar({
           <nav className="work-sidebar-nav" aria-label={t('artifactsNav')}>
             <WorkArtifactsSection workspaceRoot={workspaceRoot} />
           </nav>
+          {remoteMobile ? null : <WorkPapersSection />}
           <WorkSpaceSwitcher onAddSpace={() => void actions.pickWriteWorkspace()} />
         </div>
 
@@ -109,8 +110,6 @@ export function WriteSidebar({
             <WorkSessionsSection onOpenArchives={() => onOpenSettings('archives')} />
             <div className="work-materials-label">{t('workSidebarMaterials')}</div>
             <div className="work-materials">
-              {/* Phones keep their own paper home. */}
-              {remoteMobile ? null : <WorkPapersSection />}
               {/* Last, so the tree takes the remaining height. */}
               <WorkFilesSection actions={actions} />
             </div>

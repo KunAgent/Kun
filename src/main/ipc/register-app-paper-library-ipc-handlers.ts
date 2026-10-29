@@ -1,4 +1,5 @@
 import { app, ipcMain, shell } from 'electron'
+import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
   paperDownloadPdfPayloadSchema,
@@ -108,6 +109,7 @@ export function registerAppPaperLibraryIpcHandlers(
       )
       try {
         const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
+        if (!(await stat(workspacePath)).isDirectory()) throw new Error('The paper library root is not a directory.')
         const papersDir = await papersDirFor(request.papersDir)
         const papersDirAbs = await resolveTargetPathWithinWorkspace(papersDir, workspacePath)
         const [units, local, folders] = await Promise.all([
@@ -312,6 +314,7 @@ export function registerAppPaperLibraryIpcHandlers(
       )
       try {
         const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
+        if (!(await stat(workspacePath)).isDirectory()) throw new Error('The paper library root is not a directory.')
         const papersDir = await papersDirFor(request.papersDir)
         const papersDirAbs = await resolveTargetPathWithinWorkspace(papersDir, workspacePath)
         const [units, local] = await Promise.all([

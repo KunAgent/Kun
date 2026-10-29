@@ -133,7 +133,7 @@ export type PaperErrorCode =
   | 'io'
 
 export type PaperImportResult =
-  | { ok: true; unitDir: string; meta: PaperUnitMeta; reused: boolean }
+  | { ok: true; unitDir: string; workspaceRoot?: string; meta: PaperUnitMeta; reused: boolean }
   | { ok: false; code: PaperErrorCode; message: string }
 
 /**
@@ -159,6 +159,7 @@ export type PaperImportBatchItemResult = {
   input: string
   ok: boolean
   unitDir?: string
+  workspaceRoot?: string
   title?: string
   reused?: boolean
   code?: PaperErrorCode
@@ -183,6 +184,7 @@ export type PaperUnitReadResult =
   | {
       ok: true
       unitDir: string
+      workspaceRoot?: string
       meta: PaperUnitMeta
       figures: PaperFigureIndexV1 | null
     }

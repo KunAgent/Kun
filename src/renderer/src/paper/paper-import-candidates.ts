@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
 import { titleKey, type PaperSearchCardHit, type PaperSearchHit } from '@shared/paper/paper-search'
 import { paperCardImportInput, paperCardImportMeta, type RendererPaperListEntry } from '../agent/paper-list-adapter'
-import { usePaperModeStore } from './paper-mode-store'
+import { usePaperSpaceStore } from './paper-space-store'
 import { paperIdentityKeys, type ResearchPoolEntry } from './paper-research-pool'
 import type { ImportCandidate, ImportOwned } from './paper-import-plan'
 
@@ -12,13 +12,13 @@ import type { ImportCandidate, ImportOwned } from './paper-import-plan'
  * that says which papers are already in the library.
  */
 
-export type LibraryIndex = ReadonlyMap<string, PaperLibraryEntry>
+export type LibraryIndex = ReadonlyMap<string, PaperLibraryEntry & { workspaceRoot?: string }>
 
-export function buildLibraryIndex(entries: readonly PaperLibraryEntry[]): LibraryIndex {
-  const index = new Map<string, PaperLibraryEntry>()
+export function buildLibraryIndex(entries: readonly (PaperLibraryEntry & { workspaceRoot?: string })[]): LibraryIndex {
+  const index = new Map<string, PaperLibraryEntry & { workspaceRoot?: string }>()
   for (const entry of entries) {
     const meta = entry.meta
-    if (meta.arxivId) index.set(`arxiv:${meta.arxivId}`, entry)
+    if (meta.arxivId) index.set(`arxiv:${meta.arxivId.replace(/v\d+$/i, '')}`, entry)
     if (meta.doi) index.set(`doi:${meta.doi.toLowerCase()}`, entry)
     if (meta.coolPapers?.id) index.set(`cool:${meta.coolPapers.id}`, entry)
     if (meta.title) index.set(`title:${titleKey(meta.title)}`, entry)
@@ -26,7 +26,7 @@ export function buildLibraryIndex(entries: readonly PaperLibraryEntry[]): Librar
   return index
 }
 
-export function findLibraryEntry(index: LibraryIndex, keys: readonly string[]): PaperLibraryEntry | undefined {
+export function findLibraryEntry(index: LibraryIndex, keys: readonly string[]): (PaperLibraryEntry & { workspaceRoot?: string }) | undefined {
   for (const key of keys) {
     const hit = index.get(key)
     if (hit) return hit
@@ -36,13 +36,13 @@ export function findLibraryEntry(index: LibraryIndex, keys: readonly string[]): 
 
 function ownedOf(index: LibraryIndex, keys: readonly string[]): ImportOwned | undefined {
   const hit = findLibraryEntry(index, keys)
-  return hit ? { unitDir: hit.unitDir, group: hit.group } : undefined
+  return hit ? { unitDir: hit.unitDir, group: hit.group, ...(hit.workspaceRoot ? { workspaceRoot: hit.workspaceRoot } : {}) } : undefined
 }
 
-/** The mounted library as a lookup (re-built only when the entries change). */
+/** All registered sources, independent of Work's active folder. */
 export function useLibraryIndex(): LibraryIndex {
-  const entries = usePaperModeStore((s) => s.entries)
-  return useMemo(() => buildLibraryIndex(entries), [entries])
+  const items = usePaperSpaceStore((s) => s.items)
+  return useMemo(() => buildLibraryIndex(items.map((item) => ({ ...item.entry, workspaceRoot: item.libraryRoot }))), [items])
 }
 
 const ARXIV_ID = /^(\d{4}\.\d{4,5}|[a-z-]+(\.[A-Z]{2})?\/\d{7})(v\d+)?$/i

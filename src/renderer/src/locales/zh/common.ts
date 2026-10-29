@@ -49,6 +49,7 @@ import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
 import paperWorkspace from './common/paper-workspace.json'
+import paperSpace from './common/paper-space.json'
 import paperEvidence from './common/paper-evidence.json'
 import mobileWork from './common/mobile-work.json'
 import agentHarness from './common/agent-harness.json'
@@ -154,6 +155,7 @@ const common = {
   ...remoteAccess,
   ...paper,
   ...paperWorkspace,
+  ...paperSpace,
   ...paperEvidence,
   ...mobileWork,
   ...agentHarness,

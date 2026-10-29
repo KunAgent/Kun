@@ -4,6 +4,7 @@
  * group moves, and trash. Paths reaching this file are already canonicalized
  * and contained inside the workspace by the IPC layer.
  */
+import { withPaperImportLock } from './paper-import-lock'
 import { basename, join, relative, sep } from 'node:path'
 import { lstat, mkdir, readdir, readFile } from 'node:fs/promises'
 import {
@@ -300,8 +301,9 @@ export async function listPaperGroups(papersDirAbs: string): Promise<string[]> {
     let entries
     try {
       entries = await readdir(dirAbs, { withFileTypes: true })
-    } catch {
-      return
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw error
     }
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.')) continue
@@ -381,6 +383,9 @@ export type PaperBibtexImportEntry = {
   citeKey: string
   ok: boolean
   unitDir?: string
+  workspaceRoot?: string
+  meta?: PaperUnitMetaV2
+  reused?: boolean
   message?: string
 }
 
@@ -395,8 +400,7 @@ function bibtexSlug(fields: Record<string, string>, citeKey: string): string {
 
 /**
  * Import `.bib` entries as metadata-only units: dedupe by
- * arXiv → DOI → title+year; a hit on a unit missing its PDF attaches the PDF
- * url instead of duplicating the unit. `downloadPdfs` stays false here — PDF
+ * arXiv → DOI → title+year; existing notes, metadata and marks remain untouched. `downloadPdfs` stays false here — PDF
  * fetching runs through the normal `paperImport` path afterwards.
  */
 export async function importPaperBibtex(
@@ -404,14 +408,33 @@ export async function importPaperBibtex(
   papersDirAbs: string,
   bibtex: string,
   signal?: AbortSignal,
-  targetDirAbs = papersDirAbs
+  targetDirAbs = papersDirAbs,
+  sources: readonly { workspaceRoot: string; papersAbs: string }[] = []
+): Promise<{ imported: number; skipped: number; entries: PaperBibtexImportEntry[] }> {
+  return withPaperImportLock(papersDirAbs, () => {
+    signal?.throwIfAborted()
+    return importPaperBibtexUnlocked(rootAbs, papersDirAbs, bibtex, signal, targetDirAbs, sources)
+  })
+}
+
+async function importPaperBibtexUnlocked(
+  rootAbs: string,
+  papersDirAbs: string,
+  bibtex: string,
+  signal?: AbortSignal,
+  targetDirAbs = papersDirAbs,
+  sources: readonly { workspaceRoot: string; papersAbs: string }[] = []
 ): Promise<{ imported: number; skipped: number; entries: PaperBibtexImportEntry[] }> {
   const parsed = parseBibtexEntries(bibtex)
   if (parsed.length === 0) {
     throw new PaperUnitError('invalid-input', 'No BibTeX entries found.')
   }
   const takenKeys = new Set<string>()
-  const existing = await scanPaperLibrary(rootAbs, papersDirAbs)
+  const existing = (await Promise.all([
+    { workspaceRoot: rootAbs, papersAbs: papersDirAbs },
+    ...sources.filter((source) => source.workspaceRoot !== rootAbs)
+  ].map(async (source) => (await scanPaperLibrary(source.workspaceRoot, source.papersAbs))
+    .map((unit) => ({ ...unit, workspaceRoot: source.workspaceRoot }))))).flat()
   for (const unit of existing) {
     if (unit.meta.citeKey) takenKeys.add(unit.meta.citeKey)
   }
@@ -430,7 +453,7 @@ export async function importPaperBibtex(
   let imported = 0
   let skipped = 0
   for (const entry of parsed) {
-    if (signal?.aborted) break
+    signal?.throwIfAborted()
     const fields = entry.fields
     const title = fields.title?.trim()
     if (!title) {
@@ -443,7 +466,7 @@ export async function importPaperBibtex(
     const year = fields.year?.match(/\d{4}/)?.[0]
     const hit = matchExisting({ arxivId, doi, title, year })
     if (hit) {
-      entries.push({ citeKey: entry.citeKey, ok: false, unitDir: hit.unitDir, message: 'already in library' })
+      entries.push({ citeKey: entry.citeKey, ok: true, unitDir: hit.unitDir, workspaceRoot: hit.workspaceRoot, meta: hit.meta, reused: true })
       skipped += 1
       continue
     }
@@ -470,7 +493,9 @@ export async function importPaperBibtex(
         source: 'bibtex'
       }
     })
-    entries.push({ citeKey, ok: true, unitDir: workspaceRelativeDir(rootAbs, created.unitDir) })
+    const unitDir = workspaceRelativeDir(rootAbs, created.unitDir)
+    entries.push({ citeKey, ok: true, unitDir, workspaceRoot: rootAbs, meta: created.meta, reused: false })
+    existing.push({ dirAbs: created.unitDir, unitDir, meta: created.meta, workspaceRoot: rootAbs, group: '', hasPdf: false, hasNotes: true, interpretationCount: 0 })
     imported += 1
   }
   return { imported, skipped, entries }

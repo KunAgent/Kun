@@ -1,3 +1,4 @@
+import { openPaperSpace } from '../paper/paper-space'
 import { useChatStore } from '../store/chat-store'
 import { writeConversationResourcePath } from '../paper/paper-mode-actions'
 import { usePaperModeStore } from '../paper/paper-mode-store'
@@ -5,7 +6,7 @@ import { selectPaperResearchSession } from '../paper/paper-research-actions'
 import { openLibraryEntry } from '../paper/paper-library-actions'
 import { useWriteWorkspaceStore, writeDirnameFromPath, writeJoinPath } from './write-workspace-store'
 import { normalizePath } from './write-workspace-store-helpers'
-import type { WritePaperViewId } from './write-workspace-store-types'
+import type { PaperSpaceView } from '../paper/paper-space-store'
 import { beginWorkSessionTransition, currentWorkSessionId, useWorkSessionStore } from './work-session-store'
 import { readWorkSessionTabs, workSessionTabTarget } from './work-session-tabs'
 import type { WorkSessionEntry } from './work-sessions-model'
@@ -31,10 +32,9 @@ export async function ensureWorkSpaceMounted(): Promise<boolean> {
   return target ? mountWorkSpace(target) : false
 }
 
-/** Library and discover pages open as tabs of the current space. */
-export async function openPaperView(view: WritePaperViewId): Promise<void> {
-  if (!(await ensureWorkSpaceMounted())) return
-  useWriteWorkspaceStore.getState().openPaperViewTab(view)
+/** Global paper library and discover pages are independent of Work tabs. */
+export async function openPaperView(view: PaperSpaceView): Promise<void> {
+  await openPaperSpace(view)
 }
 
 /**
@@ -50,8 +50,7 @@ export async function startWorkPaperSearch(): Promise<void> {
 
 /** The import dialog files papers into the current space's papers folder. */
 export async function openPaperImport(): Promise<void> {
-  if (!(await ensureWorkSpaceMounted())) return
-  usePaperModeStore.getState().setImportDialogOpen(true)
+  await openPaperSpace('library', true)
 }
 
 function relativeTo(root: string, path: string): string {

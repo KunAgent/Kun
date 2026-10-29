@@ -52,6 +52,7 @@ import { PaperTranslatedMirror } from './PaperTranslatedMirror'
 import { PaperReaderDrawer } from './PaperReaderDrawer'
 import { PaperFloatingControls } from './PaperFloatingControls'
 import { PaperCommentGutter } from './PaperCommentGutter'
+import { usePaperReaderHost } from './paper-reader-host'
 
 type PaperTone = WritePaperModeReaderSettingsV1['paperTone']
 
@@ -74,6 +75,7 @@ export function PaperUnitPdfReader({
   onSelectionChange,
   unitDirAbs
 }: WritePdfRendererProps & { unitDirAbs: string }): ReactElement {
+  const readerHost = usePaperReaderHost()
   const { t } = useTranslation('common')
   // R2.3: the secondary-group twin renders overlay-only and mirrors scroll.
   const translated = pdfView === 'translated'
@@ -86,7 +88,7 @@ export function PaperUnitPdfReader({
   const [regionSelectActive, setRegionSelectActive] = useState(false)
   const [regionNotice, setRegionNotice] = useState('')
   const entries = usePaperModeStore((s) => s.entries)
-  const libraryEntry = entries.find((e) => e.unitDir === unitRelDir)
+  const libraryEntry = readerHost?.entry ?? entries.find((e) => e.unitDir === unitRelDir)
   const tone = useWriteWorkspaceStore((s) => s.paperMode.reader.paperTone)
   const translateJob = usePaperStore((s) => s.busy['translate-document'])
 
@@ -97,7 +99,10 @@ export function PaperUnitPdfReader({
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const [scale, setScale] = useState(1.15)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [layoutPreset, setLayoutPreset] = useState<PaperReaderLayoutPreset>(readPaperReaderLayout)
+  const [layoutPreset, setLayoutPreset] = useState<PaperReaderLayoutPreset>(readerHost?.layoutPreset ?? readPaperReaderLayout)
+  useEffect(() => {
+    if (readerHost?.layoutPreset) setLayoutPreset(readerHost.layoutPreset)
+  }, [readerHost?.layoutPreset])
   const workbenchChrome = usePaperWorkbenchChrome()
   const { immersive, toggleImmersive } = usePaperImmersive({ rootRef, chrome: workbenchChrome })
 
@@ -113,6 +118,8 @@ export function PaperUnitPdfReader({
     unitDir: unitRelDir,
     pdfSha256,
     onSelectionChange,
+    onQuoteSelection: readerHost?.onQuoteSelection,
+    onAskSelection: readerHost?.onAskSelection,
     onAutoTranslate: autoTranslateSelection
       ? (sel) => selectionTranslateRef.current(sel)
       : undefined
@@ -156,7 +163,8 @@ export function PaperUnitPdfReader({
     currentPage,
     pageCount,
     scrollToPage,
-    enabled: !translated
+    enabled: !translated,
+    publishContext: !readerHost
   })
 
   const {
@@ -177,7 +185,8 @@ export function PaperUnitPdfReader({
   } = usePaperTranslateCard({
     unitDir: unitRelDir,
     workspaceRoot,
-    t
+    t,
+    onOpenTranslated: readerHost?.onOpenTranslated
   })
   selectionTranslateRef.current = (sel) => {
     selection.dismissPending()
@@ -307,12 +316,16 @@ export function PaperUnitPdfReader({
   const applyLayout = useCallback((preset: PaperReaderLayoutPreset): void => {
     setLayoutPreset(preset)
     storePaperReaderLayout(preset)
+    if (readerHost) {
+      readerHost.applyLayout(preset)
+      return
+    }
     void applyPaperReaderLayout(
       preset,
       { workspaceRoot, unitDir: unitRelDir, pdfFile: unitPdfFile },
       workbenchChrome
     )
-  }, [workspaceRoot, unitRelDir, unitPdfFile, workbenchChrome])
+  }, [workspaceRoot, unitRelDir, unitPdfFile, workbenchChrome, readerHost])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -414,7 +427,7 @@ export function PaperUnitPdfReader({
   }, [pageTexts])
 
   const captureRegion = usePaperRegionCapture({
-    pdfDocument, pdfSha256, workspaceRoot, unitDir: unitRelDir,
+    pdfDocument, pdfSha256, workspaceRoot, unitDir: unitRelDir, independentWorkspace: Boolean(readerHost),
     onNotice: setRegionNotice, onComplete: () => setRegionSelectActive(false)
   })
 
@@ -616,8 +629,8 @@ export function PaperUnitPdfReader({
         jumpSearch={jumpSearch}
         drawerOpen={drawerOpen}
         onToggleDrawer={() => setDrawerOpen((open) => !open)}
-        onBackToLibrary={() => openPaperViewTab('library')}
-        onShowInfo={() => usePaperModeStore.getState().openInfoDrawer(unitRelDir)}
+        onBackToLibrary={readerHost?.onBack ?? (() => openPaperViewTab('library'))}
+        onShowInfo={readerHost?.onShowInfo ?? (() => usePaperModeStore.getState().openInfoDrawer(unitRelDir))}
         layoutPreset={layoutPreset}
         onApplyLayout={applyLayout}
         immersive={immersive}

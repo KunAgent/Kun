@@ -15,11 +15,13 @@ import { evidenceInput, evidencePrimaryButton } from '../evidence/PaperEvidenceP
 const PURPOSES: readonly PaperReadingPurpose[] = ['quick-screen', 'method-deep-read', 'reproduction-prep', 'review-critique']
 const LISTED = 8
 
-export function PaperBatchInterpretDialogHost(): ReactElement | null {
+type OpenSession = (workspaceRoot: string, threadId: string, unitDir: string) => void
+
+export function PaperBatchInterpretDialogHost({ onOpenSession }: { onOpenSession?: OpenSession } = {}): ReactElement | null {
   const request = usePaperBatchInterpret((state) => state.request)
   const close = usePaperBatchInterpret((state) => state.closeDialog)
   if (!request) return null
-  return <PaperBatchInterpretDialog workspaceRoot={request.workspaceRoot} papers={request.papers} onClose={close} />
+  return <PaperBatchInterpretDialog workspaceRoot={request.workspaceRoot} papers={request.papers} onClose={close} onOpenSession={onOpenSession} />
 }
 
 /**
@@ -27,10 +29,11 @@ export function PaperBatchInterpretDialogHost(): ReactElement | null {
  * already read are skipped, and one explicit provider disclosure. Each paper
  * then gets its own session, interpreted in the background.
  */
-export function PaperBatchInterpretDialog({ workspaceRoot, papers, onClose }: {
+export function PaperBatchInterpretDialog({ workspaceRoot, papers, onClose, onOpenSession }: {
   workspaceRoot: string
   papers: PaperBatchPaper[]
   onClose: () => void
+  onOpenSession?: OpenSession
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const [purpose, setPurpose] = useState<PaperReadingPurpose>('quick-screen')
@@ -40,7 +43,7 @@ export function PaperBatchInterpretDialog({ workspaceRoot, papers, onClose }: {
   const model = useChatStore((state) => state.composerModel)
   const running = usePaperBatchInterpret((state) => Boolean(state.job?.running))
   const alreadyRead = useMemo(
-    () => papers.filter((paper) => paperSessionIds(workspaceRoot, paper.unitDir).length > 0).length,
+    () => papers.filter((paper) => paperSessionIds(paper.workspaceRoot ?? workspaceRoot, paper.unitDir).length > 0).length,
     [papers, workspaceRoot]
   )
   const queued = skipExisting ? papers.length - alreadyRead : papers.length
@@ -64,7 +67,11 @@ export function PaperBatchInterpretDialog({ workspaceRoot, papers, onClose }: {
       model,
       language: i18n.language,
       t,
-      onOpenSession: (threadId, unitDir) => void openPaperSession(workspaceRoot, threadId, unitDir)
+      onOpenSession: (threadId, unitDir, sourceRoot) => {
+        const root = sourceRoot ?? workspaceRoot
+        if (onOpenSession) onOpenSession(root, threadId, unitDir)
+        else void openPaperSession(root, threadId, unitDir)
+      }
     })
   }
 
@@ -99,9 +106,9 @@ export function PaperBatchInterpretDialog({ workspaceRoot, papers, onClose }: {
           ) : null}
           <ul className="space-y-1 rounded-xl border border-ds-border-muted bg-ds-subtle/50 px-3 py-2.5 text-[12.5px]">
             {papers.slice(0, LISTED).map((paper) => {
-              const read = paperSessionIds(workspaceRoot, paper.unitDir).length > 0
+              const read = paperSessionIds(paper.workspaceRoot ?? workspaceRoot, paper.unitDir).length > 0
               return (
-                <li key={paper.unitDir} className="flex min-w-0 items-center gap-2">
+                <li key={`${paper.workspaceRoot ?? workspaceRoot}\0${paper.unitDir}`} className="flex min-w-0 items-center gap-2">
                   <span className="min-w-0 flex-1 truncate" title={paper.meta.title}>{paper.meta.title}</span>
                   {read ? <span className="shrink-0 text-[11px] text-ds-faint">{t('paperBatchAlreadyRead')}</span> : null}
                 </li>

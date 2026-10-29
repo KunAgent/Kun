@@ -207,6 +207,9 @@ export type PaperBibtexImportEntryResult = {
   citeKey: string
   ok: boolean
   unitDir?: string
+  workspaceRoot?: string
+  meta?: PaperUnitMetaV2
+  reused?: boolean
   message?: string
 }
 

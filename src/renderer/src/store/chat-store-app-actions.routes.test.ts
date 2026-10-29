@@ -38,8 +38,8 @@ function buildActions(initial: Partial<ChatState>) {
   return { state, actions }
 }
 
-describe('retired workspace routes', () => {
-  it.each<[AppRoute, AppRoute]>([['rooms', 'agent-chat'], ['design', 'chat'], ['write', 'write'], ['agent-chat', 'agent-chat']])(
+describe('app route normalization', () => {
+  it.each<[AppRoute, AppRoute]>([['rooms', 'agent-chat'], ['design', 'chat'], ['write', 'write'], ['papers', 'papers'], ['agent-chat', 'agent-chat']])(
     'opens %s as %s',
     (requested, expected) => {
       const { state, actions } = buildActions({})
@@ -48,6 +48,13 @@ describe('retired workspace routes', () => {
     }
   )
 
+  it('persists the global papers route through settings and restores it', () => {
+    const { state, actions } = buildActions({ route: 'papers' })
+    actions.openSettings('general')
+    expect(state.settingsReturnRoute).toBe('papers')
+    actions.closeSettings()
+    expect(state.route).toBe('papers')
+  })
   it('returns from settings to Code conversations instead of the retired Rooms mode', () => {
     const { state, actions } = buildActions({ route: 'rooms' as AppRoute })
     actions.openSettings('general')

@@ -153,8 +153,8 @@ export function useWorkbenchLayout({
   const [writeRightWidth, setWriteRightWidth] = useState(() =>
     readStoredWidth(WRITE_RIGHT_PANEL_WIDTH_KEY, WRITE_RIGHT_PANEL_DEFAULT_WIDTH)
   )
-  const rightSidebarWidth = route === 'write' ? writeRightWidth : codeRightWidth
-  const setRightSidebarWidth = route === 'write' ? setWriteRightWidth : setCodeRightWidth
+  const rightSidebarWidth = route === 'write' || route === 'papers' ? writeRightWidth : codeRightWidth
+  const setRightSidebarWidth = route === 'write' || route === 'papers' ? setWriteRightWidth : setCodeRightWidth
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(() =>
     readStoredWidth(TERMINAL_HEIGHT_KEY, TERMINAL_HEIGHT_DEFAULT)
@@ -171,7 +171,9 @@ export function useWorkbenchLayout({
     : null
   const rightPanelVisible = route === 'write'
     ? writeAssistantOpen
-    : route === 'design'
+    : route === 'papers'
+      ? false
+      : route === 'design'
       ? designAssistantOpen || designImplementOpen
       : codeRightTabs.expanded || rightPanelMode !== null
   const widthConstraints = workbenchWidthConstraintsForRightPanel(route, rightPanelMode)

@@ -25,11 +25,13 @@ export function PaperCitationGraph({
   centerTitle,
   items,
   entries,
+  onOpenEntry,
   t
 }: {
   centerTitle: string
   items: readonly PaperReferenceItem[]
   entries: readonly PaperLibraryEntry[]
+  onOpenEntry?: (entry: PaperLibraryEntry) => Promise<void> | void
   t: TFunction
 }): ReactElement | null {
   const neighbors = useMemo(() => pickCitationGraphNeighbors(items, entries), [items, entries])
@@ -38,7 +40,7 @@ export function PaperCitationGraph({
 
   const openNeighbor = (neighbor: (typeof layout)[number]['neighbor']): void => {
     if (neighbor.inLibrary) {
-      void openLibraryEntry(neighbor.inLibrary)
+      void (onOpenEntry ? onOpenEntry(neighbor.inLibrary) : openLibraryEntry(neighbor.inLibrary))
       return
     }
     const url = neighbor.ref.doi

@@ -203,7 +203,7 @@ export function workbenchWidthConstraintsForRightPanel(
   _rightPanelMode: RightPanelMode
 ): WorkbenchWidthConstraints {
   if (route === 'chat' || route === 'ade') return CODE_TABS_WIDTH_CONSTRAINTS
-  if (route === 'write') return WRITE_WIDTH_CONSTRAINTS
+  if (route === 'write' || route === 'papers') return WRITE_WIDTH_CONSTRAINTS
   return DEFAULT_WIDTH_CONSTRAINTS
 }
 
