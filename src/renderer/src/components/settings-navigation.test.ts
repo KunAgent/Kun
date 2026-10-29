@@ -49,8 +49,10 @@ describe('settings navigation model', () => {
     expect(mac).not.toContain('extensions')
     expect(windows).toContain('storage')
     expect(windows).toContain('extensions')
-    expect(windows).toHaveLength(34)
-    expect(mac).toHaveLength(32)
+    expect(mac).toContain('storageCleanup')
+    expect(windows).toContain('storageCleanup')
+    expect(windows).toHaveLength(35)
+    expect(mac).toHaveLength(33)
     expect(mac).not.toContain('integrations')
   })
 

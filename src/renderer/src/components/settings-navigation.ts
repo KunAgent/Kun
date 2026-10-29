@@ -11,6 +11,7 @@ import {
   FolderCog,
   FolderSync,
   GraduationCap,
+  Eraser,
   HardDrive,
   Keyboard,
   Mic,
@@ -67,6 +68,7 @@ export type SettingsCategory =
   | 'archives'
   | 'dataMigration'
   | 'storage'
+  | 'storageCleanup'
   | 'laboratory'
   | 'agentRuntime'
   | 'debug'
@@ -206,6 +208,10 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
         category: 'dataMigration', labelKey: 'dataMigration', navigationLabelKey: 'settingsNavMigration',
         icon: FolderSync, tone: 'teal', searchKeys: ['legacyImportTitle']
       },
+      {
+        category: 'storageCleanup', labelKey: 'storageCleanup', icon: Eraser, tone: 'green',
+        searchKeys: ['storageCleanupAutoTitle', 'storageCleanupTrashTitle']
+      },
       { category: 'storage', labelKey: 'storageRelocation', icon: HardDrive, tone: 'slate', windowsOnly: true }
     ]
   },
@@ -261,6 +267,7 @@ const SETTINGS_CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategory, string> = {
   archives: 'archivesOverviewDesc',
   dataMigration: 'dataMigrationSubtitle',
   storage: 'storageRelocationSubtitle',
+  storageCleanup: 'storageCleanupDesc',
   laboratory: 'settingsIaLabsDesc',
   agentRuntime: 'settingsIaRuntimeDesc',
   debug: 'settingsIaDiagnosticsDesc',
@@ -326,6 +333,7 @@ const ROUTE_SECTION_CATEGORIES: Record<SettingsRouteSection, SettingsCategory> =
   terminal: 'terminal',
   debug: 'debug',
   storage: 'storage',
+  storageCleanup: 'storageCleanup',
   dataMigration: 'dataMigration'
 }
 

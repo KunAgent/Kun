@@ -22,6 +22,7 @@ import { registerGitHubAppRoutes } from './github-app.js'
 import { registerGmailRoutes } from './gmail.js'
 import { registerGenUiRoutes } from './register-gen-ui-routes.js'
 import { registerMcpAppsRoutes } from './register-mcp-apps-routes.js'
+import { registerStorageRoutes } from './storage-thread-slim.js'
 
 /** Build the full HTTP router while preserving first-match registration order. */
 export function buildRouter(runtime: ServerRuntime): Router {
@@ -46,6 +47,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   registerHistoryReferenceRoutes(router, runtime)
   registerGenUiRoutes(router, runtime)
   registerMcpAppsRoutes(router, runtime)
+  registerStorageRoutes(router, runtime)
   registerThreadRoutes(router, runtime, approvalConsent)
   registerRemoteRoutes(router, runtime)
   return router

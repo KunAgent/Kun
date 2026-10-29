@@ -56,6 +56,7 @@ import type {
   BrowserUseViewState
 } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
+import type { StorageCleanupApi } from './storage-cleanup'
 import type { UninstallApi } from './uninstall'
 import type { RuntimeRequestIpcApi } from './kun-gui-api-runtime-request'
 import type { RuntimeDataRecoveryApi } from './runtime-data-recovery'
@@ -283,6 +284,8 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   }
   /** Windows production storage-root relocation and recovery surface. */
   storageRelocation: StorageRelocationApi
+  /** Settings storage page: usage scan, consented auto cleanup, trash. */
+  storageCleanup: StorageCleanupApi
   /** In-app uninstall: optional full local-data removal and app self-removal. */
   uninstall: UninstallApi
   /** One-time, path-opaque Runtime migration recovery surface. */

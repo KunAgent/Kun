@@ -13,6 +13,7 @@ import { registerExtensionContentScriptPreload } from './extension-content-scrip
 import { parseAppEnvironment } from './app-environment'
 import { createDesktopStartupPreloadApi } from './startup-state'
 import { createStorageRelocationWorkbenchApi } from './storage-relocation-workbench'
+import { createStorageCleanupApi } from './storage-cleanup-api'
 import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorization'
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
@@ -59,6 +60,7 @@ const api = {
   appEnvironment,
   startup: createDesktopStartupPreloadApi(),
   storageRelocation: createStorageRelocationWorkbenchApi(),
+  storageCleanup: createStorageCleanupApi(),
   sharedClientState: {
     read: () => ipcRenderer.invoke('shared-client-state:get'),
     write: (expectedRevision, entries) =>

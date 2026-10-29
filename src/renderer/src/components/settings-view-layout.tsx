@@ -88,6 +88,9 @@ const DataMigrationSettingsSection = lazySection(() =>
 const StorageRelocationSettingsSection = lazySection(() =>
   import('./settings-section-storage-relocation').then((module) => ({ default: module.StorageRelocationSettingsSection }))
 )
+const StorageCleanupSettingsSection = lazySection(() =>
+  import('./settings-section-storage-cleanup').then((module) => ({ default: module.StorageCleanupSettingsSection }))
+)
 const UninstallSettingsSection = lazySection(() =>
   import('./settings-section-uninstall').then((module) => ({ default: module.UninstallSettingsSection }))
 )
@@ -119,6 +122,7 @@ const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
   debug: LlmDebugSettingsSection.preload,
   dataMigration: DataMigrationSettingsSection.preload,
   storage: StorageRelocationSettingsSection.preload,
+  storageCleanup: StorageCleanupSettingsSection.preload,
   uninstall: UninstallSettingsSection.preload
 }
 
@@ -153,7 +157,8 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
   const pageRef = useRef<HTMLDivElement | null>(null)
   useSettingsArrivalFlash(pageRef, arrival)
   const autoApplyCategory = category !== 'extensions' &&
-    category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall'
+    category !== 'dataMigration' && category !== 'storage' && category !== 'storageCleanup' &&
+    category !== 'uninstall'
   // These two pages edit a draft and save it with their own button.
   const explicitSavePanel = category === 'collaboration' || category === 'projects'
   // Workspaces carry their own header and use the full content width.
@@ -269,6 +274,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
                 </>
               ) : null}
               {category === 'storage' ? <StorageRelocationSettingsSection /> : null}
+              {category === 'storageCleanup' ? <StorageCleanupSettingsSection /> : null}
               {category === 'uninstall' ? <UninstallSettingsSection /> : null}
             </Suspense>
           </div>
