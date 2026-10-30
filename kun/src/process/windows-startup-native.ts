@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export type WindowsProcessInspection = {
@@ -36,11 +36,15 @@ export function windowsStartupDirectory(): string {
   const moduleDirectory = typeof __dirname === 'string' ? __dirname : dirname(fileURLToPath(import.meta.url))
   const resources = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
   const folder = `win32-${process.arch}`
+  // Shared Electron main modules are emitted one level deeper than entry bundles.
+  const developmentMainDirectory = basename(moduleDirectory) === 'chunks' &&
+    basename(dirname(moduleDirectory)) === 'main' && basename(dirname(dirname(moduleDirectory))) === 'out'
+    ? dirname(moduleDirectory) : moduleDirectory
   const candidates = resources && existsSync(join(resources, 'app.asar'))
     ? [join(resources, 'app.asar.unpacked', 'kun', 'dist', 'native', folder)]
     : [join(moduleDirectory, '..', 'native', folder),
       join(moduleDirectory, '..', '..', 'dist', 'native', folder),
-      join(moduleDirectory, '..', '..', 'kun', 'dist', 'native', folder)]
+      join(developmentMainDirectory, '..', '..', 'kun', 'dist', 'native', folder)]
   const root = candidates.find((path) => existsSync(join(path, 'manifest.json')))
   if (!root) throw new WindowsStartupIntegrityError()
   try {
