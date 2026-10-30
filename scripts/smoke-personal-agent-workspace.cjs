@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { allowWorkspaceTool } = require('./smoke-workspace-tool-consent.cjs')
 const { confirmAgentCreationModel } = require('./smoke-agent-creation-model.cjs')
 const { createServer } = require('node:http')
 const { readFile, writeFile } = require('node:fs/promises')
@@ -66,21 +67,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await wrapper().waitFor()
   }
   const browserState = (threadId) => page.evaluate((id) => window.kunGui.getBrowserUseState(id), threadId)
-  const allowTool = async (label) => {
-    const next = application.waitForEvent('window')
-    await page.getByRole('button', { name: 'Review and allow', exact: true }).first().click()
-    const consent = await next
-    await consent.getByRole('button', { name: 'Allow once', exact: true }).waitFor()
-    assert(!await consent.evaluate(() => Boolean(window.kunGui)), 'Protected consent does not expose the workbench bridge')
-    if (label) await capture(label, consent)
-    await consent.getByRole('button', { name: 'Allow once', exact: true }).click()
-    approvals.push(label ?? 'protected-tool-consent')
-  }
   const completed = async (roomId, previous) => {
     let value
     await poll(async () => {
       const data = await activity(roomId)
-      if (data.approvals.length) await allowTool()
+      assert.equal(data.approvals.length, 0, 'Unexpected extra approval must not be automatically allowed')
       const current = data.requests[0]
       assert(!current || !['failed', 'recovery_required'].includes(current.status), JSON.stringify(data))
       if (current?.id !== previous && current?.status === 'completed' && !data.active) { value = current; return true }
@@ -157,7 +148,9 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await send('WORKSPACE_ARTIFACT Create workspace-evidence.txt and attach the saved file to your final reply.')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
     await capture('workspace-02-real-write-approval')
-    await allowTool('workspace-03-protected-write-consent')
+    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, roomId: entry.roomId,
+      expected: { toolName: 'write', arguments: { path: 'workspace-evidence.txt', content: 'Saved personal workspace artifact v1\n' } },
+      label: 'workspace-03-inline-write-consent' }))
     const artifactRun = await completed(entry.roomId)
     const direct = await activity(entry.roomId)
     assert.equal(await readFile(join(direct.workspace.path, 'workspace-evidence.txt'), 'utf8'), 'Saved personal workspace artifact v1\n')
@@ -219,7 +212,9 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await assertLiveBinding(entry.roomId, active)
     await capture('workspace-08-active-before-browser')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
-    await allowTool('workspace-09-protected-browser-tool-consent')
+    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, roomId: entry.roomId,
+      expected: { toolName: 'browser_use', arguments: { action: 'open', url: website.url } },
+      label: 'workspace-09-inline-browser-tool-consent' }))
     const originButton = page.getByRole('button', { name: 'Allow origin once', exact: true })
     await originButton.waitFor()
     assert.equal(website.snapshot().pageRequests, 0, 'No page request occurs before exact-origin consent')
@@ -271,7 +266,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await assertLiveBinding(entry.roomId, active)
     await poll(async () => (await browserState(active.threadId)).visible, 15000, 'explicit return to current browser')
     assertions.push('Selecting the historical artifact run is read-only until explicitly returning to the current execution')
-    assertions.push('Real browser_use passes protected Kun tool consent and exact-origin consent, then loads only the local fixture in a sandboxed native view')
+    assertions.push('Real browser_use passes trusted inline Kun tool consent and exact-origin consent, then loads only the local fixture in a sandboxed native view')
 
     await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
     await page.getByRole('button', { name: 'Define in chat', exact: true }).click()
@@ -415,7 +410,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
       website: website.snapshot(), nativeBrowserEvidence,
       fixtureBoundary: { mocked: ['deterministic loopback model responses', 'static loopback browser page', 'one exact native Runtime restart confirmation response'],
         actual: ['Electron renderer/preload/main', 'Manager and Runtime', 'request/run/thread/turn admission',
-          'protected tool consent', 'exact-origin browser consent and SSRF policy', 'sandboxed Browser Use WebContentsView',
+          'trusted inline tool consent with exact approval identity', 'exact-origin browser consent and SSRF policy', 'sandboxed Browser Use WebContentsView',
           'saved artifact publication/search/preview/source', 'Code-mode baseline and private sidebar geometry',
           'native pointer resize and BrowserWindow wide/narrow sizes', 'Runtime restart and renderer reload'] } }
   } catch (error) {

@@ -115,7 +115,7 @@ export function ConnectionsSettingsSection({ ctx }: { ctx?: Record<string, any> 
 
       <div className="space-y-3">
         {apps.map((group) => (
-          <section key={group.appId} className="rounded-xl border border-ds-border bg-ds-panel p-3">
+          <section key={group.appId} className="rounded-xl border border-ds-border bg-ds-card p-3">
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="text-[13px] font-semibold text-ds-ink">{group.name}</h3>
               <span className="text-[11px] text-ds-muted">

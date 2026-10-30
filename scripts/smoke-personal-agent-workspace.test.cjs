@@ -516,3 +516,63 @@ test('long selected sidebar tabs fit their scroll viewport at both normal and co
       'a fixed cap alone can exceed the narrow tablist, so scrolling cannot reveal the entire selected tab')
   }
 })
+
+
+const { allowWorkspaceTool } = require('./smoke-workspace-tool-consent.cjs')
+
+function fixture() {
+  const expected = { toolName: 'write', arguments: { path: 'workspace-evidence.txt', content: 'fixture\n' } }
+  const approval = { id: 'approval-1', threadId: 'thread-1', turnId: 'turn-1', status: 'pending',
+    toolName: expected.toolName, action: { arguments: expected.arguments } }
+  const state = { approval, active: { id: 'request-1', runId: 'run-1', threadId: 'thread-1', turnId: 'turn-1' },
+    clicks: 0, synthetic: 0, captures: [], cards: 1, directReads: 0 }
+  const copy = (value) => structuredClone(value)
+  const allow = { waitFor: async () => {}, evaluate: async (fn) => fn({ click: () => { state.synthetic++ } }),
+    click: async () => { state.clicks++; state.approval.status = 'allowed' } }
+  const card = { count: async () => state.cards, locator: () => ({ innerText: async () => JSON.stringify(expected.arguments) }),
+    getByRole: (_role, options) => { assert.equal(options.name, 'Review and allow'); return allow } }
+  const options = { page: { locator: () => card }, roomId: 'room-1', expected, label: 'consent',
+    request: async (_page, path) => {
+      if (path === '/v1/rooms/room-1/direct') {
+        state.directReads++
+        return copy({ approvals: [state.approval], active: state.active })
+      }
+      assert.equal(path, '/v1/approvals/approval-1')
+      return copy({ approval: state.approval })
+    }, poll: async (check) => assert(await check()), capture: async (name) => state.captures.push(name) }
+  return { state, options, allow }
+}
+
+test('workspace consent uses one trusted inline click, rejects repeated synthetic clicks and records exact identity', async () => {
+  const { state, options } = fixture()
+  const result = await allowWorkspaceTool(options)
+  assert.equal(state.synthetic, 2)
+  assert.equal(state.clicks, 1)
+  assert.deepEqual(state.captures, ['consent'])
+  assert.deepEqual(result, { label: 'consent', approvalId: 'approval-1', requestId: 'request-1', runId: 'run-1',
+    threadId: 'thread-1', turnId: 'turn-1', toolName: 'write', syntheticClicksRejected: true, status: 'allowed' })
+})
+
+for (const mismatch of ['tool', 'arguments', 'thread', 'turn', 'cards', 'request', 'approval', 'synthetic']) {
+  test(`workspace consent fails closed before a trusted click for ${mismatch} mismatch`, async () => {
+    const { state, options, allow } = fixture()
+    if (mismatch === 'tool') state.approval.toolName = 'exec'
+    if (mismatch === 'arguments') state.approval.action.arguments = { command: 'unexpected' }
+    if (mismatch === 'thread') state.approval.threadId = 'other-thread'
+    if (mismatch === 'turn') state.approval.turnId = 'other-turn'
+    if (mismatch === 'cards') state.cards = 2
+    if (['request', 'approval', 'synthetic'].includes(mismatch)) allow.evaluate = async () => {
+      if (mismatch === 'request') state.active.id = 'replacement-request'
+      if (mismatch === 'approval') state.approval.id = 'replacement-approval'
+      if (mismatch === 'synthetic') state.approval.status = 'allowed'
+    }
+    await assert.rejects(allowWorkspaceTool(options))
+    assert.equal(state.clicks, 0)
+  })
+}
+
+test('a denied result never passes as allowed consent', async () => {
+  const { state, options, allow } = fixture()
+  allow.click = async () => { state.approval.status = 'denied' }
+  await assert.rejects(allowWorkspaceTool(options), /denied or expired/)
+})
