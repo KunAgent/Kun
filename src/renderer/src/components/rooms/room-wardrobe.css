@@ -66,15 +66,16 @@
 @keyframes rooms-wardrobe-wobble { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
 
 /* The bottle under an Agent reply */
-.rooms-wardrobe-drop-slot { display: grid; gap: 6px; padding: 4px 16px 8px; }
+.rooms-wardrobe-drop-slot { container-type: inline-size; display: grid; gap: 6px; padding: 4px 16px 8px; }
 .rooms-wardrobe-drop { display: flex; align-items: center; gap: 12px; max-width: 520px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--ds-accent) 40%, var(--ds-border));
   border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--ds-accent) 12%, var(--ds-surface-card)), var(--ds-surface-card));
   box-shadow: 0 10px 24px -20px var(--ds-accent); animation: rooms-wardrobe-rise .35s ease-out; }
-.rooms-wardrobe-drop-text { display: grid; flex: 1; min-width: 0; gap: 2px; font-size: 12.5px; line-height: 1.35; }
-.rooms-wardrobe-drop-text > strong { font-size: 13.5px; font-weight: 650; }
-.rooms-wardrobe-drop-text > span { color: var(--ds-text-muted); }
+/* minmax(0, 1fr) keeps the copy column from growing past the card when the chat column narrows. */
+.rooms-wardrobe-drop-text { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-width: 0; gap: 2px; font-size: 12.5px; line-height: 1.35; }
+.rooms-wardrobe-drop-text > strong { min-width: 0; overflow-wrap: anywhere; font-size: 13.5px; font-weight: 650; }
+.rooms-wardrobe-drop-text > span { min-width: 0; overflow-wrap: anywhere; color: var(--ds-text-muted); }
 .rooms-wardrobe-drop-actions { display: flex; flex: none; gap: 6px; }
-.rooms-wardrobe-drop-actions > button { min-height: 32px; padding: 5px 12px; border: 1px solid var(--ds-border); border-radius: 9px; color: var(--ds-text); font-size: 12.5px; }
+.rooms-wardrobe-drop-actions > button { min-height: 32px; padding: 5px 12px; border: 1px solid var(--ds-border); border-radius: 9px; color: var(--ds-text); font-size: 12.5px; white-space: nowrap; }
 .rooms-wardrobe-drop-actions > .rooms-run-primary { border-color: var(--ds-accent); color: var(--ds-control-foreground, #fff); background: var(--ds-accent); }
 @keyframes rooms-wardrobe-rise { from { opacity: 0; transform: translateY(6px); } }
 
@@ -107,7 +108,8 @@
   box-shadow: 0 0 0 1px var(--ds-sidebar-row-ring, var(--ds-border)), 0 1px 2px rgb(16 24 40 / .05); }
 .ds-sidebar-kun-open { color: var(--ds-text-faint); }
 
-@media (max-width: 640px) {
+/* The card can be narrow inside a wide window, so wrap against its own width, not the viewport. */
+@container (max-width: 480px) {
   .rooms-wardrobe-drop { flex-wrap: wrap; }
   .rooms-wardrobe-drop-actions { width: 100%; justify-content: flex-end; }
 }
