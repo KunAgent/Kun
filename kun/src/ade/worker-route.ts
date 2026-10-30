@@ -122,7 +122,8 @@ async function resolveWorkerRouteInput(input: {
     // cached probe result when the modelSource probes, else the static table.
     const probed = def.modelSource === 'probe' ? input.probedModels?.(def) : undefined
     const known = probed && probed.length > 0 ? probed : def.staticModels
-    if (known.length > 0 && (!model || !known.includes(model))) {
+    const defaultOnly = def.transport === 'acp' && known.length === 1 && known[0] === 'default'
+    if (!defaultOnly && known.length > 0 && (model ? !(def.transport === 'acp' && model === 'default') && !known.includes(model) : def.transport !== 'acp')) {
       return {
         error: `model ${model || '(missing)'} is not in harness ${def.id}'s model list`
       }
@@ -136,7 +137,7 @@ async function resolveWorkerRouteInput(input: {
     return {
       route: {
         harnessId: def.id,
-        model: model || known[0] || fallbackModel || '',
+        model: model || (def.transport === 'acp' ? 'default' : known[0]) || fallbackModel || '',
         ...(requested.providerId?.trim() || defaults?.providerId || fallbackProvider
           ? { providerId: requested.providerId?.trim() ?? defaults?.providerId ?? fallbackProvider }
           : {}),

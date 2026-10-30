@@ -22,7 +22,6 @@ import type {
   DelegatedRuntimeCapabilities,
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
-import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
 import { resolveSessionTurnContext, type SessionTurnContext } from '../../session/session-turn-context.js'
 
 import {
@@ -53,6 +52,7 @@ import {
   finishAcpTrace,
   kunToolsDescriptorOf,
   mapAcpFailure,
+  missingAcpCoordinator,
   resolveAcpCredentialContext,
   startAcpTrace,
   type AcpCredentialEnvInput,
@@ -102,7 +102,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     this.sessions =
       deps.sessionManager ??
       new AcpSessionManager({
-        coordinator: deps.sessionCoordinator ?? missingCoordinator(),
+        coordinator: deps.sessionCoordinator ?? missingAcpCoordinator(),
         debug: deps.debug
       })
   }
@@ -382,11 +382,14 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       sandbox: definition.capabilities.facts?.sandbox ?? 'native'
     })
     // Workspace-local Agents and generic settings only appear in a real
-    // session; refresh the composer controls.
+    // session; refresh the composer controls and native model catalog.
+    if (credentialMode === 'native-login' && (!actingModelRoute.providerId || actingModelRoute.providerId === 'default')) {
+      try { this.deps.onNativeSession?.(definition, session) } catch { /* The catalog is advisory. */ }
+    }
     const modeSelector = acpSessionModeSelector(session)
     const nativeAgents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(modeSelector) : []
     const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
-    if (nativeAgents.length || settings.length) {
+    if (nativeAgents.length || settings.length || (credentialMode === 'native-login' && (!actingModelRoute.providerId || actingModelRoute.providerId === 'default'))) {
       await emitter.emitAll([{ kind: 'harness_session_state', threadId, turnId, harnessId: definition.id,
         ...(nativeAgents.length ? { agents: nativeAgents } : {}), ...(settings.length ? { settings } : {}),
         ...(nativeAgents.length && modeSelector?.currentModeId ? { currentModeId: modeSelector.currentModeId } : {}) }]).catch(() => undefined)
@@ -693,8 +696,4 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       severity: 'error'
     })
   }
-}
-
-function missingCoordinator(): DelegatedSessionCoordinator {
-  throw new Error('AcpRuntime requires sessionCoordinator')
 }

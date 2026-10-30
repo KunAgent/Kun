@@ -206,9 +206,10 @@ export function WriteAssistantPanel({
     if (detachedKey && detachedKey !== contextKey) useWorkContextStore.getState().attach()
   }, [contextKey, detachedKey])
   const listedTitle = useWorkSessionStore((s) => s.titles)
-  const sessionTitle = useChatStore((s) =>
-    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title)) ||
-    (activeThreadId ? listedTitle[activeThreadId] ?? '' : '')
+  const sessionTitle = useChatStore((s) => {
+    const thread = s.threads.find((candidate) => candidate.id === s.activeThreadId)
+    return workSessionDisplayTitle(thread?.title, thread?.titleAuto, thread?.id)
+  }) || (activeThreadId ? listedTitle[activeThreadId] ?? '' : '')
   const agentHarnessId = useChatStore(workAssistantHarnessId)
   const paperEntries = usePaperModeStore((s) => s.entries)
   const readerPage = usePaperModeStore((s) => s.readerPage)

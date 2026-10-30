@@ -1,5 +1,6 @@
 import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { nativeAgentNetworkEnv } from '../harness/native-agent-network.js'
+import { acpSessionCatalog } from '../harness/acp-model-catalog.js'
 /**
  * Delegated-turn-runtime dep assembly for the main serve scope. Extracted
  * from runtime-composition-agent.ts to keep that file under the line-count
@@ -204,6 +205,7 @@ export function buildMainDelegatedRuntime(
   const acpRuntimeDeps: AcpRuntimeDeps = {
     readiness: services.harnesses.readiness,
     catalog: services.harnesses.catalog,
+    onNativeSession: (definition, session) => services.harnesses.acpModels.seed(definition, acpSessionCatalog(definition, session)),
     binaryPath: (harnessId) => harnessCommandOverride(core.activeOptions.harnesses, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),
     resolveSecretEnv: services.harnesses.resolveSecretEnv, threadStore, sessionStore,

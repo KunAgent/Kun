@@ -10,11 +10,19 @@ import {
   readWriteThreadRegistry,
   writeWorkspaceKey
 } from '../../write/write-thread-registry'
-import { buildWorkSessions, type WorkSessionEntry } from '../../write/work-sessions-model'
+import { buildWorkSessions, workSessionDisplayTitle, type WorkSessionEntry } from '../../write/work-sessions-model'
+import { recoverWorkTitle, type RecoveredWorkTitle } from '../../write/work-session-title-recovery'
 import { useWorkSessionStore } from '../../write/work-session-store'
 import { usePaperBatchInterpret } from '../../paper/paper-batch-interpret'
 
 const PAGE_LIMIT = 80
+const TITLE_RECOVERY_CONCURRENCY = 4
+
+function applyRecoveredTitle(thread: NormalizedThread, originalTitle: string, result: RecoveredWorkTitle): NormalizedThread {
+  if (thread.title !== originalTitle || thread.titleAuto === false ||
+    workSessionDisplayTitle(thread.title, thread.titleAuto, thread.id)) return thread
+  return { ...thread, ...result }
+}
 
 /**
  * The shared thread list only carries the most recent page across every
@@ -109,27 +117,76 @@ export function useWorkSessions(query: string): {
     setListed((current) => ({ ...current, threads: current.threads.filter((thread) => thread.id !== threadId) }))
   }, [])
 
-  const sessions = useMemo(() => {
+  const sourceThreads = useMemo(() => {
     const known = new Set(threads.map((thread) => thread.id))
     const extra = listed.key === key ? listed.threads.filter((thread) => !known.has(thread.id)) : []
-    const boards = Object.values(whiteboards).map((board) => ({
-      id: board.id,
-      workspaceRoot: board.workspaceRoot,
-      threadIds: workWhiteboardThreadIds(board)
-    }))
-    return buildWorkSessions({
-      root,
-      threads: [...threads, ...extra],
-      registry: readWriteThreadRegistry(),
-      boards,
-      query
-    })
-  }, [key, listed, query, root, threads, whiteboards])
+    return [...threads, ...extra]
+  }, [key, listed, threads])
+  const boards = useMemo(() => Object.values(whiteboards).map((board) => ({
+    id: board.id,
+    workspaceRoot: board.workspaceRoot,
+    threadIds: workWhiteboardThreadIds(board)
+  })), [whiteboards])
+  const allSessions = useMemo(() => buildWorkSessions({
+    root, threads: sourceThreads, registry: readWriteThreadRegistry(), boards
+  }), [root, sourceThreads, boards])
+  const sessions = useMemo(() => query.trim() ? buildWorkSessions({
+    root, threads: sourceThreads, registry: readWriteThreadRegistry(), boards, query
+  }) : allSessions, [allSessions, boards, query, root, sourceThreads])
 
-  // The assistant panel names the open session from the same listing.
+  // Recover older placeholders without loading every timeline into the renderer.
+  const titleRequests = useRef(new Set<string>())
   useEffect(() => {
-    useWorkSessionStore.getState().rememberTitles(sessions)
-  }, [sessions])
+    if (!runtimeReady || !key || listed.key !== key) return
+    const sources = new Map(sourceThreads.map((thread) => [thread.id, thread]))
+    const pending = allSessions.flatMap((session) => {
+      const thread = sources.get(session.id)
+      if (session.title || !thread || thread.titleAuto === false || thread.turnCount === 0 ||
+        titleRequests.current.has(thread.id)) return []
+      titleRequests.current.add(thread.id)
+      return [{ id: thread.id, originalTitle: thread.title }]
+    })
+    let next = 0
+    const drain = async (): Promise<void> => {
+      while (next < pending.length) {
+        const candidate = pending[next++]!
+        try {
+          const result = await recoverWorkTitle(candidate.id)
+          if (!mounted.current || writeWorkspaceKey(useWriteWorkspaceStore.getState().workspaceRoot) !== key) {
+            titleRequests.current.delete(candidate.id)
+            continue
+          }
+          if (!result || !workSessionDisplayTitle(result.title, result.titleAuto, candidate.id)) {
+            // A later listing or newly available history can make recovery possible.
+            titleRequests.current.delete(candidate.id)
+            continue
+          }
+          const live = useChatStore.getState().threads.find((thread) => thread.id === candidate.id)
+          const liveTitle = live && workSessionDisplayTitle(live.title, live.titleAuto, live.id)
+          const listedResult = liveTitle ? { title: liveTitle, titleAuto: live.titleAuto, agentSurface: live.agentSurface === 'write' ? 'write' as const : undefined } : result
+          setListed((current) => current.key !== key ? current : {
+            ...current,
+            threads: current.threads.map((thread) => thread.id === candidate.id
+              ? applyRecoveredTitle(thread, candidate.originalTitle, listedResult)
+              : thread)
+          })
+          useChatStore.setState((current) => ({
+            threads: current.threads.map((thread) => thread.id === candidate.id
+              ? applyRecoveredTitle(thread, candidate.originalTitle, result)
+              : thread)
+          }))
+        } catch {
+          titleRequests.current.delete(candidate.id)
+        }
+      }
+    }
+    for (let index = 0; index < Math.min(TITLE_RECOVERY_CONCURRENCY, pending.length); index += 1) void drain()
+  }, [allSessions, key, listed.key, runtimeReady, sourceThreads])
+
+  // The assistant panel and tabs name sessions even while the list is filtered.
+  useEffect(() => {
+    useWorkSessionStore.getState().rememberTitles(allSessions)
+  }, [allSessions])
 
   return { root, sessions, loading: loading && listed.key !== key, patchThread, forgetThread, reload }
 }

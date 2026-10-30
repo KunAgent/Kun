@@ -13,6 +13,7 @@ import type {
 } from '../../contracts/harness.js'
 import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import type { DelegatedRuntimeCapabilities } from '../delegated-turn-runtime.js'
+import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
 import {
   unsupported,
   type HarnessCapabilities
@@ -29,6 +30,10 @@ import {
   resolveDelegatedCredentialContext,
   type DelegatedCredentialEnvInput
 } from '../../session/delegated-credentials.js'
+
+export function missingAcpCoordinator(): DelegatedSessionCoordinator {
+  throw new Error('AcpRuntime requires sessionCoordinator')
+}
 
 export type AcpTrace = DelegatedTrace
 

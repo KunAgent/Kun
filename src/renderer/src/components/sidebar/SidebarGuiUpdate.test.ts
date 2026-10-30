@@ -14,7 +14,10 @@ let emit: (state: GuiUpdateState) => void
 let download: ReturnType<typeof vi.fn>
 let install: ReturnType<typeof vi.fn>
 
-async function mount(initial: GuiUpdateState = { status: 'available', info }): Promise<void> {
+async function mount(
+  initial: GuiUpdateState = { status: 'available', info },
+  options?: Parameters<typeof create>[1]
+): Promise<void> {
   vi.stubGlobal('window', { kunGui: {
     getGuiUpdateState: vi.fn(async () => initial),
     onGuiUpdateState: (listener: typeof emit) => { emit = listener; return vi.fn() },
@@ -23,7 +26,7 @@ async function mount(initial: GuiUpdateState = { status: 'available', info }): P
     logError: vi.fn(async () => undefined),
     openExternal: vi.fn(async () => undefined)
   } })
-  await act(async () => { renderer = create(createElement(SidebarGuiUpdate)) })
+  await act(async () => { renderer = create(createElement(SidebarGuiUpdate), options) })
 }
 
 function chip(): ReactTestInstance {
@@ -66,6 +69,29 @@ describe('sidebar GUI update entry', () => {
   it('stays hidden without a pending update', async () => {
     await mount({ status: 'not_available', info: { ...info, hasUpdate: false } })
     expect(renderer.toJSON()).toBeNull()
+  })
+
+  it('collapses an overflowing update label even when its flex spacer is zero', async () => {
+    let resize: () => void = () => {}
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resize = callback }
+      observe() {}
+      disconnect() {}
+    })
+    const slot = { clientWidth: 0, dataset: { footerSettingsSlot: 'spacer' } }
+    const bar = { clientWidth: 208, scrollWidth: 230, querySelector: () => slot }
+    const node = { parentElement: bar, dataset: { compact: '' }, querySelector: () => ({ offsetWidth: 30 }) }
+    await mount({ status: 'available', info }, {
+      createNodeMock: (element) => (element.props as { className?: string }).className === 'ds-sidebar-update-chip' ? node : null
+    })
+    expect(chip().props['data-compact']).toBe('true')
+    node.dataset.compact = 'true'
+    bar.scrollWidth = 208
+    await act(async () => resize())
+    expect(chip().props['data-compact']).toBe('true')
+    slot.clientWidth = 50
+    await act(async () => resize())
+    expect(chip().props['data-compact']).toBeUndefined()
   })
 
   it('opens a card instead of updating on the first click', async () => {

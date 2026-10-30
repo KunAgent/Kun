@@ -45,6 +45,7 @@ import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import type { ThreadLifecycleFence } from './thread-lifecycle-fence.js'
 import { withFileMutationQueue } from '../adapters/tool/file-mutation-queue.js'
 import { withThreadStoreMutation } from './thread-mutation-coordinator.js'
+import { recoverWorkSessionTitle } from './work-session-title.js'
 import { DEFAULT_KUN_MODEL } from '../config/kun-config.js'
 import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
 import {
@@ -189,6 +190,12 @@ export class ThreadService {
     this.withHistoryReferenceMutation = options.withHistoryReferenceMutation
     this.onStatusChanged = options.onStatusChanged
     this.onForked = options.onForked
+  }
+
+  async recoverWorkTitle(threadId: string): Promise<ThreadRecord | null> {
+    return recoverWorkSessionTitle({
+      threadStore: this.threadStore, sessionStore: this.sessionStore, events: this.events
+    }, threadId)
   }
 }
 

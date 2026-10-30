@@ -63,31 +63,6 @@
   border-top: 1px solid var(--ds-sidebar-divider);
 }
 
-.kun-account-dock-bar .ds-focus-mode-switch {
-  height: 28px;
-}
-
-/* Without the Settings label the row has room for "Focus" down to the narrowest sidebar. */
-@container (max-width: 216px) {
-  .kun-account-dock-bar .ds-focus-mode-switch {
-    padding-left: 9px;
-  }
-
-  .kun-account-dock-bar .ds-focus-mode-switch-label {
-    display: inline;
-  }
-}
-
-@container (max-width: 168px) {
-  .kun-account-dock-bar .ds-focus-mode-switch {
-    padding-left: 7px;
-  }
-
-  .kun-account-dock-bar .ds-focus-mode-switch-label {
-    display: none;
-  }
-}
-
 /* Focus mode: no frame, one quiet row; the face is the account entry. */
 .kun-account-focus-row {
   padding: 0 2px;
@@ -125,21 +100,6 @@
   width: 8px;
   height: 8px;
   box-shadow: 0 0 0 2px var(--ds-bg-sidebar);
-}
-
-.kun-account-focus-row .ds-focus-mode-switch {
-  height: 28px;
-}
-
-/* Face, Focus and three tools: the label goes first when the row runs short. */
-@container (max-width: 236px) {
-  .kun-account-focus-row:has(.kun-account-mini) .ds-focus-mode-switch {
-    padding-left: 7px;
-  }
-
-  .kun-account-focus-row:has(.kun-account-mini) .ds-focus-mode-switch-label {
-    display: none;
-  }
 }
 
 [data-theme='dark'] .kun-account-dock {

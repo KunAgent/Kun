@@ -1,4 +1,5 @@
 import { nativeAgentNetworkEnv } from '../harness/native-agent-network.js'
+import { acpSessionCatalog } from '../harness/acp-model-catalog.js'
 import {
   join,
   CapabilityRegistry,
@@ -261,6 +262,7 @@ export function createRuntimeRegistry(
     // narrow to the child's declared read/write boundary.
     acp: {
       catalog: services.harnesses.catalog,
+      onNativeSession: (definition, session) => services.harnesses.acpModels.seed(definition, acpSessionCatalog(definition, session)),
       readiness: services.harnesses.readiness,
       binaryPath: (harnessId: string) =>
         harnessCommandOverride(core.activeOptions.harnesses, harnessId),

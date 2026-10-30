@@ -48,7 +48,8 @@ function useChipLabelFits(chipRef: RefObject<HTMLButtonElement | null>, label: s
       const compact = chip.dataset.compact === 'true'
       const extra = compact ? labelWidth + CHIP_LABEL_EXTRA_WIDTH : 0
       const reserved = slot.dataset.footerSettingsSlot === 'spacer' ? 0 : SETTINGS_ICON_MIN_WIDTH
-      setFits(slot.clientWidth - reserved - extra >= 0)
+      // A flex spacer clamps at zero even when the controls already overflow.
+      setFits(bar.scrollWidth <= bar.clientWidth && slot.clientWidth - reserved - extra >= 0)
     }
     measure()
     const observer = new ResizeObserver(measure)

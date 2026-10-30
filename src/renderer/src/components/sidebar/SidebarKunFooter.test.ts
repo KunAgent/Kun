@@ -100,7 +100,7 @@ describe('Sidebar Kun footer', () => {
     expect(face()).toBe('designer')
   })
 
-  it('shows Focus mode as a labeled pill switch', async () => {
+  it('keeps the switch name and state when its label and track collapse to an icon', async () => {
     const onChange = vi.fn()
     await act(async () => root.render(createElement(SidebarFocusModeSwitch, { enabled: false, onChange })))
     const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!
@@ -108,6 +108,7 @@ describe('Sidebar Kun footer', () => {
     expect(toggle.getAttribute('aria-label')).toBe('focusModeToggleLabel')
     expect(toggle.querySelector('.ds-focus-mode-switch-label')?.textContent).toBe('focusMode')
     expect(toggle.querySelector('.ds-focus-mode-switch-track .ds-focus-mode-switch-thumb')).not.toBeNull()
+    expect(toggle.querySelector('.ds-focus-mode-switch-icon')?.getAttribute('aria-hidden')).toBe('true')
     expect(toggle.title).toBe('focusModeToggleTitle')
     await act(async () => toggle.click())
     expect(onChange).toHaveBeenLastCalledWith(true)

@@ -28,7 +28,7 @@ import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
 import type { AcpConnectionPool } from './acp-connection-pool.js'
 import type { AcpClientHost } from './acp-client-host.js'
-import type { AcpSessionManager } from './acp-session-manager.js'
+import type { AcpSessionHandle, AcpSessionManager } from './acp-session-manager.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import type { AcpCredentialEnvInput } from './acp-runtime-support.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
@@ -98,6 +98,8 @@ export interface AcpRuntimeDeps {
   nowIso?: () => string
   debug?: AcpDebugLog
   cancelSettleMs?: number
+  /** Cache model options from a real native-login conversation. */
+  onNativeSession?: (definition: HarnessDefinition, session: AcpSessionHandle) => void
   /**
    * a real connection acquisition failed (spawn/initialize, not an
    * abort) — report back so the harness catalog stops claiming `ready`.

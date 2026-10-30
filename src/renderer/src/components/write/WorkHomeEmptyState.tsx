@@ -32,6 +32,7 @@ export function WorkKunAvatar({ variant = 'writer', size = 22 }: {
  */
 export function WorkHomeHero(): ReactElement {
   const { t } = useTranslation('common')
+  const focusMode = useFocusModeStore((state) => state.enabled)
   const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const whiteboard = useWorkWhiteboardCreation({ workspaceRoot, onNeedWorkspace: async () => undefined })
   const actions = [
@@ -44,7 +45,7 @@ export function WorkHomeHero(): ReactElement {
   ]
   return (
     <div className="work-home-hero" data-work-home>
-      <img src={kunLaptopUrl} alt="" className="work-home-mascot" draggable={false} />
+      {focusMode ? null : <img src={kunLaptopUrl} alt="" className="work-home-mascot" draggable={false} />}
       <h2 className="work-home-title">{t('workHomeTitle')}</h2>
       <p className="work-home-subtitle">{t('workHomeSubtitle')}</p>
       <div className="work-home-actions">

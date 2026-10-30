@@ -4,6 +4,7 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import {
   loadHarnesses,
   loadHarnessModels,
+  receiveHarnessSessionState,
   loadHarnessProviderGroups,
   resetHarnessPolling,
   applyHarnessEnablementSettings,
@@ -318,6 +319,36 @@ describe('harnessRowRunsTurns', () => {
     const kunRow = row('kun')
     kunRow.definition.transport = 'native-loop'
     expect(harnessRowRunsTurns(kunRow)).toBe(true)
+  })
+})
+
+describe('session-backed ACP model catalog', () => {
+  beforeEach(() => { resetStore(); provider.listHarnessModels.mockReset() })
+
+  it('refreshes the fallback after a real session publishes its catalog', async () => {
+    useHarnessStore.setState({ rows: [row('devin')] })
+    provider.listHarnessModels.mockResolvedValueOnce({ harnessId: 'devin', models: ['default'],
+      catalogStatus: { source: 'fallback', fetchedAt: 'x' } })
+      .mockResolvedValueOnce({ harnessId: 'devin', models: ['native-model'],
+        catalogStatus: { source: 'cache', fetchedAt: 'y' } })
+    await loadHarnessModels('devin')
+    expect(useHarnessStore.getState().models.devin?.models).toEqual(['default'])
+    receiveHarnessSessionState({ threadId: 'thread', harnessId: 'devin' })
+    await vi.waitFor(() => expect(useHarnessStore.getState().models.devin?.models).toEqual(['native-model']))
+    expect(provider.listHarnessModels).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes after an in-flight fallback resolves when the session arrives first', async () => {
+    useHarnessStore.setState({ rows: [row('devin')] })
+    let finish!: (value: unknown) => void
+    provider.listHarnessModels.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+      .mockResolvedValueOnce({ harnessId: 'devin', models: ['native-model'], catalogStatus: { source: 'cache', fetchedAt: 'y' } })
+    const pending = loadHarnessModels('devin')
+    receiveHarnessSessionState({ threadId: 'thread', harnessId: 'devin' })
+    finish({ harnessId: 'devin', models: ['default'], catalogStatus: { source: 'fallback', fetchedAt: 'x' } })
+    await pending
+    await vi.waitFor(() => expect(useHarnessStore.getState().models.devin?.models).toEqual(['native-model']))
+    expect(provider.listHarnessModels).toHaveBeenCalledTimes(2)
   })
 })
 

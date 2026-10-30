@@ -242,6 +242,59 @@ describe('sidebar Kun account card', () => {
     expect(panel()?.dataset.view).toBe('menu')
   })
 
+  it.each([
+    ['signed in', signedIn],
+    ['signed out', anonymous]
+  ] as const)('groups Focus immediately before Settings when %s', async (_label, state) => {
+    current = state
+    const onFocusModeChange = vi.fn()
+    const onOpenSettings = vi.fn()
+    const onToggleConnectPhone = vi.fn()
+    const onToggleTheme = vi.fn()
+    await act(async () => root.render(createElement(SidebarStandardFooter, {
+      focusModeEnabled: true, connectPhoneSidebarOpen: true, onFocusModeChange,
+      onOpenSettings, onToggleConnectPhone, onToggleTheme
+    })))
+    const row = container.querySelector<HTMLElement>('.kun-account-focus-row')!
+    const spacer = row.querySelector('[data-footer-settings-slot="spacer"]')!
+    const toggle = row.querySelector<HTMLButtonElement>('[role="switch"]')!
+    const settings = row.querySelector<HTMLButtonElement>('[aria-label="settings"]')!
+    const phone = row.querySelector<HTMLButtonElement>('[aria-label="claw"]')!
+    const theme = row.querySelector<HTMLButtonElement>('[aria-label="toggleTheme"]')!
+    expect(spacer.previousElementSibling).toBe(state === signedIn ? card() : null)
+    expect(spacer.nextElementSibling).toBe(toggle)
+    expect(toggle.nextElementSibling).toBe(settings)
+    expect(settings.nextElementSibling?.hasAttribute('data-guided-tours-button')).toBe(true)
+    expect(phone.nextElementSibling).toBe(theme)
+    expect(phone.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => { toggle.click(); settings.click(); phone.click(); theme.click() })
+    expect(onFocusModeChange).toHaveBeenCalledWith(false)
+    expect(onOpenSettings).toHaveBeenCalledOnce()
+    expect(onToggleConnectPhone).toHaveBeenCalledOnce()
+    expect(onToggleTheme).toHaveBeenCalledOnce()
+    await act(async () => root.render(createElement(SidebarStandardFooter, {
+      focusModeEnabled: false, connectPhoneSidebarOpen: false, onFocusModeChange,
+      onOpenSettings, onToggleConnectPhone, onToggleTheme
+    })))
+    const dockBar = container.querySelector('.kun-account-dock-bar')!
+    expect(dockBar.firstElementChild?.getAttribute('data-footer-settings-slot')).toBe('spacer')
+    expect(dockBar.querySelector('[role="switch"]')?.previousElementSibling).toBe(dockBar.firstElementChild)
+  })
+
+  it('keeps the same Focus and Settings order in the remote client without account or help controls', async () => {
+    kunGui.isRemoteWeb = true
+    await act(async () => root.render(createElement(SidebarStandardFooter, {
+      focusModeEnabled: true, connectPhoneSidebarOpen: false,
+      onFocusModeChange: vi.fn(), onOpenSettings: vi.fn(), onToggleConnectPhone: vi.fn(), onToggleTheme: vi.fn()
+    })))
+    const row = container.querySelector('.ds-sidebar-footer-bar')!
+    const toggle = row.querySelector('[role="switch"]')!
+    expect(row.firstElementChild?.getAttribute('data-footer-settings-slot')).toBe('spacer')
+    expect(toggle.nextElementSibling?.getAttribute('aria-label')).toBe('settings')
+    expect(row.querySelector('[data-guided-tours-button]')).toBeNull()
+    expect(card()).toBeNull()
+  })
+
   it('opens the avatar picker from the menu face and switches to the Kun look', async () => {
     const items = new Map<string, string>()
     vi.stubGlobal('localStorage', { getItem: (key: string) => items.get(key) ?? null, setItem: (key: string, value: string) => { items.set(key, value) } })

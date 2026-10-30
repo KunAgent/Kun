@@ -118,6 +118,25 @@ describe('ThreadTitleService', () => {
     expect(JSON.stringify(captured?.history)).not.toContain('Assistant reply')
   })
 
+  it('uses the visible Work request when upgrading a provisional title', async () => {
+    const threadStore = new InMemoryThreadStore()
+    const sessionStore = new InMemorySessionStore()
+    await threadStore.upsert(createThreadRecord({ id: 'work', title: 'Provisional', titleAuto: true,
+      workspace: '/tmp', model: 'main-model', agentSurface: 'write' }))
+    await sessionStore.appendItem('work', {
+      ...makeUserItem('work', 'turn_1', 'internal document context'), displayText: 'Explain the paper'
+    } as TurnItem)
+    let captured: ModelRequest | undefined
+    const service = new ThreadTitleService({ threadStore, sessionStore,
+      model: makeTitleModel((request) => { captured = request }),
+      events: { async record(event) { return { ...event, seq: 1, timestamp: new Date().toISOString() } } },
+      nowIso: () => new Date().toISOString(), getRoles: () => undefined })
+    await service.generateAfterTurn('work', 'turn_1')
+    expect((await threadStore.get('work'))?.title).toBe('LLM title')
+    expect(JSON.stringify(captured?.history)).toContain('Explain the paper')
+    expect(JSON.stringify(captured?.history)).not.toContain('internal document context')
+  })
+
   it('skips once any turn has already completed', async () => {
     const threadStore = new InMemoryThreadStore()
     const sessionStore = new InMemorySessionStore()

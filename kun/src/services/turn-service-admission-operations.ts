@@ -1,6 +1,7 @@
 import { validateAttachmentAliases, type AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { restartSourceIsCurrent, insertRecoveryTurn } from '../domain/queue-execution-state.js'
 import { resolveTurnReviewRequests } from './review-composer-context.js'
+import { recoverWorkSessionTitle } from './work-session-title.js'
 import { createHash } from 'node:crypto'
 import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
 import { promotePendingExecutionConfig } from './thread-service-execution-config.js'
@@ -472,6 +473,12 @@ async startTurn(this: TurnService, input: {
           `${error instanceof Error ? error.message : String(error)}`
         )
       })
+      if (threadAgentSurface === 'write' && started.userItem.kind === 'user_message' &&
+        committedThread.turns.find((turn) => !turn.messageSource)?.id === started.turnId) {
+        await recoverWorkSessionTitle(this['deps'], input.threadId, started.userItem).catch((error) => {
+          console.warn('[kun] Work session title could not be generated:', error instanceof Error ? error.message : String(error))
+        })
+      }
       const response = {
         threadId: input.threadId,
         turnId: started.turnId,

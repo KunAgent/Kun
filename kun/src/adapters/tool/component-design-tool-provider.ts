@@ -79,6 +79,7 @@ export function buildComponentDesignToolProviders(
       description: [
         'Publish one interactive UI component prototype inline in the current conversation.',
         'Prefer passing complete standalone HTML in `html`, or `artifactPath` for an existing large or multi-file artifact; direct publication does not start a child agent.',
+        'When both are supplied, html takes precedence and is validated and saved at artifactPath before publication.',
         'The document must start with <!doctype html>, contain complete html/head/body elements, and have no more than one data-kun-component-root; Kun adds missing platform markers.',
         'Relative local scripts, styles, images, fonts, and media are supported. Remote resources require exact HTTPS origins in resourcePolicy.',
         'If HTML is not ready, pass `request` plus optional existing implementation/sourceFiles to ask the component-designer child agent to generate it.',
@@ -104,13 +105,13 @@ export function buildComponentDesignToolProviders(
           html: {
             type: 'string',
             minLength: 1,
-            description: 'Complete standalone component HTML. Use artifactPath instead for large or multi-file prototypes.'
+            description: 'Complete standalone component HTML. Takes precedence over existing artifact content; when artifactPath is also supplied, save the HTML there.'
           },
           artifactPath: {
             type: 'string',
             minLength: 1,
             maxLength: 1_024,
-            description: 'Existing workspace-relative .kun-design/component-prototypes/<id>/prototype.html to validate and publish in place.'
+            description: 'Workspace-relative .kun-design/component-prototypes/<id>/prototype.html: an existing artifact to publish, or the destination when html is supplied.'
           },
           resourcePolicy: {
             type: 'object',
@@ -194,9 +195,7 @@ export function buildComponentDesignToolProviders(
 
         if (args.html || args.artifactPath) {
           try {
-            const content = args.artifactPath
-              ? await readFile(target.absolutePath, 'utf8')
-              : args.html!
+            const content = args.html ?? await readFile(target.absolutePath, 'utf8')
             const artifact = await persistComponentPrototypeHtml(
               target.absolutePath,
               content,
@@ -523,6 +522,7 @@ async function persistComponentPrototypeHtml(
   resourcePolicy: ComponentPrototypeResourcePolicy = emptyResourcePolicy()
 ): Promise<{ byteSize: number; contentHash: string }> {
   const hardened = hardenComponentPrototypeHtml(content, resourcePolicy)
+  await mkdir(dirname(absolutePath), { recursive: true, mode: 0o700 })
   await writeFile(absolutePath, hardened, { encoding: 'utf8', mode: 0o600 })
   const info = await stat(absolutePath)
   return {

@@ -27,7 +27,8 @@ function useDocumentDarkMode(): boolean {
  * Footer shared by the Code and Work sidebars. On the desktop app it is one dock: the Kun account
  * card (its menu holds the wardrobe and Settings) with the Settings gear on its right edge, and
  * below it the focus switch, the GUI update chip, phone and theme. Focus mode drops the frame for
- * one flat row: the account face (signed in only, never a sign-in prompt), Focus, Settings and tools. Theme packs with their own sidebar scene use the
+ * one flat row: the account face (signed in only, never a sign-in prompt), then the right-aligned
+ * Focus, Settings and tools. Theme packs with their own sidebar scene use the
  * one-line card; the remote browser client, which has no account, keeps Kun's status card.
  */
 export function SidebarStandardFooter({
@@ -78,9 +79,9 @@ export function SidebarStandardFooter({
       return (
         <div className="ds-sidebar-footer-bar kun-account-focus-row relative flex items-center gap-1" data-kun-account-dock data-focus>
           <KunAccountControl variant="mini" onOpenSettings={onOpenSettings} />
-          <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
           <div className="min-w-0 flex-1" data-footer-settings-slot="spacer" />
           <SidebarGuiUpdate />
+          <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
           {settingsButton}
           {tools}
         </div>
@@ -90,9 +91,9 @@ export function SidebarStandardFooter({
       <div className="kun-account-dock" data-kun-account-dock>
         <KunAccountControl accessory={settingsButton} onOpenSettings={onOpenSettings} />
         <div className="ds-sidebar-footer-bar kun-account-dock-bar relative flex items-center gap-1">
-          <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
           <div className="min-w-0 flex-1" data-footer-settings-slot="spacer" />
           <SidebarGuiUpdate />
+          <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
           {tools}
         </div>
       </div>
@@ -111,17 +112,24 @@ export function SidebarStandardFooter({
         </div>
       ) : null}
       <div className="ds-sidebar-footer-bar relative flex items-center gap-1">
-        <div className="min-w-0 flex-1" data-footer-settings-slot>
-          <SidebarCommandRow
-            icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}
-            label={t('settings')}
-            onClick={onOpenSettings}
-            variant="footer"
-            collapseLabel
-          />
-        </div>
+        {sceneFooter ? (
+          <div className="min-w-0 flex-1" data-footer-settings-slot>
+            <SidebarCommandRow
+              icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}
+              label={t('settings')}
+              onClick={onOpenSettings}
+              variant="footer"
+              collapseLabel
+            />
+          </div>
+        ) : <div className="min-w-0 flex-1" data-footer-settings-slot="spacer" />}
         <SidebarGuiUpdate />
-        {!sceneFooter ? <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} /> : null}
+        {!sceneFooter ? (
+          <>
+            <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
+            {settingsButton}
+          </>
+        ) : null}
         {tools}
       </div>
     </div>

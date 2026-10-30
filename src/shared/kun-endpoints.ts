@@ -440,6 +440,11 @@ export function kunThreadForkPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/fork`
 }
 
+export const KUN_THREAD_WORK_TITLE_RECOVER_TEMPLATE = '/v1/threads/{id}/work-title/recover'
+export function kunThreadWorkTitleRecoverPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/work-title/recover`
+}
+
 export const KUN_THREAD_SUMMARIZE_TEMPLATE = '/v1/threads/{id}/summarize'
 export function kunThreadSummarizePath(threadId: string): string {
   return `${kunThreadPath(threadId)}/summarize`

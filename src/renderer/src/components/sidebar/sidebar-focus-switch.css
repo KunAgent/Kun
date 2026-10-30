@@ -7,25 +7,25 @@
   --ds-focus-switch-track-off: #cdd3dd;
   --ds-focus-switch-thumb-off: #ffffff;
   display: inline-flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 28px;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 5px 0 9px;
-  border: 1px solid var(--ds-sidebar-row-ring);
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--ds-border);
   border-radius: 999px;
-  background: var(--ds-sidebar-row-active);
+  background: var(--ds-surface-subtle);
   color: var(--ds-text-muted);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
-  box-shadow: 0 1px 1px rgba(20, 32, 60, 0.04);
   outline: none;
   transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
 }
 
 .ds-focus-mode-switch:hover {
@@ -41,7 +41,7 @@
 .ds-focus-mode-switch[aria-checked='true'] {
   border-color: color-mix(in srgb, var(--ds-accent) 42%, transparent);
   background: var(--ds-accent-soft);
-  color: color-mix(in srgb, var(--ds-accent) 80%, var(--ds-text));
+  color: var(--ds-text);
 }
 
 .ds-focus-mode-switch[aria-checked='true']:hover {
@@ -49,31 +49,38 @@
 }
 
 .ds-focus-mode-switch-icon {
+  display: none;
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
+}
+
+.ds-focus-mode-switch-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ds-focus-mode-switch-track {
   position: relative;
   flex: none;
-  width: 26px;
-  height: 16px;
+  width: 24px;
+  height: 14px;
   border-radius: 999px;
   background: var(--ds-focus-switch-track-off);
-  transition: background-color 160ms ease;
+  transition: background-color 140ms ease;
 }
 
 .ds-focus-mode-switch-thumb {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--ds-focus-switch-thumb-off);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.28);
-  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 140ms ease;
 }
 
 .ds-focus-mode-switch[aria-checked='true'] .ds-focus-mode-switch-track {
@@ -91,14 +98,46 @@
   box-shadow: none;
 }
 
-/* A narrow sidebar keeps the icon and the track; the aria-label still names it. */
-@container (max-width: 216px) {
-  .ds-focus-mode-switch {
-    padding-left: 7px;
+.kun-account-focus-row:has(> .ds-sidebar-update-chip) {
+  column-gap: 2px;
+}
+
+/* The update chip needs room before the same right-aligned controls. */
+@container (max-width: 300px) {
+  .ds-sidebar-footer-bar:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch {
+    width: 28px;
+    padding: 0;
+    border-radius: var(--ds-radius-control);
   }
 
-  .ds-focus-mode-switch-label {
+  .ds-sidebar-footer-bar:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch-icon {
+    display: block;
+  }
+
+  .ds-sidebar-footer-bar:has(> .ds-sidebar-update-chip) :is(.ds-focus-mode-switch-label, .ds-focus-mode-switch-track) {
     display: none;
+  }
+}
+
+/* Narrow sidebars use one icon, keeping the switch's name and checked state. */
+@container (max-width: 220px) {
+  .ds-focus-mode-switch {
+    width: 28px;
+    padding: 0;
+    border-radius: var(--ds-radius-control);
+  }
+
+  .ds-focus-mode-switch-icon {
+    display: block;
+  }
+
+  .ds-focus-mode-switch-label,
+  .ds-focus-mode-switch-track {
+    display: none;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) .ds-sidebar-icon-button {
+    width: 24px;
   }
 }
 

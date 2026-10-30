@@ -290,6 +290,81 @@ describe('design_component tool', () => {
     })
   })
 
+  it.each([false, true])('publishes supplied HTML at artifactPath (existing: %s)', async (existing) => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-component-design-html-path-'))
+    workspaces.push(workspace)
+    const relativePath = '.kun-design/component-prototypes/hover-help/prototype.html'
+    if (existing) {
+      await mkdir(join(workspace, '.kun-design/component-prototypes/hover-help'), { recursive: true })
+      await writeFile(join(workspace, relativePath), validHtml('Old result'))
+    }
+    const runChild = vi.fn()
+    const runtime = { enabled: () => true, runChild } as unknown as Pick<DelegationRuntime, 'enabled' | 'runChild'>
+    const tool = buildComponentDesignToolProviders(runtime)[0]!.tools[0]!
+    const html = validHtml('Hover help')
+    const updates: unknown[] = []
+
+    const result = await tool.execute({
+      title: 'Hover help',
+      html,
+      artifactPath: relativePath,
+      request: 'Preview the hover interaction.',
+      sourceFiles: ['missing.tsx']
+    }, context(workspace), (update) => { updates.push(update.output) })
+
+    expect(result.isError).not.toBe(true)
+    expect(runChild).not.toHaveBeenCalled()
+    expect(result.output).toMatchObject({
+      status: 'completed',
+      componentPrototype: {
+        version: 1,
+        status: 'completed',
+        producer: 'main-agent',
+        relativePath,
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+      }
+    })
+    expect(updates).toEqual([
+      expect.objectContaining({ componentPrototype: expect.objectContaining({ status: 'preparing', relativePath }) })
+    ])
+    expect(await readFile(join(workspace, relativePath), 'utf8')).toBe(hardenComponentPrototypeHtml(html))
+  })
+
+  it('validates supplied HTML before replacing an existing artifactPath', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-component-design-html-path-invalid-'))
+    workspaces.push(workspace)
+    const relativePath = '.kun-design/component-prototypes/hover-help/prototype.html'
+    await mkdir(join(workspace, '.kun-design/component-prototypes/hover-help'), { recursive: true })
+    const original = validHtml('Original result')
+    await writeFile(join(workspace, relativePath), original)
+    const tool = buildComponentDesignToolProviders(undefined)[0]!.tools[0]!
+
+    const result = await tool.execute({
+      artifactPath: relativePath,
+      html: validHtml().replace('</head>', '<script src="https://cdn.example.test/ui.js"></script></head>')
+    }, context(workspace))
+
+    expect(result.isError).toBe(true)
+    expect(result.output).toMatchObject({
+      componentPrototype: { status: 'failed', error: expect.stringContaining('undeclared remote origin') }
+    })
+    expect(await readFile(join(workspace, relativePath), 'utf8')).toBe(original)
+  })
+
+  it.each([
+    { artifactPath: '../outside/prototype.html', sandboxMode: 'workspace-write' as const },
+    { artifactPath: '.kun-design/component-prototypes/hover-help/prototype.html', sandboxMode: 'read-only' as const }
+  ])('rejects HTML publication outside its path or sandbox contract: %s', async ({ artifactPath, sandboxMode }) => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-component-design-html-path-denied-'))
+    workspaces.push(workspace)
+    const tool = buildComponentDesignToolProviders(undefined)[0]!.tools[0]!
+
+    const result = await tool.execute({ html: validHtml(), artifactPath }, { ...context(workspace), sandboxMode })
+
+    expect(result.isError).toBe(true)
+    await expect(readFile(join(workspace, artifactPath), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('keeps the tool advertised and explains how to proceed when request delegation is disabled', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-component-design-disabled-'))
     workspaces.push(workspace)

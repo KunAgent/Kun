@@ -310,7 +310,7 @@ export async function loadHarnessModels(harnessId: string, force = false, select
     const failed = result.models.length === 0 && (lookupError !== undefined || result.catalogStatus?.source === 'fallback')
     const models = failed && existing?.models.length ? existing.models : result.models
     if (!failed && !selectedModel && result.models.length > 0 && result.catalogStatus?.source !== 'provider' &&
-      result.catalogStatus?.source !== 'static') {
+      result.catalogStatus?.source !== 'static' && result.catalogStatus?.source !== 'fallback') {
       writeCatalogSeed(harnessId, { models: result.models, ...(result.modelInfo ? { modelInfo: result.modelInfo } : {}),
         ...(result.catalogStatus?.version ? { version: result.catalogStatus.version } : {}), savedAt: result.catalogStatus?.fetchedAt ?? new Date().toISOString() })
     }
@@ -389,6 +389,27 @@ export async function loadHarnessProviderGroups(
   }
 }
 
+const pendingSessionModelRefresh = new Map<string, () => void>()
+
+/** Refresh a fallback after the real session arrives, even if its first lookup is still in flight. */
+function refreshSessionModels(harnessId: string): void {
+  const cache = useHarnessStore.getState().models[harnessId]
+  if (!cache) return
+  if (!cache.loading) {
+    if (cache.catalogStatus?.source === 'fallback') void loadHarnessModels(harnessId, true)
+    return
+  }
+  if (pendingSessionModelRefresh.has(harnessId)) return
+  const unsubscribe = useHarnessStore.subscribe((state) => {
+    const current = state.models[harnessId]
+    if (current?.loading) return
+    pendingSessionModelRefresh.delete(harnessId)
+    unsubscribe()
+    if (current?.catalogStatus?.source === 'fallback') void loadHarnessModels(harnessId, true)
+  })
+  pendingSessionModelRefresh.set(harnessId, unsubscribe)
+}
+
 /** Sink entry for mapped `harness_session_state` runtime events. */
 export function receiveHarnessSessionState(state: AdeHarnessSessionState): void {
   const threadId = state.threadId.trim()
@@ -422,6 +443,8 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
       }
     }
   }))
+  const harness = useHarnessStore.getState().rows.find((row) => row.definition.id === state.harnessId)
+  if (harness?.definition.transport === 'acp') refreshSessionModels(state.harnessId)
 }
 
 /**

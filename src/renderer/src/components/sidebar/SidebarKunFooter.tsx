@@ -83,9 +83,8 @@ export function SidebarKunStatus({ onOpen = toggleWardrobePage }: { onOpen?: () 
 }
 
 /**
- * Focus mode as a labeled pill switch beside the phone and theme buttons:
- * icon, "Focus" and a track whose thumb shows the state. The label drops
- * out when the footer bar gets too narrow (sidebar-focus-switch.css).
+ * Focus mode uses a label and track without a redundant icon. Narrow footer bars
+ * replace both with one icon; the accessible switch name and state stay intact.
  */
 export function SidebarFocusModeSwitch({ enabled, onChange }: {
   enabled: boolean
