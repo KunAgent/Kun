@@ -77,7 +77,6 @@ export async function handOffPlanBuild(input: {
   route: PlanBuildRoute & { accountId?: string }
   displayText: string
   chatState: ChatState
-  getChatState: () => ChatState
   t: Translate
 }): Promise<boolean> {
   const { plan, prepared, route, chatState } = input
@@ -96,25 +95,22 @@ export async function handOffPlanBuild(input: {
     ...(route.accountId ? { accountId: route.accountId } : {}),
     ...(effort ? { reasoningEffort: effort } : {})
   })
-  const after = input.getChatState()
-  if (!dispatched) {
+  if (!dispatched.ok) {
     store.setFailure(plan.id, {
       agentId: route.agentId,
-      message: after.error || input.t('planBuildHandoffFailed')
+      message: dispatched.error || input.t('planBuildHandoffFailed')
     })
-    after.setError(null)
     return false
   }
-  if (after.activeThreadId) {
-    const { accountId: _account, ...persisted } = route
-    store.setHandoff(plan.id, {
-      threadId: after.activeThreadId,
-      route: persisted,
-      planTitle: plan.featureName || prepared.title,
-      planPath: plan.relativePath,
-      ...(sourceThreadId && sourceThreadId !== after.activeThreadId ? { sourceThreadId } : {}),
-      startedAt: Date.now()
-    })
-  }
+  const { accountId: _account, ...persisted } = route
+  store.setHandoff(plan.id, {
+    threadId: dispatched.threadId,
+    workspaceId: dispatched.workspaceId,
+    route: persisted,
+    planTitle: plan.featureName || prepared.title,
+    planPath: plan.relativePath,
+    ...(sourceThreadId && sourceThreadId !== dispatched.threadId ? { sourceThreadId } : {}),
+    startedAt: Date.now()
+  })
   return true
 }

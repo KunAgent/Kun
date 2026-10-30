@@ -282,7 +282,7 @@ export async function sendThreadMessage(
       return false
     }
     if (!expectedThreadStillActive()) {
-      set({
+      if (!queued) set({
         error: i18n.t('common:designThreadChangedBeforeSend')
       })
       return false
@@ -297,13 +297,14 @@ export async function sendThreadMessage(
         if (!activeWriteContextIsValid()) return false
       }
       if (workspaceRoot && !(await workspaceDirectoryExists(workspaceRoot))) {
-        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) return false
+        if (!expectedThreadStillActive() || (adeDraft && !adeDraftStillCurrent(get(), adeDraft))) return false
         set({ error: workspaceMissingError() })
         if (!adeDraft) await showWorkspaceMissingDialog(workspaceRoot)
         return false
       }
       if (!activeWriteContextIsValid()) return false
     }
+    if (!expectedThreadStillActive()) return false
     const p = getProvider()
     if (writeContext || get().route === 'write') {
       const boardThreadId = writeContext?.whiteboardId
@@ -356,6 +357,12 @@ export async function sendThreadMessage(
       : null
     // ADE manager sends fold pending worker notices into the turn.
     const adeExtras = await adeWorkerNoticeSendExtras(get(), queued?.ackNoticeIds, i18n.language)
+    // Preparation may yield while the user selects another conversation.
+    // Leave the owner's durable queue intact for target-thread recovery.
+    if (!expectedThreadStillActive()) {
+      settleRuntimeTurnAdmission(clientRequestId, false)
+      return false
+    }
     const ackNoticeIds = adeExtras.ackNoticeIds
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
     // Task-worktree prep queues locally: the runtime cannot admit
@@ -434,6 +441,7 @@ export async function sendThreadMessage(
         })
         if (submitted !== null) return submitted
       }
+      if (!expectedThreadStillActive()) return false
       set((s) => ({
         queuedMessages: upsertQueuedSubmission(s.queuedMessages, {
           ...queued,

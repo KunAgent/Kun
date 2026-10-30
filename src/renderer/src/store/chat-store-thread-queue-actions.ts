@@ -173,6 +173,9 @@ import {
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
 
+import { drainTaskWorkspaceQueuedMessages } from './task-workspace-queue-delivery'
+import { threadHasBoundTaskWorkspace } from './task-workspace-store'
+
 function isResumablePausedQueuedMessage(message: QueuedUserMessage): boolean {
   return message.deliveryState === 'paused' && !message.editIntent && !message.waitForRuntimeAdmission
 }
@@ -194,9 +197,14 @@ export function createThreadQueueActions(
     }
   }
   return {
-  drainQueuedMessages: async () => {
-    const threadId = get().activeThreadId?.trim()
-    if (!threadId || threadActionSharedState.drainingQueuedMessageThreadIds.has(threadId)) return
+  drainQueuedMessages: async (targetThreadId) => {
+    const threadId = targetThreadId?.trim() || get().activeThreadId?.trim()
+    if (!threadId) return
+    if (get().activeThreadId !== threadId) {
+      await drainTaskWorkspaceQueuedMessages(threadId, set, get)
+      return
+    }
+    if (threadActionSharedState.drainingQueuedMessageThreadIds.has(threadId)) return
     threadActionSharedState.drainingQueuedMessageThreadIds.add(threadId)
     try {
       while (true) {
@@ -225,6 +233,7 @@ export function createThreadQueueActions(
         const next = queuedMessages.find((message) => isPendingQueuedMessage(message) ||
           (message.deliveryState === 'starting' && message.clientRequestId && !queueAdmissionPending(message.id)))
         if (!next || (state.busy && (!next.clientRequestId || next.waitForRuntimeAdmission)) ||
+          (next.planBuild && !threadHasBoundTaskWorkspace(threadId, state)) ||
           queueAdmissionPending(next.id) || threadActionSharedState.guidingQueuedMessageIds.has(next.id)) return
         if (
           next.waitForRuntimeAdmission &&

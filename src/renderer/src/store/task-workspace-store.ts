@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ChatState } from './chat-store-types'
 import type {
   TaskWorkspaceRecord,
   TaskWorkspaceState,
@@ -19,6 +20,8 @@ export type TaskWorkspacePrep = {
   state: TaskWorkspaceState
   progress?: { step?: string; percent?: number; message?: string }
   path?: string
+  /** Set only after the Runtime acknowledges the owner-thread binding. */
+  bound?: boolean
   /** Original project directory; `path` is the isolated execution directory. */
   sourceRoot?: string
   /** Terminal creation error shown with a retry affordance. */
@@ -69,6 +72,15 @@ export function threadWorkspaceBlocksSend(threadId: string | null | undefined): 
     useTaskWorkspaceStore.getState().prepByThread[threadId]?.state === 'failed')
 }
 
+export function threadHasBoundTaskWorkspace(
+  threadId: string,
+  state: Pick<ChatState, 'threads' | 'adeThreads'>
+): boolean {
+  const thread = state.threads.find((row) => row.id === threadId) ?? state.adeThreads?.find((row) => row.id === threadId)
+  const prep = useTaskWorkspaceStore.getState().prepByThread[threadId]
+  return Boolean(thread?.taskWorkspaceId || (prep?.bound && prep.state === 'ready' && prep.path))
+}
+
 /** Mark a create/prepare attempt failed; the composer shows retry. */
 export function markThreadWorkspacePrepFailed(threadId: string, error: string): void {
   const thread = threadId.trim()
@@ -113,6 +125,7 @@ export function receiveTaskWorkspaceRecord(record: TaskWorkspaceRecord): void {
           workspaceId: record.workspaceId,
           ownerThreadId: threadId,
           state: record.state,
+          ...(existing?.bound && existing.workspaceId === record.workspaceId && existing.path === record.path ? { bound: true } : {}),
           ...(record.path ? { path: record.path } : {}),
           ...(record.sourceRoot ? { sourceRoot: record.sourceRoot } : {}),
           ...(record.lastError ? { error: record.lastError } : {})
@@ -141,6 +154,8 @@ export function receiveTaskWorkspaceThreadEvent(ev: TaskWorkspaceThreadEvent): v
           workspaceId,
           ownerThreadId: threadId,
           state: ev.state,
+          ...(existing?.bound && existing.workspaceId === workspaceId &&
+            (!ev.workspace?.path || existing.path === ev.workspace.path) ? { bound: true } : {}),
           ...(ev.progress ? { progress: ev.progress } : {}),
           ...(ev.workspace?.path ? { path: ev.workspace.path } : existing?.path
             ? { path: existing.path }

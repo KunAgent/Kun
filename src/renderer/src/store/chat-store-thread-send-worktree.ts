@@ -15,7 +15,6 @@ import {
   useTaskWorkspaceStore
 } from './task-workspace-store'
 import { upsertQueuedSubmission, type StoreActionContext } from './chat-store-thread-actions-support'
-import type { ChatState } from './chat-store-types'
 
 /**
  * New-session worktree isolation: subscribe for the task_workspace
@@ -36,13 +35,23 @@ export async function prepareAdeThreadWorktree(args: {
 }): Promise<TaskWorkspaceRecord | null> {
   const { provider: p, threadId, workspaceRoot, submittedMessageForQueue } = args
   const { set, get, sseAbortRef } = args.context
+  markThreadWorkspacePreparing(threadId, '')
   const ac = new AbortController()
   sseAbortRef.current = ac
   const sink = buildThreadEventSink(set, get, { threadId, signal: ac.signal, sinceSeq: 0 })
   subscribeThreadEventsWithRecovery(p, threadId, 0, sink, ac.signal, get)
-  // Seed `creating` before the POST resolves so a failed create leaves a
-  // retryable prep entry instead of a silent stall.
-  markThreadWorkspacePreparing(threadId, '')
+  // Persist before requesting preparation: the response or ready event can
+  // arrive after navigation, or after a renderer restart.
+  const pending = { ...submittedMessageForQueue, deliveryState: 'pending' as const }
+  const active = get().activeThreadId === threadId
+  const queuedMessages = upsertQueuedSubmission(
+    active ? get().queuedMessages : queuedMessagesForThread(threadId), pending
+  )
+  if (active) {
+    set({ busy: false, busyUnconfirmed: false, queuedMessages })
+  }
+  saveQueuedMessagesForThread(threadId, queuedMessages)
+  if (active) args.persistActiveQueuedMessages()
   let record: TaskWorkspaceRecord | null = null
   try {
     const created = await p.createTaskWorkspace!({
@@ -60,16 +69,6 @@ export async function prepareAdeThreadWorktree(args: {
       workspaceError instanceof Error ? workspaceError.message : String(workspaceError)
     )
   }
-  const pending = { ...submittedMessageForQueue, deliveryState: 'pending' as const }
-  const active = get().activeThreadId === threadId
-  const queuedMessages = upsertQueuedSubmission(
-    active ? get().queuedMessages : queuedMessagesForThread(threadId), pending
-  )
-  if (active) {
-    set((_s: ChatState) => ({ busy: false, busyUnconfirmed: false, queuedMessages }))
-  }
-  saveQueuedMessagesForThread(threadId, queuedMessages)
-  if (active) args.persistActiveQueuedMessages()
   const prep = useTaskWorkspaceStore.getState().prepByThread[threadId]
   if (prep?.state === 'ready' && prep.path) {
     await bindReadyTaskWorkspace({ threadId, workspaceId: prep.workspaceId, state: 'ready',

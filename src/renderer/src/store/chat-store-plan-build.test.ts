@@ -83,7 +83,7 @@ describe('dispatchExternalPlanBuild', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     registryMock.provider = {}
-    worktreeMock.prepareAdeThreadWorktree.mockResolvedValue(null)
+    worktreeMock.prepareAdeThreadWorktree.mockResolvedValue({ workspaceId: 'ws_1' })
   })
 
   it('creates an ADE thread pinned to the external harness and parks a planBuild turn', async () => {
@@ -97,7 +97,7 @@ describe('dispatchExternalPlanBuild', () => {
 
     const ok = await actions.dispatchExternalPlanBuild(input)
 
-    expect(ok).toBe(true)
+    expect(ok).toEqual({ ok: true, threadId: 'thr_build', workspaceId: 'ws_1' })
     expect(createThread).toHaveBeenCalledWith(expect.objectContaining({
       workspace: '/repo',
       workspaceMode: 'ade',
@@ -150,6 +150,43 @@ describe('dispatchExternalPlanBuild', () => {
     expect(watchMock.watchPlanBuildReview).toHaveBeenCalledWith('ws_1', 'thr_build')
   })
 
+  it('returns the created IDs even if selection changes while preparing the worktree', async () => {
+    const { state, set, get, sseAbortRef } = buildHarness()
+    registryMock.provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_build', workspace: '/repo' })),
+      createTaskWorkspace: vi.fn()
+    }
+    worktreeMock.prepareAdeThreadWorktree.mockImplementationOnce(async () => {
+      state.activeThreadId = 'thr_other'
+      state.error = 'other thread error'
+      return { workspaceId: 'ws_1' }
+    })
+    const actions = createPlanBuildActions(
+      { set, get, sseAbortRef },
+      { threadSelectionGeneration: 0, fenceThreadMutation: vi.fn(() => 1), persistActiveQueuedMessages: vi.fn() }
+    )
+    expect(await actions.dispatchExternalPlanBuild(input)).toEqual({
+      ok: true, threadId: 'thr_build', workspaceId: 'ws_1'
+    })
+    expect(state.activeThreadId).toBe('thr_other')
+    expect(state.error).toBe('other thread error')
+  })
+
+  it('does not report a handoff when workspace creation failed', async () => {
+    const { set, get, sseAbortRef } = buildHarness()
+    registryMock.provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_build', workspace: '/repo' })),
+      createTaskWorkspace: vi.fn()
+    }
+    worktreeMock.prepareAdeThreadWorktree.mockResolvedValueOnce(null)
+    const actions = createPlanBuildActions(
+      { set, get, sseAbortRef },
+      { threadSelectionGeneration: 0, fenceThreadMutation: vi.fn(() => 1), persistActiveQueuedMessages: vi.fn() }
+    )
+    expect(await actions.dispatchExternalPlanBuild(input)).toMatchObject({ ok: false })
+    expect(watchMock.watchPlanBuildReview).not.toHaveBeenCalled()
+  })
+
   it('fails without a task-workspace provider surface', async () => {
     const { state, set, get, sseAbortRef } = buildHarness()
     registryMock.provider = { createThread: vi.fn() }
@@ -160,8 +197,8 @@ describe('dispatchExternalPlanBuild', () => {
 
     const ok = await actions.dispatchExternalPlanBuild(input)
 
-    expect(ok).toBe(false)
-    expect(state.error).toBeTruthy()
+    expect(ok).toMatchObject({ ok: false, error: expect.any(String) })
+    expect(state.error).toBeUndefined()
     expect(registryMock.provider.createThread).not.toHaveBeenCalled()
   })
 
@@ -180,8 +217,8 @@ describe('dispatchExternalPlanBuild', () => {
 
     const ok = await actions.dispatchExternalPlanBuild(input)
 
-    expect(ok).toBe(false)
+    expect(ok).toMatchObject({ ok: false, error: expect.stringContaining('runtime offline') })
     expect(state.activeThreadId).toBe('thr_plan')
-    expect(state.error).toBeTruthy()
+    expect(state.error).toBeUndefined()
   })
 })

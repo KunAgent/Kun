@@ -249,7 +249,9 @@ describe('workbench plan build orchestration', () => {
       expect.objectContaining({ harnessId: 'kun', model: 'kimi-k3', providerId: 'moonshot', orchestration: 'direct' }))
 
     sendMessage.mockClear()
-    const dispatchExternalPlanBuild = vi.fn(async () => true)
+    const dispatchExternalPlanBuild = vi.fn(async () => ({
+      ok: true as const, threadId: 'thr_build', workspaceId: 'ws_build'
+    }))
     useChatStore.setState({ dispatchExternalPlanBuild } as Partial<ChatState>)
     usePlanBuildAgentStore.getState().setRoute(planId, { agentId: 'codex', model: 'gpt-6.1-codex', credentialMode: 'native-login' })
     await act(async () => { await controller.buildGuiPlan('direct') })
@@ -257,7 +259,9 @@ describe('workbench plan build orchestration', () => {
     expect(dispatchExternalPlanBuild).toHaveBeenCalledWith(expect.objectContaining({
       harnessId: 'codex', model: 'gpt-6.1-codex', credentialMode: 'native-login', workspaceRoot: '/Users/codex/app'
     }))
-    expect(usePlanBuildAgentStore.getState().handoffs[planId]?.route.agentId).toBe('codex')
+    expect(usePlanBuildAgentStore.getState().handoffs[planId]).toMatchObject({
+      threadId: 'thr_build', workspaceId: 'ws_build', route: { agentId: 'codex' }
+    })
     usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} })
   })
 

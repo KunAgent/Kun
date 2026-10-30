@@ -475,6 +475,8 @@ function threadHasUserMessage(blocks: ChatBlock[]): boolean {
   return blocks.some((block) => block.kind === 'user')
 }
 
+const readyWorkspaceBindings = new Map<string, Promise<unknown>>()
+
 /** Ready task workspace: PATCH the binding, patch the thread, drain queue. */
 export async function bindReadyTaskWorkspace(
   event: TaskWorkspaceThreadEvent,
@@ -488,6 +490,11 @@ export async function bindReadyTaskWorkspace(
   if (thread?.taskWorkspaceId && thread.taskWorkspaceId !== event.workspaceId) return
   const path = event.workspace?.path?.trim()
   if (!path) return
+  const prep = useTaskWorkspaceStore.getState().prepByThread[event.threadId]
+  const alreadyBound = (thread?.taskWorkspaceId === event.workspaceId &&
+    normalizeWorkspaceRoot(thread.workspace) === normalizeWorkspaceRoot(path)) ||
+    (prep?.bound && prep.workspaceId === event.workspaceId &&
+      normalizeWorkspaceRoot(prep.path) === normalizeWorkspaceRoot(path))
   try {
     useTaskWorkspaceStore.setState((state) => {
       const prep = state.prepByThread[event.threadId]
@@ -495,11 +502,23 @@ export async function bindReadyTaskWorkspace(
         [event.threadId]: { ...prep, state: 'setting-up' as const } } } : {}
     })
     const provider = getProvider()
-    if (provider.bindThreadTaskWorkspace) {
-      await provider.bindThreadTaskWorkspace(event.threadId, {
-        taskWorkspaceId: event.workspaceId,
-        workspace: path
-      })
+    if (!provider.bindThreadTaskWorkspace && !alreadyBound) {
+      throw new Error('Task workspace binding is unavailable')
+    }
+    if (provider.bindThreadTaskWorkspace && !alreadyBound) {
+      const key = JSON.stringify([event.threadId, event.workspaceId, path])
+      let binding = readyWorkspaceBindings.get(key)
+      if (!binding) {
+        binding = provider.bindThreadTaskWorkspace(event.threadId, {
+          taskWorkspaceId: event.workspaceId, workspace: path
+        })
+        readyWorkspaceBindings.set(key, binding)
+      }
+      try {
+        await binding
+      } finally {
+        if (readyWorkspaceBindings.get(key) === binding) readyWorkspaceBindings.delete(key)
+      }
     }
     const sourceRoot = useTaskWorkspaceStore.getState().prepByThread[event.threadId]?.sourceRoot
     if (sourceRoot && normalizeWorkspaceRoot(sourceRoot) !== normalizeWorkspaceRoot(path)) {
@@ -522,12 +541,12 @@ export async function bindReadyTaskWorkspace(
     useTaskWorkspaceStore.setState((state) => {
       const prep = state.prepByThread[event.threadId]
       return prep ? { prepByThread: { ...state.prepByThread,
-        [event.threadId]: { ...prep, state: 'ready' as const } } } : {}
+        [event.threadId]: { ...prep, state: 'ready' as const, bound: true } } } : {}
     })
-    if (get().activeThreadId === event.threadId) void get().drainQueuedMessages()
+    await get().drainQueuedMessages(event.threadId)
   } catch (error) {
     markThreadWorkspacePrepFailed(event.threadId, error instanceof Error ? error.message : String(error))
-    if (!stillCurrent()) return
+    if (!stillCurrent() || get().activeThreadId !== event.threadId) return
     set({ error: error instanceof Error ? error.message : String(error) })
   }
 }

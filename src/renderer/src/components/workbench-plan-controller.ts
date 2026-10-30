@@ -456,7 +456,6 @@ export function useWorkbenchPlanController({
           route: externalPlanBuildRoute({ agentId: buildHarnessId, picked: pickedRoute, chatState }),
           displayText: `${t('planBuildDirect')}: ${plan.relativePath}`,
           chatState,
-          getChatState: useChatStore.getState,
           t
         })
         if (handedOff) await onPlanBuildStarted?.(plan)

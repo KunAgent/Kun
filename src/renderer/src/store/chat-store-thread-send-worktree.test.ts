@@ -436,7 +436,11 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     const provider = {
       createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
       createTaskWorkspace: vi.fn(async () => {
+        expect(persistenceMock.saveQueuedMessagesForThread).toHaveBeenCalledWith(
+          'thr_new', [expect.objectContaining({ id: 'q_1', deliveryState: 'pending' })]
+        )
         state.activeThreadId = 'thr_elsewhere'
+        state.queuedMessages = []
         return { record: { workspaceId: 'ws_1', ownerThreadId: 'thr_new', sourceRoot: '/repo',
           isolation: 'worktree', state: 'creating' } }
       })
@@ -446,6 +450,22 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     expect(persistenceMock.saveQueuedMessagesForThread).toHaveBeenCalledWith(
       'thr_new', [expect.objectContaining({ id: 'q_1', deliveryState: 'pending' })]
     )
+  })
+
+  it('does not reinsert a turn consumed before the create-workspace response arrives', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
+      createTaskWorkspace: vi.fn(async () => {
+        expect(state.queuedMessages).toEqual([expect.objectContaining({ id: 'q_1' })])
+        state.queuedMessages = []
+        return { record: { workspaceId: 'ws_1', ownerThreadId: 'thr_new', sourceRoot: '/repo',
+          isolation: 'worktree', state: 'creating' } }
+      })
+    }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(true)
+    expect(state.queuedMessages).toEqual([])
+    expect(persistenceMock.saveQueuedMessagesForThread).toHaveBeenCalledTimes(1)
   })
 
   it('does not fall back to the host setting when an ADE draft has no project', async () => {

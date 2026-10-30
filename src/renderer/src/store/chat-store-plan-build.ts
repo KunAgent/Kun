@@ -14,6 +14,7 @@ import type { ModelReasoningEffort } from '@shared/app-settings'
 import { prepareAdeThreadWorktree } from './chat-store-thread-send-worktree'
 import { snapshotThreadProjection } from './thread-snapshot-cache'
 import { watchPlanBuildReview } from './plan-build-watch'
+import { useTaskWorkspaceStore } from './task-workspace-store'
 import {
   createClientTurnRequestId,
   type StoreActionContext,
@@ -45,8 +46,7 @@ export function createPlanBuildActions(
     dispatchExternalPlanBuild: async (input) => {
       const provider = getProvider()
       if (!provider.createTaskWorkspace) {
-        set({ error: i18n.t('common:planBuildExternalUnsupported') })
-        return false
+        return { ok: false, error: i18n.t('common:planBuildExternalUnsupported') }
       }
       try {
         const harnessId = input.harnessId.trim()
@@ -142,11 +142,14 @@ export function createPlanBuildActions(
           startFrom: { kind: 'current-head' },
           label: input.title?.trim() || input.displayText
         })
-        if (record) watchPlanBuildReview(record.workspaceId, thread.id)
-        return true
+        if (!record) {
+          return { ok: false, error: useTaskWorkspaceStore.getState().prepByThread[thread.id]?.error ||
+            i18n.t('common:planBuildHandoffFailed') }
+        }
+        watchPlanBuildReview(record.workspaceId, thread.id)
+        return { ok: true, threadId: thread.id, workspaceId: record.workspaceId }
       } catch (error) {
-        set({ error: formatRuntimeError(error) })
-        return false
+        return { ok: false, error: formatRuntimeError(error) }
       }
     }
   }

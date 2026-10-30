@@ -15,6 +15,7 @@ export type PlanBuildRoute = AgentDispatchAssignmentRoute & {
 export type PlanBuildHandoff = {
   route: PlanBuildRoute
   threadId: string
+  workspaceId?: string
   planTitle?: string
   planPath?: string
   /** Conversation the plan was written in, for the way back. */

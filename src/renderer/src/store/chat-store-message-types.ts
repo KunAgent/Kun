@@ -224,3 +224,7 @@ export type ExternalPlanBuildRequest = {
   /** Reasoning level for the build turn; omitted leaves it to the Agent. */
   reasoningEffort?: string
 }
+
+export type ExternalPlanBuildDispatchResult =
+  | { ok: true; threadId: string; workspaceId: string }
+  | { ok: false; error: string }
