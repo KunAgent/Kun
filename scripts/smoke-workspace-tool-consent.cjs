@@ -15,8 +15,30 @@ async function allowWorkspaceTool({ page, request, poll, capture, roomId, expect
   assert.equal(approval.status, 'pending')
   assert.equal(approval.toolName, expected.toolName)
   assert.deepEqual(approval.action?.arguments, expected.arguments, 'Consent is limited to the exact fixture action')
-  const path = `/v1/approvals/${encodeURIComponent(approval.id)}`
-  assert.deepEqual((await request(page, path)).approval, approval)
+  // The renderer bridge deliberately excludes /v1/approvals/:id. Read the
+  // canonical approval item through the existing, run-scoped inspector instead.
+  const base = `/v1/rooms/${encodeURIComponent(roomId)}/runs/${encodeURIComponent(before.active.runId)}`
+  const run = (await request(page, base)).run
+  assert.equal(run.id, before.active.runId)
+  assert.equal(run.roomId, roomId)
+  assert.equal(run.requestId, before.active.id)
+  assert.equal(run.threadId, approval.threadId)
+  assert.equal(run.turnId, approval.turnId)
+  const itemsPath = base + '/items?limit=100&max_bytes=262144'
+  const matchingItem = (result) => {
+    assert.equal(result.availability?.status, 'available', 'Canonical approval history must be available')
+    const matches = result.items.filter((item) => item.kind === 'approval' && item.approvalId === approval.id)
+    assert.equal(matches.length, 1, 'The exact approval item must exist; disappearance is not consent')
+    const item = matches[0]
+    assert.equal(item.threadId, approval.threadId)
+    assert.equal(item.turnId, approval.turnId)
+    assert.equal(item.toolName, approval.toolName)
+    assert.deepEqual(item.action, approval.action)
+    return item
+  }
+  const pendingItem = matchingItem(await request(page, itemsPath))
+  assert.equal(pendingItem.status, 'pending')
+  const path = itemsPath + '&item_id=' + encodeURIComponent(pendingItem.id)
   const card = page.locator('.room-approval-card:visible')
   assert.equal(await card.count(), 1, 'Never choose the first of multiple approval cards')
   assert.deepEqual(JSON.parse(await card.locator('code').innerText()), expected.arguments)
@@ -25,7 +47,8 @@ async function allowWorkspaceTool({ page, request, poll, capture, roomId, expect
   // DOM-generated/repeated clicks must not grant consent. Only the real pointer
   // click below may cross the trusted-user activation and signed Main boundary.
   await allow.evaluate((button) => { button.click(); button.click() })
-  assert.deepEqual((await request(page, path)).approval, approval, 'Synthetic clicks leave the exact approval pending')
+  assert.deepEqual(matchingItem(await request(page, path)), pendingItem,
+    'Synthetic clicks leave the exact approval pending')
   if (label) await capture(label)
   const current = await activity()
   assert.equal(current.active?.id, before.active.id)
@@ -33,14 +56,12 @@ async function allowWorkspaceTool({ page, request, poll, capture, roomId, expect
   assert.deepEqual(current.approvals, [approval], 'Request and approval cannot change before consent')
   await allow.click()
   await poll(async () => {
-    const resolved = (await request(page, path)).approval
-    assert.equal(resolved.id, approval.id)
-    assert.equal(resolved.toolName, approval.toolName)
-    assert.equal(resolved.threadId, approval.threadId)
-    assert.equal(resolved.turnId, approval.turnId)
-    assert.deepEqual(resolved.action, approval.action)
+    const resolved = matchingItem(await request(page, path))
+    assert.equal(resolved.id, pendingItem.id)
     assert(['pending', 'allowed'].includes(resolved.status), 'Expected user consent was not denied or expired')
-    return resolved.status === 'allowed'
+    if (resolved.status === 'pending') return false
+    assert.equal(resolved.approvalReviewer, 'user', 'The canonical resolution must record user consent')
+    return true
   }, 15000, 'the exact inline tool approval is allowed')
   return { label, approvalId: approval.id, requestId: before.active.id, runId: before.active.runId,
     threadId: approval.threadId, turnId: approval.turnId, toolName: approval.toolName,

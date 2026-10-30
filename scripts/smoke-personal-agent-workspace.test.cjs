@@ -537,8 +537,12 @@ function fixture() {
         state.directReads++
         return copy({ approvals: [state.approval], active: state.active })
       }
-      assert.equal(path, '/v1/approvals/approval-1')
-      return copy({ approval: state.approval })
+      if (path === '/v1/rooms/room-1/runs/run-1') return copy({ run: {
+        id: 'run-1', roomId: 'room-1', requestId: state.active.id, threadId: 'thread-1', turnId: 'turn-1' } })
+      assert(path.startsWith('/v1/rooms/room-1/runs/run-1/items?'))
+      return copy({ availability: { status: 'available' }, items: [{ ...state.approval,
+        id: 'item-1', kind: 'approval', approvalId: state.approval.id,
+        ...(state.approval.status === 'allowed' ? { approvalReviewer: 'user' } : {}) }] })
     }, poll: async (check) => assert(await check()), capture: async (name) => state.captures.push(name) }
   return { state, options, allow }
 }
