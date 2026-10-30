@@ -30,6 +30,7 @@ on:
       - 'kun/src/rooms/room-run-recording*'
       - 'scripts/smoke-personal-agent-workspace*'
       - 'scripts/smoke-workspace-tool-consent.cjs'
+      - 'scripts/smoke-workspace-approval-events.cjs'
       - 'scripts/smoke-personal-workspace-diagnostics.cjs'
       - 'scripts/smoke-isolated-paths*'
       - 'scripts/smoke-packaged-extension-desktop-runtime.cjs'

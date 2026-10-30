@@ -148,7 +148,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await send('WORKSPACE_ARTIFACT Create workspace-evidence.txt and attach the saved file to your final reply.')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
     await capture('workspace-02-real-write-approval')
-    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, roomId: entry.roomId,
+    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, recordDiagnostic, roomId: entry.roomId,
       expected: { toolName: 'write', arguments: { path: 'workspace-evidence.txt', content: 'Saved personal workspace artifact v1\n' } },
       label: 'workspace-03-inline-write-consent' }))
     const artifactRun = await completed(entry.roomId)
@@ -212,7 +212,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await assertLiveBinding(entry.roomId, active)
     await capture('workspace-08-active-before-browser')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
-    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, roomId: entry.roomId,
+    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, recordDiagnostic, roomId: entry.roomId,
       expected: { toolName: 'browser_use', arguments: { action: 'open', url: website.url } },
       label: 'workspace-09-inline-browser-tool-consent' }))
     const originButton = page.getByRole('button', { name: 'Allow origin once', exact: true })
@@ -390,9 +390,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await capture('workspace-19-restored-artifact-preview')
     assertions.push('Real Runtime restart reconciles the same interrupted request; reload preserves draft/artifact with no browser session or automatic model replay')
 
-    // Leave for the Code project task, then reopen the conversation from the Code sidebar.
+    // Projects and conversations have mutually exclusive sidebars: switch scopes explicitly.
+    await page.locator('[role="tab"][data-workspace-mode="chat"]').click()
     await page.getByRole('button', { name: /^Code sidebar comparison/ }).first().click()
     await poll(async () => (await roomWorkbenchSnapshot(page)).route === 'chat', 15000, 'Code project task selected')
+    await page.locator('[role="tab"][data-workspace-mode="chats"]').click()
     await sidebarRow(entry.roomId).click()
     await waitForPrivateRoomSurface(page, entry.roomId)
     assert.equal((await roomWorkbenchSnapshot(page)).conversationRoomId, entry.roomId)
@@ -401,7 +403,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert.equal(await wrapper().locator('[data-browser-use-variant]').count(), 0)
     assert.equal(await editor().innerText(), draft)
     await capture('workspace-20-code-private-workspace')
-    assertions.push('Reopening the conversation from the Code sidebar exposes the same private workspace without reviving a historical browser')
+    assertions.push('Switching from Code back to Chats and reopening the conversation exposes the same private workspace without reviving a historical browser')
     sidebar.assertSharedChrome()
     assertions.push('Stopped and restarted recovery actions remain inside their conversation without horizontal overflow at wide and narrow sizes')
     assertions.push('Actual Code and private Agent screenshots share tab-header and rail dimensions; native pointer drags and narrow-window geometry keep private controls unclipped')
