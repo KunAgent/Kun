@@ -97,7 +97,7 @@ export function PlanBuildAgentPicker({ planId, route, disabled, compact = false 
   const rowClass = (active: boolean): string =>
     `flex h-[38px] w-full min-w-0 shrink-0 items-center gap-2.5 rounded-[9px] px-2 text-left transition hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-55 ${active ? 'bg-accent-soft/70' : ''}`
   const icon = (id: string): ReactElement => (
-    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] border border-ds-border-muted bg-white">
+    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] border border-ds-border-muted bg-ds-card text-ds-ink">
       <AgentIcon harnessId={id} size={15} />
     </span>
   )
@@ -105,7 +105,7 @@ export function PlanBuildAgentPicker({ planId, route, disabled, compact = false 
   const setupPane = setupRow ? (
     <div data-plan-build-agent-setup={setupRow.row.definition.id} className="flex min-h-0 flex-1 flex-col gap-3 p-5">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-ds-border-muted bg-white">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-ds-border-muted bg-ds-card text-ds-ink">
           <AgentIcon harnessId={setupRow.row.definition.id} size={20} />
         </span>
         <div className="min-w-0">
@@ -254,7 +254,7 @@ export function PlanBuildAgentPicker({ planId, route, disabled, compact = false 
           if (next) options.refresh()
         }}
         className={`inline-flex min-w-0 max-w-full items-center gap-2 rounded-[10px] border bg-ds-card pl-1.5 pr-2.5 text-ds-ink transition hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-60 ${compact ? 'h-[34px] text-[12.5px]' : 'h-9 text-[13px]'} ${open ? 'border-accent shadow-[0_0_0_3px_rgba(79,95,224,0.15)]' : 'border-ds-border'}`}>
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border border-ds-border-muted bg-white">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border border-ds-border-muted bg-ds-card text-ds-ink">
           <AgentIcon harnessId={route.agentId} size={16} />
         </span>
         <span className="shrink-0 font-semibold">{agentName}</span>

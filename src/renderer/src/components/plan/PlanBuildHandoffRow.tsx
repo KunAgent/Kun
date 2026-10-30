@@ -50,7 +50,7 @@ export function PlanBuildHandoffRow({ handoff, onRebuild }: {
   return (
     <div data-plan-build-handoff={agentId} data-plan-build-handoff-stage={stage}
       className="flex w-full min-w-0 flex-wrap items-center gap-3 rounded-[16px] bg-ds-card-muted/70 p-3 dark:bg-white/[0.04]">
-      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-ds-border-muted bg-white">
+      <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-ds-border-muted bg-ds-card text-ds-ink">
         <AgentIcon harnessId={agentId} size={20} />
         {stage === 'running' || stage === 'preparing' ? (
           <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-ds-card bg-accent" aria-hidden="true" />
