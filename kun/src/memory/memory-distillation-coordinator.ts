@@ -443,7 +443,25 @@ export class MemoryDistillationCoordinator {
           ))
         })
       }
-      return { candidates: parsed.candidates }
+      if (parsed.salvaged.length) {
+        this.options.onDiagnostic?.({
+          threadId: input.threadId,
+          turnId: input.turnId,
+          message: sanitizeMemoryDistillationDiagnostic(new Error(
+            `memory distillation salvaged ${parsed.salvaged.length} extraction candidate(s) ` +
+            'with quarantined comparisons; decision checks still apply: ' +
+            parsed.salvaged.map((entry) => `#${entry.index} invalid comparison relation ` +
+              (entry.relations.length
+                ? entry.relations.map((relation) => `'${relation}'`).join(', ')
+                : 'malformed')).join('; ')
+          ))
+        })
+      }
+      // Salvaged candidates arrive with their comparisons stripped, and
+      // every decision in this pipeline becomes a pending candidate that
+      // only an explicit user decision can apply, so including them here
+      // cannot write anything automatically.
+      return { candidates: [...parsed.candidates, ...parsed.salvaged.map((entry) => entry.candidate)] }
     } finally {
       clearTimeout(timeout)
       this.extractionControllers.delete(controller)

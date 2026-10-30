@@ -21,6 +21,19 @@ describe('app-ipc-schemas Laboratory settings', () => {
     })).toThrow()
   })
 
+  it.each([true, false])('accepts mailbox auto-continuation set to %s', (autoContinueEnabled) => {
+    const payload = settingsPatchSchema.parse({
+      agents: { kun: { lab: { assistantMailbox: { enabled: true, autoContinueEnabled } } } }
+    })
+    expect(payload.agents?.kun?.lab?.assistantMailbox).toEqual({ enabled: true, autoContinueEnabled })
+  })
+
+  it('keeps mailbox settings strict and boolean-only', () => {
+    for (const assistantMailbox of [{ autoContinueEnabled: 'yes' }, { unknown: true }]) {
+      expect(() => settingsPatchSchema.parse({ agents: { kun: { lab: { assistantMailbox } } } })).toThrow()
+    }
+  })
+
   it('rejects the retired isolated plan-build experiment switch', () => {
     expect(() => settingsPatchSchema.parse({
       agents: { kun: { lab: { planWorktree: { enabled: false } } } }

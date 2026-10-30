@@ -20,10 +20,16 @@ export type AgentMemoryCandidate = {
   id: string; phase: 'candidate'; participantAgentId: string; roomId: string; rootRequestId: string;
   status: 'pending' | 'completed' | 'skipped' | 'conflicted'; candidate: MemoryCandidate;
   action: 'create' | 'update' | 'supersede'; targetId?: string; targetFingerprint?: string;
+  /** Original capture isolation; absent on legacy records, never infer a broader scope. */
+  captureScope?: { conversationId: string; taskId?: string; handoffId?: string };
   runId: string; sourceMessageIds: string[]; memoryId?: string; reason?: string; scrubFailure?: AgentMemoryScrubFailure
 }
 export type AgentMemoryCaptureResult = {
   candidates: Array<{ candidate: MemoryCandidate; action: 'create' | 'update' | 'supersede';
-    targetId?: string; targetFingerprint?: string }>;
+    targetId?: string; targetFingerprint?: string;
+    /** When set, the coordinator must hold this candidate as a pending
+     * review record with this reason instead of applying it automatically,
+     * even when the decision action is 'create'. */
+    reviewReason?: string }>;
   usage?: UsageSnapshot; error?: string; diagnostics?: string[]; elapsedMs: number
 }

@@ -124,7 +124,10 @@ export class TurnContextResolver {
     const approvalReviewer = normalizeApprovalReviewer(
       input.thread.roomContext ? input.thread.approvalReviewer : input.turn.approvalReviewer ?? input.thread.approvalReviewer
     )
-    const memoryStore = input.thread.roomContext ? undefined : this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    const availableMemoryStore = this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    // Room memory injection stays isolated from the global read-side context.
+    // Tool availability is separate and is restricted by applyRoomToolPolicy.
+    const memoryStore = input.thread.roomContext ? undefined : availableMemoryStore
     const workbenchCeiling = input.thread.workbenchOrigin?.capabilityCeiling
     // A reserved HTML page turn owns one file: it gets a fixed read/write tool
     // set, and capability skills for tools it cannot see stay inactive.
@@ -234,7 +237,7 @@ export class TurnContextResolver {
       ...(userInputDisabled ? { userInputDisabled: true } : {}),
       signal: input.signal
     }, {
-      memoryEnabled: Boolean(memoryStore),
+      memoryEnabled: Boolean(availableMemoryStore),
       ...(this.deps.allowedProviderIds ? { allowedProviderIds: this.deps.allowedProviderIds } : {}),
       ...(this.deps.allowedSkillIds ? { allowedSkillIds: this.deps.allowedSkillIds } : {}),
       ...(this.deps.allowedReadPaths ? { allowedReadPaths: this.deps.allowedReadPaths } : {}),

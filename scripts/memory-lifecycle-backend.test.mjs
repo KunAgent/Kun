@@ -78,13 +78,38 @@ test('generic routes enforce project scope/revision and persist candidate decisi
     const stale = await backend.request(path + '?project=' + encodeURIComponent(metadata.projectRoot), 'PATCH', JSON.stringify({ content: 'Stale overwrite', expectedRevision: 1 }))
     assert.equal(stale.status, 409)
     const pendingPath = `/v1/agents/${metadata.agentId}/memory-candidates`
-    const entry = json(await backend.request(pendingPath)).candidates[0]
+    const entry = json(await backend.request(pendingPath)).candidates.find((entry) => entry.candidate.id === 'candidate-fixture-build')
     const decision = await backend.request(pendingPath + '/' + entry.candidate.id + '/decision', 'POST', JSON.stringify({
       clientRequestId: 'review-skip', expectedRevision: entry.revision, expectedTargetFingerprint: entry.target.fingerprint, decision: 'skip'
     }))
     assert.equal(decision.ok, true)
     await backend.reopen()
-    assert.equal(json(await backend.request(pendingPath)).candidates.length, 0)
+    assert.deepEqual(json(await backend.request(pendingPath)).candidates.map((entry) => entry.candidate.id), [metadata.reviewedCandidateId])
     assert.equal((await backend.snapshot()).project.content, 'Correct project scope')
+  })
+})
+
+test('targetless approval preserves isolation and persists exactly once across replay and reopening', async () => {
+  await fixture('scoped-approval', async (backend, metadata) => {
+    const path = `/v1/agents/${metadata.agentId}/memory-candidates`
+    const entry = json(await backend.request(path)).candidates.find((entry) => entry.candidate.id === metadata.reviewedCandidateId)
+    assert.equal(entry.target, undefined)
+    const body = JSON.stringify({ clientRequestId: 'fixture-accept-scoped', expectedRevision: entry.revision, decision: 'allow' })
+    const first = await backend.request(path + '/' + metadata.reviewedCandidateId + '/decision', 'POST', body)
+    assert.equal(first.ok, true)
+    assert.deepEqual(await backend.request(path + '/' + metadata.reviewedCandidateId + '/decision', 'POST', body), first)
+    await backend.reopen()
+    const result = await backend.verifyReviewedCandidate()
+    assert.equal(result.status, 'completed')
+    assert.equal(result.createdCount, 1)
+    assert.equal(result.content, 'Include source links in the task completion report.')
+    assert.equal(result.locked, true)
+    assert.equal(result.conversationId, result.expectedConversationId)
+    assert.equal(result.taskId, 'fixture-task')
+    assert.equal(result.handoffId, 'fixture-handoff')
+    assert.equal(result.visibleInTask, true)
+    assert.equal(result.visibleOutsideTask, false)
+    assert.equal(result.supersedes, undefined)
+    assert.equal(result.originalSupersededAt, undefined)
   })
 })

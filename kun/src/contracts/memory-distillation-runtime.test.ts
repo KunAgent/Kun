@@ -20,6 +20,7 @@ describe('parseMemoryDistillationExtractionResponse', () => {
   it('keeps a fully valid response unchanged and drops nothing', () => {
     const result = parseMemoryDistillationExtractionResponse({ candidates: [validCandidate] })
     expect(result.dropped).toEqual([])
+    expect(result.salvaged).toEqual([])
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]?.type).toBe('preference')
     expect(result.candidates[0]?.durability).toBe('durable')
@@ -44,6 +45,60 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(result.candidates[0]?.durability).toBe('transient')
   })
 
+  it('normalizes numeric-string confidence and importance to numbers', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: '0.9', importance: '0.8' }]
+    })
+    expect(result.dropped).toEqual([])
+    expect(result.candidates[0]?.confidence).toBe(0.9)
+    expect(result.candidates[0]?.importance).toBe(0.8)
+  })
+
+  it('normalizes percentage confidence and importance to the 0-1 range', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: 85, importance: '75%' }]
+    })
+    expect(result.dropped).toEqual([])
+    expect(result.candidates[0]?.confidence).toBe(0.85)
+    expect(result.candidates[0]?.importance).toBe(0.75)
+  })
+
+  it('drops a candidate whose score is missing or not numeric instead of inventing one', () => {
+    const { confidence: _omitted, ...withoutConfidence } = validCandidate
+    for (const damaged of [
+      withoutConfidence,
+      { ...validCandidate, confidence: 'high' },
+      { ...validCandidate, importance: null }
+    ]) {
+      const result = parseMemoryDistillationExtractionResponse({ candidates: [damaged] })
+      expect(result.candidates).toEqual([])
+      expect(result.dropped).toHaveLength(1)
+      expect(result.dropped[0]?.error).toMatch(/confidence|importance/)
+    }
+  })
+
+  it.each<[string | number, number]>([
+    ['0%', 0], ['0.5%', 0.005], ['0.6%', 0.006], ['1%', 0.01],
+    ['1.1%', 0.011], [' 1 % ', 0.01], ['100%', 1], ['1', 1], [1, 1]
+  ])('normalizes the explicit percentage boundary %s to %s', (score, expected) => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: score, importance: score }]
+    })
+    expect(result.dropped).toEqual([])
+    expect(result.candidates[0]?.confidence).toBeCloseTo(expected, 10)
+    expect(result.candidates[0]?.importance).toBeCloseTo(expected, 10)
+  })
+
+  it('drops a candidate whose normalized score stays out of range', () => {
+    for (const confidence of [150, -0.5, '120', '101%', '-1%']) {
+      const result = parseMemoryDistillationExtractionResponse({
+        candidates: [{ ...validCandidate, confidence }]
+      })
+      expect(result.candidates).toEqual([])
+      expect(result.dropped[0]?.error).toContain('confidence')
+    }
+  })
+
   it('normalizes an unknown candidate type to fact', () => {
     const result = parseMemoryDistillationExtractionResponse({
       candidates: [{ ...validCandidate, type: 'note' }]
@@ -51,7 +106,7 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(result.candidates[0]?.type).toBe('fact')
   })
 
-  it('drops a candidate whose comparisons are malformed and reports why', () => {
+  it('salvages a candidate whose only failures are in comparisons, stripped for review', () => {
     const damaged = {
       ...validCandidate,
       content: 'User now lives in Shanghai',
@@ -62,9 +117,36 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     }
     const result = parseMemoryDistillationExtractionResponse({ candidates: [damaged] })
     expect(result.candidates).toEqual([])
+    expect(result.dropped).toEqual([])
+    expect(result.salvaged).toHaveLength(1)
+    expect(result.salvaged[0]?.index).toBe(0)
+    expect(result.salvaged[0]?.candidate.content).toBe('User now lives in Shanghai')
+    // The quarantined comparisons never ride along, not even the valid one.
+    expect(result.salvaged[0]?.candidate.comparisons).toEqual([])
+    expect(result.salvaged[0]?.relations).toEqual(['replace'])
+    expect(result.salvaged[0]?.error).toContain('comparisons')
+  })
+
+  it('salvages a candidate with a single out-of-enum relation and reports the raw value', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, comparisons: [{ memoryId: 'memory-1', relation: 'related' }] }]
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.dropped).toEqual([])
+    expect(result.salvaged).toHaveLength(1)
+    expect(result.salvaged[0]?.relations).toEqual(['related'])
+    expect(result.salvaged[0]?.candidate.comparisons).toEqual([])
+  })
+
+  it('still drops a candidate that also fails outside comparisons', () => {
+    const result = parseMemoryDistillationExtractionResponse({
+      candidates: [{ ...validCandidate, confidence: 'high',
+        comparisons: [{ memoryId: 'memory-1', relation: 'related' }] }]
+    })
+    expect(result.candidates).toEqual([])
+    expect(result.salvaged).toEqual([])
     expect(result.dropped).toHaveLength(1)
-    expect(result.dropped[0]?.index).toBe(0)
-    expect(result.dropped[0]?.error).toContain('comparisons')
+    expect(result.dropped[0]?.error).toContain('confidence')
   })
 
   it('keeps a valid supersede comparison intact when a sibling candidate is damaged', () => {
@@ -84,7 +166,9 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(result.candidates[0]?.comparisons).toEqual([
       { memoryId: 'memory-1', relation: 'supersede', reason: 'User moved' }
     ])
-    expect(result.dropped.map((entry) => entry.index)).toEqual([1])
+    expect(result.dropped).toEqual([])
+    expect(result.salvaged.map((entry) => entry.index)).toEqual([1])
+    expect(result.salvaged[0]?.relations).toEqual(['replace'])
   })
 
   it('keeps every candidate when only one has an out-of-enum durability', () => {
@@ -120,6 +204,11 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(() => MemoryCandidateAssessment.parse({
       candidate: draft,
       durability: 'long-term',
+      comparisons: []
+    })).toThrow()
+    expect(() => MemoryCandidateAssessment.parse({
+      candidate: { ...draft, confidence: '0.9' },
+      durability: 'durable',
       comparisons: []
     })).toThrow()
     expect(MemoryCandidateAssessment.parse({

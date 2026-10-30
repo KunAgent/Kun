@@ -55,10 +55,13 @@ it('returns explicitly clipped private candidate summaries and complete contiguo
 it('requires the exact target fingerprint and candidate revision, without empty/current fallback or scope fields', async () => {
   const f = await agentHistoryFixture()
   try {
-    for (const fingerprint of [undefined, null, '', 'old']) {
+    for (const fingerprint of [null, '', 'old']) {
       expect(() => AgentParamSchemas['agent.memory.candidates.decide'].parse({ ...f.candidateParams, decision: 'accept', expectedTargetFingerprint: fingerprint })).toThrow()
       expect(() => AgentParamSchemas['agent.memory.candidates.get'].parse({ ...f.candidateParams, side: 'current', expectedTargetFingerprint: fingerprint })).toThrow()
     }
+    const missing = await f.call('agent.memory.candidates.decide', { ...f.candidateParams, decision: 'accept' })
+    expect(missing.error).toEqual({ code: 'INVALID_REQUEST', definitive: true })
+    expect(() => AgentParamSchemas['agent.memory.candidates.get'].parse({ ...f.candidateParams, side: 'current' })).toThrow()
     expect(() => AgentParamSchemas['agent.memory.candidates.decide'].parse({ ...f.candidateParams, decision: 'reject', shared: true })).toThrow()
     await expect(f.call('agent.memory.candidates.get', { ...f.candidateParams, expectedRevision: 1, side: 'proposed' })).rejects.toThrow('REVISION_CONFLICT')
     await f.rooms.agentMemory.edit(f.agent.id, f.saved.memory.id, { clientRequestId: 'desktop-edit', expectedFingerprint: f.saved.fingerprint, content: 'A newer user correction' })

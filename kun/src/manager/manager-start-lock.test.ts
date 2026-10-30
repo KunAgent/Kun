@@ -40,6 +40,39 @@ describe('startup lock boundaries', () => {
       expect(owner).toMatchObject({ pid: process.pid, processIdentity: expect.any(String), instanceId: expect.any(String) })
     })
   })
+  it('awaits the critical section and cleanup before returning its result', async () => {
+    let finishAction!: (value: string) => void
+    let finishCleanup!: () => void
+    const action = new Promise<string>((resolve) => { finishAction = resolve })
+    const cleanup = new Promise<void>((resolve) => { finishCleanup = resolve })
+    const release = vi.fn(() => cleanup)
+    const settled = vi.fn()
+    const result = runWithStartLock(() => action, release)
+    void result.then(settled)
+    await Promise.resolve()
+    expect(release).not.toHaveBeenCalled()
+    finishAction('result')
+    await Promise.resolve()
+    expect(release).toHaveBeenCalledTimes(1)
+    expect(settled).not.toHaveBeenCalled()
+    finishCleanup()
+    await expect(result).resolves.toBe('result')
+    expect(settled).toHaveBeenCalledTimes(1)
+  })
+  it('preserves a synchronous or undefined action failure after successful cleanup', async () => {
+    for (const failure of [new Error('synchronous action'), undefined]) {
+      const release = vi.fn().mockResolvedValue(undefined)
+      await expect(runWithStartLock(() => { throw failure }, release)).rejects.toBe(failure)
+      expect(release).toHaveBeenCalledTimes(1)
+    }
+  })
+  it('aggregates asynchronous cleanup rejection even when the action threw undefined', async () => {
+    const cleanup = new Error('async cleanup')
+    const release = vi.fn().mockRejectedValue(cleanup)
+    await expect(runWithStartLock(() => Promise.reject(undefined), release))
+      .rejects.toMatchObject({ errors: [undefined, cleanup], cause: undefined })
+    expect(release).toHaveBeenCalledTimes(1)
+  })
   it('does not discard cleanup failures or the original business failure', async () => {
     const failure = new Error('action')
     const cleanup = Object.assign(new Error('cleanup'), { code: 'EEXIST' })

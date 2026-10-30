@@ -19,18 +19,37 @@ export const MEMORY_DISTILLATION_PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1_000
 // - durability: anything not exactly 'durable' is treated as 'transient',
 //   so the candidate is skipped as non-durable instead of persisted.
 // - type: unknown types degrade to the generic 'fact'.
+// - confidence / importance: models routinely answer with a numeric
+//   string ('0.9') or a percentage (85, '85%') instead of a 0-1 JSON
+//   number; both are normalized to the 0-1 number the canonical schema
+//   expects. A score that is missing or not numeric at all is NOT
+//   replaced with an invented default: it still fails validation and
+//   the candidate is dropped with a diagnostic, because a fabricated
+//   confidence would silently clear the low-confidence gate.
 // Comparisons are different: they carry consolidation intent against
 // existing memories, so silently dropping a malformed comparison would
 // turn a supersede/update into a plain create that bypasses conflict
 // review. parseMemoryDistillationExtractionResponse therefore validates
 // candidates one by one and drops a candidate that fails validation,
 // reporting it in `dropped` so callers can retain a diagnostic instead
-// of writing the candidate as an unrelated new memory.
+// of writing the candidate as an unrelated new memory. One exception:
+// when every failure is confined to `comparisons` and the rest of the
+// candidate is valid, the content should not die with its damaged
+// comparison. The candidate is salvaged into `salvaged` with its
+// comparisons stripped, so the quarantined comparisons can never take
+// effect; callers must route salvaged candidates to human review and
+// never apply them automatically.
 const ExtractionMemoryType = MemoryType.catch('fact')
 const ExtractionDurability = MemoryCandidateDurability.catch('transient')
 
+const ExtractionScore = z.unknown()
+  .transform(normalizeExtractionScore)
+  .pipe(z.number().min(0).max(1))
+
 export const MemoryDistillationExtractionCandidate = MemoryCandidateDraft.extend({
   type: ExtractionMemoryType,
+  confidence: ExtractionScore,
+  importance: ExtractionScore,
   durability: ExtractionDurability,
   comparisons: z.array(z.object({
     memoryId: z.string().min(1).max(256),
@@ -55,21 +74,33 @@ export type MemoryDistillationExtractionDroppedCandidate = {
   error: string
 }
 
+export type MemoryDistillationExtractionSalvagedCandidate = {
+  index: number
+  /** The candidate with its comparisons stripped; safe to show a reviewer, never to auto-apply. */
+  candidate: MemoryDistillationExtractionCandidate
+  /** Raw relation values outside MemoryCandidateRelation, in encounter order. */
+  relations: string[]
+  error: string
+}
+
 export type MemoryDistillationExtractionParseResult = {
   candidates: MemoryDistillationExtractionCandidate[]
   dropped: MemoryDistillationExtractionDroppedCandidate[]
+  salvaged: MemoryDistillationExtractionSalvagedCandidate[]
 }
 
 const ExtractionEnvelope = z.object({ candidates: z.array(z.unknown()) })
 
 /**
  * Parse raw extraction model output candidate by candidate. A candidate
- * that fails validation (for example a comparison with an out-of-enum
- * relation) is dropped and reported in `dropped` with a compact reason,
- * so one damaged candidate neither fails the whole response nor slips
- * through as an unrelated new memory. A malformed envelope (not an
- * object, or `candidates` not an array) still throws, like
- * MemoryDistillationExtractionResponse.parse did.
+ * that fails validation is dropped and reported in `dropped` with a
+ * compact reason, so one damaged candidate neither fails the whole
+ * response nor slips through as an unrelated new memory. A candidate
+ * whose failures are confined to `comparisons` is instead salvaged
+ * (see the note at ExtractionMemoryType): its content is returned in
+ * `salvaged` with the comparisons stripped, for human review only.
+ * A malformed envelope (not an object, or `candidates` not an array)
+ * still throws, like MemoryDistillationExtractionResponse.parse did.
  */
 export function parseMemoryDistillationExtractionResponse(
   raw: unknown
@@ -77,6 +108,7 @@ export function parseMemoryDistillationExtractionResponse(
   const { candidates: rawCandidates } = ExtractionEnvelope.parse(raw)
   const candidates: MemoryDistillationExtractionCandidate[] = []
   const dropped: MemoryDistillationExtractionDroppedCandidate[] = []
+  const salvaged: MemoryDistillationExtractionSalvagedCandidate[] = []
   rawCandidates.forEach((rawCandidate, index) => {
     if (index >= MEMORY_DISTILLATION_MAX_CANDIDATES) {
       dropped.push({
@@ -86,10 +118,83 @@ export function parseMemoryDistillationExtractionResponse(
       return
     }
     const parsed = MemoryDistillationExtractionCandidate.safeParse(rawCandidate)
-    if (parsed.success) candidates.push(parsed.data)
-    else dropped.push({ index, error: summarizeExtractionIssues(parsed.error) })
+    if (parsed.success) { candidates.push(parsed.data); return }
+    const salvagedCandidate = salvageComparisonsOnlyFailure(rawCandidate, parsed.error)
+    if (salvagedCandidate) {
+      salvaged.push({
+        index,
+        candidate: salvagedCandidate,
+        relations: invalidComparisonRelations(rawCandidate),
+        error: summarizeExtractionIssues(parsed.error)
+      })
+    } else {
+      dropped.push({ index, error: summarizeExtractionIssues(parsed.error) })
+    }
   })
-  return { candidates, dropped }
+  return { candidates, dropped, salvaged }
+}
+
+/**
+ * Salvage a candidate whose validation failures are confined to
+ * `comparisons`: re-validate with the comparisons stripped so they can
+ * never take effect. Returns null when any failure sits outside
+ * `comparisons` or the stripped candidate is still invalid; the caller
+ * then drops the candidate as before.
+ */
+function salvageComparisonsOnlyFailure(
+  rawCandidate: unknown,
+  error: z.ZodError
+): MemoryDistillationExtractionCandidate | null {
+  if (!error.issues.length) return null
+  if (!error.issues.every((issue) => issue.path[0] === 'comparisons')) return null
+  if (typeof rawCandidate !== 'object' || rawCandidate === null || Array.isArray(rawCandidate)) return null
+  const reparsed = MemoryDistillationExtractionCandidate.safeParse({
+    ...(rawCandidate as Record<string, unknown>),
+    comparisons: []
+  })
+  return reparsed.success ? reparsed.data : null
+}
+
+function invalidComparisonRelations(rawCandidate: unknown): string[] {
+  if (typeof rawCandidate !== 'object' || rawCandidate === null) return []
+  const comparisons = (rawCandidate as { comparisons?: unknown }).comparisons
+  if (!Array.isArray(comparisons)) return []
+  const valid = new Set<string>(MemoryCandidateRelation.options)
+  const relations: string[] = []
+  for (const comparison of comparisons) {
+    if (typeof comparison !== 'object' || comparison === null) continue
+    const relation = (comparison as { relation?: unknown }).relation
+    if (typeof relation === 'string' && !valid.has(relation) && !relations.includes(relation)) {
+      relations.push(relation)
+    }
+  }
+  return relations
+}
+
+/**
+ * Normalize one raw confidence/importance value to a 0-1 number.
+ * Numeric strings are parsed, explicit percentages are always rescaled,
+ * and unmarked values in (1, 100] are also read as percentages. Invalid
+ * input becomes NaN, which the piped canonical range check rejects, so the candidate
+ * is dropped with a diagnostic instead of being scored by a guess.
+ */
+function normalizeExtractionScore(value: unknown): number {
+  let numeric: number
+  let percentage = false
+  if (typeof value === 'number') {
+    numeric = value
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim()
+    percentage = trimmed.endsWith('%')
+    const text = (percentage ? trimmed.slice(0, -1) : trimmed).trim()
+    if (!text) return Number.NaN
+    numeric = Number(text)
+  } else {
+    return Number.NaN
+  }
+  if (!Number.isFinite(numeric)) return Number.NaN
+  if (percentage) return numeric / 100
+  return numeric > 1 && numeric <= 100 ? numeric / 100 : numeric
 }
 
 function summarizeExtractionIssues(error: z.ZodError): string {
