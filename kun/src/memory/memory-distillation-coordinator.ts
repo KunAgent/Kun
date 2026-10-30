@@ -450,10 +450,7 @@ export class MemoryDistillationCoordinator {
           message: sanitizeMemoryDistillationDiagnostic(new Error(
             `memory distillation salvaged ${parsed.salvaged.length} extraction candidate(s) ` +
             'with quarantined comparisons; decision checks still apply: ' +
-            parsed.salvaged.map((entry) => `#${entry.index} invalid comparison relation ` +
-              (entry.relations.length
-                ? entry.relations.map((relation) => `'${relation}'`).join(', ')
-                : 'malformed')).join('; ')
+            parsed.salvaged.map((entry) => `#${entry.index} invalid comparison`).join('; ')
           ))
         })
       }

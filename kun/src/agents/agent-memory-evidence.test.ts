@@ -98,7 +98,7 @@ it.each(['1%', '90%'])('combines score normalization with quarantined comparison
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]?.candidate.confidence).toBe(0.9)
     expect(result.candidates[0]?.reviewReason).toContain('review required')
-    expect(result.diagnostics).toEqual(["routed 1 candidate(s) to review: #0 invalid comparison relation 'related'"])
+    expect(result.diagnostics).toEqual(['routed 1 candidate(s) to review: #0 invalid comparison'])
   }
 })
 

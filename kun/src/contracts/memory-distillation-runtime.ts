@@ -78,8 +78,6 @@ export type MemoryDistillationExtractionSalvagedCandidate = {
   index: number
   /** The candidate with its comparisons stripped; safe to show a reviewer, never to auto-apply. */
   candidate: MemoryDistillationExtractionCandidate
-  /** Raw relation values outside MemoryCandidateRelation, in encounter order. */
-  relations: string[]
   error: string
 }
 
@@ -124,7 +122,6 @@ export function parseMemoryDistillationExtractionResponse(
       salvaged.push({
         index,
         candidate: salvagedCandidate,
-        relations: invalidComparisonRelations(rawCandidate),
         error: summarizeExtractionIssues(parsed.error)
       })
     } else {
@@ -155,22 +152,6 @@ function salvageComparisonsOnlyFailure(
   return reparsed.success ? reparsed.data : null
 }
 
-function invalidComparisonRelations(rawCandidate: unknown): string[] {
-  if (typeof rawCandidate !== 'object' || rawCandidate === null) return []
-  const comparisons = (rawCandidate as { comparisons?: unknown }).comparisons
-  if (!Array.isArray(comparisons)) return []
-  const valid = new Set<string>(MemoryCandidateRelation.options)
-  const relations: string[] = []
-  for (const comparison of comparisons) {
-    if (typeof comparison !== 'object' || comparison === null) continue
-    const relation = (comparison as { relation?: unknown }).relation
-    if (typeof relation === 'string' && !valid.has(relation) && !relations.includes(relation)) {
-      relations.push(relation)
-    }
-  }
-  return relations
-}
-
 /**
  * Normalize one raw confidence/importance value to a 0-1 number.
  * Numeric strings are parsed, explicit percentages are always rescaled,
@@ -187,7 +168,7 @@ function normalizeExtractionScore(value: unknown): number {
     const trimmed = value.trim()
     percentage = trimmed.endsWith('%')
     const text = (percentage ? trimmed.slice(0, -1) : trimmed).trim()
-    if (!text) return Number.NaN
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return Number.NaN
     numeric = Number(text)
   } else {
     return Number.NaN

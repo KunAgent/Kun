@@ -68,6 +68,9 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     for (const damaged of [
       withoutConfidence,
       { ...validCandidate, confidence: 'high' },
+      { ...validCandidate, confidence: '0x64' },
+      { ...validCandidate, confidence: '0b11' },
+      { ...validCandidate, importance: '0o77%' },
       { ...validCandidate, importance: null }
     ]) {
       const result = parseMemoryDistillationExtractionResponse({ candidates: [damaged] })
@@ -79,7 +82,8 @@ describe('parseMemoryDistillationExtractionResponse', () => {
 
   it.each<[string | number, number]>([
     ['0%', 0], ['0.5%', 0.005], ['0.6%', 0.006], ['1%', 0.01],
-    ['1.1%', 0.011], [' 1 % ', 0.01], ['100%', 1], ['1', 1], [1, 1]
+    ['1.1%', 0.011], [' 1 % ', 0.01], ['100%', 1], ['1', 1], [1, 1],
+    ['9e-1', 0.9], ['.5', 0.5]
   ])('normalizes the explicit percentage boundary %s to %s', (score, expected) => {
     const result = parseMemoryDistillationExtractionResponse({
       candidates: [{ ...validCandidate, confidence: score, importance: score }]
@@ -123,19 +127,19 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     expect(result.salvaged[0]?.candidate.content).toBe('User now lives in Shanghai')
     // The quarantined comparisons never ride along, not even the valid one.
     expect(result.salvaged[0]?.candidate.comparisons).toEqual([])
-    expect(result.salvaged[0]?.relations).toEqual(['replace'])
     expect(result.salvaged[0]?.error).toContain('comparisons')
   })
 
-  it('salvages a candidate with a single out-of-enum relation and reports the raw value', () => {
+  it('salvages a candidate with an out-of-enum relation without retaining its raw value', () => {
+    const secret = 'password=example-secret'
     const result = parseMemoryDistillationExtractionResponse({
-      candidates: [{ ...validCandidate, comparisons: [{ memoryId: 'memory-1', relation: 'related' }] }]
+      candidates: [{ ...validCandidate, comparisons: [{ memoryId: 'memory-1', relation: secret }] }]
     })
     expect(result.candidates).toEqual([])
     expect(result.dropped).toEqual([])
     expect(result.salvaged).toHaveLength(1)
-    expect(result.salvaged[0]?.relations).toEqual(['related'])
     expect(result.salvaged[0]?.candidate.comparisons).toEqual([])
+    expect(JSON.stringify(result)).not.toContain(secret)
   })
 
   it('still drops a candidate that also fails outside comparisons', () => {
@@ -168,7 +172,6 @@ describe('parseMemoryDistillationExtractionResponse', () => {
     ])
     expect(result.dropped).toEqual([])
     expect(result.salvaged.map((entry) => entry.index)).toEqual([1])
-    expect(result.salvaged[0]?.relations).toEqual(['replace'])
   })
 
   it('keeps every candidate when only one has an out-of-enum durability', () => {

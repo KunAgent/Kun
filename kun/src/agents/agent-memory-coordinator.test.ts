@@ -16,7 +16,7 @@ import type { ModelClient } from '../ports/model-client.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 
 const resources: Array<{ root: string; store: SqliteRoomStore; capture: AgentMemoryCoordinator }> = []
-async function fixture(compare = false, damaged = false, variant?: 'related' | 'related-bad-score') {
+async function fixture(compare = false, damaged = false, variant?: 'related' | 'related-bad-score' | 'sensitive-relation') {
   const root = await mkdtemp(join(tmpdir(), 'kun-agent-capture-'))
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const agents = new AgentIdentityService(store, () => ({}))
@@ -41,8 +41,8 @@ async function fixture(compare = false, damaged = false, variant?: 'related' | '
       tags: [], sourceIds: [source.sources[0].id], durability: 'durable'
     }
     const candidates = variant && existingId ? [
-      variant === 'related'
-        ? { ...base, comparisons: [{ memoryId: existingId, relation: 'related', reason: 'Feels related to the earlier preference.' }] }
+      variant !== 'related-bad-score'
+        ? { ...base, comparisons: [{ memoryId: existingId, relation: variant === 'sensitive-relation' ? 'password=example-secret' : 'related', reason: 'Feels related to the earlier preference.' }] }
         : { ...base, confidence: 'high', comparisons: [{ memoryId: existingId, relation: 'related' }] }
     ] : damaged && existingId ? [
       { ...base, comparisons: [{ memoryId: existingId, relation: 'supersede', reason: 'Replaces the earlier reporting preference.' }] },
@@ -151,11 +151,11 @@ it('routes a damaged-comparison candidate to review instead of dropping it, whil
   const supersede = proposals.find((row) => row.value.action === 'supersede')
   expect(supersede?.value).toMatchObject({ status: 'pending', targetId: existing.memory.id })
   // The damaged candidate is held for review too, with the quarantined
-  // relation named in its reason; its content survives for the reviewer.
+  // comparison described in its reason; its content survives for the reviewer.
   const held = proposals.find((row) => row.value.action === 'create')
   expect(held?.value.status).toBe('pending')
   expect(held?.value.reason).toContain('invalid-relation')
-  expect(held?.value.reason).toContain("'replace'")
+  expect(held?.value.reason).toContain('comparisons quarantined')
   expect(held?.value.candidate.content).toBe('Reports should link every source inline.')
   // The run completes and its record keeps the routed-to-review diagnostic.
   const runs = await f.store.list<RoomRunRecord>('room_run', { phase: 'memory' })
@@ -163,7 +163,7 @@ it('routes a damaged-comparison candidate to review instead of dropping it, whil
   expect(runs[0].value.status).toBe('completed')
   expect(runs[0].value.reason).toContain('0 saved; 2 need review')
   expect(runs[0].value.reason).toContain('routed 1 candidate(s) to review')
-  expect(runs[0].value.reason).toContain("'replace'")
+  expect(runs[0].value.reason).toContain('invalid comparison')
 })
 
 it('holds a candidate with an out-of-enum relation for review instead of saving or dropping it', async () => {
@@ -180,13 +180,27 @@ it('holds a candidate with an out-of-enum relation for review instead of saving 
   expect(proposals[0]!.value).toMatchObject({ status: 'pending', action: 'create',
     captureScope: { conversationId: f.room.id } })
   expect(proposals[0]!.value.reason).toContain('invalid-relation')
-  expect(proposals[0]!.value.reason).toContain("'related'")
+  expect(proposals[0]!.value.reason).toContain('comparisons quarantined')
   expect(proposals[0]!.value.reason).toContain('#0')
   const runs = await f.store.list<RoomRunRecord>('room_run', { phase: 'memory' })
   expect(runs).toHaveLength(1)
   expect(runs[0].value.reason).toContain('0 saved; 1 need review')
   expect(runs[0].value.reason).toContain('routed 1 candidate(s) to review')
-  expect(runs[0].value.reason).toContain("'related'")
+  expect(runs[0].value.reason).toContain('invalid comparison')
+})
+
+it('never persists an invalid relation containing sensitive text in a review or run diagnostic', async () => {
+  const f = await fixture(false, false, 'sensitive-relation')
+  await f.memory.create(f.actor.id, { clientRequestId: 'earlier-preference', conversationId: f.room.id,
+    sourceMessageIds: [f.sourceMessageId], content: 'Reports must use Chinese and preserve complete source links.', type: 'preference' })
+  await f.capture.tick()
+  await f.publish('response-after-preference')
+  await f.capture.tick(); await setImmediate(); await f.capture.tick()
+  const proposals = await f.store.list('agent_memory_job', { phase: 'candidate' })
+  const runs = await f.store.list<RoomRunRecord>('room_run', { phase: 'memory' })
+  expect(proposals).toHaveLength(1)
+  expect(runs[0].value.reason).toContain('routed 1 candidate(s) to review')
+  expect(JSON.stringify([proposals, runs])).not.toContain('example-secret')
 })
 
 it('still drops a candidate that is invalid outside its comparisons', async () => {

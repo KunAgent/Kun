@@ -254,7 +254,7 @@ describe('MemoryDistillationCoordinator', () => {
     expect(records).toHaveLength(1)
     expect(records[0]?.content).toBe('The user prefers long release notes.')
     expect(harness.diagnostics.some((message) =>
-      message.includes('salvaged 1 extraction candidate(s)') && message.includes("'related'"))).toBe(true)
+      message.includes('salvaged 1 extraction candidate(s)') && message.includes('invalid comparison'))).toBe(true)
   })
 
   it('does not claim a low-confidence salvaged candidate reached pending review', async () => {
@@ -267,6 +267,17 @@ describe('MemoryDistillationCoordinator', () => {
       message.includes('salvaged 1 extraction candidate(s)') &&
       message.includes('decision checks still apply'))).toBe(true)
     expect(harness.diagnostics.some((message) => message.includes('routed'))).toBe(false)
+  })
+
+  it('keeps invalid comparison text out of pending records and diagnostics', async () => {
+    const secret = 'example-secret'
+    const harness = await createHarness({
+      output: extraction({ comparisons: [{ memoryId: 'existing', relation: `password=${secret}` }] })
+    })
+    const pending = await harness.coordinator.distill('thread_1', 'turn_1')
+    expect(pending).toHaveLength(1)
+    expect(harness.diagnostics.some((message) => message.includes('invalid comparison'))).toBe(true)
+    expect(JSON.stringify([pending, harness.diagnostics])).not.toContain(secret)
   })
 
   it('rejects invalid output and cross-scope comparison targets without writes', async () => {

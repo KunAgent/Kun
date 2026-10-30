@@ -143,19 +143,13 @@ function skippedCandidatesDiagnostic(skipped: ReadonlyMap<string, number>): stri
   return `skipped ${total} extracted candidate(s) during decision: ${detail}`.slice(0, 300)
 }
 
-function formatSalvagedRelations(entry: MemoryDistillationExtractionSalvagedCandidate): string {
-  return entry.relations.length
-    ? entry.relations.map((relation) => `'${relation}'`).join(', ')
-    : 'malformed'
-}
-
 function invalidRelationReviewReason(entry: MemoryDistillationExtractionSalvagedCandidate): string {
-  return `invalid-relation ${formatSalvagedRelations(entry)} (candidate #${entry.index}): ` +
+  return `invalid-relation (candidate #${entry.index}): ` +
     'comparisons quarantined; review required before this candidate can be saved'
 }
 
 function salvagedCandidatesDiagnostic(salvaged: MemoryDistillationExtractionSalvagedCandidate[]): string {
   const detail = salvaged.map((entry) =>
-    `#${entry.index} invalid comparison relation ${formatSalvagedRelations(entry)}`).join('; ')
+    `#${entry.index} invalid comparison`).join('; ')
   return `routed ${salvaged.length} candidate(s) to review: ${detail}`.slice(0, 300)
 }
