@@ -67,7 +67,10 @@ describe('discover cards', () => {
     expect(requiredKeysOf(TAVILY)).toEqual(['TAVILY_API_KEY'])
     expect(requiredKeysOf(BRAVE)).toEqual(['BRAVE_API_KEY'])
     expect(requiredKeysOf(PLAYWRIGHT)).toEqual([])
-    expect(launchOf(PLAYWRIGHT)).toBe('npx -y @playwright/mcp@0.0.77')
+    expect(launchOf(PLAYWRIGHT)).toBe('npx -y @playwright/mcp@0.0.77 --headless')
+    expect(PLAYWRIGHT.mcpConfig!('/workspace')).toMatchObject({
+      servers: { playwright: { args: ['-y', '@playwright/mcp@0.0.77', '--headless'] } }
+    })
     expect(permissionsOf(BRAVE)).toContain('secret')
   })
 

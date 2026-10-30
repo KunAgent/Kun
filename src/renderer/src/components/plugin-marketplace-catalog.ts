@@ -212,7 +212,7 @@ export const RECOMMENDED_ITEMS: MarketplaceItem[] = [
       buildMcpConfig(
         'playwright',
         'npx',
-        ['-y', '@playwright/mcp@0.0.77']
+        ['-y', '@playwright/mcp@0.0.77', '--headless']
       ),
     supplyChain: { source: 'mcp', packageName: '@playwright/mcp', version: '0.0.77', permissions: ['command', 'network', 'file'] }
   },

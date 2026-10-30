@@ -20,6 +20,16 @@ describe('buildTurnModeInstruction', () => {
     expect(instruction).not.toContain('call the `create_plan` tool')
   })
 
+  it('routes GUI browsing in-app without granting browser access to other surfaces', () => {
+    const instruction = buildTurnModeInstruction({ clientSurface: 'gui', orchestration: 'direct' }, false)
+    expect(instruction).toContain('prefer browser_use when it is advertised')
+    expect(instruction).toContain('explicit authorization for external-browser automation')
+    expect(instruction).toContain('Design canvas and component artifacts already have an in-app preview')
+    expect(buildTurnModeInstruction({ clientSurface: 'api', orchestration: 'direct' }, false)).toBe('')
+    expect(buildTurnModeInstruction({ clientSurface: 'gui', agentSurface: 'write', orchestration: 'direct' }, false))
+      .toContain(WORK_MODE_INSTRUCTION)
+  })
+
   it('emits no surface policy for an ordinary Code turn', () => {
     expect(buildTurnModeInstruction({ orchestration: 'direct' }, false)).toBe('')
   })

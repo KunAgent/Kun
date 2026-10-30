@@ -9,8 +9,10 @@ import { DESIGN_CANVAS_MODE_INSTRUCTION } from './design-canvas-mode.js'
 import { DESIGN_HTML_PAGE_MODE_INSTRUCTION } from './design-html-page-mode.js'
 import { PLAN_MODE_INSTRUCTION } from './plan-mode.js'
 import { WORK_MODE_INSTRUCTION } from './work-mode.js'
+import { GUI_BROWSER_ROUTING_INSTRUCTION } from '../shared/design-preview-policy.js'
 
 type TurnModeState = {
+  clientSurface?: string
   agentSurface?: 'code' | 'write' | 'design'
   orchestration: 'direct' | 'graph'
   guiDesignArtifact?: { kind: string }
@@ -42,6 +44,7 @@ export function buildTurnModeInstruction(
         'Answer as the current member using attributed room context. Never claim unperformed checks, and do not restate these step limits in your reply.'
   ].join('\n') : PLAN_MODE_INSTRUCTION
   return [
+    ...(turn.clientSurface === 'gui' ? [GUI_BROWSER_ROUTING_INSTRUCTION] : []),
     ...(turn.agentSurface === 'write' ? [WORK_MODE_INSTRUCTION] : []),
     ...(turn.orchestration === 'graph' ? [GRAPH_LEAD_MODE_INSTRUCTION] : []),
     ...(planTurnActive ? [readOnlyRoomInstruction] : []),

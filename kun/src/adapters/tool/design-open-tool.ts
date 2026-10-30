@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { ToolHostContext } from '../../ports/tool-host.js'
+import { DESIGN_PREVIEW_INSTRUCTION } from '../../shared/design-preview-policy.js'
 import { designToolError, oneOf, stringArg } from './design-canvas-normalization.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { assertCanWritePath } from './sandbox-policy.js'
@@ -162,6 +163,7 @@ export function createDesignOpenTool(): LocalTool {
       `Send at most ${DESIGN_OPEN_MAX_SCREENS} boards per call; for a larger set, call again with the same title, one or two sections per call, until the plan is complete. Each call adds to the same canvas, and a board with an existing name is replaced.`,
       'The conversation shows a card the user clicks to open the canvas.',
       'To revise one screen you can also edit its HTML file directly (paths are returned); the canvas reloads.',
+      DESIGN_PREVIEW_INSTRUCTION,
       'After the last call, summarise the board set in a sentence or two. Do not implement the design in code until the user approves it.'
     ].join(' '),
     toolKind: 'file_change',

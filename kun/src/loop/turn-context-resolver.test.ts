@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import { MemoryRecord } from '../contracts/memory.js'
+import { ToolResultTurnItem } from '../contracts/items.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
@@ -65,6 +66,31 @@ function turn(overrides: Partial<Turn> = {}): Turn {
 }
 
 describe('TurnContextResolver', () => {
+  it('fences Code previews after publication without leaking into the next turn', async () => {
+    const resolver = new TurnContextResolver({
+      toolHost: { listTools: async () => [] },
+      resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
+    })
+    const history = [ToolResultTurnItem.parse({
+      id: 'result_1', threadId: 'thread_1', turnId: 'turn_1', role: 'tool',
+      kind: 'tool_result', status: 'completed', createdAt: '2026-10-30T00:00:00Z',
+      toolName: 'design_open', callId: 'call_1', toolKind: 'file_change',
+      output: { designRequest: { status: 'ready' } }
+    })]
+    for (const id of ['turn_1', 'turn_2']) {
+      const currentTurn = turn({ id, clientSurface: 'gui', agentSurface: 'code' })
+      const resolved = await resolver.resolve({
+        threadId: 'thread_1', turnId: id, thread: thread(), turn: currentTurn, history,
+        model: 'model_1', modelCapabilities: capabilities(['text']),
+        signal: new AbortController().signal,
+        mode: resolveTurnModeContext({ turn: currentTurn, workspace: '/workspace', threadMode: 'agent' }),
+        goalNoToolRecoverySteps: 0
+      })
+      expect(resolved.toolDiscoveryContext.designPreviewOnly).toBe(id === 'turn_1' ? true : undefined)
+    }
+  })
+
   it.each<{
     name: string
     overrides: Partial<Turn>

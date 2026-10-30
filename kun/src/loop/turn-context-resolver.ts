@@ -16,6 +16,7 @@ import {
 } from '../memory/memory-turn-context.js'
 import type { GuiPlanContext, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
+import { hasPublishedDesignPreview } from '../shared/design-preview-policy.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from './design-mode.js'
 import {
   DESIGN_HTML_PAGE_ALLOWED_TOOL_NAMES,
@@ -203,6 +204,8 @@ export class TurnContextResolver {
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
       ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
+      ...(clientSurface === 'gui' && hasPublishedDesignPreview(input.history, input.turnId)
+        ? { designPreviewOnly: true } : {}),
       agentSurface: input.turn.agentSurface ?? 'code',
       ...(input.turn.guiDesignArtifact ? { guiDesignArtifact: input.turn.guiDesignArtifact } : {}),
       ...(input.turn.imContext ? { imContext: true } : {}),

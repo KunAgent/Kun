@@ -134,6 +134,7 @@ export type ToolTurnContextInput = {
   guiDesignCanvas?: boolean
   guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
+  designPreviewOnly?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   guiDesignArtifact?: GuiDesignArtifactContext
   modelProviderId?: string

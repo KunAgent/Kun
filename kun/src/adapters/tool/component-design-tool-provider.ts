@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import type { ToolHostContext, ToolExecutionUpdate } from '../../ports/tool-host.js'
+import { DESIGN_PREVIEW_INSTRUCTION } from '../../shared/design-preview-policy.js'
 import { assertCanWritePath } from './sandbox-policy.js'
 import { resolveWorkspacePath, withToolBoundary } from './builtin-tool-utils.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
@@ -83,6 +84,7 @@ export function buildComponentDesignToolProviders(
         'The document must start with <!doctype html>, contain complete html/head/body elements, and have no more than one data-kun-component-root; Kun adds missing platform markers.',
         'Relative local scripts, styles, images, fonts, and media are supported. Remote resources require exact HTTPS origins in resourcePolicy.',
         'If HTML is not ready, pass `request` plus optional existing implementation/sourceFiles to ask the component-designer child agent to generate it.',
+        DESIGN_PREVIEW_INSTRUCTION,
         'Do not use for complete pages, multi-page flows, production implementation, or non-UI tasks.'
       ].join(' '),
       toolKind: 'file_change',
@@ -263,6 +265,8 @@ export function buildComponentDesignToolProviders(
             sandboxMode: 'workspace-write',
             security: {
               sandboxRoot: childWorkspace,
+              allowedToolNames: ['read', 'grep', 'glob', 'ls', 'write', 'edit']
+                .filter((name) => !context.allowedToolNames || context.allowedToolNames.includes(name)),
               ...(context.allowedProviderIds ? { allowedProviderIds: [...context.allowedProviderIds] } : {}),
               ...(context.allowedSkillIds ? { allowedSkillIds: [...context.allowedSkillIds] } : {}),
               ...(context.blockedProviderIds ? { blockedProviderIds: [...context.blockedProviderIds] } : {}),
@@ -474,6 +478,7 @@ export function buildComponentDesignerPrompt(input: Omit<ComponentDesignArgs, 'r
     '- Use semantic controls, visible focus, touch-friendly hit targets, reduced-motion handling, and readable contrast.',
     '- Do not use network URLs, external assets, imports, iframes, embeds, forms that submit, or browser storage.',
     '- Do not modify any production source file.',
+    `- ${DESIGN_PREVIEW_INSTRUCTION}`,
     '- Before finishing, read the written file once and fix incomplete tags or non-working interactions.'
   )
   return lines.join('\n')

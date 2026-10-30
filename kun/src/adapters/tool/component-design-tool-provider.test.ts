@@ -135,16 +135,39 @@ describe('design_component tool', () => {
       inheritedProviderId: 'provider-test',
       approvalPolicy: 'auto',
       sandboxMode: 'workspace-write',
-      security: expect.objectContaining({ memoryEnabled: false })
+      security: expect.objectContaining({
+        memoryEnabled: false,
+        allowedToolNames: ['read', 'grep', 'glob', 'ls', 'write', 'edit']
+      })
     })
     expect(String(prompts[0]?.workspace).replaceAll('\\', '/'))
       .toMatch(/\.kun-design\/component-prototypes\/.+$/)
     expect(String(prompts[0]?.prompt)).toContain('Required output path: prototype.html')
+    expect(String(prompts[0]?.prompt)).toContain('Do not launch Chrome, Chromium, Playwright')
+    expect(tool!.description).toContain('in-app canvas or component preview')
     expect(String(prompts[0]?.prompt)).toContain('<DatePicker mode="range" />')
     expect(String(prompts[0]?.prompt)).toContain('export function DatePicker')
     const html = await readFile(join(workspace, String(prototype.relativePath)), 'utf8')
     expect(html).toContain('Content-Security-Policy')
     expect(html).toContain("connect-src 'none'")
+  })
+
+  it('narrows a parent tool ceiling to file authoring even with a customized profile', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-component-design-ceiling-'))
+    workspaces.push(workspace)
+    const runChild = vi.fn(async (input: Record<string, unknown>) => {
+      expect(input.security).toMatchObject({ allowedToolNames: ['read', 'write'] })
+      await writeFile(join(String(input.workspace), 'prototype.html'), validHtml())
+      return { id: 'child_bounded', status: 'completed', summary: 'Authored the component.' }
+    })
+    const runtime = { enabled: () => true, runChild } as unknown as Pick<DelegationRuntime, 'enabled' | 'runChild'>
+    const tool = buildComponentDesignToolProviders(runtime)[0]!.tools[0]!
+    const result = await tool.execute({ title: 'Bounded', request: 'Create a button.' }, {
+      ...context(workspace),
+      allowedToolNames: ['read', 'write', 'design_component', 'bash', 'mcp_playwright_browser_snapshot']
+    })
+    expect(result.isError).not.toBe(true)
+    expect(runChild).toHaveBeenCalledOnce()
   })
 
   it('fails closed when the child writes a remotely dependent prototype', async () => {

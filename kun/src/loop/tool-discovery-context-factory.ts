@@ -51,6 +51,7 @@ export function createToolDiscoveryContext(
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
     ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(input.guiDesignMode ? { guiDesignMode: true } : {}),
+    ...(input.designPreviewOnly ? { designPreviewOnly: true } : {}),
     agentSurface: input.agentSurface ?? 'code',
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
     ...(input.imContext ? { imContext: true } : {}),

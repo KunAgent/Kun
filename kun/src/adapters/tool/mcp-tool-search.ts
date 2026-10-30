@@ -4,6 +4,7 @@ import type {
 } from '../../contracts/capabilities.js'
 import { mcpAppToolOutputMeta } from '../../contracts/mcp-apps.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
+import { canUseMcpBrowserTool } from '../../shared/design-preview-policy.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { mcpCallTimeoutMs } from './mcp-call-budget.js'
@@ -348,6 +349,7 @@ function availableRecords(
   const blocked = context.blockedProviderIds
   return view.list().flatMap((entry) => entry.value ? [entry.value] : []).filter((record) =>
     options.isServerAvailable(record.server, context.workspace)
+    && canUseMcpBrowserTool(record.descriptor.name, context)
     // Honor the per-turn provider deny-list (e.g. a subagent's blockedMcpServers).
     // In search mode the per-server `mcp:<id>` provider is never registered, so
     // CapabilityRegistry.canUseProvider can't gate it — this is the single

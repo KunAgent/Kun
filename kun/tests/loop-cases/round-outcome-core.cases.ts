@@ -32,6 +32,33 @@ import {
 } from './round-outcome-support.cases.js'
 
 describe('RoundOutcomeCoordinator', () => {
+  it.each(['design_open', 'design_component'])('fences browser calls batched before %s', async (toolName) => {
+    const h = harness()
+    await h.coordinator.resolve(input(completed({ toolCalls: [
+      { callId: 'browser', toolName: 'mcp_playwright_browser_snapshot', arguments: {} },
+      { callId: 'publish', toolName, arguments: {} }
+    ] }), { prepared: prepared({ clientSurface: 'gui' }) }))
+    expect(h.dispatches[0]?.designPreviewOnly).toBe(true)
+  })
+
+  it('carries a published preview fence into later browser dispatches', async () => {
+    const h = harness()
+    await h.coordinator.resolve(input(completed({ toolCalls: [
+      { callId: 'browser', toolName: 'mcp_playwright_browser_snapshot', arguments: {} }
+    ] }), { prepared: prepared({
+      clientSurface: 'gui', toolDiscoveryContext: { designPreviewOnly: true } as ToolHostContext
+    }) }))
+    expect(h.dispatches[0]?.designPreviewOnly).toBe(true)
+  })
+
+  it('does not fence an ordinary browser-only Code batch', async () => {
+    const h = harness()
+    await h.coordinator.resolve(input(completed({ toolCalls: [
+      { callId: 'browser', toolName: 'mcp_playwright_browser_snapshot', arguments: {} }
+    ] }), { prepared: prepared({ clientSurface: 'gui' }) }))
+    expect(h.dispatches[0]?.designPreviewOnly).toBe(false)
+  })
+
   it('passes aborted and failed stream outcomes through without dispatching', async () => {
     const h = harness()
     await expect(h.coordinator.resolve(input({ kind: 'aborted' }))).resolves.toBe('aborted')

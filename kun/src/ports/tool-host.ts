@@ -144,6 +144,8 @@ export type ToolHostContext = {
   guiRoomExcalidrawCanvas?: boolean
   /** True only for product Design turns (not Code sidebar canvas turns). */
   guiDesignMode?: boolean
+  /** Current GUI turn published a canvas/component artifact; keep browser QA in-app. */
+  designPreviewOnly?: boolean
   /** Code is the compatibility default when an older turn omits the field. */
   agentSurface?: 'code' | 'write' | 'design'
   /** Reserved SVG artifact exposed to structured SVG tools for this turn. */

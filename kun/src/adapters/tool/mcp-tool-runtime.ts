@@ -11,6 +11,7 @@ import { projectMcpSchemaForModel } from './mcp-schema-projection.js'
 import type { McpClientLike, McpServerDiagnostic, McpToolDescriptor } from './mcp-types.js'
 import type { McpSearchCatalogRecord } from './mcp-tool-search.js'
 import type { McpBackgroundReconnectOptions, McpConnectionState } from './mcp-tool-provider.js'
+import { canUseMcpBrowserTool, DESIGN_PREVIEW_INSTRUCTION } from '../../shared/design-preview-policy.js'
 import { mcpCallTimeoutMs } from './mcp-call-budget.js'
 
 const DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS = 5
@@ -116,8 +117,12 @@ export function createMcpLocalTool(
       ? { sideEffect: 'read-only' as const }
       : {}),
     policy: policyFromAnnotations(descriptor.annotations),
-    shouldAdvertise: (context: ToolHostContext) => canUseMcpServer(state.server, context.workspace),
+    shouldAdvertise: (context: ToolHostContext) => canUseMcpServer(state.server, context.workspace) &&
+      canUseMcpBrowserTool(descriptor.name, context),
     execute: async (args, context) => {
+      if (!canUseMcpBrowserTool(descriptor.name, context)) {
+        return { output: { error: DESIGN_PREVIEW_INSTRUCTION }, isError: true }
+      }
       if (!isMcpServerVisible(state.server, context.workspace)) {
         return {
           output: { error: `MCP server ${state.serverId} is not enabled for this workspace` },
