@@ -124,6 +124,9 @@ export function TurnUsageDetailsCard({
           <p data-turn-usage-gateway-source>{t('turnUsageDetailsGatewaySource')}</p>
         ) : null}
         {usage.referenceEstimateUsd !== null ? <p>{t('sessionUsageEstimateTitle')}</p> : null}
+        {usage.actualCost === null && (usage.referenceEstimateUsd === null || usage.estimateCoverage === 'unavailable') ? (
+          <p data-turn-usage-details-unavailable>{t('sessionUsagePriceUnavailable')}</p>
+        ) : null}
         {usage.estimateCoverage === 'partial' ? <p>{t('turnUsageEstimatePartial')}</p> : null}
         {stale ? <p>{t('turnUsageStaleTitle')}</p> : null}
       </div>

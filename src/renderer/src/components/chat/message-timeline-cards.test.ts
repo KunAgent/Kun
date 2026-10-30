@@ -84,6 +84,29 @@ describe('TurnChangeSummary', () => {
 
     act(() => renderer!.unmount())
   })
+
+  it('leads each row with the file name, keeps the folder secondary, and shows a diff bar', async () => {
+    let renderer: ReactTestRenderer
+
+    await act(async () => {
+      renderer = create(
+        createElement(TurnChangeSummary, {
+          changes: [change(1)],
+          viewportRef: createRef<HTMLDivElement>()
+        })
+      )
+    })
+
+    const row = renderer!.root.findByProps({ 'data-turn-change-file': true })
+    const rowButton = row.findByType('button')
+    expect(rowButton.props.title).toBe('src/file-1.ts')
+    const texts = rowButton.findAllByType('span').map((span) => nodeText(span.props.children))
+    expect(texts).toContain('file-1.ts')
+    expect(texts).toContain('src')
+    expect(renderer!.root.findAllByProps({ 'data-turn-change-diff-bar': true })).toHaveLength(1)
+
+    act(() => renderer!.unmount())
+  })
 })
 
 describe('plan build actions', () => {
