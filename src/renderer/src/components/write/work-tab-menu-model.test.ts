@@ -21,6 +21,17 @@ describe('workTabCloseTargets', () => {
     expect(keys(workTabCloseTargets(strip, 'one.md', 'all'))).toEqual(['session:a', 'session:b', 'one.md', 'two.md'])
   })
 
+  it('includes library tabs in close actions without moving them into a different group', () => {
+    const libraries: WorkStripEntry[] = [
+      ...strip,
+      { kind: 'library', key: 'library:papers', tab: 'papers' },
+      { kind: 'library', key: 'library:artifacts', tab: 'artifacts' }
+    ]
+    expect(keys(workTabCloseTargets(libraries, 'one.md', 'right'))).toEqual(['two.md', 'library:papers', 'library:artifacts'])
+    expect(keys(workTabCloseTargets(libraries, 'library:papers', 'self'))).toEqual(['library:papers'])
+    expect(workTabMoveNeighbor(libraries, 'library:papers', 1)).toBeNull()
+  })
+
   it('never closes the draft and returns nothing for an unknown tab', () => {
     expect(workTabCloseTargets(strip, 'session:draft', 'self')).toEqual([])
     expect(workTabCloseTargets(strip, 'two.md', 'right')).toEqual([])

@@ -11,9 +11,8 @@ import { PaperImportDialogHost } from '../paper/PaperImportDialogHost'
 import { PaperMetadataDrawer } from '../paper/sidebar/PaperMetadataDrawer'
 import { PaperTaskRing } from '../paper/PaperTaskRing'
 import { PaperBatchInterpretDialogHost } from '../paper/batch/PaperBatchInterpretDialog'
-import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { useWorkViewStore } from '../../write/work-view-store'
-import { WorkSideDocumentHeader, WorkTabStrip } from './WorkTabStrip'
+import { WorkSideDocumentHeader } from './WorkTabStrip'
 import './work-tabs.css'
 
 export type WorkPaperHostProps = {
@@ -62,7 +61,6 @@ export function WorkPaperHost({
   const setEntriesResult = usePaperModeStore((s) => s.setEntriesResult)
   const setEntriesError = usePaperModeStore((s) => s.setEntriesError)
   const infoDrawerOpen = usePaperModeStore((s) => s.infoDrawerOpen)
-  const remoteMobile = useRemoteMobileLayout()
   const split = useWorkViewStore((s) => s.split)
   const peek = useWorkViewStore((s) => s.peek)
   // Swapped means the session owns the stage while files are open: alone, peeking at
@@ -141,8 +139,7 @@ export function WorkPaperHost({
   return (
     <PaperWorkbenchChromeContext.Provider value={chrome}>
       <WritePdfRendererProvider value={PaperPdfReader}>
-        <div className={`work-tab-host flex min-h-0 flex-1 flex-col${remoteMobile ? '' : ' has-tab-strip'}`}>
-        {remoteMobile ? null : <WorkTabStrip />}
+        <div className="flex min-h-0 flex-1 flex-col">
         <div className={`relative flex min-h-0 flex-1${conversationStage ? ' work-stage-conversation' : ''}${swapped ? ' is-swapped' : ''}`}
           data-work-stage={swapped ? 'swapped' : conversationStage ? 'conversation' : 'documents'}
           data-work-session-view={sessionView}>

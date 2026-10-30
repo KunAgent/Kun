@@ -24,10 +24,11 @@ type Props = {
   onToggleLeftSidebar: () => void
   onSubmitPrompt?: (prompt: string) => void
   onAttachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
+  embedded?: boolean
 }
 
-/** A global paper destination, independent of the document workspace and its tabs. */
-export function PapersSurface({ leftSidebarCollapsed, onToggleLeftSidebar }: Props): ReactElement {
+/** A global paper destination; its data scope remains independent of Work. */
+export function PapersSurface({ leftSidebarCollapsed, onToggleLeftSidebar, embedded = false }: Props): ReactElement {
   const { t } = useTranslation('common')
   const state = usePaperSpaceStore()
   const legacyPaperReading = useWriteWorkspaceStore((write) => write.paperReading)
@@ -50,7 +51,7 @@ export function PapersSurface({ leftSidebarCollapsed, onToggleLeftSidebar }: Pro
 
   return (
     <section className="papers-space ds-no-drag" data-papers-surface>
-      <header className="papers-space-topbar">
+      {embedded ? null : <header className="papers-space-topbar">
         <button type="button" className="papers-icon-button" onClick={onToggleLeftSidebar}
           aria-label={t(leftSidebarCollapsed ? 'paperSpaceShowSidebar' : 'paperSpaceHideSidebar')} aria-expanded={!leftSidebarCollapsed}>
           <PanelLeft size={18} strokeWidth={1.75} />
@@ -59,7 +60,7 @@ export function PapersSurface({ leftSidebarCollapsed, onToggleLeftSidebar }: Pro
         <LibraryBig size={18} strokeWidth={1.75} />
         <span>{t('workSidebarPapersNav')}</span>
         <span className="papers-space-unified"><LockKeyhole size={14} strokeWidth={1.75} />{t('paperSpaceUnified')}</span>
-      </header>
+      </header>}
       {reader && state.error ? <div className="papers-notes-error" role="alert">{state.error}</div> : null}
       {reader ? (
         <Suspense fallback={<div className="papers-space-loading" aria-busy>{t('loading')}</div>}>

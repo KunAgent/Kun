@@ -5,7 +5,7 @@ import { useWriteWorkspaceStore } from './write-workspace-store'
 
 describe('work view store', () => {
   beforeEach(() => {
-    useWorkViewStore.setState({ sessionTabs: {}, split: false, peek: false })
+    useWorkViewStore.setState({ sessionTabs: {}, libraryTabs: [], split: false, peek: false })
     useWorkSlotsStore.setState({ assistantMain: false })
   })
 
@@ -18,6 +18,16 @@ describe('work view store', () => {
     expect(useWorkViewStore.getState().sessionTabs[key]).toEqual(['thread-a', 'thread-b'])
     view.closeSessionTab('/space', 'thread-a')
     expect(useWorkViewStore.getState().sessionTabs[key]).toEqual(['thread-b'])
+  })
+
+  it('keeps each library tab once and allows closing it independently', () => {
+    const view = useWorkViewStore.getState()
+    view.openLibraryTab('papers')
+    view.openLibraryTab('artifacts')
+    view.openLibraryTab('papers')
+    expect(useWorkViewStore.getState().libraryTabs).toEqual(['papers', 'artifacts'])
+    view.closeLibraryTab('papers')
+    expect(useWorkViewStore.getState().libraryTabs).toEqual(['artifacts'])
   })
 
   it('gives the stage to the session or the file and folds the assistant panel without the split', () => {

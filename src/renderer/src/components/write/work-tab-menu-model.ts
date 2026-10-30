@@ -1,10 +1,12 @@
 import type { WriteEditorGroupId, WriteEditorItem } from '../../write/write-workspace-store-types'
+import type { WorkLibraryTab } from '../../write/work-view-store'
 
 /** One tab of the Work strip, in the order it is drawn: sessions, the draft, then documents. */
 export type WorkStripEntry =
   | { kind: 'session'; key: string; id: string }
   | { kind: 'draft'; key: string }
   | { kind: 'document'; key: string; groupId: WriteEditorGroupId; item: WriteEditorItem }
+  | { kind: 'library'; key: string; tab: WorkLibraryTab }
 
 export type WorkTabCloseScope = 'self' | 'others' | 'right' | 'all'
 
@@ -27,7 +29,7 @@ export function workTabMoveNeighbor(entries: WorkStripEntry[], key: string, dire
   const index = entries.findIndex((entry) => entry.key === key)
   const entry = entries[index]
   const neighbor = entries[index + direction]
-  if (!entry || !neighbor || entry.kind === 'draft' || neighbor.kind !== entry.kind) return null
+  if (!entry || !neighbor || entry.kind === 'draft' || entry.kind === 'library' || neighbor.kind !== entry.kind) return null
   if (entry.kind === 'document' && neighbor.kind === 'document' && neighbor.groupId !== entry.groupId) return null
   return neighbor
 }

@@ -105,11 +105,13 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
           rootLoading={rootLoading}
           onToggleDir={(path) => void toggleDirectory(workspaceRoot, path)}
           onSelectFile={(path) => {
+            useChatStore.getState().setRoute('write')
             useWorkViewStore.getState().showDocument()
             void openFile(workspaceRoot, path)
           }}
           onOpenBeside={(path) => {
             // Beside: the session keeps the stage and the file joins it in the split.
+            useChatStore.getState().setRoute('write')
             const view = useWorkViewStore.getState()
             view.showSession()
             if (!view.split) view.toggleSplit()

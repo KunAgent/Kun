@@ -8,6 +8,7 @@ const SESSION_TABS_KEY = 'kun.work.openSessionTabs.v1'
 const MAX_SESSION_TABS = 12
 
 type OpenSessionTabs = Record<string, string[]>
+export type WorkLibraryTab = 'artifacts' | 'papers'
 
 function readOpenSessionTabs(): OpenSessionTabs {
   try {
@@ -28,12 +29,15 @@ function readOpenSessionTabs(): OpenSessionTabs {
  */
 type WorkViewState = {
   sessionTabs: OpenSessionTabs
+  libraryTabs: WorkLibraryTab[]
   split: boolean
   peek: boolean
   openSessionTab: (workspaceRoot: string, threadId: string) => void
   closeSessionTab: (workspaceRoot: string, threadId: string) => void
   /** Replace the space's session tab order (the strip's move left / right). */
   reorderSessionTabs: (workspaceRoot: string, threadIds: string[]) => void
+  openLibraryTab: (tab: WorkLibraryTab) => void
+  closeLibraryTab: (tab: WorkLibraryTab) => void
   showSession: () => void
   showDocument: () => void
   toggleSplit: () => void
@@ -42,6 +46,7 @@ type WorkViewState = {
 
 export const useWorkViewStore = create<WorkViewState>((set, get) => ({
   sessionTabs: readOpenSessionTabs(),
+  libraryTabs: [],
   split: false,
   peek: false,
   openSessionTab: (workspaceRoot, threadId) => {
@@ -70,6 +75,10 @@ export const useWorkViewStore = create<WorkViewState>((set, get) => ({
     writeBrowserStorageItem(SESSION_TABS_KEY, JSON.stringify(sessionTabs))
     set({ sessionTabs })
   },
+  openLibraryTab: (tab) => set((state) => ({
+    libraryTabs: state.libraryTabs.includes(tab) ? state.libraryTabs : [...state.libraryTabs, tab]
+  })),
+  closeLibraryTab: (tab) => set((state) => ({ libraryTabs: state.libraryTabs.filter((item) => item !== tab) })),
   showSession: () => {
     useWorkSlotsStore.getState().setAssistantMain(true)
     // The session gets the stage alone unless the split was turned on.

@@ -105,7 +105,7 @@ function designVersions(screens: DesignScreen[], t: (key: string, options?: Reco
   }))
 }
 
-export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSidebar, chat, mode = 'code' }: {
+export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSidebar, chat, mode = 'code', embedded = false }: {
   artifact: LibraryArtifact
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
@@ -113,6 +113,7 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
   chat?: ArtifactChatHost
   /** Work keeps the viewer read-only: revisions belong to the Work conversation. */
   mode?: 'code' | 'work'
+  embedded?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   const isWork = mode === 'work'
@@ -143,8 +144,8 @@ export function ArtifactViewer({ artifact, leftSidebarCollapsed, onToggleLeftSid
     <div className="ds-drag flex h-full min-h-0 flex-col bg-ds-main" data-artifact-viewer={artifact.kind}>
       <div className="ds-stage-inset shrink-0">
         <header className="ds-topbar-surface relative z-10 mt-3 flex min-h-[52px] w-full flex-wrap items-center gap-3 rounded-[24px] px-3 py-1.5">
-          <div className={`flex min-w-0 flex-1 items-center gap-2 ${leftSidebarCollapsed ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
-            {leftSidebarCollapsed ? (
+          <div className={`flex min-w-0 flex-1 items-center gap-2 ${leftSidebarCollapsed && !embedded ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
+            {leftSidebarCollapsed && !embedded ? (
               <SidebarTitlebarToggleButton onClick={onToggleLeftSidebar} title={t('sidebarExpand')} ariaLabel={t('sidebarExpand')} />
             ) : null}
             <button type="button" onClick={closeArtifact} aria-label={t('artifactsBack')} title={t('artifactsBack')}

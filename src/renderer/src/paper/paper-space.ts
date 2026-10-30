@@ -85,9 +85,9 @@ export async function refreshPaperSpace(): Promise<void> {
   }
 }
 
-export async function openPaperSpace(view: PaperSpaceView = 'library', importing = false): Promise<void> {
+export async function openPaperSpace(view: PaperSpaceView = 'library', importing = false): Promise<boolean> {
   const { preparePaperNotesForNavigation } = await import('./paper-notes-draft')
-  if (!(await preparePaperNotesForNavigation())) return
+  if (!(await preparePaperNotesForNavigation())) return false
   usePaperSpaceStore.getState().setView(view)
   const { useChatStore } = await import('../store/chat-store')
   useChatStore.setState({ route: 'papers' })
@@ -99,6 +99,7 @@ export async function openPaperSpace(view: PaperSpaceView = 'library', importing
       // The route presents the bootstrap error and an explicit retry.
     }
   }
+  return true
 }
 
 export async function openPaperSpaceItem(item: PaperSpaceItem): Promise<void> {

@@ -36,11 +36,12 @@ const NEW_PROMPT_KEYS: Record<LibraryArtifactKind, string> = {
   board: 'artifactsNewBoardPrompt', sheet: 'artifactsNewDocPrompt', image: 'artifactsNewDesignPrompt'
 }
 
-export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar, chat }: {
+export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar, chat, embedded = false }: {
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
   /** The Code conversation, for the Office artifact chat panel. */
   chat?: ArtifactChatHost
+  embedded?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   const items = useArtifactLibraryStore((state) => state.items)
@@ -144,7 +145,7 @@ export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar, chat 
   }
 
   if (openItem) {
-    return <ArtifactViewer artifact={openItem} leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={isWork ? undefined : chat} mode={isWork ? 'work' : 'code'} />
+    return <ArtifactViewer artifact={openItem} leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={isWork ? undefined : chat} mode={isWork ? 'work' : 'code'} embedded={embedded} />
   }
 
   const tabs: ArtifactKindFilter[] = ['all', ...LIBRARY_ARTIFACT_KINDS]
@@ -153,12 +154,12 @@ export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar, chat 
     <div className="ds-drag flex h-full min-h-0 flex-col bg-ds-main" data-artifacts-page>
       <div className="ds-stage-inset shrink-0">
         <header className="ds-topbar-surface relative z-10 mt-3 flex min-h-[46px] w-full items-center justify-between gap-3 rounded-[24px] px-3">
-          <div className={`flex min-w-0 items-center gap-2 ${leftSidebarCollapsed ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
-            <SidebarTitlebarToggleButton
+          <div className={`flex min-w-0 items-center gap-2 ${leftSidebarCollapsed && !embedded ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
+            {embedded ? null : <SidebarTitlebarToggleButton
               onClick={onToggleLeftSidebar}
               title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
               ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
-            />
+            />}
             <h1 className="truncate text-[15px] font-semibold text-ds-ink">{t('artifactsTitle')}</h1>
           </div>
           <div className="ds-no-drag flex items-center gap-1">
@@ -166,10 +167,10 @@ export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar, chat 
               className="flex h-8 w-8 items-center justify-center rounded-lg text-ds-muted hover:bg-ds-hover hover:text-ds-ink">
               <RefreshCw className={`h-4 w-4 ${status === 'loading' ? 'animate-spin' : ''}`} aria-hidden />
             </button>
-            <button type="button" onClick={closeArtifactsPage} aria-label={t('artifactsClose')} title={t('artifactsClose')}
+            {embedded ? null : <button type="button" onClick={closeArtifactsPage} aria-label={t('artifactsClose')} title={t('artifactsClose')}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-ds-muted hover:bg-ds-hover hover:text-ds-ink">
               <X className="h-4 w-4" aria-hidden />
-            </button>
+            </button>}
           </div>
         </header>
       </div>
