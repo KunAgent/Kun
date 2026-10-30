@@ -39,7 +39,7 @@ describe('TurnUsageRow', () => {
       })
     }))
 
-    expect(html).toContain('1,200 tokens')
+    expect(html).toContain('1.2k tokens')
     expect(html).toContain('API $0.0123')
     expect(html).toContain('Plan value ≈$0.0456')
     expect(html).toContain('Partial estimate')
@@ -56,14 +56,15 @@ describe('TurnUsageRow', () => {
     expect(html).not.toContain('data-turn-usage-unavailable')
   })
 
-  it('renders unavailable and stale states without hiding token usage', () => {
+  it('keeps the unavailable price out of the row but flags it, and shows stale state', () => {
     const html = renderToStaticMarkup(createElement(TurnUsageRow, {
-      usage: usage(),
+      usage: usage({ totalTokens: 15_254_000 }),
       stale: true
     }))
 
-    expect(html).toContain('1,200 tokens')
-    expect(html).toContain('Price unavailable')
+    expect(html).toContain('15.3M tokens')
+    expect(html).not.toContain('Price unavailable')
+    expect(html).toContain('data-turn-usage-unavailable="true"')
     expect(html).toContain('May be stale')
     expect(html).toContain('data-stale="true"')
   })
