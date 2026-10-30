@@ -61,6 +61,62 @@ describe('dev preview detection', () => {
     expect(extractLatestTurnAutoOpenDevPreviewUrls(blocks)).toEqual([])
   })
 
+  it('never auto-opens assistant explanations or quoted server output', () => {
+    const blocks = [user('explain this log'), assistant('Example output:\nLocal: http://localhost:5173/\nready in 100 ms')]
+    expect(extractLatestTurnDevPreviewUrls(blocks)).toEqual(['http://localhost:5173/'])
+    expect(extractLatestTurnAutoOpenDevPreviewSignal(blocks)).toBeNull()
+  })
+
+  it.each(['read', 'grep', 'fast_context'])('does not auto-open %s results containing server logs', (toolName) => {
+    const block: ChatBlock = {
+      kind: 'tool', id: toolName, summary: toolName, status: 'success',
+      detail: 'Local: http://localhost:5173/\nready in 100 ms',
+      meta: { toolName }
+    }
+    expect(extractAutoOpenDevPreviewUrls([block])).toEqual([])
+  })
+
+  it.each([
+    'cat README.md',
+    'grep "npm run dev" README.md',
+    'rg "VITE|npm run dev" README.md',
+    'cat README.md # ; npm run dev',
+    'printf "Local: http://localhost:5173/"',
+    'curl http://localhost:5173/'
+  ])('does not treat inspected output from %s as a server launch', (command) => {
+    expect(extractAutoOpenDevPreviewUrls([commandExecutionBlock({
+      command, detail: 'Local: http://localhost:5173/\nready in 100 ms'
+    })])).toEqual([])
+  })
+
+  it('requires a result rather than command arguments or summary', () => {
+    const block = commandExecutionBlock({ command: 'npm run dev', summary: 'Local: http://localhost:5173/' })
+    expect(extractAutoOpenDevPreviewUrls([block])).toEqual([])
+    if (block.kind !== 'tool') throw new Error('Expected tool')
+    block.detail = JSON.stringify({ command: 'npm run dev # Local: http://localhost:5173/' })
+    expect(extractAutoOpenDevPreviewUrls([block])).toEqual([])
+    block.detail = 'Local: http://localhost:5173/'
+    block.meta = { ...block.meta, sourceItemKind: 'tool_call' }
+    expect(extractAutoOpenDevPreviewUrls([block])).toEqual([])
+  })
+
+  it('accepts structured command output and ignores unrelated URLs in the same result', () => {
+    const block = commandExecutionBlock({
+      command: 'cd /app && PORT=5173 npm run dev',
+      detail: JSON.stringify({
+        command: 'npm run dev',
+        output: 'proxy target http://localhost:9000/\nLocal: http://localhost:5173/\nready in 100 ms'
+      })
+    })
+    expect(extractAutoOpenDevPreviewUrls([block])).toEqual(['http://localhost:5173/'])
+  })
+
+  it('does not auto-open failed commands even if they contain a startup log', () => {
+    expect(extractAutoOpenDevPreviewUrls([commandExecutionBlock({
+      command: 'npm run dev', status: 'error', detail: 'Local: http://localhost:5173/\nError: server stopped'
+    })])).toEqual([])
+  })
+
   it('auto-opens when a dev server command announces a local URL', () => {
     const blocks: ChatBlock[] = [
       commandExecutionBlock({

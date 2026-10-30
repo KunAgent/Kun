@@ -92,11 +92,12 @@ export function agentDesignArtifacts(
 export async function ingestAgentDesign(options: {
   workspaceRoot: string
   request: DesignOpenRequestMetadata
+  isCurrent?: () => boolean
 }): Promise<string | null> {
   const { request } = options
   const workspaceRoot = options.workspaceRoot.trim()
   const documentId = request.documentId
-  if (!workspaceRoot || request.status !== 'ready' || !documentId || request.screens.length === 0) return null
+  if (options.isCurrent?.() === false || !workspaceRoot || request.status !== 'ready' || !documentId || request.screens.length === 0) return null
 
   const store = useDesignWorkspaceStore.getState()
   if (normalizeDesignWorkspaceRoot(store.workspaceRoot) !== normalizeDesignWorkspaceRoot(workspaceRoot)) {
@@ -108,6 +109,8 @@ export async function ingestAgentDesign(options: {
   }
 
   const hydrated = useDesignWorkspaceStore.getState()
+  if (options.isCurrent?.() === false ||
+    normalizeDesignWorkspaceRoot(hydrated.workspaceRoot) !== normalizeDesignWorkspaceRoot(workspaceRoot)) return null
   const document = hydrated.documents.find((candidate) => candidate.id === documentId)
   if (!document) {
     hydrated.createDocument(request.title, { id: documentId, titleOrigin: 'generated' })
@@ -127,10 +130,11 @@ export async function openAgentDesignCanvas(options: {
   threadId: string
   workspaceRoot: string
   request: DesignOpenRequestMetadata
+  isCurrent?: () => boolean
 }): Promise<boolean> {
   const documentId = await ingestAgentDesign(options)
-  if (!documentId) return false
+  if (!documentId || options.isCurrent?.() === false) return false
   useCodeCanvasDesignSurface.getState().showDesignDocument(options.threadId, options.workspaceRoot, documentId)
-  requestCodeCanvasPanelOpen()
+  requestCodeCanvasPanelOpen({ threadId: options.threadId })
   return true
 }

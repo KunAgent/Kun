@@ -246,7 +246,7 @@ describe('workbench navigation controller Design tasks', () => {
     vi.unstubAllGlobals()
   })
 
-  it('opens a locked Design task in Code and restores its runtime document target', async () => {
+  it('restores a locked Design document in Code without forcing its sidebar open', async () => {
     const storage = new MemoryStorage()
     const dispatchEvent = vi.fn(() => true)
     vi.stubGlobal('window', { localStorage: storage, dispatchEvent })
@@ -280,10 +280,10 @@ describe('workbench navigation controller Design tasks', () => {
       documentId: 'runtime-document'
     })
     expect(rehydrateArtifacts).toHaveBeenCalledTimes(1)
-    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+    expect(dispatchEvent).not.toHaveBeenCalled()
   })
 
-  it('keeps an unlocked Design task in Code before it has a profile', async () => {
+  it('does not open an empty whiteboard for an unlocked Design task without a profile', async () => {
     const dispatchEvent = vi.fn(() => true)
     vi.stubGlobal('window', { localStorage: new MemoryStorage(), dispatchEvent })
     const designTask = thread('design')
@@ -294,7 +294,7 @@ describe('workbench navigation controller Design tasks', () => {
 
     expect(props.setRoute).toHaveBeenCalledWith('chat')
     expectSelected(props.selectThread, designTask.id)
-    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+    expect(dispatchEvent).not.toHaveBeenCalled()
   })
 
   it('opens a legacy registry-owned thread without rewriting its binding', async () => {

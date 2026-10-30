@@ -287,14 +287,15 @@ export function useWorkbenchLayout({
 
   useEffect(() => {
     const onCanvasOpenRequest = (event: Event): void => {
-      if (canvasOpenRequestDetail(event)?.target === 'write') return
+      const detail = canvasOpenRequestDetail(event)
+      if (detail?.target === 'write' || (detail?.threadId && detail.threadId !== activeThreadId)) return
       ensureInitialCodePanelWidth()
       setCodeRightTabs((current) => openCodeRightTab(current, BUILTIN_RIGHT_PANEL_IDS.canvas))
     }
 
     window.addEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
     return () => window.removeEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
-  }, [ensureInitialCodePanelWidth])
+  }, [activeThreadId, ensureInitialCodePanelWidth])
 
   useEffect(() => {
     const onCanvasFocusRequest = (): void => {

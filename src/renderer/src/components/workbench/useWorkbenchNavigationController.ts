@@ -7,7 +7,6 @@ import { useChatStore } from '../../store/chat-store'
 import type { ChatState } from '../../store/chat-store-types'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
-import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { startWorkSession } from '../../write/work-session-actions'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
@@ -267,10 +266,8 @@ export function useWorkbenchNavigationController({
             designRef.docId
           )
         }
-        // Even an unlocked Design task without a committed profile belongs to
-        // the Code workbench. Open the whiteboard now; its provisional binding
-        // can arrive on the first accepted turn without changing routes.
-        requestCodeCanvasPanelOpen()
+        // Restore the document binding without overriding the conversation's
+        // remembered sidebar visibility (or opening an empty whiteboard).
         await selectThread(id, { selectionGuard: isCurrentRequest })
         if (!isCurrentRequest()) return
         if (!designRef) {

@@ -149,6 +149,38 @@ describe('captureResizePointer', () => {
 })
 
 describe('focused whiteboard presentation', () => {
+  it('ignores canvas requests from a different conversation but preserves manual opens', () => {
+    const listeners = new Map<string, Set<(event: Event) => void>>()
+    const windowStub = {
+      addEventListener: (type: string, listener: (event: Event) => void) => {
+        const set = listeners.get(type) ?? new Set()
+        set.add(listener)
+        listeners.set(type, set)
+      },
+      removeEventListener: (type: string, listener: (event: Event) => void) => { listeners.get(type)?.delete(listener) },
+      dispatchEvent: (event: Event) => {
+        for (const listener of listeners.get(event.type) ?? []) listener(event)
+        return true
+      },
+      innerWidth: 1600, innerHeight: 900
+    }
+    vi.stubGlobal('window', windowStub)
+    const harness = renderWorkbenchLayoutHarness()
+    try {
+      harness.rerender()
+      act(() => { windowStub.dispatchEvent(new CustomEvent('kun:code-canvas-open-request', { detail: { target: 'code', threadId: 'thread-other' } })) })
+      expect(harness.lastRenderResult()?.rightPanelMode).toBeNull()
+      act(() => { windowStub.dispatchEvent(new CustomEvent('kun:code-canvas-open-request', { detail: { target: 'code', threadId: 'thread-1' } })) })
+      expect(harness.lastRenderResult()?.rightPanelMode).toBe(BUILTIN_RIGHT_PANEL_IDS.canvas)
+      act(() => { harness.lastRenderResult()?.collapseRightPanel() })
+      act(() => { windowStub.dispatchEvent(new CustomEvent('kun:code-canvas-open-request', { detail: { target: 'code' } })) })
+      expect(harness.lastRenderResult()?.rightPanelMode).toBe(BUILTIN_RIGHT_PANEL_IDS.canvas)
+    } finally {
+      harness.unmount()
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('activates the canvas tab without widening the persisted right rail', async () => {
     const listeners = new Map<string, Set<(event: Event) => void>>()
     const windowStub = {

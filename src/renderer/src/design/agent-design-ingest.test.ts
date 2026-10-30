@@ -1,11 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DesignOpenRequestMetadata } from '../agent/design-open-request'
 import type { ChatBlock } from '../agent/types'
 import type { DesignArtifact } from './design-types'
-import { agentDesignArtifacts } from './agent-design-ingest'
+import { agentDesignArtifacts, openAgentDesignCanvas } from './agent-design-ingest'
+import { useDesignWorkspaceStore } from './design-workspace-store'
+import { useCodeCanvasDesignSurface } from './code-canvas-design-surface'
 import { takeLiveDesignRequests } from '../components/workbench/useAgentDesignAutoOpen'
 
 const NOW = '2026-10-24T08:00:00.000Z'
+const initialDesignState = useDesignWorkspaceStore.getState()
+const initialSurfaceState = useCodeCanvasDesignSurface.getState()
+afterEach(() => {
+  useDesignWorkspaceStore.setState(initialDesignState, true)
+  useCodeCanvasDesignSurface.setState(initialSurfaceState, true)
+  vi.unstubAllGlobals()
+})
 
 function request(screens: { id: string; name: string; width?: number; height?: number; section?: string }[]): DesignOpenRequestMetadata {
   return {
@@ -40,6 +49,45 @@ function existing(id: string, x: number, width: number, extra: Partial<DesignArt
 }
 
 describe('agent design ingest', () => {
+  it.each(['selection', 'workspace'] as const)('does not reveal or mutate a stale design after %s changes during loading', async (change) => {
+    let finish!: () => void
+    let current = true
+    const createDocument = vi.fn()
+    const upsertArtifact = vi.fn()
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { dispatchEvent })
+    useDesignWorkspaceStore.setState({
+      workspaceRoot: '/repo', settingsLoaded: false, documents: [], activeDocumentId: null,
+      createDocument, upsertArtifact,
+      loadDesignSettings: () => new Promise<void>((resolve) => { finish = resolve })
+    })
+    const opening = openAgentDesignCanvas({
+      threadId: 'thread-a', workspaceRoot: '/repo',
+      request: request([{ id: '11111111', name: 'Overview' }]), isCurrent: () => current
+    })
+    if (change === 'selection') current = false
+    else useDesignWorkspaceStore.setState({ workspaceRoot: '/other' })
+    finish()
+    expect(await opening).toBe(false)
+    expect(createDocument).not.toHaveBeenCalled()
+    expect(upsertArtifact).not.toHaveBeenCalled()
+    expect(useCodeCanvasDesignSurface.getState().surface).toBe(initialSurfaceState.surface)
+    expect(dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('reveals a valid design with the originating conversation on its open event', async () => {
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { dispatchEvent })
+    useDesignWorkspaceStore.setState({
+      workspaceRoot: '/repo', settingsLoaded: true, documents: [], activeDocumentId: '0a1b2c3d',
+      createDocument: vi.fn(), upsertArtifact: vi.fn(), setActiveArtifact: vi.fn()
+    })
+    expect(await openAgentDesignCanvas({
+      threadId: 'thread-a', workspaceRoot: '/repo', request: request([{ id: '11111111', name: 'Overview' }])
+    })).toBe(true)
+    expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ detail: { target: 'code', threadId: 'thread-a' } }))
+  })
+
   it('lays new screens out in one row after the existing ones', () => {
     const appended = agentDesignArtifacts(
       request([{ id: '33333333', name: 'Next' }]),
@@ -100,7 +148,7 @@ describe('agent design ingest', () => {
       id,
       turnId,
       summary: 'design_open',
-      status: 'success',
+      status: status === 'pending' ? 'running' : 'success',
       toolKind: 'file_change',
       meta: {
         toolName: 'design_open',
@@ -124,5 +172,10 @@ describe('agent design ingest', () => {
     // A result that lands while its turn is still running also opens.
     expect(takeLiveDesignRequests([designBlock('cccc', 'ready', 'turn-run')], { busy: true, currentTurnId: 'turn-run' }, seen, handled)
       .map((item) => item.blockId)).toEqual(['cccc'])
+    // A pending item replayed from a settled or different turn is not live.
+    takeLiveDesignRequests([designBlock('dddd', 'pending', 'turn-old')], { busy: false, currentTurnId: null }, seen, handled)
+    expect(takeLiveDesignRequests([designBlock('dddd', 'ready', 'turn-old')], { busy: false, currentTurnId: null }, seen, handled)).toEqual([])
+    takeLiveDesignRequests([designBlock('eeee', 'pending', 'turn-old')], { busy: true, currentTurnId: 'turn-new' }, seen, handled)
+    expect(takeLiveDesignRequests([designBlock('eeee', 'ready', 'turn-old')], { busy: false, currentTurnId: null }, seen, handled)).toEqual([])
   })
 })
