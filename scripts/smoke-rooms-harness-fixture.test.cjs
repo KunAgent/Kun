@@ -7,7 +7,7 @@ const { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL
 
 const publicationTools = ['add_board_card', 'create_code_task', 'request_app_connection', 'send_im_message', 'user_input']
 const fullTools = [...publicationTools, 'list_code_harnesses']
-const route = { harnessId: 'devin', credentialMode: 'native-login', model: 'devin-fixture-model' }
+const route = { harnessId: 'devin', credentialMode: 'native-login', model: ROOMS_HARNESS_MODEL }
 const catalog = { authority: 'reference_only', agents: [{ harnessId: 'devin', available: true, models: [route] }] }
 const user = () => [{ role: 'user', content: 'Inspect the task card [rooms-harness-smoke]' }]
 const call = (id, name, args) => ({ role: 'assistant', content: null,

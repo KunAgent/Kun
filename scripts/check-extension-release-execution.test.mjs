@@ -1,3 +1,4 @@
+import { assertNativeBootstrapLock } from './lib/native-bootstrap-lock.mjs'
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -45,17 +46,40 @@ test('clean postinstall delegates to the canonical Extension API then Kun bootst
 
   const kunLock = JSON.parse(await readFile(join(root, 'kun', 'package-lock.json'), 'utf8'))
   const semver = requireKun('semver')
-  const wasmRuntime = kunLock.packages?.['node_modules/@napi-rs/wasm-runtime']
-  for (const dependency of ['@emnapi/core', '@emnapi/runtime']) {
-    const version = kunLock.packages?.[`node_modules/${dependency}`]?.version
-    const peerRange = wasmRuntime?.peerDependencies?.[dependency]
-    assert.ok(semver.valid(version), `Kun lock must contain top-level ${dependency} with a valid SemVer`)
-    assert.equal(typeof peerRange, 'string', `@napi-rs/wasm-runtime must declare ${dependency} peer range`)
-    assert.ok(
-      semver.satisfies(version, peerRange),
-      `Kun lock ${dependency}@${version} must satisfy @napi-rs/wasm-runtime ${peerRange}`
-    )
+  assertNativeBootstrapLock(kunLock, semver)
+})
+
+test('native bootstrap lock tolerates retired WASM runtime but rejects missing or incompatible requirements', () => {
+  const semver = requireKun('semver')
+  const fixture = () => ({ packages: {
+    '': { dependencies: { '@emnapi/core': '^1.10.0', '@emnapi/runtime': '^1.10.0' } },
+    'node_modules/@emnapi/core': { version: '1.11.2' },
+    'node_modules/@emnapi/runtime': { version: '1.11.2' }
+  } })
+  assert.doesNotThrow(() => assertNativeBootstrapLock(fixture(), semver))
+  for (const kind of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    const missingRuntime = fixture()
+    missingRuntime.packages['node_modules/consumer'] = { [kind]: { '@napi-rs/wasm-runtime': '^1.0.0' } }
+    assert.throws(() => assertNativeBootstrapLock(missingRuntime, semver), /package node is missing/)
   }
+  const referenced = fixture()
+  referenced.packages['node_modules/consumer'] = { optionalDependencies: { '@napi-rs/wasm-runtime': '^1.0.0' } }
+  assert.throws(() => assertNativeBootstrapLock(referenced, semver), /package node is missing/)
+  referenced.packages['node_modules/@napi-rs/wasm-runtime'] = {
+    peerDependencies: { '@emnapi/core': '^1.10.0', '@emnapi/runtime': '^1.10.0' }
+  }
+  assert.doesNotThrow(() => assertNativeBootstrapLock(referenced, semver))
+  referenced.packages['node_modules/@napi-rs/wasm-runtime'].peerDependencies['@emnapi/core'] = '^2.0.0'
+  assert.throws(() => assertNativeBootstrapLock(referenced, semver), /must satisfy.*peer/)
+  const incompatible = fixture()
+  incompatible.packages['node_modules/@emnapi/core'].version = '1.9.0'
+  assert.throws(() => assertNativeBootstrapLock(incompatible, semver), /production dependency/)
+  const devOnly = fixture()
+  devOnly.packages['node_modules/@emnapi/runtime'].dev = true
+  assert.throws(() => assertNativeBootstrapLock(devOnly, semver), /remain a production dependency/)
+  const missing = fixture()
+  delete missing.packages['node_modules/@emnapi/runtime']
+  assert.throws(() => assertNativeBootstrapLock(missing, semver), /valid SemVer/)
 })
 
 test('v1 uses the documented no-previous-major exception', () => {

@@ -116,7 +116,7 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
     const step = stepByName(recovery, name)
     const extra = file === 'recovery-safety'
       ? ' src/main/windows-installer-migration.payload-backup.test.ts'
-      : ' src/main/windows-installer-migration.restart.test.ts --no-file-parallelism'
+      : ' src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts --no-file-parallelism'
     assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts${extra}`)
     assert.equal(step.if, undefined)
   }
@@ -148,7 +148,19 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
   const identity = stepByName(recovery, 'Test Windows process identity and owned startup')
   assert.equal(identity['working-directory'], 'kun')
   assert.equal(identity.if, undefined)
-  assert.equal(identity.run, 'node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts')
+  assert.equal(identity.run, 'node node_modules/vitest/vitest.mjs run ' + [
+    'src/server/runtime-process-identity.test.ts',
+    'src/server/runtime-process-identity.windows.test.ts',
+    'src/server/runtime-process-identity.windows-native.test.ts',
+    'src/manager/app-session-reservation.test.ts',
+    'src/manager/owned-service-manager-session.admission.test.ts',
+    'src/manager/owned-service-manager-session.test.ts',
+    'src/process/owned-process-windows.test.ts',
+    'src/manager/manager-start-lock.test.ts',
+    'src/manager/manager-start-lock-windows.test.ts',
+    'src/manager/manager-start-lock.windows-native.test.ts',
+    'src/process/windows-startup-native.test.ts'
+  ].join(' '))
   assert.ok(recovery.steps.indexOf(identity) > recovery.steps.indexOf(stepByName(recovery, 'Install root dependencies')))
   assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
