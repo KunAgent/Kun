@@ -131,7 +131,7 @@ export async function createMemorySmokeBackend(root: string) {
       const created = records.find((record) => record.id === candidate?.value.memoryId)
       const matching = await fresh.list({ agent: { agentId: agent.id, conversationId: room.id, taskId: 'fixture-task', handoffId: 'fixture-handoff' } })
       const unrelated = await fresh.list({ agent: { agentId: agent.id, conversationId: room.id, taskId: 'other-task', handoffId: 'other-handoff' } })
-      return { status: candidate?.value.status, createdCount: records.filter((record) => record.content === 'Include source links in the task completion report.').length,
+      return { memoryId: created?.id, status: candidate?.value.status, createdCount: records.filter((record) => record.content === 'Include source links in the task completion report.').length,
         content: created?.content, locked: created?.agentContext?.locked,
         conversationId: created?.agentContext?.sourceConversationId, taskId: created?.agentContext?.sourceTaskId,
         handoffId: created?.agentContext?.sourceHandoffId, expectedConversationId: room.id,
