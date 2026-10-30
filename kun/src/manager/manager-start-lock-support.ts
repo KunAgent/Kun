@@ -30,13 +30,15 @@ export async function waitForStartLock(deadline: number, signal?: AbortSignal): 
 
 /** Never release a live critical section through a timeout race. */
 export async function runWithStartLock<T>(action: () => Promise<T>, release: () => Promise<void> | void): Promise<T> {
-  let failure: unknown
-  let failed = false
-  try { return await action() } catch (error) { failed = true; failure = error; throw error }
-  finally {
-    try { await release() } catch (error) {
-      if (failed) throw new AggregateError([failure, error], 'Kun startup failed and its lock cleanup also failed', { cause: failure })
-      throw error
+  let outcome: { ok: true; value: T } | { ok: false; error: unknown }
+  try { outcome = { ok: true, value: await action() } }
+  catch (error) { outcome = { ok: false, error } }
+  try { await release() } catch (error) {
+    if (!outcome.ok) {
+      throw new AggregateError([outcome.error, error], 'Kun startup failed and its lock cleanup also failed', { cause: outcome.error })
     }
+    throw error
   }
+  if (!outcome.ok) throw outcome.error
+  return outcome.value
 }

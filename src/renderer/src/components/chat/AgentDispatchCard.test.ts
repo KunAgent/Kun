@@ -12,7 +12,9 @@ const state = vi.hoisted(() => ({ intent: undefined as AgentDispatchIntentView |
   act: vi.fn(), busy: false, error: '', activeThreadId: 'parent', rows: {} as Record<string, unknown> }))
 const preview = vi.hoisted(() => vi.fn())
 vi.mock('./use-agent-dispatch-intent', () => ({ useAgentDispatchIntent: () => state }))
-vi.mock('react-i18next', () => ({ useTranslation: () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...await importOriginal<typeof import('react-i18next')>(),
+  useTranslation: () => ({
   t: (key: string, values?: Record<string, unknown>) => values ? `${key}:${JSON.stringify(values)}` : key
 }) }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: (select: (value: unknown) => unknown) =>

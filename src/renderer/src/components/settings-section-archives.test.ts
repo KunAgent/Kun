@@ -139,18 +139,21 @@ describe('ArchivedThreadsSettingsSection', () => {
     before('providers', 'gateway')
     before('agents', 'permissions')
     before('memory', 'subagents')
-    before('subagents', 'harnesses')
+    before('subagents', 'connections')
+    before('connections', 'harnesses')
     before('code', 'write')
     before('write', 'paper')
     before('archives', 'dataMigration')
+    before('dataMigration', 'storageCleanup')
+    before('storageCleanup', 'laboratory')
     before('laboratory', 'agentRuntime')
     // The local speech provider lives under Media, not in its own entry. The
     // sidebar renders each item's labelKey, and the stub echoes unknown keys.
     expect(html.indexOf('speechToText')).toBeGreaterThanOrEqual(0)
     expect(html).not.toContain('speakTitle')
     expect(html).not.toContain('settingsNavSpeak')
-    // 31 destinations (no Windows storage, no extension page here) plus the back button.
-    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(32)
+    // 33 destinations (no Windows storage, no extension page here) plus the back button.
+    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(34)
   })
 
   it('groups compact settings navigation without pushing the footer away', () => {

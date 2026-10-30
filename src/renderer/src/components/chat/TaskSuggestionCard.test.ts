@@ -8,7 +8,9 @@ import { AgentDispatchGroup } from './AgentDispatchCard'
 const state = vi.hoisted(() => ({ card: undefined as TaskSuggestionView | undefined, act: vi.fn(), busy: false, error: '',
   activeThreadId: 'parent', awaiting: {} as Record<string, true>, selectThread: vi.fn() }))
 vi.mock('./use-task-suggestion', () => ({ useTaskSuggestion: () => state, useThreadTaskSuggestions: () => [] }))
-vi.mock('react-i18next', () => ({ useTranslation: () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...await importOriginal<typeof import('react-i18next')>(),
+  useTranslation: () => ({
   t: (key: string, values?: Record<string, unknown>) => values ? `${key}:${JSON.stringify(values)}` : key
 }) }))
 vi.mock('../../store/chat-store', () => {

@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { gunzipSync } from 'node:zlib'
-import { settingsCategoryInventory } from './settings-ui-smoke-inventory.mjs'
+import { assertCurrentSettingsCategoryInventory, settingsCategoryInventory } from './settings-ui-smoke-inventory.mjs'
 
 test('navigation inventory preserves historical destinations and Windows-only filtering', () => {
   const source = `const groups = [{ items: [
@@ -446,3 +446,24 @@ test('final polish fails for inherited overflow, clipping and small buttons too'
     controls: [control({ name: 'Toggle', tag: 'button', role: 'switch', reached: { height: 26.24 } })]
   }]), [])
 })
+
+const currentNavigationSource = readFileSync(new URL('../src/renderer/src/components/settings-navigation.ts', import.meta.url), 'utf8')
+
+for (const platform of ['darwin', 'win32']) {
+  test(`current ${platform} smoke covers Connections and Storage & cleanup`, () => {
+    const categories = settingsCategoryInventory(currentNavigationSource, platform)
+    assertCurrentSettingsCategoryInventory(categories, platform)
+    assert(categories.includes('connections'))
+    assert(categories.includes('storageCleanup'))
+    assert.equal(categories.includes('storage'), platform === 'win32')
+    for (const added of ['connections', 'storageCleanup']) {
+      assert.throws(() => assertCurrentSettingsCategoryInventory(
+        categories.filter(category => category !== added), platform), /must cover every destination/)
+    }
+    assert.throws(() => assertCurrentSettingsCategoryInventory(
+      [...categories, 'unexpected'], platform), /must cover every destination/)
+    assert.throws(() => assertCurrentSettingsCategoryInventory(
+      categories.map(category => category === 'connections' ? 'integrations' : category), platform),
+    /Retired integrations/)
+  })
+}

@@ -14,7 +14,7 @@ export const AgentHistoryParamSchemas = {
     z.object({ ...Candidate, side: z.literal('current'), expectedTargetFingerprint: Fingerprint, ...Slice }).strict()
   ]),
   'agent.memory.candidates.decide': z.discriminatedUnion('decision', [
-    z.object({ ...Candidate, decision: z.literal('accept'), expectedTargetFingerprint: Fingerprint }).strict(),
+    z.object({ ...Candidate, decision: z.literal('accept'), expectedTargetFingerprint: Fingerprint.optional() }).strict(),
     z.object({ ...Candidate, decision: z.literal('reject') }).strict()
   ]),
   'agent.memory.history.list': z.object({ ...Memory, ...Page }).strict(),

@@ -10,7 +10,9 @@ const transaction = readFileSync(resolve('build/windows-installer-migration-tran
 const quote = (value: string) => `'${value.replaceAll("'", "''")}'`
 function run(script: string) {
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-    `$ErrorActionPreference='Stop'; Set-StrictMode -Version 2; ${script}`], { encoding: 'utf8', timeout: 60_000 })
+    // -Command otherwise inherits $? from an intentionally caught contention error.
+    `$ErrorActionPreference='Stop'; Set-StrictMode -Version 2;
+      try { ${script}; exit 0 } catch { [Console]::Error.WriteLine($_); exit 1 }`], { encoding: 'utf8', timeout: 60_000 })
   expect(result.error).toBeUndefined()
   expect(result.status, result.stdout + result.stderr).toBe(0)
   return result.stdout + result.stderr
@@ -25,8 +27,9 @@ describe('update cutover contention wiring', () => {
     expect(rollback.indexOf('Stop-UpdatePayloadProcesses')).toBeLessThan(rollback.indexOf('Remove-PayloadTreeIfPresent'))
     expect(rollback).toContain('Invoke-UpdateFileOperation { Move-Item -LiteralPath $old')
   })
-  it('publishes installer birth identity before prepared metadata', () => {
-    expect(transaction).toContain('Set-InstallerTransactionOwner $transaction\n  Write-UpdateTransaction $transaction')
+  it.each(['\n', '\r\n'])('publishes installer birth identity before prepared metadata with %j line endings', newline => {
+    const sourceWithLineEndings = transaction.replace(/\r?\n/g, newline)
+    expect(sourceWithLineEndings).toMatch(/Set-InstallerTransactionOwner \$transaction\r?\n {2}Write-UpdateTransaction \$transaction/)
     const source = readFileSync(payload, 'utf8')
     expect(source).toContain('error != 32 && error != 33')
     expect(source).toContain('retryWaitMs >= 10000')
@@ -34,6 +37,10 @@ describe('update cutover contention wiring', () => {
 })
 
 describe.skipIf(process.platform !== 'win32')('native update contention regression', () => {
+  it('reports completed assertions independently of caught errors without hiding failed assertions', () => {
+    expect(() => run("try { throw 'expected fixture error' } catch {}; if($false){throw 'unreachable'}")).not.toThrow()
+    expect(() => run("throw 'fixture assertion failure'")).toThrow(/fixture assertion failure/)
+  })
   it('retries transient lock errors but not access denial and caps persistent contention', () => {
     run(`. ${quote(recovery)};
       function Write-InstallerDiagnostic($text) { [Console]::WriteLine($text) }
@@ -46,9 +53,10 @@ describe.skipIf(process.platform !== 'win32')('native update contention regressi
       try { Invoke-UpdateFileOperation { $script:attempts++; throw [ComponentModel.Win32Exception]::new(5) } }
       catch { $denied=$true };
       if(-not $denied -or $script:attempts -ne 1 -or $script:UpdateFileWaitMs -ne 0){throw 'denial not preserved'};
-      $script:UpdateFileWaitMs=0;
-      try { Invoke-UpdateFileOperation { throw [ComponentModel.Win32Exception]::new(33) } } catch {}
-      if($script:UpdateFileWaitMs -ne 10000){throw 'unbounded contention'};`)
+      $script:UpdateFileWaitMs=0; $script:attempts=0; $contended=$false;
+      try { Invoke-UpdateFileOperation { $script:attempts++; throw [ComponentModel.Win32Exception]::new(33) } }
+      catch { $contended=$true };
+      if(-not $contended -or $script:attempts -ne 14 -or $script:UpdateFileWaitMs -ne 10000){throw 'unbounded contention'};`)
   })
   it('copies the original bytes after a real transient destination lock releases', () => {
     const root = mkdtempSync(join(tmpdir(), 'kun-copy-contention-'))

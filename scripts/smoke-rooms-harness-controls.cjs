@@ -19,7 +19,7 @@ async function verifyRoomsHarnessReadiness({ page, poll, runtimeRequest }) {
   assert.equal(result.readiness.authentication, 'unverified', 'A fixture key must not claim verified remote authentication')
   assert.equal(result.handshake?.protocol, 'acp')
   assert.equal(result.handshake?.agent?.name, 'Devin offline fixture')
-  assert(result.handshake?.models?.includes(ROOMS_HARNESS_MODEL), 'The real ACP session must expose the pinned fixture model')
+  assert.equal(result.handshake.models, undefined, 'Readiness must not create a session to discover models')
   assert.equal(result.trial, undefined, 'Readiness must not run a model trial')
   assert.deepEqual((await row()).readyProfiles.map(({ expiresAt: _expiresAt, readiness: _readiness, ...profile }) => profile), [ROOMS_HARNESS_PROFILE])
   return result
@@ -27,9 +27,7 @@ async function verifyRoomsHarnessReadiness({ page, poll, runtimeRequest }) {
 
 /** Real rendered conversation -> catalog -> confirmation -> ACP -> durable result. */
 async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize, workspaceRoot, releaseFile, modelFixture }) {
-  await openAgentPrivateChat({ page, switchCode: async () => {
-    await page.locator('[role="tab"][data-workspace-mode="chat"]').click()
-  } })
+  await openAgentPrivateChat({ page })
   const entry = await runtimeRequest(page, '/v1/agents/chat-entry')
   assert(entry.initialized && entry.roomId)
   const { agent } = await runtimeRequest(page, '/v1/agents/' + entry.agentId)
@@ -53,6 +51,7 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   const proposed = links.find((link) => link.status === 'awaiting_confirmation')
   assert(proposed && !proposed.threadId, 'A proposal must not start an external task')
   assert.equal(proposed.request.execution.model.harnessId, 'devin')
+  assert.equal(proposed.request.execution.model.model, ROOMS_HARNESS_MODEL)
   assertRoomsHarnessDiscoveryOrder(modelFixture.snapshot().observations)
   await card.locator('[data-workbench-agent="devin"]').waitFor()
   await poll(async () => !(await page.locator('.rooms-composer .rooms-rich-input').innerText()).trim(), 20_000, 'acknowledged composer cleared')

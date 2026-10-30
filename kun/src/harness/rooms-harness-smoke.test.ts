@@ -1,5 +1,7 @@
+import { makeHarness } from '../../tests/helpers/acp-runtime-test-support.js'
+import { acpSessionCatalog } from './acp-model-catalog.js'
 import { createRequire } from 'node:module'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -24,7 +26,8 @@ afterEach(async () => {
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'kun-rooms-readiness-')); roots.push(root)
   const audit = join(root, 'acp-methods.jsonl')
-  const command = await writeRoomsHarnessStub(root, join(root, 'release'), audit)
+  const release = join(root, 'release')
+  const command = await writeRoomsHarnessStub(root, release, audit)
   const settings = { agents: { kun: { harnesses: HarnessesConfigSchema.parse({ binaryPaths: { devin: command } }) } } }
   const environment: Record<string, string> = {}
   configureRoomsHarnessFixture(settings, environment)
@@ -44,7 +47,7 @@ async function fixture() {
   }
   const methods = async () => (await readFile(audit, 'utf8').catch(() => '')).trim().split('\n').filter(Boolean)
     .map((line) => JSON.parse(line).method as string)
-  return { options, harnesses, runtimeRequest, methods }
+  return { options, harnesses, runtimeRequest, methods, command, release }
 }
 
 it('the exact Rooms fixture earns real readiness before live Code discovery without any model prompt', async () => {
@@ -52,8 +55,8 @@ it('the exact Rooms fixture earns real readiness before live Code discovery with
   const result = await verifyRoomsHarnessReadiness({ page: undefined, runtimeRequest: f.runtimeRequest,
     poll: async (condition: () => Promise<boolean>) => vi.waitFor(async () => expect(await condition()).toBe(true), { timeout: 30_000 }) })
   expect(result).toMatchObject({ ok: true, readiness: { usable: true, authentication: 'unverified' },
-    handshake: { ok: true, protocol: 'acp', agent: { name: 'Devin offline fixture' },
-      models: ['devin-fixture-model', 'devin-fixture-alternative'] } })
+    handshake: { ok: true, protocol: 'acp', agent: { name: 'Devin offline fixture' } } })
+  expect(result.handshake.models).toBeUndefined()
   const adapter = { handlesProvider: () => true, capabilities: () => undefined,
     runTurn: async () => 'completed' } as unknown as DelegatedTurnRuntime
   const runtimes = new HarnessRuntimeMap({ acp: adapter })
@@ -66,14 +69,40 @@ it('the exact Rooms fixture earns real readiness before live Code discovery with
     defaultModel: () => ({ model: 'offline-model' }) })
   const { agents } = await service.list()
   expect(agents.find((agent) => agent.harnessId === 'devin')).toMatchObject({ available: true, models: expect.arrayContaining([
-    { harnessId: 'devin', credentialMode: 'native-login', model: 'devin-fixture-model' }
+    { harnessId: 'devin', credentialMode: 'native-login', model: 'default' }
   ]) })
   expect(agents.filter((agent) => agent.harnessId !== 'kun').map((agent) => agent.harnessId)).toEqual(['devin'])
   const methods = await f.methods()
   expect(methods).toContain('initialize')
-  expect(methods).toContain('session/new')
+  expect(methods).not.toContain('session/new')
   expect(methods).not.toContain('session/prompt')
   expect(methods).not.toContain('authenticate')
+}, 60_000)
+
+it('discovers fixture models only when the actual offline turn creates its session', async () => {
+  const f = await fixture()
+  const definition = f.harnesses.catalog.get('devin')!
+  expect(await f.harnesses.acpModels.probe(definition)).toEqual([])
+  await writeFile(f.release, 'complete fixture\n')
+  const h = await makeHarness('basic-chat.json', {
+    definition: { ...definition, acpPermission: undefined },
+    thread: { harnessId: 'devin' },
+    turn: { harnessId: 'devin', model: 'default', credentialMode: 'native-login',
+      approvalPolicy: 'auto', sandboxMode: 'danger-full-access' },
+    deps: {
+      binaryPath: () => f.command,
+      harnessDefaults: () => ({ permissionMode: 'bypass' }),
+      onNativeSession: (nativeDefinition, session) =>
+        f.harnesses.acpModels.seed(nativeDefinition, acpSessionCatalog(nativeDefinition, session))
+    }
+  })
+  expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
+  expect(await f.harnesses.acpModels.probe(definition)).toEqual(['devin-fixture-model', 'devin-fixture-alternative'])
+  const methods = await f.methods()
+  expect(methods.filter((method) => method === 'session/new')).toHaveLength(1)
+  expect(methods.indexOf('session/new')).toBeLessThan(methods.indexOf('session/prompt'))
+  expect(methods).not.toContain('authenticate')
+  expect(h.deltas.map(({ delta }) => delta).join('')).toContain('Model: devin-fixture-model')
 }, 60_000)
 
 it('installed Rooms fixtures cannot become ready without consent or without the offline credential sentinel', async () => {

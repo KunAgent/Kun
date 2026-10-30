@@ -22,12 +22,15 @@ on:
       - 'src/shared/rooms-api.ts'
       - 'src/main/ipc/app-ipc-schemas/runtime.ts'
       - 'src/main/ipc/app-ipc-schemas.agent-model-selection.test.ts'
+      - 'src/main/ipc/workspace-tool-consent-contract.test.ts'
       - 'kun/src/agents/agent-direct*'
       - 'kun/src/agents/agent-artifact*'
       - 'kun/src/contracts/room-content.ts'
       - 'kun/src/rooms/room-content*'
       - 'kun/src/rooms/room-run-recording*'
       - 'scripts/smoke-personal-agent-workspace*'
+      - 'scripts/smoke-workspace-tool-consent.cjs'
+      - 'scripts/smoke-workspace-approval-events.cjs'
       - 'scripts/smoke-personal-workspace-diagnostics.cjs'
       - 'scripts/smoke-isolated-paths*'
       - 'scripts/smoke-packaged-extension-desktop-runtime.cjs'
@@ -76,6 +79,7 @@ jobs:
       - name: Verify renderer and native browser authority boundaries
         run: >-
           npx vitest run src/main/ipc/app-ipc-schemas.agent-model-selection.test.ts
+          src/main/ipc/workspace-tool-consent-contract.test.ts
           src/main/browser-use/browser-use-manager.turn-binding.test.ts
           src/main/browser-use/register-browser-use-ipc.test.ts
           src/main/browser-use/network-policy.test.ts

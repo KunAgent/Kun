@@ -11,7 +11,7 @@ import { createServer, optimizeDeps } from 'vite'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsTabs, readGatewayClientPicker, scrollSettingsDetail, verifyGatewayClientMaskAssets } from './settings-ui-smoke-dom.mjs'
 import { captureReadySettingsDetail, readGatewayClientAccessibility } from './settings-ui-smoke-detail.mjs'
-import { settingsCategoryInventory } from './settings-ui-smoke-inventory.mjs'
+import { assertCurrentSettingsCategoryInventory, settingsCategoryInventory } from './settings-ui-smoke-inventory.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
 // node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve [--port <n>]]
@@ -125,8 +125,7 @@ app.on('window-all-closed', () => app.quit())
   assert.deepEqual(categories, settingsCategoryInventory(navigationSource, nativePlatform),
     'Every destination declared by the measured checkout must be present in order')
   if (phase === 'after') {
-    assert.equal(new Set(categories).size, nativePlatform === 'win32' ? 33 : 32)
-    assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
+    assertCurrentSettingsCategoryInventory(categories, nativePlatform)
   }
   const sizes = [{ name: 'wide', width: 1440, height: 1000 }, { name: 'small', width: 900, height: 720 }]
   const configurations = []

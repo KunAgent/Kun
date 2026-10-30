@@ -7,7 +7,7 @@ const { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL
 
 const publicationTools = ['add_board_card', 'create_code_task', 'request_app_connection', 'send_im_message', 'user_input']
 const fullTools = [...publicationTools, 'list_code_harnesses']
-const route = { harnessId: 'devin', credentialMode: 'native-login', model: 'devin-fixture-model' }
+const route = { harnessId: 'devin', credentialMode: 'native-login', model: ROOMS_HARNESS_MODEL }
 const catalog = { authority: 'reference_only', agents: [{ harnessId: 'devin', available: true, models: [route] }] }
 const user = () => [{ role: 'user', content: 'Inspect the task card [rooms-harness-smoke]' }]
 const call = (id, name, args) => ({ role: 'assistant', content: null,
@@ -140,3 +140,49 @@ test('Rooms native build keeps the validated workspace heap budget and full flow
   assert.match(rooms, /run: npm run build/)
   assert.match(rooms, /--rooms-harness-only --evidence dist\/rooms-agent-smoke/)
 })
+
+const { openAgentPrivateChat } = require('./smoke-agent-chat-workbench.cjs')
+for (const initialRoute of ['chat', 'write', 'agent-chat']) {
+  for (const existing of [true, false]) {
+    test(`private smoke opens Chats from ${initialRoute} (${existing ? 'existing' : 'new'} conversation)`, async () => {
+      let route = initialRoute
+      let opened = false
+      let tabClicks = 0
+      const selected = '[data-workspace-mode-trigger][data-workspace-mode="chats"]'
+      const page = {
+        evaluate: async () => ({ route }),
+        locator(selector) {
+          return {
+            first() { return this },
+            filter() { return this },
+            count: async () => existing ? 1 : 0,
+            getByRole(role, options) {
+              assert.equal(selector, '.sidebar-agent-chats')
+              assert.equal(role, 'button')
+              assert.deepEqual(options, { name: 'New conversation', exact: true })
+              return this
+            },
+            async click() {
+              if (selector === '[role="tab"][data-workspace-mode="chats"]') {
+                tabClicks++
+                route = 'agent-chat'
+              } else {
+                assert.equal(route, 'agent-chat', 'Conversation controls require Chats scope')
+                assert(['.sidebar-agent-chat-row', '.sidebar-agent-chats', '.direct-agent-choices button'].includes(selector))
+                if (selector !== '.sidebar-agent-chats') opened = true
+              }
+            },
+            async waitFor() {
+              assert.equal(route, 'agent-chat', 'Code home has no conversation sidebar')
+              assert(['.sidebar-agent-chats', '.direct-new-chat', '.direct-header', selected].includes(selector))
+              if (selector === '.direct-header' || selector === selected) assert(opened)
+            }
+          }
+        }
+      }
+      await openAgentPrivateChat({ page })
+      assert(opened)
+      assert.equal(tabClicks, initialRoute === 'agent-chat' ? 0 : 1)
+    })
+  }
+}

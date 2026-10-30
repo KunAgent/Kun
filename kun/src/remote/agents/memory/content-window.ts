@@ -38,9 +38,13 @@ export async function candidateRow(rooms: RoomRuntime, agentId: string, candidat
     !['pending', 'completed', 'skipped', 'conflicted'].includes(value.status) || !['create', 'update', 'supersede'].includes(value.action))
     throw new RemoteNoEffect('INVALID_REQUEST')
   await privateAgentSource(rooms, agentId, value.roomId, value.sourceMessageIds, false, true)
+  if (value.captureScope) {
+    await privateAgentSource(rooms, agentId, value.captureScope.conversationId, [], false, true)
+  }
   const storage = rooms.agentMemory.store()
   if (await storage.isForgotten?.({ ...value.candidate, scope: 'user', agentContext: {
-    schemaVersion: 1, agentId, sourceConversationId: value.roomId, shared: false,
+    schemaVersion: 1, agentId, sourceConversationId: value.captureScope?.conversationId ?? value.roomId,
+    sourceTaskId: value.captureScope?.taskId, sourceHandoffId: value.captureScope?.handoffId, shared: false,
     sharedConversationIds: [], sharedProjectRoots: [], locked: false } }, value.memoryId)) throw new RemoteNoEffect('NOT_FOUND')
   if (value.targetId) await privateMemory(rooms, agentId, value.targetId)
   return row
