@@ -27,9 +27,7 @@ async function verifyRoomsHarnessReadiness({ page, poll, runtimeRequest }) {
 
 /** Real rendered conversation -> catalog -> confirmation -> ACP -> durable result. */
 async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize, workspaceRoot, releaseFile, modelFixture }) {
-  await openAgentPrivateChat({ page, switchCode: async () => {
-    await page.locator('[role="tab"][data-workspace-mode="chat"]').click()
-  } })
+  await openAgentPrivateChat({ page })
   const entry = await runtimeRequest(page, '/v1/agents/chat-entry')
   assert(entry.initialized && entry.roomId)
   const { agent } = await runtimeRequest(page, '/v1/agents/' + entry.agentId)
