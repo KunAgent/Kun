@@ -72,8 +72,8 @@ export const ThreadStoreListOptionsSchema: z.ZodType<ThreadStoreListOptions> = z
   workspace: z.string().optional(),
   workspaces: z.array(z.string()).max(64).optional(),
   workspaceMode: z.enum(['code', 'ade']).optional(),
-  workbenchScope: z.literal('code').optional()
-}).strict().refine((options) => !options.workspaceMode || !options.workbenchScope, {
+  workbenchScope: z.enum(['code', 'work']).optional()
+}).strict().refine((options) => !options.workspaceMode || options.workbenchScope !== 'code', {
   message: 'workspaceMode and workbenchScope cannot be combined',
   path: ['workbenchScope']
 })

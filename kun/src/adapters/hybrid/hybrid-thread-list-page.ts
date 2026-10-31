@@ -5,7 +5,8 @@ import type { ThreadRow } from './hybrid-thread-index-mapping.js'
 import {
   applyThreadCursor,
   encodeThreadCursor,
-  filterThreadSummaries
+  filterThreadSummaries,
+  isWorkWorkbenchThread
 } from '../../domain/thread-list-query.js'
 import { summaryFromRow } from './hybrid-thread-index-mapping.js'
 
@@ -84,7 +85,8 @@ export async function hybridThreadStoreListPage(
           cursor,
           ...(wanted > 0 ? { limit: wanted - readable.length } : {})
         })
-        readable.push(...await summariesFromRows(source, rows))
+        const summaries = await summariesFromRows(source, rows)
+        readable.push(...(options.workbenchScope === 'work' ? summaries.filter(isWorkWorkbenchThread) : summaries))
         if (wanted === 0 || readable.length >= wanted || rows.length === 0) break
         const lastRow = rows.at(-1)
         if (!lastRow) break
@@ -93,7 +95,9 @@ export async function hybridThreadStoreListPage(
       const result = pageFromSummaries(
         readable,
         options,
-        () => source.indexCount(options)
+        // SQL deliberately includes legacy candidates and execution units;
+        // its count cannot accurately describe the final Work inventory.
+        () => options.workbenchScope === 'work' ? undefined : source.indexCount(options)
       )
       source.markSqliteHealthy()
       return { ...result, indexStatus: source.indexStatus() }

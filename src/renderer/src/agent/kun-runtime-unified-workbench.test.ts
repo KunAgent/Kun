@@ -27,6 +27,21 @@ describe('KunRuntimeProvider unified Code inventory', () => {
     expect(page.threads[0]?.collaboration).toEqual({ enabled: true })
   })
 
+  it('sends the Work scope, search and cursor to the runtime', async () => {
+    const runtimeRequest = vi.fn(async (_path: string) => ({
+      ok: true, status: 200, body: JSON.stringify({ threads: [], workbenchScope: 'work', hasMore: true, nextCursor: 'next' })
+    }))
+    installDsGui({ runtimeRequest })
+    const page = await new KunRuntimeProvider().listThreadsPage({
+      workbenchScope: 'work', workspaceMode: 'code', workspace: '/repo', search: 'old task', cursor: 'previous', limit: 80
+    })
+    const url = new URL(runtimeRequest.mock.calls[0]![0], 'http://kun.local')
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({
+      workbench_scope: 'work', workspace_mode: 'code', workspace: '/repo', search: 'old task', cursor: 'previous', limit: '80'
+    })
+    expect(page).toMatchObject({ workbenchScopeApplied: true, hasMore: true, nextCursor: 'next' })
+  })
+
   it('does not treat an old runtime that ignores the scope as a complete inventory', async () => {
     installDsGui({ runtimeRequest: vi.fn(async () => ({
       ok: true, status: 200, body: JSON.stringify({ threads: [thread], hasMore: false })

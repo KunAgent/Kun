@@ -1,6 +1,7 @@
 import type { Database as BetterSqliteDatabase, Statement } from 'better-sqlite3'
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
 import { decodeThreadCursor } from '../../domain/thread-list-query.js'
+import { LEGACY_WRITE_CONTEXT_HEADING, LEGACY_WRITE_THREAD_TITLE } from '../../domain/thread.js'
 import {
   rowFromIndexRecord,
   type ThreadIndexRecord,
@@ -64,6 +65,15 @@ export class HybridThreadIndexRepository {
       // conversations remain outside its root inventory.
       where.push("COALESCE(agent_surface, 'code') IN ('code', 'design')")
       where.push("relation != 'side'")
+    }
+    if (options.workbenchScope === 'work') {
+      // Legacy rows may need their item history to resolve ownership. Keep
+      // candidates until after hydration; the pager discards non-Work rows.
+      where.push(`(agent_surface = 'write' OR agent_surface IS NULL OR
+        (agent_surface = 'code' AND (instr(title, @legacyWriteTitle) > 0 OR instr(title, @legacyWriteHeading) > 0)))`)
+      where.push("relation != 'side'")
+      params.legacyWriteTitle = LEGACY_WRITE_THREAD_TITLE
+      params.legacyWriteHeading = LEGACY_WRITE_CONTEXT_HEADING
     }
     const search = options.search?.trim().toLowerCase()
     if (search) { where.push("search_text LIKE @search ESCAPE '\\'"); params.search = `%${escapeLike(search)}%` }

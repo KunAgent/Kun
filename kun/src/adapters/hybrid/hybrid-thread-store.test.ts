@@ -286,6 +286,9 @@ describe('HybridThreadStore filesystem surface fallback', () => {
       ]))
       expect(fullRead).toHaveBeenCalledTimes(1)
       expect(fullRead).toHaveBeenCalledWith(legacy.id)
+      const page = await store.listPage({ workbenchScope: 'work', workspace: '/tmp/workspace', limit: 1 })
+      expect(page.threads.map((thread) => thread.id)).toEqual([legacy.id])
+      expect(page.hasMore).toBe(false)
     } finally {
       fullRead.mockRestore()
       store.close()

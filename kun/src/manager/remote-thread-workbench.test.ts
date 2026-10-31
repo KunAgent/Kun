@@ -52,6 +52,8 @@ describe('Code workbench through the Manager HTTP proxy', () => {
       expect(second).toMatchObject({ hasMore: false, threads: [{ id: 'code' }] })
       expect((await remote.list({ workbenchScope: 'code', search: 'Task' })).map((thread) => thread.id)).toEqual(['ade', 'code'])
       expect((await remote.listPage({ workspaceMode: 'ade' })).threads.map((thread) => thread.id)).toEqual(['ade'])
+      expect((await remote.listPage({ workbenchScope: 'work', workspaceMode: 'code', workspace: '/repo', search: 'work' }))
+        .threads.map((thread) => thread.id)).toEqual(['work'])
       await expect(remote.listPage({ workspaceMode: 'code', workbenchScope: 'code' })).rejects.toThrow('HTTP 400')
       await expect(remote.list({ workbenchScope: 'unknown' as 'code' })).rejects.toThrow('HTTP 400')
     } finally { await close() }

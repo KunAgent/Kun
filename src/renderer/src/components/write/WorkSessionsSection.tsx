@@ -59,7 +59,8 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   const [rowMenu, setRowMenu] = useState<{ session: WorkSessionEntry; point: KunContextMenuPoint } | null>(null)
   const dismissRowMenu = useCallback(() => setRowMenu(null), [])
   const searching = searchOpen && query.trim().length > 0
-  const { root, sessions, loading, patchThread, forgetThread, reload } = useWorkSessions(searching ? query : '')
+  const { root, sessions, loading, hasMore, error, loadMore, patchThread, forgetThread, reload } =
+    useWorkSessions(searching ? query : '')
   const whiteboards = useWriteWorkspaceStore((state) => state.whiteboards)
   const spaceKey = writeWorkspaceKey(root)
   const current = useWorkSessionStore((state) => state.current[spaceKey])
@@ -301,7 +302,18 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
             {showAll ? t('workSessionShowLess') : t('workSessionShowMore', { count: hidden })}
           </button>
         ) : null}
-        {sessions.length === 0 && !draftRow ? (
+        {error ? <p className="work-session-loading" role="alert">{t('workSessionLoadFailed')}</p> : null}
+        {error === 'initial' ? (
+          <button type="button" className="work-session-more" onClick={reload} disabled={loading}>
+            {t('workSessionRetry')}
+          </button>
+        ) : hasMore && (showAll || searching || !canFold) ? (
+          <button type="button" className="work-session-more" data-work-sessions-load-more
+            onClick={loadMore} disabled={loading}>
+            {loading ? t('workSessionLoading') : error === 'more' ? t('workSessionRetry') : t('workSessionLoadMore')}
+          </button>
+        ) : null}
+        {sessions.length === 0 && !draftRow && !error ? (
           loading ? (
             <p className="work-session-loading">{t('workSessionLoading')}</p>
           ) : (

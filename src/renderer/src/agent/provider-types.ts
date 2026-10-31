@@ -85,8 +85,8 @@ export type ThreadListOptions = {
   workspaces?: string[]
   /** Filter by owning workspace mode; absent returns every mode. */
   workspaceMode?: 'code' | 'ade'
-  /** Unified Code workbench listing of Code and legacy ADE roots. */
-  workbenchScope?: 'code'
+  /** Unified Code workbench, or Work session inventory. */
+  workbenchScope?: 'code' | 'work'
   lean?: boolean
 }
 
@@ -101,7 +101,7 @@ export type ThreadIndexStatusInfo = {
 /** Paginated sidebar thread listing result. */
 export type ThreadListPage = {
   threads: NormalizedThread[]
-  /** True only when the runtime acknowledged workbench_scope=code. */
+  /** True only when the runtime acknowledged the requested workbench scope. */
   workbenchScopeApplied?: boolean
   nextCursor?: string
   hasMore: boolean

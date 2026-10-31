@@ -221,7 +221,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         ...(cursor ? { cursor } : {})
       })
       if (options.workbenchScope && page.workbenchScopeApplied !== true) {
-        throw new Error('Kun runtime does not support the unified Code workbench query')
+        throw new Error(options.workbenchScope === 'code'
+          ? 'Kun runtime does not support the unified Code workbench query'
+          : 'Kun runtime does not support the Work workbench query')
       }
       threads.push(...page.threads)
       cursor = page.hasMore ? page.nextCursor : undefined
@@ -257,7 +259,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     const body = readRuntimeJson<{
       threads: CoreThreadSummaryJson[]
-      workbenchScope?: 'code'
+      workbenchScope?: 'code' | 'work'
       nextCursor?: string
       hasMore?: boolean
       total?: number

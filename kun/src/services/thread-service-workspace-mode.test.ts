@@ -151,8 +151,30 @@ describe('ThreadService workspace mode', () => {
       'http://kun.local/v1/threads?workbench_scope=code&workspace_mode=ade'
     )).ok).toBe(false)
     expect(threadsRouteInternal.parseListThreadsOptions(new Request(
+      'http://kun.local/v1/threads?workbench_scope=work&workspace_mode=code&search=old'
+    ))).toEqual({ ok: true, options: expect.objectContaining({
+      workbenchScope: 'work', workspaceMode: 'code', search: 'old'
+    }) })
+    expect(threadsRouteInternal.parseListThreadsOptions(new Request(
       'http://kun.local/v1/threads?workbench_scope=write'
     )).ok).toBe(false)
+  })
+
+  it('filters Work sessions before paginating the in-memory fallback', async () => {
+    const service = serviceWith()
+    for (let index = 0; index < 4; index += 1) {
+      await service.create({ title: `work ${index}`, workspace: '/repo', model: 'm', mode: 'agent', agentSurface: 'write' })
+      await service.create({ title: `code ${index}`, workspace: '/repo', model: 'm', mode: 'agent' })
+    }
+    const options = { workbenchScope: 'work' as const, workspace: '/repo', limit: 2 }
+    const first = await service.listPage(options)
+    const second = await service.listPage({ ...options, cursor: first.nextCursor })
+    expect(first.hasMore).toBe(true)
+    expect(first.total).toBe(4)
+    expect(second.hasMore).toBe(false)
+    expect([...first.threads, ...second.threads]).toHaveLength(4)
+    expect([...first.threads, ...second.threads].every((thread) => thread.agentSurface === 'write')).toBe(true)
+    expect((await service.listPage({ ...options, search: 'work 0' })).threads).toHaveLength(1)
   })
 
   it('paginates one mixed Code/ADE inventory and excludes Work and children', async () => {

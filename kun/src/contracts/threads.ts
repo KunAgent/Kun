@@ -675,8 +675,8 @@ export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequest>
 
 export const ListThreadsResponse = z.object({
   threads: z.array(ThreadSummarySchema),
-  /** Echo for clients negotiating the combined Code inventory. */
-  workbenchScope: z.literal('code').optional(),
+  /** Echo for clients negotiating a workbench inventory. */
+  workbenchScope: z.enum(['code', 'work']).optional(),
   nextCursor: z.string().optional(),
   hasMore: z.boolean().optional(),
   total: z.number().int().nonnegative().optional(),
