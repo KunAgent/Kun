@@ -226,6 +226,13 @@ export const DispatchRecordSchema = z
       .strict()
       .optional(),
     verdict: QualityVerdictSchema.optional(),
+    /**
+     * Host-maintained: the manager or user recorded a quality decision after
+     * this dispatch already reached `completed`/`failed`. The matching
+     * completion notice needs no further wake-up; it does not mean the work
+     * succeeded or the final answer was delivered.
+     */
+    completionHandledAt: z.string().optional(),
     /** Target version for an ephemeral cross-review dispatch. */
     revision: ReviewRevisionSchema.optional(),
     failureReason: z.string().max(4_000).optional(),
