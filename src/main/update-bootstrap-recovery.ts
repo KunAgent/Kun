@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { relaunchApp } from './relaunch-app'
 import { runtimeProcessIsAlive } from '../../kun/src/server/runtime-process-identity.js'
 import {
   GUI_UPDATE_BACKUP_GRACE_MS,
@@ -32,7 +33,7 @@ const defaultDeps: UpdateBootstrapRecoveryDeps = {
   platform: process.platform,
   version: () => app.getVersion(),
   scheduleRollback: scheduleUpdateRollbackAfterExit,
-  relaunch: () => app.relaunch(),
+  relaunch: relaunchApp,
   exit: (code) => app.exit(code)
 }
 

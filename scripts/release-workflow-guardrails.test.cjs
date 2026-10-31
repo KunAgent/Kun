@@ -173,6 +173,29 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
   assert.match(workflow.jobs['pr-gate'].steps[0].with.script, /core\.setFailed/)
 })
 
+test('Linux x64 builds keep a stable baseline and verify their packaged architecture', () => {
+  const jobs = [
+    ['pr-checks.yml', 'package', '$(node -p "require(\'./package.json\').version")'],
+    ['release.yml', 'build-linux', '${{ needs.prepare.outputs.version }}'],
+    ['daily-dev-prerelease.yml', 'build-linux', '${{ needs.prepare.outputs.dev_version }}']
+  ]
+  for (const [file, name, version] of jobs) {
+    const job = readWorkflow(file).jobs[name]
+    assert.equal(job['runs-on'], 'ubuntu-22.04', file)
+    assert.match(stepByName(job, 'Install Linux packaging dependencies').run, /\bfile\b/u)
+    const build = job.steps.findIndex(step => step.run === 'npm run dist:linux')
+    const verify = job.steps.findIndex(step => step.name === 'Verify Linux x64 package architecture')
+    const smoke = job.steps.findIndex(step => step.name === 'Smoke packaged update handoff (Linux x64)')
+    const upload = job.steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
+    assert.ok(build >= 0 && verify > build && smoke > verify && upload > smoke, file)
+    assert.match(job.steps[verify].run, /node \.\/scripts\/verify-linux-package-architecture\.mjs/u)
+    assert.ok(job.steps[verify].run.includes(`--version "${version}"`), file)
+    assert.match(job.steps[verify].run, /--arch x64\b/u)
+    assert.match(job.steps[smoke].run, /if \[ -e \/proc\/sys\/kernel\/apparmor_restrict_unprivileged_userns \]; then\s+sudo sysctl -w kernel\.apparmor_restrict_unprivileged_userns=0\s+fi/u)
+    assert.match(job.steps[upload].with.path, /dist\/latest-linux\.yml/u)
+  }
+})
+
 test('stable Linux ARM64 packaging retains the proven PR timeout budget', () => {
   const workflow = readWorkflow('release.yml')
 

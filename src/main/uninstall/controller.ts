@@ -18,6 +18,7 @@ import {
 } from './paths'
 import { trustedRendererSenderIsCurrent } from '../renderer-trust-policy'
 import { trustedWorkbenchRendererUrl } from '../main-window'
+import { relaunchApp } from '../relaunch-app'
 
 export type UninstallControllerOptions = {
   getMainWindow: () => BrowserWindow | null
@@ -150,7 +151,7 @@ export class UninstallController {
       // normal application session restores the GUI without replaying deletion.
       if (preparationStarted && !this.recoveryScheduled) {
         this.recoveryScheduled = true
-        try { app.relaunch() } finally { app.quit() }
+        try { relaunchApp() } finally { app.quit() }
       }
       throw error
     }

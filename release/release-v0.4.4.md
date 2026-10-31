@@ -23,6 +23,11 @@
 - **记忆提取**：规范提取分数与诊断信息，候选比较关系异常时转入复核而不是直接丢弃，并保持群聊中的记忆工具可用。
 - **OAuth 与存储安全**：改善 MCP 加密凭据与令牌刷新的生命周期，避免旧授权失败误清除新凭据。清理过程中设置发生变化时会重新检查授权边界。
 - **界面与预览**：避免无关操作误开浏览器或 Design 侧栏，设计预览校验保持在 Kun 内完成，并改善深色主题、窄面板和通知展示。
+- **Linux 重启**：AppImage 和 deb 版本在恢复或迁移后重新进入正确的启动入口，并保留启动参数。
+
+## Linux 安装提示
+
+Ubuntu 24.04 及其他限制非特权用户命名空间的系统上，AppImage 可能需要管理员配置 AppArmor；建议优先使用 deb 包。Linux ARM64 暂不包含部分计算机控制后端。
 
 ## 更新后介绍
 
@@ -55,6 +60,11 @@ Kun 0.4.4 brings sources, conversations, and artifacts closer together. Work con
 - **Memory extraction**: Normalized extraction scores and diagnostics, routed candidates with invalid comparison relations to review instead of dropping them, and kept memory tools available in group conversations.
 - **OAuth and storage safety**: Improved encrypted MCP credential and token-refresh lifecycles so failures from an old grant do not clear fresh credentials. Cleanup rechecks consent boundaries when settings change mid-run.
 - **Interface and previews**: Avoid opening the Browser or Design sidebar from unrelated actions, keep design preview validation inside Kun, and improve dark themes, narrow panes, and notifications.
+- **Linux relaunch**: AppImage and deb builds return to the correct launcher after recovery or migration, retaining their startup arguments.
+
+### Linux installation notes
+
+On Ubuntu 24.04 and other systems that restrict unprivileged user namespaces, AppImage may require administrator-configured AppArmor permissions; the deb package is recommended. Some computer-control backends are not included on Linux ARM64.
 
 ### After updating
 

@@ -71,8 +71,24 @@ function remoteProtocolMatchesLock() {
   }
 }
 
+function patchedDependenciesMatchLock() {
+  try {
+    const lock = JSON.parse(readFileSync('kun/package-lock.json', 'utf8'))
+    for (const name of ['babel-plugin-module-resolver', 'follow-redirects', 'glob', 'minimatch']) {
+      const expected = lock.packages?.[`node_modules/${name}`]?.version
+      const installed = JSON.parse(readFileSync(`kun/node_modules/${name}/package.json`, 'utf8'))
+      if (typeof expected !== 'string' || installed.version !== expected) return false
+    }
+    const source = readFileSync('kun/node_modules/babel-plugin-module-resolver/lib/normalizeOptions.js', 'utf8')
+    return source.includes('var _glob = { default: require("glob") };') &&
+      !source.includes('var _glob = _interopRequireDefault(require("glob"));')
+  } catch {
+    return false
+  }
+}
+
 function ensureKunInstall() {
-  if (!REQUIRED_PATHS.every((path) => existsSync(path)) || !remoteProtocolMatchesLock()) {
+  if (!REQUIRED_PATHS.every((path) => existsSync(path)) || !remoteProtocolMatchesLock() || !patchedDependenciesMatchLock()) {
     const npm = npmInvocation(['--prefix', 'kun', 'ci'])
     const installKun = run(npm.command, npm.args)
     if (installKun.status !== 0) {

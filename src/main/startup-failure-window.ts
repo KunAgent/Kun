@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
+import { relaunchApp } from './relaunch-app'
 import { appIcon } from './main-app-context'
 import { logError, logWarn } from './logger'
 import {
@@ -115,7 +116,7 @@ export function showStartupFailureWindow(
         await Promise.race([operationTask, aborted])
         controller.signal.throwIfAborted()
         if (window.isDestroyed()) return
-        app.relaunch()
+        relaunchApp()
         app.quit()
       } catch (recoveryError) {
         diagnosticError = recoveryError

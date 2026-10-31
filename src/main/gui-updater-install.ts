@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { relaunchApp } from './relaunch-app'
 import { win32 as win32Path } from 'node:path'
 import type { GuiUpdateChannel, GuiUpdateInfo, GuiUpdateInstallResult, GuiUpdateState } from '../shared/gui-update'
 import { installerOwnsUpdateCutover } from './update-bootstrap-recovery'
@@ -530,7 +531,7 @@ export class GuiUpdateInstaller {
     this.deps.clearPreparation()
     this.deps.setQuitting(false)
     try {
-      app.relaunch()
+      relaunchApp()
     } catch (error) {
       console.error('[kun-gui updater] failed to relaunch after update install failure:', error)
     } finally {

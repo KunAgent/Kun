@@ -1,4 +1,5 @@
 import { startQuotaReminderNotifications } from './quota-reminder-notification'
+import { relaunchApp } from './relaunch-app'
 import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import {
   app,
@@ -492,7 +493,7 @@ export function registerMainIpc(services: MainServices): void {
         await shutdownServiceManagerAndWait(serviceManager)
         if (mainState.activeServiceManager === serviceManager) mainState.activeServiceManager = null
         mainState.mainWindow?.destroy()
-        app.relaunch()
+        relaunchApp()
         app.exit(0)
       }
     }).registerIpc()
