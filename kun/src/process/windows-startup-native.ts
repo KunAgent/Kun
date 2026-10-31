@@ -10,7 +10,11 @@ export type WindowsProcessInspection = {
   startedAtMs?: number
 }
 export type WindowsStartupLock = { handle: object; created: boolean; text: string }
+export type WindowsAsyncStartupLock = { handle: object; created: boolean; text: string }
 export type WindowsStartupNative = {
+  acquireStartLock(path: string): Promise<WindowsAsyncStartupLock | null>
+  writeStartLock(handle: object, owner: string): Promise<void>
+  releaseStartLock(handle: object, remove: boolean): Promise<void>
   acquire(guardPath: string, legacyPath: string): WindowsStartupLock | undefined
   publish(handle: object, owner: string): void
   release(handle: object): void

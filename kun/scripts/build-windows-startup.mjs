@@ -16,7 +16,7 @@ if (process.platform === 'win32') {
   const work = await mkdtemp(join(tmpdir(), 'kun-startup-build-'))
   try {
     await mkdir(output, { recursive: true })
-    for (const name of ['binding.gyp', 'startup.cc']) {
+    for (const name of ['binding.gyp', 'startup.cc', 'async-startup-lock.cc']) {
       await copyFile(join(root, 'native', 'windows-startup', name), join(work, name))
     }
     execFileSync(process.execPath, [require.resolve('node-gyp/bin/node-gyp.js'), 'rebuild',

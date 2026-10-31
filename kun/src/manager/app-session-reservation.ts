@@ -3,10 +3,11 @@ import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 
 import { basename, dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { AppSessionOwnerSchema, type AppSessionOwner } from '../contracts/app-session-owner.js'
-import { requireRuntimeProcessIdentity, runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
+import { requireRuntimeProcessIdentity, runtimeProcessIsAlive, runtimeProcessOwnerState } from '../server/runtime-process-identity.js'
 import { sameCanonicalPath } from './canonical-path.js'
 import { readManagerHandoffDiscoveryStrict, withManagerStartLock } from './manager-discovery.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
+import type { ManagerStartLockOptions } from './manager-start-lock.js'
 
 export const AppSessionParticipantSchema = z.object({
   pid: z.number().int().positive(),
@@ -32,7 +33,7 @@ const DEFAULT_CONFLICT_HINT = 'Close that client first, or isolate dataDir, cont
 
 export class AppSessionConflictError extends Error {
   readonly code = 'app_session_owner_busy'
-  constructor(path: string, detail = 'another application session owns this profile', hint = DEFAULT_CONFLICT_HINT) {
+  constructor(readonly path: string, readonly detail = 'another application session owns this profile', hint = DEFAULT_CONFLICT_HINT) {
     super(`Kun profile is already owned: ${path}; ${detail}. ${hint}.`)
     this.name = 'AppSessionConflictError'
   }
@@ -51,17 +52,13 @@ export function orphanedReservationError(
   path: string,
   owner: AppSessionOwner,
   orphans: readonly Pick<LiveParticipant, 'pid' | 'instanceId'>[],
-  platform: NodeJS.Platform = process.platform
+  _platform: NodeJS.Platform = process.platform
 ): OrphanedAppSessionError {
-  const pids = [...new Set(orphans.map((orphan) => orphan.pid))]
   const listed = orphans.map((orphan) => `pid ${orphan.pid} (${orphan.instanceId})`).join(', ')
-  const stop = platform === 'win32'
-    ? pids.map((pid) => `taskkill /PID ${pid} /T /F`).join(' && ')
-    : `kill ${pids.join(' ')}`
   return new OrphanedAppSessionError(
     path,
     `its ${owner.ownerKind} application (pid ${owner.ownerPid}) has exited, but processes it started are still running and did not shut down: ${listed}`,
-    `Stop them (\`${stop}\`), then retry`
+    'Use Recover Kun to verify and stop the recorded leftover processes, then retry'
   )
 }
 
@@ -85,6 +82,7 @@ export async function acquireAppSessionReservation(input: {
   controlDir: string
   settingsPath: string
   signal?: AbortSignal
+  lockOptions?: ManagerStartLockOptions
 }): Promise<AppSessionReservation> {
   const profile = {
     dataDir: await canonicalSessionPath(input.dataDir),
@@ -96,14 +94,22 @@ export async function acquireAppSessionReservation(input: {
     join(profile.controlDir, '.app-session'),
     `${profile.settingsPath}.kun-app-session`
   ])].sort()
+  const scopes = new Map([
+    [join(profile.dataDir, '.app-session'), 'dataDir' as const],
+    [join(profile.controlDir, '.app-session'), 'controlDir' as const],
+    [`${profile.settingsPath}.kun-app-session`, 'settingsPath' as const]
+  ])
   const record = { token: randomUUID(), owner: input.owner, ...profile }
   const owned: string[] = []
   try {
     for (const path of paths) {
+      input.signal?.throwIfAborted()
       await withManagerStartLock(`${path}.election`,
-        () => claimAppSessionReservation(path, record, { signal: input.signal }), input.signal)
+        () => claimAppSessionReservation(path, record, { signal: input.signal }), input.signal,
+        { ...input.lockOptions, scope: scopes.get(path) })
       owned.push(path)
     }
+    input.signal?.throwIfAborted()
   } catch (error) {
     await Promise.allSettled(owned.map((path) => releaseMatching(path, record.token)))
     throw error
@@ -163,9 +169,11 @@ export async function claimAppSessionReservation(
     }
     const owner = await readClaimOwner(path)
     if (owner.kind === 'record') {
-      if (runtimeProcessIsAlive(owner.value.owner.ownerPid, {
+      const ownerState = runtimeProcessOwnerState(owner.value.owner.ownerPid, {
         startedAt: owner.value.owner.ownerStartedAt, processIdentity: owner.value.owner.ownerProcessIdentity
-      })) {
+      })
+      if (ownerState === 'unknown') throw new AppSessionConflictError(path, 'application process birth identity cannot be verified')
+      if (ownerState === 'alive') {
         throw new AppSessionConflictError(
           path,
           `a running ${owner.value.owner.ownerKind} application session (pid ${owner.value.owner.ownerPid}) owns this profile`
@@ -217,15 +225,11 @@ async function claimParticipantConflict(path: string): Promise<AppSessionConflic
       'Quit every Kun client, then inspect the app-session directory for diagnosis and retry')
   }
   if (live.length === 0) return undefined
-  const pids = [...new Set(live.map((participant) => participant.pid))]
   const listed = live.map((participant) => `pid ${participant.pid} (${participant.instanceId})`).join(', ')
-  const stop = process.platform === 'win32'
-    ? pids.map((pid) => `taskkill /PID ${pid} /T /F`).join(' && ')
-    : `kill ${pids.join(' ')}`
   return new AppSessionConflictError(
     path,
     `its owner record is unreadable, but processes it started are still running and did not shut down: ${listed}`,
-    `Stop them (\`${stop}\`), then retry`)
+    'Quit all Kun clients and verify the recorded processes before retrying')
 }
 
 async function claimManagerConflict(
@@ -280,7 +284,9 @@ async function liveParticipants(path: string): Promise<LiveParticipant[]> {
   const live: LiveParticipant[] = []
   for (const entry of entries.filter((name) => name.startsWith('process-')).sort()) {
     const value = AppSessionParticipantSchema.parse(JSON.parse(await readFile(join(path, entry), 'utf8')))
-    if (runtimeProcessIsAlive(value.pid, value)) live.push(value)
+    const state = runtimeProcessOwnerState(value.pid, value)
+    if (state === 'unknown') throw new AppSessionConflictError(path, `recorded process ${value.pid} birth identity cannot be verified`)
+    if (state === 'alive') live.push(value)
   }
   return live
 }

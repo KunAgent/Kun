@@ -160,6 +160,7 @@ async function resolveManagedKunPort(
 }
 
 function noteSuccessfulRuntimeSettings(source: string, settings: AppSettingsV1): AppSettingsV1 {
+  desktopProcessStack.assertCanStart()
   mainState.settledRuntimeSettings = settings
   runtimeSupervisor.noteLatest(settings)
   noteRuntimeHealthy(source, settings)
@@ -168,6 +169,7 @@ function noteSuccessfulRuntimeSettings(source: string, settings: AppSettingsV1):
 
 export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1> {
   desktopProcessStack.assertCanStart()
+  desktopProcessStack.startupAttempt?.note('runtime-launch')
   const recoveredManager = await desktopProcessStack.recoverManager(() => kunRuntimeAdapter.stopAndWait())
   if (recoveredManager) {
     mainState.activeServiceManager = configureKunManagerDataPlaneForCurrentProcess(recoveredManager)
@@ -186,7 +188,7 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
     // Match the watchdog probe budget: a single big scan (large events.jsonl
     // cold read) can exceed 2s without the runtime being unhealthy, and the
     // hung path below still provides the multi-second confirmation window.
-    await kunRuntimeHealthMonitor.waitForHealthy(currentSettings, 5_000)
+    await kunRuntimeHealthMonitor.waitForHealthy(currentSettings, 5_000, desktopProcessStack.startupAttempt?.signal)
   if (healthy) {
     const runtimeApi = await probeRuntimeApi(currentSettings)
     if (runtimeApi.ok) {
@@ -258,7 +260,7 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
       throw retryError
     }
   }
-  const started = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
+  const started = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000, desktopProcessStack.startupAttempt?.signal)
   if (!started) {
     throw runtimeJsonError(
       'runtime_unhealthy',
@@ -505,7 +507,7 @@ async function restartRuntimeAfterStopping(
     throw e
   }
 
-  const healthy = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
+  const healthy = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000, desktopProcessStack.startupAttempt?.signal)
   if (!healthy) {
     throw runtimeJsonError(
       'runtime_unhealthy',

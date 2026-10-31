@@ -165,3 +165,12 @@ export const runtimeProcessIsAlive: RuntimeProcessIsAlive = (pid, record) => {
   if (!inspection) return processExists(pid)
   return runtimeProcessInspectionMatchesRecord(record, inspection)
 }
+
+/** Unknown identity is never evidence of a stopped owner. */
+export function runtimeProcessOwnerState(pid: number, record: RuntimeProcessRecordIdentity): 'dead' | 'reused' | 'alive' | 'unknown' {
+  try { process.kill(pid, 0) } catch (error) { return errnoCode(error) === 'ESRCH' ? 'dead' : 'unknown' }
+  const inspection = inspectRuntimeProcess(pid)
+  if (!inspection) return 'unknown'
+  if (!record.processIdentity && inspection.startedAtMs === undefined) return 'unknown'
+  return runtimeProcessInspectionMatchesRecord(record, inspection) ? 'alive' : 'reused'
+}

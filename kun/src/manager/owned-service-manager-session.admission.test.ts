@@ -112,7 +112,7 @@ function fixture() {
   sessions.push(session)
   return {
     session, child, send, recording, registration, inspecting, recordProcess, release,
-    ensure: () => session.ensure({ ...profile, flavor: 'production', timeoutMs: 1_000 }),
+    ensure: (timeoutMs = 1_000) => session.ensure({ ...profile, flavor: 'production', timeoutMs }),
     ready: (override: Partial<AppSessionOwner> = {}) => child.emit('message', {
       type: 'kun-manager-owner-ready', owner: { ...owner, ...override }
     })
@@ -120,6 +120,27 @@ function fixture() {
 }
 
 describe('owned Service Manager identity admission', () => {
+  it('includes profile preflight in the deadline and never launches after delayed completion', async () => {
+    const f = fixture()
+    const original = vi.mocked(acquireAppSessionReservation).getMockImplementation()!
+    vi.mocked(acquireAppSessionReservation).mockImplementation(async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      return original(...args)
+    })
+    await expect(f.ensure(20)).rejects.toMatchObject({ code: 'startup_deadline' })
+    expect(launchServiceManagerProcess).not.toHaveBeenCalled()
+  })
+
+  it('retries a proven exited and reaped startup child at most once', async () => {
+    const f = fixture()
+    Object.assign(f.child, { exitCode: 1 })
+    f.registration.resolve()
+    await expect(f.ensure()).rejects.toThrow('Owned Manager exited before readiness')
+    expect(launchServiceManagerProcess).toHaveBeenCalledTimes(2)
+    expect(stopOwnedProcess).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(launchServiceManagerProcess).mock.calls[1]![0].appOwner?.generation).toBe(2)
+    expect(f.send).not.toHaveBeenCalled()
+  })
   it('never grants startup after failed registration and cleans up only the exact launched child', async () => {
     const f = fixture()
     const failure = f.ensure().catch((error: unknown) => error)
@@ -134,7 +155,7 @@ describe('owned Service Manager identity admission', () => {
     expect(error).toBe(cause)
     expect(error).toHaveProperty('message', `Cannot verify process identity for PID 42042: process identity query timed out; inspect ${logPath}`)
     expect(f.recordProcess).toHaveBeenCalledExactlyOnceWith({ pid: f.child.pid, instanceId: 'manager-1' })
-    expect(stopOwnedProcess).toHaveBeenCalledExactlyOnceWith(f.child, { graceMs: 0, timeoutMs: 2_000 })
+    expect(stopOwnedProcess).toHaveBeenCalledExactlyOnceWith(f.child, { graceMs: 0, timeoutMs: expect.any(Number) })
     expect(removeManagerDiscovery).not.toHaveBeenCalled()
     expect(f.session.current()).toBeUndefined()
     expect(ownedServiceManagerProcesses()).toEqual([])
@@ -159,7 +180,7 @@ describe('owned Service Manager identity admission', () => {
     expect(error).toBeInstanceOf(ReservationConflict)
     expect(error).toHaveProperty('code', 'app_session_owner_busy')
     expect(error).toHaveProperty('message', `Application reservation changed; inspect ${logPath}`)
-    expect(stopOwnedProcess).toHaveBeenCalledExactlyOnceWith(f.child, { graceMs: 0, timeoutMs: 2_000 })
+    expect(stopOwnedProcess).toHaveBeenCalledExactlyOnceWith(f.child, { graceMs: 0, timeoutMs: expect.any(Number) })
     expect(f.send).not.toHaveBeenCalled()
   })
 
@@ -209,7 +230,7 @@ describe('owned Service Manager identity admission', () => {
     await closing
     f.ready()
     expect(f.send).not.toHaveBeenCalled()
-    expect(stopOwnedProcess).toHaveBeenCalledExactlyOnceWith(f.child, { graceMs: 0, timeoutMs: 2_000 })
+    expect(stopOwnedProcess).toHaveBeenCalledExactlyOnceWith(f.child, { graceMs: 0, timeoutMs: expect.any(Number) })
     expect(f.release).toHaveBeenCalledOnce()
     expect(stopOwnedProcess).toHaveBeenCalledBefore(f.release)
     expect(f.session.current()).toBeUndefined()

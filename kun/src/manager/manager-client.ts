@@ -1,4 +1,6 @@
 import { ServiceManagerUnavailableError } from './manager-resolution-error.js'
+import type { EnsureServiceManagerInput, LegacyRuntimeHandoverStatus } from './manager-startup-options.js'
+export type { EnsureServiceManagerInput, LegacyRuntimeHandoverStatus } from './manager-startup-options.js'
 import { ServiceManagerHttpError } from './usage-errors.js'
 import { ManagerRuntimeSlotBusyError } from './manager-runtime-heartbeat-request.js'
 export { ManagerRuntimeSlotBusyError, heartbeatRuntimeWithManager } from './manager-runtime-heartbeat-request.js'
@@ -40,8 +42,7 @@ import {
   inspectServiceManager
 } from './manager-resolution.js'
 import {
-  launchServiceManagerProcess,
-  type ManagerLaunchOverride
+  launchServiceManagerProcess
 } from './manager-launch.js'
 export {
   resolveServiceManager,
@@ -251,26 +252,6 @@ function fenceOf(lease: z.infer<typeof ManagerResourceLeaseSchema>): ManagerReso
     fencingToken: lease.fencingToken
   }
 }
-
-export type EnsureServiceManagerInput = {
-  flavor: RuntimeFlavor
-  controlDir?: string
-  fetch?: typeof fetch
-  timeoutMs?: number
-  allowDevelopmentBootstrap?: boolean
-  buildId?: string
-  dataDir: string
-  settingsPath?: string
-  launch?: ManagerLaunchOverride
-  /** Progress sink for the legacy production Runtime handover wait. */
-  onLegacyHandoverStatus?: (status: LegacyRuntimeHandoverStatus) => void
-}
-
-export type LegacyRuntimeHandoverStatus =
-  | { kind: 'idle' }
-  | { kind: 'waiting'; activeTurnCount: number }
-  | { kind: 'shutdown-requested' }
-  | { kind: 'released' }
 
 export async function ensureServiceManager(
   input: EnsureServiceManagerInput

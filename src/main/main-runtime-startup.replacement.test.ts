@@ -468,7 +468,7 @@ describe('explicit Kun serve replacement', () => {
     expect(harness.stopSharedAndWait).not.toHaveBeenCalled()
     expect(harness.ensureReplacementRunning).toHaveBeenCalledWith(current)
     expect(harness.ensureRunning).not.toHaveBeenCalled()
-    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 20_000)
+    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 20_000, undefined)
     expect(harness.probeRuntimeApi).toHaveBeenCalledWith(current)
     expect(harness.mainState.settledRuntimeSettings).toBe(current)
   })
@@ -545,7 +545,7 @@ describe('explicit Kun serve replacement', () => {
     await expect(restartAllKunServeProcesses(current)).resolves.toBeUndefined()
 
     expect(order).toEqual(['stop-current', 'clear-history', 'launch-replacement'])
-    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 20_000)
+    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 20_000, undefined)
     expect(harness.probeRuntimeApi).toHaveBeenCalledWith(current)
   })
 
@@ -588,7 +588,7 @@ describe('startup Kun serve restart', () => {
     expect(harness.stopSharedForReplacementAndWait).not.toHaveBeenCalled()
     expect(harness.ensureReplacementRunning).not.toHaveBeenCalled()
     expect(harness.ensureRunning).not.toHaveBeenCalled()
-    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 5_000)
+    expect(harness.waitForHealthy).toHaveBeenCalledWith(current, 5_000, undefined)
     expect(harness.probeRuntimeApi).toHaveBeenCalledWith(current)
   })
 

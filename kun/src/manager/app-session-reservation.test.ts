@@ -107,13 +107,13 @@ describe('application session profile reservation', () => {
     reservations.push(await acquireAppSessionReservation({ ...profile, owner: owner() }))
   })
 
-  it('suggests a platform stop command for orphaned processes', () => {
+  it('directs orphan recovery through verified ownership instead of raw PID kill commands', () => {
     const exited = { ...owner(), ownerPid: DEAD_PID }
     const orphans = [{ pid: 24121, instanceId: 'manager-2' }, { pid: 17778, instanceId: 'runtime' }]
     expect(orphanedReservationError('/p', exited, orphans, 'darwin').message)
-      .toContain('Stop them (`kill 24121 17778`), then retry.')
+      .toContain('Use Recover Kun to verify and stop the recorded leftover processes')
     expect(orphanedReservationError('/p', exited, orphans, 'win32').message)
-      .toContain('`taskkill /PID 24121 /T /F && taskkill /PID 17778 /T /F`')
+      .not.toContain('taskkill')
   })
 
   it('allows independent profiles and permits a sequential owner after release', async () => {

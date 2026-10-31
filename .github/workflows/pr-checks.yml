@@ -258,6 +258,13 @@ jobs:
         working-directory: kun
         run: node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts src/manager/manager-start-lock.test.ts src/manager/manager-start-lock-windows.test.ts src/manager/manager-start-lock.windows-native.test.ts src/process/windows-startup-native.test.ts
 
+      - name: Test Windows startup lock candidate and deadline
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/manager/manager-start-lock-diagnostics.test.ts src/manager/manager-start-lock-windows-async.test.ts src/manager/manager-start-lock-async.windows-native.test.ts src/manager/startup-attempt.test.ts
+
+      - name: Test startup cancellation and diagnostic presentation
+        run: npx vitest run src/main/startup-failure-window.test.ts src/main/runtime/desktop-process-stack.test.ts src/main/runtime/kun-runtime-health-monitor.test.ts src/main/main-runtime-startup-flow.test.ts
+
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction

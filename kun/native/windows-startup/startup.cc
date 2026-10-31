@@ -188,6 +188,8 @@ static napi_value inspect(napi_env env, napi_callback_info info) {
   return result;
 }
 
+napi_value add_async_start_lock(napi_env env, napi_value exports);
+
 static napi_value init(napi_env env, napi_value exports) {
   napi_property_descriptor methods[] = {
     {"acquire", nullptr, acquire, nullptr, nullptr, nullptr, napi_default, nullptr},
@@ -196,6 +198,6 @@ static napi_value init(napi_env env, napi_value exports) {
     {"inspectProcess", nullptr, inspect, nullptr, nullptr, nullptr, napi_default, nullptr}
   };
   napi_define_properties(env, exports, sizeof(methods) / sizeof(methods[0]), methods);
-  return exports;
+  return add_async_start_lock(env, exports);
 }
 NAPI_MODULE(NODE_GYP_MODULE_NAME, init)

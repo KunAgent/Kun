@@ -124,9 +124,9 @@ export function startupFailureHtml(
   const primaryAction = busy
     ? `<span class="working"><span class="spinner"></span>${escapeHtml(busyLabel)}</span>`
     : retryable ? actionLink('retry', primaryLabel, 'button primary') : ''
-  const notice = busy
+  const notice = options.notice ?? (busy
     ? { tone: 'info' as const, text: copy.busyHint }
-    : options.notice
+    : undefined)
   const noticeHtml = notice
     ? `<div class="notice ${notice.tone}" role="status">${escapeHtml(notice.text)}</div>`
     : ''

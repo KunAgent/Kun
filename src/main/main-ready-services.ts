@@ -1,3 +1,4 @@
+import { resolveKunStartupTimeoutMs } from './runtime/kun-runtime-health-monitor'
 import { detectAnalyticsInstallation } from './product-analytics/storage'
 import { homedir } from 'node:os'
 import {
@@ -170,6 +171,19 @@ export async function initializeMainServices(input: {
         return null
       }
     }
+    desktopProcessStack.beginStartup(resolveKunStartupTimeoutMs(process.platform, process.env), (progress) => {
+      const stages = {
+        profile: 'Checking which Kun session owns your data...',
+        'previous-processes': 'Checking the previous Kun session...',
+        'manager-launch': 'Starting the Kun data service...',
+        'manager-ready': 'Waiting for the Kun data service...',
+        'runtime-launch': 'Starting Kun...',
+        ready: 'Kun is ready.',
+        cleanup: 'Finishing startup recovery...'
+      }
+      input.onPhase?.('manager_starting', `${stages[progress.stage]} (${Math.ceil(progress.remainingMs / 1_000)}s remaining)`)
+      logInfo('startup', 'Kun startup progress.', progress)
+    })
     const managerDataDir = await resolveKunManagerDataDirFromSettings(productionSettingsPath)
     input.onPhase?.('manager_starting')
     const serviceManager = await ensureKunServiceManager({

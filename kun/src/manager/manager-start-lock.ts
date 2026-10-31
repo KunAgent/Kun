@@ -1,80 +1,114 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, rm, type FileHandle } from 'node:fs/promises'
+import { mkdir, open, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { requireRuntimeProcessIdentity, runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
-import { withWindowsManagerStartLock } from './manager-start-lock-windows.js'
-import { ManagerStartLockError, MANAGER_START_LOCK_TIMEOUT_MS, lockErrorCode, runWithStartLock, waitForStartLock } from './manager-start-lock-support.js'
-export { ManagerStartLockError } from './manager-start-lock-support.js'
+import { setTimeout as delay } from 'node:timers/promises'
+import { requireRuntimeProcessIdentity } from '../server/runtime-process-identity.js'
+import { classifyStartLock, lockErrno, ManagerStartLockError, type StartLockDiagnostic, type StartLockScope } from './manager-start-lock-diagnostics.js'
+import { runWithStartLock } from './manager-start-lock-support.js'
 
-// Mixed-version protocol activation requires Windows native/installer evidence.
-// Keep production on the shared legacy namespace until that release gate passes.
+export { ManagerStartLockError } from './manager-start-lock-diagnostics.js'
+
+// Activation requires the Windows native, installed and mixed-version gates.
 const WINDOWS_NATIVE_LOCK_PROTOCOL_ENABLED = false
 
-export async function withManagerStartLock<T>(controlDir: string, action: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  signal?.throwIfAborted()
+export type ManagerStartLockOptions = {
+  timeoutMs?: number
+  /** Monotonic deadline shared by every election in one launch attempt. */
+  deadline?: number
+  attemptId?: string
+  scope?: StartLockScope
+  onWait?: (diagnostic: StartLockDiagnostic) => void
+}
+
+export async function withManagerStartLock<T>(
+  controlDir: string, action: () => Promise<T>, signal?: AbortSignal, options: ManagerStartLockOptions = {}
+): Promise<T> {
   const start = performance.now()
-  const deadline = start + MANAGER_START_LOCK_TIMEOUT_MS
+  const deadline = Math.min(options.deadline ?? Infinity, start + (options.timeoutMs ?? 40_000))
   const path = join(controlDir, '.manager-start.lock')
-  try { await mkdir(controlDir, { recursive: true, mode: 0o700 }) } catch (error) {
-    throw new ManagerStartLockError(path, 'io', performance.now() - start, undefined, lockErrorCode(error))
+  const diagnostic: StartLockDiagnostic = {
+    path, scope: options.scope ?? 'manager', phase: 'acquire', waitedMs: 0, attemptId: options.attemptId ?? randomUUID()
   }
-  const owner = JSON.stringify({ pid: process.pid, instanceId: randomUUID(), acquiredAt: new Date().toISOString(),
-    processIdentity: requireRuntimeProcessIdentity() })
-  if (process.platform === 'win32' && WINDOWS_NATIVE_LOCK_PROTOCOL_ENABLED) {
-    return withWindowsManagerStartLock(path, owner, action, start, deadline, signal)
+  const fail = (reason: 'timeout' | 'unverifiable' | 'io', error?: unknown) => {
+    throw new ManagerStartLockError(reason, { ...diagnostic, waitedMs: Math.round(performance.now() - start),
+      ...(lockErrno(error) ? { errno: lockErrno(error) } : {}) })
   }
-  while (performance.now() < deadline) {
+  const check = () => {
     signal?.throwIfAborted()
-    let handle: FileHandle
+    if (performance.now() >= deadline) fail('timeout')
+  }
+  check()
+  try { await mkdir(controlDir, { recursive: true, mode: 0o700 }) } catch (error) { fail('io', error) }
+  check()
+  const owner = JSON.stringify({
+    pid: process.pid, processIdentity: requireRuntimeProcessIdentity(), instanceId: randomUUID(),
+    generation: 1, acquiredAt: new Date().toISOString()
+  })
+  // Windows uses a process-held native handle only after its mixed-protocol
+  // validation gate has succeeded for the bundled helper.
+  if (process.platform === 'win32' && WINDOWS_NATIVE_LOCK_PROTOCOL_ENABLED) {
+    const { withWindowsManagerStartLock } = await import('./manager-start-lock-windows-async.js')
+    return withWindowsManagerStartLock({ path, owner, action, signal, deadline, diagnostic, check, fail, onWait: options.onWait })
+  }
+  let nextInspection = 0
+  let lastText: string | undefined
+  while (true) {
+    check()
+    diagnostic.phase = 'acquire'
+    let handle: Awaited<ReturnType<typeof open>> | undefined
+    // Only acquisition errors are lock contention. Never replay the action,
+    // including when it or cleanup raises EEXIST.
     try { handle = await open(path, 'wx', 0o600) } catch (error) {
-      if (lockErrorCode(error) !== 'EEXIST') {
-        throw new ManagerStartLockError(path, 'io', performance.now() - start, undefined, lockErrorCode(error))
-      }
-      await reclaimExitedOwner(path, start)
-      await waitForStartLock(deadline, signal)
-      continue
+      if (lockErrno(error) !== 'EEXIST') fail('io', error)
     }
-    // Only open(wx) errors mean contention. Never retry an EEXIST from action.
-    return runWithStartLock(async () => {
-      await handle.writeFile(owner, 'utf8')
-      signal?.throwIfAborted()
-      if (performance.now() >= deadline) throw new ManagerStartLockError(path, 'busy', performance.now() - start)
-      return action()
-    }, async () => {
-      await handle.close()
-      await removeOwnedLock(path, owner)
-    })
-  }
-  signal?.throwIfAborted()
-  throw new ManagerStartLockError(path, 'busy', performance.now() - start)
-}
-
-async function reclaimExitedOwner(path: string, start: number): Promise<void> {
-  let text: string
-  try { text = await readFile(path, 'utf8') } catch (error) {
-    if (lockErrorCode(error) === 'ENOENT') return
-    throw new ManagerStartLockError(path, 'io', performance.now() - start, undefined, lockErrorCode(error))
-  }
-  let owner: { pid?: number; processIdentity?: string; acquiredAt?: string }
-  try { owner = JSON.parse(text) } catch {
-    // POSIX has no pinned Windows sharing handle. A timestamp alone does not
-    // prove a paused writer has exited; do not silently delete an unknown lock.
-    // An empty file may be the short open/write publication window: wait.
-    if (text === '') return
-    throw new ManagerStartLockError(path, 'corrupt', performance.now() - start)
-  }
-  if (!owner || !Number.isSafeInteger(owner.pid) || owner.pid! <= 0) {
-    throw new ManagerStartLockError(path, 'corrupt', performance.now() - start)
-  }
-  const record = typeof owner.acquiredAt === 'string' ? {
-    startedAt: owner.acquiredAt,
-    ...(typeof owner.processIdentity === 'string' ? { processIdentity: owner.processIdentity } : {})
-  } : undefined
-  if (!runtimeProcessIsAlive(owner.pid!, record)) await removeOwnedLock(path, text)
-}
-
-async function removeOwnedLock(path: string, owner: string): Promise<void> {
-  try { if (await readFile(path, 'utf8') === owner) await rm(path, { force: true }) } catch (error) {
-    if (lockErrorCode(error) !== 'ENOENT') throw error
+    if (handle) {
+      let written = false
+      return runWithStartLock(async () => {
+        check()
+        diagnostic.phase = 'write'
+        try { await handle.writeFile(owner, 'utf8'); written = true } catch (error) { fail('io', error) }
+        check()
+        return action()
+      }, async () => {
+        diagnostic.phase = 'release'
+        await handle.close()
+        try {
+          if (written && await readFile(path, 'utf8') === owner) await rm(path)
+        } catch (error) { if (lockErrno(error) !== 'ENOENT') fail('io', error) }
+      })
+    }
+    diagnostic.phase = 'inspect'
+    try {
+      const details = await stat(path)
+      if (!details.isFile() || details.size > 64 * 1024) {
+        diagnostic.ownerState = 'invalid'
+        fail('unverifiable')
+      }
+      const text = await readFile(path, 'utf8')
+      if (text !== lastText || performance.now() >= nextInspection) {
+        const observed = classifyStartLock(text)
+        diagnostic.ownerState = observed.state
+        diagnostic.ownerPid = observed.pid
+        nextInspection = performance.now() + 1_000
+        lastText = text
+      }
+      if (diagnostic.ownerState === 'dead' || diagnostic.ownerState === 'reused') {
+        // POSIX retains the existing protocol. Windows reclamation never uses
+        // read/compare/unlink; its legacy coordination is in the native backend.
+        if (await readFile(path, 'utf8') === text) await rm(path)
+        continue
+      }
+      if (diagnostic.ownerState === 'unknown') fail('unverifiable')
+      if (['empty', 'malformed', 'invalid'].includes(diagnostic.ownerState ?? '') &&
+        performance.now() - start >= 1_000) fail('unverifiable')
+    } catch (error) {
+      if (error instanceof ManagerStartLockError) throw error
+      if (lockErrno(error) === 'ENOENT') continue
+      fail('io', error)
+    }
+    diagnostic.waitedMs = Math.round(performance.now() - start)
+    options.onWait?.({ ...diagnostic })
+    check()
+    await delay(Math.min(100, Math.max(1, deadline - performance.now())), undefined, { signal })
   }
 }

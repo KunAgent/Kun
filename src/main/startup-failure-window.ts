@@ -5,10 +5,11 @@ import {
   parseStartupFailureAction,
   sanitizeStartupFailureMessage,
   startupFailurePresentation,
-  startupFailureHtml
+  startupFailureHtml,
+  startupFailureDiagnostics
 } from './startup-failure-content'
 import { startupFailureCopy, startupFailureLanguage } from './startup-failure-copy'
-import { readStartupLogTail, startupDiagnosticsReport, startupLogSource } from './startup-failure-log'
+import { readStartupLogTail, startupLogSource } from './startup-failure-log'
 import type { StartupFailurePageOptions } from './startup-failure-page'
 
 export const STARTUP_RECOVERY_TIMEOUT_MS = 45_000
@@ -65,6 +66,7 @@ export function showStartupFailureWindow(
     }
     let recoveryInFlight = false
     let recoveryController: AbortController | undefined
+    let diagnosticError = error
     let notice: StartupFailurePageOptions['notice']
     const htmlOptions = (busy = false): StartupFailurePageOptions => ({
       kind: presentation.kind,
@@ -103,24 +105,35 @@ export function showStartupFailureWindow(
       const timer = presentation.handoff ? undefined : setTimeout(() => controller.abort(new Error(
         'Recovery timed out after 45 seconds. Kun has not restarted. Retry to recheck the remaining processes, or quit and reopen the app.'
       )), STARTUP_RECOVERY_TIMEOUT_MS)
+      let operationTask: Promise<void> | undefined
+      let operationPending = false
       try {
         // Catch synchronous failures too, and never relaunch on a late result
         // after timeout, window close, or an explicit Quit.
-        await Promise.race([operation(controller.signal), aborted])
+        operationPending = true
+        operationTask = operation(controller.signal).finally(() => { operationPending = false })
+        await Promise.race([operationTask, aborted])
         controller.signal.throwIfAborted()
         if (window.isDestroyed()) return
         app.relaunch()
         app.quit()
       } catch (recoveryError) {
+        diagnosticError = recoveryError
         const detail = sanitizeStartupFailureMessage(recoveryError)
         logWarn('startup', 'Kun startup retry cleanup failed.', { message: detail })
         notice = { tone: 'error', text: `${copy.retryFailed} ${detail}` }
-        render()
+        render(Boolean(operationTask && operationPending))
       } finally {
         if (timer) clearTimeout(timer)
         controller.signal.removeEventListener('abort', onAbort)
-        recoveryInFlight = false
-        recoveryController = undefined
+        const settled = () => {
+          recoveryInFlight = false
+          recoveryController = undefined
+        }
+        if (operationTask && operationPending) {
+          // Aborting does not establish that the original cleanup has stopped.
+          void operationTask.catch(() => undefined).then(() => { settled(); render() })
+        } else settled()
       }
     }
     window.once('closed', () => recoveryController?.abort(new Error('Recovery window closed')))
@@ -144,13 +157,8 @@ export function showStartupFailureWindow(
         recoveryController?.abort(new Error('Recovery cancelled by Quit'))
         app.quit()
       } else if (action === 'copy-diagnostics') {
-        clipboard.writeText(startupDiagnosticsReport({
-          title: copy.kinds[presentation.kind].title,
-          kind: presentation.kind,
-          message,
-          logDir,
-          logTail: logTail(),
-          ...launchIdentity
+        clipboard.writeText(startupFailureDiagnostics(diagnosticError, {
+          kind: presentation.kind, appVersion: launchIdentity.appVersion
         }))
         if (recoveryInFlight) return
         notice = { tone: 'info', text: copy.copied }

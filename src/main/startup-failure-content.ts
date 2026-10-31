@@ -1,9 +1,12 @@
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
-import { ManagerStartLockError } from '../../kun/src/manager/manager-start-lock-support.js'
+import { ManagerStartLockError as LegacyManagerStartLockError } from '../../kun/src/manager/manager-start-lock-support.js'
+import { ManagerStartLockError } from '../../kun/src/manager/manager-start-lock-diagnostics.js'
 import { WindowsStartupIntegrityError } from '../../kun/src/process/windows-startup-native.js'
 import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
-import { OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
+import { AppSessionConflictError, OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
+import { StartupDeadlineError } from '../../kun/src/manager/startup-attempt.js'
 import { KunHandoffError } from './runtime/kun-installed-build-handoff'
 import { STARTUP_ACTION_PROTOCOL } from './startup-failure-page'
 
@@ -47,6 +50,22 @@ export function startupFailurePresentation(error: unknown): StartupFailurePresen
     return { kind: 'integrity', message: sanitizeStartupFailureMessage(error), handoff: false, retryable: false }
   }
   if (error instanceof ManagerStartLockError) {
+    const d = error.diagnostic
+    const explanation = d.errno === 'EACCES' || d.errno === 'EPERM'
+      ? 'Kun cannot access the startup coordination file. Check that this user can access the selected data and settings directories.'
+      : d.ownerState === 'unknown'
+        ? 'Kun cannot verify the previous process birth identity. Close the previous Kun or terminal session, then retry.'
+        : ['empty', 'malformed', 'invalid'].includes(d.ownerState ?? '')
+          ? 'The previous startup record is incomplete. Kun could not safely verify ownership for recovery.'
+          : 'Another Kun or terminal session is starting or using this profile. Wait for it to finish or close that session, then retry.'
+    return { kind: 'start-lock', message: `${explanation}\nScope: ${d.scope}\nPhase: ${d.phase}\nWaited: ${d.waitedMs}ms\nAttempt: ${d.attemptId}`,
+      handoff: false, retryable: true, recheck: true }
+  }
+  if (error instanceof StartupDeadlineError) {
+    return { kind: 'generic', message: `${error.message}. Retry will recheck the same profile and its owned processes. Saved conversations and settings are preserved.`,
+      handoff: false, retryable: true }
+  }
+  if (error instanceof LegacyManagerStartLockError) {
     const hint = error.reason === 'busy'
       ? 'Another Kun window or terminal may still be starting or closing. Let it finish, or quit that client, then Recheck Kun.'
       : error.reason === 'io'
@@ -155,6 +174,32 @@ export function parseStartupFailureAction(targetUrl: string): StartupFailureActi
   return (STARTUP_FAILURE_ACTIONS as readonly string[]).includes(action)
     ? action as StartupFailureAction
     : null
+}
+
+/** Copy only allowlisted local facts, never raw log text, causes or environment. */
+export function startupFailureDiagnostics(error: unknown, context?: { kind: string; appVersion: string }): string {
+  const home = homedir()
+  const pattern = new RegExp(home.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'giu')
+  const redactPath = (path: string) => path.replace(pattern, '[home]')
+  let facts: Record<string, unknown>
+  if (error instanceof ManagerStartLockError) {
+    const { scope, path, phase, waitedMs, ownerPid, ownerState, errno, attemptId } = error.diagnostic
+    facts = { code: error.code, reason: error.reason, scope, path: redactPath(path), phase,
+      waitedMs, ownerPid, ownerState, errno, attemptId }
+  } else if (error instanceof LegacyManagerStartLockError) {
+    facts = { code: error.code, reason: error.reason, path: redactPath(error.lockPath),
+      waitedMs: error.waitedMs, ownerPid: error.ownerPid, errno: error.filesystemCode }
+  } else if (error instanceof StartupDeadlineError) {
+    facts = { code: error.code, ...error.progress }
+  } else if (error instanceof WindowsStartupIntegrityError) {
+    facts = { code: error.code }
+  } else if (error instanceof AppSessionConflictError) {
+    facts = { code: error.code, path: redactPath(error.path) }
+  } else {
+    const code = parseStartupRuntimeError(error).code
+    facts = { code: /^[a-zA-Z0-9_]{1,80}$/u.test(code) ? code : 'startup_failed' }
+  }
+  return JSON.stringify({ ...context, ...facts }, null, 2)
 }
 
 export { startupFailureHtml } from './startup-failure-page'

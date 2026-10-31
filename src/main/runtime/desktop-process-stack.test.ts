@@ -19,6 +19,15 @@ function fixture() {
 }
 
 describe('desktop process stack', () => {
+  it('shares the cold-start deadline with Manager admission and fences Runtime after expiry', async () => {
+    const f = fixture()
+    f.stack.beginStartup(20, vi.fn())
+    await f.stack.ensureManager(f.input)
+    expect(f.ensure).toHaveBeenCalledWith(expect.objectContaining({ startupAttempt: f.stack.startupAttempt }))
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    expect(() => f.stack.assertCanStart()).toThrow('startup timed out')
+    f.stack.beginStop()
+  })
   it('fences late Manager readiness after quit and cleans the exact candidate', async () => {
     const f = fixture()
     let ready!: (value: ServiceManagerConnection) => void

@@ -108,6 +108,10 @@ try {
     '--mode' 'hash'
   Assert-True ($LASTEXITCODE -eq 0) 'The installed Kun runtime failed integrity verification.'
 
+  & node (Join-Path $PSScriptRoot 'smoke-windows-startup-helpers.cjs') `
+    '--resources' (Join-Path $installLocation 'resources')
+  Assert-True ($LASTEXITCODE -eq 0) 'The installed Windows startup helpers failed native Node/Electron smoke.'
+
   & node (Join-Path $PSScriptRoot 'smoke-packaged-cli.cjs') `
     '--resources' (Join-Path $installLocation 'resources')
   Assert-True ($LASTEXITCODE -eq 0) 'The installed Kun CLI smoke failed.'
