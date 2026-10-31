@@ -48,6 +48,7 @@ export function dispatchAssignments(intent: AgentDispatchIntentView): AgentDispa
 export function assignmentRoute(assignment: AgentDispatchAssignmentRoute): AgentDispatchAssignmentRoute {
   return { agentId: assignment.agentId, ...(assignment.profileId ? { profileId: assignment.profileId } : {}),
     ...(assignment.model ? { model: assignment.model } : {}),
+    ...(assignment.reasoningEffort ? { reasoningEffort: assignment.reasoningEffort } : {}),
     ...(assignment.providerId ? { providerId: assignment.providerId } : {}),
     ...(assignment.credentialMode ? { credentialMode: assignment.credentialMode } : {}) }
 }
@@ -60,7 +61,7 @@ export function replaceAssignmentRoute(assignments: readonly AgentDispatchAssign
 
 export function sameAssignmentRoute(left: AgentDispatchAssignmentRoute, right: AgentDispatchAssignmentRoute): boolean {
   return left.agentId === right.agentId && (left.profileId ?? '') === (right.profileId ?? '') &&
-    (left.model ?? '') === (right.model ?? '') &&
+    (left.model ?? '') === (right.model ?? '') && (left.reasoningEffort ?? '') === (right.reasoningEffort ?? '') &&
     (left.providerId ?? '') === (right.providerId ?? '') && (left.credentialMode ?? '') === (right.credentialMode ?? '')
 }
 

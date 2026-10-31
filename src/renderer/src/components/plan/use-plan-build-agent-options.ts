@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
-import type { PlanBuildRoute } from '../../plan/plan-build-agent-store'
+import { normalizePlanBuildReasoningEffort, type PlanBuildRoute } from '../../plan/plan-build-agent-store'
 import { planBuildEffortChoices } from '../../plan/plan-build-effort'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -147,8 +147,9 @@ export function usePlanBuildAgentOptions(
     external ? native?.modelInfo?.find((entry) => entry.id === displayModel) : undefined)
   const effort = route.reasoningEffort && effortChoices.includes(route.reasoningEffort) ? route.reasoningEffort : 'auto'
   const selectEffort = (next: string): void => {
-    if (!effortChoices.includes(next)) return
-    onChange({ ...route, reasoningEffort: next })
+    const reasoningEffort = normalizePlanBuildReasoningEffort(next)
+    if (!reasoningEffort || !effortChoices.includes(reasoningEffort)) return
+    onChange({ ...route, reasoningEffort })
   }
 
   return {

@@ -124,6 +124,37 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild.mock.calls[0][0]).toMatchObject({ harnessId: worker })
   })
 
+  it.each(['off', 'max', 'auto', 'xhigh'] as const)('persists a card-selected %s effort through admission and delivery', async (reasoningEffort) => {
+    const f = await setup('ask-for-approval')
+    const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    const route = intent.recommendation.assignments![0]
+    const { label: _label, agentName: _name, workspaceIsolation: _isolation, ...editable } = route
+    const updated = await f.service.act(intent.intentId, { action: 'update', requestId: 'reasoning', expectedRevision: intent.revision,
+      recommendation: { assignments: [{ ...editable, reasoningEffort }] } })
+    expect(updated.recommendation.assignments![0].reasoningEffort).toBe(reasoningEffort)
+    expect((await f.service.get(intent.intentId))!.recommendation.assignments![0].reasoningEffort).toBe(reasoningEffort)
+    expect(updated.recommendation.agentSelection).toBe('user')
+    expect(f.runChild).not.toHaveBeenCalled()
+    await startNow(f, intent.intentId)
+    expect(f.runChild.mock.calls[0][0]).toMatchObject({ reasoningEffort })
+    expect((await f.teams.get('parent'))!.workers[0].reasoningEffort).toBe(reasoningEffort)
+  })
+
+  it('keeps sibling reasoning choices independent and legacy workers without an override', async () => {
+    const f = await setup('ask-for-approval')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, workspaceIsolation: _isolation, ...route }, index) =>
+      index === 0 ? { ...route, reasoningEffort: 'off' as const } : route)
+    await f.service.act(intent.intentId, { action: 'update', requestId: 'reasoning', expectedRevision: intent.revision,
+      recommendation: { assignments: routes } })
+    await startNow(f, intent.intentId)
+    expect(f.runChild.mock.calls[0][0]).toMatchObject({ reasoningEffort: 'off' })
+    expect(f.runChild.mock.calls[1][0]).not.toHaveProperty('reasoningEffort')
+    expect((await f.teams.get('parent'))!.workers[1].reasoningEffort).toBeUndefined()
+  })
+
   it('starts a batch with one intervention window', async () => {
     const f = await setup('full-access')
     const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)

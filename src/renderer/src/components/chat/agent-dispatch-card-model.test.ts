@@ -63,6 +63,16 @@ describe('dispatch card view model', () => {
       { label: 'Review A / Review B', agentId: 'kun', model: 'deepseek-flash' }])
   })
 
+  it('treats a depth-only edit as a route change and keeps sibling overrides', () => {
+    const first = { agentId: 'kun', model: 'deepseek-flash', reasoningEffort: 'off' as const }
+    const second = { agentId: 'kun', model: 'deepseek-flash', reasoningEffort: 'high' as const }
+    const next = { ...second, reasoningEffort: 'max' as const }
+    expect(sameAssignmentRoute(second, next)).toBe(false)
+    expect(sameAssignmentRoute(first, { ...first })).toBe(true)
+    expect(sameAssignmentRoute({ agentId: 'kun' }, { agentId: 'kun', reasoningEffort: 'auto' })).toBe(false)
+    expect(replaceAssignmentRoute([first, second], 1, next)).toEqual([first, next])
+  })
+
   it('replaces one route and sends every worker in card order', () => {
     const routes = [{ agentId: 'kun', model: 'a', providerId: 'deepseek', credentialMode: 'provider' as const },
       { agentId: 'kun', model: 'a', providerId: 'deepseek', credentialMode: 'provider' as const }]

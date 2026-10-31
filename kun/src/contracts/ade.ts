@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 import { HarnessRouteSchema } from './harness.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from './capabilities-core.js'
 import { ChildSecuritySnapshot } from '../delegation/delegation-runtime-contracts.js'
@@ -27,6 +28,8 @@ export const WorkerRecordSchema = z
     role: z.string().max(64).optional(),
     /** Frozen route chosen at creation (01: harness/provider/model/credential). */
     route: HarnessRouteSchema,
+    /** Optional depth chosen on this worker's dispatch card; retained across follow-ups. */
+    reasoningEffort: TurnReasoningEffortSchema.optional(),
     /** Profile that produced this route when the worker selector chose one. */
     profileId: z.string().min(1).max(128).optional(),
     /**

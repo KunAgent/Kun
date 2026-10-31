@@ -1,7 +1,7 @@
 import { capabilityFieldKnown } from '../../../../../kun/src/contracts/model-metadata-evidence.js'
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
 import type { TFunction } from 'i18next'
-import { Check, ChevronRight, Search, Settings2, Zap } from 'lucide-react'
+import { Check, ChevronRight, Search, Settings2, X, Zap } from 'lucide-react'
 import { modelSupportsImageInput } from '@shared/app-settings-provider-core'
 import type { ComposerFastModeState } from './composer-fast-mode'
 import { ComposerModelSourceIcon } from './ComposerModelSourceIcon'
@@ -45,6 +45,9 @@ type ComposerModelPanelProps = {
   style: CSSProperties
   locked: boolean
   reasoningEnabled: boolean
+  reasoningScope?: 'task'
+  reasoningUnavailable?: 'unsupported' | 'unknown'
+  reasoningInherited?: boolean
   reasoningOptions: ComposerReasoningOption[]
   currentReasoning: ComposerReasoningEffort
   onReasoningChange?: (effort: ComposerReasoningEffort) => void
@@ -66,7 +69,7 @@ type ComposerModelPanelProps = {
 
 export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement {
   const { t, panelRef, style, reasoningEnabled, fastModeState, notice, footer, needsProviderSetup, onConfigureProviders, onClose } = props
-  const showReasoning = reasoningEnabled || fastModeState !== 'hidden'
+  const showReasoning = reasoningEnabled || Boolean(props.reasoningUnavailable) || fastModeState !== 'hidden'
   return (
     <div
       ref={panelRef}
@@ -76,6 +79,13 @@ export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement
       data-composer-model-panel
       className="ds-composer-model-panel fixed z-[1000] flex flex-col overflow-hidden rounded-[14px] border border-ds-border bg-white text-[13px] text-ds-muted shadow-[0_18px_52px_rgba(20,30,50,0.18),0_2px_6px_rgba(20,30,50,0.06)] dark:bg-ds-card"
     >
+      {props.reasoningScope === 'task' ? <div className="flex shrink-0 items-center justify-between gap-3 border-b border-ds-border-muted px-4 py-2.5">
+        <span className="text-[13px] font-semibold text-ds-ink">{t('composerModelControls')}</span>
+        <button type="button" aria-label={t('dispatchIntent.reasoningClose')} onClick={onClose}
+          className="rounded-md p-1 text-ds-muted hover:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </div> : null}
       {showReasoning ? <ComposerReasoningSection {...props} /> : null}
       <ComposerModelList {...props} />
       {notice ? <div className="shrink-0 border-t border-ds-border-muted">{notice}</div> : null}
@@ -98,7 +108,7 @@ export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement
 }
 
 function ComposerReasoningSection({
-  t, locked, reasoningEnabled, reasoningOptions, currentReasoning, onReasoningChange,
+  t, locked, reasoningEnabled, reasoningScope, reasoningUnavailable, reasoningInherited, reasoningOptions, currentReasoning, onReasoningChange,
   fastModeState, fastModeEnabled, onFastModeToggle
 }: ComposerModelPanelProps): ReactElement {
   const levels = useMemo(() => composerReasoningLevels(reasoningOptions), [reasoningOptions])
@@ -124,7 +134,16 @@ function ComposerReasoningSection({
     : t(fastActive ? 'composerFastModeOn' : 'composerFastModeOff')
   const fastDisabled = !fastSupported || locked
   return (
-    <div className="shrink-0 border-b border-ds-border-muted px-3.5 pb-3 pt-3" data-composer-reasoning-section>
+    <div className={`shrink-0 border-b border-ds-border-muted px-3.5 pb-3 pt-3${reasoningScope ? ' min-h-[128px]' : ''}`} data-composer-reasoning-section>
+      {reasoningUnavailable ? <div data-composer-reasoning-unavailable={reasoningUnavailable}>
+        <span className="text-[12.5px] font-semibold text-ds-ink">{t('composerReasoning')}</span>
+        <p className="mt-2 rounded-lg bg-ds-hover px-3 py-2 text-[12px] text-ds-ink">
+          {t(reasoningUnavailable === 'unknown' ? 'dispatchIntent.reasoningUnknown' : 'dispatchIntent.reasoningUnsupported')}
+        </p>
+        <p className="mt-2 text-[11.5px] leading-5 text-ds-muted">
+          {t(reasoningUnavailable === 'unknown' ? 'dispatchIntent.reasoningUnknownHint' : 'dispatchIntent.reasoningUnsupportedHint')}
+        </p>
+      </div> : null}
       {reasoningEnabled ? (
         <>
           <div className="flex items-baseline justify-between gap-3">
@@ -155,10 +174,11 @@ function ComposerReasoningSection({
                       data-reasoning-effort={effort}
                       title={isAuto ? t('composerReasoningAutoHint') : undefined}
                       onClick={() => {
-                        if (!checked) onReasoningChange?.(effort)
+                        if (!checked || reasoningInherited) onReasoningChange?.(effort)
                       }}
                       className={`ds-composer-reasoning-segment${isAuto ? ' is-auto' : ''}${checked ? ' is-checked' : ''}${checked && effort === 'max' ? ' is-maximum' : ''}`}
                     >
+                      {reasoningScope && checked ? <Check className="mr-1 inline h-3 w-3" aria-hidden /> : null}
                       {labelFor(effort)}
                     </button>
                     {isAuto && rail.length > 1 ? <span className="ds-composer-reasoning-divider" aria-hidden="true" /> : null}
@@ -167,6 +187,9 @@ function ComposerReasoningSection({
               })}
             </div>
           ) : null}
+          {reasoningInherited ? <p className="mt-2 text-[11.5px] leading-5 text-ds-muted" data-composer-reasoning-inherited>
+            {t('dispatchIntent.reasoningInherited')}
+          </p> : null}
         </>
       ) : null}
       {fastModeState !== 'hidden' ? (
@@ -213,7 +236,7 @@ function ComposerModelList({
     if (showFilter) searchRef.current?.focus({ preventScroll: true })
     const selected = listRef.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]')
     if (typeof selected?.scrollIntoView === 'function') selected.scrollIntoView({ block: 'nearest' })
-    // Only on open: later selections close the panel.
+    // Focus on open only; task-scoped selections keep this list mounted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

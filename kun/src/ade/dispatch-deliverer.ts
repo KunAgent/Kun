@@ -40,6 +40,7 @@ type RunChildInput = {
   workspace?: string
   model?: string
   providerId?: string
+  reasoningEffort?: WorkerRecord['reasoningEffort']
   /** Resolved subagent profile id applied to the child's role. */
   profile?: string
   /** Selector decision metadata recorded on the child run. */
@@ -362,6 +363,7 @@ export class DispatchDeliverer {
       workspace: workspace?.path ?? (worker.reviewOf ? worker.securitySnapshot.sandboxRoot : undefined),
       model: worker.route.model,
       providerId: worker.route.providerId,
+      ...(worker.reasoningEffort ? { reasoningEffort: worker.reasoningEffort } : {}),
       // Reviewers run under the host read-only ceiling; resumeChild
       // inherits the policy from the stored run record automatically.
       ...(worker.reviewOf

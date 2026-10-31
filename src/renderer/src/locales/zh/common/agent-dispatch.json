@@ -1,5 +1,15 @@
 {
   "dispatchIntent": {
+    "reasoningScope": "仅应用于此任务",
+    "reasoningDone": "完成",
+    "reasoningClose": "关闭模型选择器",
+    "reasoningDefault": "任务默认",
+    "reasoningUnavailable": "不可调节",
+    "reasoningInherited": "未单独设置，沿用任务默认；选择档位后覆盖。",
+    "reasoningUnknown": "服务商未提供可调档位",
+    "reasoningUnknownHint": "保留模型默认行为，不猜测可用档位。",
+    "reasoningUnsupported": "此模型不支持调节思考强度",
+    "reasoningUnsupportedHint": "切换到支持调节的模型后，可选择档位。",
     "loading": "正在加载 Agent 任务…",
     "countdown": "{{seconds}} 秒后自动派发",
     "startNow": "立即派发",

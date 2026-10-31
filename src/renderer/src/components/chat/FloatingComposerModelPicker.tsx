@@ -8,11 +8,9 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { composerFastModeState, type ComposerFastModeState } from './composer-fast-mode'
 import { ComposerModelPanel } from './floating-composer-model-panel'
 import {
-  REASONING_OPTIONS,
   buildComposerModelMenuGroups, buildComposerModelOptions, calculateFloatingMenuPlacement,
-  currentBodyZoom, fullModelLabel, modelProfileForSelection, modelIdsMatch,
-  agentModelReasoningChoices, normalizeComposerReasoningEffort, normalizeComposerReasoningEffortValue,
-  reasoningLabelKey, reasoningOptionsForModel, shouldShowProviderSetupPrompt,
+  currentBodyZoom, fullModelLabel, modelIdsMatch, normalizeComposerReasoningEffortValue,
+  reasoningLabelKey, resolveComposerReasoningSelection, shouldShowProviderSetupPrompt,
   type ComposerModelMenuGroup,
   type ComposerReasoningEffort,
   type FloatingMenuPlacement
@@ -67,6 +65,9 @@ type Props = {
   allowedReasoningEfforts?: readonly ComposerReasoningEffort[]
   stretch?: boolean
   composerReasoningEffort?: string
+  /** Task cards keep model and depth together without changing composer behavior. */
+  reasoningScope?: 'task'
+  onOpenChange?: (open: boolean) => void
   composerFastMode?: boolean
   showProviderInModelLabel?: boolean
   onComposerModelChange: (modelId: string, providerId?: string) => void
@@ -97,7 +98,9 @@ export function FloatingComposerModelPicker({
   canChangeModel,
   allowedReasoningEfforts,
   stretch = false,
-  composerReasoningEffort = 'max',
+  composerReasoningEffort: configuredReasoningEffort,
+  reasoningScope,
+  onOpenChange,
   composerFastMode = false,
   showProviderInModelLabel = false,
   onComposerModelChange,
@@ -108,6 +111,10 @@ export function FloatingComposerModelPicker({
   renderNotice
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const taskScoped = reasoningScope === 'task'
+  const composerReasoningEffort = configuredReasoningEffort ?? (taskScoped ? undefined : 'max')
+  const onOpenChangeRef = useRef(onOpenChange)
+  onOpenChangeRef.current = onOpenChange
   const portalContainer = useContext(ComposerPickerPortalContext)
   const pickerRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -128,7 +135,6 @@ export function FloatingComposerModelPicker({
     group.modelIds.some((id) => modelIdsMatch(id, currentModel))
   )?.providerId ?? null
   const selectedProviderGroup = providerMenuGroups.find((group) => group.providerId === selectedProviderId) ?? null
-  const currentModelProfile = modelProfileForSelection(providerMenuGroups, currentModel, selectedProviderId)
   const emptyModelMessage = emptyModelState && providerMenuGroups.length === 0
     ? emptyModelState === 'agent-failed'
       ? t('agentUpdate.composerFailedHint', { reason: t(`agentUpdate.catalogError.${emptyModelReason ?? 'unavailable'}`, {
@@ -137,27 +143,23 @@ export function FloatingComposerModelPicker({
         : emptyModelState === 'agent-not-ready' ? 'agentUpdate.composerNotReadyHint'
           : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
-  const nativeHarnessId = selectedProviderGroup?.nativeHarnessId
-  const nativeModel = nativeHarnessId ? selectedProviderGroup?.modelInfo?.[currentModel] : undefined
-  // Other Agents list per-model levels with the catalog; offer those (plus Auto), or every level when unreported.
-  const nativeChoices = nativeHarnessId && nativeHarnessId !== 'devin' ? agentModelReasoningChoices(nativeModel) : undefined
-  const adapterChoices = nativeChoices !== undefined || (nativeHarnessId === 'devin' && nativeModel?.reasoningEfforts !== undefined) ||
-    (!currentModelProfile?.reasoning && currentModelProfile?.supportsReasoning !== false && allowedReasoningEfforts !== undefined)
-  const reasoningOptions = (adapterChoices ? REASONING_OPTIONS : reasoningOptionsForModel(currentModelProfile)).filter((option) =>
-    (!allowedReasoningEfforts || allowedReasoningEfforts.includes(option.id)) && (!nativeChoices || nativeChoices.includes(option.id)) &&
-    (nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id)))
+  const reasoningSelection = resolveComposerReasoningSelection({ groups: providerMenuGroups, model: currentModel,
+    providerId: selectedProviderId, effort: composerReasoningEffort, allowedEfforts: allowedReasoningEfforts,
+    requireReportedLevels: taskScoped })
+  const reasoningOptions = reasoningSelection.options
   const reasoningEnabled =
     !needsProviderSetup && !emptyModelMessage && Boolean(onComposerReasoningEffortChange) && reasoningOptions.length > 0
   const fastModeState: ComposerFastModeState = onComposerFastModeChange
     ? composerFastModeState(composerModelGroups, currentModel, composerProviderId)
     : 'hidden'
   const fastModeEnabled = fastModeState === 'supported' && composerFastMode
-  const normalizedReasoning = adapterChoices
-    ? normalizeComposerReasoningEffortValue(composerReasoningEffort) ?? 'auto'
-    : normalizeComposerReasoningEffort(composerReasoningEffort, currentModelProfile)
-  const currentReasoning = reasoningOptions.some((option) => option.id === normalizedReasoning) ? normalizedReasoning
-    : reasoningOptions.find((option) => option.id === nativeModel?.defaultReasoningEffort)?.id ?? reasoningOptions[0]?.id ?? normalizedReasoning
-  const currentReasoningLabel = t(reasoningLabelKey(currentReasoning))
+  const currentReasoning = reasoningSelection.current
+  const currentReasoningLabel = taskScoped && composerReasoningEffort === undefined
+    ? t('dispatchIntent.reasoningDefault') : t(reasoningLabelKey(currentReasoning))
+  const reasoningUnavailable = taskScoped && !needsProviderSetup && !emptyModelMessage && reasoningSelection.availability !== 'supported'
+    ? reasoningSelection.availability : undefined
+  const reasoningTriggerLabel = reasoningUnavailable === 'unsupported' ? t('dispatchIntent.reasoningUnavailable')
+    : reasoningUnavailable === 'unknown' ? t('dispatchIntent.reasoningDefault') : currentReasoningLabel
   const canOpen = canChangeModel || (needsProviderSetup && Boolean(onConfigureProviders))
   const modelLabel = emptyModelMessage
     ? emptyModelState === 'loading' ? t('composerModelsLoading')
@@ -177,22 +179,26 @@ export function FloatingComposerModelPicker({
   const controlsTitle = [
     selectedProviderGroup?.label,
     modelLabel,
-    reasoningEnabled ? `${t('composerReasoning')} ${currentReasoningLabel}` : '',
+    reasoningEnabled || reasoningUnavailable ? `${t('composerReasoning')} ${reasoningTriggerLabel}` : '',
     fastModeEnabled ? t('composerFastModeOn') : ''
   ].filter(Boolean).join(' / ')
   // The trigger is a content-sized pill: stretch only lets it shrink in a
   // cramped toolbar, it never grows, so it stays next to the right-side actions.
   const widthClass = stretch
     ? 'min-w-0 shrink max-w-[min(300px,48vw)]'
-    : compact ? 'min-w-0 shrink-0 max-w-[232px]' : 'min-w-0 shrink-0 max-w-[min(300px,46vw)]'
+    : taskScoped ? 'min-w-0 shrink-0 max-w-[min(300px,60vw)]'
+      : compact ? 'min-w-0 shrink-0 max-w-[232px]' : 'min-w-0 shrink-0 max-w-[min(300px,46vw)]'
 
   useEffect(() => {
-    if (!reasoningEnabled) return
+    if (!reasoningEnabled || (taskScoped && composerReasoningEffort === undefined)) return
     const rawReasoning = normalizeComposerReasoningEffortValue(composerReasoningEffort)
     if (rawReasoning !== currentReasoning) {
       onComposerReasoningEffortChange?.(currentReasoning)
     }
-  }, [composerReasoningEffort, currentReasoning, onComposerReasoningEffortChange, reasoningEnabled])
+  }, [composerReasoningEffort, currentReasoning, onComposerReasoningEffortChange, reasoningEnabled, taskScoped])
+
+  useEffect(() => { onOpenChangeRef.current?.(open) }, [open])
+  useEffect(() => () => { onOpenChangeRef.current?.(false) }, [])
 
   useEffect(() => {
     if (!canOpen) setOpen(false)
@@ -235,7 +241,7 @@ export function FloatingComposerModelPicker({
         menuHeight: panelRef.current?.scrollHeight ?? 0,
         viewportHeight: window.innerHeight,
         viewportWidth: window.innerWidth,
-        preferredWidth: COMPOSER_MODEL_PANEL_WIDTH,
+        preferredWidth: taskScoped ? 388 : COMPOSER_MODEL_PANEL_WIDTH,
         maximumHeight: COMPOSER_MODEL_PANEL_MAX_HEIGHT,
         coordinateScale: currentBodyZoom()
       }))
@@ -250,7 +256,7 @@ export function FloatingComposerModelPicker({
       window.removeEventListener('resize', updatePlacement)
       window.removeEventListener('scroll', updatePlacement, true)
     }
-  }, [open])
+  }, [open, taskScoped])
 
   useEffect(() => {
     if (!open || !portalContainer) return
@@ -261,10 +267,13 @@ export function FloatingComposerModelPicker({
 
   const panelStyle: CSSProperties = placement
     ? { left: `${placement.left}px`, top: `${placement.top}px`, width: `${placement.width}px`, maxHeight: `${placement.maxHeight}px` }
-    : { left: 0, top: 0, width: `${COMPOSER_MODEL_PANEL_WIDTH}px`, maxHeight: `${COMPOSER_MODEL_PANEL_MAX_HEIGHT}px`, visibility: 'hidden' }
+    : { left: 0, top: 0, width: `${taskScoped ? 388 : COMPOSER_MODEL_PANEL_WIDTH}px`, maxHeight: `${COMPOSER_MODEL_PANEL_MAX_HEIGHT}px`, visibility: 'hidden' }
 
   const renderPanel = (): ReactElement | null => {
     if (!open || !canOpen) return null
+    const customFooter = agentHarnessId && agentHarnessId !== 'kun'
+      ? <AgentModelCatalogFooter harnessId={agentHarnessId} selectedModel={composerModel} />
+      : renderFooter?.(() => { triggerRef.current?.focus(); setOpen(false) })
     const panel = (
       <ComposerModelPanel
         t={t}
@@ -272,6 +281,9 @@ export function FloatingComposerModelPicker({
         style={panelStyle}
         locked={!canChangeModel}
         reasoningEnabled={reasoningEnabled}
+        reasoningScope={reasoningScope}
+        reasoningUnavailable={reasoningUnavailable}
+        reasoningInherited={taskScoped && composerReasoningEffort === undefined}
         reasoningOptions={reasoningOptions}
         currentReasoning={currentReasoning}
         onReasoningChange={onComposerReasoningEffortChange}
@@ -286,14 +298,20 @@ export function FloatingComposerModelPicker({
         onConfigureProviders={onConfigureProviders}
         onPickModel={(modelId, providerId) => {
           onComposerModelChange(modelId, providerId)
-          if (portalContainer) triggerRef.current?.focus()
-          setOpen(false)
+          if (!taskScoped) {
+            if (portalContainer) triggerRef.current?.focus()
+            setOpen(false)
+          }
         }}
-        onClose={() => setOpen(false)}
+        onClose={() => { triggerRef.current?.focus(); setOpen(false) }}
         notice={renderNotice?.(() => setOpen(false))}
-        footer={agentHarnessId && agentHarnessId !== 'kun'
-          ? <AgentModelCatalogFooter harnessId={agentHarnessId} selectedModel={composerModel} />
-          : renderFooter?.(() => { triggerRef.current?.focus(); setOpen(false) })}
+        footer={taskScoped ? <>{customFooter}<div className="flex items-center justify-between gap-3 px-4 py-2 text-[11.5px] text-ds-muted" data-dispatch-model-footer>
+          <span>{t('dispatchIntent.reasoningScope')}</span>
+          <button type="button" onClick={() => { triggerRef.current?.focus(); setOpen(false) }}
+            className="rounded-md bg-ds-hover px-3 py-1 text-[12px] font-medium text-ds-ink hover:bg-accent-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
+            {t('dispatchIntent.reasoningDone')}
+          </button>
+        </div></> : customFooter}
       />
     )
     if (typeof document === 'undefined') return panel
@@ -342,11 +360,11 @@ export function FloatingComposerModelPicker({
           <span className="ds-composer-model-trigger-provider">{providerLabel}<span aria-hidden="true"> · </span></span>
         ) : null}
         <span className="ds-composer-model-trigger-model">{shortModelLabel}</span>
-        {reasoningEnabled ? (
+        {reasoningEnabled || reasoningUnavailable ? (
           <>
             <span className="ds-composer-model-trigger-dot" aria-hidden="true" />
             <span className={`ds-composer-model-trigger-effort${currentReasoning === 'max' ? ' is-maximum' : ''}`}>
-              {currentReasoningLabel}
+              {reasoningTriggerLabel}
             </span>
           </>
         ) : null}

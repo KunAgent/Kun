@@ -1,15 +1,13 @@
 import { create } from 'zustand'
 import type { AgentDispatchAssignmentRoute } from '@shared/agent-dispatch'
+import { MODEL_REASONING_EFFORTS } from '@shared/app-settings-types-provider'
 
 /**
  * Agent + model the user picked to execute a plan, keyed by plan id. The
  * timeline card and the plan panel share one pick; a plan without an entry
  * builds on the composer's current Agent, exactly as before the picker.
  */
-export type PlanBuildRoute = AgentDispatchAssignmentRoute & {
-  /** Reasoning level for the build turn; absent or `auto` leaves it to the Agent. */
-  reasoningEffort?: string
-}
+export type PlanBuildRoute = AgentDispatchAssignmentRoute
 
 /** A plan handed to an external Agent conversation (now, or by a scheduled run). */
 export type PlanBuildHandoff = {
@@ -119,9 +117,15 @@ export function planBuildHandoffForThread(
   return null
 }
 
+/** Normalize the persisted/composer string at the shared route contract boundary. */
+export function normalizePlanBuildReasoningEffort(value: string | undefined): PlanBuildRoute['reasoningEffort'] {
+  const normalized = value?.trim().toLowerCase()
+  return MODEL_REASONING_EFFORTS.find((effort) => effort === normalized)
+}
+
 /** Effort the turn should request; `auto` and blanks leave it to the Agent. */
-export function planBuildReasoningEffort(route: PlanBuildRoute | undefined): string | undefined {
-  const effort = route?.reasoningEffort?.trim()
+export function planBuildReasoningEffort(route: PlanBuildRoute | undefined): PlanBuildRoute['reasoningEffort'] {
+  const effort = normalizePlanBuildReasoningEffort(route?.reasoningEffort)
   return effort && effort !== 'auto' ? effort : undefined
 }
 
@@ -132,7 +136,7 @@ export function resolvePlanBuildRoute(
 ): PlanBuildRoute {
   if (picked) return picked
   const credentialMode = composer.credentialMode.trim()
-  const effort = composer.reasoningEffort?.trim()
+  const effort = normalizePlanBuildReasoningEffort(composer.reasoningEffort)
   return {
     agentId: composer.harnessId || 'kun',
     ...(composer.model.trim() ? { model: composer.model.trim() } : {}),

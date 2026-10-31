@@ -1,5 +1,15 @@
 {
   "dispatchIntent": {
+    "reasoningScope": "Only applies to this task",
+    "reasoningDone": "Done",
+    "reasoningClose": "Close model picker",
+    "reasoningDefault": "Task default",
+    "reasoningUnavailable": "Not adjustable",
+    "reasoningInherited": "Uses the task default until you choose a level.",
+    "reasoningUnknown": "The provider has not reported adjustable levels",
+    "reasoningUnknownHint": "Keeps the model default without guessing supported levels.",
+    "reasoningUnsupported": "This model does not support reasoning adjustment",
+    "reasoningUnsupportedHint": "Choose a model that supports adjustment to select a level.",
     "loading": "Loading Agent task…",
     "countdown": "Dispatches in {{seconds}}s",
     "startNow": "Dispatch now",

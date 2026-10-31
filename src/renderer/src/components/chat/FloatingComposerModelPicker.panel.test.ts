@@ -9,6 +9,7 @@ import {
   composerReasoningLevels,
   initialExpandedModelGroups
 } from './floating-composer-model-panel'
+import { resolveComposerReasoningSelection } from './floating-composer-model-picker-logic'
 
 const CODEX: ModelProviderModelGroup = {
   providerId: 'codex-2',
@@ -67,6 +68,62 @@ const buttonWithText = (text: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] button')].find((button) => button.textContent?.trim() === text)
 
 describe('composer model and reasoning control', () => {
+  it('keeps a task picker open across model and reasoning changes until Done', async () => {
+    const onModel = vi.fn()
+    const onReasoning = vi.fn()
+    const onOpen = vi.fn()
+    const trigger = await renderPicker({ reasoningScope: 'task', composerReasoningEffort: undefined,
+      onComposerModelChange: onModel, onComposerReasoningEffortChange: onReasoning, onOpenChange: onOpen })
+    expect(onReasoning).not.toHaveBeenCalled()
+    expect(trigger.textContent).toContain('Task default')
+    await act(async () => trigger.click())
+    expect(document.querySelector('[data-dispatch-model-footer]')?.textContent).toContain('Only applies to this task')
+    expect(document.querySelector('[data-composer-reasoning-inherited]')).not.toBeNull()
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-composer-model-panel] button[data-reasoning-effort="high"]')?.click())
+    expect(onReasoning).toHaveBeenLastCalledWith('high')
+    const nextModel = document.querySelector<HTMLButtonElement>('[data-model-nav][title="deepseek-v4-flash"]')
+    expect(nextModel).not.toBeNull()
+    await act(async () => nextModel!.click())
+    expect(onModel).toHaveBeenLastCalledWith('deepseek-v4-flash', 'deepseek')
+    expect(panel()).not.toBeNull()
+    expect(onOpen).toHaveBeenLastCalledWith(true)
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-dispatch-model-footer] button')?.click())
+    expect(panel()).toBeNull()
+    expect(onOpen).toHaveBeenLastCalledWith(false)
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it.each(['unknown', 'unsupported'] as const)('explains a task model with %s reasoning instead of hiding the section', async (availability) => {
+    const groups: ModelProviderModelGroup[] = [{ providerId: 'provider', label: 'Provider', modelIds: ['plain-model'],
+      modelProfiles: availability === 'unsupported' ? { 'plain-model': { inputModalities: ['text'], outputModalities: ['text'],
+        supportsToolCalling: true, messageParts: ['text'], supportsReasoning: false } } : {} }]
+    const onReasoning = vi.fn()
+    const trigger = await renderPicker({ reasoningScope: 'task', composerModel: 'plain-model', composerProviderId: 'provider',
+      composerModelGroups: groups, onComposerReasoningEffortChange: onReasoning })
+    await act(async () => trigger.click())
+    expect(document.querySelector(`[data-composer-reasoning-unavailable="${availability}"]`)).not.toBeNull()
+    expect(document.querySelectorAll('button[data-reasoning-effort]')).toHaveLength(0)
+    expect(onReasoning).not.toHaveBeenCalled()
+    expect(trigger.textContent).toContain(availability === 'unsupported' ? 'Not adjustable' : 'Task default')
+  })
+
+  it('normalizes only to reported model levels and intersects native transport capabilities', () => {
+    const group: ModelProviderModelGroup = { ...DEEPSEEK, modelProfiles: { 'deepseek-v4-flash': {
+      inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+      reasoning: { supportedEfforts: ['off', 'high', 'max'], defaultEffort: 'max', requestProtocol: 'deepseek-chat-completions' } } } }
+    const known = resolveComposerReasoningSelection({ groups: [group], model: 'deepseek-v4-flash', providerId: 'deepseek',
+      effort: 'low', requireReportedLevels: true })
+    expect(known.options.map((option) => option.id)).toEqual(['off', 'high', 'max'])
+    expect(known.current).toBe('max')
+    const native: ModelProviderModelGroup[] = [{ providerId: 'native', label: 'Native', modelIds: ['native-model'], nativeHarnessId: 'codex',
+      modelInfo: { 'native-model': { id: 'native-model', displayName: 'Native model', reasoningEfforts: ['low', 'high', 'xhigh'], defaultReasoningEffort: 'high' } } }]
+    const limited = resolveComposerReasoningSelection({ groups: native, model: 'native-model', providerId: 'native',
+      effort: 'xhigh', requireReportedLevels: true, allowedEfforts: ['auto', 'high', 'xhigh'] })
+    expect(limited.options.map((option) => option.id)).toEqual(['auto', 'high', 'xhigh'])
+    expect(limited.current).toBe('xhigh')
+    expect(resolveComposerReasoningSelection({ groups: [], model: 'unreported', requireReportedLevels: true }).availability).toBe('unknown')
+  })
+
   it('offers every reasoning level for an Agent model whose levels were not reported', async () => {
     // CodeMaker/OpenCode report levels only for the model their probe session selected.
     const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'CodeMaker account', nativeHarnessId: 'codemaker',

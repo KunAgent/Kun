@@ -35,7 +35,7 @@ export class ManagerWorkerCreator {
     rawInput: unknown,
     /** The calling turn's security view (tool context), for the worker ceiling. */
     toolContext: ToolHostContext,
-    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string }
+    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string; reasoningEffort?: WorkerRecord['reasoningEffort'] }
   ): Promise<WorkerCreateResult> {
     const language = this.reportLanguage()
     const input = WorkerCreateInputSchema.parse(rawInput)
@@ -236,6 +236,7 @@ export class ManagerWorkerCreator {
       label: input.label,
       ...(input.role ? { role: input.role } : {}),
       route,
+      ...(allocation?.reasoningEffort ? { reasoningEffort: allocation.reasoningEffort } : {}),
       ...(profileId ? { profileId } : {}),
       ...(selection ? { selection } : {}),
       permissionMode: effectivePermissionMode,

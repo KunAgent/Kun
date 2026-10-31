@@ -254,6 +254,7 @@ export class ManagerWorkerDispatch {
         intent.recommendation.assignments[index] = { label: assignment.label, agentId: resolved.route.harnessId,
           agentName: resolved.definition.displayName, workspaceIsolation: resolved.isolation,
           ...(assignment.profileId ? { profileId: assignment.profileId } : {}),
+          ...(assignment.reasoningEffort ? { reasoningEffort: assignment.reasoningEffort } : {}),
           ...(resolved.route.model ? { model: resolved.route.model } : {}),
           ...(resolved.route.providerId ? { providerId: resolved.route.providerId } : {}),
           credentialMode: resolved.route.credentialMode }
@@ -280,6 +281,8 @@ export class ManagerWorkerDispatch {
       // A role picked on the card replaces the saved one; the saved one survives an unchanged route.
       const cardProfileId = intent.recommendation.assignments?.[index]?.profileId
       const allocation = { ...assignmentIds(intent, index), intentId: intent.intentId,
+        ...(intent.recommendation.assignments?.[index]?.reasoningEffort
+          ? { reasoningEffort: intent.recommendation.assignments[index].reasoningEffort } : {}),
         ...(savedRoute ? {
           selection: payload.items[index]?.selection as import('../contracts/ade.js').WorkerRecord['selection'],
           profileId: cardProfileId ?? payload.items[index]?.profileId

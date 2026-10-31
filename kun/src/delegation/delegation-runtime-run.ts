@@ -100,6 +100,8 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     workspace?: string
     model?: string
     providerId?: string
+    /** Host-selected depth from the worker dispatch card; ordinary tools do not supply it. */
+    reasoningEffort?: string
     accountId?: string
     clientSurface?: TurnClientSurface
     /** Effective parent turn/thread model inherited together with inheritedProviderId. */
@@ -306,11 +308,13 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     // Default-inherit tools (e.g. fast_context) follow the parent session's
     // reasoning strength unless the profile configures an explicit depth;
     // reusable delegate_task profiles keep their existing 'off'-style default.
-    const resolvedReasoningEffort = ephemeralAgentInheritsSessionSelection
-      ? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
-      : input.inheritSessionDefaults === true
-        ? profile?.reasoningEffort ?? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
-        : profile?.reasoningEffort
+    const resolvedReasoningEffort = input.reasoningEffort !== undefined
+      ? ModelReasoningEffort.parse(input.reasoningEffort)
+      : ephemeralAgentInheritsSessionSelection
+        ? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
+        : input.inheritSessionDefaults === true
+          ? profile?.reasoningEffort ?? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
+          : profile?.reasoningEffort
     // Explicit tool override wins; otherwise default-inherit tools adopt the
     // parent turn's Codex service tier ('fast'). The child model request is
     // still capability-gated downstream (Codex + priority-capable only).
