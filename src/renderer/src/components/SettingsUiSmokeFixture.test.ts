@@ -29,7 +29,8 @@ it('renders all real SettingsView destinations and every discovered nested tab o
   await waitUntil(() => !!document.querySelector('[data-settings-category-view="general"]'))
   const categories = [...document.querySelectorAll<HTMLButtonElement>('[data-settings-category]')]
     .map(element => element.dataset.settingsCategory!)
-  expect(new Set(categories).size).toBe(33)
+  expect(new Set(categories).size).toBe(35)
+  expect(categories).toEqual(expect.arrayContaining(['connections', 'storageCleanup']))
   expect(categories).not.toContain('integrations')
   const panels: string[] = []
   const discovered = new Set<string>()

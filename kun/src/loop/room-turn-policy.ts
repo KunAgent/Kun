@@ -62,7 +62,13 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
     sandboxMode: readOnly ? 'read-only' : fullAccess ? 'danger-full-access' : 'workspace-write',
     approvalPolicy: thread.approvalPolicy,
     approvalReviewer: thread.approvalReviewer,
-    memoryPolicy: { enabled: false },
+    // A writable conversation keeps the upstream memory policy: an explicit
+    // user directive is stored through memory_create, which already requires
+    // explicit approval. Other room kinds host peer or sub agents that must
+    // not write the user's long-term memory, so they stay disabled.
+    memoryPolicy: policy.kind === 'conversation' && !readOnly
+      ? (context.memoryPolicy ?? { enabled: false })
+      : { enabled: false },
     allowedToolNames: allowed,
     // Execution and review stay on one checkout. Discussion may read host
     // paths the user names; writes still cannot grow a new mutable root list.

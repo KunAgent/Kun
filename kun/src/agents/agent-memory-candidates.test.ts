@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -50,6 +50,29 @@ it('shows the old value and creates one protected new version only after explici
   expect(newer.content).toBe(f.candidate.candidate.content)
   expect(records.find((record) => record.id === f.saved.memory.id)?.supersededAt).toBeTruthy()
 })
+it('saves a target-less reviewed candidate as a new memory only after explicit acceptance', async () => {
+  const f = await fixture()
+  const held: AgentMemoryCandidate = { id: 'held-candidate', phase: 'candidate', participantAgentId: f.agent.id,
+    roomId: f.candidate.roomId, rootRequestId: f.candidate.rootRequestId, status: 'pending',
+    candidate: { content: 'Reports should link every source inline.', type: 'preference', confidence: .9, importance: .7,
+      observedAt: new Date().toISOString(), tags: [], sources: f.saved.memory.sources },
+    action: 'create', captureScope: { conversationId: f.candidate.roomId },
+    reason: "invalid-relation 'related' (candidate #0): comparisons quarantined; review required before this candidate can be saved",
+    runId: 'memory-run', sourceMessageIds: f.candidate.sourceMessageIds }
+  await f.store.commit({ requestId: 'held-candidate', checks: [{ kind: 'agent_memory_job', id: held.id, expectedRevision: null }],
+    puts: [{ kind: 'agent_memory_job', id: held.id, roomId: held.roomId, value: held }] })
+  const listed = await listAgentMemoryCandidates(f.service, f.agent.id)
+  const entry = listed.candidates.find((item) => item.candidate.id === 'held-candidate')!
+  expect(entry.target).toBeUndefined()
+  await decideAgentMemoryCandidate(f.service, f.agent.id, 'held-candidate', {
+    clientRequestId: 'accept-held', expectedRevision: entry.revision, decision: 'allow' })
+  const records = await f.storage.list({ agent: { agentId: f.agent.id, manage: true } })
+  expect(records).toHaveLength(2)
+  const created = records.find((record) => record.content === 'Reports should link every source inline.')!
+  expect(created.agentContext?.locked).toBe(true)
+  // The pre-existing memory is untouched: approval did not supersede it.
+  expect(records.find((record) => record.id === f.saved.memory.id)?.supersededAt).toBeFalsy()
+})
 it('rejects another Agent and stale decisions without overwriting a user correction', async () => {
   const f = await fixture()
   await expect(decideAgentMemoryCandidate(f.service, 'other-agent', f.candidate.id, {
@@ -62,4 +85,57 @@ it('rejects another Agent and stale decisions without overwriting a user correct
   })).rejects.toThrow('changed')
   await decideAgentMemoryCandidate(f.service, f.agent.id, f.candidate.id, { clientRequestId: 'skip', expectedRevision: 0, decision: 'skip' })
   expect((await f.service.find(f.agent.id, f.saved.memory.id)).content).toContain('three concise')
+})
+
+it.each([
+  { conversationId: 'origin-room', taskId: 'task-a', handoffId: 'handoff-a' },
+  { conversationId: 'origin-room', handoffId: 'handoff-a' },
+  { conversationId: 'origin-room' }
+])('preserves targetless capture isolation and retries without duplicate memory: %j', async (captureScope) => {
+  const f = await fixture()
+  const held: AgentMemoryCandidate = { ...f.candidate, id: 'scoped', action: 'create',
+    targetId: undefined, targetFingerprint: undefined, captureScope }
+  await f.store.commit({ requestId: 'scoped', checks: [{ kind: 'agent_memory_job', id: held.id, expectedRevision: null }], puts: [{ kind: 'agent_memory_job', id: held.id, roomId: held.roomId, value: held }] })
+  const forgotten = vi.spyOn(f.storage, 'isForgotten')
+  await listAgentMemoryCandidates(f.service, f.agent.id)
+  expect(forgotten.mock.calls.some(([record]) => record.agentContext?.sourceConversationId === captureScope.conversationId &&
+    record.agentContext?.sourceTaskId === captureScope.taskId && record.agentContext?.sourceHandoffId === captureScope.handoffId)).toBe(true)
+  forgotten.mockRestore()
+  const input = { clientRequestId: 'accept-scoped', expectedRevision: 0, decision: 'allow' }
+  await expect(decideAgentMemoryCandidate(f.service, f.agent.id, held.id, {
+    ...input, clientRequestId: 'unexpected-target', expectedTargetFingerprint: f.saved.fingerprint
+  })).rejects.toThrow('no valid target or capture scope')
+  // Canonical memory persists, but the room-store acknowledgement fails once.
+  const commit = f.store.commit.bind(f.store)
+  const spy = vi.spyOn(f.store, 'commit').mockImplementationOnce(async () => { throw new Error('lost acknowledgement') })
+  await expect(decideAgentMemoryCandidate(f.service, f.agent.id, held.id, input)).rejects.toThrow('lost acknowledgement')
+  spy.mockImplementation(commit)
+  await expect(decideAgentMemoryCandidate(f.service, f.agent.id, held.id, {
+    ...input, clientRequestId: 'unexpected-target-after-write', expectedTargetFingerprint: f.saved.fingerprint
+  })).rejects.toThrow('no valid target or capture scope')
+  const result = await decideAgentMemoryCandidate(f.service, f.agent.id, held.id, input)
+  expect(await decideAgentMemoryCandidate(f.service, f.agent.id, held.id, input)).toEqual(result)
+  const accepted = await f.store.get<AgentMemoryCandidate>('agent_memory_job', held.id)
+  expect(accepted?.value.memoryId).toBeTruthy()
+  const created = await f.storage.getById(accepted!.value.memoryId!, { agent: { agentId: f.agent.id, manage: true } })
+  expect(created?.agentContext).toMatchObject({ sourceConversationId: captureScope.conversationId,
+    shared: false, locked: true })
+  expect(created?.agentContext?.sourceTaskId).toBe(captureScope.taskId)
+  expect(created?.agentContext?.sourceHandoffId).toBe(captureScope.handoffId)
+  const matching = await f.storage.list({ agent: { agentId: f.agent.id, ...captureScope } })
+  expect(matching.some((record) => record.id === created!.id)).toBe(true)
+  const other = await f.storage.list({ agent: { agentId: f.agent.id, conversationId: held.roomId, taskId: 'other-task', handoffId: 'other-handoff' } })
+  expect(other.some((record) => record.id === created!.id)).toBe(false)
+  expect(await f.storage.list({ agent: { agentId: f.agent.id, manage: true } })).toHaveLength(2)
+  spy.mockRestore()
+})
+it.each(['create', 'update', 'supersede'] as const)('rejects targetless %s without a trustworthy create scope', async (action) => {
+  const f = await fixture()
+  const held: AgentMemoryCandidate = { ...f.candidate, id: 'unsafe', action, targetId: undefined,
+    ...(action === 'create' ? {} : { captureScope: { conversationId: f.candidate.roomId } }) }
+  await f.store.commit({ requestId: 'unsafe', checks: [{ kind: 'agent_memory_job', id: held.id, expectedRevision: null }], puts: [{ kind: 'agent_memory_job', id: held.id, roomId: held.roomId, value: held }] })
+  await expect(decideAgentMemoryCandidate(f.service, f.agent.id, held.id, {
+    clientRequestId: 'unsafe-accept', expectedRevision: 0, decision: 'allow'
+  })).rejects.toThrow('no valid target or capture scope')
+  expect(await f.storage.list({ agent: { agentId: f.agent.id, manage: true } })).toHaveLength(1)
 })

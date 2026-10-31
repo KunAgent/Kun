@@ -1,4 +1,4 @@
-const { existsSync, rmSync } = require('node:fs')
+const { existsSync, readFileSync, rmSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
 const { dirname, join } = require('node:path')
 
@@ -22,6 +22,7 @@ const REQUIRED_PATHS = [
   'kun/node_modules/highlight.js/package.json',
   'kun/node_modules/@modelcontextprotocol/sdk/package.json',
   'kun/node_modules/@kun/extension-api/package.json',
+  'kun/node_modules/@kun/remote-protocol/package.json',
   'kun/node_modules/@kun/provider-catalog/package.json',
   'kun/node_modules/@kun/provider-catalog/dist/index.js',
   'kun/node_modules/create-kun-extension/package.json'
@@ -53,8 +54,25 @@ function npmInvocation(args) {
   return { command: process.execPath, args: [npmCli, ...args] }
 }
 
+// Root npm ci does not replace an existing nested runtime node_modules directory.
+// The vendored protocol must follow the runtime lock, not merely exist on disk.
+function remoteProtocolMatchesLock() {
+  try {
+    const manifest = JSON.parse(readFileSync('kun/package.json', 'utf8'))
+    const lock = JSON.parse(readFileSync('kun/package-lock.json', 'utf8'))
+    const installed = JSON.parse(readFileSync('kun/node_modules/@kun/remote-protocol/package.json', 'utf8'))
+    const declared = manifest.dependencies?.['@kun/remote-protocol']
+    const locked = lock.packages?.['node_modules/@kun/remote-protocol']
+    return typeof declared === 'string' && declared === lock.packages?.['']?.dependencies?.['@kun/remote-protocol'] &&
+      typeof locked?.version === 'string' && installed.version === locked.version
+  } catch {
+    // Missing/legacy/incomplete installations still take the existing npm ci path.
+    return false
+  }
+}
+
 function ensureKunInstall() {
-  if (!REQUIRED_PATHS.every((path) => existsSync(path))) {
+  if (!REQUIRED_PATHS.every((path) => existsSync(path)) || !remoteProtocolMatchesLock()) {
     const npm = npmInvocation(['--prefix', 'kun', 'ci'])
     const installKun = run(npm.command, npm.args)
     if (installKun.status !== 0) {

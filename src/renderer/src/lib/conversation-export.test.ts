@@ -76,7 +76,8 @@ describe('buildConversationExportDocument', () => {
       title: 'Code review',
       blocks,
       locale: 'en',
-      exportedAt: new Date('2026-07-19T02:00:00.000Z'),
+      // Export filenames use the user's local calendar date.
+      exportedAt: new Date(2026, 6, 19, 2),
       labels,
       busy: false
     })
@@ -114,7 +115,8 @@ describe('buildConversationExportDocument', () => {
       title: 'Busy thread',
       blocks,
       locale: 'en',
-      exportedAt: new Date('2026-07-19T02:00:00.000Z'),
+      // Export filenames use the user's local calendar date.
+      exportedAt: new Date(2026, 6, 19, 2),
       labels,
       busy: true,
       currentTurnId: 'turn-2',
@@ -137,7 +139,8 @@ describe('buildConversationExportDocument', () => {
         { kind: 'user', id: 'user-2', text: 'Still running' }
       ],
       locale: 'en',
-      exportedAt: new Date('2026-07-19T02:00:00.000Z'),
+      // Export filenames use the user's local calendar date.
+      exportedAt: new Date(2026, 6, 19, 2),
       labels,
       busy: true
     })

@@ -9,3 +9,11 @@ export function settingsCategoryInventory(source, platform) {
   assert.equal(new Set(categories).size, categories.length, 'Source navigation must not contain duplicate destinations')
   return categories
 }
+
+/** Keep the current fixture's coverage count independent of parsed/rendered navigation. */
+export function assertCurrentSettingsCategoryInventory(categories, platform) {
+  // Connections and Storage & cleanup are separate destinations on both platforms.
+  assert.equal(new Set(categories).size, platform === 'win32' ? 35 : 34,
+    'Current settings smoke must cover every destination')
+  assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
+}

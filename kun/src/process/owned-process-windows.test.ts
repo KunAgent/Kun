@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { build } from 'esbuild'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { windowsStartupDirectory } from './windows-startup-native.js'
 import { inspectRuntimeProcess } from '../server/runtime-process-identity.js'
 import { resolveWindowsExecutablePath } from './owned-process-windows.js'
 import { quoteWindowsArgument, spawnWindowsOwnedProcess, stopWindowsOwnedProcess, shutdownWindowsOwnedProcesses, resumeWindowsOwnedProcessAdmission } from './owned-process-windows.js'
@@ -58,7 +59,7 @@ describe.skipIf(process.platform !== 'win32')('Windows owned Job integration', (
 
   it('keeps its launcher and target alive for owner-loss draining, then kills the entire Job', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'kun-windows-owner-loss-'))
-    const entry = join(directory, 'owned-process.mjs')
+    const entry = join(directory, 'process', 'owned-process.mjs')
     const fixture = join(directory, 'owner.mjs')
     const pidsPath = join(directory, 'pids.json')
     const checkpointPath = join(directory, 'after-owner-loss.json')
@@ -71,6 +72,9 @@ describe.skipIf(process.platform !== 'win32')('Windows owned Job integration', (
     let jobExited = false
     let stderr = ''
     try {
+      // Preserve the module-relative native layout after relocating the bundle.
+      // Copy only integrity-verified build outputs; never bypass the loader.
+      await cp(windowsStartupDirectory(), join(directory, 'native', `win32-${process.arch}`), { recursive: true })
       await build({
         entryPoints: [resolve(import.meta.dirname, 'owned-process-windows.ts')], outfile: entry,
         bundle: true, packages: 'external', platform: 'node', format: 'esm', target: 'node22', logLevel: 'silent'

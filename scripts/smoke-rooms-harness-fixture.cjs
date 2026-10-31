@@ -4,7 +4,8 @@ const { chmod, mkdir, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 
 const ROOMS_HARNESS_PROFILE = Object.freeze({ harnessId: 'devin', credentialMode: 'native-login' })
-const ROOMS_HARNESS_MODEL = 'devin-fixture-model'
+// Fresh ACP catalogs expose only the Agent default until a real turn opens a session.
+const ROOMS_HARNESS_MODEL = 'default'
 const ROOMS_HARNESS_KEY = 'rooms-offline-fixture-no-service-access'
 
 /** Consent for exactly the offline fixture; persisted consent is not readiness. */
@@ -51,6 +52,11 @@ rl.on('line', (line) => {
     modes: { currentModeId: 'normal', availableModes: [
       { id: 'normal', name: 'Normal' }, { id: 'bypass', name: 'Full access (offline fixture)' }
     ] },
+    configOptions: [{ id: 'model', category: 'model', type: 'select', name: 'Model', currentValue: modelId,
+      options: [
+        { value: 'devin-fixture-model', name: 'Devin fixture model' },
+        { value: 'devin-fixture-alternative', name: 'Devin alternate model' }
+      ] }],
     models: { currentModelId: modelId, availableModels: [
       { modelId: 'devin-fixture-model', name: 'Devin fixture model' },
       { modelId: 'devin-fixture-alternative', name: 'Devin alternate model' }
@@ -122,7 +128,7 @@ function roomsHarnessDiscoveryRoute(messages) {
     if (output?.error || output?.isError === true || output?.authority !== 'reference_only' || !Array.isArray(output.agents)) return null
     const agent = output.agents.find((entry) => entry.harnessId === 'devin' && entry.available === true)
     return agent?.models?.find((route) => route.harnessId === 'devin' && route.credentialMode === 'native-login' &&
-      route.model === 'devin-fixture-model') ?? null
+      route.model === ROOMS_HARNESS_MODEL) ?? null
   } catch { return null }
 }
 

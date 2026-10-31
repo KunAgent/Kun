@@ -236,6 +236,50 @@ describe('MemoryDistillationCoordinator', () => {
     expect(await harness.memory.list({ all: true })).toHaveLength(0)
   })
 
+  it('routes a candidate whose only defect is an invalid comparison relation to pending review', async () => {
+    const harness = await createHarness({
+      output: extraction({ comparisons: [{ memoryId: 'existing', relation: 'related' }] })
+    })
+    await harness.memory.createWithId('existing', {
+      content: 'The user prefers long release notes.',
+      scope: 'workspace',
+      workspace
+    })
+    const pending = await harness.coordinator.distill('thread_1', 'turn_1')
+    // The salvaged candidate waits for review as a plain create; its
+    // quarantined comparison never takes effect on the existing memory.
+    expect(pending).toHaveLength(1)
+    expect(pending[0]).toMatchObject({ proposedAction: { action: 'create' }, status: 'pending' })
+    const records = await harness.memory.list({ all: true })
+    expect(records).toHaveLength(1)
+    expect(records[0]?.content).toBe('The user prefers long release notes.')
+    expect(harness.diagnostics.some((message) =>
+      message.includes('salvaged 1 extraction candidate(s)') && message.includes('invalid comparison'))).toBe(true)
+  })
+
+  it('does not claim a low-confidence salvaged candidate reached pending review', async () => {
+    const harness = await createHarness({
+      output: extraction({ confidence: '1%', comparisons: [{ memoryId: 'existing', relation: 'related' }] })
+    })
+    expect(await harness.coordinator.distill('thread_1', 'turn_1')).toEqual([])
+    expect(await harness.memory.list({ all: true })).toHaveLength(0)
+    expect(harness.diagnostics.some((message) =>
+      message.includes('salvaged 1 extraction candidate(s)') &&
+      message.includes('decision checks still apply'))).toBe(true)
+    expect(harness.diagnostics.some((message) => message.includes('routed'))).toBe(false)
+  })
+
+  it('keeps invalid comparison text out of pending records and diagnostics', async () => {
+    const secret = 'example-secret'
+    const harness = await createHarness({
+      output: extraction({ comparisons: [{ memoryId: 'existing', relation: `password=${secret}` }] })
+    })
+    const pending = await harness.coordinator.distill('thread_1', 'turn_1')
+    expect(pending).toHaveLength(1)
+    expect(harness.diagnostics.some((message) => message.includes('invalid comparison'))).toBe(true)
+    expect(JSON.stringify([pending, harness.diagnostics])).not.toContain(secret)
+  })
+
   it('rejects invalid output and cross-scope comparison targets without writes', async () => {
     const invalid = await createHarness({ output: '{not-json' })
     expect(await invalid.coordinator.distill('thread_1', 'turn_1')).toEqual([])
@@ -552,9 +596,9 @@ function makeThread(options: {
 }
 
 function extraction(overrides: {
-  comparisons?: Array<{ memoryId: string; relation: 'duplicate' | 'update' | 'supersede' }>
+  comparisons?: Array<{ memoryId: string; relation: string }>
   durability?: 'durable' | 'transient'
-  confidence?: number
+  confidence?: number | string
   sourceIds?: string[]
   turnId?: string
 } = {}): string {
