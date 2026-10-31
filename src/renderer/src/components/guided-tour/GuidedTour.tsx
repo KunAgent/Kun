@@ -15,6 +15,7 @@ import { GUIDED_TOURS, type GuidedTourArt, type GuidedTourId, type GuidedTourSte
 import { placeCoach, toOverlayBox, type Box, type CoachPlacement } from './guided-tour-geometry'
 import { GuidedTourLastActions } from './GuidedTourLastActions'
 import './guided-tour.css'
+import './guided-tour-overview.css'
 
 const ART: Record<GuidedTourArt, string> = {
   greet: kunGreetUrl,
@@ -156,7 +157,19 @@ export function GuidedTour({ tour }: { tour: GuidedTourId }): ReactElement | nul
   const step = useGuidedTourStore((s) => s.step)
   const close = useGuidedTourStore((s) => s.close)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const previousFocus = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null)
   const [steps] = useState<GuidedTourStep[]>(() => availableSteps(tour))
+
+  useEffect(() => {
+    const root = rootRef.current
+    const restoreFocus = previousFocus.current
+    return () => {
+      const active = document.activeElement
+      if (restoreFocus?.isConnected && (active === document.body || (active && root?.contains(active)))) {
+        restoreFocus.focus()
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (steps.length === 0) close()
@@ -169,6 +182,21 @@ export function GuidedTour({ tour }: { tour: GuidedTourId }): ReactElement | nul
         event.preventDefault()
         event.stopPropagation()
         state.close()
+        return
+      }
+      if (event.key === 'Tab') {
+        const dialog = rootRef.current?.querySelector<HTMLElement>('[role="dialog"]')
+        const controls = dialog ? [...dialog.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+        )].filter((element) => !element.closest('[hidden]')) : []
+        const first = controls[0]
+        const last = controls[controls.length - 1]
+        const active = document.activeElement
+        if (first && (!dialog?.contains(active) || (event.shiftKey ? active === first : active === last))) {
+          event.preventDefault()
+          const target = event.shiftKey ? last : first
+          target.focus()
+        }
         return
       }
       const current = steps[state.step]

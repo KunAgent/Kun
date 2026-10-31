@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Briefcase, ChevronRight, Cloud, Code2, FilePlus2, Import, ListChecks, MessageCirclePlus, MessagesSquare, PenLine, Search, Wrench } from 'lucide-react'
+import { ArrowRight, Briefcase, ChevronRight, Cloud, Code2, FilePlus2, Import, ListChecks, MessageCirclePlus, MessagesSquare, PenLine, Search, Wrench } from 'lucide-react'
 import { COMPOSER_PREFILL_EVENT, type ComposerPrefillDetail } from '../../artifacts/composer-prefill'
 import { FirstTaskGuide } from '../../product-analytics/FirstTaskGuide'
 import { createWorkDraftDocument, openPaperImport } from '../../write/work-session-actions'
@@ -74,14 +74,18 @@ function OverviewActions({ onBack }: { onBack?: () => void }): ReactElement {
           <MessagesSquare {...icon} /><span>{t('workspaceModeChatsLabel')}</span>
         </button>
       </div>
-      <Foot onBack={onBack}>
-        {notes ? (
-          <button type="button" className="guided-tour-text-button is-accent" data-guided-tour-release-notes
+      {notes ? (
+        <div className="guided-tour-overview-notes">
+          <span>{t('whatsNewBadge')}</span>
+          <button type="button" data-guided-tour-release-notes
             onClick={() => { useGuidedTourStore.getState().close(); void openCurrentWhatsNew() }}>
-            {t('guidedTour_overview_notes')}
+            {t('guidedTour_overview_notes')}<ArrowRight {...icon} />
           </button>
-        ) : null}
-        <button type="button" className="guided-tour-button is-small" data-guided-tour-primary="true"
+        </div>
+      ) : null}
+      <Foot onBack={onBack}>
+        <span className="guided-tour-foot-hint">{t('guidedTourEscHint')}</span>
+        <button type="button" className="guided-tour-button is-primary is-small" data-guided-tour-primary="true"
           onClick={() => useGuidedTourStore.getState().close()}>
           {t('guidedTour_overview_stay')}
         </button>

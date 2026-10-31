@@ -10,6 +10,8 @@ import type { WhatsNewContent } from './whats-new-content'
 import { WhatsNewArtifactsSpotlight } from './WhatsNewArtifactsSpotlight'
 import { WhatsNewFocusSpotlight } from './WhatsNewFocusSpotlight'
 import { WhatsNewOlderVersions } from './WhatsNewOlderVersions'
+import { WhatsNewWorkbenchHighlights } from './WhatsNewWorkbenchHighlights'
+import './whats-new-workbench.css'
 import { SPOTLIGHT_HIGHLIGHT_LIMIT, whatsNewSpotlight } from './whats-new-spotlights'
 
 type Props = {
@@ -23,8 +25,16 @@ function openChangelog(url: string): void {
   void window.kunGui?.openExternal?.(url)
 }
 
-function FixRow({ item }: { item: ReleaseNoteItem }): ReactElement {
-  const body = item.body ? firstSentence(item.body, 64) : ''
+function FixRow({ item, workbench = false }: { item: ReleaseNoteItem; workbench?: boolean }): ReactElement {
+  const body = item.body ? firstSentence(item.body, workbench ? 100 : 64) : ''
+  if (workbench) {
+    return (
+      <li>
+        <Check size={17} strokeWidth={1.7} aria-hidden="true" />
+        <div>{item.title ? <strong>{item.title}</strong> : null}<p>{body}</p></div>
+      </li>
+    )
+  }
   return (
     <li>
       {item.title ? <strong>{item.title}</strong> : null}
@@ -38,6 +48,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
   const { t } = useTranslation('common')
   const titleId = useId()
   const featuresId = useId()
+  const fixesId = useId()
   const dialogRef = useRef<HTMLElement>(null)
   const primaryRef = useRef<HTMLButtonElement>(null)
   const summary = content.current
@@ -46,6 +57,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
     ? pickHighlights(summary, spotlight ? { exclude: spotlight.covers, limit: SPOTLIGHT_HIGHLIGHT_LIMIT } : {})
     : null), [spotlight, summary])
   const fixesOnly = Boolean(summary && !spotlight && !picked?.highlights.length && summary.fixes.length)
+  const workbench = content.version.trim().replace(/^v/i, '') === '0.4.4' && (summary?.features.length ?? 0) >= 3
   const [featuresOpen, setFeaturesOpen] = useState(false)
   const [fixesOpen, setFixesOpen] = useState(fixesOnly)
   const otherFeatures = spotlight?.id === 'artifacts' && summary
@@ -70,7 +82,10 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
   }, [])
 
   useEffect(() => {
-    if (fixesOpen && !fixesOnly) fixesRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    if (fixesOpen && !fixesOnly) {
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      fixesRef.current?.scrollIntoView({ block: 'nearest', behavior: reducedMotion ? 'auto' : 'smooth' })
+    }
   }, [fixesOnly, fixesOpen])
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
@@ -81,6 +96,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
     }
     if (event.key !== 'Tab' || !dialogRef.current) return
     const focusable = [...dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)]
+      .filter((element) => !element.closest('[hidden]'))
     if (!focusable.length) return
     const first = focusable[0]
     const last = focusable[focusable.length - 1]
@@ -113,11 +129,19 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
           onKeyDown={onKeyDown}
         >
           {closeButton}
-          <img className="kun-wn-empty-art" src={kunMagicUrl} alt="" draggable={false} />
-          <h2 id={titleId} className="kun-wn-empty-title">{t('whatsNewPatchTitle', { version: content.version })}</h2>
-          <p className="kun-wn-empty-body">{t('whatsNewMissingBody')}</p>
+          <div className="kun-wn-empty-content">
+            <div className="kun-wn-empty-heading">
+              <div>
+                <div className="kun-wn-empty-version">Kun {content.version}</div>
+                <div className="kun-wn-empty-ready"><Check size={14} aria-hidden="true" />{t('whatsNewMissingReady')}</div>
+              </div>
+              <img className="kun-wn-empty-art" src={kunMagicUrl} alt="" draggable={false} />
+            </div>
+            <h2 id={titleId} className="kun-wn-empty-title">{t('whatsNewMissingTitle')}</h2>
+            <p className="kun-wn-empty-body">{t('whatsNewMissingBody')}</p>
+          </div>
           <div className="kun-wn-empty-actions">
-            <button type="button" className="kun-wn-secondary" onClick={onClose}>{t('whatsNewLater')}</button>
+            <button type="button" className="kun-wn-secondary" onClick={onClose}>{t('whatsNewMissingContinue')}</button>
             <button
               ref={primaryRef}
               type="button"
@@ -136,7 +160,9 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
   }
 
   const highlights = picked?.highlights ?? []
-  const alsoUpdated = picked?.alsoUpdated ?? []
+  const alsoUpdated = workbench
+    ? ['whatsNewWorkbenchAlsoTours', 'whatsNewWorkbenchAlsoConnections', 'whatsNewWorkbenchAlsoAssistants', 'whatsNewWorkbenchAlsoStorage'].map((key) => t(key))
+    : picked?.alsoUpdated ?? []
 
   return (
     <div className="kun-wn ds-no-drag">
@@ -149,6 +175,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
         className="kun-wn-dialog"
         data-whats-new-dialog={fixesOnly ? 'patch' : skipped ? 'skipped' : 'release'}
         data-variant={fixesOnly ? 'patch' : undefined}
+        data-release-layout={workbench ? 'workbench' : undefined}
         data-spotlight={spotlight?.id}
         onKeyDown={onKeyDown}
       >
@@ -156,16 +183,24 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
           <span className="kun-wn-glow" aria-hidden="true" />
           <img className="kun-wn-art" src={kunCheerUrl} alt="" draggable={false} />
           <div className="kun-wn-heading">
-            {fixesOnly ? null : (
+            {workbench ? (
+              <div className="kun-wn-workbench-meta">
+                <strong>Kun {content.version}</strong>
+                <span>{t('whatsNewReady')}</span>
+                {content.previousVersion ? (
+                  <span className="kun-wn-path"><span>{content.previousVersion}</span><ArrowRight size={12} aria-hidden="true" /><span>{content.version}</span></span>
+                ) : null}
+              </div>
+            ) : fixesOnly ? null : (
               <span className="kun-wn-badge">
                 <Check className="h-3 w-3" strokeWidth={2.6} aria-hidden />
                 {skipped ? t('whatsNewSkipped', { n: skipped + 1 }) : t('whatsNewBadge')}
               </span>
             )}
             <h2 id={titleId} className="kun-wn-title">
-              {t(fixesOnly ? 'whatsNewPatchTitle' : 'whatsNewTitle', { version: content.version })}
+              {t(workbench ? 'whatsNewWorkbenchTitle' : fixesOnly ? 'whatsNewPatchTitle' : 'whatsNewTitle', { version: content.version })}
             </h2>
-            {content.previousVersion ? (
+            {workbench ? <p className="kun-wn-workbench-description">{t('whatsNewWorkbenchBody')}</p> : content.previousVersion ? (
               <div className="kun-wn-path">
                 <span>{content.previousVersion}</span>
                 <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
@@ -178,12 +213,14 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
         </header>
 
         <div className="kun-wn-body">
-          {summary.intro && !fixesOnly ? <p className="kun-wn-intro">{summary.intro}</p> : null}
+          {summary.intro && !fixesOnly && !workbench ? <p className="kun-wn-intro">{summary.intro}</p> : null}
+
+          {workbench ? <WhatsNewWorkbenchHighlights /> : null}
 
           {spotlight?.id === 'focus-mode' ? <WhatsNewFocusSpotlight /> : null}
           {spotlight?.id === 'artifacts' ? <WhatsNewArtifactsSpotlight onOpen={openArtifacts} /> : null}
 
-          {highlights.length ? (
+          {highlights.length && !workbench ? (
             <>
               <div className="kun-wn-label">{t('whatsNewHighlights')}</div>
               <ul className="kun-wn-highlights">
@@ -241,17 +278,19 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
                   className="kun-wn-disclosure"
                   data-whats-new-fixes
                   aria-expanded={fixesOpen}
+                  aria-controls={fixesId}
                   onClick={() => setFixesOpen((value) => !value)}
                 >
                   <Wrench className="kun-wn-fix-icon h-4 w-4" strokeWidth={2} aria-hidden />
                   <span className="kun-wn-disclosure-label">{t('whatsNewFixes')}</span>
                   <span className="kun-wn-count">{summary.fixes.length}</span>
+                  {workbench ? <span className="kun-wn-workbench-fix-hint">{t('whatsNewWorkbenchStableBody')}</span> : null}
                   <ChevronDown className="kun-wn-chevron h-4 w-4" strokeWidth={2} aria-hidden />
                 </button>
               )}
               {fixesOpen ? (
-                <ul className="kun-wn-fix-list">
-                  {summary.fixes.map((item, index) => <FixRow key={`${item.title}-${index}`} item={item} />)}
+                <ul id={fixesId} className="kun-wn-fix-list">
+                  {summary.fixes.map((item, index) => <FixRow key={`${item.title}-${index}`} item={item} workbench={workbench} />)}
                 </ul>
               ) : null}
             </div>
@@ -265,9 +304,13 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
             {t('whatsNewChangelog')}
             <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
           </button>
-          <button ref={primaryRef} type="button" className="kun-wn-primary" data-whats-new-primary onClick={onClose}>
-            {t(fixesOnly ? 'whatsNewDone' : 'whatsNewStart')}
-          </button>
+          <div className="kun-wn-footer-actions">
+            {workbench ? <span className="kun-wn-revisit">{t('whatsNewRevisit')}</span> : null}
+            <button ref={primaryRef} type="button" className="kun-wn-primary" data-whats-new-primary onClick={onClose}>
+              {t(fixesOnly ? 'whatsNewDone' : 'whatsNewStart')}
+              {workbench ? <ArrowRight size={15} strokeWidth={1.7} aria-hidden="true" /> : null}
+            </button>
+          </div>
         </footer>
       </section>
     </div>
