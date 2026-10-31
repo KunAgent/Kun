@@ -30,7 +30,7 @@
   "sidebarUpdateCurrent": "मौजूदा {{version}}",
   "sidebarUpdateManualHint": "मैन्युअल इंस्टॉल",
   "sidebarUpdateDownloadingHint": "डाउनलोड पूरा होने पर इंस्टॉल के लिए रीस्टार्ट होगा",
-  "sidebarUpdateBodyAvailable": "डाउनलोड पूरा होने पर Kun इंस्टॉल पूरा करने के लिए रीस्टार्ट होगा।",
+  "sidebarUpdateBodyAvailable": "डाउनलोड पूरा होने पर Kun इंस्टॉल पूरा करने के लिए रीस्टार्ट होगा। पहले चल रहे कार्य पूरे करें।",
   "sidebarUpdateBodyManual": "यह संस्करण डाउनलोड पेज से मैन्युअल रूप से इंस्टॉल करना होगा।",
   "sidebarUpdateDownloadAndRestart": "डाउनलोड करें और रीस्टार्ट करें",
   "sidebarUpdateRestartNow": "अभी रीस्टार्ट करें",

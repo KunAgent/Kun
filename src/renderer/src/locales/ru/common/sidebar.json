@@ -30,7 +30,7 @@
   "sidebarUpdateCurrent": "Текущая {{version}}",
   "sidebarUpdateManualHint": "ручная установка",
   "sidebarUpdateDownloadingHint": "После загрузки Kun перезапустится для установки",
-  "sidebarUpdateBodyAvailable": "После загрузки Kun перезапустится, чтобы завершить установку.",
+  "sidebarUpdateBodyAvailable": "После загрузки Kun перезапустится, чтобы завершить установку. Сначала завершите текущие задачи.",
   "sidebarUpdateBodyManual": "Эту версию нужно установить вручную со страницы загрузки.",
   "sidebarUpdateDownloadAndRestart": "Скачать и перезапустить",
   "sidebarUpdateRestartNow": "Перезапустить",

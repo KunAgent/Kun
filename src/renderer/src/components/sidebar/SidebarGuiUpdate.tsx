@@ -17,8 +17,6 @@ import './sidebar-gui-update.css'
 
 /** The settings row keeps its left padding and 16px gear (the rest of its 20px icon box may clip). */
 const SETTINGS_ICON_MIN_WIDTH = 31
-/** A labeled chip is the label plus this much (gap and side padding) wider than the 28px icon-only one. */
-const CHIP_LABEL_EXTRA_WIDTH = 6
 
 const CHIP_LABEL_KEYS: Record<Exclude<GuiUpdatePhase, 'downloading'>, string> = {
   available: 'sidebarUpdateChip',
@@ -46,7 +44,8 @@ function useChipLabelFits(chipRef: RefObject<HTMLButtonElement | null>, label: s
     const measure = (): void => {
       const labelWidth = chip.querySelector<HTMLElement>('[data-update-chip-label]')?.offsetWidth ?? 0
       const compact = chip.dataset.compact === 'true'
-      const extra = compact ? labelWidth + CHIP_LABEL_EXTRA_WIDTH : 0
+      // The labeled chip's icon, gap, padding and border total the same 32px as the compact chip.
+      const extra = compact ? labelWidth : 0
       const reserved = slot.dataset.footerSettingsSlot === 'spacer' ? 0 : SETTINGS_ICON_MIN_WIDTH
       // A flex spacer clamps at zero even when the controls already overflow.
       setFits(bar.scrollWidth <= bar.clientWidth && slot.clientWidth - reserved - extra >= 0)
@@ -177,8 +176,8 @@ function UpdateCard({ action, titleId, cardRef, onClose }: {
             <div className="ds-sidebar-update-progress-value" style={{ width: `${percent}%` }} />
           </div>
           <div className="ds-sidebar-update-progress-meta">
-            <span>{progress ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)}` : `${percent}%`}</span>
-            {progress && progress.bytesPerSecond > 0 ? <span>{formatBytes(progress.bytesPerSecond)}/s</span> : null}
+            <span>{progress ? `${formatBytes(progress.transferred)} / ${formatBytes(progress.total)}` : null}</span>
+            <span>{percent}%{progress && progress.bytesPerSecond > 0 ? ` · ${formatBytes(progress.bytesPerSecond)}/s` : null}</span>
           </div>
         </div>
       ) : null}
@@ -228,7 +227,7 @@ export function SidebarGuiUpdate(): ReactElement | null {
 }
 
 function SidebarGuiUpdateChip({ action }: { action: GuiUpdateAction }): ReactElement {
-  const { t } = useTranslation('common')
+  const { t } = useTranslation(['common', 'settings'])
   const [open, setOpen] = useState(false)
   const [pulse, setPulse] = useState(false)
   const chipRef = useRef<HTMLButtonElement>(null)
@@ -237,9 +236,14 @@ function SidebarGuiUpdateChip({ action }: { action: GuiUpdateAction }): ReactEle
   const { info, phase, percent } = action
   const label = phase === 'downloading' ? `${percent}%` : t(CHIP_LABEL_KEYS[phase])
   const labelFits = useChipLabelFits(chipRef, label)
-  const chipTitle = phase === 'error' && action.error
-    ? action.error
-    : t('sidebarUpdateTitleAvailable', { version: info.latestVersion })
+  const chipTitle = {
+    available: t('sidebarUpdateTitleAvailable', { version: info.latestVersion }),
+    manual: t('sidebarUpdateTitleAvailable', { version: info.latestVersion }),
+    downloading: t('sidebarUpdateTitleDownloading', { version: info.latestVersion }),
+    downloaded: t('sidebarUpdateTitleDownloaded', { version: info.latestVersion }),
+    installing: t('settings:guiUpdateInstalling'),
+    error: action.error || t('sidebarUpdateTitleFailed')
+  }[phase]
 
   useEffect(() => {
     if (phase !== 'available' || pulsedVersion === info.latestVersion) return
@@ -269,7 +273,7 @@ function SidebarGuiUpdateChip({ action }: { action: GuiUpdateAction }): ReactEle
 
   const close = (): void => {
     setOpen(false)
-    if (phase === 'error') action.dismissError()
+    chipRef.current?.focus()
   }
 
   return (

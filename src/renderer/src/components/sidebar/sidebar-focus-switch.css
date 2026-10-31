@@ -98,23 +98,38 @@
   box-shadow: none;
 }
 
+/* The outer container lets the focus footer wrap without depending on window width. */
+.kun-account-focus-footer {
+  container: kun-account-focus / inline-size;
+}
+
 .kun-account-focus-row:has(> .ds-sidebar-update-chip) {
   column-gap: 2px;
 }
 
+.kun-account-focus-row:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch {
+  flex: none;
+  height: 32px;
+}
+
+.kun-account-focus-row:has(> .ds-sidebar-update-chip) .kun-account-focus-tools {
+  flex: none;
+  gap: 2px;
+}
+
 /* The update chip needs room before the same right-aligned controls. */
 @container (max-width: 300px) {
-  .ds-sidebar-footer-bar:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch {
+  .ds-sidebar-footer-bar:not(.kun-account-focus-row):has(> .ds-sidebar-update-chip) .ds-focus-mode-switch {
     width: 28px;
     padding: 0;
     border-radius: var(--ds-radius-control);
   }
 
-  .ds-sidebar-footer-bar:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch-icon {
+  .ds-sidebar-footer-bar:not(.kun-account-focus-row):has(> .ds-sidebar-update-chip) .ds-focus-mode-switch-icon {
     display: block;
   }
 
-  .ds-sidebar-footer-bar:has(> .ds-sidebar-update-chip) :is(.ds-focus-mode-switch-label, .ds-focus-mode-switch-track) {
+  .ds-sidebar-footer-bar:not(.kun-account-focus-row):has(> .ds-sidebar-update-chip) :is(.ds-focus-mode-switch-label, .ds-focus-mode-switch-track) {
     display: none;
   }
 }
@@ -135,9 +150,56 @@
   .ds-focus-mode-switch-track {
     display: none;
   }
+}
 
-  .kun-account-focus-row:has(> .ds-sidebar-update-chip) .ds-sidebar-icon-button {
-    width: 24px;
+/* Keep the update entry and Focus together; move only the tools to a second row. */
+@container kun-account-focus (max-width: 264px) {
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > [data-footer-settings-slot='spacer'] {
+    order: 1;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .ds-focus-mode-switch {
+    order: 2;
+    width: auto;
+    padding: 0 4px 0 8px;
+    border-radius: 999px;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch-icon {
+    display: none;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) :is(.ds-focus-mode-switch-label, .ds-focus-mode-switch-track) {
+    display: block;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .ds-sidebar-update-chip {
+    justify-content: center;
+    width: 32px;
+    padding: 0;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .ds-sidebar-update-chip .ds-sidebar-update-chip-label {
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .kun-account-focus-tools {
+    flex: 0 0 100%;
+    justify-content: flex-end;
+    gap: 4px;
+    order: 3;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) .kun-account-focus-tools .ds-sidebar-icon-button {
+    width: 32px;
+    height: 32px;
   }
 }
 

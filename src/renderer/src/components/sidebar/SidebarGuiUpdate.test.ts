@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -89,7 +90,10 @@ describe('sidebar GUI update entry', () => {
     bar.scrollWidth = 208
     await act(async () => resize())
     expect(chip().props['data-compact']).toBe('true')
-    slot.clientWidth = 50
+    slot.clientWidth = 29
+    await act(async () => resize())
+    expect(chip().props['data-compact']).toBe('true')
+    slot.clientWidth = 30
     await act(async () => resize())
     expect(chip().props['data-compact']).toBeUndefined()
   })
@@ -102,6 +106,7 @@ describe('sidebar GUI update entry', () => {
     expect(chip().props['aria-expanded']).toBe(true)
     expect(textOf(cards()[0])).toContain('Kun 0.3.9 is available')
     expect(textOf(cards()[0])).toContain('Current 0.3.8')
+    expect(textOf(cards()[0])).toContain('Finish any running tasks first.')
     expect(download).not.toHaveBeenCalled()
     await act(async () => { chip().props.onClick() })
     expect(cards()).toHaveLength(0)
@@ -139,6 +144,8 @@ describe('sidebar GUI update entry', () => {
       } })
     })
     expect(textOf(chip())).toContain('42%')
+    expect(chip().props['aria-label']).toContain('Downloading 0.3.9')
+    expect(textOf(cards()[0])).toContain('42%')
     expect(renderer.root.findByProps({ role: 'progressbar' }).props['aria-valuenow']).toBe(42)
     expect(download).toHaveBeenCalledExactlyOnceWith('stable')
     expect(install).not.toHaveBeenCalled()
@@ -176,21 +183,40 @@ describe('sidebar GUI update entry', () => {
     expect(renderer.root.findAllByProps({ role: 'alert' })).toHaveLength(0)
   })
 
-  it('clears a failure when the card is closed', async () => {
-    download.mockResolvedValueOnce({ ok: false, message: 'connection reset', code: 'download_failed' })
-    await mount()
-    await openCard()
-    await act(async () => { primary().props.onClick() })
-    expect(chip().props['data-phase']).toBe('error')
-    await act(async () => { renderer.root.findByProps({ 'aria-label': 'Close' }).props.onClick() })
-    expect(cards()).toHaveLength(0)
-    expect(chip().props['data-phase']).toBe('available')
-  })
+  it.each(['close button', 'entry', 'outside', 'escape'])(
+    'retains a failure after closing the card using %s', async (method) => {
+      const listeners = new Map<string, (event: { key?: string; target?: object }) => void>()
+      vi.stubGlobal('document', {
+        addEventListener: (name: string, handler: (event: { key?: string; target?: object }) => void) => listeners.set(name, handler),
+        removeEventListener: (name: string) => listeners.delete(name)
+      })
+      const chipNode = { parentElement: null, contains: () => false, focus: vi.fn() }
+      download.mockResolvedValueOnce({ ok: false, message: 'connection reset', code: 'download_failed' })
+      await mount({ status: 'available', info }, {
+        createNodeMock: (element) => (element.props as { className?: string }).className === 'ds-sidebar-update-chip' ? chipNode : null
+      })
+      await openCard()
+      await act(async () => { primary().props.onClick() })
+      expect(chip().props['data-phase']).toBe('error')
+      await act(async () => {
+        if (method === 'close button') renderer.root.findByProps({ 'aria-label': 'Close' }).props.onClick()
+        else if (method === 'entry') chip().props.onClick()
+        else if (method === 'outside') listeners.get('pointerdown')?.({ target: {} })
+        else listeners.get('keydown')?.({ key: 'Escape' })
+      })
+      expect(cards()).toHaveLength(0)
+      expect(chip().props['data-phase']).toBe('error')
+      expect(chipNode.focus).toHaveBeenCalledTimes(method === 'close button' || method === 'escape' ? 1 : 0)
+      await openCard()
+      expect(errorText()).toContain('connection reset')
+    }
+  )
 
   it('reports install failures and retries a downloaded update without downloading again', async () => {
     install.mockResolvedValueOnce({ ok: false, message: 'installation deferred' })
     await mount({ status: 'downloaded', info: { ...info, downloaded: true } })
     expect(chip().props['data-phase']).toBe('downloaded')
+    expect(chip().props.title).toBe('0.3.9 is downloaded')
     await openCard()
     expect(textOf(primary())).toBe('Restart now')
     await act(async () => { primary().props.onClick() })
@@ -209,6 +235,31 @@ describe('sidebar GUI update entry', () => {
     expect(window.kunGui.openExternal).toHaveBeenCalledWith(info.releaseUrl)
     expect(download).not.toHaveBeenCalled()
     expect(install).not.toHaveBeenCalled()
+  })
+
+  it('uses the approved Chinese entry and warns before restarting', async () => {
+    await i18n.changeLanguage('zh')
+    await mount()
+    expect(textOf(chip())).toContain('升级')
+    await openCard()
+    expect(textOf(cards()[0])).toContain('请先结束当前运行任务')
+    expect(textOf(primary())).toBe('下载并重启')
+  })
+
+  it('keeps neutral update surfaces and a usable narrow focus footer', () => {
+    const updateCss = readFileSync(new URL('./sidebar-gui-update.css', import.meta.url), 'utf8')
+    const focusCss = readFileSync(new URL('./sidebar-focus-switch.css', import.meta.url), 'utf8')
+    expect(updateCss).toContain('--ds-update-bg: var(--ds-surface-subtle)')
+    expect(updateCss).toContain('--ds-update-fg: var(--ds-text-muted)')
+    expect(updateCss).toContain('background: var(--ds-update-primary-bg)')
+    expect(updateCss).toContain(".ds-sidebar-update-chip[data-phase='error']")
+    expect(updateCss).toContain('max-height: max(120px, calc(100vh - 160px))')
+    expect(updateCss).toContain('overflow-y: auto')
+    expect(updateCss).toMatch(/\.ds-sidebar-update-button\s*\{[^}]*max-width:\s*100%;[^}]*overflow-wrap:\s*anywhere/s)
+    expect(updateCss).toMatch(/\.ds-sidebar-update-chip\[data-compact='true'\]\s*\{[^}]*width:\s*32px/s)
+    expect(focusCss).toContain('@container kun-account-focus (max-width: 264px)')
+    expect(focusCss).toMatch(/\.kun-account-focus-tools\s*\{[^}]*flex:\s*0 0 100%/s)
+    expect(focusCss).toMatch(/\.kun-account-focus-tools \.ds-sidebar-icon-button\s*\{[^}]*width:\s*32px;[^}]*height:\s*32px/s)
   })
 
   it('opens the release notes from the card', async () => {

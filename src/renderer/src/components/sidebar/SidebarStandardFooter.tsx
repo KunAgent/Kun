@@ -77,13 +77,17 @@ export function SidebarStandardFooter({
     // Focus mode drops the frame: one flat row with the face (signed in only), Focus, and the tools.
     if (focusModeEnabled) {
       return (
-        <div className="ds-sidebar-footer-bar kun-account-focus-row relative flex items-center gap-1" data-kun-account-dock data-focus>
-          <KunAccountControl variant="mini" onOpenSettings={onOpenSettings} />
-          <div className="min-w-0 flex-1" data-footer-settings-slot="spacer" />
-          <SidebarGuiUpdate />
-          <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
-          {settingsButton}
-          {tools}
+        <div className="kun-account-focus-footer">
+          <div className="ds-sidebar-footer-bar kun-account-focus-row relative flex items-center gap-1" data-kun-account-dock data-focus>
+            <KunAccountControl variant="mini" onOpenSettings={onOpenSettings} />
+            <div className="min-w-0 flex-1" data-footer-settings-slot="spacer" />
+            <SidebarGuiUpdate />
+            <SidebarFocusModeSwitch enabled={focusModeEnabled} onChange={onFocusModeChange} />
+            <div className="kun-account-focus-tools flex items-center gap-1">
+              {settingsButton}
+              {tools}
+            </div>
+          </div>
         </div>
       )
     }

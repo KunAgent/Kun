@@ -98,7 +98,7 @@
   "sidebarUpdateCurrent": "Current {{version}}",
   "sidebarUpdateManualHint": "manual install",
   "sidebarUpdateDownloadingHint": "Kun restarts to install when the download finishes",
-  "sidebarUpdateBodyAvailable": "Kun restarts to finish installing once the download completes.",
+  "sidebarUpdateBodyAvailable": "Kun restarts to finish installing once the download completes. Finish any running tasks first.",
   "sidebarUpdateBodyManual": "This version has to be installed from the download page.",
   "sidebarUpdateDownloadAndRestart": "Download and restart",
   "sidebarUpdateRestartNow": "Restart now",
