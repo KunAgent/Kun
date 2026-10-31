@@ -27,6 +27,11 @@ import type { McpOAuthRefreshWriteResult, McpOAuthState } from './mcp-oauth-stor
 /** Credential state the SDK based this refresh on, captured when it read tokens. */
 export type McpOAuthTokenSnapshot = {
   accessToken: string
+  /**
+   * Refresh token the SDK will spend. Compared together with the access token
+   * because a grant can be renewed without changing the access token.
+   */
+  refreshToken: string | undefined
   mutationEpoch: number
   clearEpoch: number
 }

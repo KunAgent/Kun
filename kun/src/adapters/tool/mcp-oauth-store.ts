@@ -68,6 +68,9 @@ export type McpOAuthState = {
 /** Result of a refresh-aware token write. */
 export type McpOAuthRefreshWriteResult = 'saved' | 'superseded' | 'cleared'
 
+/** Outcome of a token invalidation bound to a credential version. */
+export type McpOAuthInvalidateResult = 'cleared' | 'superseded'
+
 /**
  * Shared-data resource for one credential file.
  *
@@ -248,6 +251,53 @@ export class FileMcpOAuthStore {
       return 'saved'
     } catch (error) {
       if (error instanceof McpOAuthWriteRejected) return error.result
+      throw error
+    }
+  }
+
+  /**
+   * Remove the token set a failing operation used, unless a peer already
+   * replaced or cleared it.
+   *
+   * The version comparison and the deletion run inside one credential
+   * critical section, so a refresh or re-authorization cannot land between
+   * them and be erased by the older failure. `clearEpoch` and `mutationEpoch`
+   * identify the persisted version; the token strings are compared as well so
+   * a write that bypassed the epoch counters (legacy back-fill through
+   * `update`) is still detected.
+   */
+  async invalidateTokensIfCurrent(input: {
+    accessToken: string
+    refreshToken: string | undefined
+    observedMutationEpoch: number
+    observedClearEpoch: number
+  }): Promise<McpOAuthInvalidateResult> {
+    try {
+      await this.locked(() => this.mutate((state) => {
+        const tokens = state.tokens
+        if (!tokens?.access_token) throw new McpOAuthWriteRejected('superseded')
+        if ((state.clearEpoch ?? 0) !== input.observedClearEpoch) {
+          throw new McpOAuthWriteRejected('superseded')
+        }
+        if ((state.mutationEpoch ?? 0) !== input.observedMutationEpoch) {
+          throw new McpOAuthWriteRejected('superseded')
+        }
+        if (tokens.access_token !== input.accessToken || tokens.refresh_token !== input.refreshToken) {
+          throw new McpOAuthWriteRejected('superseded')
+        }
+        const next = { ...state }
+        delete next.tokens
+        delete next.tokensObtainedAt
+        delete next.lastRefresh
+        // Removing tokens is a revocation: refreshes started before it must
+        // not write their result back, and peers must see that the grant moved.
+        next.clearEpoch = (state.clearEpoch ?? 0) + 1
+        next.mutationEpoch = (state.mutationEpoch ?? 0) + 1
+        return next
+      }))
+      return 'cleared'
+    } catch (error) {
+      if (error instanceof McpOAuthWriteRejected) return 'superseded'
       throw error
     }
   }

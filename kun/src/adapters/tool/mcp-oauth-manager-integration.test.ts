@@ -519,4 +519,64 @@ describe('MCP OAuth refresh against a real Service Manager', { timeout: 60_000 }
     const persisted = await new FileMcpOAuthStore(storePath).read()
     expect(persisted.tokens?.access_token).toBe('a-new')
   })
+
+  it('does not drop a grant that kept the access token but rotated the refresh token', async () => {
+    const { as, storePath } = await harness()
+    const stale = providerAt(serverConfig(as.issuer), storePath)
+    expect(await stale.tokens()).toMatchObject({ access_token: 'a0', refresh_token: 'r0' })
+    // A peer refreshed the same grant: the authorization server reused the
+    // access token, so only the rotated refresh token and the version
+    // counters show that this is a different credential set.
+    await new FileMcpOAuthStore(storePath).saveTokens({
+      tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r1', issuer: as.issuer },
+      obtainedAt: Date.now()
+    })
+
+    await stale.invalidateCredentials('tokens')
+
+    const persisted = await new FileMcpOAuthStore(storePath).read()
+    expect(persisted.tokens?.refresh_token).toBe('r1')
+    expect(persisted.clearEpoch ?? 0).toBe(0)
+  })
+
+  it('re-checks the credential version under the same lock as the delete', async () => {
+    const { as, storePath } = await harness()
+    const stale = providerAt(serverConfig(as.issuer), storePath)
+    expect(await stale.tokens()).toMatchObject({ access_token: 'a0', refresh_token: 'r0' })
+    const beforeRotation = await new FileMcpOAuthStore(storePath).read()
+    await new FileMcpOAuthStore(storePath).saveTokens({
+      tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r1', issuer: as.issuer },
+      obtainedAt: Date.now()
+    })
+    // A check that ran before the peer's write only sees the old grant. The
+    // delete must not trust that stale read: it has to compare against the
+    // persisted state inside the credential section.
+    const read = vi.spyOn(FileMcpOAuthStore.prototype, 'read').mockResolvedValue(beforeRotation)
+    try {
+      await stale.invalidateCredentials('tokens')
+    } finally {
+      read.mockRestore()
+    }
+
+    const persisted = await new FileMcpOAuthStore(storePath).read()
+    expect(persisted.tokens?.refresh_token).toBe('r1')
+  })
+
+  it('keeps a grant written while a stale invalidation is running', async () => {
+    const { as, storePath } = await harness()
+    const stale = providerAt(serverConfig(as.issuer), storePath)
+    expect(await stale.tokens()).toMatchObject({ access_token: 'a0', refresh_token: 'r0' })
+    const peer = new FileMcpOAuthStore(storePath).saveTokens({
+      tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r1', issuer: as.issuer },
+      obtainedAt: Date.now()
+    })
+
+    // Either the invalidation deletes the old set first and the peer write
+    // wins afterwards, or the guard sees the peer's write and refuses. The
+    // newer grant must survive in both orders.
+    await Promise.all([stale.invalidateCredentials('tokens'), peer])
+
+    const persisted = await new FileMcpOAuthStore(storePath).read()
+    expect(persisted.tokens?.refresh_token).toBe('r1')
+  })
 })

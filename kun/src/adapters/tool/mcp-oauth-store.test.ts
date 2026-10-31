@@ -70,3 +70,94 @@ describe('FileMcpOAuthStore encryption', () => {
     })
   })
 })
+
+describe('FileMcpOAuthStore version-bound token invalidation', () => {
+  it('clears the token version the failing operation used', async () => {
+    await withDir(async (dir) => {
+      const store = new FileMcpOAuthStore(join(dir, 's.json'))
+      await store.saveTokens({
+        tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r0' },
+        obtainedAt: 1
+      })
+      const observed = await store.read()
+
+      await expect(store.invalidateTokensIfCurrent({
+        accessToken: 'a0',
+        refreshToken: 'r0',
+        observedMutationEpoch: observed.mutationEpoch ?? 0,
+        observedClearEpoch: observed.clearEpoch ?? 0
+      })).resolves.toBe('cleared')
+
+      const cleared = await store.read()
+      expect(cleared.tokens).toBeUndefined()
+      expect(cleared.tokensObtainedAt).toBeUndefined()
+      expect(cleared.clearEpoch).toBe((observed.clearEpoch ?? 0) + 1)
+      expect(cleared.mutationEpoch).toBe((observed.mutationEpoch ?? 0) + 1)
+    })
+  })
+
+  it('keeps a peer grant whose refresh token rotated under the same access token', async () => {
+    await withDir(async (dir) => {
+      const store = new FileMcpOAuthStore(join(dir, 's.json'))
+      await store.saveTokens({
+        tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r0' },
+        obtainedAt: 1
+      })
+      const observed = await store.read()
+      // The authorization server reused the access token but rotated the
+      // refresh token: comparing access tokens alone would miss this.
+      await store.saveTokens({
+        tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r1' },
+        obtainedAt: 2
+      })
+
+      await expect(store.invalidateTokensIfCurrent({
+        accessToken: 'a0',
+        refreshToken: 'r0',
+        observedMutationEpoch: observed.mutationEpoch ?? 0,
+        observedClearEpoch: observed.clearEpoch ?? 0
+      })).resolves.toBe('superseded')
+
+      const persisted = await store.read()
+      expect(persisted.tokens?.refresh_token).toBe('r1')
+      expect(persisted.clearEpoch ?? 0).toBe(0)
+    })
+  })
+
+  it('keeps a grant replaced through a legacy write that did not move the epochs', async () => {
+    await withDir(async (dir) => {
+      const store = new FileMcpOAuthStore(join(dir, 's.json'))
+      await store.update(() => ({ tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r0' } }))
+      const observed = await store.read()
+      await store.update((state) => ({ ...state, tokens: { access_token: 'a-new', token_type: 'Bearer' } }))
+
+      await expect(store.invalidateTokensIfCurrent({
+        accessToken: 'a0',
+        refreshToken: 'r0',
+        observedMutationEpoch: observed.mutationEpoch ?? 0,
+        observedClearEpoch: observed.clearEpoch ?? 0
+      })).resolves.toBe('superseded')
+      await expect(store.read()).resolves.toMatchObject({ tokens: { access_token: 'a-new' } })
+    })
+  })
+
+  it('does nothing when the credentials were already cleared', async () => {
+    await withDir(async (dir) => {
+      const store = new FileMcpOAuthStore(join(dir, 's.json'))
+      await store.saveTokens({
+        tokens: { access_token: 'a0', token_type: 'Bearer', refresh_token: 'r0' },
+        obtainedAt: 1
+      })
+      const observed = await store.read()
+      await store.clear()
+
+      await expect(store.invalidateTokensIfCurrent({
+        accessToken: 'a0',
+        refreshToken: 'r0',
+        observedMutationEpoch: observed.mutationEpoch ?? 0,
+        observedClearEpoch: observed.clearEpoch ?? 0
+      })).resolves.toBe('superseded')
+      expect((await store.read()).clearEpoch).toBe((observed.clearEpoch ?? 0) + 1)
+    })
+  })
+})

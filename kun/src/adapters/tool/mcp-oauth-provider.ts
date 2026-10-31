@@ -156,6 +156,7 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
     if (tokens?.access_token) {
       this.lastTokenSnapshot = {
         accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
         mutationEpoch: state.mutationEpoch ?? 0,
         clearEpoch: state.clearEpoch ?? 0
       }
@@ -274,17 +275,35 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   }
 
   async invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery'): Promise<void> {
-    if (scope === 'all' || scope === 'tokens') {
-      // The SDK calls this after a refresh it saw fail. If another connection
-      // has since authorized a newer grant for this server, that failure
-      // belongs to the old grant: dropping the new tokens here would revoke
-      // credentials the user just approved.
-      if (await this.credentialsMovedSinceSnapshot()) return
+    if (scope === 'tokens') {
+      // The SDK calls this after a refresh it saw fail (invalid_grant). That
+      // failure belongs to the token set this connection last read: delete
+      // exactly that version, or nothing when a peer already refreshed or
+      // re-authorized. The comparison and the delete share one credential
+      // critical section, so a new grant cannot land in between and be erased.
+      const snapshot = this.lastTokenSnapshot
+      const cleared = snapshot
+        ? await this.store.invalidateTokensIfCurrent({
+            accessToken: snapshot.accessToken,
+            refreshToken: snapshot.refreshToken,
+            observedMutationEpoch: snapshot.mutationEpoch,
+            observedClearEpoch: snapshot.clearEpoch
+          }) === 'cleared'
+        : false
+      this.lastTokenSnapshot = undefined
       // A still-running refresh for this file is doomed too, so stop it
       // instead of queueing the revocation behind its network round trip.
-      this.store.cancelInFlightRefresh()
+      // Only once the credentials are really gone: a superseded failure must
+      // not abort a peer's refresh that is about to persist the new grant.
+      if (cleared) this.store.cancelInFlightRefresh()
+      return
     }
     if (scope === 'all') {
+      // invalid_client is about the client registration, not a token version.
+      // Skip the reset when this connection's grant was already replaced, so
+      // an old failure cannot wipe a newer authorization.
+      if (await this.credentialsMovedSinceSnapshot()) return
+      this.store.cancelInFlightRefresh()
       await this.store.clear()
       this.lastTokenSnapshot = undefined
       this.authorizationClearEpoch = null
@@ -293,23 +312,10 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
     await this.store.update((state) => {
       const next = { ...state }
       if (scope === 'client') delete next.clientInformation
-      if (scope === 'tokens') {
-        delete next.tokens
-        delete next.tokensObtainedAt
-        delete next.lastRefresh
-        // Removing tokens is a revocation: in-flight refreshes started before
-        // it must not write their result back, and peers must see that the
-        // grant moved.
-        next.clearEpoch = (state.clearEpoch ?? 0) + 1
-        next.mutationEpoch = (state.mutationEpoch ?? 0) + 1
-      }
       if (scope === 'verifier') delete next.codeVerifier
       if (scope === 'discovery') delete next.discoveryState
       return next
     })
-    if (scope === 'tokens') {
-      this.lastTokenSnapshot = undefined
-    }
   }
 
   /**
