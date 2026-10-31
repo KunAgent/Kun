@@ -10,7 +10,7 @@ import { sessionInstructions } from '../../session/session-instructions.js'
  * by the `session/prompt` result — worker self-reports never end a turn.
  */
 import type { HarnessRoute } from '../../contracts/harness.js'
-import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
+import { resolveSessionUserInput } from '../../session/session-user-input.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import { makeDelegatedAwaitApproval } from '../../ade/delegated-approval.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
@@ -43,7 +43,7 @@ import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
 import { acpSubagentSource } from './acp-subagent-source.js'
 import { openCodeDatabasePath, startOpenCodeChildSessions } from './opencode-child-sessions.js'
 import { devinSessionDatabasePath } from './devin-session-usage.js'
-import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
+import { buildAcpPromptBlocks } from './acp-prompt.js'
 import { resolveAcpDocuments } from './acp-attachment-documents.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
@@ -397,15 +397,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
 
     const imageCapable =
       conn.initResult?.agentCapabilities?.promptCapabilities?.image === true
-    // Text attachments are inlined for every agent: an external ACP agent
-    // cannot read Kun's attachment store, so gating the body on image support
-    // used to drop pasted long text without a trace.
-    const inlineDocuments = await resolveAcpDocuments(
-      this.deps.attachmentStore,
-      threadId,
-      workspace,
-      userItem.attachmentIds ?? []
-    )
+    const userInput = await resolveSessionUserInput({
+      userItem, pending: preparation.pendingUserMessages,
+      attachmentStore: this.deps.attachmentStore, threadId, workspace, imageCapable
+    })
     const prompt = buildAcpPromptBlocks({
       handoffBrief: turnHandoff?.brief.text,
       historyTranscript:
@@ -419,19 +414,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       instructionBlocks: sessionInstructions(preparation, [
         ...instructionBlocks, buildClientSurfaceInstruction(resolveTurnClientSurface(turn))
       ], false, turnDynamicContext.instructions),
-      userText: userMessageTextWithComposerContexts(userItem),
-      images: await resolveAcpImages(
-        this.deps.attachmentStore,
-        threadId,
-        workspace,
-        userItem.attachmentIds ?? [],
-        imageCapable
-      ),
-      attachmentPaths: attachmentFallbackPaths(userItem),
+      ...userInput,
       imageCapable,
-      documents: inlineDocuments.documents,
-      unreadableDocuments: inlineDocuments.unreadable,
-      fileReferences: userItem.fileReferences ?? [],
       workspacePath: workspace
     })
 

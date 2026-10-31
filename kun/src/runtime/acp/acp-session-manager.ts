@@ -21,6 +21,7 @@ import type { AcpDebugLog } from './acp-jsonrpc.js'
 import type { AcpConnection, AcpSessionUpdateSink } from './acp-connection.js'
 import {
   ACP_AGENT_METHODS,
+  ACP_RPC_ERROR,
   acpConfigOptionValues,
   AcpLoadSessionResultSchema,
   AcpNewSessionResultSchema,
@@ -138,6 +139,7 @@ export class AcpSessionManager {
         // only determines whether it can be restored after process exit.
         continuationMode: 'native'
       },
+      replayPendingUserMessages: true,
       priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turnId),
       beforeRebase: async (binding, reason) => {
         if (reason !== 'history_changed' && reason !== 'capabilities_changed' && reason !== 'native_state_unavailable') return
@@ -232,7 +234,16 @@ export class AcpSessionManager {
         }
         unsubscribe()
         conn.unregisterSession(handle.sessionId)
-        return this.recreate(conn, ctx, preparation, acpContinuationFailure(conn, stage, error), sink)
+        const failure = acpContinuationFailure(conn, stage, error)
+        // Only session/load's explicit not-found response proves native state
+        // is gone. Failed configuration, transport and decoding keep the binding.
+        if (stage !== 'session/load' || !(error instanceof AcpError)
+          || error.code !== 'agent_error' || error.rpcCode !== ACP_RPC_ERROR.sessionUnavailable) {
+          await recordAcpContinuation(ctx, 'harness_continuation_failed',
+            acpContinuationDiagnostic(preparation, ctx.harnessId, failure))
+          throw error
+        }
+        return this.recreate(conn, ctx, preparation, failure, sink)
       }
     }
     return this.createFresh(conn, ctx, preparation, sink)

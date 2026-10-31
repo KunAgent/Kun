@@ -19,7 +19,7 @@ import type { HarnessTransport } from '../contracts/harness.js'
 import type { ApprovalRequest } from '../domain/approval.js'
 import { makeDelegatedAwaitApproval } from '../ade/delegated-approval.js'
 import { resolveTurnClientSurface } from '../loop/turn-context-resolver.js'
-import { userMessageTextWithComposerContexts } from '../domain/composer-context.js'
+import { resolveSessionUserInput, sessionUserItem, sessionUserTextWithDocuments } from './session-user-input.js'
 import { buildClientSurfaceInstruction } from '../prompt/kun-prompt-context.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
@@ -52,6 +52,7 @@ import type {
 } from '../runtime/delegated-turn-runtime.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import { AcpDraftEmitter } from '../runtime/acp/acp-turn-emitter.js'
+import { acpDiagnosticText } from '../runtime/acp/acp-diagnostic-text.js'
 import { maybeExternalSubagentRouting } from '../runtime/external-subagent-routing.js'
 
 import { HarnessAgentPool } from './harness-pool.js'
@@ -76,6 +77,7 @@ import { followUpTurnInput, SessionLiveSteering } from './session-live-steering.
 import { harnessTurnTiming } from '../runtime/harness-turn-timing.js'
 import {
   HarnessTransportError,
+  HarnessSessionUnavailableError,
   type HarnessAgent,
   type HarnessAgentFactory,
   type HarnessSession,
@@ -316,9 +318,10 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     )
     await this.recordDelegatedRuntime(ctx, session)
 
+    const inputContext = { ...ctx, userItem: sessionUserItem(ctx.userItem, session.preparation.pendingUserMessages) }
     const input = this.deps.buildTurnInput
-      ? this.deps.buildTurnInput(ctx, session)
-      : this.defaultTurnInput(ctx, session, turnHandoff?.brief.text)
+      ? this.deps.buildTurnInput(inputContext, session)
+      : await this.defaultTurnInput(inputContext, session, turnHandoff?.brief.text)
 
     let trace = await startDelegatedTrace(this.deps.debugSink, {
       threadId,
@@ -441,7 +444,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     }
   }
 
-  /** Coordinator.prepare → resume or start; resume failure rebases portable. */
+  /** Coordinator.prepare -> resume or start; only confirmed loss permits rebase. */
   private async ensureSession(
     agent: HarnessAgent,
     ctx: SessionTurnContext,
@@ -471,6 +474,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         ),
         continuationMode: caps.continuation
       },
+      replayPendingUserMessages: true,
       allowNativeCapabilityResume: this.deps.transport === 'codex-app-server',
       priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turn.id)
     })
@@ -501,7 +505,19 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       try {
         return await agent.resumeSession(input)
       } catch (error) {
-        this.debug(`native resume failed, rebasing: ${String(error)}`)
+        signal.throwIfAborted()
+        const cause = error instanceof HarnessSessionUnavailableError ? error.detail : error
+        const detail = cause instanceof HarnessTransportError ? cause.detail : undefined
+        console.warn('[harness-continuation]', JSON.stringify({
+          threadId: ctx.thread.id, turnId: ctx.turn.id, harnessId: ctx.definition.id,
+          stage: 'session/resume', rebase: error instanceof HarnessSessionUnavailableError,
+          code: cause instanceof HarnessTransportError ? cause.code : 'unknown',
+          rpcCode: typeof detail === 'object' && detail !== null && 'code' in detail && typeof detail.code === 'number'
+            ? detail.code : undefined,
+          message: acpDiagnosticText(cause instanceof Error ? cause.message : String(cause))
+        }))
+        if (!(error instanceof HarnessSessionUnavailableError)) throw error
+        await validateSession()
         const rebased = await coordinator.rejectResume(preparation)
         await validateSession()
         return agent.startSession({ ...input, preparation: rebased })
@@ -550,21 +566,28 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     }
   }
 
-  private defaultTurnInput(
+  private async defaultTurnInput(
     ctx: SessionTurnContext,
     session: HarnessSession,
     handoffBrief: string | undefined
-  ): HarnessTurnInput {
+  ): Promise<HarnessTurnInput> {
+    const userInput = await resolveSessionUserInput({
+      userItem: ctx.userItem,
+      attachmentStore: this.deps.attachmentStore,
+      threadId: ctx.thread.id,
+      workspace: ctx.workspace,
+      imageCapable: this.deps.imageCapable === true
+    })
     return {
       instructionBlocks: sessionInstructions(session.preparation, ctx.definition.id === 'codex'
         ? ctx.turnDynamicContext?.instructions ?? [] : [
         ...ctx.instructionBlocks,
         buildClientSurfaceInstruction(resolveTurnClientSurface(ctx.turn))
       ], false, ctx.turnDynamicContext?.instructions ?? []),
-      userText: userMessageTextWithComposerContexts(ctx.userItem),
-      images: [],
-      attachmentPaths: [],
-      fileReferences: ctx.userItem.fileReferences ?? [],
+      userText: sessionUserTextWithDocuments(userInput),
+      images: userInput.images,
+      attachmentPaths: userInput.attachmentPaths,
+      fileReferences: userInput.fileReferences,
       workspacePath: ctx.workspace,
       model: ctx.wireModel ?? ctx.model,
       reasoningEffort: ctx.turn.reasoningEffort,

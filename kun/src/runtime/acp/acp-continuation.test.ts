@@ -161,16 +161,56 @@ describe('ACP native continuation diagnostics', () => {
       recreationError: { stage: 'session/new', message: 'replacement unavailable', rpcCode: -32603 } })
   })
 
-  it.each([
-    [{ loadSession: { error: { code: -32002, message: '' } } }, 'session/load', 'agent_error', false],
-    [{ loadSession: { result: 'malformed response' } }, 'session/load_result', 'harness_protocol_error', true],
-    [{ loadSession: { neverRespond: true } }, 'session/load', 'request_timeout', true]
-  ] as const)('classifies missing details, invalid results and timeouts (%j)', async (scenario, stage, code, detailsAvailable) => {
-    const h = await setup(scenario)
+  it('recovers an explicit missing session even without error details', async () => {
+    const h = await setup({ loadSession: { error: { code: -32002, message: '' } } })
     const session = await h.manager.ensureSession(h.ctx, h.conn)
-    expect(session.continuation?.failure).toMatchObject({ stage, code, detailsAvailable })
-    if (!detailsAvailable) expect(session.continuation?.failure.message).toBe('No error details available from the agent')
-    expect((await replay(h.root))[0]).toMatchObject({ failure: { stage, code, detailsAvailable } })
+    expect(session.continuation?.failure).toMatchObject({ stage: 'session/load', code: 'agent_error', detailsAvailable: false,
+      message: 'No error details available from the agent' })
+  })
+
+  it.each([
+    [{ loadSession: { result: 'malformed response' } }, 'session/load_result', 'harness_protocol_error'],
+    [{ loadSession: { neverRespond: true } }, 'session/load', 'request_timeout'],
+    [{ loadSession: { error: { code: -32603, message: 'Internal error' } } }, 'session/load', 'agent_error'],
+    [{ loadSession: { error: { code: -32602, message: 'Invalid params' } } }, 'session/load', 'agent_error'],
+    [{ loadSession: { error: { code: -32601, message: 'Method not found' } } }, 'session/load', 'agent_error']
+  ] as const)('retains the original session after an unconfirmed failure (%j)', async (scenario, stage, code) => {
+    const h = await setup(scenario)
+    const request = vi.spyOn(h.conn.rpc, 'request')
+    const reject = vi.spyOn(h.coordinator, 'rejectResume')
+    await expect(h.manager.ensureSession(h.ctx, h.conn)).rejects.toMatchObject({ code })
+    expect(reject).not.toHaveBeenCalled()
+    expect(await h.coordinator.store.load(threadId)).toMatchObject({ generation: 1, nativeSessionId: 'original-native' })
+    expect((await replay(h.root)).map((event) => event.kind)).toEqual(['harness_continuation_failed'])
+    expect((await replay(h.root))[0]).toMatchObject({ failure: { stage, code } })
+    request.mockResolvedValueOnce({ modes: { currentModeId: 'normal', availableModes: [{ id: 'normal', name: 'Normal' }] } })
+    const next = await h.manager.ensureSession({ ...h.ctx, turnId: 'retry', items: [...h.ctx.items,
+      makeUserItem({ id: 'retry', threadId, turnId: 'retry', text: 'Try again' })] }, h.conn)
+    expect(next.sessionId).toBe('original-native')
+    expect(next.replayedHistory).toBe(false)
+    expect(next.preparation).toMatchObject({ generation: 1, pendingUserMessages: [expect.objectContaining({ text: 'Continue' })] })
+    expect(request.mock.calls.map(([method]) => method)).not.toContain('session/new')
+    next.detach()
+  })
+
+  it.each([-32002, -32603])('does not discard a successfully loaded session on configuration error %s', async (rpcCode) => {
+    const h = await setup({ loadSession: {
+      modes: { currentModeId: 'normal', availableModes: [{ id: 'normal', name: 'Normal' }] },
+      configOptions: [{ id: 'reasoning', name: 'Reasoning', type: 'select',
+      category: 'thought_level', currentValue: 'low', options: [{ value: 'low', name: 'Low' }, { value: 'high', name: 'High' }] }] } })
+    h.ctx.reasoningEffort = 'high'
+    const originalRequest = h.conn.rpc.request.bind(h.conn.rpc)
+    const failure = new AcpError('agent_error', 'configuration unavailable', { rpcCode })
+    const request = vi.spyOn(h.conn.rpc, 'request').mockImplementation((method, params, options) => {
+      if (method === 'session/set_config_option') return Promise.reject(failure)
+      return originalRequest(method, params, options)
+    })
+    const reject = vi.spyOn(h.coordinator, 'rejectResume')
+    await expect(h.manager.ensureSession(h.ctx, h.conn)).rejects.toBe(failure)
+    expect(reject).not.toHaveBeenCalled()
+    expect(await h.coordinator.store.load(threadId)).toMatchObject({ generation: 1, nativeSessionId: 'original-native' })
+    expect(request.mock.calls.map(([method]) => method)).not.toContain('session/new')
+    expect((await replay(h.root))[0]).toMatchObject({ failure: { stage: 'session/configure', rpcCode } })
   })
 
   it('records lack of load support without inventing an Agent error', async () => {
@@ -197,6 +237,8 @@ describe('ACP native continuation diagnostics', () => {
     expect(events[0]).toMatchObject({ failure: { stage: 'session/load', code: 'harness_crashed',
       connectionClosed: true, process: { exitCode: 7, signal: null, stderrTail: 'crash [redacted]' } } })
     expect(JSON.stringify(events)).not.toContain('sk-testsecret123456789')
+    expect(events.map((event) => event.kind)).toEqual(['harness_continuation_failed'])
+    expect(await h.coordinator.store.load(threadId)).toMatchObject({ generation: 1, nativeSessionId: 'original-native' })
   })
 
   it('bounds diagnostics and excludes arbitrary error data', async () => {

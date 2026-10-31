@@ -1,6 +1,6 @@
 import { scryptSync } from 'node:crypto'
 import { resolve } from 'node:path'
-import type { TurnItem } from '../contracts/items.js'
+import type { TurnItem, UserTurnItem } from '../contracts/items.js'
 import { effectiveHistoryAfterLatestCompaction } from '../loop/compaction-history.js'
 import {
   DEFAULT_DELEGATED_MODEL,
@@ -62,7 +62,9 @@ export type DelegatedSessionPreparation = {
   instructionDigest?: string
   nativeSessionId?: string
   resumed: boolean
-  /** Set when this resume restored a parked session. */
+  /** Undelivered user requests; adapters must send these verbatim, not as a summary. */
+  pendingUserMessages?: readonly UserTurnItem[]
+  /** Catch-up since the last native checkpoint of a restored parked session. */
   parkedDelta?: {
     lastCommittedTurnId: string
     /** Route that ran most recently before this restore (the switch source). */
@@ -139,6 +141,8 @@ export class DelegatedSessionCoordinator {
     priorItems: readonly TurnItem[]
     /** An adapter with compatible native restore can validate a client-version change on resume. */
     allowNativeCapabilityResume?: boolean
+    /** Only adapters with lossless pending-request delivery may opt into this. */
+    replayPendingUserMessages?: boolean
     /** Observability hook runs before stale provider state is cleared or parked. */
     beforeRebase?: (binding: DelegatedSessionBinding, reason: NonNullable<DelegatedSessionPreparation['rebaseReason']>) => Promise<void>
   }): Promise<DelegatedSessionPreparation> {
@@ -159,7 +163,10 @@ export class DelegatedSessionCoordinator {
       input.route.continuationMode === 'native' &&
       binding.continuationMode === 'native' &&
       binding.nativeSessionId &&
-      binding.synchronizedHistoryDigest === priorHistoryDigest
+      (binding.synchronizedHistoryDigest === priorHistoryDigest || (
+        input.replayPendingUserMessages && this.prefixMatches(binding, input.priorItems) && delegatedHistoryItems(input.priorItems)
+          .slice(binding.priorItemCount).every((item) => item.kind === 'user_message')
+      ))
     )
     if (binding && canResume) {
       return {
@@ -169,7 +176,13 @@ export class DelegatedSessionCoordinator {
         priorHistoryDigest,
         nativeSessionId: binding.nativeSessionId,
         synchronizedInstructionDigest: binding.synchronizedInstructionDigest,
-        resumed: true
+        resumed: true,
+        // A failed pre-turn resume leaves new user messages after the native
+        // checkpoint. Catch up on the same session; do not discard its history.
+        ...(binding.synchronizedHistoryDigest !== priorHistoryDigest ? {
+          pendingUserMessages: delegatedHistoryItems(input.priorItems).slice(binding.priorItemCount)
+            .filter((item): item is UserTurnItem => item.kind === 'user_message')
+        } : {})
       }
     }
     if (binding && portableAligned) {
@@ -347,12 +360,12 @@ export class DelegatedSessionCoordinator {
   }
 
   /**
-   * A parked session may resume only if the canonical prefix it was committed
+   * A native session may catch up only if the canonical prefix it was committed
    * against is still intact: digest the first `priorItemCount` prior items and
-   * compare to the parked checkpoint's synchronized digest.
+   * compare to the checkpoint's synchronized digest.
    */
   private prefixMatches(
-    candidate: ParkedSession,
+    candidate: Pick<ParkedSession, 'priorItemCount' | 'synchronizedHistoryDigest'>,
     priorItems: readonly TurnItem[]
   ): boolean {
     const history = delegatedHistoryItems(priorItems)

@@ -37,6 +37,14 @@ export class HarnessTransportError extends Error {
   }
 }
 
+/** Only an adapter-confirmed missing native session permits a portable rebase. */
+export class HarnessSessionUnavailableError extends HarnessTransportError {
+  constructor(message: string, detail?: unknown) {
+    super('harness_not_ready', message, detail)
+    this.name = 'HarnessSessionUnavailableError'
+  }
+}
+
 export type HarnessSpawnFn = (
   command: string,
   args: readonly string[],
@@ -199,7 +207,7 @@ export interface HarnessAgent {
   readonly info: HarnessAgentInfo
   /** Start a new native session. */
   startSession(input: HarnessSessionStartInput): Promise<HarnessSession>
-  /** Resume a parked/live native session; throw to trigger portable rebase. */
+  /** Resume a parked/live native session; only HarnessSessionUnavailableError permits rebase. */
   resumeSession?(input: HarnessSessionStartInput): Promise<HarnessSession>
   /** Capability surface for coordinator fingerprints (native resume etc). */
   sessionCapabilities(): { continuation: 'native' | 'portable'; fingerprint: unknown }

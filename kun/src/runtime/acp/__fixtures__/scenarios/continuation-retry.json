@@ -1,0 +1,31 @@
+{
+  "sessionId": "sess-continuation",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": { "image": true }
+    },
+    "authMethods": []
+  },
+  "newSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [{ "id": "ask", "name": "Ask" }]
+    }
+  },
+  "turns": [
+    {
+      "steps": [{ "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "First response" } } }],
+      "stopReason": "end_turn"
+    },
+    {
+      "steps": [{ "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Resumed response" } } }],
+      "stopReason": "end_turn"
+    },
+    {
+      "steps": [{ "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Queued response" } } }],
+      "stopReason": "end_turn"
+    }
+  ]
+}
