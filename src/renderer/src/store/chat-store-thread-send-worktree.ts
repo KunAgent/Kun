@@ -14,7 +14,8 @@ import {
   receiveTaskWorkspaceRecord,
   useTaskWorkspaceStore
 } from './task-workspace-store'
-import { upsertQueuedSubmission, type StoreActionContext } from './chat-store-thread-actions-support'
+import { upsertQueuedSubmission, createClientTurnRequestId, type StoreActionContext } from './chat-store-thread-actions-support'
+import { rememberQueuedTaskWorkspace } from './task-workspace-queue-identity'
 
 /**
  * New-session worktree isolation: subscribe for the task_workspace
@@ -35,14 +36,17 @@ export async function prepareAdeThreadWorktree(args: {
 }): Promise<TaskWorkspaceRecord | null> {
   const { provider: p, threadId, workspaceRoot, submittedMessageForQueue } = args
   const { set, get, sseAbortRef } = args.context
-  markThreadWorkspacePreparing(threadId, '')
+  markThreadWorkspacePreparing(threadId, '', workspaceRoot)
   const ac = new AbortController()
   sseAbortRef.current = ac
   const sink = buildThreadEventSink(set, get, { threadId, signal: ac.signal, sinceSeq: 0 })
   subscribeThreadEventsWithRecovery(p, threadId, 0, sink, ac.signal, get)
   // Persist before requesting preparation: the response or ready event can
   // arrive after navigation, or after a renderer restart.
-  const pending = { ...submittedMessageForQueue, deliveryState: 'pending' as const }
+  const pending: QueuedUserMessage = { ...submittedMessageForQueue,
+    expectedThreadId: threadId,
+    clientRequestId: submittedMessageForQueue.clientRequestId?.trim() || createClientTurnRequestId(),
+    taskWorkspace: { sourceRoot: workspaceRoot }, deliveryState: 'pending' }
   const active = get().activeThreadId === threadId
   const queuedMessages = upsertQueuedSubmission(
     active ? get().queuedMessages : queuedMessagesForThread(threadId), pending
@@ -62,6 +66,7 @@ export async function prepareAdeThreadWorktree(args: {
       ...(args.startFrom ? { startFrom: args.startFrom } : {})
     })
     record = created.record
+    rememberQueuedTaskWorkspace(created.record, set, get)
     receiveTaskWorkspaceRecord(created.record)
   } catch (workspaceError) {
     markThreadWorkspacePrepFailed(

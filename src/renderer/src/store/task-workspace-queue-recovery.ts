@@ -4,10 +4,12 @@ import type { ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { bindReadyTaskWorkspace } from './chat-store-runtime-helpers'
 import { isPendingQueuedMessage, queuedMessagesForThread, readQueuedMessageRegistry } from './queued-message-persistence'
 import { receiveTaskWorkspaceRecord, useTaskWorkspaceStore } from './task-workspace-store'
+import { failQueuedTaskWorkspace, queuedTaskWorkspaceMatches, rememberQueuedTaskWorkspace } from './task-workspace-queue-identity'
+import { workspaceRootScopeKey } from '../lib/workspace-path'
 
-function hasParkedPlanBuild(threadId: string): boolean {
-  return queuedMessagesForThread(threadId).some((message) => message.planBuild &&
-    message.expectedThreadId === threadId && Boolean(message.clientRequestId) &&
+function parkedWorkspaceSubmission(threadId: string) {
+  return queuedMessagesForThread(threadId).find((message) => (message.taskWorkspace || message.planBuild) &&
+    message.expectedThreadId === threadId && Boolean(message.clientRequestId) && !message.editIntent &&
     (isPendingQueuedMessage(message) || message.deliveryState === 'starting'))
 }
 
@@ -23,24 +25,33 @@ export async function recoverTaskWorkspaceQueuedMessages(input: {
   if (!provider.listTaskWorkspaces || !provider.bindThreadTaskWorkspace) return
   for (const threadId of Object.keys(readQueuedMessageRegistry().threads)) {
     if (!isCurrent()) return
-    if (!hasParkedPlanBuild(threadId)) continue
+    if (!parkedWorkspaceSubmission(threadId)) continue
     try {
       const result = await provider.listTaskWorkspaces({ ownerThreadId: threadId })
-      if (!isCurrent() || !hasParkedPlanBuild(threadId)) continue
+      const submission = parkedWorkspaceSubmission(threadId)
+      if (!isCurrent() || !submission) continue
       const prep = useTaskWorkspaceStore.getState().prepByThread[threadId]
       const thread = get().adeThreads?.find((row) => row.id === threadId) ??
         get().threads.find((row) => row.id === threadId)
       if (thread?.archived || thread?.relation === 'side') continue
-      const workspaceId = thread?.taskWorkspaceId || prep?.workspaceId
-      const owner = result.records.filter((record) => record.ownerThreadId === threadId &&
-        !record.unitId && (!workspaceId || record.workspaceId === workspaceId))
+      const workspaceId = submission.taskWorkspace?.workspaceId || thread?.taskWorkspaceId || prep?.workspaceId
+      const owner = result.records.filter((record) => !record.unitId &&
+        queuedTaskWorkspaceMatches(submission, record) && (!workspaceId || record.workspaceId === workspaceId))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
       // Never fall back to an older ready workspace or the source checkout.
-      if (!owner || owner.state !== 'ready' || !owner.path) continue
+      if (!owner || owner.isolation !== 'worktree') continue
+      if (owner.state === 'failed') {
+        receiveTaskWorkspaceRecord(owner)
+        failQueuedTaskWorkspace(owner, owner.lastError || 'Task workspace preparation failed', set, get)
+        continue
+      }
+      if (owner.state !== 'ready' || !owner.path || !owner.sourceRoot ||
+        workspaceRootScopeKey(owner.path) === workspaceRootScopeKey(owner.sourceRoot)) continue
+      if (!rememberQueuedTaskWorkspace(owner, set, get)) continue
       receiveTaskWorkspaceRecord(owner)
       await bindReadyTaskWorkspace({ threadId, workspaceId: owner.workspaceId, state: 'ready',
         workspace: { path: owner.path, sourceRoot: owner.sourceRoot } }, set, get,
-      () => isCurrent() && hasParkedPlanBuild(threadId) &&
+      () => isCurrent() && parkedWorkspaceSubmission(threadId)?.id === submission.id &&
         useTaskWorkspaceStore.getState().prepByThread[threadId]?.workspaceId === owner.workspaceId)
     } catch {
       // Runtime may still be starting/reconnecting. Keep the durable request

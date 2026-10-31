@@ -43,7 +43,7 @@ const schedulersMock = vi.hoisted(() => ({
   resetBusyRecoveryAttempts: vi.fn()
 }))
 const persistenceMock = vi.hoisted(() => ({
-  saveQueuedMessagesForThread: vi.fn(),
+  saveQueuedMessagesForThread: vi.fn(() => true),
   queuedMessagesForThread: vi.fn(() => [])
 }))
 const registryMock = vi.hoisted(() => ({
@@ -541,7 +541,11 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({ workspace: '/repo', workspaceIsolation: 'worktree' }))
     expect(provider.createTaskWorkspace).toHaveBeenCalledTimes(1)
     expect(provider.sendUserMessage).not.toHaveBeenCalled()
-    expect(harness.state.queuedMessages).toHaveLength(1)
+    expect(harness.state.queuedMessages).toEqual([expect.objectContaining({
+      expectedThreadId: 'thr_new', clientRequestId: 'req_1',
+      taskWorkspace: { sourceRoot: '/repo', workspaceId: 'ws_1' }
+    })])
+    expect(harness.state.queuedMessages[0]?.planBuild).toBeUndefined()
   })
 
   it('does not allocate a workspace for an already-created empty Code task', async () => {

@@ -53,6 +53,8 @@ export type QueuedUserMessage = {
   messageSource?: 'design_continuation'
   /** Renderer-only guard that prevents a scoped send from falling back to another thread. */
   expectedThreadId?: string
+  /** Renderer-only requirement: never admit this submission in the source checkout. */
+  taskWorkspace?: { sourceRoot: string; workspaceId?: string }
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]

@@ -18,6 +18,8 @@ import {
   snapshotThreadProjection
 } from './thread-snapshot-cache'
 import { invalidatePendingTurnStarts } from './turn-start-fence'
+import { markThreadWorkspacePreparing, receiveTaskWorkspaceThreadEvent, useTaskWorkspaceStore } from './task-workspace-store'
+import { restoreThreadWorkspaceOwner } from './restore-thread-workspace-owner'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -72,6 +74,7 @@ describe('chat-store-thread-actions queued messages', () => {
   })
 
   afterEach(() => {
+    useTaskWorkspaceStore.setState({ prepByThread: {} })
     useWriteWorkspaceStore.getState().resetWorkspace()
     rendererRuntimeClient.invalidateSettings()
     vi.unstubAllGlobals()
@@ -204,6 +207,49 @@ describe('chat-store-thread-actions queued messages', () => {
     ])
     expect(state.blocks).toEqual([])
     expect(state.recoverActiveTurn).toHaveBeenCalledWith({ forceTimeline: true })
+  })
+
+  it('persists workspace requirements for additional input while a Code worktree is preparing', async () => {
+    const sendUserMessage = vi.fn()
+    registryMock.getProvider.mockReturnValue({ sendUserMessage })
+    vi.stubGlobal('window', { localStorage: new MemoryStorage(), kunGui: {
+      getSettings: vi.fn(async () => ({})), logError: vi.fn(async () => undefined)
+    } })
+    const { actions, state } = buildHarness()
+    state.busy = false
+    markThreadWorkspacePreparing('thr_existing', 'ws_code', '/workspace/deepseek-gui')
+    await expect(actions.sendMessage('also add a regression', 'agent')).resolves.toBe(true)
+    expect(sendUserMessage).not.toHaveBeenCalled()
+    expect(queuedMessagesForThread('thr_existing')).toEqual([expect.objectContaining({
+      expectedThreadId: 'thr_existing', clientRequestId: expect.any(String),
+      taskWorkspace: { sourceRoot: '/workspace/deepseek-gui', workspaceId: 'ws_code' }
+    })])
+  })
+
+  it.each(['missing prep', 'unbound ready', 'empty lookup'])('keeps new Code input isolated with %s', async (phase) => {
+    const sendUserMessage = vi.fn()
+    const provider = { sendUserMessage, listTaskWorkspaces: vi.fn(async () => ({ records: [] })) }
+    registryMock.getProvider.mockReturnValue(provider)
+    vi.stubGlobal('window', { localStorage: new MemoryStorage(), kunGui: {
+      getSettings: vi.fn(async () => ({})), logError: vi.fn(async () => undefined)
+    } })
+    const { actions, state } = buildHarness()
+    state.busy = false
+    state.queuedMessages = [{ id: 'first', text: 'first worktree input', clientRequestId: 'first-request',
+      expectedThreadId: 'thr_existing', taskWorkspace: { sourceRoot: '/workspace/deepseek-gui', workspaceId: 'ws_code' } }]
+    saveQueuedMessagesForThread('thr_existing', state.queuedMessages)
+    if (phase === 'empty lookup') {
+      await restoreThreadWorkspaceOwner(provider as never, 'thr_existing', (patch) =>
+        Object.assign(state, typeof patch === 'function' ? patch(state) : patch), () => state, () => true)
+    } else if (phase === 'unbound ready') {
+      receiveTaskWorkspaceThreadEvent({ threadId: 'thr_existing', workspaceId: 'ws_wrong', state: 'ready',
+        workspace: { path: '/workspace/deepseek-gui', sourceRoot: '/workspace/deepseek-gui' } })
+    }
+    await expect(actions.sendMessage('second input must wait', 'agent')).resolves.toBe(true)
+    expect(sendUserMessage).not.toHaveBeenCalled()
+    expect(queuedMessagesForThread('thr_existing')).toHaveLength(2)
+    expect(queuedMessagesForThread('thr_existing')[1]).toMatchObject({ expectedThreadId: 'thr_existing',
+      taskWorkspace: { sourceRoot: '/workspace/deepseek-gui', workspaceId: 'ws_code' } })
   })
 
   it('sends the selected composer provider with the turn without switching the global runtime provider', async () => {

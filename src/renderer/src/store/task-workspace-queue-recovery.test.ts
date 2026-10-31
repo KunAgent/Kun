@@ -10,23 +10,24 @@ import { queuedMessagesForThread, saveQueuedMessagesForThread } from './queued-m
 import { receiveTaskWorkspaceThreadEvent, useTaskWorkspaceStore } from './task-workspace-store'
 import { threadActionSharedState } from './chat-store-thread-actions-support'
 import { recoverTaskWorkspaceQueuedMessages, startTaskWorkspaceQueueRecovery } from './task-workspace-queue-recovery'
+import { prepareAdeThreadWorktree } from './chat-store-thread-send-worktree'
 
 const mocks = vi.hoisted(() => ({
   provider: {} as AgentProvider,
   syncTurnCompletionPoll: vi.fn(), watchTurnCompletionNotification: vi.fn(),
-  turnCompleteNotificationSource: vi.fn(() => undefined)
+  turnCompleteNotificationSource: vi.fn(() => undefined), buildThreadEventSink: vi.fn(() => ({}))
 }))
 vi.mock('../agent/registry', () => ({ getProvider: () => mocks.provider }))
 vi.mock('./chat-store-runtime', () => mocks)
 vi.mock('./review-store', () => ({ ensureThreadBinding: vi.fn() }))
 vi.mock('./chat-store-thread-action-helpers', async (original) => ({
   ...await original<typeof import('./chat-store-thread-action-helpers')>(),
-  ensureRuntimeProviderForSend: vi.fn(async () => undefined)
+  ensureRuntimeProviderForSend: vi.fn(async () => undefined), subscribeThreadEventsWithRecovery: vi.fn()
 }))
 
 const record = {
   workspaceId: 'ws_build', ownerThreadId: 'build', sourceRoot: '/repo',
-  path: '/task/worktree', state: 'ready', createdAt: '2026-10-30T00:00:00Z'
+  path: '/task/worktree', state: 'ready', isolation: 'worktree', createdAt: '2026-10-30T00:00:00Z'
 } as TaskWorkspaceRecord
 const submission: QueuedUserMessage = {
   id: 'q-build', text: 'Implement the plan', displayText: 'Build Feature',
@@ -36,7 +37,7 @@ const submission: QueuedUserMessage = {
 const ready = { threadId: 'build', workspaceId: record.workspaceId, state: 'ready' as const,
   workspace: { path: record.path, sourceRoot: record.sourceRoot } }
 
-function harness() {
+function queueHarness(message: QueuedUserMessage = submission) {
   const calls: string[] = []
   const provider = {
     bindThreadTaskWorkspace: vi.fn(async () => { calls.push('bind') }),
@@ -54,19 +55,24 @@ function harness() {
     busy: true, error: 'other error', blocks: [{ id: 'other-live', kind: 'assistant', text: 'Other task' }],
     queuedMessages: [{ id: 'q-other', text: 'other input' }], clawChannels: [],
     threads: [], adeThreads: [{ id: 'build', workspace: '/repo' }], watchTurnCompletion: {},
-    sendMessage: vi.fn(async () => true), recoverActiveTurn: vi.fn(async () => true)
+    sendMessage: vi.fn(async () => false), recoverActiveTurn: vi.fn(async () => true)
   } as unknown as ChatState
   const get = () => state
   const set: ChatStoreSet = (partial) => { state = { ...state, ...(typeof partial === 'function' ? partial(state) : partial) } }
   const actions = createThreadQueueActions({ set, get, sseAbortRef: { current: null } },
     { persistActiveQueuedMessages: vi.fn(), fenceThreadMutation: vi.fn(() => 1), threadSelectionGeneration: 0 })
   set({ drainQueuedMessages: actions.drainQueuedMessages })
-  saveQueuedMessagesForThread('build', [submission])
+  saveQueuedMessagesForThread('build', [message])
   return { provider, calls, get, set,
     recover: () => recoverTaskWorkspaceQueuedMessages({ provider: mocks.provider, get, set }) }
 }
 
-describe('parked external plan execution', () => {
+describe.each(['ordinary Code', 'external plan'] as const)('parked %s execution', (kind) => {
+  const parkedSubmission: QueuedUserMessage = kind === 'external plan' ? submission : {
+    ...submission, planBuild: undefined, harnessId: 'kun',
+    taskWorkspace: { sourceRoot: '/repo', workspaceId: 'ws_build' }
+  }
+  const harness = () => queueHarness(parkedSubmission)
   beforeEach(() => {
     vi.clearAllMocks()
     const data = new Map<string, string>()
@@ -95,8 +101,10 @@ describe('parked external plan execution', () => {
     expect(h.provider.bindThreadTaskWorkspace).toHaveBeenCalledTimes(1)
     expect(h.provider.sendUserMessage).toHaveBeenCalledTimes(1)
     expect(h.provider.sendUserMessage).toHaveBeenCalledWith('build', expect.any(String), expect.objectContaining({
-      clientRequestId: 'request-build', planBuild: true, harnessId: 'codex', enqueueIfBusy: true
+      clientRequestId: 'request-build', harnessId: kind === 'external plan' ? 'codex' : 'kun', enqueueIfBusy: true
     }))
+    const options = vi.mocked(mocks.provider.sendUserMessage).mock.calls[0]?.[2]
+    expect(options?.planBuild).toBe(kind === 'external plan' ? true : undefined)
     expect(h.calls).toEqual(['bind', 'send'])
     expect(h.get()).toMatchObject({ ...other, activeThreadId: 'other', route: 'settings', busy: true,
       watchTurnCompletion: { build: true } })
@@ -156,12 +164,12 @@ describe('parked external plan execution', () => {
     await h.recover()
     await h.get().drainQueuedMessages('build')
     expect(h.calls).toEqual([])
-    expect(queuedMessagesForThread('build')[0]?.deliveryState).toBe('pending')
+    expect(queuedMessagesForThread('build')[0]?.deliveryState).toBe(kind === 'failed' ? 'failed' : 'pending')
   })
 
-  it('keeps active plan input parked after restart until its workspace is bound', async () => {
+  it('keeps active input parked after restart until its workspace is bound', async () => {
     const h = harness()
-    h.set({ activeThreadId: 'build', busy: false, queuedMessages: [submission] })
+    h.set({ activeThreadId: 'build', busy: false, queuedMessages: [parkedSubmission] })
     await h.get().drainQueuedMessages('build')
     expect(h.get().sendMessage).not.toHaveBeenCalled()
     expect(h.provider.sendUserMessage).not.toHaveBeenCalled()
@@ -188,7 +196,7 @@ describe('parked external plan execution', () => {
 
   it.each(['paused', 'failed'] as const)('does not automatically resume %s input', async (deliveryState) => {
     const h = harness()
-    saveQueuedMessagesForThread('build', [{ ...submission, deliveryState }])
+    saveQueuedMessagesForThread('build', [{ ...parkedSubmission, deliveryState }])
     await h.recover()
     expect(h.provider.listTaskWorkspaces).not.toHaveBeenCalled()
     expect(h.calls).toEqual([])
@@ -196,7 +204,7 @@ describe('parked external plan execution', () => {
 
   it('retries starting input with its persisted idempotency key', async () => {
     const h = harness()
-    saveQueuedMessagesForThread('build', [{ ...submission, deliveryState: 'starting' }])
+    saveQueuedMessagesForThread('build', [{ ...parkedSubmission, deliveryState: 'starting' }])
     await h.recover()
     expect(h.provider.sendUserMessage).toHaveBeenCalledWith('build', expect.any(String), expect.objectContaining({ clientRequestId: 'request-build' }))
     await h.recover()
@@ -217,6 +225,118 @@ describe('parked external plan execution', () => {
     stop()
     await vi.advanceTimersByTimeAsync(3_000)
     expect(h.provider.sendUserMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists an ordinary submission before preparation and recovers after navigation and restart', async () => {
+    const h = harness()
+    h.set({ activeThreadId: 'build', route: 'chat', busy: true, queuedMessages: [],
+      threads: [{ id: 'build', workspace: '/repo', workspaceMode: 'code' }] as ChatState['threads'], adeThreads: [] })
+    const ac = { current: null as AbortController | null }
+    let resolveCreation!: (value: { record: TaskWorkspaceRecord }) => void
+    const provider = { ...h.provider, createTaskWorkspace: vi.fn(() =>
+      new Promise<{ record: TaskWorkspaceRecord }>((resolve) => { resolveCreation = resolve })) }
+    const preparing = prepareAdeThreadWorktree({ provider: provider as unknown as AgentProvider,
+      threadId: 'build', workspaceRoot: '/repo', context: { set: h.set, get: h.get, sseAbortRef: ac },
+      submittedMessageForQueue: { id: 'q-code', text: 'Fix the bug', mode: 'agent' },
+      persistActiveQueuedMessages: vi.fn() })
+    const parked = queuedMessagesForThread('build')[0]!
+    expect(parked).toMatchObject({ expectedThreadId: 'build', taskWorkspace: { sourceRoot: '/repo' }, deliveryState: 'pending' })
+    expect(parked.clientRequestId).toBeTruthy()
+    expect(parked.planBuild).toBeUndefined()
+    expect(h.get().busy).toBe(false)
+    ac.current?.abort()
+    h.set({ activeThreadId: 'other', busy: true, queuedMessages: [{ id: 'other', text: 'keep me' }] })
+    resolveCreation({ record: { ...record, state: 'creating' } })
+    await preparing
+    expect(queuedMessagesForThread('build')[0]).toMatchObject({ clientRequestId: parked.clientRequestId,
+      taskWorkspace: { sourceRoot: '/repo', workspaceId: record.workspaceId } })
+    useTaskWorkspaceStore.setState({ prepByThread: {} })
+    h.set({ threads: [], adeThreads: [] })
+    await h.recover()
+    await h.recover()
+    await h.recover()
+    expect(h.calls).toEqual(['bind', 'send'])
+    expect(h.provider.sendUserMessage).toHaveBeenCalledWith('build', expect.any(String),
+      expect.objectContaining({ clientRequestId: parked.clientRequestId }))
+    expect(h.get()).toMatchObject({ activeThreadId: 'other', busy: true, queuedMessages: [{ id: 'other', text: 'keep me' }] })
+  })
+
+  it('recovers a lost creation response using the persisted source before pinning the workspace ID', async () => {
+    const h = harness()
+    saveQueuedMessagesForThread('build', [{ ...parkedSubmission, taskWorkspace: { sourceRoot: '/repo' } }])
+    await h.recover()
+    expect(h.calls).toEqual(['bind', 'send'])
+    expect(queuedMessagesForThread('build')[0]?.taskWorkspace).toEqual({ sourceRoot: '/repo', workspaceId: record.workspaceId })
+  })
+
+  it.each(['workspace ID', 'source root', 'source checkout'] as const)('rejects a mismatched %s in lookups and ready events', async (mismatch) => {
+    const h = harness()
+    saveQueuedMessagesForThread('build', [{ ...parkedSubmission,
+      taskWorkspace: { sourceRoot: '/repo', workspaceId: record.workspaceId } }])
+    const wrong = { ...record,
+      ...(mismatch === 'workspace ID' ? { workspaceId: 'ws_other' } : {}),
+      ...(mismatch === 'source root' ? { sourceRoot: '/other-project' } : {}),
+      ...(mismatch === 'source checkout' ? { path: '/repo' } : {}) }
+    h.provider.listTaskWorkspaces.mockResolvedValue({ records: [wrong] })
+    await h.recover()
+    await bindReadyTaskWorkspace({ ...ready, workspaceId: wrong.workspaceId,
+      workspace: { path: wrong.path, sourceRoot: wrong.sourceRoot } }, h.set, h.get)
+    await h.get().drainQueuedMessages('build')
+    expect(h.calls).toEqual([])
+    expect(queuedMessagesForThread('build')[0]?.deliveryState).toBe('pending')
+  })
+
+  it('does not adopt an older ready workspace when the pinned workspace is still creating', async () => {
+    const h = harness()
+    saveQueuedMessagesForThread('build', [{ ...parkedSubmission,
+      taskWorkspace: { sourceRoot: '/repo', workspaceId: 'ws_new' } }])
+    h.provider.listTaskWorkspaces.mockResolvedValue({ records: [record,
+      { ...record, workspaceId: 'ws_new', state: 'creating', createdAt: '2026-10-31T00:00:00Z' }] })
+    await h.recover()
+    expect(h.calls).toEqual([])
+  })
+
+  it('does not scan or send unrelated local input without a workspace requirement', async () => {
+    const h = harness()
+    saveQueuedMessagesForThread('build', [{ ...submission, planBuild: undefined }])
+    await h.recover()
+    expect(h.provider.listTaskWorkspaces).not.toHaveBeenCalled()
+    expect(h.calls).toEqual([])
+  })
+
+  it.each(['local', 'directory'] as const)('does not bind legacy plan input to %s isolation', async (isolation) => {
+    const h = harness()
+    saveQueuedMessagesForThread('build', [submission])
+    h.provider.listTaskWorkspaces.mockResolvedValue({ records: [{ ...record, isolation, path: '/repo' }] })
+    await h.recover()
+    await bindReadyTaskWorkspace({ ...ready, workspace: { path: '/repo', sourceRoot: '/repo' } }, h.set, h.get)
+    expect(h.calls).toEqual([])
+  })
+
+  it('keeps temporary source paths distinct and accepts only the exact execution directory', async () => {
+    const h = harness()
+    saveQueuedMessagesForThread('build', [{ ...parkedSubmission,
+      taskWorkspace: { sourceRoot: '/tmp/project-a', workspaceId: record.workspaceId } }])
+    h.provider.listTaskWorkspaces.mockResolvedValueOnce({ records: [{ ...record, sourceRoot: '/tmp/project-b' }] })
+    await h.recover()
+    expect(h.calls).toEqual([])
+    h.provider.listTaskWorkspaces.mockResolvedValueOnce({ records: [{ ...record,
+      sourceRoot: '/tmp/project-a', path: '/tmp/execution-worktree' }] })
+    await h.recover()
+    expect(h.calls).toEqual(['bind', 'send'])
+  })
+
+  it('exposes a terminal workspace failure and stops automatic admission retries', async () => {
+    vi.useFakeTimers()
+    const h = harness()
+    h.provider.listTaskWorkspaces.mockResolvedValue({ records: [{ ...record, state: 'failed', lastError: 'setup failed' }] })
+    const stop = startTaskWorkspaceQueueRecovery(h.set, h.get)
+    await vi.advanceTimersByTimeAsync(12_000)
+    stop()
+    expect(h.provider.listTaskWorkspaces).toHaveBeenCalledTimes(1)
+    expect(h.calls).toEqual([])
+    expect(queuedMessagesForThread('build')[0]).toMatchObject({ deliveryState: 'failed', errorMessage: 'setup failed' })
+    expect(useTaskWorkspaceStore.getState().prepByThread.build).toMatchObject({ state: 'failed', error: 'setup failed' })
   })
 
   it('does not consume a late lookup after application recovery has stopped', async () => {

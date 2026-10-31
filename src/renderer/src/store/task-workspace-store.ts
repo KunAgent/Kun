@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import type { ChatState } from './chat-store-types'
+import type { ChatState, QueuedUserMessage } from './chat-store-types'
+import { workspaceRootScopeKey } from '../lib/workspace-path'
+import { queuedTaskWorkspaceRequirement } from './task-workspace-queue-identity'
 import type {
   TaskWorkspaceRecord,
   TaskWorkspaceState,
@@ -38,14 +40,15 @@ export const useTaskWorkspaceStore = create<TaskWorkspaceStoreState>(() => ({
 
 export function markThreadWorkspacePreparing(
   threadId: string,
-  workspaceId: string
+  workspaceId: string,
+  sourceRoot?: string
 ): void {
   const thread = threadId.trim()
   if (!thread) return
   useTaskWorkspaceStore.setState((state) => ({
     prepByThread: {
       ...state.prepByThread,
-      [thread]: { workspaceId, ownerThreadId: thread, state: 'creating' }
+      [thread]: { workspaceId, ownerThreadId: thread, state: 'creating', ...(sourceRoot ? { sourceRoot } : {}) }
     }
   }))
 }
@@ -67,18 +70,29 @@ export function threadWorkspacePreparing(threadId: string | null | undefined): b
 }
 
 // A failed isolation request must never send the parked input in the source checkout.
-export function threadWorkspaceBlocksSend(threadId: string | null | undefined): boolean {
-  return threadWorkspacePreparing(threadId) || Boolean(threadId &&
-    useTaskWorkspaceStore.getState().prepByThread[threadId]?.state === 'failed')
+export function threadWorkspaceBlocksSend(
+  threadId: string | null | undefined,
+  state: Pick<ChatState, 'threads' | 'adeThreads'> = { threads: [], adeThreads: [] }
+): boolean {
+  if (!threadId) return false
+  if (threadWorkspacePreparing(threadId) || useTaskWorkspaceStore.getState().prepByThread[threadId]?.state === 'failed') return true
+  const requirement = queuedTaskWorkspaceRequirement(threadId)
+  return Boolean(requirement && !threadHasBoundTaskWorkspace(threadId, state, requirement.taskWorkspace))
 }
 
 export function threadHasBoundTaskWorkspace(
   threadId: string,
-  state: Pick<ChatState, 'threads' | 'adeThreads'>
+  state: Pick<ChatState, 'threads' | 'adeThreads'>,
+  required?: QueuedUserMessage['taskWorkspace']
 ): boolean {
   const thread = state.threads.find((row) => row.id === threadId) ?? state.adeThreads?.find((row) => row.id === threadId)
   const prep = useTaskWorkspaceStore.getState().prepByThread[threadId]
-  return Boolean(thread?.taskWorkspaceId || (prep?.bound && prep.state === 'ready' && prep.path))
+  if (!required) return Boolean(thread?.taskWorkspaceId || (prep?.bound && prep.state === 'ready' && prep.path))
+  const workspaceId = thread?.taskWorkspaceId || (prep?.bound && prep.state === 'ready' ? prep.workspaceId : '')
+  const path = thread?.taskWorkspaceId ? thread.workspace : prep?.path
+  return Boolean(workspaceId && path && required.sourceRoot &&
+    (!required.workspaceId || required.workspaceId === workspaceId) &&
+    workspaceRootScopeKey(path) !== workspaceRootScopeKey(required.sourceRoot))
 }
 
 /** Mark a create/prepare attempt failed; the composer shows retry. */

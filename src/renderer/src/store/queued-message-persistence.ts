@@ -177,6 +177,14 @@ function normalizeQueuedMessage(value: unknown): QueuedUserMessage | null {
   const expectedThreadId = normalizedString(source.expectedThreadId)
   if (expectedThreadId) normalized.expectedThreadId = expectedThreadId
   else delete normalized.expectedThreadId
+  if (source.taskWorkspace !== undefined) {
+    const workspace = source.taskWorkspace && typeof source.taskWorkspace === 'object'
+      ? source.taskWorkspace as Record<string, unknown> : {}
+    const workspaceId = normalizedString(workspace.workspaceId)
+    // Keep a malformed requirement parked rather than dropping the message or isolation guard.
+    normalized.taskWorkspace = { sourceRoot: normalizedString(workspace.sourceRoot),
+      ...(workspaceId ? { workspaceId } : {}) }
+  } else delete normalized.taskWorkspace
   const resume = source.subagentResume
   if (resume && typeof resume === 'object' && !Array.isArray(resume)) {
     const childId = normalizedString((resume as Record<string, unknown>).childId)

@@ -178,8 +178,8 @@ export async function drainBackgroundQueuedMessage(
     }
     saveQueuedMessagesForThread(threadId, messages)
     if (!next) return { status: 'none' }
-    if (threadWorkspaceBlocksSend(threadId)) return { status: 'none' }
-    if (next.planBuild && !threadHasBoundTaskWorkspace(threadId, get())) return { status: 'none' }
+    if (threadWorkspaceBlocksSend(threadId, get())) return { status: 'none' }
+    if ((next.taskWorkspace || next.planBuild) && !threadHasBoundTaskWorkspace(threadId, get(), next.taskWorkspace)) return { status: 'none' }
     if (next.expectedThreadId && next.expectedThreadId !== threadId) return { status: 'none' }
 
     const clientRequestId = next.clientRequestId?.trim() || createClientTurnRequestId()

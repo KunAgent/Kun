@@ -54,7 +54,8 @@ import type {
   WriteAssistantMessageContext
 } from './chat-store-types'
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
-import { threadWorkspaceBlocksSend } from './task-workspace-store'
+import { threadWorkspaceBlocksSend, useTaskWorkspaceStore } from './task-workspace-store'
+import { queuedTaskWorkspaceRequirement } from './task-workspace-queue-identity'
 import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
@@ -367,7 +368,7 @@ export async function sendThreadMessage(
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
     // Task-worktree prep queues locally: the runtime cannot admit
     // a turn until the thread is bound to the ready workspace path.
-    const workspacePreparing = threadWorkspaceBlocksSend(get().activeThreadId)
+    const workspacePreparing = threadWorkspaceBlocksSend(get().activeThreadId, get())
     if (get().busy || hasPendingActiveTurn || workspacePreparing || (queued && !shouldWaitForRuntimeAdmission)) {
       const state = get()
       const activeThreadId = state.activeThreadId
@@ -442,9 +443,16 @@ export async function sendThreadMessage(
         if (submitted !== null) return submitted
       }
       if (!expectedThreadStillActive()) return false
+      const prep = activeThreadId ? useTaskWorkspaceStore.getState().prepByThread[activeThreadId] : undefined
+      const waiting = activeThreadId ? queuedTaskWorkspaceRequirement(activeThreadId) : undefined
+      const taskWorkspace = queued?.taskWorkspace ?? waiting?.taskWorkspace ?? (workspacePreparing ? {
+        sourceRoot: prep?.sourceRoot ?? threadSnap?.workspace ?? state.workspaceRoot,
+        ...(prep?.workspaceId ? { workspaceId: prep.workspaceId } : {})
+      } : undefined)
       set((s) => ({
         queuedMessages: upsertQueuedSubmission(s.queuedMessages, {
           ...queued,
+          ...(taskWorkspace && activeThreadId ? { taskWorkspace, expectedThreadId: activeThreadId } : {}),
           id: queued?.id ?? `q-${clientRequestId}`,
           text: trimmedText,
           clientRequestId,

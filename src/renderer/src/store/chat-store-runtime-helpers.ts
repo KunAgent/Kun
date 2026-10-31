@@ -10,13 +10,14 @@ import {
   applyClientUserMessageSourceMeta,
   isBackgroundShellNoticeUserMessage
 } from '@shared/background-shell-notice'
-import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../lib/workspace-path'
 import { shouldAutoTitleThread } from '../lib/thread-title'
 import { getProvider } from '../agent/registry'
 import { ensureThreadBinding } from './review-store'
 import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import type { ChatState } from './chat-store-types'
 import { emptyLiveProjection } from './chat-store-live-projection'
+import { queuedTaskWorkspaceMatches, queuedTaskWorkspaceRequirement, rememberQueuedTaskWorkspace } from './task-workspace-queue-identity'
 
 type ThreadDetailProviderLike = {
   getThreadDetail: (threadId: string) => Promise<{ blocks: ChatBlock[] }>
@@ -484,17 +485,23 @@ export async function bindReadyTaskWorkspace(
   get: () => ChatState,
   stillCurrent: () => boolean = () => true
 ): Promise<void> {
-  if (!stillCurrent() || event.unitId) return
+  if (!stillCurrent() || event.unitId || event.state !== 'ready') return
   const thread = get().threads.find((item) => item.id === event.threadId) ??
     get().adeThreads?.find((item) => item.id === event.threadId)
   if (thread?.taskWorkspaceId && thread.taskWorkspaceId !== event.workspaceId) return
   const path = event.workspace?.path?.trim()
   if (!path) return
   const prep = useTaskWorkspaceStore.getState().prepByThread[event.threadId]
+  const requirement = queuedTaskWorkspaceRequirement(event.threadId)
+  const identity = { ownerThreadId: event.threadId, workspaceId: event.workspaceId,
+    sourceRoot: event.workspace?.sourceRoot ?? prep?.sourceRoot }
+  if (requirement && (!queuedTaskWorkspaceMatches(requirement, identity) || !identity.sourceRoot ||
+    workspaceRootScopeKey(path) === workspaceRootScopeKey(identity.sourceRoot))) return
+  if (requirement && !rememberQueuedTaskWorkspace(identity, set, get)) return
   const alreadyBound = (thread?.taskWorkspaceId === event.workspaceId &&
-    normalizeWorkspaceRoot(thread.workspace) === normalizeWorkspaceRoot(path)) ||
+    workspaceRootScopeKey(thread.workspace) === workspaceRootScopeKey(path)) ||
     (prep?.bound && prep.workspaceId === event.workspaceId &&
-      normalizeWorkspaceRoot(prep.path) === normalizeWorkspaceRoot(path))
+      workspaceRootScopeKey(prep.path) === workspaceRootScopeKey(path))
   try {
     useTaskWorkspaceStore.setState((state) => {
       const prep = state.prepByThread[event.threadId]

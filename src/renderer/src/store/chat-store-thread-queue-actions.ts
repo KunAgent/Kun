@@ -233,7 +233,8 @@ export function createThreadQueueActions(
         const next = queuedMessages.find((message) => isPendingQueuedMessage(message) ||
           (message.deliveryState === 'starting' && message.clientRequestId && !queueAdmissionPending(message.id)))
         if (!next || (state.busy && (!next.clientRequestId || next.waitForRuntimeAdmission)) ||
-          (next.planBuild && !threadHasBoundTaskWorkspace(threadId, state)) ||
+          ((next.taskWorkspace || next.planBuild) && !threadHasBoundTaskWorkspace(threadId, state, next.taskWorkspace)) ||
+          (next.expectedThreadId && next.expectedThreadId !== threadId) ||
           queueAdmissionPending(next.id) || threadActionSharedState.guidingQueuedMessageIds.has(next.id)) return
         if (
           next.waitForRuntimeAdmission &&
