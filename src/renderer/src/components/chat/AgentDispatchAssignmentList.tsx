@@ -64,6 +64,8 @@ export function AgentDispatchAssignmentList({ intent, dispatches, assignments, e
               onChange={(route) => onRouteChange(index, route)} onInteract={onInteract}
               onPendingChange={onPendingChange ? (pending) => onPendingChange(index, pending) : undefined} />
             : <AgentDispatchRouteLabel route={assignment} agentName={assignment.agentName} />}
+          {assignment.workspaceIsolation === 'worktree' ? <span className="basis-full text-[11.5px] text-ds-muted"
+            data-dispatch-workspace-isolation="worktree">{t('dispatchIntent.isolatedWorkspaceHint')}</span> : null}
         </div>
         {progress ? <ProgressChip progress={progress} /> : null}
         {progress?.workerId ? <button type="button" onClick={() => onOpenWorker(progress.workerId!, assignment.label)}

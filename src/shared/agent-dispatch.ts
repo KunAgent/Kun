@@ -9,7 +9,11 @@ export type AgentDispatchAssignmentRoute = {
   /** Agent roster role the worker plays; absent = the engine alone. */
   profileId?: string
 }
-export type AgentDispatchAssignmentView = AgentDispatchAssignmentRoute & { label: string; agentName?: string }
+export type AgentDispatchAssignmentView = AgentDispatchAssignmentRoute & {
+  label: string; agentName?: string
+  /** Host-resolved, read-only workspace choice for this worker. */
+  workspaceIsolation?: 'local' | 'worktree'
+}
 export type AgentDispatchIntentView = {
   intentId: string
   kind: 'worker' | 'workbench'
@@ -55,6 +59,7 @@ export type AgentDispatchTargetView = {
 const permission = z.enum(['ask-for-approval', 'approve-for-me', 'full-access'])
 const assignment = z.object({ label: z.string().min(1).max(64), agentId: z.string().min(1).max(512),
   profileId: z.string().min(1).max(128).optional(),
+  workspaceIsolation: z.enum(['local', 'worktree']).optional(),
   agentName: z.string().max(512).optional(), model: z.string().max(512).optional(),
   providerId: z.string().min(1).max(128).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional() }).strict()

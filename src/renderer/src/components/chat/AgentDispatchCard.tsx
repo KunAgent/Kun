@@ -72,6 +72,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const canEditRoutes = !locked && dispatchRoutesEditable(intent) && (Boolean(recommendation.assignments) || !batch)
   const localRoutes = draft?.routes ?? hold.routes
   const shown = localRoutes ? assignments.map((assignment, index) => ({ label: assignment.label, ...localRoutes[index],
+    ...(sameAssignmentRoute(localRoutes[index], assignment) ? { workspaceIsolation: assignment.workspaceIsolation } : {}),
     ...(localRoutes[index].agentId === assignment.agentId && assignment.agentName ? { agentName: assignment.agentName } : {}) }))
     : assignments
   const iconIds = shown.map((assignment) => agentIconId(assignment.agentId))

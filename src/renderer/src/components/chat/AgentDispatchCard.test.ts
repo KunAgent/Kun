@@ -20,6 +20,7 @@ vi.mock('../../store/chat-store', () => ({ useChatStore: (select: (value: unknow
 vi.mock('../../store/activity-store', () => ({ useActivityStore: (select: (value: unknown) => unknown) =>
   select({ rows: state.rows }) }))
 vi.mock('../workers/worker-view-store', () => ({ openWorkerSession: preview }))
+vi.mock('../workers/use-team-workers', () => ({ useTeamWorkers: () => ({ overview: undefined }) }))
 vi.mock('./FloatingComposerWorkersPill', () => ({ OPEN_WORKERS_PANEL_EVENT: 'open-workers-panel' }))
 vi.mock('./AgentDispatchIntentControls', () => ({ AgentDispatchIntentControls: (props: { readOnly: boolean }) =>
   createElement('div', { 'data-controls': props.readOnly ? 'read-only' : 'interactive' }) }))
@@ -145,6 +146,22 @@ describe('Agent dispatch card', () => {
     state.intent.recommendation.assignments = [{ label: 'Task', agentId: 'codex' }]
     await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
     expect(headerIcons()[0].props['data-agent-icon']).toBe('codex')
+  })
+
+  it('shows the host-resolved worktree choice and clears its hint for an unvalidated draft route', async () => {
+    state.intent = fixture({ state: 'paused' })
+    state.intent.recommendation.assignments![0].workspaceIsolation = 'worktree'
+    state.intent.recommendation.assignments![1].workspaceIsolation = 'local'
+    const text = await render()
+    expect(text).toContain('dispatchIntent.isolatedWorkspaceHint')
+    const hints = () => renderer!.root.findAll((node) => node.type === 'span' &&
+      node.props['data-dispatch-workspace-isolation'] === 'worktree')
+    expect(hints()).toHaveLength(1)
+    await act(async () => { renderer!.root.findByType(AgentDispatchIntentControls).props.onEdit(state.intent) })
+    expect(hints()).toHaveLength(1)
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[0].props.onClick() })
+    expect(hints()).toHaveLength(0)
+    expect(state.act).not.toHaveBeenCalled()
   })
 
   it('switches one worker route from a counting-down batch card', async () => {

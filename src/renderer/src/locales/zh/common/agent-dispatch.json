@@ -48,6 +48,7 @@
     "pause": "暂停",
     "executor": "执行者",
     "routeHint": "可为每个任务切换 Agent 和模型；调整时倒计时会暂停，停手 10 秒后重新开始计时。",
+    "isolatedWorkspaceHint": "独立 worktree：基于 Git 提交运行，不包含原目录未提交的改动。",
     "holdHint": "正在调整，倒计时已暂停 · {{seconds}} 秒内无操作后重新开始计时",
     "agentMenuHint": "只改这一路任务的执行 Agent，修改后重新计时。",
     "roleLabel": "角色",

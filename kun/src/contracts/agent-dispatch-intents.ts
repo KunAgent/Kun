@@ -40,7 +40,9 @@ export type AgentDispatchAssignmentRoute = z.infer<typeof AgentDispatchAssignmen
 
 export const AgentDispatchAssignmentSchema = AgentDispatchAssignmentRouteSchema.extend({
   label: z.string().min(1).max(64),
-  agentName: z.string().max(512).optional()
+  agentName: z.string().max(512).optional(),
+  /** Host-resolved isolation, shown on the card and reused at admission; not an editable route field. */
+  workspaceIsolation: z.enum(['local', 'worktree']).optional()
 }).strict()
 export type AgentDispatchAssignment = z.infer<typeof AgentDispatchAssignmentSchema>
 

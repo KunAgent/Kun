@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { AgentDispatchIntentPublicSchema } from './agent-dispatch'
-import { AgentDispatchIntentSchema, AgentDispatchStateSchema, publicAgentDispatchIntent } from '../../kun/src/contracts/agent-dispatch-intents'
+import { AgentDispatchActionSchema, AgentDispatchIntentSchema, AgentDispatchStateSchema, publicAgentDispatchIntent } from '../../kun/src/contracts/agent-dispatch-intents'
 
 describe('Agent dispatch HTTP contract mirror', () => {
+  it.each(['local', 'worktree'])('rejects client-supplied %s isolation in route edits', (workspaceIsolation) => {
+    expect(AgentDispatchActionSchema.safeParse({ action: 'update', requestId: 'edit', expectedRevision: 3,
+      recommendation: { assignments: [{ agentId: 'codex', model: 'model', workspaceIsolation }] } }).success).toBe(false)
+  })
+
   it.each(AgentDispatchStateSchema.options)('accepts the canonical %s state with all public fields', (state) => {
     const intent = AgentDispatchIntentSchema.parse({ intentId: 'dispatch', kind: 'worker', state, revision: 3,
       source: { threadId: 'parent', turnId: 'turn', toolCallId: 'call', applicationSessionId: 'app', userIntent: 'Private user excerpt',
@@ -10,7 +15,7 @@ describe('Agent dispatch HTTP contract mirror', () => {
       policySnapshot: { approvalPolicy: 'auto', sandboxMode: 'danger-full-access', approvalReviewer: 'user' },
       recommendation: { title: 'Task', task: 'Assignment', agentId: 'codex', agentName: 'Codex', model: 'model', workspace: '/workspace',
         acceptanceCriteria: ['Tests pass'], permissionMode: 'full-access', effectivePermissionMode: 'approve-for-me', agentSelection: 'auto',
-        assignments: [{ label: 'Task', agentId: 'codex', profileId: 'reviewer', agentName: 'Codex', model: 'model', providerId: 'provider', credentialMode: 'native-login' }] },
+        assignments: [{ label: 'Task', agentId: 'codex', profileId: 'reviewer', agentName: 'Codex', model: 'model', providerId: 'provider', credentialMode: 'native-login', workspaceIsolation: 'worktree' }] },
       payload: { private: true }, requestLedger: { call: 'hash' }, startRequestId: 'start', batchId: 'batch',
       deadline: '2026-10-07T02:01:00.000Z', decision: { decision: 'allow', reason: 'Reviewed', decidedAt: '2026-10-07T02:00:00.000Z' },
       target: { taskId: 'task', threadId: 'child', turnId: 'child-turn', workerIds: ['child'], dispatchIds: ['dispatch'] },

@@ -24,7 +24,7 @@ afterEach(async () => { for (const close of cleanup.splice(0)) await close() })
 
 async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorkers = 8,
   harnessDefaults?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['harnessDefaults'],
-  roster?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['roster']) {
+  roster?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['roster'], withoutTaskWorkspaces = false) {
   const root = await mkdtemp(join(tmpdir(), 'kun-worker-dispatch-'))
   const clock = { now: Date.parse('2026-10-07T00:00:00.000Z') }
   const nowIso = () => new Date(clock.now).toISOString()
@@ -51,10 +51,13 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
   const deliverer = new DispatchDeliverer({ teams, dispatches, threads, childRuns,
     taskWorkspaces: taskWorkspaces as never, delegation, turns: { interruptTurn: vi.fn() } as never })
   const disabled = new Set<string>()
-  const service = new AgentDispatchService({ store: new FileAgentDispatchIntentStore(root),
+  const store = new FileAgentDispatchIntentStore(root)
+  const service = new AgentDispatchService({ store,
     applicationSessionId: 'app', now: () => clock.now,
     review: async () => ({ decision: 'allow', reason: 'The assignment matches the user request.' }) })
   cleanup.push(async () => { await service.stop(); await rm(root, { recursive: true, force: true }) })
+  const capabilitiesForRoute = vi.fn<import('./manager-runtime-deps.js').ManagerRuntimeDeps['capabilitiesForRoute']>(
+    async () => KUN_NATIVE_CAPABILITIES)
   const runtime = new ManagerRuntime({
     agentDispatchService: service, teams, dispatches, childRuns, threads,
     questions: new FileQuestionStore(root, nowIso), notices: new FileWorkerNoticeStore(root, nowIso),
@@ -65,8 +68,8 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
       list: () => BUILTIN_HARNESSES, isDisabled: (id: string) => disabled.has(id),
       isProfileEnabled: (route: { harnessId: string }) => !disabled.has(route.harnessId) } as never,
     detector: { status: async (harnessId: string) => ({ harnessId, installed: 'yes', login: 'signed-in', checkedAt: nowIso() }) } as never,
-    capabilitiesForRoute: async () => KUN_NATIVE_CAPABILITIES,
-    taskWorkspaces: taskWorkspaces as never, delegation, deliverer, nowIso,
+    capabilitiesForRoute,
+    taskWorkspaces: withoutTaskWorkspaces ? undefined : taskWorkspaces as never, delegation, deliverer, nowIso,
     ids: { next: (prefix) => `${prefix}_unused` }, teamLimits: () => ({ hardWorkers, softWorkers: Math.min(4, hardWorkers) }),
     harnessDefaults, ...(roster ? { roster } : {}),
     providerPool: async () => ({ models: ['main-model', 'other-model'] }), allowUnattendedFullAccess: () => true
@@ -81,7 +84,7 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
   const assignment = { label: 'Independent task', task: 'Implement a bounded change and verify it.',
     context: { constraints: ['Existing behavior remains correct.'] }, workspace: { isolation: 'worktree' as const } }
   return { source, clock, context, ctx, runtime, service, teams, dispatches, childRuns,
-    runChild, taskWorkspaces, disabled, threads, assignment, workspace, deliverer }
+    runChild, taskWorkspaces, disabled, threads, assignment, workspace, deliverer, capabilitiesForRoute, store }
 }
 
 async function startNow(fixture: Awaited<ReturnType<typeof setup>>, id: string) {
@@ -215,6 +218,102 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
     const harnesses = f.runChild.mock.calls.map(([input]) => (input as { harnessId?: string }).harnessId).sort()
     expect(harnesses).toEqual(['claude-code', 'kun'])
+  })
+
+  it.each([[1, false], [2, false], [1, true], [2, true]] as const)(
+    'isolates the switched sandbox-none Agent on a %i-worker card (capabilities refreshed: %s)', async (count, refreshed) => {
+    const f = await setup('full-access')
+    f.capabilitiesForRoute.mockImplementation(async (route) => ({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: route.harnessId === 'deepseek-harness' ? 'none' : 'host' } }))
+    const item = { ...f.assignment, workspace: { isolation: 'local', startFrom: { kind: 'current-head' } } }
+    const result = count === 1 ? await f.runtime.createWorker(f.ctx, item, f.context)
+      : await f.runtime.createWorkerBatch(f.ctx, { items: [item, { ...item, label: 'Second' }] }, f.context)
+    const paused = await f.service.act(result.dispatchIntentId!, { action: 'pause', requestId: 'pause', expectedRevision: 1 })
+    const routes = [{ agentId: 'deepseek-harness', model: 'other-model', credentialMode: 'native-login' as const },
+      ...(count === 2 ? [{ agentId: 'kun', model: 'main-model', providerId: 'test', credentialMode: 'provider' as const }] : [])]
+    const updated = await f.service.act(paused.intentId, { action: 'update', requestId: 'switch',
+      expectedRevision: paused.revision, recommendation: { assignments: routes } })
+    expect(updated.state).toBe('countdown')
+    expect(updated.recommendation.assignments?.[0]).toMatchObject({ agentId: 'deepseek-harness', workspaceIsolation: 'worktree' })
+    if (count === 2) expect(updated.recommendation.assignments?.[1]).toMatchObject({ agentId: 'kun', workspaceIsolation: 'local' })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+    expect(f.runChild).not.toHaveBeenCalled()
+    // Admission consumes the persisted choice, even if capabilities improve before start.
+    if (refreshed) f.capabilitiesForRoute.mockResolvedValue(KUN_NATIVE_CAPABILITIES)
+    await startNow(f, paused.intentId)
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(count))
+    expect(f.taskWorkspaces.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      isolation: 'worktree', startFrom: { kind: 'current-head' }, sourceRoot: '/repo' }), expect.anything())
+    expect(f.runChild.mock.calls[0][0]).toMatchObject({ harnessId: 'deepseek-harness', workspace: '/repo/.worktrees/fix-login' })
+    if (count === 2) expect(f.taskWorkspaces.create).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ isolation: 'local' }), expect.anything())
+  })
+
+  it('keeps local isolation when switching to an Agent with a native sandbox', async () => {
+    const f = await setup('full-access')
+    f.capabilitiesForRoute.mockResolvedValue({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: 'native' } })
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    const updated = await f.service.act(result.dispatchIntentId!, { action: 'update', requestId: 'switch', expectedRevision: 1,
+      recommendation: { assignments: [{ agentId: 'claude-code', model: 'other-model', credentialMode: 'native-login' }] } })
+    expect(updated.recommendation.assignments?.[0]).toMatchObject({ workspaceIsolation: 'local' })
+    await startNow(f, updated.intentId)
+    expect(f.taskWorkspaces.create).toHaveBeenCalledWith(expect.objectContaining({ isolation: 'local' }), expect.anything())
+  })
+
+  it('still rejects an explicitly local sandbox-none proposal instead of bypassing admission', async () => {
+    const f = await setup('full-access')
+    f.capabilitiesForRoute.mockResolvedValue({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: 'none' } })
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' },
+      agent: { harnessId: 'deepseek-harness', model: 'main-model', credentialMode: 'native-login' } }, f.context)
+    expect(result).toMatchObject({ ok: false, userReport: 'harness without sandbox must run in an isolated worktree' })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+    expect(f.runChild).not.toHaveBeenCalled()
+  })
+
+  it('rejects a switched Agent missing capabilities without changing the paused card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    const paused = await f.service.act(result.dispatchIntentId!, { action: 'pause', requestId: 'pause', expectedRevision: 1 })
+    f.capabilitiesForRoute.mockImplementation(async (route) => route.harnessId === 'kun' ? KUN_NATIVE_CAPABILITIES : {
+      ...KUN_NATIVE_CAPABILITIES, facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: 'none' },
+      statuses: { ...KUN_NATIVE_CAPABILITIES.statuses, abort: { supported: false, reason: 'not-implemented' } } })
+    await expect(f.service.act(paused.intentId, { action: 'update', requestId: 'switch', expectedRevision: paused.revision,
+      recommendation: { assignments: [{ agentId: 'deepseek-harness', model: 'other-model', credentialMode: 'native-login' }] } }))
+      .rejects.toThrow(/abort/)
+    expect(await f.service.get(paused.intentId)).toMatchObject({ state: 'paused', revision: paused.revision,
+      recommendation: { assignments: [{ agentId: 'kun', workspaceIsolation: 'local' }] } })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+  })
+
+  it('upgrades a persisted legacy single-worker card when edited after reload', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    await f.store.transaction((file) => { delete file.intents[0].recommendation.assignments })
+    f.capabilitiesForRoute.mockImplementation(async (route) => ({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: route.harnessId === 'deepseek-harness' ? 'none' : 'host' } }))
+    const updated = await f.service.act(result.dispatchIntentId!, { action: 'update', requestId: 'switch', expectedRevision: 1,
+      recommendation: { agentId: 'deepseek-harness', model: 'other-model' } })
+    expect(await f.store.get(updated.intentId)).toMatchObject({ recommendation: { assignments: [
+      { agentId: 'deepseek-harness', workspaceIsolation: 'worktree' }] } })
+    await startNow(f, updated.intentId)
+    expect(f.runChild).toHaveBeenCalledTimes(1)
+    expect(f.taskWorkspaces.create).toHaveBeenCalledWith(expect.objectContaining({ isolation: 'worktree' }), expect.anything())
+  })
+
+  it('keeps the card unchanged when a switched Agent needs an unavailable worktree service', async () => {
+    const f = await setup('full-access', 'kun', 8, undefined, undefined, true)
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    f.capabilitiesForRoute.mockImplementation(async (route) => ({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: route.harnessId === 'deepseek-harness' ? 'none' : 'host' } }))
+    await expect(f.service.act(result.dispatchIntentId!, { action: 'update', requestId: 'switch', expectedRevision: 1,
+      recommendation: { assignments: [{ agentId: 'deepseek-harness', model: 'other-model', credentialMode: 'native-login' }] } }))
+      .rejects.toThrow('Isolated task workspace service is unavailable.')
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ revision: 1,
+      recommendation: { assignments: [{ agentId: 'kun', workspaceIsolation: 'local' }] } })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+    expect(f.runChild).not.toHaveBeenCalled()
   })
 
   it('carries a roster role from the proposal through card switches to the started worker', async () => {
