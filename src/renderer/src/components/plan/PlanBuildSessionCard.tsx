@@ -1,10 +1,10 @@
-import type { ReactElement } from 'react'
+import { useMemo, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Circle, FileText, GitBranch, Loader2, X } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
 import { useHarnessStore } from '../../store/harness-store'
 import { useTaskWorkspaceStore } from '../../store/task-workspace-store'
-import { planBuildHandoffForThread, usePlanBuildAgentStore } from '../../plan/plan-build-agent-store'
+import { planBuildHandoffForThread, usePlanBuildAgentStore, type PlanBuildHandoff } from '../../plan/plan-build-agent-store'
 import { planBuildEffortLabelKey } from '../../plan/plan-build-effort'
 import { AgentIcon } from '../agent-icon'
 import { usePlanBuildHandoffStage, type PlanBuildHandoffStage } from './PlanBuildHandoffRow'
@@ -19,10 +19,22 @@ export function planBuildSessionSteps(stage: PlanBuildHandoffStage, worktreeRead
   return worktreeReady ? ['done', 'active', 'todo', 'todo'] : ['active', 'todo', 'todo', 'todo']
 }
 
+/**
+ * Handoff of the conversation on screen. The lookup allocates a new object, so
+ * it cannot run inside the store selector: zustand compares snapshots by
+ * reference and an unstable one re-renders forever (React error #185).
+ */
+function usePlanBuildHandoff(
+  threadId: string | null | undefined
+): { planId: string; handoff: PlanBuildHandoff } | null {
+  const handoffs = usePlanBuildAgentStore((state) => state.handoffs)
+  return useMemo(() => planBuildHandoffForThread(handoffs, threadId), [handoffs, threadId])
+}
+
 /** Whether the active conversation is a plan build handed to an Agent. */
 export function useIsPlanBuildSession(): boolean {
   const threadId = useChatStore((state) => state.activeThreadId)
-  return usePlanBuildAgentStore((state) => Boolean(planBuildHandoffForThread(state.handoffs, threadId)))
+  return usePlanBuildHandoff(threadId) !== null
 }
 
 /**
@@ -33,7 +45,7 @@ export function useIsPlanBuildSession(): boolean {
 export function PlanBuildSessionCard(): ReactElement | null {
   const { t } = useTranslation('common')
   const threadId = useChatStore((state) => state.activeThreadId)
-  const match = usePlanBuildAgentStore((state) => planBuildHandoffForThread(state.handoffs, threadId))
+  const match = usePlanBuildHandoff(threadId)
   const prep = useTaskWorkspaceStore((state) => (threadId ? state.prepByThread[threadId] : undefined))
   const stage = usePlanBuildHandoffStage(threadId ?? '')
   const agentId = match?.handoff.route.agentId ?? ''
