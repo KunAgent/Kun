@@ -1,5 +1,7 @@
 import type { WorkerNotice } from '../contracts/ade.js'
 import { reportLanguage, type ReportLanguage } from './user-report.js'
+import { WORKER_RESULT_GUIDANCE } from './dispatch-guidance.js'
+import { clipWorkerResult } from './worker-result-summary.js'
 
 /**
  * Host-generated manager wake-up text. One `<kun_worker_updates>`
@@ -60,14 +62,15 @@ function noticeRows(notice: WorkerNotice, language: ReportLanguage): string[] {
         : ''
       rows.push(`${zh ? '  问题：' : '  question: '}${escapeXml(clipDetail(detail))}${options}`)
     } else {
-      rows.push(`${zh ? '  worker 汇报：' : '  worker report: '}${escapeXml(clipDetail(detail))}`)
+      const report = escapeXml(clipWorkerResult(detail, 4_000)).replaceAll('\n', '\n  ')
+      rows.push(`${zh ? '  worker 汇报：' : '  worker report: '}${report}`)
     }
   }
   return rows
 }
 
 export type RenderedWorkerUpdates = {
-  /** Structured `<kun_worker_updates>` block used as the wake-up prompt. */
+  /** Structured notice followed by host-owned result guidance for terminal updates. */
   prompt: string
   /** Short title surfaced in the UI instead of the raw block. */
   displayText: string
@@ -79,8 +82,10 @@ export function renderWorkerUpdates(
 ): RenderedWorkerUpdates {
   const lang = typeof language === 'string' ? reportLanguage(language) : (language ?? 'en')
   const lines = notices.flatMap((notice) => [noticeHeader(notice, lang), ...noticeRows(notice, lang)])
+  const terminal = notices.some((notice) => ['dispatch_completed', 'review_completed', 'dispatch_failed', 'dispatch_cancelled'].includes(notice.kind))
   return {
-    prompt: ['<kun_worker_updates>', ...lines, '</kun_worker_updates>'].join('\n'),
+    prompt: ['<kun_worker_updates>', ...lines, '</kun_worker_updates>',
+      ...(terminal ? ['', WORKER_RESULT_GUIDANCE] : [])].join('\n'),
     displayText: lang === 'zh'
       ? `${notices.length} 个 worker 有更新`
       : `${notices.length} worker update${notices.length === 1 ? '' : 's'}`

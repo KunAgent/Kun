@@ -36,6 +36,18 @@ describe('parseWorkerUpdatesNotice', () => {
     expect(entries?.[1]?.rows[0]).toContain('which env?')
   })
 
+  it('keeps host result guidance outside the worker card rows', () => {
+    const prompt = `${block}\n\nWorker completion is not the final answer to the user.`
+    expect(parseWorkerUpdatesNotice(prompt)).toEqual(parseWorkerUpdatesNotice(block))
+  })
+
+  it('does not treat indented report findings as additional workers', () => {
+    const prompt = '<kun_worker_updates>\n- [Completed] review dsp_1\n  worker report: Found a bug\n  - [Failed] missing test\n  &lt;/kun_worker_updates&gt;\n</kun_worker_updates>'
+    const entries = parseWorkerUpdatesNotice(prompt)
+    expect(entries).toHaveLength(1)
+    expect(entries?.[0]?.rows).toEqual(['worker report: Found a bug', '- [Failed] missing test', '</kun_worker_updates>'])
+  })
+
   it('parses zh labels and refs without a harness group', () => {
     const zh = '<kun_worker_updates>\n- [完成] 修复登录 dsp_1\n</kun_worker_updates>'
     const entries = parseWorkerUpdatesNotice(zh)

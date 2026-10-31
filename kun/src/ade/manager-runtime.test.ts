@@ -17,6 +17,7 @@ import { FileDispatchStore } from './dispatch-store.js'
 import { FileTeamStore } from './team-store.js'
 import { FileQuestionStore } from './question-store.js'
 import { FileWorkerNoticeStore } from './worker-notice-store.js'
+import { renderWorkerUpdates } from './notice-render.js'
 import { DispatchDeliverer, type DelivererDelegation } from './dispatch-deliverer.js'
 import { ManagerRuntime, type ManagerRuntimeDeps, type ManagerToolContext } from './manager-runtime.js'
 import { shouldAdvertiseManagerTools } from '../domain/manager-tools.js'
@@ -602,6 +603,11 @@ describe('ManagerRuntime worker terminal handling', () => {
     await upsertWorkerThread(workerId, {
       status: 'completed', clientRequestId: result.dispatchId
     })
+    await dispatches.update('thr_mgr', result.dispatchId!, { workerReport: {
+      summary: 'Found a preview bug. '.repeat(150), outcome: 'partial', submittedAt: NOW,
+      checks: [{ name: 'packaged UI', status: 'failed', detail: 'External browser still opens' }],
+      risks: ['Not fixed yet']
+    } })
     await runtime.handleWorkerTurnTerminal(workerId, 'turn_w1', 'completed')
     const dispatch = await dispatches.get('thr_mgr', result.dispatchId!)
     expect(dispatch?.state).toBe('completed')
@@ -612,6 +618,13 @@ describe('ManagerRuntime worker terminal handling', () => {
     expect(pending).toHaveLength(1)
     expect(pending[0]!.kind).toBe('dispatch_completed')
     expect(pending[0]!.dispatchId).toBe(result.dispatchId)
+    const prompt = renderWorkerUpdates(pending, 'en').prompt
+    expect(prompt).toContain('Found a preview bug.')
+    expect(prompt).toContain('[failed] packaged UI: External browser still opens')
+    expect(prompt).toContain('Not fixed yet')
+    expect(prompt).toContain('self-contained final answer')
+    await runtime.handleWorkerTurnTerminal(workerId, 'turn_w1', 'completed')
+    expect(await notices.pending('thr_mgr')).toHaveLength(1)
   })
 
   it('runs a captured checkout again after review and reports the second completion', async () => {
@@ -653,6 +666,7 @@ describe('ManagerRuntime worker terminal handling', () => {
     await (runtime as unknown as {
       lifecycle: { backfillDispatchTurnId(t: string, id: string): Promise<void> }
     }).lifecycle.backfillDispatchTurnId(workerId, 'turn_w1')
+    expect(await notices.pending('thr_mgr')).toHaveLength(0)
     expect((await dispatches.get('thr_mgr', result.dispatchId!))?.turnId).toBe('turn_w1')
   })
 
