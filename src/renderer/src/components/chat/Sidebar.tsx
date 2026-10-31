@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
+import { markAttentionRead } from '../../store/attention-read-actions'
 import type {
   ClawImChannelV1,
 } from '@shared/app-settings'
@@ -308,6 +309,7 @@ export function Sidebar({
           threads={threads}
           activityContext={sidebarActivityContext}
           onSelectThread={onSelectThread}
+          onMarkRead={markAttentionRead}
           t={t}
         />
       ) : null}

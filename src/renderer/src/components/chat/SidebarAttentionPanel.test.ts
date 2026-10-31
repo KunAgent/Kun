@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread } from '../../agent/types'
+import type { AttentionReadUndo } from '../../store/attention-read-actions'
+import { resetToasts, useToastStore } from '../../toast/toast-store'
 import { SidebarAttentionPanel } from './SidebarAttentionPanel'
 import type { SidebarThreadActivityContext } from './sidebar-project-selectors'
 
@@ -42,18 +44,26 @@ describe('SidebarAttentionPanel', () => {
   afterEach(() => {
     if (renderer) act(() => renderer!.unmount())
     renderer = null
+    for (const item of [...useToastStore.getState().items, ...useToastStore.getState().waitingItems]) {
+      useToastStore.getState().dismiss(item.id)
+    }
+    resetToasts()
+    vi.useRealTimers()
   })
 
   function renderPanel(
     ids: string[],
-    onSelectThread = vi.fn()
+    onSelectThread = vi.fn(),
+    onMarkRead: (threadIds: readonly string[]) => AttentionReadUndo | null = vi.fn(() => null),
+    activityContext = context(ids)
   ): ReturnType<typeof vi.fn> {
     act(() => {
       renderer = create(
         createElement(SidebarAttentionPanel, {
           threads: ids.map(thread),
-          activityContext: context(ids),
+          activityContext,
           onSelectThread,
+          onMarkRead,
           t
         })
       )
@@ -104,5 +114,77 @@ describe('SidebarAttentionPanel', () => {
       renderer!.root.findByProps({ title: 'Thread b' }).props.onClick()
     })
     expect(onSelectThread).toHaveBeenCalledWith('b')
+  })
+
+  it('marks every unread row, including the rows beyond the initial six', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    const onMarkRead = vi.fn(() => null)
+    renderPanel(ids, vi.fn(), onMarkRead)
+    const mark = renderer!.root.findByProps({ 'aria-label': 'attentionMarkAllReadTooltip:8' })
+    act(() => mark.props.onClick())
+    expect(onMarkRead).toHaveBeenCalledWith(ids)
+    expect(renderer!.root.findByProps({ 'aria-label': 'attentionCollapse' }).props['aria-expanded']).toBe(true)
+  })
+
+  it('disables the action when only failures and pending questions remain', () => {
+    const ids = ['failed', 'asked']
+    const activityContext = context(ids)
+    activityContext.unreadThreadIds = { failed: 'failed', asked: 'completed' }
+    activityContext.awaitingUserInputThreadIds = { asked: true }
+    renderPanel(ids, vi.fn(), vi.fn(() => null), activityContext)
+    expect(renderer!.root.findByProps({ 'aria-label': 'attentionNoUnread' }).props.disabled).toBe(true)
+  })
+
+  it('keeps the undo notice available when the panel disappears or unmounts', () => {
+    const batch = { count: 2, undo: vi.fn(), dispose: vi.fn() }
+    const onMarkRead = vi.fn(() => batch)
+    renderPanel(['a', 'b'], vi.fn(), onMarkRead)
+    act(() => renderer!.root.findByProps({ 'aria-label': 'attentionMarkAllReadTooltip:2' }).props.onClick())
+    act(() => renderer!.update(createElement(SidebarAttentionPanel, {
+      threads: [], activityContext: context([]), onSelectThread: vi.fn(), onMarkRead, t
+    })))
+    expect(renderer!.toJSON()).toBeNull()
+    act(() => renderer!.unmount())
+    renderer = null
+    const notice = useToastStore.getState().items[0]!
+    expect(notice.title).toBe('attentionMarkReadDone:2')
+    expect(batch.dispose).not.toHaveBeenCalled()
+    act(() => {
+      notice.actions![0]!.run()
+      useToastStore.getState().dismiss(notice.id)
+    })
+    expect(batch.undo).toHaveBeenCalledOnce()
+    expect(batch.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('keeps consecutive batches independently undoable', () => {
+    const first = { count: 1, undo: vi.fn(), dispose: vi.fn() }
+    const second = { count: 1, undo: vi.fn(), dispose: vi.fn() }
+    const onMarkRead = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+    renderPanel(['a'], vi.fn(), onMarkRead)
+    const mark = renderer!.root.findByProps({ 'aria-label': 'attentionMarkAllReadTooltip:1' })
+    act(() => { mark.props.onClick(); mark.props.onClick() })
+    const notices = useToastStore.getState().items
+    expect(notices).toHaveLength(2)
+    expect(notices[0]!.id).not.toBe(notices[1]!.id)
+    expect(first.dispose).not.toHaveBeenCalled()
+    act(() => {
+      notices[0]!.actions![0]!.run()
+      useToastStore.getState().dismiss(notices[0]!.id)
+      notices[1]!.actions![0]!.run()
+      useToastStore.getState().dismiss(notices[1]!.id)
+    })
+    expect(first.undo).toHaveBeenCalledOnce()
+    expect(second.undo).toHaveBeenCalledOnce()
+  })
+
+  it('dismisses the undo notice and releases its subscription after eight seconds', () => {
+    vi.useFakeTimers()
+    const batch = { count: 1, undo: vi.fn(), dispose: vi.fn() }
+    renderPanel(['a'], vi.fn(), vi.fn(() => batch))
+    act(() => renderer!.root.findByProps({ 'aria-label': 'attentionMarkAllReadTooltip:1' }).props.onClick())
+    act(() => { vi.advanceTimersByTime(8_000) })
+    expect(batch.dispose).toHaveBeenCalledOnce()
+    expect(useToastStore.getState().items).toHaveLength(0)
   })
 })
