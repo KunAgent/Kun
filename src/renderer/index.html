@@ -11,9 +11,42 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <title>Kun</title>
+    <style>
+      html, body, #root { height: 100%; margin: 0; }
+      .kun-initial-startup {
+        box-sizing: border-box;
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 32px 32px;
+        background: #fcfcfd;
+        color: #687083;
+        font: 500 14px/1.4 system-ui, sans-serif;
+        -webkit-app-region: drag;
+      }
+      .kun-initial-startup img { width: 96px; height: 96px; object-fit: contain; animation: kun-initial-breathe 2.6s ease-in-out infinite; }
+      .kun-initial-startup p { margin: 24px 0 0; }
+      @keyframes kun-initial-breathe {
+        0%, 100% { opacity: .35; transform: scale(.96); }
+        50% { opacity: 1; transform: scale(1); }
+      }
+      @media (prefers-color-scheme: dark) {
+        .kun-initial-startup { background: #151515; color: #bbbcc0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .kun-initial-startup img { animation: none; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="kun-initial-startup" role="status" aria-live="polite" aria-busy="true">
+        <img src="../asset/img/kun_bird.png" alt="" aria-hidden="true" draggable="false" />
+        <p>Starting Kun...</p>
+      </main>
+    </div>
     <script src="./remote-polyfills.js"></script>
     <script src="./remote-bridge.js"></script>
     <script type="module" src="/src/main.tsx"></script>
