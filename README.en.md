@@ -13,7 +13,7 @@
   &nbsp;·&nbsp;
   <a href="https://www.kun-agent.com/docs">Docs</a>
   &nbsp;·&nbsp;
-  <a href="./release/release-v0.4.0.md">Changelog</a>
+  <a href="./release/release-v0.4.4.md">Changelog</a>
   &nbsp;·&nbsp;
   <a href="./README.md">中文</a>
 </p>
@@ -33,7 +33,7 @@
 
 ## What Kun does
 
-Kun is a desktop app that runs on your computer. Code, documents, and Agent conversations share one local runtime. Conversations, memory, and settings stay on your machine, and you bring your own models.
+Kun is a desktop app that runs on your computer. Code, Work, and Chats share one local runtime for coding, design, documents, papers, and collaboration across Agents. Conversations, memory, and settings stay on your machine, and you bring your own models.
 
 <table>
   <tr>
@@ -46,7 +46,13 @@ Kun is a desktop app that runs on your computer. Code, documents, and Agent conv
   </tr>
 </table>
 
-Also included: a plugin and skill marketplace (MCP / Skills), reminders and scheduled tasks, a terminal TUI, mobile remote access, and Kun accounts with a wardrobe. See the [0.4.0 changelog](release/release-v0.4.0.md) for the full list.
+- **Code / Design**: projects, terminal, Git, and diffs in one place. Compare screens, states, and alternatives on the Design canvas before asking an Agent to implement the approved design. External Agents such as Claude Code and Codex can open designs too.
+- **Work / papers**: organize sessions and files in tabs and split them for comparison. Rewrite, expand, or quote selected text; inspect selected-cell statistics and ask Kun to analyze the data. An independent paper library brings imports, reading, notes, and related conversations together.
+- **Chats / Agent collaboration**: chat one-on-one or in groups with personal Agents, Codex, Claude Code, and OpenCode. Choose a plan's execution Agent, dispatch tasks, and follow their progress and results. Personal-assistant task workflows are optional under Settings → Lab and require server availability and a connected assistant.
+- **Reports / artifacts**: ask Kun to turn real data into reports with metrics, charts, and explanations. View them in a conversation and save them to the artifacts library to reopen or update; thumbnails help you find the right artifact.
+- **Connections / extensions**: manage available GitHub and Gmail connections in one place, and extend workflows with MCP / Skills, Loops, and the extension platform. The local model gateway reuses the same provider configuration.
+
+Also included: reminders and scheduled tasks, storage management, a terminal TUI, mobile remote access, and Kun accounts with a wardrobe. See the [0.4.4 changelog](release/release-v0.4.4.md) for the latest changes.
 
 ## Get started in three steps
 
