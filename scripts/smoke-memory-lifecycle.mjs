@@ -169,6 +169,11 @@ try {
   await existingCandidate.getByText('Proposed update', { exact: true }).waitFor()
   await screenshot('pending-review')
   await existingCandidate.getByRole('button', { name: 'Keep current memory', exact: true }).click()
+  // The candidate disappears only after the skip succeeds and the list refreshes.
+  await existingCandidate.waitFor({ state: 'detached' })
+  const skipped = await backend.snapshot()
+  assert.equal(skipped.candidates.find((entry) => entry.id === 'candidate-fixture-build')?.value.status, 'skipped')
+  assert.equal(skipped.calls.filter((call) => call.path.endsWith('/candidate-fixture-build/decision') && call.status === 200 && call.body.decision === 'skip').length, 1)
   const scopedCandidate = page.locator('.agent-memory-entry').filter({ hasText: 'Include source links in the task completion report.' })
   await scopedCandidate.getByText("invalid-relation 'related': comparisons quarantined; review required", { exact: true }).waitFor()
   const accept = scopedCandidate.getByRole('button', { name: 'Accept as a new version', exact: true })
