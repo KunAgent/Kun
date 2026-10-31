@@ -420,7 +420,14 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         `error=${raw}`,
         stack ? `stack=${stack}` : ''
       ].filter(Boolean).join(' ')
-      const settlement = await settle({ status: 'failed', error: message })
+      const settlement = await settle({
+        status: 'failed',
+        error: message,
+        // A slow or restarting local Manager is not a provider failure. Keep
+        // the typed code so the renderer explains it as such and the turn stays
+        // resumable instead of reporting a model-request timeout.
+        ...(error instanceof ServiceManagerTransportError ? { code: 'service_manager_unavailable' } : {})
+      })
       finalStatus = statusFromSettlement(settlement, 'failed')
       finalError = errorFromSettlement(settlement)
       return finalStatus

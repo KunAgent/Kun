@@ -4,12 +4,15 @@ import { MANAGER_MUTATION_REPLAY_CAPABILITY } from '../contracts/manager-request
 import { requestManagerJson, type ServiceManagerConnection } from './manager-client.js'
 import { isSessionMutation, isThreadMutation } from './shared-data-store-contracts.js'
 import { mutationFenceForValue } from './turn-mutation-context.js'
+import { isServiceManagerTimeoutError } from './usage-errors.js'
 
 type ManagerStore = 'thread' | 'session' | 'artifact' | 'memory' | 'graph' | 'attachment'
 
 const ResultSchema = z.object({ result: z.unknown() }).strict()
 export const MANAGER_USAGE_REQUEST_TIMEOUT_MS = 30_000
 const MANAGER_TIMELINE_DATA_REQUEST_TIMEOUT_MS = 120_000
+/** One extra budget for reads; a degraded Manager often answers the second try. */
+const MANAGER_READ_TIMEOUT_BUDGETS = 2
 
 export async function callManagerStore(
   manager: ServiceManagerConnection,
@@ -26,17 +29,29 @@ export async function callManagerStore(
     manager.discovery.capabilities?.includes(MANAGER_MUTATION_REPLAY_CAPABILITY)
     ? { requestId: randomUUID(), managerInstanceId: manager.discovery.instanceId, expiresAt: Date.now() + timeoutMs }
     : undefined
-  const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
-    method: 'POST',
-    signal,
-    retrySafe: isManagerStoreRead(store, operation) || replay !== undefined,
-    ...(replay ? { maxAttempts: 5 } : {}),
-    body: store === 'thread' || store === 'session'
-      ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}), ...(replay ? { replay } : {}) }
-      : value ?? {},
-    timeoutMs
-  })
-  return ResultSchema.parse(response).result
+  // Only short-budget reads get a second full budget. A 120 s timeline read
+  // that already consumed its deadline must not double the turn's stall, and a
+  // mutation may have reached the Manager, so it is never replayed this way.
+  const budgets = isManagerStoreRead(store, operation) && timeoutMs <= MANAGER_USAGE_REQUEST_TIMEOUT_MS
+    ? MANAGER_READ_TIMEOUT_BUDGETS
+    : 1
+  for (let budget = 1; ; budget += 1) {
+    try {
+      const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
+        method: 'POST',
+        signal,
+        retrySafe: isManagerStoreRead(store, operation) || replay !== undefined,
+        ...(replay ? { maxAttempts: 5 } : {}),
+        body: store === 'thread' || store === 'session'
+          ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}), ...(replay ? { replay } : {}) }
+          : value ?? {},
+        timeoutMs
+      })
+      return ResultSchema.parse(response).result
+    } catch (error) {
+      if (budget >= budgets || signal?.aborted || !isServiceManagerTimeoutError(error)) throw error
+    }
+  }
 }
 
 function shouldFenceManagerStoreMutation(store: ManagerStore, operation: string): boolean {

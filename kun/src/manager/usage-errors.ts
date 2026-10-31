@@ -23,6 +23,13 @@ export class ServiceManagerTransportError extends Error {
   }
 }
 
+/** True when a Manager RPC failed because its own deadline expired. */
+export function isServiceManagerTimeoutError(
+  error: unknown
+): error is ServiceManagerTransportError {
+  return error instanceof ServiceManagerTransportError && error.kind === 'timeout'
+}
+
 export class ServiceManagerHttpError extends Error {
   constructor(
     readonly status: number,

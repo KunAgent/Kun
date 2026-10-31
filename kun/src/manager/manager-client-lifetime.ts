@@ -1,6 +1,22 @@
+import { ServiceManagerTransportError } from './usage-errors.js'
+
 // Opt-in process-local admission for desktop data consumers. The Manager
 // physical writer and standalone clients retain their own lifecycle policy.
 let admission: AbortController | undefined
+
+/**
+ * Abort reason for a Manager request whose own deadline expired. Callers must
+ * be able to tell a slow local Manager apart from an aborted turn: the turn
+ * lifecycle tags ServiceManagerTransportError as `service_manager_unavailable`
+ * and keeps the turn resumable, while a bare DOMException `TimeoutError` reads
+ * like a stalled model request and fails the turn outright.
+ */
+export function managerRequestTimeoutError(timeoutMs: number): ServiceManagerTransportError {
+  return new ServiceManagerTransportError(
+    'timeout',
+    `Kun Service Manager connection failed (timeout; ${Math.max(0, Math.round(timeoutMs))}ms).`
+  )
+}
 
 export function openManagerClientAdmission(): void {
   if (!admission || admission.signal.aborted) admission = new AbortController()
@@ -45,7 +61,7 @@ export function openManagerRequestSignal(
   ]
   const detach: Array<() => void> = []
   const timer = setTimeout(() => {
-    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+    controller.abort(managerRequestTimeoutError(timeoutMs))
   }, timeoutMs)
   timer.unref?.()
   const dispose = (): void => {

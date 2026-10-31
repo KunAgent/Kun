@@ -50,7 +50,11 @@ describe('desktop Manager client lifetime', () => {
       openManagerClientAdmission()
       const timed = openManagerRequestSignal(undefined, 1_000)
       vi.advanceTimersByTime(1_000)
-      expect(timed.signal.reason).toMatchObject({ name: 'TimeoutError' })
+      expect(timed.signal.reason).toMatchObject({
+        name: 'ServiceManagerTransportError',
+        kind: 'timeout',
+        message: expect.stringContaining('Kun Service Manager connection failed (timeout; 1000ms)')
+      })
       const caller = new AbortController()
       const cancelled = openManagerRequestSignal(caller.signal, 1_000)
       caller.abort(new Error('caller stopped'))
