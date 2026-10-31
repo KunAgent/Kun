@@ -19,6 +19,19 @@ export function WorkPaperSearchChip(): ReactElement {
     setDepth: state.setDepth
   })))
   const rowRef = useRef<HTMLDivElement | null>(null)
+  const toggleRef = useRef<HTMLButtonElement | null>(null)
+  const restoreToggleFocus = useRef(false)
+
+  useEffect(() => {
+    if (!restoreToggleFocus.current) return
+    restoreToggleFocus.current = false
+    toggleRef.current?.focus()
+  }, [enabled])
+
+  const toggleFromChip = (next: boolean): void => {
+    restoreToggleFocus.current = true
+    setEnabled(next)
+  }
 
   // The home quick action turns the chip on; the composer then takes focus.
   useEffect(() => {
@@ -34,7 +47,7 @@ export function WorkPaperSearchChip(): ReactElement {
           <span className="work-paper-search-chip is-on">
             <Compass className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
             {t('workPaperSearchChip')}
-            <button type="button" className="work-paper-search-remove" onClick={() => setEnabled(false)}
+            <button ref={toggleRef} type="button" className="work-paper-search-remove" onClick={() => toggleFromChip(false)}
               aria-label={t('workPaperSearchOff')} title={t('workPaperSearchOff')}>
               <X className="h-3 w-3" strokeWidth={2.4} />
             </button>
@@ -46,7 +59,7 @@ export function WorkPaperSearchChip(): ReactElement {
           </button>
         </>
       ) : (
-        <button type="button" className="work-paper-search-chip" onClick={() => setEnabled(true)}
+        <button ref={toggleRef} type="button" className="work-paper-search-chip" onClick={() => toggleFromChip(true)}
           title={t('workPaperSearchHint')}>
           <Compass className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden="true" />
           {t('workPaperSearchChip')}

@@ -58,6 +58,145 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.055);
 }
 
+/* The Work shortcut is only shown by the docked dark assistant surface below. */
+.work-composer-shortcut {
+  display: none;
+}
+
+/* Keep the footer on the assistant surface, rather than the document's raised surface. */
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] {
+  --work-assistant-input-bg: color-mix(in srgb, var(--ds-bg-main) 68%, black);
+  --work-assistant-input-border: color-mix(in srgb, var(--ds-text-muted) 60%, var(--work-assistant-input-bg));
+  --work-assistant-hint: color-mix(in srgb, var(--ds-text-muted) 80%, var(--ds-bg-main));
+  --work-assistant-paper-active-bg: color-mix(in srgb, var(--ds-accent) 12%, var(--ds-bg-main));
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer {
+  border-top: 0;
+  background: color-mix(in srgb, var(--ds-bg-main) 88%, transparent);
+  padding: 0 16px 16px;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-shell.ds-chat-composer {
+  border: 1px solid var(--work-assistant-input-border);
+  border-radius: 16px;
+  background: var(--work-assistant-input-bg);
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-shell.ds-chat-composer:focus-within {
+  border-color: var(--ds-focus-ring);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--ds-focus-ring) 18%, transparent),
+    0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-textarea {
+  min-height: 72px;
+  padding: 4px 2px 12px;
+  line-height: 1.7;
+  caret-color: var(--ds-focus-ring);
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-textarea::placeholder {
+  color: var(--work-assistant-hint);
+  opacity: 1;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-toolbar {
+  border-top: 0;
+  padding-top: 0;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-primary-action:not([data-primary-action='interrupt']) {
+  height: 32px;
+  width: 32px;
+  border-radius: 8px;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-primary-action:not([data-primary-action='interrupt']):not(:disabled) {
+  background: var(--ds-accent);
+  color: var(--ds-control-foreground);
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .work-paper-search-row {
+  margin-bottom: 10px;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .work-paper-search-chip {
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--ds-text-faint) 28%, var(--ds-bg-main));
+  border-radius: 9999px;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .work-paper-search-chip.is-on {
+  height: 34px;
+  border-color: var(--ds-accent);
+  background: var(--work-assistant-paper-active-bg);
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .work-paper-search-remove {
+  width: 32px;
+  height: 32px;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .work-paper-search-chip:focus-visible,
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .work-paper-search-remove:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+:where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+  .write-assistant-panel[data-work-assistant='panel'] .work-composer-shortcut {
+  display: block;
+  margin: 10px 2px 0;
+  color: var(--work-assistant-hint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* At narrow widths preserve every action by giving each toolbar group a row. */
+@container (max-width: 320px) {
+  :where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+    .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  :where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+    .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-toolbar > .ds-composer-toolbar-start,
+  :where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+    .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-toolbar > .ds-composer-toolbar-actions {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+    .write-assistant-panel[data-work-assistant='panel'] .write-assistant-footer .ds-composer-shell,
+  :where(html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin]):not([data-color-palette='parchment']))
+    .write-assistant-panel[data-work-assistant='panel'] .work-paper-search-chip {
+    transition: none;
+  }
+}
+
 @media (max-height: 760px) {
   .write-assistant-ready {
     min-height: 178px;
