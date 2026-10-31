@@ -77,15 +77,19 @@ export async function executeCleanupPlan(input: {
   trash: StorageTrash
   trashDays: number
   reason: StorageCleanupRunReason
+  /** Rechecked after async planning and before each destructive operation. */
+  shouldContinue?: () => boolean
 }): Promise<StorageCleanupResult> {
+  const shouldContinue = input.shouldContinue ?? (() => true)
   const { plan, targets } = await buildCleanupPlan(input)
   const wanted = (id: string): boolean => input.itemIds === 'all' || input.itemIds.has(id)
   const tally = new CleanupTally()
-  const run = await input.trash.begin(input.trashDays)
+  const run = await input.trash.begin(input.trashDays, shouldContinue)
   const itemsById = new Map(plan.items.map((item) => [item.id, item]))
 
   const threadIds = [...targets.threads.keys()].filter((threadId) => wanted(`threadSlim:${threadId}`))
   for (let index = 0; index < threadIds.length; index += SLIM_BATCH_SIZE) {
+    if (!shouldContinue()) break
     const batch = threadIds.slice(index, index + SLIM_BATCH_SIZE)
     let response: Awaited<ReturnType<SlimRuntimeClient['apply']>>
     try {
@@ -111,6 +115,7 @@ export async function executeCleanupPlan(input: {
         tally.add('threadSlim', freed)
       }
       for (const path of shells) {
+        if (!shouldContinue()) break
         const bytes = await lstat(path).then((info) => info.size, () => 0)
         await trashPath(run.move, tally, 'threadSlim', path, bytes, slimmed.has(threadId) ? false : true)
       }
@@ -118,6 +123,7 @@ export async function executeCleanupPlan(input: {
   }
 
   for (const [id, path] of targets.paths) {
+    if (!shouldContinue()) break
     if (!wanted(id)) continue
     const item = itemsById.get(id)
     if (!item) continue

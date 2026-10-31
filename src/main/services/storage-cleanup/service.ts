@@ -12,6 +12,7 @@ import {
   type StorageCleanupPlan,
   type StorageCleanupResult,
   type StorageCleanupStatus,
+  type StorageTrashRestoreResponse,
   type StorageTrashSummary,
   type StorageUsageSnapshot
 } from '../../../shared/storage-cleanup'
@@ -41,6 +42,8 @@ export class StorageCleanupService {
   private timer: NodeJS.Timeout | null = null
   private running: Promise<unknown> | null = null
   private storeCache: { key: string; store: StorageCleanupConfigStore } | null = null
+  private configVersion = 0
+  private configUpdates = 0
 
   constructor(private readonly deps: StorageCleanupServiceDeps) {}
 
@@ -66,6 +69,22 @@ export class StorageCleanupService {
     return promise
   }
 
+  /** Invalidate scheduled work before the first await, including while preferences are being saved. */
+  private async changeConfig(mutate: (config: StorageCleanupConfig) => StorageCleanupConfig): Promise<void> {
+    this.configVersion += 1
+    this.configUpdates += 1
+    try {
+      const { store } = await this.context()
+      await store.update(mutate)
+    } finally {
+      this.configUpdates -= 1
+    }
+  }
+
+  private isCurrent(version: number): boolean {
+    return version === this.configVersion && this.configUpdates === 0
+  }
+
   private nextRunAt(config: StorageCleanupConfig): string | undefined {
     if (storageCleanupState(config) !== 'scheduled' && storageCleanupState(config) !== 'pending') return undefined
     if (config.pendingRunAt) return config.pendingRunAt
@@ -88,9 +107,8 @@ export class StorageCleanupService {
   }
 
   async enable(olderThanDays: number): Promise<StorageCleanupStatus> {
-    const { store } = await this.context()
     const days = clampStorageCleanupDays(olderThanDays)
-    await store.update((config) => ({
+    await this.changeConfig((config) => ({
       ...config,
       enabled: true,
       olderThanDays: days,
@@ -100,15 +118,13 @@ export class StorageCleanupService {
   }
 
   async disable(): Promise<StorageCleanupStatus> {
-    const { store } = await this.context()
-    await store.update(({ pendingRunAt: _pending, ...config }) => ({ ...config, enabled: false }))
+    await this.changeConfig(({ pendingRunAt: _pending, ...config }) => ({ ...config, enabled: false }))
     return this.status()
   }
 
   /** Changes never widen consent: a shorter threshold flips the state to needs_consent. */
   async updateConfig(patch: StorageCleanupConfigPatch): Promise<StorageCleanupStatus> {
-    const { store } = await this.context()
-    await store.update((config) => {
+    await this.changeConfig((config) => {
       const next = {
         ...config,
         ...(patch.olderThanDays !== undefined ? { olderThanDays: clampStorageCleanupDays(patch.olderThanDays) } : {}),
@@ -178,12 +194,12 @@ export class StorageCleanupService {
   }
 
   async skipPendingRun(): Promise<StorageCleanupStatus> {
-    const { store } = await this.context()
     const now = this.now()
-    await store.update(({ pendingRunAt: _pending, ...config }) => ({
+    await this.changeConfig(({ pendingRunAt: _pending, ...config }) => ({
       ...config,
       skipUntil: new Date(now.getTime() + STORAGE_CLEANUP_RUN_INTERVAL_DAYS * DAY_MS).toISOString()
     }))
+    const { store } = await this.context()
     await store.appendHistory({ runId: `skip-${now.getTime()}`, reason: 'skipped', startedAt: now.toISOString() })
     return this.status()
   }
@@ -192,10 +208,10 @@ export class StorageCleanupService {
     return (await this.context()).store.history()
   }
 
-  async restoreTrashRun(runId: string): Promise<StorageTrashSummary> {
+  async restoreTrashRun(runId: string): Promise<StorageTrashRestoreResponse> {
     const { trash } = await this.context()
-    await trash.restore(runId)
-    return trash.summary()
+    const result = await trash.restore(runId)
+    return { ...result, trash: await trash.summary() }
   }
 
   async emptyTrash(): Promise<StorageTrashSummary> {
@@ -218,21 +234,23 @@ export class StorageCleanupService {
   }
 
   stop(): void {
+    this.configVersion += 1
     if (this.timer) clearInterval(this.timer)
     this.timer = null
   }
 
   /** Purge expired trash, then advance the notice → run cycle when consent covers it. */
   async tick(): Promise<void> {
-    if (this.running) return
+    if (this.running || this.configUpdates > 0) return
+    const version = this.configVersion
     const { paths, store, trash } = await this.context()
     await trash.purgeExpired()
     const config = await store.load()
-    if (storageCleanupState(config) === 'off' || storageCleanupState(config) === 'needs_consent') return
+    if (!this.isCurrent(version) || !config.enabled || !storageCleanupConsentCovers(config)) return
     const now = this.now().getTime()
     if (config.pendingRunAt) {
       if (Date.parse(config.pendingRunAt) > now) return
-      await this.runScheduled()
+      await this.runScheduled(version)
       return
     }
     const due = Math.max(
@@ -241,28 +259,42 @@ export class StorageCleanupService {
     )
     if (due > now) return
     if (!config.notifyBefore) {
-      await this.runScheduled()
+      await this.runScheduled(version)
       return
     }
     const { plan } = await buildCleanupPlan({ paths, olderThanDays: config.olderThanDays, runtime: this.deps.runtime, now: this.now() })
-    if (plan.totalBytes < NOTICE_MIN_BYTES) {
-      await store.update((current) => ({ ...current, lastRunAt: new Date(now).toISOString() }))
-      return
-    }
-    await store.update((current) => ({ ...current, pendingRunAt: new Date(now + STORAGE_CLEANUP_NOTICE_LEAD_MS).toISOString() }))
-    this.deps.notify({ bytes: plan.totalBytes, olderThanDays: config.olderThanDays })
+    if (!this.isCurrent(version)) return
+    let notify = false
+    await store.update((current) => {
+      if (!this.isCurrent(version) || !current.enabled || !storageCleanupConsentCovers(current)) return current
+      if (plan.totalBytes < NOTICE_MIN_BYTES) return { ...current, lastRunAt: new Date(now).toISOString() }
+      notify = true
+      return { ...current, pendingRunAt: new Date(now + STORAGE_CLEANUP_NOTICE_LEAD_MS).toISOString() }
+    })
+    if (notify && this.isCurrent(version)) this.deps.notify({ bytes: plan.totalBytes, olderThanDays: config.olderThanDays })
   }
 
-  private runScheduled(): Promise<StorageCleanupResult> {
+  private runScheduled(version: number): Promise<StorageCleanupResult | undefined> {
     return this.exclusive(async () => {
       const { paths, store, trash } = await this.context()
       const config = await store.load()
+      if (!this.isCurrent(version) || !config.enabled || !storageCleanupConsentCovers(config)) return
+      const shouldContinue = (): boolean => this.isCurrent(version)
       const result = await executeCleanupPlan({
         paths, olderThanDays: config.olderThanDays, itemIds: 'all', runtime: this.deps.runtime,
-        trash, trashDays: config.trashDays, reason: 'scheduled'
+        trash, trashDays: config.trashDays, reason: 'scheduled', shouldContinue
       })
-      await store.update(({ pendingRunAt: _pending, ...current }) => ({ ...current, lastRunAt: result.finishedAt }))
-      await store.appendHistory(result)
+      // A cancelled run must not consume the next schedule or erase a newer notice/skip.
+      if (shouldContinue()) {
+        await store.update((current) => {
+          if (!shouldContinue()) return current
+          const { pendingRunAt: _pending, ...next } = current
+          return { ...next, lastRunAt: result.finishedAt }
+        })
+      }
+      if (shouldContinue() || result.slimmedThreads > 0 || result.movedToTrash > 0 || result.failed > 0) {
+        await store.appendHistory(result)
+      }
       return result
     })
   }

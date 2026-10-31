@@ -156,6 +156,14 @@ export type StorageTrashSummary = {
   entries: number
 }
 
+export type StorageTrashRestoreResult = {
+  restored: number
+  kept: number
+  failures: Array<{ path: string; code: string; message: string }>
+}
+
+export type StorageTrashRestoreResponse = StorageTrashRestoreResult & { trash: StorageTrashSummary }
+
 export type StorageCleanupHistoryEntry = StorageCleanupResult | {
   runId: string
   reason: 'skipped'
@@ -182,7 +190,7 @@ export type StorageCleanupApi = {
   removeMigrationBackups: () => Promise<StorageCleanupResult>
   skipPendingRun: () => Promise<StorageCleanupStatus>
   history: () => Promise<StorageCleanupHistoryEntry[]>
-  restoreTrashRun: (runId: string) => Promise<StorageTrashSummary>
+  restoreTrashRun: (runId: string) => Promise<StorageTrashRestoreResponse>
   emptyTrash: () => Promise<StorageTrashSummary>
   reveal: (itemId: StorageManualItemId | 'dataRoot') => Promise<void>
   /** The advance-notice notification was clicked. */

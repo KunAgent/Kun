@@ -3,6 +3,7 @@ import type {
   StorageCleanupPlan,
   StorageCleanupResult,
   StorageCleanupStatus,
+  StorageTrashRestoreResponse,
   StorageUsageSnapshot
 } from '@shared/storage-cleanup'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -73,6 +74,13 @@ export function useStorageCleanup() {
     void scan()
   }, [refresh, scan])
 
+  const finishRestore = useCallback((value: StorageTrashRestoreResponse) => {
+    setStatus((current) => current ? { ...current, trash: value.trash } : current)
+    setError(value.failures.map((failure) => `${failure.path}: [${failure.code}] ${failure.message}`).join('\n'))
+    void refresh()
+    void scan()
+  }, [refresh, scan])
+
   const openDialog = useCallback((kind: 'consent' | 'review', days: number) => {
     const token = ++dialogToken.current
     setDialog({ kind, days, plan: null })
@@ -106,6 +114,7 @@ export function useStorageCleanup() {
     scan,
     act,
     finishRun,
+    finishRestore,
     openDialog,
     closeDialog,
     dismissResult: () => setResult(null)

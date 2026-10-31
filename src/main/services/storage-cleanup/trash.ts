@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { cp, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
-import type { StorageTrashRun, StorageTrashSummary } from '../../../shared/storage-cleanup'
+import type { StorageTrashRestoreResult, StorageTrashRun, StorageTrashSummary } from '../../../shared/storage-cleanup'
 
 /**
  * Cleanup trash: every file the cleaner removes is first moved under
@@ -20,11 +20,21 @@ function isInside(parent: string, child: string): boolean {
   return rel !== '' && !rel.startsWith(`..${sep}`) && rel !== '..' && !rel.startsWith(sep)
 }
 
+async function assertVacant(path: string): Promise<void> {
+  try {
+    await lstat(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  throw Object.assign(new Error('The original path is occupied; the entry was kept in the cleanup trash.'), { code: 'EEXIST' })
+}
+
 export class StorageTrash {
   constructor(private readonly root: string, private readonly now: () => Date = () => new Date()) {}
 
   /** Start a run; `move` relocates one path into it, `commit` writes the manifest. */
-  async begin(trashDays: number): Promise<{
+  async begin(trashDays: number, shouldContinue: () => boolean = () => true): Promise<{
     runId: string
     move: (path: string, bytes: number) => Promise<boolean>
     commit: () => Promise<number>
@@ -47,11 +57,17 @@ export class StorageTrash {
         const stored = join('files', String(entries.length))
         const target = join(runDir, stored)
         await mkdir(dirname(target), { recursive: true })
+        if (!shouldContinue()) return false
         try {
           await rename(source, target)
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
-          await cp(source, target, { recursive: true, errorOnExist: true, verbatimSymlinks: true })
+          if (!shouldContinue()) return false
+          await cp(source, target, { recursive: true, force: false, errorOnExist: true, verbatimSymlinks: true })
+          if (!shouldContinue()) {
+            await rm(target, { recursive: true, force: true })
+            return false
+          }
           await rm(source, { recursive: true, force: true })
         }
         entries.push({ original: source, stored, bytes })
@@ -86,25 +102,47 @@ export class StorageTrash {
   }
 
   /** Move a run's entries back; entries whose original path is occupied stay in the trash. */
-  async restore(runId: string): Promise<{ restored: number; kept: number }> {
+  async restore(runId: string): Promise<StorageTrashRestoreResult> {
     const found = (await this.manifests()).find((item) => item.manifest.runId === runId)
-    if (!found) return { restored: 0, kept: 0 }
+    if (!found) return { restored: 0, kept: 0, failures: [] }
     const remaining: TrashEntry[] = []
+    const failures: StorageTrashRestoreResult['failures'] = []
     let restored = 0
     for (const entry of found.manifest.entries) {
       const source = join(found.dir, entry.stored)
-      if (await lstat(entry.original).catch(() => null)) { remaining.push(entry); continue }
       try {
+        await assertVacant(entry.original)
         await mkdir(dirname(entry.original), { recursive: true })
-        await rename(source, entry.original)
+        try {
+          await rename(source, entry.original)
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
+          // Stage on the destination volume: a failed copy must not leave a partial original.
+          const staging = await mkdtemp(join(dirname(entry.original), '.kun-storage-restore-'))
+          try {
+            const staged = join(staging, 'entry')
+            await cp(source, staged, { recursive: true, force: false, errorOnExist: true, verbatimSymlinks: true })
+            await assertVacant(entry.original)
+            await rename(staged, entry.original)
+          } finally {
+            await rm(staging, { recursive: true, force: true })
+          }
+          // Do not remove the only restorable copy until the complete destination is in place.
+          await rm(source, { recursive: true, force: true })
+        }
         restored += 1
-      } catch {
+      } catch (error) {
         remaining.push(entry)
+        failures.push({
+          path: entry.original,
+          code: (error as NodeJS.ErrnoException).code ?? 'UNKNOWN',
+          message: error instanceof Error ? error.message : String(error)
+        })
       }
     }
     if (remaining.length === 0) await rm(found.dir, { recursive: true, force: true })
     else await writeFile(join(found.dir, MANIFEST), JSON.stringify({ ...found.manifest, entries: remaining }, null, 2))
-    return { restored, kept: remaining.length }
+    return { restored, kept: remaining.length, failures }
   }
 
   async purgeExpired(): Promise<number> {

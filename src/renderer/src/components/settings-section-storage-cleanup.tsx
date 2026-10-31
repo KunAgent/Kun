@@ -319,7 +319,7 @@ export function StorageCleanupSettingsSection(): ReactElement {
             title={formatStorageDate(run.createdAt, locale)}
             description={t('storageCleanupTrashExpires', { entries: run.entries, size: formatBytes(run.bytes), date: formatStorageDay(run.expiresAt, locale) })}
             control={(
-              <button type="button" className={settingsButtonClass()} disabled={busy} onClick={() => void state.act(() => api.restoreTrashRun(run.runId), () => { void state.refresh(); void state.scan() })}>
+              <button type="button" className={settingsButtonClass()} disabled={busy} onClick={() => void state.act(() => api.restoreTrashRun(run.runId), state.finishRestore)}>
                 {t('storageCleanupRestore')}
               </button>
             )}

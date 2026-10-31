@@ -105,7 +105,7 @@ describe('storage trash', () => {
     expect(await stat(file).catch(() => null)).toBeNull()
     const summary = await trash.summary()
     expect(summary).toMatchObject({ entries: 1, bytes: 10 })
-    expect(await trash.restore(summary.runs[0]!.runId)).toEqual({ restored: 1, kept: 0 })
+    expect(await trash.restore(summary.runs[0]!.runId)).toEqual({ restored: 1, kept: 0, failures: [] })
     expect((await stat(file)).isDirectory()).toBe(true)
 
     const second = await trash.begin(7)

@@ -96,6 +96,56 @@ describe('StorageCleanupSettingsSection', () => {
     expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
   })
 
+  it.each(['EEXIST', 'ENOSPC', 'EACCES'])('shows the concrete %s restore failure and keeps the remaining run visible', async (code) => {
+    await i18n.changeLanguage('en')
+    const api = install()
+    const nextStatus = status('off')
+    nextStatus.trash = {
+      runs: [{ runId: 'trash-run', createdAt: plan.createdAt, expiresAt: '2026-11-05T00:00:00.000Z', entries: 1, bytes: 100 }],
+      entries: 1, bytes: 100
+    }
+    vi.mocked(api.getStatus).mockResolvedValue(nextStatus)
+    vi.mocked(api.restoreTrashRun).mockResolvedValue({
+      restored: 0, kept: 1,
+      failures: [{ path: '/other-drive/history.jsonl', code, message: 'Concrete filesystem failure' }],
+      trash: nextStatus.trash
+    })
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = createRenderer(createElement(StorageCleanupSettingsSection)) })
+    await flush()
+    await act(async () => { renderer.root.findAllByType('button').find((button) => text(button) === 'Restore')!.props.onClick() })
+    await flush()
+    expect(api.restoreTrashRun).toHaveBeenCalledWith('trash-run')
+    const alert = text(renderer.root.findByProps({ role: 'alert' }))
+    expect(alert).toContain('/other-drive/history.jsonl')
+    expect(alert).toContain(`[${code}]`)
+    expect(alert).toContain('Concrete filesystem failure')
+    expect(renderer.root.findAllByType('button').filter((button) => text(button) === 'Restore')).toHaveLength(1)
+  })
+
+  it('refreshes the trash after a successful restore without displaying an error', async () => {
+    await i18n.changeLanguage('en')
+    const api = install()
+    const initial = status('off')
+    initial.trash = {
+      runs: [{ runId: 'trash-run', createdAt: plan.createdAt, expiresAt: '2026-11-05T00:00:00.000Z', entries: 1, bytes: 100 }],
+      entries: 1, bytes: 100
+    }
+    vi.mocked(api.getStatus).mockResolvedValue(initial)
+    vi.mocked(api.restoreTrashRun).mockImplementation(async () => {
+      const empty = status('off')
+      vi.mocked(api.getStatus).mockResolvedValue(empty)
+      return { restored: 1, kept: 0, failures: [], trash: empty.trash }
+    })
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = createRenderer(createElement(StorageCleanupSettingsSection)) })
+    await flush()
+    await act(async () => { renderer.root.findAllByType('button').find((button) => text(button) === 'Restore')!.props.onClick() })
+    await flush()
+    expect(renderer.root.findAllByProps({ role: 'alert' })).toHaveLength(0)
+    expect(renderer.root.findAllByType('button').filter((button) => text(button) === 'Restore')).toHaveLength(0)
+  })
+
   it('runs only the items left checked in the preview', async () => {
     await i18n.changeLanguage('en')
     const api = install()
