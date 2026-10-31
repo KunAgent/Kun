@@ -352,6 +352,37 @@ describe('MCP OAuth refresh against a real Service Manager', { timeout: 60_000 }
     expect(persisted.lastRefresh?.spentRefreshToken).toBe('r0')
   })
 
+  it('does not write a stale SDK acknowledgement through the Manager after a newer refresh', async () => {
+    const { manager, as, storePath } = await harness()
+    const first = providerAt(serverConfig(as.issuer), storePath)
+    const second = providerAt(serverConfig(as.issuer), storePath)
+    const reached = deferred()
+    const release = deferred()
+    const save = first.saveTokens.bind(first)
+    vi.spyOn(first, 'saveTokens').mockImplementation(async (...args) => {
+      reached.resolve()
+      await release.promise
+      await save(...args)
+    })
+    const firstRun = auth(first, { serverUrl: as.serverUrl, fetchFn: first.oauthFetch })
+    try {
+      await reached.promise
+      expect((await new FileMcpOAuthStore(storePath).read()).tokens?.refresh_token).toBe('r1')
+      expect(await auth(second, { serverUrl: as.serverUrl, fetchFn: second.oauthFetch })).toBe('AUTHORIZED')
+      const newest = await new FileMcpOAuthStore(storePath).read()
+      expect(newest.tokens).toMatchObject({ access_token: 'a2', refresh_token: 'r2' })
+      expect(newest.lastRefresh).toMatchObject({ accessToken: 'a2', spentRefreshToken: 'r1' })
+      const writes = manager.writes.length
+      release.resolve()
+      expect(await firstRun).toBe('AUTHORIZED')
+      expect(await new FileMcpOAuthStore(storePath).read()).toEqual(newest)
+      expect(manager.writes).toHaveLength(writes)
+    } finally {
+      release.resolve()
+      await firstRun
+    }
+  })
+
   it('cannot resurrect credentials when the Manager commits a refresh after a revocation', async () => {
     const { manager, as, storePath } = await harness()
     const provider = providerAt(serverConfig(as.issuer), storePath)

@@ -93,7 +93,7 @@ type RefreshOutcome =
     headers: Array<[string, string]>
     body: string
     /** Present for token payloads the SDK will acknowledge through saveTokens. */
-    guard?: { clearEpoch: number; accessToken: string }
+    guard?: { accessToken: string; refreshToken: string }
   }
   | { kind: 'error'; error: unknown }
 
@@ -105,7 +105,7 @@ function responseFromOutcome(outcome: RefreshOutcome): Response {
 function jsonOutcome(
   payload: unknown,
   status = 200,
-  guard?: { clearEpoch: number; accessToken: string }
+  guard?: { accessToken: string; refreshToken: string }
 ): RefreshOutcome {
   return {
     kind: 'response',
@@ -163,7 +163,7 @@ export type McpOAuthRefreshCoordinatorOptions = {
   /** Token snapshot taken when this connection last read credentials. */
   snapshot?: () => McpOAuthTokenSnapshot | undefined
   /** Registers the token payload the provider's next `saveTokens` acknowledges. */
-  beginRefreshWrite?: (write: { clearEpoch: number; accessToken: string }) => void
+  beginRefreshWrite?: (write: { accessToken: string; refreshToken: string }) => void
   /**
    * Ties the transaction to the connection lifetime so `close()` waits for it.
    * It deliberately does not abort the transaction: a refresh that already left
@@ -248,7 +248,9 @@ export class McpOAuthRefreshCoordinator {
         }
         const settled = this.settledElsewhere(state, { spentRefreshToken, grantKey, snapshot })
         if (settled) {
-          return jsonOutcome(tokenPayload(settled), 200, { clearEpoch, accessToken: settled.access_token })
+          return jsonOutcome(tokenPayload(settled), 200, {
+            accessToken: settled.access_token, refreshToken: settled.refresh_token || spentRefreshToken
+          })
         }
         // Sending is the irreversible step: re-validate the fence right before.
         await context.assertCurrent()
@@ -293,14 +295,16 @@ export class McpOAuthRefreshCoordinator {
             // cannot reinstate the set we just refused to persist.
             const winner = (await this.options.store.read()).tokens
             if (!winner) return jsonOutcome({ error: 'invalid_grant' }, 400)
-            return jsonOutcome(tokenPayload(winner), 200, { clearEpoch, accessToken: winner.access_token })
+            return jsonOutcome(tokenPayload(winner), 200, {
+              accessToken: winner.access_token, refreshToken: winner.refresh_token || spentRefreshToken
+            })
           }
           return {
             kind: 'response',
             status: response.status,
             headers,
             body,
-            guard: { clearEpoch, accessToken: tokens.access_token }
+            guard: { accessToken: tokens.access_token, refreshToken: parsed.refresh_token ?? spentRefreshToken }
           }
         } finally {
           signal.dispose()

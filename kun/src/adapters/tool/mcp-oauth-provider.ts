@@ -78,16 +78,11 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
    */
   private lastTokenSnapshot: McpOAuthTokenSnapshot | undefined
   /**
-   * Credential set this connection's coordinator persisted, keyed by access
-   * token. The SDK's follow-up `saveTokens` acknowledges it instead of
-   * rewriting the row, and the entry pins the `clearEpoch` the transaction ran
-   * under. It is a map rather than a single slot because one provider can have
-   * several `auth()` calls in flight that share one refresh result: every
-   * acknowledgement must stay tied to that transaction, so that an
-   * acknowledgement arriving after a revocation is dropped instead of
-   * recreating the credentials.
+   * Outstanding SDK acknowledgements for results already persisted by the
+   * refresh coordinator. Count each response: concurrent auth calls can share
+   * a result, and none may rewrite it after a newer grant or a revocation.
    */
-  private readonly coordinatedWrites = new Map<string, { clearEpoch: number }>()
+  private readonly coordinatedWrites = new Map<string, number>()
   private refreshCoordinator: McpOAuthRefreshCoordinator | null = null
 
   constructor(
@@ -171,13 +166,17 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   async saveTokens(tokens: StoredOAuthTokens, ctx?: OAuthClientInformationContext): Promise<void> {
     this.assertExpectedIssuer(ctx?.issuer ?? tokens.issuer)
     const stamped = stampIssuer(tokens, ctx?.issuer)
-    // Acknowledgements are matched by access token, not consumed from a single
-    // slot: two `auth()` calls may acknowledge the same coordinated result, and
-    // each one carries the clear epoch of the transaction that produced it.
-    const coordinated = this.coordinatedWrites.get(stamped.access_token)
-    const observedClearEpoch = coordinated?.clearEpoch
-      ?? this.authorizationClearEpoch
-      ?? undefined
+    // Refresh transactions already persisted their complete result. Their SDK
+    // acknowledgements are not writes, even if a peer has since refreshed or
+    // cleared the grant. Match both tokens since access tokens may be reused.
+    const key = hashText(JSON.stringify([stamped.access_token, stamped.refresh_token ?? null]))
+    const pending = this.coordinatedWrites.get(key)
+    if (pending) {
+      if (pending === 1) this.coordinatedWrites.delete(key)
+      else this.coordinatedWrites.set(key, pending - 1)
+      return
+    }
+    const observedClearEpoch = this.authorizationClearEpoch ?? undefined
     this.authorizationClearEpoch = null
     await this.store.saveTokens({
       tokens: stamped,
@@ -376,9 +375,7 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
   async clearCredentials(): Promise<void> {
     this.lastTokenSnapshot = undefined
     this.authorizationClearEpoch = null
-    // Deliberately keep `coordinatedWrites`: an acknowledgement still in flight
-    // must still be recognised as belonging to the revoked transaction, so its
-    // epoch mismatch drops it instead of writing the credentials back.
+    // Keep outstanding acknowledgements so none can recreate a revoked grant.
     await this.store.clear()
   }
 
@@ -401,14 +398,8 @@ export class FileMcpOAuthProvider implements OAuthClientProvider {
         now: this.now,
         snapshot: () => this.lastTokenSnapshot,
         beginRefreshWrite: (write) => {
-          this.coordinatedWrites.set(write.accessToken, { clearEpoch: write.clearEpoch })
-          // Bounded: an acknowledgement always follows its own response within
-          // the same `auth()` call, so only recently coordinated sets matter.
-          while (this.coordinatedWrites.size > 32) {
-            const oldest = this.coordinatedWrites.keys().next().value
-            if (oldest === undefined) break
-            this.coordinatedWrites.delete(oldest)
-          }
+          const key = hashText(JSON.stringify([write.accessToken, write.refreshToken ?? null]))
+          this.coordinatedWrites.set(key, (this.coordinatedWrites.get(key) ?? 0) + 1)
         }
       })
     }
@@ -590,7 +581,7 @@ export async function listMcpOAuthDiagnostics(
 
 export async function clearMcpOAuthCredentials(
   config: McpCapabilityConfig,
-  options: { storageDir?: string; serverId?: string; lifetime?: McpOAuthLifetime } = {}
+  options: { storageDir?: string; serverId?: string; encryptor?: SecretEncryptor; lifetime?: McpOAuthLifetime } = {}
 ): Promise<McpOAuthClearResult> {
   options.lifetime?.signal.throwIfAborted()
   const providers = createConfiguredMcpOAuthProviders(config, options)

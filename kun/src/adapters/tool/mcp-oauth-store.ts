@@ -267,35 +267,20 @@ export class FileMcpOAuthStore {
     observedClearEpoch?: number
   }): Promise<McpOAuthRefreshWriteResult> {
     try {
-      return await this.locked<McpOAuthRefreshWriteResult>(async () => {
-        // Acknowledging the token set this file already holds must not write.
-        // Rewriting it would move `tokensObtainedAt` to the acknowledgement
-        // time and bump the epochs for no change, and - because ordinary writes
-        // follow the connection lifetime - a connection that closed while the
-        // refresh was on the wire would turn a successful refresh into a
-        // failure. The credentials are already persisted, so this is read-only.
-        const current = await this.read()
-        if (
-          current.tokens?.access_token === input.tokens.access_token
-          && current.tokens.refresh_token === input.tokens.refresh_token
-        ) {
-          return 'saved'
+      await this.locked(() => this.mutate((state) => {
+        if (input.observedClearEpoch !== undefined && (state.clearEpoch ?? 0) !== input.observedClearEpoch) {
+          throw new McpOAuthWriteRejected('cleared')
         }
-        await this.mutate((state) => {
-          if (input.observedClearEpoch !== undefined && (state.clearEpoch ?? 0) !== input.observedClearEpoch) {
-            throw new McpOAuthWriteRejected('cleared')
-          }
-          return {
-            ...state,
-            tokens: input.tokens,
-            tokensObtainedAt: input.obtainedAt,
-            refreshEpoch: (state.refreshEpoch ?? 0) + 1,
-            mutationEpoch: (state.mutationEpoch ?? 0) + 1,
-            ...withoutAuthorizationError(state)
-          }
-        })
-        return 'saved'
-      })
+        return {
+          ...state,
+          tokens: input.tokens,
+          tokensObtainedAt: input.obtainedAt,
+          refreshEpoch: (state.refreshEpoch ?? 0) + 1,
+          mutationEpoch: (state.mutationEpoch ?? 0) + 1,
+          ...withoutAuthorizationError(state)
+        }
+      }))
+      return 'saved'
     } catch (error) {
       if (error instanceof McpOAuthWriteRejected) return error.result
       throw error

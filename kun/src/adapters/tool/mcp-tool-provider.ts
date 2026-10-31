@@ -661,6 +661,7 @@ export async function buildMcpToolProviders(
       const result = await clearMcpOAuthCredentials(mcp, {
         storageDir: options.oauthStorageDir,
         serverId,
+        encryptor: options.oauthEncryptor,
         lifetime
       })
       await refreshOAuthDiagnostics()
