@@ -1,6 +1,6 @@
 import { useTeamWorkers } from '../workers/use-team-workers'
 import { useChatStore } from '../../store/chat-store'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, GitBranch, ShieldCheck, Split, Timer } from 'lucide-react'
 import {
@@ -17,6 +17,7 @@ import { assignmentRoute, dispatchAssignments, dispatchRoutesEditable, replaceAs
   sameAssignmentRoute } from './agent-dispatch-card-model'
 import { openWorkerSession } from '../workers/worker-view-store'
 import { TaskSuggestionCard } from './TaskSuggestionCard'
+import { AssistantMarkdown } from './AssistantMarkdown'
 import { AgentIcon } from '../agent-icon'
 import { agentIconId } from '../../lib/agent-icon-aliases'
 import { isTaskSuggestionBlock } from './task-suggestion-card-model'
@@ -41,6 +42,33 @@ export function AgentDispatchGroup({ blocks, readOnly = false }: { blocks: reado
   return <div className="space-y-3">{cards.map((block) => isTaskSuggestionBlock(block)
     ? <TaskSuggestionCard key={block.id} block={block} readOnly={readOnly} />
     : <AgentDispatchCard key={block.id} block={block} readOnly={readOnly} />)}</div>
+}
+
+function AgentDispatchResult({ intent, count }: { intent: AgentDispatchIntentView; count: number }) {
+  const { t } = useTranslation('common')
+  const id = useId()
+  const [expanded, setExpanded] = useState(false)
+  const summary = intent.resultSummary?.replace(/\r\n?/g, '\n').trim() ?? ''
+  if (!summary && intent.state !== 'completed') return null
+  const preview = summary.split('\n').slice(0, 8).join('\n').slice(0, 800).trimEnd()
+  const canExpand = preview.length < summary.length
+  const text = canExpand && !expanded ? `${preview}\n…` : summary
+  return <section className="min-w-0 space-y-2 border-t border-ds-border-muted px-4 py-3"
+    data-dispatch-result data-result-state={expanded ? 'expanded' : 'preview'} aria-labelledby={`${id}-title`}>
+    <h5 id={`${id}-title`} className="text-[13px] font-semibold text-ds-ink">
+      {t(count > 1 ? 'dispatchIntent.resultBatch' : 'dispatchIntent.result')}
+    </h5>
+    <div id={`${id}-body`}>
+      {summary ? <AssistantMarkdown text={text} streaming={false} safeMarkdown
+        className="ds-markdown whitespace-pre-wrap break-words text-[13.5px] leading-6 text-ds-ink" />
+        : <p className="text-[13px] leading-6 text-ds-muted">{t('dispatchIntent.resultMissing')}</p>}
+    </div>
+    {canExpand ? <button type="button" aria-expanded={expanded} aria-controls={`${id}-body`}
+      onClick={() => setExpanded((value) => !value)}
+      className="rounded-md px-2 py-1 text-[13px] font-medium text-ds-ink hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      {t(expanded ? 'dispatchIntent.collapseResult' : 'dispatchIntent.expandResult')}
+    </button> : null}
+  </section>
 }
 
 type Draft = { title: string; task: string; routes: AgentDispatchAssignmentRoute[] }
@@ -117,6 +145,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
       </div>
       <AgentDispatchStatusBadge intent={intent} dispatches={overview?.dispatches} />
     </header>
+    <AgentDispatchResult key={id} intent={intent} count={assignments.length} />
     {draft ? <div className="space-y-2 border-t border-ds-border-muted px-4 py-3 text-[13px]">
       {!batch ? <input value={draft.title} maxLength={512} aria-label={t('dispatchIntent.title')}
         onChange={(event) => setDraft({ ...draft, title: event.target.value })} className={fieldClass} /> : null}
@@ -165,9 +194,6 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
       {!draft && routeFailed && error ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-300">
         {t('dispatchIntent.routeUpdateFailed', { message: error })}</p> : null}
       {intent.replacementReason ? <p className="break-words text-xs text-ds-muted">{intent.replacementReason}</p> : null}
-      {intent.resultSummary ? <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-ds-subtle px-3 py-2 text-[12px] leading-5 text-ds-ink">
-        {intent.resultSummary}
-      </div> : null}
     </footer>
   </section>
 }

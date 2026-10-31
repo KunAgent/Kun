@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentDispatchIntentPublicSchema, type AgentDispatchIntentView } from '@shared/agent-dispatch'
 import type { ChatBlock } from '../../agent/types'
 import { AgentDispatchGroup } from './AgentDispatchCard'
+import { AssistantMarkdown } from './AssistantMarkdown'
 import { Split } from 'lucide-react'
 import { AgentDispatchIntentControls } from './AgentDispatchIntentControls'
 import { rememberAgentIconAliases } from '../../lib/agent-icon-aliases'
@@ -77,6 +78,62 @@ async function render(): Promise<string> {
 describe('Agent dispatch card', () => {
   const header = () => renderer!.root.findByType('header')
   const headerIcons = () => header().findAll((node) => typeof node.type === 'string' && node.props['data-agent-icon'])
+
+  it('shows a short safe Markdown result above task details without nested scrolling', async () => {
+    state.intent = fixture({ state: 'completed', resultSummary: '## Findings\r\n- Fixed the preview\r\nTests passed' })
+    const text = await render()
+    const result = renderer!.root.findByProps({ 'data-dispatch-result': true })
+    expect(text.indexOf('dispatchIntent.resultBatch')).toBeLessThan(text.indexOf('dispatchIntent.details'))
+    expect(result.findByType('h5').props.id).toBe(result.props['aria-labelledby'])
+    expect(result.findByType(AssistantMarkdown).props).toMatchObject({
+      safeMarkdown: true, streaming: false, text: '## Findings\n- Fixed the preview\nTests passed'
+    })
+    expect(result.findAllByType('button')).toHaveLength(0)
+    expect(result.findAll((node) => /overflow-y|max-h-/.test(node.props.className ?? ''))).toHaveLength(0)
+    expect(result.findAllByType('details')).toHaveLength(0)
+  })
+
+  it.each([Array.from({ length: 40 }, (_, i) => `Finding ${i}`).join('\n'), 'Result '.repeat(200)])(
+    'expands long results accessibly and keeps the full result in page flow', async (summary) => {
+      state.intent = fixture({ state: 'completed', resultSummary: summary })
+      await render()
+      const result = renderer!.root.findByProps({ 'data-dispatch-result': true })
+      const button = result.findByType('button')
+      expect(button.props['aria-expanded']).toBe(false)
+      expect(result.findByType(AssistantMarkdown).props.text.length).toBeLessThan(summary.length)
+      expect(result.findByProps({ id: button.props['aria-controls'] })).toBeDefined()
+      await act(async () => button.props.onClick())
+      expect(button.props['aria-expanded']).toBe(true)
+      expect(result.props['data-result-state']).toBe('expanded')
+      expect(result.findByType(AssistantMarkdown).props.text).toBe(summary.trim())
+      expect(result.findAll((node) => /overflow-y|max-h-/.test(node.props.className ?? ''))).toHaveLength(0)
+      await act(async () => button.props.onClick())
+      expect(button.props['aria-expanded']).toBe(false)
+    })
+
+  it.each([undefined, ' \r\n '])('explains an empty completed result without inventing success', async (summary) => {
+    state.intent = fixture({ state: 'completed', resultSummary: summary })
+    const text = await render()
+    expect(text).toContain('dispatchIntent.resultMissing')
+    expect(renderer!.root.findAllByType(AssistantMarkdown)).toHaveLength(0)
+    expect(text).not.toContain('dispatchIntent.worker.passed')
+  })
+
+  it.each(['running', 'awaiting_parent', 'failed', 'cancelled'] as const)(
+    'does not show an empty result section for %s', async (phase) => {
+      state.intent = fixture({ state: phase })
+      await render()
+      expect(renderer!.root.findAllByProps({ 'data-dispatch-result': true })).toHaveLength(0)
+    })
+
+  it.each(['awaiting_parent', 'failed', 'cancelled'] as const)('preserves available findings in %s', async (phase) => {
+    state.intent = fixture({ state: phase, resultSummary: 'Fixed the preview.\nCancelled: second task' })
+    const text = await render()
+    expect(text).toContain('Cancelled: second task')
+    expect(renderer!.root.findAllByProps({ 'data-dispatch-result': true })).toHaveLength(1)
+    expect(text).not.toContain('dispatchIntent.worker.passed')
+  })
+
 
   it.each(['kun', 'codex', 'claude-code'])('shows the %s icon independently of the model', async (agentId) => {
     state.intent = fixture()

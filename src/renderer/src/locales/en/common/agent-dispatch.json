@@ -13,6 +13,11 @@
     "save": "Save changes",
     "keepRecommendation": "Discard changes",
     "details": "Task and acceptance criteria",
+    "result": "Result",
+    "resultBatch": "Combined results",
+    "expandResult": "Show full result",
+    "collapseResult": "Collapse result",
+    "resultMissing": "Execution ended, but no result text was returned. Open the task for details.",
     "viewProcess": "View process",
     "updateFailed": "Could not save the recommendation. The task remains paused.",
     "status": {

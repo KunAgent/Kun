@@ -133,6 +133,46 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     f.clock.now += 60_000; await f.service.reconcile(); expect(f.runChild).toHaveBeenCalledTimes(2)
   })
 
+  it('uses structured worker results, checks and risks rather than task titles alone', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Review' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    for (const record of await f.dispatches.list('parent')) {
+      await f.dispatches.update('parent', record.dispatchId, { state: 'completed', workerReport: {
+        summary: `Result from ${record.title}`, outcome: 'partial', submittedAt: new Date(f.clock.now).toISOString(),
+        checks: [{ name: 'UI smoke', status: 'skipped', detail: 'Not run' }], risks: ['Packaged app unverified']
+      } })
+    }
+    await f.service.reconcile()
+    const intent = await f.service.get(result.dispatchIntentId!)
+    expect(intent?.state).toBe('awaiting_parent')
+    expect(intent?.resultSummary).toContain('### Independent task\n\nResult from Independent task')
+    expect(intent?.resultSummary).toContain('### Review\n\nResult from Review')
+    expect(intent?.resultSummary).toContain('[skipped] UI smoke: Not run')
+    expect(intent?.resultSummary).toContain('Packaged app unverified')
+  })
+
+  it('keeps every batch assignment represented within the result budget', async () => {
+    const f = await setup('full-access', 'kun', 16)
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: Array.from({ length: 16 }, (_, i) =>
+      ({ ...f.assignment, label: `Task ${i}` })) }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    const records = await f.dispatches.list('parent')
+    expect(records).toHaveLength(16)
+    for (const record of records) {
+      await f.dispatches.update('parent', record.dispatchId, { state: 'completed', workerReport: {
+        summary: 'Result '.repeat(570), outcome: 'succeeded', submittedAt: new Date(f.clock.now).toISOString(),
+        checks: [{ name: 'tests', status: 'passed', detail: 'All checked. '.repeat(140) }],
+        risks: ['Risk '.repeat(200)]
+      } })
+    }
+    await f.service.reconcile()
+    const intent = await f.service.get(result.dispatchIntentId!)
+    expect(intent?.resultSummary?.length).toBeLessThanOrEqual(32_000)
+    for (const record of records) expect(intent?.resultSummary).toContain(`### ${record.title}\n`)
+    expect(intent?.resultSummary).toContain('[truncated]')
+  })
+
   it.each(['passed', 'needs_changes', 'rejected', 'waived'] as const)(
     'reviews completed siblings before settling a mixed batch with verdict %s', async (verdict) => {
       const f = await setup('full-access')

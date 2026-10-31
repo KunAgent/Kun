@@ -13,6 +13,11 @@
     "save": "保存修改",
     "keepRecommendation": "放弃修改",
     "details": "任务与验收条件",
+    "result": "执行结果",
+    "resultBatch": "任务汇总",
+    "expandResult": "展开完整结果",
+    "collapseResult": "收起结果",
+    "resultMissing": "执行已结束，但尚未收到结果正文。可打开子任务查看详情。",
     "viewProcess": "查看过程",
     "updateFailed": "无法保存推荐方案，任务仍保持暂停。",
     "status": {

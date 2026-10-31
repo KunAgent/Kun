@@ -1,3 +1,4 @@
+import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
 import { replaceFailedBatchAssignment, replaceFailedWorkerDispatch } from './worker-dispatch-replacement.js'
 import { assignmentFallbacks, workerDispatchIds } from './worker-dispatch-ids.js'
 import { z } from 'zod'
@@ -410,6 +411,11 @@ export class ManagerWorkerDispatch {
         }
       } finally { this.replacing.delete(intent.intentId) }
     }
+    // Keep every sibling represented within the card's total budget.
+    const resultBudget = Math.floor(32_000 / live.length) - 2
+    const resultSummary = live.map((record) => clipWorkerResult(record.state === 'cancelled'
+      ? `Cancelled: ${record.title}`
+      : `### ${record.title}\n\n${workerResultSummary(record) ?? 'No result text returned.'}`, resultBudget)).join('\n\n')
     const failed = live.find((record) => record.state === 'failed')
     if (failed && live.some((record) => record.state === 'accepted' || record.state === 'pending')) {
       return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target,
@@ -422,7 +428,7 @@ export class ManagerWorkerDispatch {
           if (await settleReplacement(intent, () => replaceFailedWorkerDispatch(this.deps, intent, failed, inputs[0].input))) return null
         } finally { this.replacing.delete(intent.intentId) }
       }
-      return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.' }
+      return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.', resultSummary }
     }
     if (live.every((record) => record.state === 'completed' || record.state === 'cancelled')) {
       // Cancelled siblings have no result to review, but completed work still
@@ -430,9 +436,7 @@ export class ManagerWorkerDispatch {
       const reviewed = live.filter((record) => record.state === 'completed')
         .every((record) => (record.verdict?.status ?? 'pending') !== 'pending')
       const settled = live.some((record) => record.state === 'cancelled') ? 'cancelled' : 'completed'
-      return { state: reviewed ? settled : 'awaiting_parent', target,
-        resultSummary: live.map((record) => record.state === 'cancelled'
-          ? `Cancelled: ${record.title}` : record.resultExcerpt ?? record.title).join('\n').slice(0, 32_000) }
+      return { state: reviewed ? settled : 'awaiting_parent', target, resultSummary }
     }
     return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target }
   }
