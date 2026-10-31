@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { randomUUID } from 'node:crypto'
+import { MANAGER_MUTATION_REPLAY_CAPABILITY } from '../contracts/manager-request-replay.js'
 import { requestManagerJson, type ServiceManagerConnection } from './manager-client.js'
 import { isSessionMutation, isThreadMutation } from './shared-data-store-contracts.js'
 import { mutationFenceForValue } from './turn-mutation-context.js'
@@ -19,14 +21,20 @@ export async function callManagerStore(
   const turnFence = shouldFenceManagerStoreMutation(store, operation)
     ? mutationFenceForValue(value)
     : undefined
+  const timeoutMs = resolveManagerDataRequestTimeoutMs(store, operation)
+  const replay = shouldFenceManagerStoreMutation(store, operation) &&
+    manager.discovery.capabilities?.includes(MANAGER_MUTATION_REPLAY_CAPABILITY)
+    ? { requestId: randomUUID(), managerInstanceId: manager.discovery.instanceId, expiresAt: Date.now() + timeoutMs }
+    : undefined
   const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
     method: 'POST',
     signal,
-    retrySafe: isManagerStoreRead(store, operation),
+    retrySafe: isManagerStoreRead(store, operation) || replay !== undefined,
+    ...(replay ? { maxAttempts: 5 } : {}),
     body: store === 'thread' || store === 'session'
-      ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}) }
+      ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}), ...(replay ? { replay } : {}) }
       : value ?? {},
-    timeoutMs: resolveManagerDataRequestTimeoutMs(store, operation)
+    timeoutMs
   })
   return ResultSchema.parse(response).result
 }

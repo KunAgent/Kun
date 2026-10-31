@@ -26,7 +26,7 @@ describe('Service Manager resolution', () => {
     const fetchImpl = managerFetch(fixture)
 
     await expect(resolveServiceManager(fixture.controlDir, fetchImpl)).resolves.toEqual({
-      discovery: fixture.discovery
+      discovery: { ...fixture.discovery, capabilities: fixture.capabilities }
     })
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
@@ -47,7 +47,7 @@ describe('Service Manager resolution', () => {
       controlDir: fixture.controlDir,
       settingsPath: fixture.discovery.settingsPath,
       fetch: fetchImpl
-    })).resolves.toEqual({ discovery: fixture.discovery })
+    })).resolves.toEqual({ discovery: { ...fixture.discovery, capabilities: fixture.capabilities } })
     expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
@@ -58,7 +58,7 @@ describe('Service Manager resolution', () => {
 
     await expect(resolveServiceManager(fixture.controlDir, fetchImpl)).resolves.toBeNull()
     await expect(resolveServiceManagerForMigration(fixture.controlDir, fetchImpl)).resolves.toEqual({
-      discovery: fixture.discovery
+      discovery: { ...fixture.discovery, capabilities: fixture.capabilities }
     })
 
     const statusCall = vi.mocked(fetchImpl).mock.calls.find(([input]) =>
@@ -67,11 +67,13 @@ describe('Service Manager resolution', () => {
     expect(new Headers(statusCall?.[1]?.headers).get('authorization')).toBe('Bearer manager-token')
   })
 
-  it.each(['item-turn-page-v1', 'room-store-v4', 'room-store-v6', 'history-reference-recovery-v1', 'history-reference-sources-v1', 'history-reference-sources-v2'])('requires %s before accepting manager features', async (missing) => {
+  it.each(['mutation-replay-v1', 'item-turn-page-v1', 'room-store-v4', 'room-store-v6', 'history-reference-recovery-v1', 'history-reference-sources-v1', 'history-reference-sources-v2'])('requires %s before accepting manager features', async (missing) => {
     const fixture = await managerFixture(KUN_MANAGER_CAPABILITIES.filter((value) => value !== missing))
     const fetchImpl = managerFetch(fixture)
     await expect(resolveServiceManager(fixture.controlDir, fetchImpl)).resolves.toBeNull()
-    await expect(resolveServiceManagerForMigration(fixture.controlDir, fetchImpl)).resolves.toEqual({ discovery: fixture.discovery })
+    await expect(resolveServiceManagerForMigration(fixture.controlDir, fetchImpl)).resolves.toEqual({
+      discovery: { ...fixture.discovery, capabilities: fixture.capabilities }
+    })
   })
 
   it('rejects a capability-incompatible manager when status authentication fails', async () => {

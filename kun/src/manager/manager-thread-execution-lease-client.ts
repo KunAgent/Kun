@@ -72,6 +72,14 @@ export class ManagerThreadExecutionLeaseClient implements ThreadExecutionLeasePo
   authorityState(threadId: string): ThreadLeaseAuthorityState {
     const thread = this.authorityByThread.get(threadId) ?? 'holder'
     if (this.state !== 'open' || thread === 'lost' || this.runtimeAuthority === 'lost') return 'lost'
+    const renewal = this.renewals.get(threadId)
+    if (thread === 'holder' && renewal && Date.parse(renewal.lease.expiresAt) <= Date.now()) {
+      // A resumed promise can dispatch work before overdue timer callbacks
+      // run. A live isolated heartbeat does not prove this thread still owns
+      // its fence: park synchronously until Manager confirms that exact lease.
+      this.expireRenewal(threadId, renewal.lease.turnId, renewal.lease.fencingToken)
+      return this.authorityState(threadId)
+    }
     return thread === 'grace' || this.runtimeAuthority === 'grace' ? 'grace' : 'holder'
   }
 

@@ -308,7 +308,7 @@ export function WorkbenchChatStage({
                 onOpenRequirementDraft={onOpenRequirementDraft}
                 trajectoryEnabled={Boolean(activeThreadId)}
                 trajectoryOpen={trajectoryOpen}
-                trajectoryRunning={trajectoryData.summary.runningCount > 0}
+                trajectoryRunning={busy || trajectoryData.summary.runningCount > 0}
                 trajectoryFailed={trajectoryData.summary.lastStatus === 'failed'}
                 onToggleTrajectory={() => {
                   if (!activeThreadId) return

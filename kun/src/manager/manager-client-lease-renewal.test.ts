@@ -14,6 +14,27 @@ const manager = {
 } as ServiceManagerConnection
 
 describe('ManagerThreadExecutionLeaseClient renewal', () => {
+  it.each([200, 409])('parks an overdue lease before delayed timers run, then honors Manager response %s', async (status) => {
+    vi.useFakeTimers()
+    let resolveRenewal!: (response: Response) => void
+    const pending = new Promise<Response>(resolve => { resolveRenewal = resolve })
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url.endsWith('/acquire')) return leaseResponse(0)
+      if (url.endsWith('/renew')) return pending
+      if (url.endsWith('/release')) return jsonResponse({ released: true })
+      throw new Error('unexpected request')
+    }))
+    const client = new ManagerThreadExecutionLeaseClient(manager, 'production', 'runtime-1')
+    await client.acquire('thread-1', 'turn-1')
+    vi.setSystemTime(Date.now() + THREAD_EXECUTION_LEASE_TTL_MS + 1)
+    expect(client.authorityState('thread-1')).toBe('grace')
+    const authority = client.waitAuthorityResolution('thread-1')
+    resolveRenewal(status === 200 ? leaseResponse(0) : new Response('{}', { status }))
+    await expect(authority).resolves.toBe(status === 200 ? 'holder' : 'lost')
+    await client.shutdown()
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()

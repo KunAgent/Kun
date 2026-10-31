@@ -2,6 +2,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import { TurnMutationFenceSchema } from '../contracts/runtime-flavor.js'
+import { ManagerMutationReplaySchema } from '../contracts/manager-request-replay.js'
 import { HybridSessionStore } from '../adapters/hybrid/hybrid-session-store.js'
 import { HybridThreadStore } from '../adapters/hybrid/hybrid-thread-store.js'
 import {
@@ -180,7 +181,8 @@ export type ManagerSessionStoreOperation =
 
 export const ManagerDataRequestEnvelopeSchema = z.object({
   value: z.unknown(),
-  turnFence: TurnMutationFenceSchema.optional()
+  turnFence: TurnMutationFenceSchema.optional(),
+  replay: ManagerMutationReplaySchema.optional()
 }).strict()
 
 export type ManagerArtifactStoreOperation =

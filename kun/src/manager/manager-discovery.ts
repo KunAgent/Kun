@@ -25,6 +25,7 @@ export const ManagerDiscoveryRecordSchema = z.object({
   baseUrl: z.string().url().max(2_048),
   managerToken: z.string().min(1).max(16_384),
   serviceVersion: z.string().min(1).max(128),
+  capabilities: z.array(z.string().max(128)).max(128).optional(),
   /** Optional so a new desktop can authenticate and hand off a legacy Manager. */
   buildId: RuntimeBuildIdSchema.optional(),
   appOwner: AppSessionOwnerSchema.optional(),

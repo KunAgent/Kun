@@ -164,7 +164,11 @@ async function inspectManagerOnce(
   const parsed = ManagerHealthSchema.safeParse(body)
   if (!parsed.success) return fail('health_invalid')
   if (!managerIdentityMatchesDiscovery(parsed.data, discovery)) return fail('identity_mismatch')
-  return { state: 'ready', discovery, health: parsed.data }
+  return {
+    state: 'ready',
+    discovery: { ...discovery, capabilities: parsed.data.capabilities },
+    health: parsed.data
+  }
 }
 
 async function probeManagerHealth(

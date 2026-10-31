@@ -58,15 +58,15 @@ function page(): TrajectoryPage {
   }
 }
 
-function Probe({ visible }: { visible: boolean }): ReactElement | null {
-  useTrajectoryData({
+function Probe({ visible, running = true }: { visible: boolean; running?: boolean }): ReactElement | null {
+  const data = useTrajectoryData({
     threadId: 'thread-1',
     visible,
-    threadRunning: true,
+    threadRunning: running,
     filter: 'all',
     query: ''
   })
-  return null
+  return createElement('span', null, data.summary.lastStatus)
 }
 
 function setReactActEnvironment(value: boolean): void {
@@ -95,7 +95,7 @@ describe('useTrajectoryData polling', () => {
     vi.useRealTimers()
   })
 
-  it('coalesces hidden summary polls while the previous request is in flight', async () => {
+  it('does not poll a closed view after its initial summary settles', async () => {
     const pending = deferred<TrajectorySummary>()
     trajectoryMock.fetchTrajectorySummary.mockReturnValue(pending.promise)
 
@@ -106,6 +106,33 @@ describe('useTrajectoryData polling', () => {
     expect(trajectoryMock.fetchTrajectorySummary).toHaveBeenCalledTimes(1)
 
     await act(async () => pending.resolve(summary()))
+    await act(async () => vi.advanceTimersByTimeAsync(60_000))
+    expect(trajectoryMock.fetchTrajectorySummary).toHaveBeenCalledTimes(1)
+    expect(trajectoryMock.fetchTrajectoryPage).not.toHaveBeenCalled()
+  })
+
+  it('refreshes the hidden badge on completion even when the start summary is still pending', async () => {
+    const pending = deferred<TrajectorySummary>()
+    trajectoryMock.fetchTrajectorySummary.mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ ...summary(), runningCount: 0, lastStatus: 'completed' })
+    await act(async () => root.render(createElement(Probe, { visible: false })))
+    await act(async () => root.render(createElement(Probe, { visible: false, running: false })))
+    expect(trajectoryMock.fetchTrajectorySummary).toHaveBeenCalledTimes(2)
+    await act(async () => pending.resolve(summary()))
+    await act(async () => vi.advanceTimersByTimeAsync(60_000))
+    expect(trajectoryMock.fetchTrajectorySummary).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toBe('completed')
+  })
+
+  it('loads fresh records when the closed view is opened', async () => {
+    trajectoryMock.fetchTrajectorySummary.mockResolvedValue(summary())
+    trajectoryMock.fetchTrajectoryPage.mockResolvedValue(page())
+    await act(async () => root.render(createElement(Probe, { visible: false })))
+    await act(async () => vi.advanceTimersByTimeAsync(60_000))
+    await act(async () => root.render(createElement(Probe, { visible: true })))
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(trajectoryMock.fetchTrajectoryPage).toHaveBeenCalledTimes(1)
+    expect(trajectoryMock.fetchTrajectorySummary).toHaveBeenCalledTimes(1)
   })
 
   it('uses the trajectory page as the visible summary and coalesces page polls', async () => {

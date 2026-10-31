@@ -67,6 +67,7 @@ export { RESOURCE_LEASE_TTL_MS }
 export type { ManagerResourceFence, ManagerResourceLease }
 
 export const KUN_MANAGER_CAPABILITIES = [
+  'mutation-replay-v1',
   'runtime-slots-v1',
   'shared-data-v1',
   'artifact-memory-data-v1',

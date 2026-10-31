@@ -50,6 +50,8 @@ export type ManagerRequestOptions = {
   signal?: AbortSignal
   /** Explicitly read-only RPCs may retry after an ambiguous socket failure. */
   retrySafe?: boolean
+  /** Bounded transport attempts, only useful for reads or deduplicated writes. */
+  maxAttempts?: number
 }
 
 export async function requestManagerJson(
@@ -103,6 +105,7 @@ async function performManagerAttempts<T>(
   fetchImpl: typeof fetch
 ): Promise<T> {
   const body = options.body === undefined ? undefined : JSON.stringify(options.body)
+  const maxAttempts = Math.min(5, Math.max(1, Math.floor(options.maxAttempts ?? 3)))
   for (let attempt = 0; ; attempt += 1) {
     signal.throwIfAborted()
     let receivedResponse = false
@@ -120,11 +123,11 @@ async function performManagerAttempts<T>(
       return await consume(response)
     } catch (error) {
       const failure = classifyManagerTransportError(error)
-      if (signal.aborted || attempt >= 2 || !(failure instanceof ServiceManagerTransportError) ||
+      if (signal.aborted || attempt + 1 >= maxAttempts || !(failure instanceof ServiceManagerTransportError) ||
         (!retrySafe && (receivedResponse || failure.kind !== 'connection_refused'))) throw failure
       // Stay on the authenticated Manager instance. A new Manager requires
       // ownership/lease recovery, never a blind data-plane endpoint swap.
-      await delayRequestRetry(100 * (attempt + 1), undefined, { signal })
+      await delayRequestRetry(100 * (2 ** attempt), undefined, { signal })
     }
   }
 }

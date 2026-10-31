@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { InMemoryEventBus } from '../../adapters/in-memory-event-bus.js'
 import { createThreadRecord } from '../../domain/thread.js'
 import type { SessionStore } from '../../ports/session-store.js'
 import { LlmDebugRecorder } from '../../services/llm-debug-recorder.js'
@@ -7,6 +8,24 @@ import { buildRouter } from './index.js'
 import type { ServerRuntime } from './server-runtime.js'
 
 describe('trajectory routes', () => {
+  it('coalesces summaries without hydrating the thread twice and invalidates after progress', async () => {
+    const server = runtime(new LlmDebugRecorder())
+    const loadItems = vi.spyOn(server.sessionStore, 'loadItems')
+    let seq = 0
+    server.eventBus = new InMemoryEventBus()
+    vi.spyOn(server.eventBus, 'highestSeq').mockImplementation(() => seq)
+    const router = buildRouter(server)
+    const path = '/v1/threads/thread-1/trajectory/summary'
+    await Promise.all([dispatch(router, path, auth()), dispatch(router, path, auth())])
+    await dispatch(router, path, auth())
+    expect(loadItems).toHaveBeenCalledTimes(1)
+    seq += 1
+    await dispatch(router, path, auth())
+    expect(loadItems).toHaveBeenCalledTimes(2)
+    vi.spyOn(server.threadService, 'getMetadata').mockResolvedValue(null)
+    expect((await dispatch(router, path, auth())).status).toBe(404)
+  })
+
   it('authenticate, isolate threads, and expose page/summary/detail DTOs', async () => {
     const recorder = new LlmDebugRecorder()
     const round = recorder.start({
@@ -46,7 +65,7 @@ function runtime(recorder: LlmDebugRecorder): ServerRuntime {
     insecure: false,
     llmDebug: recorder,
     threadService: {
-      get: async (id: string) => id === thread.id ? thread : null
+      getMetadata: async (id: string) => id === thread.id ? thread : null
     } as unknown as ThreadService,
     sessionStore: { loadItems: async () => [] } as unknown as SessionStore
   } as unknown as ServerRuntime

@@ -2,9 +2,9 @@ import type { RuntimeRegistration } from '../contracts/runtime-flavor.js'
 import type { ThreadLeaseAuthorityState } from '../ports/thread-execution-lease.js'
 import {
   heartbeatRuntimeWithManager,
-  ManagerRuntimeSlotBusyError,
-  type ServiceManagerConnection
-} from '../manager/manager-client.js'
+  ManagerRuntimeSlotBusyError
+} from '../manager/manager-runtime-heartbeat-request.js'
+import type { ServiceManagerConnection } from '../manager/manager-client.js'
 import { ServiceManagerHttpError, ServiceManagerTransportError } from '../manager/usage-errors.js'
 
 export type ManagerOwnershipLostReason = {
@@ -14,10 +14,10 @@ export type ManagerOwnershipLostReason = {
   ownerInstanceId?: string
 }
 
-export type RuntimeManagerHeartbeat = { stop(): void }
+export type RuntimeManagerHeartbeat = { stop(): void | Promise<void> }
 
 /** Transport failures do not prove that another Runtime owns this slot. */
-export function startRuntimeManagerHeartbeat(input: {
+export type RuntimeManagerHeartbeatOptions = {
   manager: ServiceManagerConnection
   registration: RuntimeRegistration
   onAuthorityChange(state: ThreadLeaseAuthorityState): void
@@ -27,7 +27,9 @@ export function startRuntimeManagerHeartbeat(input: {
   heartbeat?: typeof heartbeatRuntimeWithManager
   intervalMs?: number
   log?: (line: string) => void
-}): RuntimeManagerHeartbeat {
+}
+
+export function startRuntimeManagerHeartbeat(input: RuntimeManagerHeartbeatOptions): RuntimeManagerHeartbeat {
   const intervalMs = input.intervalMs ?? 5_000
   const log = input.log ?? ((line: string) => process.stderr.write(`${line}\n`))
   const abort = new AbortController()

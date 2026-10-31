@@ -10,7 +10,7 @@ import { KUN_VERSION } from '../version.js'
 import { ensureServiceManager, type EnsureServiceManagerInput } from './manager-client.js'
 import { managerDiscoveryPath, publishManagerDiscovery } from './manager-discovery.js'
 import { buildServiceManagerRouter } from './service-manager-router.js'
-import { ServiceManagerState } from './service-manager-state.js'
+import { KUN_MANAGER_CAPABILITIES, ServiceManagerState } from './service-manager-state.js'
 import type { ManagerSharedDataStore } from './shared-data-store.js'
 
 const roots: string[] = []
@@ -132,7 +132,9 @@ describe('memory lifecycle Manager compatibility fence', () => {
 
   it('accepts matching protocol and lifecycle support across compatible builds', async () => {
     const test = await fixture()
-    await expect(ensureServiceManager(test.input)).resolves.toEqual({ discovery: test.discovery })
+    await expect(ensureServiceManager(test.input)).resolves.toEqual({
+      discovery: { ...test.discovery, capabilities: [...KUN_MANAGER_CAPABILITIES] }
+    })
     expect(test.request).toHaveBeenCalledTimes(1)
     const health = await (await test.request(`${test.discovery.baseUrl}/health`)).json()
     expect(health).toMatchObject({ protocolVersion: 6, capabilities: expect.arrayContaining(['memory-lifecycle-v1']) })

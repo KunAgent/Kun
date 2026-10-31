@@ -63,11 +63,20 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   stays in the same application session. Manager failure recovery belongs to
   the application owner and must stop old consumers before rebinding a new
   Manager generation; app-owned Runtime must never independently elect one.
-- Steady Manager heartbeats are single-flight. Transport failures park new
+- Steady app-owned Manager heartbeats run in a dedicated worker and are
+  single-flight. Main-loop progress bounds renewal to a thirty-second stall
+  window; the worker never registers/elects a Manager or renews thread leases.
+  Stop and await it before final Runtime unregister/cleanup. Transport failures park new
   side-effecting tools and retry the same Manager with capped backoff; reads
   may continue. Resume only after both the heartbeat and thread lease are
   confirmed. Only an explicit slot rejection proves Runtime ownership loss;
   prolonged outages still obey thread lease deadlines and app-owned recovery.
+- Thread/session mutation retries require the Manager's advertised
+  `mutation-replay-v1` capability and retain one request id, deadline, owner
+  fence and Manager generation across attempts. Manager keeps bounded
+  acknowledgement/deduplication records until that deadline, rejects stale
+  fences before replay, and never evicts live records to admit new writes.
+  A changed generation or expired retry window must fail without reapplying.
 - Log the first shutdown reason, Runtime instance and PID before cleanup,
   then its completion, failure or deadline. Distinguish ownership loss,
   host stop requests, IPC disconnects and signals. Heartbeat logs must omit

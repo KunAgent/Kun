@@ -147,7 +147,7 @@ describe('MessageTimeline live elapsed time', () => {
       turnDurationByUserId: { 'original-user': 30_000 }
     })
     await render([user, {
-      kind: 'compaction', id: 'compaction', turnId: 'original-turn', status: 'running'
+      kind: 'compaction', id: 'compaction', turnId: 'original-turn', summary: 'Compacting context', status: 'running'
     }])
     expect(elapsed()).toBe('3m 53s')
     await act(async () => { vi.advanceTimersByTime(1000) })

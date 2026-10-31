@@ -60,6 +60,7 @@ export function useTrajectoryData(input: {
   const generation = useRef(0)
   const currentThreadId = useRef(input.threadId)
   const summaryInFlight = useRef(new Map<string, Promise<void>>())
+  const summaryRevision = useRef(0)
   const latestInFlight = useRef(new Map<string, Promise<void>>())
   currentThreadId.current = input.threadId
 
@@ -69,20 +70,22 @@ export function useTrajectoryData(input: {
   const loadSummary = useCallback(async (): Promise<void> => {
     const threadId = input.threadId
     if (!threadId) return
-    const existing = summaryInFlight.current.get(threadId)
+    const revision = summaryRevision.current
+    const key = `${threadId}:${revision}`
+    const existing = summaryInFlight.current.get(key)
     if (existing) return existing
     const current = generation.current
     const task = fetchTrajectorySummary(threadId).then((next) => {
-      if (requestIsCurrent(threadId, current)) setSummary(next)
+      if (summaryRevision.current === revision && requestIsCurrent(threadId, current)) setSummary(next)
     }).catch(() => {
       // The full page owns visible errors; the button summary degrades quietly.
     })
-    summaryInFlight.current.set(threadId, task)
+    summaryInFlight.current.set(key, task)
     try {
       await task
     } finally {
-      if (summaryInFlight.current.get(threadId) === task) {
-        summaryInFlight.current.delete(threadId)
+      if (summaryInFlight.current.get(key) === task) {
+        summaryInFlight.current.delete(key)
       }
     }
   }, [input.threadId, requestIsCurrent])
@@ -134,22 +137,25 @@ export function useTrajectoryData(input: {
     setHistoryIncomplete(false)
     setError(null)
     setSummary(EMPTY_SUMMARY)
-    if (!input.visible) {
-      void loadSummary()
-      return
-    }
+    if (!input.visible) return
     const timer = globalThis.setTimeout(() => void loadLatest(true), 0)
     return () => globalThis.clearTimeout(timer)
-  }, [input.threadId, input.visible, loadLatest, loadSummary])
+  }, [input.threadId, input.visible, loadLatest])
+
+  // The closed view needs a badge at selection/turn boundaries, not a
+  // full-history projection every second throughout every model/tool step.
+  useEffect(() => {
+    summaryRevision.current += 1
+    if (!input.visible) void loadSummary()
+  }, [input.threadId, input.visible, input.threadRunning, loadSummary])
 
   useEffect(() => {
-    if (!input.threadId || (!input.threadRunning && summary.runningCount === 0)) return
+    if (!input.visible || !input.threadId || (!input.threadRunning && summary.runningCount === 0)) return
     const timer = globalThis.setInterval(() => {
-      if (input.visible) void loadLatest(false)
-      else void loadSummary()
+      void loadLatest(false)
     }, 1_000)
     return () => globalThis.clearInterval(timer)
-  }, [input.threadId, input.threadRunning, input.visible, loadLatest, loadSummary, summary.runningCount])
+  }, [input.threadId, input.threadRunning, input.visible, loadLatest, summary.runningCount])
 
   const loadOlder = useCallback(async (): Promise<void> => {
     if (!input.threadId || !input.visible || !nextCursor || loadingOlder) return

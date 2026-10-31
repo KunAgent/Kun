@@ -1,5 +1,7 @@
 import { ServiceManagerUnavailableError } from './manager-resolution-error.js'
 import { ServiceManagerHttpError } from './usage-errors.js'
+import { ManagerRuntimeSlotBusyError } from './manager-runtime-heartbeat-request.js'
+export { ManagerRuntimeSlotBusyError, heartbeatRuntimeWithManager } from './manager-runtime-heartbeat-request.js'
 import { restoreManagerMemoryError } from './manager-memory-errors.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -57,13 +59,6 @@ export class ManagerRevisionConflictError extends Error {
   constructor(readonly currentRevision: number) {
     super(`shared document changed concurrently; current revision is ${currentRevision}`)
     this.name = 'ManagerRevisionConflictError'
-  }
-}
-
-export class ManagerRuntimeSlotBusyError extends Error {
-  constructor(readonly owner: RuntimeRegistration) {
-    super(`Kun runtime slot ${owner.flavor} is already owned by ${owner.instanceId}`)
-    this.name = 'ManagerRuntimeSlotBusyError'
   }
 }
 
@@ -543,32 +538,6 @@ export async function registerRuntimeWithManager(input: {
     await requireManagerJson(response)
   )
   return parsed.registration
-}
-
-export async function heartbeatRuntimeWithManager(input: {
-  manager: ServiceManagerConnection
-  flavor: RuntimeFlavor
-  instanceId: string
-  fetch?: typeof fetch
-  signal?: AbortSignal
-}): Promise<boolean> {
-  const response = await requestManagerResponse(input.manager, `/v1/runtimes/${input.flavor}/heartbeat`, {
-    method: 'POST',
-    body: { instanceId: input.instanceId },
-    fetch: input.fetch,
-    signal: input.signal
-  })
-  if (response.ok) {
-    await response.body?.cancel().catch(() => undefined)
-    return true
-  }
-  if (response.status === 409) {
-    const body = await response.json()
-    if (z.object({ code: z.literal('runtime_instance_changed') }).safeParse(body).success) return false
-    throw new ServiceManagerHttpError(409, undefined, 'Manager heartbeat conflict did not confirm ownership loss')
-  }
-  await requireManagerJson(response)
-  return false
 }
 
 export async function unregisterRuntimeWithManager(input: {

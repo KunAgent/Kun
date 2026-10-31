@@ -46,6 +46,7 @@ import {
   ThreadStoreOperationSchema
 } from './service-manager-state.js'
 import { ManagerDataRequestEnvelopeSchema } from './shared-data-store-contracts.js'
+import { ManagerMutationReplayCache } from './manager-mutation-replay.js'
 import { guardManagerDataTurnFence } from './service-manager-router-turn-fencing.js'
 import {
   authorized,
@@ -101,6 +102,7 @@ export function buildServiceManagerRouter(input: {
   }
 }): Router {
   const router = new Router()
+  const mutationReplay = new ManagerMutationReplayCache(input.instanceId)
   if (input.sharedData) addManagerRoomRoutes(router, {
     managerToken: input.managerToken,
     state: input.state,
@@ -110,7 +112,7 @@ export function buildServiceManagerRouter(input: {
   const capabilities = input.sharedData
     ? KUN_MANAGER_CAPABILITIES
     : KUN_MANAGER_CAPABILITIES.filter((capability) =>
-        capability !== 'shared-data-v1' &&
+        capability !== 'shared-data-v1' && capability !== 'mutation-replay-v1' &&
         capability !== 'artifact-memory-data-v1' &&
         capability !== 'memory-lifecycle-v1' &&
         capability !== 'atomic-json-v1' &&
@@ -404,12 +406,12 @@ export function buildServiceManagerRouter(input: {
           input.state, 'thread', operation.data, envelope,
           (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
-        const result = await input.sharedData!.executeThread(
-          operation.data,
-          envelope.value,
-          assertCurrent
-        )
-        return jsonResponse({ result })
+        return await mutationReplay.execute(envelope.replay,
+          ['thread', operation.data, envelope.value, envelope.turnFence], async () => {
+            assertCurrent?.()
+            const result = await input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent)
+            return jsonResponse({ result })
+          })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid thread-store request', error.issues)
         if (error instanceof StaleTurnFenceError) {
@@ -434,12 +436,13 @@ export function buildServiceManagerRouter(input: {
           input.state, 'session', operation.data, envelope,
           (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
-        const result = await input.sharedData!.executeSession(
-          operation.data as ManagerSessionStoreOperation,
-          envelope.value,
-          assertCurrent
-        )
-        return jsonResponse({ result })
+        return await mutationReplay.execute(envelope.replay,
+          ['session', operation.data, envelope.value, envelope.turnFence], async () => {
+            assertCurrent?.()
+            const result = await input.sharedData!.executeSession(
+              operation.data as ManagerSessionStoreOperation, envelope.value, assertCurrent)
+            return jsonResponse({ result })
+          })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid session-store request', error.issues)
         if (error instanceof StaleTurnFenceError) {
