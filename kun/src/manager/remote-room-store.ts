@@ -29,6 +29,7 @@ import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replie
 import type { RoomSearchQuery, RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 import { invalidateTickReads, tickCachedRead } from '../rooms/room-tick-reads.js'
 import { notifyRoomStoreCommit } from '../rooms/room-commit-signal.js'
+import { currentFollowUpArbitrationFence, mayChangeFollowUpAdmission, withFollowUpArbitration } from './followup-arbitration.js'
 
 /** Runtime proxy. Canonical room data never opens a local file in this process. */
 export class RemoteRoomStore implements RoomStore {
@@ -61,7 +62,17 @@ export class RemoteRoomStore implements RoomStore {
     try {
       await this.options.ready?.()
       const fence = this.fence()
-      const result = RoomStoreCommitResultSchema.parse(await this.call('commit', { input, ...(fence ? { fence } : {}) }))
+      const commit = async () => {
+        const arbitration = currentFollowUpArbitrationFence()
+        return RoomStoreCommitResultSchema.parse(await this.call('commit', {
+          input, ...(fence ? { fence } : {}), ...(arbitration ? { arbitration } : {})
+        }))
+      }
+      const result = fence && mayChangeFollowUpAdmission(input)
+        ? await withFollowUpArbitration(commit, {
+          baseUrl: this.manager.discovery.baseUrl, token: this.manager.discovery.managerToken,
+          flavor: fence.ownerFlavor, instanceId: fence.ownerInstanceId
+        }) : await commit()
       // A replay may be the first response after an ambiguous Manager connection loss.
       notifyRoomStoreCommit(input)
       return result

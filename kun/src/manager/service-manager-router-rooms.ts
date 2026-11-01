@@ -24,6 +24,8 @@ import { authorizedAsync, validation } from './service-manager-router-auth.js'
 import { MAX_MANAGER_DATA_BODY_BYTES, type ServiceManagerState } from './service-manager-state.js'
 import { resourceFenceStale } from './service-manager-router-fenced-mutation.js'
 import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from './service-manager-router-persistence.js'
+import { FollowUpArbitrationFenceSchema, ManagerFollowUpWriteArbitration,
+  assertFollowUpArbitrationFence, requiresFollowUpArbitration } from './followup-arbitration.js'
 
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
@@ -35,7 +37,9 @@ export function addManagerRoomRoutes(router: Router, input: {
   state: ServiceManagerState
   roomStore: SqliteRoomStore
   statePersistence?: () => { degraded: boolean }
+  followUpWrites?: ManagerFollowUpWriteArbitration
 }): void {
+  const followUpWrites = input.followUpWrites ?? new ManagerFollowUpWriteArbitration()
   router.add('POST', '/v1/data/room/:operation', (request, context) => authorizedAsync(
     request, input.managerToken, async () => {
       const operation = Operations.safeParse(context.params.operation)
@@ -96,15 +100,23 @@ export function addManagerRoomRoutes(router: Router, input: {
             break
           }
           case 'commit': {
-            const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional() })
+            const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional(),
+              arbitration: FollowUpArbitrationFenceSchema.optional() })
               .strict().parse(body.value)
             if (!value.fence && value.input.puts.some((put) => (put.kind === 'agent_commitment' || CollaborationDocumentKindSchema.safeParse(put.kind).success || put.kind.startsWith('peer_') ||
               ['agent_lifecycle', 'agent_import', 'shared_attachment', 'shared_block', 'shared_resource', 'shared_receipt', 'shared_actor', 'desktop_schedule_run', 'remote_history', 'remote_receipt', 'remote_attachment_admission', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim', 'room_run', 'room_poll', 'room_reactions', 'room_avatar', 'room_proposal', 'room_reminder', 'workbench_link'].includes(put.kind)))) {
               throw new ResourceFenceStaleError()
             }
-            if (value.fence) assertCurrent(value.fence)
-            result = await input.roomStore.commit(value.input,
-              value.fence ? () => assertCurrent(value.fence!) : undefined)
+            result = await followUpWrites.run(async () => {
+              const requiresArbitration = await requiresFollowUpArbitration(input.roomStore, value.input)
+              const assertWrite = () => {
+                if (value.fence) assertCurrent(value.fence)
+                if (requiresArbitration) assertFollowUpArbitrationFence(input.state, value.arbitration)
+              }
+              // Revalidate before durable request replay as well as the physical transaction.
+              assertWrite()
+              return input.roomStore.commit(value.input, assertWrite)
+            })
             break
           }
           case 'scrubMemoryData': {

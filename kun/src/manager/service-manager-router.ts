@@ -57,6 +57,7 @@ import {
 import { addHostPowerRoute } from './service-manager-router-host-power.js'
 import { addManagerAtomicJsonRoutes } from './service-manager-router-atomic-json.js'
 import { addManagerRoomRoutes } from './service-manager-router-rooms.js'
+import { ManagerFollowUpWriteArbitration } from './followup-arbitration.js'
 import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
 import {
   flushRenewal,
@@ -103,11 +104,13 @@ export function buildServiceManagerRouter(input: {
 }): Router {
   const router = new Router()
   const mutationReplay = new ManagerMutationReplayCache(input.instanceId)
+  const followUpWrites = new ManagerFollowUpWriteArbitration()
   if (input.sharedData) addManagerRoomRoutes(router, {
     managerToken: input.managerToken,
     state: input.state,
     roomStore: input.sharedData.roomStore,
-    statePersistence: input.statePersistence
+    statePersistence: input.statePersistence,
+    followUpWrites
   })
   const capabilities = input.sharedData
     ? KUN_MANAGER_CAPABILITIES

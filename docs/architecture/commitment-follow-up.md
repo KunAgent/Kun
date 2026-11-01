@@ -145,6 +145,31 @@ approval/input references are shown only while the actual gate still exists.
 source, disconnected Runtime, or missing capability must not be shown as active
 automatic follow-up.
 
+## Admission arbitration boundary
+
+Follow-up control and sidecar mutations also require a commit reservation on the
+Manager data resource `commitment-followup`. `RemoteRoomStore` obtains it from
+the exact Rooms lease owner and Manager connection. Manager checks this
+additional fence before receipt replay and again inside the physical SQLite
+transaction. A Rooms coordinator token alone cannot mutate these sidecars.
+Untracked legacy Commitment writes do not acquire a new authorization requirement.
+
+The lock order is native thread mutation, then follow-up arbitration. Native
+admission and local controller registration must occupy the same short
+arbitration scope as stop/takeover. Model, provider, GitHub, and external process
+work must stay outside it. A Manager-owned physical writer queue additionally
+keeps an in-flight persistence operation ahead of later control commits when an
+RPC reservation expires during I/O. The native ThreadStore writer and production
+host callback still have to join this boundary before automatic native execution
+can be exposed; the RoomStore reservation alone does not complete that contract.
+
+Commit reservations are resource-scoped: a nested follow-up scope cannot reuse
+an enclosing thread commit ID. Same-resource reentry is allowed only for the
+same Manager origin and Runtime owner. An incompatible explicit identity, or a
+local-only scope trying to become a Manager reservation, fails immediately
+rather than waiting behind its own queue entry. Scheduler wakeups strip both
+resource and commit contexts.
+
 ## Native receiver receipts (PR03 primitive)
 
 Native follow-up uses the existing `TurnService.enqueueTurn` queue, original
@@ -185,7 +210,10 @@ and guarded effect/Runtime lifecycle still have to supply that proof.
 - `kun/src/rooms/room-collaboration-migration.test.ts`: real v4 schema fixture,
   repeated startup, exact legacy JSON/receipt preservation and rollback.
 - `kun/src/manager/remote-room-store.test.ts`: real router/remote-store mutation
-  fence, stale participant rejection and transactional receipt replay.
+  fence, stale participant rejection, transactional receipt replay, and missing
+  or expired admission-arbitration reservations.
+- `kun/src/manager/data-mutex-context.test.ts` and `data-mutex.test.ts`: nested
+  resource commit scoping, exact identity reentry, and wake-context stripping.
 - `kun/src/manager/manager-memory-compatibility.test.ts`: real client with frozen
   protocol-5/protocol-6 discovery readers and capability mismatch checks.
 - `kun/src/agents/followup/service.test.ts`: explicit controls, user evidence,
