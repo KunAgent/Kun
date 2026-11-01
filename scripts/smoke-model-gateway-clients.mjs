@@ -259,6 +259,26 @@ function requestSummary(body) {
     inputTypes: [...new Set((Array.isArray(body.input) ? body.input : []).map((item) => item.type ?? item.role))] }
 }
 
+// Keep only a diagnostic vocabulary: client output can contain paths or credentials.
+export function sanitizedClientOutput(output) {
+  const allowed = new Set(('error failed failure timeout timed out aborted abort cancelled cancel ' +
+    'request response status code signal exit stream fetch connect connection refused reset ' +
+    'network socket closed invalid unexpected missing model provider route gateway ' +
+    'text type part step start finish message reason retry true false null KUN_GATEWAY_OFFLINE_OK').split(' '))
+  return String(output ?? '').replace(/https?:\/\/[^\s"']+|(?:\/|[A-Za-z]:\\)[^\s"']+|[A-Za-z0-9_@.-]+/g,
+    (token) => allowed.has(token) || /^\d{1,3}$/.test(token) ? token : '[redacted]')
+    .replace(/[^\x20-\x7e\n\r\t]+/g, '[redacted]').slice(-8000)
+}
+
+export function routeChangeEvidence(client, repeated, calls, requestCount, callCount) {
+  const passed = repeated.code === 0 && succeededOutput(client, repeated.stdout) &&
+    calls.some((call) => call.providerId === 'offline') && calls.some((call) => call.providerId === 'offline-next')
+  return { sameConfiguration: true, previous: 'offline', next: 'offline-next', passed,
+    ...(!passed ? { secondInvocation: { exitCode: repeated.code ?? null, timedOut: repeated.timedOut ?? false,
+      stdout: sanitizedClientOutput(repeated.stdout), stderr: sanitizedClientOutput(repeated.stderr),
+      requestCountAtStart: requestCount, upstreamCallCountAtStart: callCount } } : {}) }
+}
+
 async function runClient(client, options, temp, gateway, denyProxy, blocked, scenario, role = 'main') {
   const binary = await findBinary(client, options)
   const home = join(temp, `${client}-${scenario}-${role}`)
@@ -312,10 +332,9 @@ async function runClient(client, options, temp, gateway, denyProxy, blocked, sce
     let routeChange
     if (scenario === 'text' && succeededOutput(client, result.stdout)) {
       runtime.replaceFixtureTarget()
+      const requestCount = requests.length, callCount = calls.length
       const repeated = await capture(binary, scenarioArgs(client, workspace, scenario, role), env, workspace, options.timeout)
-      routeChange = { sameConfiguration: true, previous: 'offline', next: 'offline-next',
-        passed: repeated.code === 0 && succeededOutput(client, repeated.stdout) &&
-          calls.some((call) => call.providerId === 'offline') && calls.some((call) => call.providerId === 'offline-next') }
+      routeChange = routeChangeEvidence(client, repeated, calls, requestCount, callCount)
     }
     const success = scenario === 'cancel' ? result.cancelled && calls.some((call) => call.aborted)
       : succeededOutput(client, result.stdout) && (scenario !== 'tools' || calls.some((call) =>

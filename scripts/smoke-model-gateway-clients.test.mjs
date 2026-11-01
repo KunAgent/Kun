@@ -2,8 +2,35 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { parse } from 'yaml'
-import { clientArgs, clientVersionEvidence, isolatedClientEnv, parseOptions, toolShape } from './smoke-model-gateway-clients.mjs'
+import { clientArgs, clientVersionEvidence, isolatedClientEnv, parseOptions, routeChangeEvidence, sanitizedClientOutput, toolShape } from './smoke-model-gateway-clients.mjs'
 import { CLIENT_VERSIONS } from './lib/gateway-client-smoke-profiles.mjs'
+
+test('second invocation failure evidence is bounded and redacted', () => {
+  const result = routeChangeEvidence('opencode', { code: 1, timedOut: true,
+    stdout: 'error secret-token /Users/private/file https://example.com/key ' + 'failure '.repeat(3000),
+    stderr: 'request Bearer abcdef' }, [{ providerId: 'offline' }], 2, 1)
+  assert.equal(result.passed, false)
+  assert.equal(result.secondInvocation.exitCode, 1)
+  assert.equal(result.secondInvocation.timedOut, true)
+  assert.equal(result.secondInvocation.requestCountAtStart, 2)
+  assert.equal(result.secondInvocation.upstreamCallCountAtStart, 1)
+  assert.ok(result.secondInvocation.stdout.length <= 8000)
+  assert.doesNotMatch(result.secondInvocation.stderr, /abcdef|Bearer/)
+  assert.doesNotMatch(sanitizedClientOutput('secret-token /Users/private/file https://example.com/key'), /secret-token|Users|example/)
+  assert.equal(sanitizedClientOutput(undefined), '')
+  assert.equal(routeChangeEvidence('opencode', { code: null }, [], 0, 0).secondInvocation.stdout, '')
+})
+
+test('route change still requires successful output and both providers', () => {
+  const stdout = JSON.stringify({ type: 'text', part: { text: 'KUN_GATEWAY_OFFLINE_OK' } })
+  const repeated = { code: 0, stdout }
+  const both = [{ providerId: 'offline' }, { providerId: 'offline-next' }]
+  assert.equal(routeChangeEvidence('opencode', repeated, both, 1, 1).passed, true)
+  assert.equal(routeChangeEvidence('opencode', repeated, both.slice(0, 1), 1, 1).passed, false)
+  assert.equal(routeChangeEvidence('opencode', { ...repeated, stdout: '' }, both, 1, 1).passed, false)
+  assert.equal(routeChangeEvidence('opencode', { ...repeated, code: 1 }, both, 1, 1).passed, false)
+  assert.equal(routeChangeEvidence('opencode', repeated, both, 1, 1).secondInvocation, undefined)
+})
 
 test('CI installs pinned clients and exercises every client and scenario using explicit binaries', () => {
   const workflow = parse(readFileSync(new URL('../.github/workflows/model-gateway-clients.yml', import.meta.url), 'utf8'))
