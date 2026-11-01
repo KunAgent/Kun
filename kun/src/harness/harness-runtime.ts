@@ -148,7 +148,8 @@ export function createHarnessComposition(
   const onCatalog = (definition: HarnessDefinition, catalog: HarnessModelCatalog): void =>
     modelCatalogs.record(definition, catalog)
   const acpModels = new AcpModelProbe({
-    binaryPath: (id) => harnessCommandOverride(options().harnesses, id), onCatalog
+    binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
+    resolveSecretEnv: deps.resolveSecretEnv, onCatalog
   })
   const agentSdkModels = new AgentSdkModelProbe({
     onCatalog,
@@ -177,11 +178,10 @@ export function createHarnessComposition(
           ? codexModels.peek(definition)
           : undefined
   const probedModels = (definition: HarnessDefinition): string[] | undefined =>
-    liveProbedModels(definition) ?? modelCatalogs.get(definition)?.catalog.models ??
-      (definition.transport === 'acp' && definition.staticModels.length === 0 ? ['default'] : undefined)
+    liveProbedModels(definition) ?? modelCatalogs.get(definition)?.catalog.models
   // Discovery never holds one Agent's probe process while starting the next.
   const probeLive = (definition: HarnessDefinition): Promise<string[]> =>
-    definition.transport === 'acp' ? acpModels.probe(definition)
+    definition.transport === 'acp' ? acpModels.probe(definition, { keepWarm: false })
       : definition.transport === 'agent-sdk' ? agentSdkModels.probe(definition)
         : definition.transport === 'codex-app-server' ? codexModels.probe(definition)
           : definition.transport === 'pi-rpc' ? piModels.probe(definition)

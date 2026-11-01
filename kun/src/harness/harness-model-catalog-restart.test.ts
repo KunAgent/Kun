@@ -8,7 +8,9 @@ import type { ServerRuntime } from '../server/routes/server-runtime.js'
 
 const fixture = fileURLToPath(new URL('../runtime/acp/__fixtures__/fake-acp-agent.mjs', import.meta.url))
 const dirs: string[] = []
+const disposers: Array<() => void> = []
 afterEach(async () => {
+  for (const dispose of disposers.splice(0)) dispose()
   vi.restoreAllMocks()
   vi.resetModules()
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
@@ -59,6 +61,7 @@ async function startRuntime(fixtureAgents: Awaited<ReturnType<typeof agents>>) {
     binaryPaths: { opencode: fixtureAgents.opencode.command, codemaker: fixtureAgents.codemaker.command },
     enabledProfiles: [{ harnessId: 'opencode', credentialMode: 'native-login' }, { harnessId: 'codemaker', credentialMode: 'native-login' }] }) }
   const h = createHarnessComposition(() => options as never, { modelCatalogStorePath: fixtureAgents.store })
+  disposers.push(() => h.acpModels.dispose())
   // Detection (`--version`, sign-in status) is a separate, metadata-only check; this covers model listing.
   const status = (id: string): HarnessStatus => ({ harnessId: id, installed: 'yes', login: 'signed-in', checkedAt: '2026-10-19T00:00:00.000Z' })
   const detector = { status: async (id: string) => status(id), cachedStatus: (id: string) => status(id) }
@@ -88,16 +91,15 @@ const listedModels = { opencode: ['opencode/big', 'opencode/small'], codemaker: 
 /** Bound the fixture runtime startup under load. */
 const SPAWNING_TEST_TIMEOUT_MS = 30_000
 
-it('shows the Agent default until a real session supplies models, without spawning', async () => {
+it('probes the Agent for its models when no catalog has been observed', async () => {
   const fixtureAgents = await agents()
   const first = await startRuntime(fixtureAgents)
-  expect(await first.models('codemaker')).toMatchObject({ models: ['default'], catalogStatus: { source: 'fallback' } })
-  expect(await first.listed()).toMatchObject({ codemaker: ['default'] })
-  expect(await fixtureAgents.spawns()).toEqual([])
-  const models = listedModels.codemaker
-  first.h.acpModels.seed(first.h.catalog.get('codemaker')!, { models, modelInfo: models.map((id) => ({ id })) })
-  expect(await first.models('codemaker')).toMatchObject({ models, catalogStatus: { source: 'cache' } })
-  expect(await fixtureAgents.spawns()).toEqual([])
+  expect(await first.models('codemaker')).toMatchObject({
+    models: listedModels.codemaker, catalogStatus: { source: 'native' }
+  })
+  expect((await fixtureAgents.spawns()).filter((event) => event === 'start codemaker')).toHaveLength(1)
+  expect(await first.listed()).toMatchObject({ codemaker: listedModels.codemaker })
+  expect((await fixtureAgents.spawns()).filter((event) => event === 'start codemaker')).toHaveLength(1)
 }, SPAWNING_TEST_TIMEOUT_MS)
 
 it('lists Agent models after a restart without starting any Agent CLI', async () => {
@@ -120,7 +122,7 @@ it('lists Agent models after a restart without starting any Agent CLI', async ()
   expect(await fixtureAgents.spawns()).toEqual(spawns)
 }, SPAWNING_TEST_TIMEOUT_MS)
 
-it('uses the default model instead of probing after an Agent executable changes', async () => {
+it('re-lists only the Agent whose executable changed since the last launch', async () => {
   const fixtureAgents = await agents()
   const first = await startRuntime(fixtureAgents)
   for (const [id, models] of Object.entries(listedModels)) {
@@ -133,8 +135,14 @@ it('uses the default model instead of probing after an Agent executable changes'
   const before = (await fixtureAgents.spawns()).length
 
   const restarted = await startRuntime(fixtureAgents)
-  expect(await restarted.listed()).toEqual({ ...listedModels, opencode: ['default'] })
-  expect((await fixtureAgents.spawns()).slice(before)).toEqual([])
+  // Opening the picker after an Agent upgrade must ask that Agent again.
+  expect(await restarted.models('opencode')).toMatchObject({
+    models: ['opencode/next'], catalogStatus: { source: 'native' }
+  })
+  expect((await fixtureAgents.spawns()).slice(before)).toEqual(['start opencode'])
+  expect(await restarted.listed()).toEqual({ ...listedModels, opencode: ['opencode/next'] })
+  // Only the changed Agent was asked again; the untouched catalog is reused.
+  expect((await fixtureAgents.spawns()).slice(before)).toEqual(['start opencode'])
 }, SPAWNING_TEST_TIMEOUT_MS)
 
 it('opens previously observed catalogs without starting an Agent or creating a session', async () => {
