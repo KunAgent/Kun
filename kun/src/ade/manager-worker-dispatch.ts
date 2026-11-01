@@ -1,3 +1,5 @@
+import { stableAgentDispatchIntentId } from '../delegation/agent-dispatch-service.js'
+import { workerCapacity, workerLimitReport } from './team-execution-policy.js'
 import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
 import { replaceFailedBatchAssignment, replaceFailedWorkerDispatch } from './worker-dispatch-replacement.js'
 import { assignmentFallbacks, workerDispatchIds } from './worker-dispatch-ids.js'
@@ -110,6 +112,20 @@ export class ManagerWorkerDispatch {
     const refused = await newManagerWorkRefusal(this.deps, ctx.threadId, ctx.turnId)
     if (refused) return refused
     if (!this.deps.delegation) return { ok: false, refusal: 'admission', userReport: 'The delegation runtime is unavailable.' }
+    const existing = await this.deps.agentDispatchService!.get(stableAgentDispatchIntentId({
+      kind: 'worker', source: { threadId: ctx.threadId, turnId: ctx.turnId, toolCallId: context.activeToolCallId! }
+    }))
+    const capacity = await workerCapacity(this.deps, ctx.threadId)
+    if (existing) return {
+      ok: !['failed', 'cancelled'].includes(existing.state), capacity,
+      dispatchIntentId: existing.intentId, dispatchIntent: publicAgentDispatchIntent(existing),
+      dispatched: existing.state === 'running',
+      ...(existing.target?.workerIds?.[0] ? { workerId: existing.target.workerIds[0] } : {}),
+      ...(existing.target?.dispatchIds?.[0] ? { dispatchId: existing.target.dispatchIds[0] } : {}),
+      userReport: dispatchReport(existing, this.deps.language?.(), Date.parse(this.deps.nowIso()))
+    }
+    if (!capacity.available) return { ok: false, refusal: 'worker_limit', capacity,
+      userReport: workerLimitReport(capacity, this.deps.language?.()) }
     try {
       const saved: Array<{ input: WorkerCreateInput & { agent: import('../contracts/harness.js').HarnessRoute };
         selection?: import('../contracts/ade.js').WorkerRecord['selection']; profileId?: string;
@@ -165,6 +181,7 @@ export class ManagerWorkerDispatch {
         ...(items.length > 1 ? { batchId: `worker_batch_${ctx.turnId}_${context.activeToolCallId}` } : {})
       })
       return {
+        capacity,
         ok: !['failed', 'cancelled'].includes(intent.state),
         dispatchIntentId: intent.intentId, dispatchIntent: publicAgentDispatchIntent(intent),
         dispatched: intent.state === 'running',
@@ -175,12 +192,7 @@ export class ManagerWorkerDispatch {
           followUp: `No worker exists yet. Check dispatch_intent_status with intentId=${intent.intentId} before ` +
             'telling the user it is running; a refusal or failed start also arrives as a worker notice.'
         }),
-        userReport: intent.state === 'cancelled' ? 'Dispatch cancelled. No new work will start.'
-          : intent.state === 'failed' ? intent.error ?? 'Automatic dispatch review failed.'
-          : intent.state === 'pending_confirmation' ? 'Dispatch saved. Waiting for your confirmation.'
-          : intent.state === 'countdown' ? countdownReport(intent, Date.parse(this.deps.nowIso()))
-          : intent.state === 'running' ? 'Dispatch started. The parent Agent will receive the result for review.'
-          : 'Dispatch saved. Automatic review and task admission are managed by Kun.'
+        userReport: dispatchReport(intent, this.deps.language?.(), Date.parse(this.deps.nowIso()))
       }
     } catch (error) {
       return { ok: false, refusal: 'admission', userReport: error instanceof Error ? error.message : String(error) }
@@ -293,10 +305,12 @@ export class ManagerWorkerDispatch {
       if (!result.ok || !result.workerId || !result.dispatchId) {
         for (let skipped = index; skipped < inputs.length; skipped += 1) {
           const skippedIds = assignmentIds(intent, skipped)
-          await this.deps.dispatches.create({ ...skippedIds, teamId: ctx.threadId, parentTurnId: ctx.turnId,
+          await this.deps.dispatches.create({ ...skippedIds, dispatchIntentId: intent.intentId, teamId: ctx.threadId, parentTurnId: ctx.turnId,
             title: inputs[skipped].label, task: inputs[skipped].task, mode: 'queue', state: 'failed',
             failureReason: skipped === index ? result.userReport : `Skipped after dispatch refusal: ${result.userReport}`,
             createdAt: this.deps.nowIso(), updatedAt: this.deps.nowIso() })
+          const failed = await this.deps.dispatches.get(ctx.threadId, skippedIds.dispatchId)
+          if (failed) await this.deps.deliverer.notifyFailure(failed)
         }
         break
       }
@@ -347,13 +361,21 @@ export class ManagerWorkerDispatch {
 
   async reportPrelaunchFailure(intentId: string): Promise<void> {
     const intent = await this.deps.agentDispatchService?.get(intentId)
-    if (!intent || intent.kind !== 'worker' || intent.state !== 'failed' || intent.target?.workerIds?.length ||
+    if (!intent || intent.kind !== 'worker' || intent.state !== 'failed' ||
       intent.cancellationRequested || intent.takenOver) return
     const source = await this.deps.threads.get(intent.source.threadId).catch(() => null)
     if (!source || source.status === 'archived' || source.status === 'deleted') return
     const turn = source.turns.find((entry) => entry.id === intent.source.turnId) ??
       await this.deps.turns.getTurn(intent.source.threadId, intent.source.turnId).catch(() => null)
     if (!turn || turn.status === 'aborted') return
+    const records = await Promise.all(PayloadSchema.parse(intent.payload).items.map((_item, index) =>
+      this.deps.dispatches.get(intent.source.threadId, assignmentIds(intent, index).dispatchId)))
+    if (records.some(Boolean)) {
+      for (const record of records) {
+        if (record?.state === 'failed' && !record.turnId && !record.outcome) await this.deps.deliverer.notifyFailure(record)
+      }
+      return
+    }
     const team = await this.deps.teams.get(intent.source.threadId)
     if (team?.workers.some((worker) => worker.dispatchIntentId === intent.intentId)) return
     await this.deps.teams.ensure(intent.source.threadId)
@@ -501,4 +523,25 @@ function userNamedAgent(intent: string | undefined, id: string, name: string): b
   const text = intent.toLowerCase()
   const labels = [id, name].map((value) => value.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
   return labels.some((label) => new RegExp(`(?:use|using|with|assign to|delegate to|用|使用|调用|派给|交给)\\s*(?:the\\s+)?${label}(?:\\b|$|[\\s，。])`, 'i').test(text))
+}
+
+function dispatchReport(intent: AgentDispatchIntent, language: string | undefined, now: number): string {
+  const zh = language?.toLowerCase().startsWith('zh')
+  if (intent.state === 'cancelled') return zh ? '派发已取消，不会启动新任务。' : 'Dispatch cancelled. No new work will start.'
+  if (intent.state === 'failed') return intent.error ?? (zh ? '派发失败。' : 'Dispatch failed.')
+  if (intent.state === 'running') return zh ? '派发已启动，结果将送回主会话审核。' : 'Dispatch started. The parent Agent will receive the result for review.'
+  const settled = {
+    completed: ['派发已完成。', 'Dispatch completed.'],
+    awaiting_parent: ['worker 结果已送回，等待主会话审核。', 'Worker results are awaiting parent review.'],
+    queued: ['派发等待宿主准入。', 'Dispatch is waiting for host admission.'],
+    starting: ['宿主正在启动派发。', 'The host is starting the dispatch.'],
+    uncertain: ['启动状态待核实，请查询派发状态。', 'Start status is uncertain; check dispatch_intent_status.'],
+    stopping: ['派发正在停止。', 'Dispatch is stopping.']
+  }
+  if (intent.state in settled) return settled[intent.state as keyof typeof settled][zh ? 0 : 1]
+  const capacity = zh ? '尚未启动；启动时将复核 worker 容量。' : 'Not started yet; worker capacity is checked again at admission.'
+  if (intent.state === 'countdown') return zh
+    ? `派发已保存，等待启动倒计时（${intent.deadline ?? ''}）；可调整或取消。${capacity}`
+    : `${countdownReport(intent, now)} ${capacity}`
+  return (zh ? '派发已保存，等待确认或自动审核。' : 'Dispatch saved. Waiting for confirmation or automatic review. ') + capacity
 }

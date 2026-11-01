@@ -1,3 +1,4 @@
+import { workerCapacity } from './team-execution-policy.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { ManagerWorkerCreator } from './manager-worker-create.js'
 import { ManagerWorkerDispatch } from './manager-worker-dispatch.js'
@@ -48,6 +49,7 @@ import {
 } from './manager-worker-inputs.js'
 
 export type WorkerCreateResult = {
+  capacity?: import('../contracts/ade.js').WorkerCapacity
   ok: boolean
   dispatchIntentId?: string
   dispatchIntent?: import('../contracts/agent-dispatch-intents.js').AgentDispatchIntentPublic
@@ -166,6 +168,7 @@ export class ManagerRuntime {
   ): Promise<{
     dispatchIntentId?: string
     dispatchIntent?: import('../contracts/agent-dispatch-intents.js').AgentDispatchIntentPublic
+    capacity?: import('../contracts/ade.js').WorkerCapacity
     pending?: number
     requested: number
     created: number
@@ -204,6 +207,7 @@ export class ManagerRuntime {
       }
     }
     return {
+      capacity: await workerCapacity(this.deps, ctx.threadId),
       requested: input.items.length,
       created,
       failed,
@@ -219,6 +223,7 @@ export class ManagerRuntime {
 
   /** `worker_status` — worker records + their dispatches + activity rows. */
   async workerStatus(ctx: ManagerToolContext, rawInput: unknown): Promise<{
+    capacity: import('../contracts/ade.js').WorkerCapacity
     workers: Array<{
       worker: WorkerRecord
       dispatches: DispatchRecord[]
@@ -227,7 +232,8 @@ export class ManagerRuntime {
   }> {
     const input = WorkerStatusInputSchema.parse(rawInput)
     const team = await this.deps.teams.get(ctx.threadId)
-    if (!team) return { workers: [] }
+    const capacity = await workerCapacity(this.deps, ctx.threadId)
+    if (!team) return { workers: [], capacity }
     const workers = input.workerId
       ? team.workers.filter((worker) => worker.workerId === input.workerId)
       : team.workers
@@ -249,7 +255,7 @@ export class ManagerRuntime {
           : {})
       }
     }))
-    return { workers: rows }
+    return { workers: rows, capacity }
   }
 
   /** `worker_read` — newest-first visible messages from the worker thread. */
