@@ -177,11 +177,12 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
       const completion = notice.kind === 'dispatch_completed' || notice.kind === 'dispatch_failed'
       // A failure the card already rerouted to another Agent needs nothing from the manager.
       const rerouted = notice.kind === 'dispatch_failed' && Boolean(intent && replacedWorkerIds(intent).includes(notice.workerId))
-      const source = !worker && notice.dispatchIntentId ? await this.options.threads.get(managerThreadId) : undefined
+      const prelaunchFailure = !worker && notice.kind === 'dispatch_failed'
+      const source = prelaunchFailure ? await this.options.threads.get(managerThreadId) : undefined
       const sourceTurn = source?.turns.find(turn => turn.id === notice.parentTurnId) ??
         (source && notice.parentTurnId ? await this.options.turns.getTurn?.(managerThreadId, notice.parentTurnId) : undefined)
       const stopped = sourceTurn?.status === 'aborted'
-      const unavailable = !worker && notice.dispatchIntentId && (!source || source.status === 'archived' || source.status === 'deleted')
+      const unavailable = prelaunchFailure && (!source || source.status === 'archived' || source.status === 'deleted')
       if (stopped || unavailable || rerouted || (completion && (worker?.control === 'user' || intent?.takenOver || intent?.cancellationRequested))) {
         suppressed.push(notice.noticeId)
       } else pending.push(notice)

@@ -1,3 +1,4 @@
+import { ManagerRuntime } from './manager-runtime.js'
 import { describe, expect, it } from 'vitest'
 import type { HarnessDefinition, HarnessStatus } from '../contracts/harness.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
@@ -105,6 +106,26 @@ describe('readOnlyToolCeiling', () => {
 })
 
 describe('ReviewRequests.request', () => {
+  it('shares the last worker slot with ordinary creation', async () => {
+    const { stores, harness } = await seeded()
+    try {
+      await stores.teams.updatePolicy('thr_mgr', { softWorkers: 1, hardWorkers: 2 })
+      const runtime = new ManagerRuntime({ ...harness.deps, taskWorkspaces: undefined })
+      const settled = await Promise.allSettled([
+        harness.reviews.request(managerCtx(), { workerId: 'wrk_1' }, toolContext()),
+        runtime.createWorker(managerCtx(), { label: 'ordinary', task: 'Bounded work',
+          agent: { harnessId: 'kun', model: 'model-x' }, workspace: { isolation: 'local' } }, toolContext())
+      ])
+      const results = settled.map(result => {
+        if (result.status === 'rejected') throw result.reason
+        return result.value
+      })
+      expect(results.filter(result => result.ok)).toHaveLength(1)
+      expect(results.find(result => !result.ok)?.refusal).toBe('worker_limit')
+      expect((await stores.teams.get('thr_mgr'))!.workers.filter(worker => worker.state === 'active')).toHaveLength(2)
+    } finally { await teardownAdeStores(stores) }
+  })
+
   it('creates an ephemeral read-only reviewer on a different harness and dispatches it', async () => {
     const { stores, harness } = await seeded()
     try {

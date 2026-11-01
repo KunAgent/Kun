@@ -206,6 +206,7 @@ export type WorkerReport = z.infer<typeof WorkerReportSchema>
 
 export const DispatchRecordSchema = z
   .object({
+    prelaunchDisposition: z.enum(['refused', 'skipped']).optional(),
     dispatchIntentId: z.string().min(1).max(256).optional(),
     /** `dsp_` + random; doubles as the child startTurn clientRequestId. */
     dispatchId: z.string().min(1).max(256),
