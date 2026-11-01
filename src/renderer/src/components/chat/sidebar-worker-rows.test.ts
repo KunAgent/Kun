@@ -43,3 +43,26 @@ describe('selectSidebarWorkerRows', () => {
     expect(selectSidebarWorkerRows(rows, NOW).get('parent')![0].activity).toBe('read')
   })
 })
+
+describe('selectSidebarWorkerRows fast context filtering', () => {
+  it('hides Fast Context retrieval runs from the task list', () => {
+    const rows = {
+      search: row('search', { childLauncher: 'fast_context' }),
+      worker: row('worker', { childLauncher: 'delegate_task' })
+    }
+    expect(selectSidebarWorkerRows(rows, NOW).get('parent')!.map((entry) => entry.unitId)).toEqual(['worker'])
+  })
+
+  it('shows no task group when a parent only ran Fast Context', () => {
+    const rows = { search: row('search', { childLauncher: 'fast_context' }) }
+    expect(selectSidebarWorkerRows(rows, NOW).size).toBe(0)
+  })
+
+  it('keeps source-less rows and same-titled ordinary tasks', () => {
+    const rows = {
+      legacy: row('legacy', { title: 'Fast Context' }),
+      sameTitle: row('sameTitle', { title: 'fast context', childLauncher: 'manager-worker' })
+    }
+    expect(selectSidebarWorkerRows(rows, NOW).get('parent')!.map((entry) => entry.unitId)).toEqual(['legacy', 'sameTitle'])
+  })
+})

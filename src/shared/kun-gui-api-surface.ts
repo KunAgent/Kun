@@ -56,6 +56,7 @@ import type {
   BrowserUseViewState
 } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
+import type { StorageCleanupApi } from './storage-cleanup'
 import type { UninstallApi } from './uninstall'
 import type { RuntimeRequestIpcApi } from './kun-gui-api-runtime-request'
 import type { RuntimeDataRecoveryApi } from './runtime-data-recovery'
@@ -254,7 +255,7 @@ import type { KunGuiMarketApi } from './market/kun-gui-api-market'
 export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
   import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi & import('./terminal-dock').KunGuiTerminalDockApi &
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
-  import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi &
+  import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi & import('./artifact-thumbnail').KunGuiArtifactThumbnailApi &
   import('./ade-collaboration-settings').AdeCollaborationSettingsBridge & import('./ade-project-defaults').AdeProjectDefaultsBridge & {
   productAnalytics?: import('./product-analytics').ProductAnalyticsApi
   platform: string
@@ -283,6 +284,8 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   }
   /** Windows production storage-root relocation and recovery surface. */
   storageRelocation: StorageRelocationApi
+  /** Settings storage page: usage scan, consented auto cleanup, trash. */
+  storageCleanup: StorageCleanupApi
   /** In-app uninstall: optional full local-data removal and app self-removal. */
   uninstall: UninstallApi
   /** One-time, path-opaque Runtime migration recovery surface. */
@@ -467,7 +470,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   activateUiPluginTheme: (id: string) => Promise<UiPluginThemeActivateIpcResult>
   deactivateUiPluginTheme: () => Promise<UiPluginThemeDeactivateIpcResult>
   getKunConfigFile: () => Promise<DeepseekConfigFileResult>
-  setKunConfigFile: (content: string) => Promise<DeepseekConfigSaveResult>
+  setKunConfigFile: (content: string, baseContent: string) => Promise<DeepseekConfigSaveResult>
   preflightBuiltinGitHubMcpAuthorization: (host?: string) => Promise<BuiltinGitHubMcpAuthorizationPreflight>
   startBuiltinGitHubMcpLogin: (host?: string) => Promise<BuiltinGitHubMcpLoginResult>
   disableBuiltinGitHubMcp: () => Promise<{ disabled: true }>

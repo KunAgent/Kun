@@ -19,6 +19,7 @@ import { MessageEditAssistProvider } from '../chat/UserMessageEditField'
 import { EMPTY_SKILL_COMMANDS } from '../chat/floating-composer-policy'
 import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
 import { TaskSessionBar } from '../chat/TaskSessionBar'
+import { PlanBuildSessionCard, useIsPlanBuildSession } from '../plan/PlanBuildSessionCard'
 import { useTaskReportSlot } from '../chat/TaskReportCards'
 import {
   GraphChildSessionBar,
@@ -54,9 +55,6 @@ import { prefetchSharedDefaultModelSelection } from '../../agent/kun-runtime-sha
 import { useTerminalDockStore } from '../terminal/terminal-dock-store'
 import { TerminalChatCollapsedStrip } from '../terminal/TerminalDrawer'
 
-const CodeTour = lazy(() =>
-  import('../code-tour/CodeTour').then((module) => ({ default: module.CodeTour }))
-)
 const TerminalDrawer = lazy(() =>
   import('../terminal/TerminalDrawer').then((module) => ({ default: module.TerminalDrawer }))
 )
@@ -232,7 +230,9 @@ export function WorkbenchChatStage({
     composerProps.fileReferenceEnabled === true &&
     composerProps.runtimeReady &&
     (composerProps.hasActiveThread || Boolean(effectiveConversationDropWorkspaceRoot))
-  const hasConversationContent = Boolean(blocks.length || liveAssistant || liveReasoning)
+  // A handed-off plan build shows its build card, never the new-task page.
+  const planBuildSession = useIsPlanBuildSession()
+  const hasConversationContent = Boolean(blocks.length || liveAssistant || liveReasoning || planBuildSession)
   const emptyTaskLayout = shouldUseEmptyTaskLayout({
     activeThreadId,
     threadLoadingId,
@@ -308,7 +308,7 @@ export function WorkbenchChatStage({
                 onOpenRequirementDraft={onOpenRequirementDraft}
                 trajectoryEnabled={Boolean(activeThreadId)}
                 trajectoryOpen={trajectoryOpen}
-                trajectoryRunning={trajectoryData.summary.runningCount > 0}
+                trajectoryRunning={busy || trajectoryData.summary.runningCount > 0}
                 trajectoryFailed={trajectoryData.summary.lastStatus === 'failed'}
                 onToggleTrajectory={() => {
                   if (!activeThreadId) return
@@ -369,6 +369,7 @@ export function WorkbenchChatStage({
           <GraphChildSessionBar context={graphChildContext} onBack={onBackToParent} />
         ) : null}
         <TaskSessionBar />
+        <PlanBuildSessionCard />
         {terminalMaximized ? <TerminalChatCollapsedStrip busy={busy} /> : null}
         <div className={`min-h-0 min-w-0 flex-1 flex-row ${terminalMaximized ? 'hidden' : 'flex'}`}>
         <div
@@ -466,11 +467,6 @@ export function WorkbenchChatStage({
                 />
                 {emptyTaskLayout && onOpenThread ? (
                   <CodeHomeQuickStart disabled={runtimeConnection !== 'ready'} onOpenThread={onOpenThread} />
-                ) : null}
-                {emptyTaskLayout && onOpenThread && !focusModeEnabled ? (
-                  <Suspense fallback={null}>
-                    <CodeTour setInput={composerProps.setInput} />
-                  </Suspense>
                 ) : null}
               </div>
             )}

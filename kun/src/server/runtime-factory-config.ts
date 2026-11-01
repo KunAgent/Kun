@@ -68,6 +68,45 @@ export function mergeRuntimeConfigApplyOptions(
   }
 }
 
+/**
+ * Reconcile the caller's MCP server set with the live one. This runs inside the
+ * serialized configuration commit, so the version check and the assignment
+ * cannot be interleaved with a Runtime mutation.
+ */
+export function applyMcpServersUpdate(
+  current: KunServeRuntimeOptions,
+  merged: KunServeRuntimeOptions,
+  update: RuntimeConfigApplyRequest['mcpServers']
+): { options: KunServeRuntimeOptions; conflict?: string } {
+  if (!merged.capabilities || !update) return { options: merged }
+  if (update.mode === 'replace') {
+    if (!update.base) {
+      return { options: merged, conflict: 'replacing MCP servers requires the set that was read' }
+    }
+    const liveServers = current.capabilities?.mcp.servers ?? {}
+    if (!isDeepStrictEqual(update.base, liveServers)) {
+      return {
+        options: merged,
+        conflict: 'MCP servers changed in the Runtime since they were read; reload and retry'
+      }
+    }
+    return { options: merged }
+  }
+  // Preserve: keep the live server set, still applying the non-server MCP
+  // settings (global enable, search) the caller sent.
+  const liveMcp = current.capabilities?.mcp
+  if (!liveMcp) return { options: merged }
+  return {
+    options: {
+      ...merged,
+      capabilities: {
+        ...merged.capabilities,
+        mcp: { ...merged.capabilities.mcp, servers: liveMcp.servers }
+      }
+    }
+  }
+}
+
 function mergeRuntimeProviderCredentials(
   current: KunServeRuntimeOptions['providers'],
   next: KunServeRuntimeOptions['providers']

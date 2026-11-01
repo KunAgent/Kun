@@ -16,6 +16,7 @@ import {
 } from '../memory/memory-turn-context.js'
 import type { GuiPlanContext, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
+import { hasPublishedDesignPreview } from '../shared/design-preview-policy.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from './design-mode.js'
 import {
   DESIGN_HTML_PAGE_ALLOWED_TOOL_NAMES,
@@ -30,12 +31,8 @@ import {
   todoContinuationInstruction
 } from './continuation-instructions.js'
 import { isStalePlanContext } from './plan-mode.js'
-import {
-  createToolDiscoveryContext,
-  modelToolDiscoveryContexts
-} from './tool-discovery-context-factory.js'
+import { createToolDiscoveryContext } from './tool-discovery-context-factory.js'
 import type {
-  DiscoveredTool,
   PreparedTurnContext,
   ResolvedTurnAttachments
 } from './turn-execution-types.js'
@@ -128,7 +125,10 @@ export class TurnContextResolver {
     const approvalReviewer = normalizeApprovalReviewer(
       input.thread.roomContext ? input.thread.approvalReviewer : input.turn.approvalReviewer ?? input.thread.approvalReviewer
     )
-    const memoryStore = input.thread.roomContext ? undefined : this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    const availableMemoryStore = this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    // Room memory injection stays isolated from the global read-side context.
+    // Tool availability is separate and is restricted by applyRoomToolPolicy.
+    const memoryStore = input.thread.roomContext ? undefined : availableMemoryStore
     const workbenchCeiling = input.thread.workbenchOrigin?.capabilityCeiling
     // A reserved HTML page turn owns one file: it gets a fixed read/write tool
     // set, and capability skills for tools it cannot see stay inactive.
@@ -207,6 +207,8 @@ export class TurnContextResolver {
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
       ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
+      ...(clientSurface === 'gui' && hasPublishedDesignPreview(input.history, input.turnId)
+        ? { designPreviewOnly: true } : {}),
       agentSurface: input.turn.agentSurface ?? 'code',
       ...(input.turn.guiDesignArtifact ? { guiDesignArtifact: input.turn.guiDesignArtifact } : {}),
       ...(input.turn.imContext ? { imContext: true } : {}),
@@ -238,7 +240,7 @@ export class TurnContextResolver {
       ...(userInputDisabled ? { userInputDisabled: true } : {}),
       signal: input.signal
     }, {
-      memoryEnabled: Boolean(memoryStore),
+      memoryEnabled: Boolean(availableMemoryStore),
       ...(this.deps.allowedProviderIds ? { allowedProviderIds: this.deps.allowedProviderIds } : {}),
       ...(this.deps.allowedSkillIds ? { allowedSkillIds: this.deps.allowedSkillIds } : {}),
       ...(this.deps.allowedReadPaths ? { allowedReadPaths: this.deps.allowedReadPaths } : {}),
@@ -254,10 +256,10 @@ export class TurnContextResolver {
       ...(this.deps.fastContextTaskCount ? { fastContextTaskCount: this.deps.fastContextTaskCount } : {}),
       interactiveToolBridge: this.deps.interactiveToolBridge
     }), input.thread)
-    const tools = await listModelTools(
-      this.deps.toolHost,
-      modelToolDiscoveryContexts(toolDiscoveryContext)
-    )
+    // Discover against the real turn: a cache-stable union of Code/Design
+    // contexts advertises canvas tools that dispatch must then reject.
+    const tools = [...await this.deps.toolHost.listTools(toolDiscoveryContext)]
+      .sort((left, right) => left.name.localeCompare(right.name))
     return {
       threadId: input.threadId,
       turnId: input.turnId,
@@ -300,20 +302,6 @@ export class TurnContextResolver {
       tools
     }
   }
-}
-
-async function listModelTools(
-  toolHost: Pick<ToolHost, 'listTools'>,
-  contexts: readonly ToolHostContext[]
-): Promise<DiscoveredTool[]> {
-  const listings = await Promise.all(contexts.map((context) => toolHost.listTools(context)))
-  const byName = new Map<string, DiscoveredTool>()
-  for (const tools of listings) {
-    for (const tool of tools) {
-      if (!byName.has(tool.name)) byName.set(tool.name, tool)
-    }
-  }
-  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name))
 }
 
 export function resolveTurnClientSurface(turn: Pick<

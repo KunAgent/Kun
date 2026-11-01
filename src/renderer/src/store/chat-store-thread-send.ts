@@ -54,7 +54,8 @@ import type {
   WriteAssistantMessageContext
 } from './chat-store-types'
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
-import { threadWorkspaceBlocksSend } from './task-workspace-store'
+import { threadWorkspaceBlocksSend, useTaskWorkspaceStore } from './task-workspace-store'
+import { queuedTaskWorkspaceRequirement } from './task-workspace-queue-identity'
 import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
@@ -282,7 +283,7 @@ export async function sendThreadMessage(
       return false
     }
     if (!expectedThreadStillActive()) {
-      set({
+      if (!queued) set({
         error: i18n.t('common:designThreadChangedBeforeSend')
       })
       return false
@@ -297,13 +298,14 @@ export async function sendThreadMessage(
         if (!activeWriteContextIsValid()) return false
       }
       if (workspaceRoot && !(await workspaceDirectoryExists(workspaceRoot))) {
-        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) return false
+        if (!expectedThreadStillActive() || (adeDraft && !adeDraftStillCurrent(get(), adeDraft))) return false
         set({ error: workspaceMissingError() })
         if (!adeDraft) await showWorkspaceMissingDialog(workspaceRoot)
         return false
       }
       if (!activeWriteContextIsValid()) return false
     }
+    if (!expectedThreadStillActive()) return false
     const p = getProvider()
     if (writeContext || get().route === 'write') {
       const boardThreadId = writeContext?.whiteboardId
@@ -356,11 +358,17 @@ export async function sendThreadMessage(
       : null
     // ADE manager sends fold pending worker notices into the turn.
     const adeExtras = await adeWorkerNoticeSendExtras(get(), queued?.ackNoticeIds, i18n.language)
+    // Preparation may yield while the user selects another conversation.
+    // Leave the owner's durable queue intact for target-thread recovery.
+    if (!expectedThreadStillActive()) {
+      settleRuntimeTurnAdmission(clientRequestId, false)
+      return false
+    }
     const ackNoticeIds = adeExtras.ackNoticeIds
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
     // Task-worktree prep queues locally: the runtime cannot admit
     // a turn until the thread is bound to the ready workspace path.
-    const workspacePreparing = threadWorkspaceBlocksSend(get().activeThreadId)
+    const workspacePreparing = threadWorkspaceBlocksSend(get().activeThreadId, get())
     if (get().busy || hasPendingActiveTurn || workspacePreparing || (queued && !shouldWaitForRuntimeAdmission)) {
       const state = get()
       const activeThreadId = state.activeThreadId
@@ -434,9 +442,17 @@ export async function sendThreadMessage(
         })
         if (submitted !== null) return submitted
       }
+      if (!expectedThreadStillActive()) return false
+      const prep = activeThreadId ? useTaskWorkspaceStore.getState().prepByThread[activeThreadId] : undefined
+      const waiting = activeThreadId ? queuedTaskWorkspaceRequirement(activeThreadId) : undefined
+      const taskWorkspace = queued?.taskWorkspace ?? waiting?.taskWorkspace ?? (workspacePreparing ? {
+        sourceRoot: prep?.sourceRoot ?? threadSnap?.workspace ?? state.workspaceRoot,
+        ...(prep?.workspaceId ? { workspaceId: prep.workspaceId } : {})
+      } : undefined)
       set((s) => ({
         queuedMessages: upsertQueuedSubmission(s.queuedMessages, {
           ...queued,
+          ...(taskWorkspace && activeThreadId ? { taskWorkspace, expectedThreadId: activeThreadId } : {}),
           id: queued?.id ?? `q-${clientRequestId}`,
           text: trimmedText,
           clientRequestId,

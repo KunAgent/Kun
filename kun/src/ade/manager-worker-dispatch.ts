@@ -1,3 +1,4 @@
+import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
 import { replaceFailedBatchAssignment, replaceFailedWorkerDispatch } from './worker-dispatch-replacement.js'
 import { assignmentFallbacks, workerDispatchIds } from './worker-dispatch-ids.js'
 import { z } from 'zod'
@@ -71,24 +72,31 @@ export class ManagerWorkerDispatch {
     }
   }
 
-  private async resolve(ctx: ManagerToolContext, input: WorkerCreateInput) {
-    const isolation = input.workspace?.isolation ?? (input.agent?.harnessId
+  private async resolve(ctx: ManagerToolContext, input: WorkerCreateInput, previousAgent?: SavedAgent) {
+    let isolation = input.workspace?.isolation ?? (input.agent?.harnessId
       ? this.deps.harnessDefaults?.(input.agent.harnessId)?.isolation : undefined) ?? 'worktree'
-    const isolated = isolation === 'worktree'
-    const resolved = await resolveManagerWorkerRoute(this.deps, ctx, input, isolated,
+    const resolved = await resolveManagerWorkerRoute(this.deps, ctx, input, isolation === 'worktree',
       (teamId, route) => workerRouteHealth(this.deps, teamId, route))
     if ('error' in resolved) throw new Error(resolved.error)
     const route = resolved.route
-    if (isolated && !this.deps.taskWorkspaces) throw new Error('Isolated task workspace service is unavailable.')
     const definition = this.deps.catalog.get(route.harnessId)
     if (!definition || this.deps.catalog.isDisabled(route.harnessId) || !this.deps.catalog.isProfileEnabled(route)) {
       throw new Error('The recommended Agent or credential profile is disabled.')
     }
+    const effective = await this.deps.capabilitiesForRoute(route)
+    // A card's saved local workspace belongs to its original Agent. A switched
+    // engine without a sandbox needs a worktree, not an exemption from admission.
+    if (isolation === 'local' && effective.facts.sandbox === 'none' && previousAgent &&
+        (previousAgent.harnessId !== route.harnessId || previousAgent.credentialMode !== route.credentialMode)) {
+      isolation = 'worktree'
+    }
+    const isolated = isolation === 'worktree'
+    if (isolated && !this.deps.taskWorkspaces) throw new Error('Isolated task workspace service is unavailable.')
     const permission = clampPermission(definition, input.permissionMode ??
       this.deps.harnessDefaults?.(route.harnessId)?.permissionMode, ctx.authority)
     const admission = checkHarnessAdmission({
       usage: 'manager-worker', credentialMode: route.credentialMode,
-      harness: definition, effective: await this.deps.capabilitiesForRoute(route),
+      harness: definition, effective,
       status: await this.deps.detector.status(route.harnessId),
       workspace: { isolated }, requestedPermissionMode: permission.effective,
       unattended: !ctx.authority.interactive,
@@ -193,7 +201,8 @@ export class ManagerWorkerDispatch {
         throw new Error('Batch Agent routes are fixed; propose a new batch to change the execution Agents.')
       }
       return payload.items.map(({ input }, index) => ({ ...input,
-        ...(assignments ? { agent: assignmentAgent(input.agent, assignments[index]), ...assignmentProfile(input, assignments[index]) } : {}),
+        ...(assignments ? { agent: assignmentAgent(input.agent, assignments[index]),
+          ...assignmentProfile(input, assignments[index]), ...assignmentWorkspace(input, assignments[index]) } : {}),
         ...(intent.recommendation.title !== payload.originalTitle ? { label: `${intent.recommendation.title} ${index + 1}`.slice(0, 64) } : {}),
         ...(intent.recommendation.task !== payload.originalTask
           ? { task: `${input.task}\n\nUser adjustment for this dispatch batch:\n${intent.recommendation.task}`.slice(0, 32_000) } : {})
@@ -202,7 +211,8 @@ export class ManagerWorkerDispatch {
     const saved = payload.items[0].input
     if (assignments) {
       return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
-        agent: assignmentAgent(saved.agent, assignments[0]), ...assignmentProfile(saved, assignments[0]) }]
+        agent: assignmentAgent(saved.agent, assignments[0]), ...assignmentProfile(saved, assignments[0]),
+        ...assignmentWorkspace(saved, assignments[0]) }]
     }
     const changedAgent = intent.recommendation.agentId !== payload.originalAgentId
     return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
@@ -232,14 +242,19 @@ export class ManagerWorkerDispatch {
     if (refused) throw new Error(refused.userReport)
     const { ctx } = await this.context(intent, signal)
     if (intent.recommendation.workspace !== ctx.workspace) throw new Error('The dispatch workspace cannot differ from its source task.')
+    const payload = PayloadSchema.parse(intent.payload)
     for (const [index, input] of this.inputs(intent).entries()) {
-      const resolved = await this.resolve(ctx, input)
-      const assignment = intent.recommendation.assignments?.[index]
+      const resolved = await this.resolve(ctx, input, payload.items[index].input.agent)
+      const assignment = intent.recommendation.assignments?.[index] ?? (payload.items.length === 1
+        ? { label: input.label, agentId: resolved.route.harnessId, profileId: resolved.profileId } : undefined)
       if (assignment) {
-        // Show the resolved route on the card (defaults filled, gateway addresses normalized).
-        intent.recommendation.assignments![index] = { label: assignment.label, agentId: resolved.route.harnessId,
-          agentName: resolved.definition.displayName,
+        // Persist isolation with the route so start uses the same workspace that
+        // passed validation, including after a restart or capability refresh.
+        intent.recommendation.assignments ??= []
+        intent.recommendation.assignments[index] = { label: assignment.label, agentId: resolved.route.harnessId,
+          agentName: resolved.definition.displayName, workspaceIsolation: resolved.isolation,
           ...(assignment.profileId ? { profileId: assignment.profileId } : {}),
+          ...(assignment.reasoningEffort ? { reasoningEffort: assignment.reasoningEffort } : {}),
           ...(resolved.route.model ? { model: resolved.route.model } : {}),
           ...(resolved.route.providerId ? { providerId: resolved.route.providerId } : {}),
           credentialMode: resolved.route.credentialMode }
@@ -266,6 +281,8 @@ export class ManagerWorkerDispatch {
       // A role picked on the card replaces the saved one; the saved one survives an unchanged route.
       const cardProfileId = intent.recommendation.assignments?.[index]?.profileId
       const allocation = { ...assignmentIds(intent, index), intentId: intent.intentId,
+        ...(intent.recommendation.assignments?.[index]?.reasoningEffort
+          ? { reasoningEffort: intent.recommendation.assignments[index].reasoningEffort } : {}),
         ...(savedRoute ? {
           selection: payload.items[index]?.selection as import('../contracts/ade.js').WorkerRecord['selection'],
           profileId: cardProfileId ?? payload.items[index]?.profileId
@@ -393,10 +410,15 @@ export class ManagerWorkerDispatch {
           const item = inputs[index]!
           // A route the user picked on the card is theirs; never swap it behind their back.
           if (item.fallbackCount || !sameAssignmentRoute(item.input.agent, intent.recommendation.assignments?.[index])) continue
-          if (await replaceFailedBatchAssignment(this.deps, intent, index, records[index]!, item)) return null
+          if (await settleReplacement(intent, () => replaceFailedBatchAssignment(this.deps, intent, index, records[index]!, item))) return null
         }
       } finally { this.replacing.delete(intent.intentId) }
     }
+    // Keep every sibling represented within the card's total budget.
+    const resultBudget = Math.floor(32_000 / live.length) - 2
+    const resultSummary = live.map((record) => clipWorkerResult(record.state === 'cancelled'
+      ? `Cancelled: ${record.title}`
+      : `### ${record.title}\n\n${workerResultSummary(record) ?? 'No result text returned.'}`, resultBudget)).join('\n\n')
     const failed = live.find((record) => record.state === 'failed')
     if (failed && live.some((record) => record.state === 'accepted' || record.state === 'pending')) {
       return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target,
@@ -406,10 +428,10 @@ export class ManagerWorkerDispatch {
       if (inputs.length === 1 && !this.replacing.has(intent.intentId)) {
         this.replacing.add(intent.intentId)
         try {
-          if (await replaceFailedWorkerDispatch(this.deps, intent, failed, inputs[0].input)) return null
+          if (await settleReplacement(intent, () => replaceFailedWorkerDispatch(this.deps, intent, failed, inputs[0].input))) return null
         } finally { this.replacing.delete(intent.intentId) }
       }
-      return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.' }
+      return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.', resultSummary }
     }
     if (live.every((record) => record.state === 'completed' || record.state === 'cancelled')) {
       // Cancelled siblings have no result to review, but completed work still
@@ -417,15 +439,27 @@ export class ManagerWorkerDispatch {
       const reviewed = live.filter((record) => record.state === 'completed')
         .every((record) => (record.verdict?.status ?? 'pending') !== 'pending')
       const settled = live.some((record) => record.state === 'cancelled') ? 'cancelled' : 'completed'
-      return { state: reviewed ? settled : 'awaiting_parent', target,
-        resultSummary: live.map((record) => record.state === 'cancelled'
-          ? `Cancelled: ${record.title}` : record.resultExcerpt ?? record.title).join('\n').slice(0, 32_000) }
+      return { state: reviewed ? settled : 'awaiting_parent', target, resultSummary }
     }
     return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target }
   }
 }
 
 type SavedAgent = WorkerCreateInput['agent']
+
+/**
+ * A replacement attempt that throws (an uninspectable checkout, a store
+ * error) must not block the card: it settles on the ordinary failure instead
+ * of retrying the same attempt on every scan.
+ */
+async function settleReplacement(intent: AgentDispatchIntent, attempt: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return await attempt()
+  } catch (error) {
+    console.warn(`[kun] dispatch replacement skipped intent=${intent.intentId}: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+}
 
 function sameAssignmentRoute(saved: SavedAgent, assignment: AgentDispatchAssignment | undefined): boolean {
   if (!saved || !assignment) return !assignment
@@ -440,6 +474,12 @@ function assignmentAgent(saved: SavedAgent, assignment: AgentDispatchAssignment)
   return { harnessId: assignment.agentId, ...(assignment.model ? { model: assignment.model } : {}),
     ...(assignment.providerId ? { providerId: assignment.providerId } : {}),
     ...(assignment.credentialMode ? { credentialMode: assignment.credentialMode } : {}) }
+}
+
+/** A host-approved worktree survives reconstruction; never downgrade the original workspace. */
+function assignmentWorkspace(saved: WorkerCreateInput, assignment: AgentDispatchAssignment): Pick<WorkerCreateInput, 'workspace'> {
+  return assignment.workspaceIsolation === 'worktree'
+    ? { workspace: { ...saved.workspace, isolation: 'worktree' } } : {}
 }
 
 /** The roster role a card assignment names, replacing the proposed one when the user switched it. */

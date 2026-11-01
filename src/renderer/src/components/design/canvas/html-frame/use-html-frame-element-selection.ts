@@ -1,30 +1,50 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DesignHtmlPreviewHostRenderProps } from '../../DesignHtmlPreviewHost'
 import type { DesignHtmlElementContext } from '../../../../design/design-composer-context'
 import type { DesignArtifact } from '../../../../design/design-types'
 import { registerHtmlElementValidation } from '../../../../design/html-element-reference-validation'
 import {
+  buildHtmlElementBoxPickScript,
   buildHtmlElementResolveScript,
   htmlElementPickResolvedStillMatches,
   buildHtmlElementPickScript,
   htmlElementCandidateLabel,
   htmlElementPickPathLabels,
+  htmlElementSelectionFromChainIndex,
   normalizeHtmlElementPickResult,
   resolveHtmlElementPickSelection,
   type HtmlElementPickChain,
   type HtmlElementPickSelection
 } from './html-element-pick'
+import {
+  hitTestHtmlElementMap,
+  htmlElementBoxLabel,
+  htmlElementBoxSizeLabel,
+  htmlElementMapBreadcrumb,
+  htmlElementMapFirstChild,
+  htmlElementMapLayersAt,
+  htmlElementMapParent,
+  htmlElementMapSibling,
+  measureHtmlElementBoxes,
+  type HtmlElementBox,
+  type HtmlElementMap
+} from './html-element-map'
+import { useHtmlFrameElementMap } from './use-html-frame-element-map'
+import { useHtmlFramePickKeys } from './use-html-frame-pick-keys'
 
 type Publish = (context: DesignHtmlElementContext | null, promptSeed?: string) => void
 // Each composer owns its own reference. A disappearing frame must not clear a
 // newer reference published by another frame using that composer.
 const owners = new WeakMap<Publish, symbol>()
+const HOVER_LEAVE_MS = 120
+const RELOCATE_DELAYS_MS = [350, 900]
 
 type Options = {
   artifact?: DesignArtifact
   canvasWidth: number
   canvasHeight: number
-  editing: boolean
+  /** Picking is available on this frame (select tool, not generating, not read-only). */
+  enabled: boolean
   interactive: boolean
   executeScript: DesignHtmlPreviewHostRenderProps['executeScript']
   shapeId: string
@@ -36,26 +56,55 @@ type Options = {
   onUseElementAsContext?: Publish
 }
 
-type Pick = { selection: HtmlElementPickSelection; chain: HtmlElementPickChain; epoch: string }
+type Pick = {
+  selection: HtmlElementPickSelection
+  chain: HtmlElementPickChain
+  epoch: string
+  boxId?: number
+  token?: number
+}
+type HoverBox = { box: HtmlElementBox; parent: HtmlElementBox | null; token: number; epoch: string }
+type PointerBounds = { left: number; top: number; width: number; height: number }
+export type HtmlFramePickModifiers = { deep?: boolean }
+export type HtmlFrameLayerMenu = { x: number; y: number; items: { id: number; label: string }[] }
+
+function inPreviewPoint(
+  clientX: number, clientY: number, bounds: PointerBounds, opts: Options
+): { x: number; y: number } {
+  return {
+    x: (clientX - bounds.left) / bounds.width * opts.canvasWidth,
+    y: (clientY - bounds.top) / bounds.height * opts.canvasHeight
+  }
+}
 
 export function useHtmlFrameElementSelection(options: Options) {
-  const { artifact, editing, interactive, executeScript, shapeId, previewRevision } = options
+  const { artifact, interactive, executeScript, shapeId, previewRevision } = options
   const epoch = JSON.stringify([
     shapeId, artifact?.id, artifact?.relativePath, previewRevision,
     options.previewWebviewUrl, options.webviewMountNonce
   ])
   const [pick, setPick] = useState<Pick | null>(null)
-  const [hover, setHover] = useState<Pick | null>(null)
+  const [hoverBox, setHoverBox] = useState<HoverBox | null>(null)
+  const [pointerInside, setPointerInside] = useState(false)
+  const [altHeld, setAltHeld] = useState(false)
+  const [layerMenu, setLayerMenu] = useState<HtmlFrameLayerMenu | null>(null)
   const [selectionError, setSelectionError] = useState('')
-  const live = useRef({ epoch, enabled: editing && !interactive, options })
-  live.current = { epoch, enabled: editing && !interactive, options }
+  const enabled = options.enabled && !interactive
+  const live = useRef({ epoch, enabled, options })
+  live.current = { epoch, enabled, options }
   const current = useRef<Pick | null>(null)
   const owner = useRef(Symbol('html-selection'))
-  const sequences = useRef({ select: 0, hover: 0 })
-  const inFlight = useRef({ select: false, hover: false })
-  const lastHover = useRef(-Infinity)
+  const sequences = useRef({ select: 0 })
+  const hoverBoxRef = useRef<HoverBox | null>(null)
+  const leaveTimer = useRef<number | null>(null)
+  const relocateTimers = useRef<number[]>([])
   const mounted = useRef(true)
   const validation = useRef<ReturnType<typeof registerHtmlElementValidation> | null>(null)
+  const { getMap, refresh } = useHtmlFrameElementMap({
+    armed: enabled && (pointerInside || Boolean(pick)),
+    epoch,
+    executeScript
+  })
 
   const clearReference = useCallback(() => {
     validation.current?.release()
@@ -83,10 +132,16 @@ export function useHtmlFrameElementSelection(options: Options) {
     }
   }, [])
 
-  const clearHover = useCallback(() => {
-    sequences.current.hover += 1
-    setHover(null)
+  const setHoverTarget = useCallback((next: HoverBox | null) => {
+    hoverBoxRef.current = next
+    setHoverBox(next)
   }, [])
+
+  const clearHover = useCallback(() => {
+    if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current)
+    leaveTimer.current = null
+    setHoverTarget(null)
+  }, [setHoverTarget])
 
   const apply = useCallback((value: Pick) => {
     validation.current?.release()
@@ -110,113 +165,264 @@ export function useHtmlFrameElementSelection(options: Options) {
     }
   }, [clearHover, contextFor])
 
+  const cancelRelocation = useCallback(() => {
+    relocateTimers.current.forEach((timer) => window.clearTimeout(timer))
+    relocateTimers.current = []
+  }, [])
+
   const clearElementSelection = useCallback(() => {
     sequences.current.select += 1
+    cancelRelocation()
     current.current = null
     setPick(null)
+    setLayerMenu(null)
     clearHover()
     clearReference()
     setSelectionError('')
-  }, [clearHover, clearReference])
+  }, [cancelRelocation, clearHover, clearReference])
 
   useEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
       sequences.current.select += 1
-      sequences.current.hover += 1
+      if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current)
+      cancelRelocation()
       clearReference()
     }
-  }, [clearReference])
+  }, [cancelRelocation, clearReference])
 
+  // The document was replaced (usually Kun finished an edit). Keep the pick and
+  // look the same element up again; only an element that can no longer be
+  // identified is dropped.
   useEffect(() => {
-    // Do not rebind a positional selector across document revisions. A fresh
-    // click is required, even if a similar-looking sibling occupies that path.
-    if (current.current && current.current.epoch !== epoch) {
-      clearElementSelection()
-      setSelectionError('The design changed. Select the component again.')
-    }
+    const previous = current.current
     sequences.current.select += 1
     clearHover()
-  }, [epoch, editing, interactive, clearElementSelection, clearHover])
+    setLayerMenu(null)
+    if (!previous || previous.epoch === epoch) return
+    cancelRelocation()
+    const attempt = (index: number): void => {
+      if (!mounted.current || current.current !== previous) return
+      const pending = live.current.options.executeScript(
+        buildHtmlElementResolveScript(previous.selection.element.selector)
+      )
+      void (async () => {
+        const resolved = pending ? normalizeHtmlElementPickResult(await pending.catch(() => null)) : null
+        if (!mounted.current || current.current !== previous) return
+        const selection = resolved && htmlElementPickResolvedStillMatches(previous.selection.element, resolved)
+          ? htmlElementSelectionFromChainIndex(resolved, 0) : null
+        if (resolved && selection) {
+          apply({ selection, chain: resolved, epoch: live.current.epoch })
+          return
+        }
+        if (index + 1 < RELOCATE_DELAYS_MS.length) {
+          relocateTimers.current.push(window.setTimeout(() => attempt(index + 1), RELOCATE_DELAYS_MS[index + 1]))
+          return
+        }
+        clearElementSelection()
+        setSelectionError('The design changed. Select the component again.')
+      })()
+    }
+    relocateTimers.current.push(window.setTimeout(() => attempt(0), RELOCATE_DELAYS_MS[0]))
+  }, [epoch, apply, cancelRelocation, clearElementSelection, clearHover])
 
-  const runPick = useCallback((event: React.PointerEvent<HTMLDivElement>, mode: 'hover' | 'select') => {
-    if (!live.current.enabled || !live.current.options.artifact) return
-    if (mode === 'select' && event.button !== 0) return
-    if (mode === 'hover') {
-      if (inFlight.current.hover || inFlight.current.select || Date.now() - lastHover.current < 90) return
-      lastHover.current = Date.now()
-    } else {
-      event.preventDefault()
-      event.stopPropagation()
-      clearHover()
-    }
-    const bounds = event.currentTarget.getBoundingClientRect()
-    if (!bounds.width || !bounds.height) return
-    const opts = live.current.options
-    const point = {
-      x: (event.clientX - bounds.left) / bounds.width * opts.canvasWidth,
-      y: (event.clientY - bounds.top) / bounds.height * opts.canvasHeight
-    }
+  useEffect(() => {
+    if (enabled) return
+    setPointerInside(false)
+    clearHover()
+    setLayerMenu(null)
+  }, [enabled, clearHover])
+
+  const selectChain = useCallback((
+    chain: HtmlElementPickChain | null, capturedEpoch: string, extra: { boxId?: number; token?: number }
+  ): boolean => {
+    const selection = chain && htmlElementSelectionFromChainIndex(chain, 0)
+    if (!chain || !selection || !selection.element.selectorIsUnique) return false
+    apply({ selection, chain, epoch: capturedEpoch, ...extra })
+    return true
+  }, [apply])
+
+  /** Select a map box. Stale tokens refresh the map once and give up quietly. */
+  const selectBox = useCallback(async (id: number, token: number): Promise<boolean> => {
+    if (!live.current.enabled) return false
     const capturedEpoch = live.current.epoch
-    const sequence = ++sequences.current[mode]
-    inFlight.current[mode] = true
+    const sequence = ++sequences.current.select
+    const pending = live.current.options.executeScript(buildHtmlElementBoxPickScript(id, token))
+    if (!pending) return false
+    try {
+      const value = await pending
+      if (!mounted.current || sequence !== sequences.current.select || capturedEpoch !== live.current.epoch) return false
+      const chain = normalizeHtmlElementPickResult(value)
+      if (chain && selectChain(chain, capturedEpoch, { boxId: id, token })) return true
+      if ((value as { reason?: string } | null)?.reason === 'stale') void refresh(true)
+      setSelectionError('Unable to select this component. Try another element.')
+    } catch {
+      setSelectionError('Unable to read this component. Try again when the preview is ready.')
+    }
+    return false
+  }, [refresh, selectChain])
+
+  /**
+   * Point pick straight from the page: the exact node under the pointer. Used
+   * for Cmd/Ctrl-click and when no element map has arrived yet.
+   */
+  const pointPick = useCallback((point: { x: number; y: number }, deep: boolean) => {
+    const capturedEpoch = live.current.epoch
+    const sequence = ++sequences.current.select
     const valid = () => mounted.current && live.current.enabled &&
-      capturedEpoch === live.current.epoch && sequences.current[mode] === sequence
+      capturedEpoch === live.current.epoch && sequences.current.select === sequence
     void (async () => {
       try {
-        const pending = executeScript(buildHtmlElementPickScript(point))
+        const pending = live.current.options.executeScript(buildHtmlElementPickScript(point))
         if (!pending) throw new Error('Preview is not ready.')
         const value = await pending
         if (!valid()) return
         const chain = normalizeHtmlElementPickResult(value)
-        const selection = chain && resolveHtmlElementPickSelection(chain)
+        const selection = chain && (deep ? htmlElementSelectionFromChainIndex(chain, 0) : resolveHtmlElementPickSelection(chain))
         if (!chain || !selection || !selection.element.selectorIsUnique) {
-          if (mode === 'hover') setHover(null)
-          else {
-            clearElementSelection()
-            if ((value as { reason?: string } | null)?.reason !== 'empty') {
-              setSelectionError('Unable to select this component. Try another element.')
-            }
+          clearElementSelection()
+          if ((value as { reason?: string } | null)?.reason !== 'empty') {
+            setSelectionError('Unable to select this component. Try another element.')
           }
           return
         }
-        const next = { selection, chain, epoch: capturedEpoch }
-        if (mode === 'hover') setHover(next)
-        else apply(next)
+        apply({ selection, chain, epoch: capturedEpoch })
       } catch {
-        if (valid() && mode === 'select') {
+        if (valid()) {
           clearElementSelection()
           setSelectionError('Unable to read this component. Try again when the preview is ready.')
         }
-      } finally {
-        inFlight.current[mode] = false
       }
     })()
-  }, [apply, clearElementSelection, clearHover, executeScript])
+  }, [apply, clearElementSelection])
+
+  const hoverClient = useCallback((
+    clientX: number, clientY: number, bounds: PointerBounds, mods: HtmlFramePickModifiers = {}
+  ) => {
+    if (!live.current.enabled || !live.current.options.artifact) return
+    if (!bounds.width || !bounds.height) return
+    setPointerInside(true)
+    if (leaveTimer.current !== null) {
+      window.clearTimeout(leaveTimer.current)
+      leaveTimer.current = null
+    }
+    const map = getMap()
+    if (!map) return
+    const point = inPreviewPoint(clientX, clientY, bounds, live.current.options)
+    const box = hitTestHtmlElementMap(map, point, { deep: mods.deep })
+    const previous = hoverBoxRef.current
+    if (!box || (previous && previous.box.id === box.id && previous.token === map.token)) return
+    setHoverTarget({ box, parent: htmlElementMapParent(map, box.id), token: map.token, epoch: live.current.epoch })
+  }, [getMap, setHoverTarget])
+
+  const leave = useCallback(() => {
+    setPointerInside(false)
+    if (leaveTimer.current !== null) window.clearTimeout(leaveTimer.current)
+    leaveTimer.current = window.setTimeout(() => {
+      leaveTimer.current = null
+      setHoverTarget(null)
+    }, HOVER_LEAVE_MS)
+  }, [setHoverTarget])
+
+  const selectClient = useCallback((
+    clientX: number, clientY: number, bounds: PointerBounds, mods: HtmlFramePickModifiers = {}
+  ) => {
+    if (!live.current.enabled || !live.current.options.artifact) return
+    if (!bounds.width || !bounds.height) return
+    clearHover()
+    setLayerMenu(null)
+    const point = inPreviewPoint(clientX, clientY, bounds, live.current.options)
+    const map = getMap()
+    const box = map && !mods.deep ? hitTestHtmlElementMap(map, point) : null
+    if (map && box) {
+      void selectBox(box.id, map.token).then((ok) => {
+        if (!ok && live.current.enabled && mounted.current && current.current === null) pointPick(point, false)
+      })
+      return
+    }
+    pointPick(point, Boolean(mods.deep))
+  }, [clearHover, getMap, pointPick, selectBox])
 
   const selectIndex = useCallback((index: number) => {
     const value = current.current
     if (!value || value.epoch !== live.current.epoch) return
-    const element = value.chain.chain[index]
-    if (!element) return
-    apply({ ...value, selection: {
-      element, hit: value.chain.chain[0],
-      ancestors: value.chain.chain.slice(index + 1).filter((node) => node.rect.width >= 4 && node.rect.height >= 4)
-    } })
+    const selection = htmlElementSelectionFromChainIndex(value.chain, index)
+    if (selection) apply({ ...value, selection, boxId: undefined, token: undefined })
   }, [apply])
 
-  useEffect(() => {
-    if (!editing || interactive) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || !current.current) return
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      clearElementSelection()
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [editing, interactive, clearElementSelection])
+  const mapForPick = useCallback((): { map: HtmlElementMap; boxId: number } | null => {
+    const value = current.current
+    const map = getMap()
+    if (!value || value.boxId === undefined || !map || map.token !== value.token) return null
+    return { map, boxId: value.boxId }
+  }, [getMap])
+
+  const selectParentElement = useCallback(() => {
+    const boxed = mapForPick()
+    const parent = boxed && htmlElementMapParent(boxed.map, boxed.boxId)
+    if (boxed && parent) { void selectBox(parent.id, boxed.map.token); return }
+    const value = current.current
+    if (value?.selection.ancestors[0]) selectIndex(value.chain.chain.indexOf(value.selection.ancestors[0]))
+  }, [mapForPick, selectBox, selectIndex])
+
+  const selectChildElement = useCallback(() => {
+    const boxed = mapForPick()
+    const child = boxed && htmlElementMapFirstChild(boxed.map, boxed.boxId)
+    if (boxed && child) void selectBox(child.id, boxed.map.token)
+  }, [mapForPick, selectBox])
+
+  const selectSiblingElement = useCallback((step: 1 | -1) => {
+    const boxed = mapForPick()
+    const sibling = boxed && htmlElementMapSibling(boxed.map, boxed.boxId, step)
+    if (boxed && sibling) void selectBox(sibling.id, boxed.map.token)
+  }, [mapForPick, selectBox])
+
+  const selectBreadcrumb = useCallback((id: number) => {
+    const map = getMap()
+    if (map) void selectBox(id, map.token)
+  }, [getMap, selectBox])
+
+  const openLayerMenu = useCallback((clientX: number, clientY: number, bounds: PointerBounds) => {
+    const map = getMap()
+    if (!live.current.enabled || !map || !bounds.width || !bounds.height) return false
+    const point = inPreviewPoint(clientX, clientY, bounds, live.current.options)
+    const items = htmlElementMapLayersAt(map, point)
+      .map((box) => ({ id: box.id, label: htmlElementBoxLabel(box) }))
+    if (!items.length) return false
+    setLayerMenu({ x: clientX - bounds.left, y: clientY - bounds.top, items })
+    return true
+  }, [getMap])
+
+  const previewLayer = useCallback((id: number | null) => {
+    const map = getMap()
+    const box = id === null || !map ? null : map.boxes[id]
+    setHoverTarget(box && map ? { box, parent: htmlElementMapParent(map, box.id), token: map.token, epoch: live.current.epoch } : null)
+  }, [getMap, setHoverTarget])
+
+  const chooseLayer = useCallback((id: number) => {
+    const map = getMap()
+    setLayerMenu(null)
+    if (map) void selectBox(id, map.token)
+  }, [getMap, selectBox])
+
+  useHtmlFramePickKeys({
+    enabled,
+    hasSelection: Boolean(pick),
+    onUp: selectParentElement,
+    onDown: selectChildElement,
+    onSibling: selectSiblingElement,
+    onClear: clearElementSelection,
+    onCloseMenu: () => setLayerMenu(null),
+    menuOpen: Boolean(layerMenu),
+    canGoUp: () => {
+      const boxed = mapForPick()
+      return Boolean(
+        (boxed && htmlElementMapParent(boxed.map, boxed.boxId)) || current.current?.selection.ancestors.length
+      )
+    },
+    onAlt: setAltHeld
+  })
 
   const updateSelectedElementText = useCallback((text: string, html?: string) => {
     const value = current.current
@@ -227,27 +433,65 @@ export function useHtmlFrameElementSelection(options: Options) {
   }, [apply])
 
   const selected = pick?.epoch === epoch ? pick.selection : null
-  const hovered = hover?.epoch === epoch ? hover.selection.element : null
+  const boxHovered = hoverBox?.epoch === epoch ? hoverBox : null
+  const hoverIsSelection = Boolean(
+    boxHovered && pick && pick.boxId === boxHovered.box.id && pick.token === boxHovered.token
+  )
+  const map = getMap()
+  const selectedBox = selected && pick?.boxId !== undefined && map && map.token === pick.token
+    ? map.boxes[pick.boxId] : null
+  const crumbBoxId = selectedBox?.id ?? boxHovered?.box.id
+  const crumbs = useMemo(() => {
+    if (!map || crumbBoxId === undefined || map.token !== (selectedBox ? pick?.token : boxHovered?.token)) return []
+    return htmlElementMapBreadcrumb(map, crumbBoxId).map((crumb) => ({
+      ...crumb, current: crumb.id === crumbBoxId
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, crumbBoxId, selectedBox, boxHovered])
+  const hoverRect = boxHovered
+    ? { left: boxHovered.box.x, top: boxHovered.box.y, width: boxHovered.box.w, height: boxHovered.box.h }
+    : null
+  const measureLines = useMemo(() => {
+    if (!altHeld || !selected || !boxHovered || hoverIsSelection) return []
+    const rect = selected.element.rect
+    return measureHtmlElementBoxes(
+      { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
+      { x: boxHovered.box.x, y: boxHovered.box.y, w: boxHovered.box.w, h: boxHovered.box.h }
+    )
+  }, [altHeld, selected, boxHovered, hoverIsSelection])
   return {
     selectionError,
-    hoverRect: hovered?.rect ?? null,
-    hoverLabel: hovered ? htmlElementCandidateLabel(hovered) : '',
-    hoverIsSelection: Boolean(hovered && hovered.selector === selected?.element.selector),
+    hoverRect,
+    hoverLabel: boxHovered ? htmlElementBoxLabel(boxHovered.box) : '',
+    hoverSize: boxHovered ? htmlElementBoxSizeLabel(boxHovered.box) : '',
+    hoverParentRect: boxHovered?.parent && !boxHovered.parent.shell
+      ? { left: boxHovered.parent.x, top: boxHovered.parent.y, width: boxHovered.parent.w, height: boxHovered.parent.h }
+      : null,
+    hoverIsSelection,
     selectedElementRect: selected?.element.rect ?? null,
+    selectedPadding: selectedBox?.pad ?? null,
+    measureLines,
+    crumbs,
+    layerMenu,
     selectedElementContext: pick ? contextFor(pick) : null,
     selectionLabel: selected ? htmlElementCandidateLabel(selected.element) : '',
     selectionPath: selected ? htmlElementPickPathLabels(selected) : [],
-    canSelectParent: Boolean(selected?.ancestors.length),
+    canSelectParent: Boolean(selected && (
+      selected.ancestors.length || (selectedBox && map && htmlElementMapParent(map, selectedBox.id))
+    )),
     canDrillToHit: Boolean(selected && selected.element.selector !== selected.hit.selector),
     canEditText: Boolean(selected?.element.editableText),
-    hoverAt: (event: React.PointerEvent<HTMLDivElement>) => runPick(event, 'hover'),
-    clearHover,
-    selectElementAt: (event: React.PointerEvent<HTMLDivElement>) => runPick(event, 'select'),
-    selectParentElement: () => {
-      const value = current.current
-      if (value?.selection.ancestors[0]) selectIndex(value.chain.chain.indexOf(value.selection.ancestors[0]))
-    },
+    hoverClient,
+    leave,
+    clearHover: leave,
+    selectClient,
+    selectParentElement,
     selectHitElement: () => selectIndex(0),
+    selectBreadcrumb,
+    openLayerMenu,
+    closeLayerMenu: () => setLayerMenu(null),
+    previewLayer,
+    chooseLayer,
     clearElementSelection,
     updateSelectedElementText
   }

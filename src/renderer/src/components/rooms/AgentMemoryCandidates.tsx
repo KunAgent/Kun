@@ -8,6 +8,7 @@ import { MemoryEvidence } from '../memory/MemoryEvidence'
 
 type Entry = { candidate: AgentMemoryCandidate; revision: number;
   target?: { content: string; fingerprint: string; shared?: boolean; disabled: boolean } }
+const isScopedCreate = (entry: Entry) => entry.candidate.action === 'create' && !entry.candidate.targetId && Boolean(entry.candidate.captureScope?.conversationId)
 export function AgentMemoryCandidates({ agentId, active, onUpdated }: { agentId: string; active: boolean; onUpdated: () => void }) {
   const { t } = useTranslation('common')
   const [cursor, setCursor] = useState<string | undefined>(), [older, setOlder] = useState<Entry[]>([])
@@ -38,13 +39,14 @@ export function AgentMemoryCandidates({ agentId, active, onUpdated }: { agentId:
       <p key={job.id} className="rooms-run-note">{t('agentsMemoryDeferred')}{job.error ? ' · ' + job.error : ''}</p>)}
     {entries.length ? <h3>{t('agentsMemoryCandidates')}</h3> : null}
     {entries.map((entry) => <article className="agent-memory-entry" key={entry.candidate.id}>
-      <p className="rooms-run-note">{t('agentsMemoryConflictHint')}</p>
+      {entry.candidate.reason ? <p className="rooms-run-note">{entry.candidate.reason}</p> :
+        <p className="rooms-run-note">{t('agentsMemoryConflictHint')}</p>}
       {entry.target ? <><strong>{t('agentsMemoryCurrent')}</strong><RoomMessageBody body={entry.target.content} attachmentIds={[]} />
-        {entry.target.shared ? <p className="rooms-run-note">{t('agentsMemoryUniversal')}</p> : null}</> : <p>{t('agentsMemoryTargetMissing')}</p>}
+        {entry.target.shared ? <p className="rooms-run-note">{t('agentsMemoryUniversal')}</p> : null}</> : !isScopedCreate(entry) ? <p>{t('agentsMemoryTargetMissing')}</p> : null}
       <strong>{t('agentsMemoryProposed')}</strong><RoomMessageBody body={entry.candidate.candidate.content} attachmentIds={[]} />
       <MemoryEvidence sources={entry.candidate.candidate.sources} consolidation={entry.candidate.candidate.consolidation} />
       <div className="agent-memory-actions">
-        <button type="button" disabled={busy || !entry.target || entry.target.disabled} onClick={() => void decide(entry, 'allow')}>{t('agentsMemoryAccept')}</button>
+        <button type="button" disabled={busy || (entry.target ? entry.target.disabled : !isScopedCreate(entry))} onClick={() => void decide(entry, 'allow')}>{t('agentsMemoryAccept')}</button>
         <button type="button" disabled={busy} onClick={() => void decide(entry, 'skip')}>{t('agentsMemorySkip')}</button>
       </div>
     </article>)}

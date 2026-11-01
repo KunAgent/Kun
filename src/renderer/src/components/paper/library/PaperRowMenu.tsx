@@ -3,7 +3,6 @@ import {
   BookOpen,
   Copy,
   Download,
-  FolderInput,
   FolderSearch,
   PencilLine,
   Sparkles,
@@ -87,7 +86,6 @@ export function PaperRowMenu({
         <Item icon={<Download />} label={t('writePaperDownloadPdf')} onClick={() => run('download-pdf')} />
       ) : null}
       <Item icon={<Copy />} label={t('writePaperCopyBibtex')} onClick={() => run('copy-bibtex')} />
-      <Item icon={<FolderInput />} label={t('writePaperMoveToGroup')} onClick={() => run('move')} />
       <Item
         icon={<FolderSearch />}
         label={window.kunGui?.platform === 'darwin' ? t('fileTreeRevealInFinder') : t('fileTreeRevealInFileManager')}

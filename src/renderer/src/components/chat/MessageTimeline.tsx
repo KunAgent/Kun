@@ -23,6 +23,7 @@ import { WorkerControlBanner } from '../workers/WorkerControlBanner'
 import {
   activeTimelineTurnIndex,
   groupTurns,
+  timelineTaskStartedAtMs,
   sameTurnContent,
   stableTurnKey,
   turnTaskSurface,
@@ -63,6 +64,7 @@ import type { MessageTimelineProps } from './message-timeline-props'
 import { MessageSelectionToolbar } from './MessageSelectionToolbar'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
 import { RoomWardrobeDropCard } from '../rooms/RoomWardrobeDropCard'
+import { useIsPlanBuildSession } from '../plan/PlanBuildSessionCard'
 import {
   timelineTurnAllowsRecoveryContinue,
   timelineTurnIsProcessing
@@ -172,6 +174,7 @@ export function MessageTimeline({
   const heroRoute: 'chat' | 'claw' =
     route === 'claw' ? 'claw' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
+  const planBuildSession = useIsPlanBuildSession()
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null), contentRef = useRef<HTMLDivElement>(null)
   const turnRefMap = useRef(new Map<string, HTMLDivElement>())
@@ -404,7 +407,7 @@ export function MessageTimeline({
       }`}>
         {activeThread?.historyRefId ? <SourceHistoryCard referenceId={activeThread.historyRefId} /> : null}
         {shouldShowTimelineEmptyHero({
-          hasContent: Boolean(hasContent),
+          hasContent: Boolean(hasContent) || planBuildSession,
           hasHistoryReference: Boolean(activeThread?.historyRefId),
           activeThreadId,
           route: heroRoute
@@ -448,10 +451,12 @@ export function MessageTimeline({
           const absoluteTurnIndex = hiddenTurnCount + index
           const userId = turn.user?.id
           const isActiveTurn = index === activeTurnIndex
-          const startedAt = busy && isActiveTurn ? liveStartedAtMs : undefined
+          const sourceHistory = isSourceHistoryTurn(turn)
+          const turnPending = !sourceHistory && threadHasPendingRuntimeWork(turn.blocks)
+          const startedAt = (busy && isActiveTurn) || turnPending
+            ? timelineTaskStartedAtMs(turn, turnStartedAtByUserId, isActiveTurn ? liveStartedAtMs : undefined)
+            : undefined
           const recordedDuration = userId ? turnDurationByUserId[userId] : undefined
-          // Continuations can share an older user bubble. Keep its recorded
-          // duration separate from the current runtime turn's live clock.
           const durationMs =
             recordedDuration ??
             (typeof startedAt === 'number'
@@ -463,8 +468,6 @@ export function MessageTimeline({
             typeof reasoningFirst === 'number' && typeof reasoningLast === 'number'
               ? Math.max(0, reasoningLast - reasoningFirst)
               : undefined
-          const sourceHistory = isSourceHistoryTurn(turn)
-          const turnPending = !sourceHistory && threadHasPendingRuntimeWork(turn.blocks)
           const turnContributions = messageContributionsForSurface?.(turnTaskSurface(turn))
           const turnMessageActions = turnContributions?.actions ?? extensionMessageActions
           const turnContextMenus = turnContributions?.contextMenus ?? extensionContextMenus

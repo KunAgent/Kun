@@ -8,7 +8,6 @@ import {
   htmlFrameOverlayCanMountAtZoom,
   htmlFrameOverlayPointerEvents,
   htmlFramePreviewAsyncEpochMatches,
-  htmlFrameShouldClearElementContextOnEditingChange,
   htmlFrameShouldApplyScrollbarSuppression,
   htmlFrameShouldPromotePreviewToReady,
   htmlFrameWebviewPartition,
@@ -178,16 +177,15 @@ describe('HtmlFrameOverlay preview gating', () => {
 
 describe('HtmlFrameOverlay pointer event policy', () => {
   it('lets the canvas receive drag events in normal selected-preview mode', () => {
-    expect(htmlFrameOverlayPointerEvents({ panning: false, interactive: false, editing: false })).toBe('none')
+    expect(htmlFrameOverlayPointerEvents({ panning: false, interactive: false })).toBe('none')
   })
 
-  it('captures events only for explicit interactive or edit modes', () => {
-    expect(htmlFrameOverlayPointerEvents({ panning: false, interactive: true, editing: false })).toBe('auto')
-    expect(htmlFrameOverlayPointerEvents({ panning: false, interactive: false, editing: true })).toBe('auto')
+  it('captures events only for the explicit interactive mode', () => {
+    expect(htmlFrameOverlayPointerEvents({ panning: false, interactive: true })).toBe('auto')
   })
 
   it('keeps hand-tool panning pass-through even when a frame mode is active', () => {
-    expect(htmlFrameOverlayPointerEvents({ panning: true, interactive: true, editing: true })).toBe('none')
+    expect(htmlFrameOverlayPointerEvents({ panning: true, interactive: true })).toBe('none')
   })
 })
 
@@ -196,15 +194,6 @@ describe('HtmlFrameOverlay zoom mount policy', () => {
     expect(htmlFrameOverlayCanMountAtZoom(0.04)).toBe(true)
     expect(htmlFrameOverlayCanMountAtZoom(0.039)).toBe(false)
     expect(htmlFrameOverlayCanMountAtZoom(Number.NaN)).toBe(false)
-  })
-})
-
-describe('HtmlFrameOverlay element context clear policy', () => {
-  it('clears picked element context only when leaving edit mode', () => {
-    expect(htmlFrameShouldClearElementContextOnEditingChange({ wasEditing: false, editing: false })).toBe(false)
-    expect(htmlFrameShouldClearElementContextOnEditingChange({ wasEditing: false, editing: true })).toBe(false)
-    expect(htmlFrameShouldClearElementContextOnEditingChange({ wasEditing: true, editing: true })).toBe(false)
-    expect(htmlFrameShouldClearElementContextOnEditingChange({ wasEditing: true, editing: false })).toBe(true)
   })
 })
 

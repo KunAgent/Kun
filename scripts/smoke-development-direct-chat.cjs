@@ -17,10 +17,11 @@ const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-contro
 const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
 const { exerciseWorkSelectionMenu } = require('./smoke-work-selection-menu.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
+const { exerciseWorkTabMenu } = require('./smoke-work-tab-menu.cjs')
 const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
 const { exerciseWhatsNew } = require('./smoke-whats-new.cjs')
-const { exerciseCodeTour } = require('./smoke-code-tour.cjs')
+const { exerciseGuidedTours } = require('./smoke-guided-tours.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -193,7 +194,7 @@ async function main() {
     await page.locator(onboarding ? '[data-onboarding-step]' : '[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
     const exercise = onboarding ? exerciseOnboarding
       : process.argv.includes('--whats-new-only') ? exerciseWhatsNew
-      : process.argv.includes('--code-tour-only') ? exerciseCodeTour
+      : process.argv.includes('--guided-tours-only') || process.argv.includes('--code-tour-only') ? exerciseGuidedTours
       : process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
       : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
@@ -204,6 +205,7 @@ async function main() {
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
       : process.argv.includes('--work-selection-only') ? exerciseWorkSelectionMenu
       : process.argv.includes('--work-only') ? exerciseWorkLayout
+      : process.argv.includes('--work-tab-menu-only') ? exerciseWorkTabMenu
       : process.argv.includes('--work-assistant-only') ? exerciseWorkAssistantAgent
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
@@ -308,8 +310,7 @@ function runtimeRequest(page, path, method = 'GET', body) {
 }
 
 async function switchMode(page, mode) {
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  await page.locator(`[role="menuitemradio"][data-workspace-mode="${mode}"]`).click()
+  await page.locator(`[role="tab"][data-workspace-mode="${mode}"]`).click()
   await page.locator(`[data-workspace-mode-trigger][data-workspace-mode="${mode}"]`).first().waitFor()
 }
 

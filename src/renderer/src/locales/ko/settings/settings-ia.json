@@ -14,6 +14,8 @@
   "settingsIaPermissions": "권한",
   "settingsIaSkills": "스킬",
   "settingsIaMcp": "MCP 도구",
+  "settingsIaConnections": "연결",
+  "settingsIaConnectionsDesc": "Notion, GitHub, Figma, Gmail의 계정과 API 토큰.",
   "settingsIaProjects": "프로젝트 구성",
   "settingsIaHarnesses": "외부 에이전트",
   "settingsIaCollaboration": "협업",

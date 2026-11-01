@@ -16,7 +16,6 @@ export type GuiUpdateAction = {
   error: string
   apply: () => Promise<void>
   openReleasePage: () => void
-  dismissError: () => void
 }
 
 /**
@@ -113,7 +112,6 @@ export function useGuiUpdateAction(): GuiUpdateAction | null {
   const openReleasePage = useCallback((): void => {
     if (info?.releaseUrl) void window.kunGui?.openExternal?.(info.releaseUrl)
   }, [info])
-  const dismissError = useCallback((): void => setError(''), [])
 
   if (!info) return null
   const downloaded = Boolean(info.downloaded) || state.status === 'downloaded'
@@ -140,7 +138,6 @@ export function useGuiUpdateAction(): GuiUpdateAction | null {
     progress,
     error,
     apply,
-    openReleasePage,
-    dismissError
+    openReleasePage
   }
 }

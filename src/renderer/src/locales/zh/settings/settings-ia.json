@@ -14,6 +14,8 @@
   "settingsIaPermissions": "权限",
   "settingsIaSkills": "技能",
   "settingsIaMcp": "MCP 工具",
+  "settingsIaConnections": "连接",
+  "settingsIaConnectionsDesc": "Notion、GitHub、Figma 与 Gmail 的账号和访问令牌。",
   "settingsIaProjects": "项目配置",
   "settingsIaHarnesses": "第三方 Agent",
   "settingsIaCollaboration": "协作",

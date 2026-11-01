@@ -1,3 +1,4 @@
+import type { HandoffContinuationFailure } from './handoff-continuation'
 import type { CoreChildRuntimeMetadataJson } from './kun-contract-child'
 import type { MemoryRelationAnnotation } from '@shared/memory-working-context'
 export type { CoreChildRunActivityJson, CoreChildLauncher, CoreChildRuntimeMetadataJson } from './kun-contract-child'
@@ -557,6 +558,7 @@ export type CoreRuntimeEventJson = {
     workspace?: { path?: string; sourceRoot?: string; kind?: string; branch?: string }
   }
   /** handoff_injected: handoff provenance + brief stats. */
+  continuationFailure?: HandoffContinuationFailure
   from?: { harnessName: string; model?: string }
   to?: { harnessName: string; model?: string }
   sinceTurnId?: string

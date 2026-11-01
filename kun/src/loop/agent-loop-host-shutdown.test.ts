@@ -6,6 +6,7 @@ import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
+import { makeAssistantTextItem } from '../domain/item.js'
 import type {
   ModelClient,
   ModelRequest,
@@ -553,6 +554,14 @@ describe('AgentLoop host shutdown suspension', () => {
         status: 'failed'
       })]
     })
+    // Restart auto-resume requires evidence of unfinished work.
+    await sessionStore.appendItem(ordinaryThreadId, makeAssistantTextItem({
+      id: 'item_ordinary_progress',
+      turnId: ordinarySourceTurnId,
+      threadId: ordinaryThreadId,
+      text: 'Half of the migration is applied.',
+      status: 'completed'
+    }))
     let settleRun!: () => void
     const runGate = new Promise<void>((resolve) => { settleRun = resolve })
     const hostTrackedRuns = new Set<Promise<'suspended'>>()

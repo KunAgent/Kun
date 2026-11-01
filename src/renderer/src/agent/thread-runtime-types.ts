@@ -105,6 +105,7 @@ export type HarnessRuntimeState = {
 
 /** `handoff_injected` event metadata. */
 export type HandoffEventPayload = {
+  continuationFailure?: import('./handoff-continuation').HandoffContinuationFailure
   threadId: string
   turnId?: string
   reason: 'harness-switch' | 'rebase' | 'worker-dispatch' | 'context-overflow'

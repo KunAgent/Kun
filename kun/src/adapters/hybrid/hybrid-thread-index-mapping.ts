@@ -11,7 +11,7 @@ import {
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
 import { resolveThreadAgentSurface } from '../../domain/thread.js'
 import { executionTasksAsTodos } from '../../tasks/execution-task-state.js'
-import { isCodeWorkbenchThread } from '../../domain/thread-list-query.js'
+import { isCodeWorkbenchThread, isWorkWorkbenchThread } from '../../domain/thread-list-query.js'
 
 export type ThreadRow = {
   id: string; title: string; workspace: string; model: string; mode: ThreadMode; status: ThreadStatus
@@ -141,6 +141,7 @@ export function filterThreadSummaries(summaries: ThreadSummary[], options: Threa
     out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
   }
   if (options.workbenchScope === 'code') out = out.filter(isCodeWorkbenchThread)
+  if (options.workbenchScope === 'work') out = out.filter(isWorkWorkbenchThread)
   if (query) out = out.filter((thread) => searchTextForThread(thread).includes(query))
   return typeof options.limit === 'number' ? out.slice(0, options.limit) : out
 }

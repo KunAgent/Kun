@@ -6,7 +6,7 @@
  * row's New session also points the blank page at that project.
  */
 import type { ChatState } from './chat-store-types'
-import { clearedThreadSelection } from './chat-store-runtime-helpers'
+import { clearedThreadSelection, threadHasPendingRuntimeWork } from './chat-store-runtime-helpers'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
 import {
   syncTurnCompletionPoll,
@@ -26,14 +26,20 @@ import {
 
 /**
  * An empty conversation is what New task would reuse anyway, so it stays put
- * (no flash). Anything with content, a running turn, a queue or an unfinished
- * hydration is replaced by the blank page at once.
+ * (no flash). Anything with content, a running turn, an unconfirmed send, a
+ * queue, recorded events or an unfinished hydration is replaced by the blank
+ * page at once. The check mirrors `activeThreadIsUntouched`, which decides the
+ * reuse itself, so leaving and reusing can never disagree.
  */
 export function threadNeedsBlankPageForNewTask(state: Pick<ChatState,
-  'activeThreadId' | 'busy' | 'blocks' | 'queuedMessages' | 'threadLoadingId'>): boolean {
+  'activeThreadId' | 'busy' | 'busyUnconfirmed' | 'blocks' | 'queuedMessages' |
+  'threadLoadingId' | 'lastSeq'>): boolean {
   if (!state.activeThreadId) return false
-  return state.busy || state.queuedMessages.length > 0 || state.threadLoadingId === state.activeThreadId ||
-    state.blocks.some((block) => block.kind === 'user')
+  if ((state.lastSeq ?? 0) > 0) return true
+  return state.busy || state.busyUnconfirmed === true || state.queuedMessages.length > 0 ||
+    state.threadLoadingId === state.activeThreadId ||
+    state.blocks.some((block) => block.kind === 'user') ||
+    threadHasPendingRuntimeWork(state.blocks)
 }
 
 /**

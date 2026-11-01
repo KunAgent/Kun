@@ -511,6 +511,7 @@
   "sidebarThreadScheduledMultiple": "{{count}} निर्धारित कार्य · अगला {{time}}",
   "sidebarThreadScheduledQueued": "निर्धारित कार्य शुरू होने की प्रतीक्षा में",
   "sidebarThreadScheduledTimePending": "समय लंबित",
+  "sidebarScheduledSessionsHint": "{{count}} शेड्यूल किए गए कार्य सत्र ऑटोमेशन में हैं",
   "sidebarThreadForkBadge": "कांटा",
   "sidebarThreadForked": "काँटेदार धागा",
   "sidebarThreadForkedFrom": "Forked from {{title}}",

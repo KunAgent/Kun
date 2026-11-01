@@ -43,7 +43,7 @@ const schedulersMock = vi.hoisted(() => ({
   resetBusyRecoveryAttempts: vi.fn()
 }))
 const persistenceMock = vi.hoisted(() => ({
-  saveQueuedMessagesForThread: vi.fn(),
+  saveQueuedMessagesForThread: vi.fn(() => true),
   queuedMessagesForThread: vi.fn(() => [])
 }))
 const registryMock = vi.hoisted(() => ({
@@ -436,7 +436,11 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     const provider = {
       createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
       createTaskWorkspace: vi.fn(async () => {
+        expect(persistenceMock.saveQueuedMessagesForThread).toHaveBeenCalledWith(
+          'thr_new', [expect.objectContaining({ id: 'q_1', deliveryState: 'pending' })]
+        )
         state.activeThreadId = 'thr_elsewhere'
+        state.queuedMessages = []
         return { record: { workspaceId: 'ws_1', ownerThreadId: 'thr_new', sourceRoot: '/repo',
           isolation: 'worktree', state: 'creating' } }
       })
@@ -446,6 +450,22 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     expect(persistenceMock.saveQueuedMessagesForThread).toHaveBeenCalledWith(
       'thr_new', [expect.objectContaining({ id: 'q_1', deliveryState: 'pending' })]
     )
+  })
+
+  it('does not reinsert a turn consumed before the create-workspace response arrives', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
+      createTaskWorkspace: vi.fn(async () => {
+        expect(state.queuedMessages).toEqual([expect.objectContaining({ id: 'q_1' })])
+        state.queuedMessages = []
+        return { record: { workspaceId: 'ws_1', ownerThreadId: 'thr_new', sourceRoot: '/repo',
+          isolation: 'worktree', state: 'creating' } }
+      })
+    }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(true)
+    expect(state.queuedMessages).toEqual([])
+    expect(persistenceMock.saveQueuedMessagesForThread).toHaveBeenCalledTimes(1)
   })
 
   it('does not fall back to the host setting when an ADE draft has no project', async () => {
@@ -521,7 +541,11 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({ workspace: '/repo', workspaceIsolation: 'worktree' }))
     expect(provider.createTaskWorkspace).toHaveBeenCalledTimes(1)
     expect(provider.sendUserMessage).not.toHaveBeenCalled()
-    expect(harness.state.queuedMessages).toHaveLength(1)
+    expect(harness.state.queuedMessages).toEqual([expect.objectContaining({
+      expectedThreadId: 'thr_new', clientRequestId: 'req_1',
+      taskWorkspace: { sourceRoot: '/repo', workspaceId: 'ws_1' }
+    })])
+    expect(harness.state.queuedMessages[0]?.planBuild).toBeUndefined()
   })
 
   it('does not allocate a workspace for an already-created empty Code task', async () => {

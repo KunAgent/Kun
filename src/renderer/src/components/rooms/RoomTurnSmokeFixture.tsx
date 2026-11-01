@@ -4,7 +4,9 @@ import type { Room, RoomMessage, RoomRunStep, RoomRunSteps } from '@shared/rooms
 import { RoomTimeline } from './RoomTimeline'
 import { RoomComposer } from './RoomComposer'
 import { RoomAgentActivity } from './RoomAgentActivity'
+import { RoomDirectHeader } from './RoomDirectChat'
 import { applyTheme } from '../../lib/apply-theme'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import i18n from '../../i18n'
 import '../../index.css'
 import '../../styles/base-shell.css'
@@ -96,16 +98,26 @@ Object.assign(window, { kunGui: {
 } })
 
 const opened: string[] = []
+const members: string[] = []
 function Fixture() {
   const [responding, setResponding] = useState(true)
-  Object.assign(window, { roomTurnFixture: { opened, language: (language: string) => i18n.changeLanguage(language),
-    theme: (mode: 'light' | 'dark') => applyTheme(mode), responding: setResponding } })
+  Object.assign(window, { roomTurnFixture: { opened, members, language: (language: string) => i18n.changeLanguage(language),
+    theme: (mode: 'light' | 'dark') => applyTheme(mode), responding: setResponding,
+    focus: (enabled: boolean) => {
+      useFocusModeStore.getState().setEnabled(enabled)
+      document.documentElement.setAttribute('data-focus-mode', enabled ? 'on' : 'off')
+    } } })
   return <div data-rooms-workspace data-room-surface="agent-chat" data-private-chat
     className="rooms-workspace relative flex h-screen min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main">
     <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <RoomDirectHeader room={room} onSidebar={() => undefined} onSearch={() => undefined} onProfile={() => undefined}
+        onModels={() => undefined} onFiles={() => undefined} onReminders={() => undefined} onReset={() => undefined}
+        onConnect={() => undefined} onTasks={() => undefined} onSession={() => undefined} sessionOpen={false}
+        sessionDisabled onInfo={() => undefined} embedded onToggleLeftSidebar={() => undefined} />
       <RoomTimeline room={room} messages={messages} tasks={[]} cursor={null} moreBusy={false}
         loadEarlier={async () => undefined} onPin={() => undefined} onTask={() => undefined}
         jumpMessageId={null} onJumped={() => undefined} onRun={(id) => { opened.push(id) }}
+        onMember={(id) => { members.push(id) }}
         afterMessages={responding ? <RoomAgentActivity room={room} memberId="kun" label={i18n.t('directRunningCommand')}
           startedAt={at(live, 40)} onSession={() => undefined} /> : null} />
       <RoomComposer room={room} tasks={[]} responding={responding} onStop={() => setResponding(false)}
@@ -114,5 +126,6 @@ function Fixture() {
   </div>
 }
 
+document.documentElement.setAttribute('data-focus-mode', 'off')
 await i18n.changeLanguage('zh')
 createRoot(document.getElementById('root')!).render(<Fixture />)

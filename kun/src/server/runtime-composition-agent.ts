@@ -30,6 +30,8 @@ import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
 import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
+import { DESIGN_OPEN_TOOL_NAME } from '../adapters/tool/design-open-tool.js'
+import { REPORT_OPEN_TOOL_NAME } from '../adapters/tool/report-open-tool.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
 import { DispatchDeliverer } from '../ade/dispatch-deliverer.js'
@@ -179,6 +181,9 @@ export async function createRuntimeAgentComposition(
     defaultSandboxMode: core.activeOptions.sandboxMode,
     defaultApprovalReviewer: core.activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
     callIdPrefix: 'mcp',
+    // ACP and Codex transcripts only carry their own MCP call items; record
+    // Kun's design_open / report_open results so the GUI cards still open.
+    recordResultItemTools: new Set([DESIGN_OPEN_TOOL_NAME, REPORT_OPEN_TOOL_NAME]),
     nowIso
   })
   // dep assembly extracted to runtime-composition-delegated.ts for the
@@ -282,6 +287,7 @@ export async function createRuntimeAgentComposition(
   // worker_* tool surface; AbortControllers outlive the manager turn.
   const childRunStore = new FileDelegationStore(join(core.activeOptions.dataDir, 'child-runs'))
   const dispatchDeliverer = new DispatchDeliverer({
+    notices: { enqueue: (notice) => workerNoticeCoordinator.enqueue(notice) },
     agentDispatchService: services.agentDispatchService,
     teams: services.adeStores.teams,
     dispatches: services.adeStores.dispatches,

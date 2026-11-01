@@ -1,3 +1,4 @@
+import type { AdeDispatchRecord } from '@shared/ade-teams'
 import type { ActivityRow } from '@shared/activity-row'
 import type {
   AgentDispatchAssignmentRoute,
@@ -47,6 +48,7 @@ export function dispatchAssignments(intent: AgentDispatchIntentView): AgentDispa
 export function assignmentRoute(assignment: AgentDispatchAssignmentRoute): AgentDispatchAssignmentRoute {
   return { agentId: assignment.agentId, ...(assignment.profileId ? { profileId: assignment.profileId } : {}),
     ...(assignment.model ? { model: assignment.model } : {}),
+    ...(assignment.reasoningEffort ? { reasoningEffort: assignment.reasoningEffort } : {}),
     ...(assignment.providerId ? { providerId: assignment.providerId } : {}),
     ...(assignment.credentialMode ? { credentialMode: assignment.credentialMode } : {}) }
 }
@@ -59,7 +61,7 @@ export function replaceAssignmentRoute(assignments: readonly AgentDispatchAssign
 
 export function sameAssignmentRoute(left: AgentDispatchAssignmentRoute, right: AgentDispatchAssignmentRoute): boolean {
   return left.agentId === right.agentId && (left.profileId ?? '') === (right.profileId ?? '') &&
-    (left.model ?? '') === (right.model ?? '') &&
+    (left.model ?? '') === (right.model ?? '') && (left.reasoningEffort ?? '') === (right.reasoningEffort ?? '') &&
     (left.providerId ?? '') === (right.providerId ?? '') && (left.credentialMode ?? '') === (right.credentialMode ?? '')
 }
 
@@ -113,7 +115,32 @@ export function formatDispatchClock(ms: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-export type WorkerProgressState = 'pending' | 'working' | 'waiting' | 'done' | 'failed' | 'cancelled'
+export type DispatchReviewState = 'awaiting_review' | 'needs_changes' | 'rejected' | 'passed' | 'waived'
+
+function completedReview(dispatch: AdeDispatchRecord): DispatchReviewState {
+  const status = dispatch.verdict?.status
+  return !status || status === 'pending' ? 'awaiting_review' : status
+}
+
+export function originalDispatch(intent: AgentDispatchIntentView, index: number,
+  dispatches: readonly AdeDispatchRecord[]): AdeDispatchRecord | undefined {
+  return dispatches.find((entry) => entry.dispatchId === intent.target?.dispatchIds?.[index] &&
+    entry.workerId === intent.target?.workerIds?.[index])
+}
+
+export function dispatchReviewState(intent: AgentDispatchIntentView,
+  dispatches: readonly AdeDispatchRecord[]): DispatchReviewState | undefined {
+  if (!['completed', 'awaiting_parent'].includes(intent.state)) return undefined
+  const originals = dispatchAssignments(intent).map((_, index) => originalDispatch(intent, index, dispatches))
+  const reviews = originals.map((entry) => entry?.state === 'completed' ? completedReview(entry) : undefined)
+  if (reviews.includes('rejected')) return 'rejected'
+  if (reviews.includes('needs_changes')) return 'needs_changes'
+  if (reviews.some((entry) => !entry)) return undefined
+  if (reviews.includes('awaiting_review')) return 'awaiting_review'
+  return reviews.includes('waived') ? 'waived' : 'passed'
+}
+
+export type WorkerProgressState = 'pending' | 'working' | 'waiting' | 'done' | 'failed' | 'cancelled' | DispatchReviewState
 export type WorkerProgress = {
   workerId?: string
   state: WorkerProgressState
@@ -133,9 +160,14 @@ function fallbackProgress(intent: AgentDispatchIntentView, hasWorker: boolean): 
 
 /** Live state of the worker at `index`, from the activity feed when it has a row. */
 export function workerProgress(intent: AgentDispatchIntentView, index: number,
-  rows: Readonly<Record<string, ActivityRow>>): WorkerProgress {
+  rows: Readonly<Record<string, ActivityRow>>, dispatches: readonly AdeDispatchRecord[] = []): WorkerProgress {
   const workerId = intent.target?.workerIds?.[index]
   if (!workerId) return { state: fallbackProgress(intent, false) }
+  const original = originalDispatch(intent, index, dispatches)
+  if (original?.state === 'completed') return { workerId, state: completedReview(original), detail: original.verdict?.notes }
+  if (original?.state === 'failed' || original?.state === 'cancelled') return { workerId, state: original.state }
+  // Worker-wide activity may now belong to a later worker_send, not this card.
+  if (['completed', 'awaiting_parent'].includes(intent.state)) return { workerId, state: 'done' }
   const row = rows[workerId] ?? Object.values(rows).find((entry) => entry.unitId === workerId || entry.threadId === workerId)
   if (!row) return { workerId, state: fallbackProgress(intent, true) }
   const detail = row.currentTool || row.progressNote || undefined

@@ -8,6 +8,8 @@ import { DEEPSEEK_HARNESS_DEFINITION } from './deepseek-harness-definition.js'
 import { DEEPSEEK_HARNESS_PRIVACY_PATCH } from './deepseek-harness-launch.js'
 import { hasDeepSeekHarnessNativeKey } from './deepseek-harness-profile.js'
 import { AcpModelProbe } from './acp-model-probe.js'
+import { acpSessionCatalog } from './acp-model-catalog.js'
+import { AcpNewSessionResultSchema } from '../runtime/acp/acp-schema.js'
 import { probeAcpHandshake } from './acp-handshake-probe.js'
 import type { AcpSpawnFn } from '../runtime/acp/acp-process.js'
 
@@ -40,7 +42,10 @@ it('replays the real unauthenticated ACP shape and enforces privacy at the actua
   expect(handshake.authRequired).toBeUndefined()
   expect(handshake.authentication).not.toBe('verified')
   expect(hasDeepSeekHarnessNativeKey({ DSH_HOME: directory })).toBe(false)
-  const catalog = await new AcpModelProbe({ spawn: fixtureSpawn }).probeCatalog(definition)
+  const captured = JSON.parse(await readFile(scenario, 'utf8'))
+  const probe = new AcpModelProbe()
+  probe.seed(definition, acpSessionCatalog(definition, AcpNewSessionResultSchema.parse({ sessionId: captured.sessionId, ...captured.newSession })))
+  const catalog = await probe.probeCatalog(definition)
   expect(catalog.models).toEqual([
     '["deepseek-official","deepseek-v4-flash"]', '["deepseek-official","deepseek-flash"]', '["deepseek-official","deepseek-v4-pro"]'
   ])
@@ -53,7 +58,7 @@ it('replays the real unauthenticated ACP shape and enforces privacy at the actua
   const methods = (await readFile(journal, 'utf8')).split('\n').filter(Boolean).map((line) => JSON.parse(line))
     .filter((entry) => entry.dir === 'in').map((entry) => entry.frame.method)
   expect(methods).toContain('initialize')
-  expect(methods).toContain('session/new')
+  expect(methods).not.toContain('session/new')
   expect(methods).not.toContain('authenticate')
   expect(methods).not.toContain('session/prompt')
 })

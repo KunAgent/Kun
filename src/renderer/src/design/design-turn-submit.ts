@@ -14,7 +14,6 @@ import {
 } from './design-board'
 import type { DesignHtmlElementContext } from './design-composer-context'
 import { useProjectDesignSystemStore } from './canvas/project-design-system-store'
-import type { DesignPromptSource } from './design-quality-repair-dispatch'
 import type { DesignArtifact } from './design-types'
 import { designDocumentResolvedEngine } from './design-types'
 import { resolveExcalidrawSceneForPrompt, excalidrawScenePath } from '../whiteboard/excalidraw-persistence'
@@ -48,6 +47,9 @@ import {
   applyDesignTaskProfileContract,
   designContextFromTaskProfile
 } from './design-task-profile-input'
+
+/** Where a design prompt came from; repairs keep their own source tag. */
+export type DesignPromptSource = 'user' | 'auto-quality-repair' | 'manual-quality-repair'
 
 export type DesignTurnSubmitSendMessage = (
   text: string,
@@ -96,7 +98,6 @@ export type SubmitDesignTurnOptions = SubmitDesignTurnDeps & {
   explicitScreenShapeId?: string | null
   explicitSvgArtifactId?: string | null
   imageEditReferencePath?: string
-  clearAutoRepairScope?: (scopeKey: string) => void
   designTaskProfileForTarget?: (target: DesignDocumentTarget) => DesignTaskProfileInput
   /**
    * When a locked task cannot rebuild an identity profile, omit both
@@ -242,9 +243,6 @@ export async function submitDesignTurn(
   if (!contextMatches(boardArtifact.id)) return failAfterResolve(contextError)
   if (resolvedTarget.nextIntentMode) {
     getDesignState().setDesignIntentMode(resolvedTarget.nextIntentMode)
-  }
-  if (options.source === 'user') {
-    options.clearAutoRepairScope?.(resolvedTarget.targetAutoRepairKey)
   }
   getDesignState().setActiveArtifact(boardArtifact.id)
 

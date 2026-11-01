@@ -45,7 +45,8 @@ import { appSessionOwnerFromEnvironment } from '../contracts/app-session-owner.j
 import { createOwnedServiceManagerSession } from '../manager/owned-service-manager-session.js'
 import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from '../manager/owned-manager-binding.js'
 import { shutdownOwnedProcesses } from '../process/owned-process.js'
-import { startRuntimeManagerHeartbeat, type ManagerOwnershipLostReason, type RuntimeManagerHeartbeat } from './runtime-manager-heartbeat.js'
+import type { ManagerOwnershipLostReason, RuntimeManagerHeartbeat } from './runtime-manager-heartbeat.js'
+import { startIsolatedRuntimeManagerHeartbeat } from './runtime-isolated-heartbeat.js'
 import { createServeShutdownHandler, type ServeShutdownReason } from './serve-shutdown.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
@@ -239,7 +240,7 @@ async function serveMain(argv: readonly string[]): Promise<number> {
         manager,
         registration
       })
-      managerHeartbeat = startRuntimeManagerHeartbeat({
+      managerHeartbeat = await startIsolatedRuntimeManagerHeartbeat({
         manager, registration,
         onAuthorityChange: (state) => server.runtime.setManagerHeartbeatAuthority?.(state),
         onOwnershipLost: requestOwnershipShutdown,
@@ -295,12 +296,18 @@ async function serveMain(argv: readonly string[]): Promise<number> {
       timeoutMs: SERVE_SHUTDOWN_TIMEOUT_MS,
       log: (line) => { process.stderr.write(`${line}\n`) },
       // Retain the slot until stores and filesystem handles have closed.
-      close: () => server.close().finally(() => unregisterRuntimeWithManager({
-        manager, flavor: runtimeFlavor, instanceId: server.instanceId
-      }))
+      close: async () => {
+        try {
+          await managerHeartbeat?.stop()
+        } finally {
+          await server.close().finally(() => unregisterRuntimeWithManager({
+            manager, flavor: runtimeFlavor, instanceId: server.instanceId
+          }))
+        }
+      }
     })
     const stop = (reason: ServeShutdownReason): void => {
-      managerHeartbeat?.stop()
+      void managerHeartbeat?.stop()
       loopMonitor.stop()
       shutdown.request(reason)
     }
@@ -320,7 +327,7 @@ async function serveMain(argv: readonly string[]): Promise<number> {
     cleanupCompleted = true
     return ServeExitCode.ok
   } finally {
-    managerHeartbeat?.stop()
+    await managerHeartbeat?.stop()
     ownerMonitor?.dispose()
     if (!cleanupCompleted && cleanupServer) {
       const server = cleanupServer

@@ -337,7 +337,7 @@ module.exports = {
       }),
   beforePack: './scripts/before-pack.cjs',
   afterPack: './scripts/after-pack.cjs',
-  afterSign: './scripts/mac-notarize.cjs',
+  afterSign: './scripts/after-sign.cjs',
   mac: {
     // macOS stores Chromium locales in language-named .lproj directories.
     electronLanguages: chromiumMacLanguages,

@@ -44,7 +44,8 @@ export async function createDispatch(
   }
   await deps.dispatches.create(dispatch)
   const delivered = await deps.deliverer.tryDeliver(input.teamId, dispatch.dispatchId)
-  return { dispatch, delivered }
+  const current = await deps.dispatches.get(input.teamId, dispatch.dispatchId)
+  return { dispatch: current ?? dispatch, delivered }
 }
 
 /** Localized one-line report for a created dispatch. */
@@ -58,7 +59,8 @@ export function sendReport(
     if (delivered.accepted) return `${base}，已开始执行。`
     if (delivered.pendingReason === 'user-control') return '未派出：该 worker 已由用户接管。'
     if (delivered.pendingReason === 'worker-busy') return `${base}，当前任务结束后自动开始。`
-    return `${base}，工作区就绪后自动开始。`
+    if (delivered.pendingReason === 'workspace') return `${base}，尚未启动；正在等待工作区准备完成。`
+    return `未启动「${worker.label}」：${delivered.failureReason ?? '派发未被接收，请检查任务状态'}。`
   }
   const base = `Dispatched to "${worker.label}"`
   if (delivered.accepted) return `${base}; it started immediately.`
@@ -68,5 +70,6 @@ export function sendReport(
   if (delivered.pendingReason === 'worker-busy') {
     return `${base}; it starts when the current task finishes.`
   }
-  return `${base}; it starts once the workspace is ready.`
+  if (delivered.pendingReason === 'workspace') return `${base}; not started, waiting for workspace preparation.`
+  return `Not started: "${worker.label}"; ${delivered.failureReason ?? 'dispatch was not accepted; check its status'}.`
 }

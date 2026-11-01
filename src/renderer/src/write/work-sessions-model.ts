@@ -33,10 +33,17 @@ function updatedMs(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+const WORK_PLACEHOLDER_TITLES = new Set([
+  WRITE_ASSISTANT_THREAD_TITLE, 'New Thread', 'New chat', '新会话', 'Untitled', '未命名'
+])
+
 /** A placeholder title means the backend titler has not named the session yet. */
-export function workSessionDisplayTitle(title: string | undefined): string {
+export function workSessionDisplayTitle(title: string | undefined, titleAuto?: boolean, threadId?: string): string {
   const trimmed = title?.trim() ?? ''
-  if (!trimmed || trimmed === WRITE_ASSISTANT_THREAD_TITLE || trimmed.startsWith(WRITE_CONTEXT_HEADING)) return ''
+  if (!trimmed) return ''
+  if (titleAuto === false) return trimmed
+  if (WORK_PLACEHOLDER_TITLES.has(trimmed) || trimmed.startsWith(WRITE_CONTEXT_HEADING) ||
+    (threadId && threadId.length > 8 && trimmed === threadId.slice(0, 8))) return ''
   return trimmed
 }
 
@@ -108,7 +115,7 @@ export function buildWorkSessions(input: {
     .sort((left, right) => updatedMs(right.updatedAt) - updatedMs(left.updatedAt))
     .map((thread): WorkSessionEntry => ({
       id: thread.id,
-      title: workSessionDisplayTitle(thread.title),
+      title: workSessionDisplayTitle(thread.title, thread.titleAuto, thread.id),
       updatedAt: thread.updatedAt || null,
       anchor: anchorFor({ threadId: thread.id, resources, boards })
     }))

@@ -1,5 +1,7 @@
+import { APP_PRESETS } from '../../contracts/app-connection-catalog.js'
 import { registerAgentDispatchIntentRoutes } from './agent-dispatch-intents.js'
 import { registerTaskSuggestionRoutes } from './task-suggestions.js'
+import { registerAppConnectionRoutes } from './register-app-connection-routes.js'
 import { registerAgentRosterRoutes } from './agent-roster.js'
 import type { Router } from '../router.js'
 import { registerProviderConfigurationRoutes } from './provider-configuration.js'
@@ -358,6 +360,11 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return applyRuntimeConfig(runtime, request)
   })
+  router.add('GET', '/v1/apps/catalog', (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return jsonResponse({ presets: APP_PRESETS })
+  })
+  registerAppConnectionRoutes(router, runtime)
   router.add('GET', '/v1/mcp/oauth', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return mcpOAuthDiagnostics(runtime)

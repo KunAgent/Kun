@@ -22,14 +22,14 @@ export function takeLiveDesignRequests(
   for (const block of blocks) {
     const request = readDesignOpenRequest(block)
     if (!request) continue
+    const turnLive = live.busy && Boolean(block.turnId) && block.turnId === live.currentTurnId
     if (request.status === 'pending') {
-      seenPending.add(block.id)
+      if (turnLive && block.kind === 'tool' && block.status === 'running') seenPending.add(block.id)
       continue
     }
     if (request.status !== 'ready' || !request.requestId || handled.has(request.requestId)) continue
     handled.add(request.requestId)
-    const turnLive = live.busy && Boolean(block.turnId) && block.turnId === live.currentTurnId
-    if (seenPending.has(block.id) || turnLive) ready.push({ blockId: block.id, request })
+    if (seenPending.delete(block.id) || turnLive) ready.push({ blockId: block.id, request })
   }
   return ready
 }
@@ -42,28 +42,57 @@ export function useAgentDesignAutoOpen(options: {
   const { activeThreadId } = options
   const blocks = useChatStore((state) => state.blocks)
   const busy = useChatStore((state) => state.busy)
+  const busyUnconfirmed = useChatStore((state) => state.busyUnconfirmed)
+  const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const currentTurnId = useChatStore((state) => state.currentTurnId)
-  const seenPendingRef = useRef(new Set<string>())
-  const handledRef = useRef(new Set<string>())
+  const trackingRef = useRef({ threadId: activeThreadId, initialized: false, seenPending: new Set<string>(), handled: new Set<string>() })
+  if (trackingRef.current.threadId !== activeThreadId) {
+    trackingRef.current = { threadId: activeThreadId, initialized: false, seenPending: new Set(), handled: new Set() }
+  }
   const latestRef = useRef(options)
   latestRef.current = options
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
-    if (!activeThreadId) return
+    if (!activeThreadId || useChatStore.getState().activeThreadId !== activeThreadId) return
+    const tracking = trackingRef.current
+    if (threadLoadingId === activeThreadId) {
+      tracking.initialized = false
+      return
+    }
+    // The first projection after selection/hydration is history, even if a
+    // cached turn still says running. Only subsequent arrivals can reveal UI.
+    const live = tracking.initialized && busy && !busyUnconfirmed
+    tracking.initialized = true
     const ready = takeLiveDesignRequests(
       blocks,
-      { busy, currentTurnId },
-      seenPendingRef.current,
-      handledRef.current
+      { busy: live, currentTurnId },
+      tracking.seenPending,
+      tracking.handled
     )
     if (ready.length === 0) return
     const thread = latestRef.current.threads.find((candidate) => candidate.id === activeThreadId)
     const workspaceRoot = normalizeWorkspaceRoot(thread?.workspace || latestRef.current.workspaceRoot)
     if (!workspaceRoot) return
+    const isCurrent = (): boolean => {
+      const latest = latestRef.current
+      const latestThread = latest.threads.find((candidate) => candidate.id === activeThreadId)
+      return mountedRef.current && trackingRef.current === tracking &&
+        latest.activeThreadId === activeThreadId && useChatStore.getState().activeThreadId === activeThreadId &&
+        normalizeWorkspaceRoot(latestThread?.workspace || latest.workspaceRoot) === workspaceRoot
+    }
     void (async () => {
       // Register every arrived design in order, then show the newest one.
-      for (const item of ready.slice(0, -1)) await ingestAgentDesign({ workspaceRoot, request: item.request })
-      await openAgentDesignCanvas({ threadId: activeThreadId, workspaceRoot, request: ready[ready.length - 1].request })
-    })()
-  }, [activeThreadId, blocks, busy, currentTurnId])
+      for (const item of ready.slice(0, -1)) {
+        if (!isCurrent()) return
+        await ingestAgentDesign({ workspaceRoot, request: item.request, isCurrent })
+      }
+      if (!isCurrent()) return
+      await openAgentDesignCanvas({ threadId: activeThreadId, workspaceRoot, request: ready[ready.length - 1].request, isCurrent })
+    })().catch((error) => { console.warn('Unable to reveal the agent design canvas', error) })
+  }, [activeThreadId, blocks, busy, busyUnconfirmed, currentTurnId, threadLoadingId])
 }

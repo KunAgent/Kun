@@ -1,3 +1,4 @@
+import { AssistantCodeContinuations } from './assistant-code-continuations.js'
 import { bindPrivateTurnLifecycle } from './private-turn-lifecycle.js'
 import { privateRequestCanRun } from '../agents/agent-lifecycle-state.js'
 import { AgentProfileImportService } from '../agents/agent-profile-import.js'
@@ -39,7 +40,7 @@ import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRe
 import { peerCoordinationNeeded, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
 import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
-import { enqueuePrivateContinuation } from './room-continuation-service.js'
+import { enqueuePrivateContinuation, roomContinuationIsCurrent } from './room-continuation-service.js'
 import { fireDueRoomReminders } from './room-reminders.js'
 import { bindRoomReminderWake } from './room-reminder-tools.js'
 import { WorkbenchBridge, bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
@@ -68,6 +69,7 @@ export class RoomRuntime {
   readonly product: RoomProductService
   readonly integrations: RoomIntegrationService
   readonly peers: RoomPeerRunner
+  readonly assistantContinuations: AssistantCodeContinuations
   /** Code/Work hand-offs for private Agents: tools, durable links and outcome delivery. */
   readonly workbench: WorkbenchBridge
   private readonly direct: AgentDirectRunner
@@ -99,6 +101,7 @@ export class RoomRuntime {
     this.agentMemory = new AgentMemoryService(this.agents, () => deps.memoryStore, deps.memoryEnabled)
     deps.agentMemory = this.agentMemory
     this.memoryCapture = new AgentMemoryCoordinator(deps)
+    this.assistantContinuations = new AssistantCodeContinuations(deps)
     this.service = new RoomService(deps.store, () => this.wake())
     this.service.setAgentDirectory(this.agents)
     this.commitments = new AgentCommitmentService(deps, this.agents)
@@ -115,7 +118,9 @@ export class RoomRuntime {
     bindAgentSetupDirectory(deps.threadStore, this.agents)
     this.product = new RoomProductService(deps, this.service)
     this.integrations = new RoomIntegrationService(deps)
-    this.unbindPrivateLifecycle = bindPrivateTurnLifecycle(deps.threadStore, { store: deps.store, exclusive: operation => this.exclusive(operation) })
+    this.unbindPrivateLifecycle = bindPrivateTurnLifecycle(deps.threadStore, { store: deps.store, exclusive: operation => this.exclusive(operation),
+      continuationAllowed: request => roomContinuationIsCurrent(deps, request),
+      assistantQueuedAllowed: (threadId, requestId) => this.assistantContinuations.queuedTurnAllowed(threadId, requestId) })
     this.lifecycle = new AgentLifecycleService(this)
     this.profileImport = new AgentProfileImportService(this)
     this.direct = new AgentDirectRunner(deps, this.executionService)
@@ -336,6 +341,8 @@ export class RoomRuntime {
       this.warnMemoryCapture(error)
       return false
     }) }
+    try { if (await this.exclusive(() => this.assistantContinuations.tick())) outcome.active = true }
+    catch { outcome.active = true }
     try { await reconcileRoomNotificationGates(this.deps) }
     catch (error) {
       console.warn('[kun] room notification reconciliation:', error instanceof Error ? error.message : String(error))

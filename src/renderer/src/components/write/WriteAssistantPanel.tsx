@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   Loader2,
   MessageSquareQuote,
+  ArrowLeftRight,
   PanelRightClose,
   Plus,
   TextSelect,
@@ -41,7 +42,13 @@ import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
 import { WriteAssistantEmptyState } from './WriteAssistantEmptyState'
 import { WorkHomeHero, WorkHomeSpaceChip, WorkKunAvatar } from './WorkHomeEmptyState'
 import { WorkHomeCards } from './WorkHomeCards'
-import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
+import {
+  useWorkAssistantAlone,
+  useWorkAssistantSwapped,
+  useWorkConversationStage,
+  WorkStageChromeContext
+} from '../../write/work-conversation-stage'
+import { useWorkSlotsStore } from '../../write/work-slots-store'
 import { focusedPaperViewId, paperResearchStageActive } from '../../paper/paper-view'
 import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
@@ -54,6 +61,8 @@ import './work-stage.css'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { useChildThreadViewer } from './useChildThreadViewer'
 import { useWorkComposerReferenceProps } from './use-work-composer-references'
+import { WorkSessionFileChips } from './WorkSessionFileChips'
+import { WorkPaperSearchChip } from './WorkPaperSearchChip'
 
 type Props = {
   input: string
@@ -187,6 +196,9 @@ export function WriteAssistantPanel({
   )
   // Nothing open: the panel is the center stage (Code-like home/conversation).
   const stage = useWorkConversationStage()
+  const swapped = useWorkAssistantSwapped()
+  const alone = useWorkAssistantAlone()
+  const swapSlots = useWorkSlotsStore((state) => state.swap)
   const stageChrome = useContext(WorkStageChromeContext)
   const detachedKey = useWorkContextStore((s) => s.detachedKey)
   // A removed chip only applies to the item it was removed from.
@@ -194,9 +206,10 @@ export function WriteAssistantPanel({
     if (detachedKey && detachedKey !== contextKey) useWorkContextStore.getState().attach()
   }, [contextKey, detachedKey])
   const listedTitle = useWorkSessionStore((s) => s.titles)
-  const sessionTitle = useChatStore((s) =>
-    workSessionDisplayTitle(s.threads.find((thread) => thread.id === s.activeThreadId)?.title)) ||
-    (activeThreadId ? listedTitle[activeThreadId] ?? '' : '')
+  const sessionTitle = useChatStore((s) => {
+    const thread = s.threads.find((candidate) => candidate.id === s.activeThreadId)
+    return workSessionDisplayTitle(thread?.title, thread?.titleAuto, thread?.id)
+  }) || (activeThreadId ? listedTitle[activeThreadId] ?? '' : '')
   const agentHarnessId = useChatStore(workAssistantHarnessId)
   const paperEntries = usePaperModeStore((s) => s.entries)
   const readerPage = usePaperModeStore((s) => s.readerPage)
@@ -234,7 +247,8 @@ export function WriteAssistantPanel({
     if (!workspaceRoot || !contextKey) return null
     const registry = readWriteThreadRegistry()
     if (paperView) {
-      if (researchActive) return { kind: 'research', key: contextKey, label: t('paperResearchContext'), sessionIds: [] }
+      // A session that took the stage from the research page is not a research run.
+      if (researchActive && !swapped) return { kind: 'research', key: contextKey, label: t('paperResearchContext'), sessionIds: [] }
       if (paperView === 'library') {
         return { kind: 'library', key: contextKey, label: t('workSidebarLibrary'),
           detail: t('workContextPaperCount', { count: libraryTotal }), sessionIds: [] }
@@ -260,7 +274,7 @@ export function WriteAssistantPanel({
     // threadCount/activeThreadId: a new session about this item joins its list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilePath, activeThreadId, activeUnitRel, activeWhiteboard, contextKey, libraryTotal, paperContextLabel,
-    paperView, readerPage, researchActive, t, threadCount, workspaceRoot])
+    paperView, readerPage, researchActive, swapped, t, threadCount, workspaceRoot])
   const presentationView = useWriteWorkspaceStore(selectFocusedPresentationView)
   const referenceProps = useWorkComposerReferenceProps(workspaceRoot)
   const {
@@ -334,7 +348,7 @@ export function WriteAssistantPanel({
 
   return (
     <aside
-      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${stage ? 'is-stage ' : ''}${home ? 'is-home ' : ''}${className}`}
+      className={`write-assistant-panel ds-sidebar-surface ds-no-drag flex min-h-0 flex-col border-l border-ds-border-muted backdrop-blur-xl ${stage ? 'is-stage ' : ''}${swapped ? 'is-swapped ' : ''}${home ? 'is-home ' : ''}${className}`}
       data-work-assistant={stage ? 'stage' : 'panel'}
     >
       <div className="write-assistant-header ds-sidebar-surface-chrome relative shrink-0">
@@ -367,6 +381,18 @@ export function WriteAssistantPanel({
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
           </button>
+          {alone ? null : (
+            <button
+              type="button"
+              onClick={swapSlots}
+              className="write-panel-icon-button"
+              data-work-swap-slots={swapped ? 'file' : 'session'}
+              aria-label={swapped ? t('workSwapToFile') : t('workSwapToSession')}
+              title={swapped ? t('workSwapToFile') : t('workSwapToSession')}
+            >
+              <ArrowLeftRight className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          )}
           {stage ? null : (
             <button
               type="button"
@@ -475,6 +501,7 @@ export function WriteAssistantPanel({
       </div>
 
       <div className="write-assistant-footer ds-sidebar-surface-chrome shrink-0 border-t border-ds-border-muted px-3 pb-3 pt-3">
+        {stage ? <WorkSessionFileChips /> : null}
         {!viewingChildThread && presentationView ? (
           <WritePresentationViewChip view={presentationView} />
         ) : null}
@@ -534,6 +561,7 @@ export function WriteAssistantPanel({
           </div>
         ) : null}
         {home ? <WorkHomeSpaceChip /> : null}
+        {viewingChildThread ? null : <WorkPaperSearchChip />}
         {viewingChildThread ? (
           <SubagentReturnBar
             parentTitle={t('writeAssistant')}

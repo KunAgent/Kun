@@ -1,3 +1,4 @@
+import { openPaperSpace } from '../paper/paper-space'
 import { useChatStore } from '../store/chat-store'
 import { writeConversationResourcePath } from '../paper/paper-mode-actions'
 import { usePaperModeStore } from '../paper/paper-mode-store'
@@ -5,11 +6,13 @@ import { selectPaperResearchSession } from '../paper/paper-research-actions'
 import { openLibraryEntry } from '../paper/paper-library-actions'
 import { useWriteWorkspaceStore, writeDirnameFromPath, writeJoinPath } from './write-workspace-store'
 import { normalizePath } from './write-workspace-store-helpers'
-import type { WritePaperViewId } from './write-workspace-store-types'
+import type { PaperSpaceView } from '../paper/paper-space-store'
 import { beginWorkSessionTransition, currentWorkSessionId, useWorkSessionStore } from './work-session-store'
 import { readWorkSessionTabs, workSessionTabTarget } from './work-session-tabs'
 import type { WorkSessionEntry } from './work-sessions-model'
 import { workAssistantThreadRoute } from './work-assistant-agent'
+import { useWorkViewStore } from './work-view-store'
+import { useWorkPaperSearchMode } from './work-paper-search-mode'
 
 /** Mount a space; every space is a folder with its documents, boards and papers. */
 export async function mountWorkSpace(root: string): Promise<boolean> {
@@ -29,16 +32,25 @@ export async function ensureWorkSpaceMounted(): Promise<boolean> {
   return target ? mountWorkSpace(target) : false
 }
 
-/** Library and discover pages open as tabs of the current space. */
-export async function openPaperView(view: WritePaperViewId): Promise<void> {
+/** Global paper library and discover pages are independent of Work tabs. */
+export async function openPaperView(view: PaperSpaceView): Promise<void> {
+  await openPaperSpace(view)
+}
+
+/**
+ * 找论文 happens in a session: bring the session to the stage (the assistant
+ * docks open beside any open file) and switch the composer chip on.
+ */
+export async function startWorkPaperSearch(): Promise<void> {
   if (!(await ensureWorkSpaceMounted())) return
-  useWriteWorkspaceStore.getState().openPaperViewTab(view)
+  useWorkViewStore.getState().showSession()
+  useWriteWorkspaceStore.getState().setAssistantOpen(true)
+  useWorkPaperSearchMode.getState().start()
 }
 
 /** The import dialog files papers into the current space's papers folder. */
 export async function openPaperImport(): Promise<void> {
-  if (!(await ensureWorkSpaceMounted())) return
-  usePaperModeStore.getState().setImportDialogOpen(true)
+  await openPaperSpace('library', true)
 }
 
 function relativeTo(root: string, path: string): string {
@@ -136,14 +148,25 @@ async function restoreSessionTabs(root: string, threadId: string): Promise<boole
  * Open a session: it becomes the current session of its space, and its
  * workbench comes back — the remembered tabs, or what it is attached to.
  */
-export async function openWorkSession(session: WorkSessionEntry, root?: string): Promise<void> {
+export async function openWorkSession(
+  session: WorkSessionEntry,
+  root?: string,
+  options: { restoreWorkbench?: boolean } = {}
+): Promise<void> {
   const end = beginWorkSessionTransition()
   try {
     if (root && !(await mountWorkSpace(root))) return
     const spaceRoot = useWriteWorkspaceStore.getState().workspaceRoot
     if (!spaceRoot) return
     useWorkSessionStore.getState().select(spaceRoot, session.id)
+    useWorkViewStore.getState().openSessionTab(spaceRoot, session.id)
     await useChatStore.getState().selectWriteThread(session.id, spaceRoot)
+    // A session opened as its own tab leaves the open files alone; only a page that
+    // is itself the session (Agent research) still comes with it.
+    if (options.restoreWorkbench === false) {
+      if (session.anchor.kind === 'research') await openSessionAnchor(spaceRoot, session)
+      return
+    }
     const restored = await restoreSessionTabs(spaceRoot, session.id)
     // Restoring the discover tab does not carry the research run. Apply it
     // anyway, or the page stays on the empty "new research" composer.

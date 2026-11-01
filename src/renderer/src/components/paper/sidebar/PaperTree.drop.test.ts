@@ -1,3 +1,4 @@
+vi.mock('../../../paper/paper-space', () => ({ paperSpaceReadingSettings: () => ({ papersDir: 'papers' }), ensurePaperSpace: vi.fn(async () => '/Users/me/space') }))
 /** @vitest-environment jsdom */
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -77,7 +78,7 @@ describe('PaperTree import drop targets', () => {
     expect(host.querySelector('[role="status"]')?.textContent).toContain('rag')
   })
 
-  it('imports the dragged papers into the folder it is dropped on', async () => {
+  it('imports dragged papers into the fixed root even on a legacy folder target', async () => {
     const bridge = {
       paperCreateGroup: vi.fn(async ({ group }: { group: string }) => ({ ok: true, group })),
       paperImportBatch: vi.fn(async ({ items, parentDir }: { items: Array<{ input: string }>; parentDir: string }) => ({
@@ -97,9 +98,9 @@ describe('PaperTree import drop targets', () => {
       folderButton('rag').dispatchEvent(dragEvent('drop'))
       await vi.waitFor(() => expect(bridge.paperImportBatch).toHaveBeenCalledTimes(2))
     })
-    expect(bridge.paperImportBatch.mock.calls.map(([arg]) => arg.parentDir)).toEqual(['papers/rag', 'papers/rag'])
+    expect(bridge.paperImportBatch.mock.calls.map(([arg]) => arg.parentDir)).toEqual(['papers', 'papers'])
     await vi.waitFor(() => expect(usePaperImportJobs.getState().jobs.quick?.running).toBe(false))
-    expect(usePaperFreshFolders.getState().byRoot[ROOT]).toEqual({ rag: 2 })
+    expect(usePaperFreshFolders.getState().byRoot[ROOT]).toBeUndefined()
     expect(usePaperImportDrag.getState().candidates).toHaveLength(0)
   })
 })

@@ -70,6 +70,7 @@ function projectProps(threads: NormalizedThread[], workspaceRoot = '/Users/zxy/p
     onDeleteThread: vi.fn(async () => undefined),
     onRestoreThread: vi.fn(async () => undefined),
     onSearchQueryChange: noOp,
+    onOpenSchedule: vi.fn(),
     t: (key: string) => key
   }
 }

@@ -1,3 +1,4 @@
+import { resolveKunStartupTimeoutMs } from './runtime/kun-runtime-health-monitor'
 import { detectAnalyticsInstallation } from './product-analytics/storage'
 import { homedir } from 'node:os'
 import {
@@ -18,6 +19,7 @@ import {
 } from './settings-store'
 import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import { registerTrayQuotaIpc } from './tray-quota-ipc'
+import { syncNativeThemeSource } from './native-theme-source'
 import { syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath } from './main-paths'
 import {
@@ -169,6 +171,19 @@ export async function initializeMainServices(input: {
         return null
       }
     }
+    desktopProcessStack.beginStartup(resolveKunStartupTimeoutMs(process.platform, process.env), (progress) => {
+      const stages = {
+        profile: 'Checking which Kun session owns your data...',
+        'previous-processes': 'Checking the previous Kun session...',
+        'manager-launch': 'Starting the Kun data service...',
+        'manager-ready': 'Waiting for the Kun data service...',
+        'runtime-launch': 'Starting Kun...',
+        ready: 'Kun is ready.',
+        cleanup: 'Finishing startup recovery...'
+      }
+      input.onPhase?.('manager_starting', `${stages[progress.stage]} (${Math.ceil(progress.remainingMs / 1_000)}s remaining)`)
+      logInfo('startup', 'Kun startup progress.', progress)
+    })
     const managerDataDir = await resolveKunManagerDataDirFromSettings(productionSettingsPath)
     input.onPhase?.('manager_starting')
     const serviceManager = await ensureKunServiceManager({
@@ -260,6 +275,7 @@ export async function initializeMainServices(input: {
         })
     traceStartup('settings load:start')
     const initial = await mainState.store.load()
+    syncNativeThemeSource(initial.theme)
     desktopProcessStack.assertCanStart()
     mainState.settledRuntimeSettings = initial
     runtimeSupervisor.noteLatest(initial)

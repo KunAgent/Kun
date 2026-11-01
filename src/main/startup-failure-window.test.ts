@@ -3,13 +3,16 @@ import {
   parseStartupFailureAction,
   sanitizeStartupFailureMessage,
   startupFailurePresentation,
-  startupFailureHtml
+  startupFailureHtml,
+  startupFailureDiagnostics
 } from './startup-failure-content'
 import {
   ClientRuntimeOwnerBusyError,
   KunHandoffError
 } from './runtime/kun-installed-build-handoff'
 import { OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
+import { ManagerStartLockError } from '../../kun/src/manager/manager-start-lock-diagnostics.js'
+import { homedir } from 'node:os'
 
 const electron = vi.hoisted(() => {
   const webHandlers = new Map<string, (...args: unknown[]) => void>()
@@ -32,12 +35,14 @@ const electron = vi.hoisted(() => {
     app: {
       isPackaged: true,
       getVersion: vi.fn(() => '0.3.10'),
+      getLocale: vi.fn(() => 'en-US'),
       relaunch: vi.fn(),
       quit: vi.fn()
     },
     BrowserWindow: vi.fn(function MockBrowserWindow(_options?: unknown) {
       return window
     }),
+    clipboard: { writeText: vi.fn() },
     dialog: { showErrorBox: vi.fn() },
     shell: { openPath: vi.fn().mockResolvedValue('') },
     webHandlers,
@@ -49,6 +54,7 @@ const electron = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: electron.app,
   BrowserWindow: electron.BrowserWindow,
+  clipboard: electron.clipboard,
   dialog: electron.dialog,
   shell: electron.shell
 }))
@@ -220,7 +226,9 @@ describe('showStartupFailureWindow', () => {
       expect(recoverRetry).toHaveBeenCalledOnce()
       await vi.advanceTimersByTimeAsync(STARTUP_RECOVERY_TIMEOUT_MS)
       expect(lastRenderedHtml()).toContain('Recovery timed out')
-      expect(lastRenderedHtml()).toContain('Retry Kun')
+      expect(lastRenderedHtml()).not.toContain('>Retry Kun</a>')
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      expect(recoverRetry).toHaveBeenCalledOnce()
       expect(recoverRetry.mock.calls[0]![0].aborted).toBe(true)
       finish()
       await vi.advanceTimersByTimeAsync(0)
@@ -471,5 +479,47 @@ describe('showStartupFailureWindow', () => {
 
     expect(recoverHandoff).not.toHaveBeenCalled()
     expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+  it('copies a sanitized diagnostics report and confirms it on the page', () => {
+    showStartupFailureWindow(new Error('Owned Manager exited before readiness; managerToken=secret'), '/tmp/kun-missing-logs')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:copy-diagnostics')
+
+    const report = electron.clipboard.writeText.mock.calls[0]?.[0] as string
+    expect(report).toContain('manager-exited')
+    expect(report).toContain('0.3.10')
+    expect(report).not.toContain('secret')
+    expect(lastRenderedHtml()).toContain('Diagnostics copied to the clipboard.')
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('opens only the log file named by the diagnostic message', async () => {
+    showStartupFailureWindow(
+      new Error('Owned Manager exited before readiness; inspect /tmp/kun-missing/control/manager.log'),
+      '/tmp/kun-logs'
+    )
+    expect(lastRenderedHtml()).toContain('No log file was found.')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:open-log-file')
+    await Promise.resolve()
+    expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/kun-missing/control/manager.log')
+  })
+})
+
+
+describe('structured startup diagnostics', () => {
+  it('copies only startup facts and redacts the home directory', () => {
+    const error = new ManagerStartLockError('unverifiable', {
+      scope: 'settingsPath', path: homedir() + '/Kun/settings.election/.manager-start.lock',
+      phase: 'inspect', waitedMs: 123, attemptId: 'attempt-a', ownerState: 'unknown', ownerPid: 42
+    })
+    Object.assign(error, { environment: { SECRET: 'never-copy' }, managerToken: 'never-copy', cause: 'chat contents' })
+    const diagnostic = startupFailureDiagnostics(error)
+    expect(diagnostic).toContain('[home]')
+    expect(diagnostic).toContain('attempt-a')
+    expect(diagnostic).not.toContain(homedir())
+    expect(diagnostic).not.toContain('never-copy')
+    expect(diagnostic).not.toContain('chat contents')
+    expect(startupFailurePresentation(error).message).toContain('cannot verify')
+    expect(parseStartupFailureAction('kun-startup-action:copy-diagnostics')).toBe('copy-diagnostics')
+    expect(startupFailureHtml('failed', '/logs')).toContain('Copy diagnostics')
   })
 })

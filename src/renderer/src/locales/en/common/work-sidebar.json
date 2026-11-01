@@ -11,9 +11,15 @@
   "workSidebarSearchPlaceholder": "Search sessions",
   "workSessionNew": "New session",
   "workSessionMore": "More actions",
+  "workOpenBeside": "Open in side panel",
+  "workSwapToFile": "Put the file in the center",
+  "workSwapToSession": "Put the session in the center",
   "workSessionShowMore": "Show {{count}} more",
   "workSessionShowLess": "Show less",
   "workSessionLoading": "Loading sessions…",
+  "workSessionLoadMore": "Load older sessions",
+  "workSessionLoadFailed": "Could not load sessions.",
+  "workSessionRetry": "Retry",
   "workSessionNoMatches": "No matching sessions",
   "workHomeTitle": "What shall we work on today?",
   "workHomeSubtitle": "Write documents, read papers or organize material — start with a sentence.",
@@ -24,5 +30,6 @@
   "workAssistantEmptyTitlePapers": "Research assistant ready",
   "workAssistantEmptySubPapers": "Select text in a paper to quote it, or pick an action below.",
   "workSessionArchived": "Archived \"{{title}}\"",
-  "workSessionUndo": "Undo"
+  "workSessionUndo": "Undo",
+  "workFilesResize": "Drag to resize Files"
 }

@@ -10,6 +10,7 @@ import type { PaperLibraryEntry, PaperLibraryFilter, PaperLibrarySort } from '@s
 import type { MobilePage } from '../navigation/mobile-page'
 import { rememberMobilePaperRoute } from './mobile-paper-route'
 import { mobilePaperLibraryRoot, setMobilePaperLibraryRoot } from './mobile-paper-library-root'
+import { ensurePaperSpace, paperSpaceReadingSettings } from '../../paper/paper-space'
 import './mobile-paper.css'
 
 type Props = {
@@ -65,22 +66,22 @@ export function MobilePaperHome({ navigate, onDocuments, onBusyChange }: Props) 
   const filtered = useMemo(() => sortPaperEntries(filterPaperEntries(listing?.entries ?? [], filter), sort),
     [listing, filter, sort])
   const runImport = async (): Promise<void> => {
-    const targetRoot = root
-    if (!targetRoot || !paperMode.libraries.includes(targetRoot) || busy || (!file && !input.trim())) return
+    const targetRoot = await ensurePaperSpace().catch((cause: unknown) => { setActionError(String(cause)); return '' })
+    if (!targetRoot || busy || (!file && !input.trim())) return
     setBusy(true); setActionError(''); setProgress(t('mobileWorkPaperUploading'))
     const requestId = crypto.randomUUID()
     requestRef.current = requestId
     try {
       if (bibtex && !file) {
         const result = await window.kunGui.paperImportBibtex({ workspaceRoot: targetRoot, bibtex: input,
-          parentDir: paperReading.papersDir, downloadPdfs: false, requestId })
+          parentDir: paperSpaceReadingSettings().papersDir, downloadPdfs: false, requestId })
         if (!result.ok) throw new Error(result.message)
       } else {
         const path = file ? await window.kunGui.uploadRemoteFile?.(file) : undefined
         if (file && !path) throw new Error(t('mobileWorkPaperUploadUnavailable'))
         const result = await window.kunGui.paperImport({ workspaceRoot: targetRoot,
           input: path || input.trim(), ...(path ? { localPdfPath: path } : {}),
-          parentDir: paperReading.papersDir, requestId })
+          parentDir: paperSpaceReadingSettings().papersDir, requestId })
         if (!result.ok) throw new Error(result.message)
       }
       setFile(null); setInput(''); setImportOpen(false); reload()

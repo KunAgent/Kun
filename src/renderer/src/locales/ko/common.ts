@@ -21,6 +21,7 @@ import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
 import paperWorkspace from './common/paper-workspace.json'
+import paperSpace from './common/paper-space.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 import workSidebar from './common/work-sidebar.json'
@@ -34,7 +35,7 @@ import wardrobeAccount from './common/wardrobe-account.json'
 import wardrobeShare from './common/wardrobe-share.json'
 import whatsNew from './common/whats-new.json'
 import wardrobeInvite from './common/wardrobe-invite.json'
-import codeTour from './common/code-tour.json'
+import guidedTours from './common/guided-tours.json'
 import messageQuote from './common/message-quote.json'
 import appSurfaces from './common/app-surfaces.json'
 import designAgent from './common/design-agent.json'
@@ -60,6 +61,8 @@ import composerQueue from './common/composer-queue.json'
 import composerAsk from './common/composer-ask.json'
 import composerApproval from './common/composer-approval.json'
 import composerRecords from './common/composer-records.json'
+import toast from './common/toast.json'
+import workTabMenu from './common/work-tab-menu.json'
 
 const common = {
   ...writeSelectionMenu,
@@ -85,6 +88,7 @@ const common = {
   ...remoteAccess,
   ...paper,
   ...paperWorkspace,
+  ...paperSpace,
   ...ade,
   ...workLayout,
   ...workSidebar,
@@ -98,7 +102,7 @@ const common = {
   ...wardrobeShare,
   ...whatsNew,
   ...wardrobeInvite,
-  ...codeTour,
+  ...guidedTours,
   ...messageQuote,
   ...appSurfaces,
   ...designAgent,
@@ -122,7 +126,9 @@ const common = {
   ...composerQueue,
   ...composerAsk,
   ...composerApproval,
-  ...composerRecords
+  ...composerRecords,
+  ...toast,
+  ...workTabMenu
 }
 
 export default common

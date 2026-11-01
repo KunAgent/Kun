@@ -1,4 +1,5 @@
 import { startQuotaReminderNotifications } from './quota-reminder-notification'
+import { relaunchApp } from './relaunch-app'
 import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import {
   app,
@@ -14,6 +15,7 @@ import {
 } from './settings-store'
 import { preserveRedactedProviderCredentials } from './settings-credential-redaction'
 import { syncLoginItemSettings } from './desktop-behavior'
+import { syncNativeThemeSource } from './native-theme-source'
 import {
   getKunRuntimeSettings,
   getModelProviderSettings,
@@ -217,6 +219,7 @@ export function registerMainIpc(services: MainServices): void {
           })
       }
       syncAppKeepAwake(saved)
+      syncNativeThemeSource(saved.theme)
       try {
         mainState.scheduleRuntime?.sync(saved)
         mainState.workflowRuntime?.sync(saved)
@@ -321,6 +324,7 @@ export function registerMainIpc(services: MainServices): void {
         return saved
       })
       syncAppKeepAwake(saved)
+      syncNativeThemeSource(saved.theme)
       void remoteAccessService.sync()
       requestExtensionWorkbenchEnvironmentPublish()
       return saved
@@ -489,7 +493,7 @@ export function registerMainIpc(services: MainServices): void {
         await shutdownServiceManagerAndWait(serviceManager)
         if (mainState.activeServiceManager === serviceManager) mainState.activeServiceManager = null
         mainState.mainWindow?.destroy()
-        app.relaunch()
+        relaunchApp()
         app.exit(0)
       }
     }).registerIpc()

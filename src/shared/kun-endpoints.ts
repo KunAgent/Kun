@@ -78,6 +78,13 @@ export const KUN_SUPPLY_CHAIN_AUDIT_TEMPLATE = '/v1/supply-chain/audit'
 export const KUN_SUPPLY_CHAIN_UPDATE_CHECK_PATH = '/v1/supply-chain/update-check'
 export const KUN_SUPPLY_CHAIN_UPDATE_CHECK_TEMPLATE = '/v1/supply-chain/update-check'
 
+export const KUN_APP_CATALOG_TEMPLATE = '/v1/apps/catalog'
+export const KUN_APP_CONNECTIONS_TEMPLATE = '/v1/apps/connections'
+export const KUN_APP_CONNECTION_TEMPLATE = '/v1/apps/connections/{id}'
+export const KUN_APP_CONNECTION_CONNECT_TEMPLATE = '/v1/apps/connections/{id}/connect'
+export const KUN_APP_CONNECTION_CHECK_TEMPLATE = '/v1/apps/connections/{id}/check'
+export const KUN_APP_CONNECTION_CREDENTIAL_TEMPLATE = '/v1/apps/connections/{id}/credential'
+export const KUN_APP_CONNECTION_ATTEMPT_TEMPLATE = '/v1/apps/connections/{id}/attempts/{attemptId}'
 export const KUN_MCP_OAUTH_PATH = '/v1/mcp/oauth'
 export const KUN_MCP_OAUTH_TEMPLATE = '/v1/mcp/oauth'
 export const KUN_MCP_OAUTH_SERVER_TEMPLATE = '/v1/mcp/oauth/{id}'
@@ -431,6 +438,11 @@ export function kunThreadKnowledgeBaseReindexPath(
 export const KUN_THREAD_FORK_TEMPLATE = '/v1/threads/{id}/fork'
 export function kunThreadForkPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/fork`
+}
+
+export const KUN_THREAD_WORK_TITLE_RECOVER_TEMPLATE = '/v1/threads/{id}/work-title/recover'
+export function kunThreadWorkTitleRecoverPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/work-title/recover`
 }
 
 export const KUN_THREAD_SUMMARIZE_TEMPLATE = '/v1/threads/{id}/summarize'

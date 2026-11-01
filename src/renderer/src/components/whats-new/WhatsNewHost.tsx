@@ -5,6 +5,7 @@ import i18n from '../../i18n'
 import { useChatStore } from '../../store/chat-store'
 import { loadWhatsNewContent, releaseNotesLanguage } from './whats-new-content'
 import { openCurrentWhatsNew, useWhatsNewStore } from './whats-new-store'
+import { markOverviewTourPending, overviewReplacesNotice, useGuidedTourStore } from '../guided-tour/guided-tour-store'
 import './whats-new.css'
 
 const WhatsNewDialog = lazy(() => import('./WhatsNewDialog'))
@@ -20,6 +21,14 @@ async function showLaunchNotice(): Promise<void> {
   if (typeof bridge?.getReleaseNotice !== 'function') return
   const notice = await bridge.getReleaseNotice().catch(() => null)
   if (!notice) return
+  if (overviewReplacesNotice(notice)) {
+    // Updating across the Code / Work / 对话 redesign: the overview tour greets instead, and its
+    // last card links back to these notes.
+    markOverviewTourPending()
+    useGuidedTourStore.getState().setReleaseNotesWaiting(true)
+    await bridge.acknowledgeReleaseNotice?.(notice.version).catch(() => undefined)
+    return
+  }
   const content = await loadWhatsNewContent(notice, releaseNotesLanguage(i18n.language))
   useWhatsNewStore.getState().show(content)
   // Seen as soon as it is on screen: a later crash must not replay it.

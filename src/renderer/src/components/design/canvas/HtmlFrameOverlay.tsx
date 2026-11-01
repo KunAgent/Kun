@@ -11,7 +11,6 @@ import {
   type Rect
 } from '../../../design/canvas/canvas-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
-import type { DesignRuntimeQualityPayload } from '../../../design/design-html-quality'
 import { ScreenOverlay } from './html-frame/HtmlFrameScreenOverlay'
 import { htmlFrameOverlayCanMountAtZoom } from './html-frame/html-frame-helpers'
 import { RunningAppFrameOverlay } from './RunningAppFrameOverlay'
@@ -26,7 +25,6 @@ export {
   htmlFrameOverlayCanMountAtZoom,
   htmlFrameOverlayPointerEvents,
   htmlFramePreviewAsyncEpochMatches,
-  htmlFrameShouldClearElementContextOnEditingChange,
   htmlFrameShouldApplyScrollbarSuppression,
   htmlFrameShouldPromotePreviewToReady,
   htmlFrameShouldSuppressDocumentScrollbars,
@@ -143,24 +141,16 @@ type Props = {
   workspaceRoot: string
   readOnly?: boolean
   interactiveId: string | null
-  editingId: string | null
   onToggleInteractive: (shapeId: string) => void
-  onToggleModify: (shapeId: string) => void
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
 }
 
 export function HtmlFrameOverlay({
   workspaceRoot,
   readOnly = false,
   interactiveId,
-  editingId,
   onToggleInteractive,
-  onToggleModify,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair
 }: Props): ReactElement {
   const document = useCanvasShapeStore((s) => s.document)
   const objects = document.objects
@@ -235,7 +225,6 @@ export function HtmlFrameOverlay({
               active={active}
               interactive={!readOnly && interactiveId === shape.id}
               panning={panning || readOnly}
-              editing={!readOnly && editingId === shape.id}
               onDoubleClick={readOnly ? () => undefined : onToggleInteractive}
             />
           )
@@ -255,13 +244,8 @@ export function HtmlFrameOverlay({
             active={active}
             interactive={!readOnly && interactiveId === shape.id}
             panning={panning || readOnly}
-            editing={!readOnly && editingId === shape.id}
-            onDoubleClick={readOnly ? () => undefined : onToggleModify}
             onToggleInteractive={readOnly ? undefined : onToggleInteractive}
-            onToggleModify={readOnly ? () => undefined : onToggleModify}
             onUseElementAsContext={readOnly ? undefined : onUseElementAsContext}
-            onRuntimeQualityFindings={readOnly ? undefined : onRuntimeQualityFindings}
-            onRequestQualityRepair={readOnly ? undefined : onRequestQualityRepair}
             canvasReadOnly={readOnly}
           />
         )

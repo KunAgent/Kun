@@ -23,6 +23,8 @@ export function projectRuntimeEvent(event: RuntimeEvent): ActivityProjection[] {
         unitId: child.childId,
         patch: {
           parentThreadId: child.parentThreadId,
+          // Late events without a launcher must not clear a known source.
+          ...(child.childLauncher ? { childLauncher: child.childLauncher } : {}),
           ...childStatusPatch(child.childStatus)
         }
       }

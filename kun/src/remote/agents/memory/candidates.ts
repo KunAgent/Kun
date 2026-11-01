@@ -10,8 +10,9 @@ import { RemoteNoEffect } from '../../requests/rejections.js'
 export class RemoteMemoryCandidates {
   constructor(private readonly rooms: RoomRuntime) {}
   async list(p: any) {
-    await requireAgent(this.rooms, p.agentId)
+    const agent = await requireAgent(this.rooms, p.agentId)
     if (!this.rooms.deps.memoryStore) throw new RemoteNoEffect('AGENT_NOT_AVAILABLE')
+    const canWrite = !agent.archivedAt && await this.rooms.agentMemory.available()
     const scope = cursorScope(['agent.memory.candidates.list', p.agentId])
     const position = readCursor<{ before?: number; incomplete?: boolean }>(p.cursor, scope, {})
     if (position.before !== undefined && (!Number.isSafeInteger(position.before) || position.before < 0) ||
@@ -33,9 +34,12 @@ export class RemoteMemoryCandidates {
         candidates.push({ candidateId: row.id, revision: row.revision, status: value.status, action: value.action,
           type: value.candidate.type, proposed: { snippet: content.text, contentLength: content.totalChars,
             contentTruncated: content.nextOffset !== undefined, summary: true as const },
+          canAccept: Boolean(canWrite && (target ? !target.disabledAt && !target.supersededAt :
+            value.action === 'create' && !value.targetId && value.captureScope?.conversationId)),
           targetAvailable: Boolean(target), ...(target ? { target: { memoryId: target.id, fingerprint: canonicalMemoryHash(target),
             contentLength: target.content.length, disabled: Boolean(target.disabledAt || target.supersededAt) } } : {}),
-          ...(['user_locked', 'source_changed', 'conflicting_memory'].includes(value.reason ?? '') ? { reason: value.reason } : {}),
+          ...(['user_locked', 'source_changed', 'conflicting_memory'].includes(value.reason ?? '') ? { reason: value.reason } :
+            value.reason?.startsWith('invalid-relation ') ? { reason: 'comparison_review_required' } : {}),
           source: { roomId: value.roomId, messageIds: value.sourceMessageIds.slice(0, 8) } })
       } catch { incomplete = true }
     }
@@ -57,8 +61,14 @@ export class RemoteMemoryCandidates {
     if (!['pending', 'conflicted'].includes(row.value.status)) throw new RemoteNoEffect('REVISION_CONFLICT')
     if (p.decision === 'accept') {
       if (agent.archivedAt || !await this.rooms.agentMemory.available()) throw new RemoteNoEffect('AGENT_NOT_AVAILABLE')
-      const target = await privateMemory(this.rooms, p.agentId, row.value.targetId ?? '', p.expectedTargetFingerprint)
-      if (target.disabledAt || target.supersededAt) throw new RemoteNoEffect('REVISION_CONFLICT')
+      if (row.value.targetId) {
+        if (!p.expectedTargetFingerprint) throw new RemoteNoEffect('INVALID_REQUEST')
+        const target = await privateMemory(this.rooms, p.agentId, row.value.targetId, p.expectedTargetFingerprint)
+        if (target.disabledAt || target.supersededAt) throw new RemoteNoEffect('REVISION_CONFLICT')
+      } else if (row.value.action !== 'create' || !row.value.captureScope?.conversationId || p.expectedTargetFingerprint !== undefined) {
+        // Missing update targets and legacy candidates with unknown scope must not become creates.
+        throw new RemoteNoEffect('INVALID_REQUEST')
+      }
     }
   }
   async decide(p: any, clientRequestId: string) {

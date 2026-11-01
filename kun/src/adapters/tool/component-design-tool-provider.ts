@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
 import type { ToolHostContext, ToolExecutionUpdate } from '../../ports/tool-host.js'
+import { DESIGN_PREVIEW_INSTRUCTION } from '../../shared/design-preview-policy.js'
 import { assertCanWritePath } from './sandbox-policy.js'
 import { resolveWorkspacePath, withToolBoundary } from './builtin-tool-utils.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
@@ -79,9 +80,11 @@ export function buildComponentDesignToolProviders(
       description: [
         'Publish one interactive UI component prototype inline in the current conversation.',
         'Prefer passing complete standalone HTML in `html`, or `artifactPath` for an existing large or multi-file artifact; direct publication does not start a child agent.',
+        'When both are supplied, html takes precedence and is validated and saved at artifactPath before publication.',
         'The document must start with <!doctype html>, contain complete html/head/body elements, and have no more than one data-kun-component-root; Kun adds missing platform markers.',
         'Relative local scripts, styles, images, fonts, and media are supported. Remote resources require exact HTTPS origins in resourcePolicy.',
         'If HTML is not ready, pass `request` plus optional existing implementation/sourceFiles to ask the component-designer child agent to generate it.',
+        DESIGN_PREVIEW_INSTRUCTION,
         'Do not use for complete pages, multi-page flows, production implementation, or non-UI tasks.'
       ].join(' '),
       toolKind: 'file_change',
@@ -104,13 +107,13 @@ export function buildComponentDesignToolProviders(
           html: {
             type: 'string',
             minLength: 1,
-            description: 'Complete standalone component HTML. Use artifactPath instead for large or multi-file prototypes.'
+            description: 'Complete standalone component HTML. Takes precedence over existing artifact content; when artifactPath is also supplied, save the HTML there.'
           },
           artifactPath: {
             type: 'string',
             minLength: 1,
             maxLength: 1_024,
-            description: 'Existing workspace-relative .kun-design/component-prototypes/<id>/prototype.html to validate and publish in place.'
+            description: 'Workspace-relative .kun-design/component-prototypes/<id>/prototype.html: an existing artifact to publish, or the destination when html is supplied.'
           },
           resourcePolicy: {
             type: 'object',
@@ -194,9 +197,7 @@ export function buildComponentDesignToolProviders(
 
         if (args.html || args.artifactPath) {
           try {
-            const content = args.artifactPath
-              ? await readFile(target.absolutePath, 'utf8')
-              : args.html!
+            const content = args.html ?? await readFile(target.absolutePath, 'utf8')
             const artifact = await persistComponentPrototypeHtml(
               target.absolutePath,
               content,
@@ -264,6 +265,8 @@ export function buildComponentDesignToolProviders(
             sandboxMode: 'workspace-write',
             security: {
               sandboxRoot: childWorkspace,
+              allowedToolNames: ['read', 'grep', 'glob', 'ls', 'write', 'edit']
+                .filter((name) => !context.allowedToolNames || context.allowedToolNames.includes(name)),
               ...(context.allowedProviderIds ? { allowedProviderIds: [...context.allowedProviderIds] } : {}),
               ...(context.allowedSkillIds ? { allowedSkillIds: [...context.allowedSkillIds] } : {}),
               ...(context.blockedProviderIds ? { blockedProviderIds: [...context.blockedProviderIds] } : {}),
@@ -475,6 +478,7 @@ export function buildComponentDesignerPrompt(input: Omit<ComponentDesignArgs, 'r
     '- Use semantic controls, visible focus, touch-friendly hit targets, reduced-motion handling, and readable contrast.',
     '- Do not use network URLs, external assets, imports, iframes, embeds, forms that submit, or browser storage.',
     '- Do not modify any production source file.',
+    `- ${DESIGN_PREVIEW_INSTRUCTION}`,
     '- Before finishing, read the written file once and fix incomplete tags or non-working interactions.'
   )
   return lines.join('\n')
@@ -523,6 +527,7 @@ async function persistComponentPrototypeHtml(
   resourcePolicy: ComponentPrototypeResourcePolicy = emptyResourcePolicy()
 ): Promise<{ byteSize: number; contentHash: string }> {
   const hardened = hardenComponentPrototypeHtml(content, resourcePolicy)
+  await mkdir(dirname(absolutePath), { recursive: true, mode: 0o700 })
   await writeFile(absolutePath, hardened, { encoding: 'utf8', mode: 0o600 })
   const info = await stat(absolutePath)
   return {

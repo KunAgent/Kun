@@ -54,10 +54,10 @@ function scheduledTask(patch: Partial<ScheduledTaskV1> = {}): ScheduledTaskV1 {
   }
 }
 
-async function selectMode(renderer: ReactTestRenderer, mode: string): Promise<void> {
-  const select = renderer.root.findByProps({ 'data-plan-build-mode': true })
+async function openMenu(renderer: ReactTestRenderer): Promise<void> {
+  const toggle = renderer.root.findByProps({ 'data-plan-build-menu-toggle': true })
   await act(async () => {
-    select.props.onChange({ target: { value: mode } })
+    toggle.props.onClick({ stopPropagation: vi.fn() })
   })
 }
 
@@ -90,8 +90,8 @@ describe('PlanBuildActions card i18n', () => {
   })
 
   it.each([
-    ['en', 'Start build', 'Set schedule', 'Start Graph build'],
-    ['zh', '开始构建', '设置定时', '开始 Graph 构建']
+    ['en', 'Start build', 'Schedule build', 'Graph build'],
+    ['zh', '开始构建', '定时构建', 'Graph 构建']
   ] as const)(
     'renders translated direct, scheduled, and Graph actions in %s',
     async (locale, directLabel, scheduleLabel, graphLabel) => {
@@ -110,13 +110,11 @@ describe('PlanBuildActions card i18n', () => {
       expect(rendererText(renderer)).toContain(directLabel)
       expect(rendererText(renderer)).not.toContain('planBuildStart')
 
-      await selectMode(renderer, 'scheduled')
+      await openMenu(renderer)
       expect(rendererText(renderer)).toContain(scheduleLabel)
-      expect(rendererText(renderer)).not.toContain('planScheduleBuildSet')
-
-      await selectMode(renderer, 'graph')
       expect(rendererText(renderer)).toContain(graphLabel)
-      expect(rendererText(renderer)).not.toContain('planBuildGraphStart')
+      expect(rendererText(renderer)).not.toContain('planScheduleBuild')
+      expect(rendererText(renderer)).not.toContain('planBuildGraph')
 
       await act(async () => {
         renderer.unmount()
@@ -198,10 +196,10 @@ describe('PlanBuildActions card i18n', () => {
       }))
     })
 
-    await selectMode(renderer, 'scheduled')
+    await openMenu(renderer)
     expect(renderer.root.findAllByProps({ 'data-plan-schedule-status': true })).toHaveLength(0)
-    expect(rendererText(renderer)).toContain('设置定时')
-    expect(rendererText(renderer)).not.toContain('定时时间')
+    expect(rendererText(renderer)).toContain('定时构建')
+    expect(rendererText(renderer)).not.toContain('修改定时')
 
     await act(async () => renderer.unmount())
   })
@@ -388,7 +386,7 @@ describe('PlanBuildActions external Agent pick', () => {
   afterEach(async () => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
-    usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} })
+    usePlanBuildAgentStore.setState({ plans: {}, handoffs: {}, failures: {} })
     resetPlanWorktreePreferenceStoreForTests()
     await i18n.changeLanguage('en')
   })
@@ -405,10 +403,26 @@ describe('PlanBuildActions external Agent pick', () => {
     const text = rendererText(renderer)
     expect(text).toContain('任务 Worktree')
     expect(text).toContain('交给 codex')
-    expect(text).not.toContain('Graph 构建')
+    expect(renderer.root.findAllByProps({ 'data-plan-build-menu-graph': true })).toHaveLength(0)
     expect(renderer.root.findAllByProps({ 'data-plan-worktree-select': true })).toHaveLength(0)
     await act(async () => renderer.root.findByProps({ 'data-plan-build-start': true }).props.onClick())
     expect(onBuild).toHaveBeenCalledWith('direct')
+    await act(async () => renderer.unmount())
+  })
+
+  it('keeps a refused handoff on the card instead of a global error', async () => {
+    await i18n.changeLanguage('zh')
+    usePlanBuildAgentStore.getState().setFailure('plan-1', { agentId: 'codex', message: 'codex 暂时不可用：未登录。' })
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(PlanBuildActions, {
+        disabled: false, graphEnabled: true, variant: 'card', planId: 'plan-1', onBuild: vi.fn()
+      }))
+    })
+    expect(renderer.root.findAllByProps({ 'data-plan-build-failure': 'codex' }).length).toBeGreaterThan(0)
+    expect(rendererText(renderer)).toContain('codex 没能接手')
+    await act(async () => renderer.root.findByProps({ 'aria-label': '关闭' }).props.onClick())
+    expect(renderer.root.findAllByProps({ 'data-plan-build-failure': 'codex' })).toHaveLength(0)
     await act(async () => renderer.unmount())
   })
 

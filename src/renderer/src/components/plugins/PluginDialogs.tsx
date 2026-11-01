@@ -1,5 +1,6 @@
 import { useEffect, type ReactElement, type ReactNode } from 'react'
-import { AlertTriangle, Check, CircleAlert, X } from 'lucide-react'
+import { X } from 'lucide-react'
+import { usePublishedToast } from '../../toast/use-published-toast'
 import { pluginButton } from './PluginPrimitives'
 
 type Translate = (key: string, values?: Record<string, unknown>) => string
@@ -103,27 +104,19 @@ export type PluginToastState = {
   action?: { label: string; run: () => void }
 }
 
-/** Bottom toast for action results; success and info dismiss themselves. */
-export function PluginToast({ t, toast, onDismiss }: { t: Translate; toast: PluginToastState; onDismiss: () => void }): ReactElement {
-  useEffect(() => {
-    if (toast.tone === 'error') return
-    const timer = window.setTimeout(onDismiss, toast.action ? 8000 : 5000)
-    return () => window.clearTimeout(timer)
-  }, [onDismiss, toast])
-  const Icon = toast.tone === 'success' ? Check : toast.tone === 'error' ? CircleAlert : AlertTriangle
-  const iconTone = toast.tone === 'success' ? 'text-[#7ee0a5]' : toast.tone === 'error' ? 'text-[#ff9b93]' : 'text-[#ffc46b]'
-  return (
-    <div role={toast.tone === 'error' ? 'alert' : 'status'} className="ds-no-drag pointer-events-auto fixed bottom-6 left-1/2 z-[70] flex w-[min(560px,calc(100vw-32px))] -translate-x-1/2 items-start gap-2.5 rounded-xl bg-[#20242d] px-3.5 py-2.5 text-[13px] leading-5 text-white shadow-[0_18px_48px_rgba(32,55,90,0.24)]">
-      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconTone}`} strokeWidth={2.2} />
-      <span className="min-w-0 flex-1 break-words">{toast.message}</span>
-      {toast.action ? (
-        <button type="button" className="shrink-0 rounded-md px-1.5 text-[12.5px] font-semibold text-[#aebdff] hover:bg-white/10" onClick={() => { toast.action?.run(); onDismiss() }}>
-          {toast.action.label}
-        </button>
-      ) : null}
-      <button type="button" aria-label={t('pluginsDismiss')} className="shrink-0 rounded-md p-0.5 text-white/70 hover:bg-white/10 hover:text-white" onClick={onDismiss}>
-        <X className="h-4 w-4" />
-      </button>
-    </div>
-  )
+/**
+ * Publishes a plugin action result to the global dock. The dock owns the
+ * countdown and the close control: success and info clear themselves, a failure
+ * waits for the user, and either way the caller drops the notice on dismiss.
+ */
+export function PluginToast({ toast, onDismiss }: { t: Translate; toast: PluginToastState; onDismiss: () => void }): null {
+  usePublishedToast({
+    id: 'plugin-action',
+    tone: toast.tone,
+    title: toast.message,
+    durationMs: toast.tone === 'error' ? null : toast.action ? 8_000 : 5_000,
+    ...(toast.action ? { actions: [{ label: toast.action.label, run: toast.action.run }] } : {}),
+    onDismiss
+  })
+  return null
 }

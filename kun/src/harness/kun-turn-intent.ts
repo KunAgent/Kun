@@ -37,8 +37,10 @@ export function unsupportedKunTurnIntent(
     intent.designImagePlacementTarget || intent.guiDesignArtifact) {
     return 'Kun Design and canvas workflows require Kun Agent. Select Kun to continue.'
   }
+  // `planBuild` is not listed: executing a finished plan is an ordinary code
+  // turn, and harness admission already pins it to an isolated workspace.
   if ((intent.orchestration === 'graph' && !options.graphWorker) ||
-    intent.guiPlan || intent.planBuild || intent.mode === 'plan') {
+    intent.guiPlan || intent.mode === 'plan') {
     return 'Kun Graph and plan workflows require Kun Agent. Select Kun to continue.'
   }
   // `code` is also the legacy carrier for ordinary external Agent messages.

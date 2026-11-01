@@ -524,6 +524,7 @@
   "sidebarThreadScheduledMultiple": "{{count}} scheduled tasks · next {{time}}",
   "sidebarThreadScheduledQueued": "Scheduled task waiting to start",
   "sidebarThreadScheduledTimePending": "time pending",
+  "sidebarScheduledSessionsHint": "{{count}} scheduled task sessions are in Automation",
   "sidebarThreadForkBadge": "Fork",
   "sidebarThreadForked": "Forked thread",
   "sidebarThreadForkedFrom": "Forked from {{title}}",

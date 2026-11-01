@@ -1,8 +1,9 @@
+import type { AdeDispatchRecord } from '@shared/ade-teams'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, CircleSlash, Loader2, Pause, TriangleAlert, UserCheck } from 'lucide-react'
 import type { AgentDispatchIntentView } from '@shared/agent-dispatch'
-import { dispatchCountdown, dispatchPhase, formatDispatchClock } from './agent-dispatch-card-model'
+import { dispatchReviewState, dispatchCountdown, dispatchPhase, formatDispatchClock } from './agent-dispatch-card-model'
 
 const RING = 2 * Math.PI * 6
 
@@ -18,7 +19,7 @@ function CountdownRing({ fraction }: { fraction: number }) {
 const pill = 'inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium'
 
 /** Header status: the no-response countdown while waiting, otherwise the card phase. */
-export function AgentDispatchStatusBadge({ intent }: { intent: AgentDispatchIntentView }) {
+export function AgentDispatchStatusBadge({ intent, dispatches = [] }: { intent: AgentDispatchIntentView; dispatches?: readonly AdeDispatchRecord[] }) {
   const { t } = useTranslation('common')
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
@@ -41,7 +42,13 @@ export function AgentDispatchStatusBadge({ intent }: { intent: AgentDispatchInte
     <UserCheck size={13} aria-hidden />{t('dispatchIntent.status.pending_confirmation')}</span>
   if (phase === 'paused') return <span className={`${pill} bg-ds-subtle text-ds-muted`}>
     <Pause size={13} aria-hidden />{t('dispatchIntent.pausedHold')}</span>
-  if (phase === 'completed') return <span className={`${pill} bg-ds-success-soft text-ds-status-success`}>
+  const review = dispatchReviewState(intent, dispatches)
+  if (review) {
+    const passed = review === 'passed' || review === 'waived'
+    return <span data-dispatch-review={review} className={`${pill} ${passed ? 'bg-ds-success-soft text-ds-status-success' : 'bg-ds-subtle text-ds-status-warning'}`}>
+      {passed ? <Check size={13} aria-hidden /> : <TriangleAlert size={13} aria-hidden />}{t(`dispatchIntent.worker.${review}`)}</span>
+  }
+  if (phase === 'completed') return <span className={`${pill} bg-ds-subtle text-ds-muted`}>
     <Check size={13} aria-hidden />{t('dispatchIntent.status.completed')}</span>
   if (phase === 'failed') return <span className={`${pill} bg-ds-danger-soft text-ds-status-danger`}>
     <TriangleAlert size={13} aria-hidden />{t('dispatchIntent.status.failed')}</span>

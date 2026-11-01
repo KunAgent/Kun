@@ -24,14 +24,18 @@ describe('InterruptedTurnCoordinator route', () => {
       events: { record: vi.fn(async () => undefined) } as never,
       nowIso: () => '2026-08-19T00:01:00.000Z',
       nowMs: () => Date.parse('2026-08-19T00:01:00.000Z'),
-      runTurn: vi.fn(async () => 'completed' as const)
+      runTurn: vi.fn(async () => 'completed' as const),
+      loadSessionItems: async () => [
+        { turnId: 'turn_interrupted', kind: 'assistant_text', role: 'assistant', status: 'completed' }
+      ] as never
     })
 
     await expect(coordinator.resumeInterruptedTurns([{ threadId: 'thr_ext', turnId: 'turn_interrupted' }])).resolves.toBe(1)
     const [input] = startTurn.mock.calls[0]!
     expect((input as { request: unknown }).request).toMatchObject({
       harnessId: 'codemaker', providerId: 'codemaker-acp', model: 'deepseek-flash',
-      credentialMode: 'native-login', reasoningEffort: 'high'
+      credentialMode: 'native-login', reasoningEffort: 'high',
+      interruptedResume: { sourceTurnId: 'turn_interrupted' }
     })
   })
 })

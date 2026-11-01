@@ -192,6 +192,8 @@ describe('PlanScheduledBuildDialog i18n', () => {
   it('maps validation error codes to localized messages', async () => {
     await i18n.changeLanguage('zh')
     const { renderer } = await renderDialog()
+    // Compare against FIXED_NOW in an explicit zone, not the runner's local zone.
+    selectTimeZone(renderer, 'Africa/Abidjan')
     setDateTime(renderer, '2030-06-15', '07:00')
     expect(dialogText(renderer)).toContain('执行时间必须晚于当前时间。')
     setDateTime(renderer, 'bogus', '07:00')

@@ -105,6 +105,15 @@ import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 import { buildGitHubAppProvider } from '../adapters/tool/github-app-provider.js'
 import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
+import { buildFigmaToolProvider } from '../adapters/tool/figma-tool-provider.js'
+
+export const MCP_STARTUP_CONNECTION_BUDGET_MS = 3_000
+
+export function prepareInitialCapabilities<M, S, C>(
+  mcp: () => Promise<M>, skills: () => Promise<S>, computerUse: () => Promise<C>
+): Promise<[M, S, C]> {
+  return Promise.all([mcp(), skills(), computerUse()])
+}
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -146,14 +155,17 @@ export async function createRuntimeServices(
     resolveCapabilityProviderCredential,
     oauthEncryptor
   } = model
-  let [mcpProviders, skillRuntime] = await Promise.all([
-    buildMcpToolProviders(core.activeOptions.capabilities?.mcp, {
+  let [mcpProviders, skillRuntime, computerUseProviders] = await prepareInitialCapabilities(
+    () => buildMcpToolProviders(core.activeOptions.capabilities?.mcp, {
+      // Failed connections continue through the existing background reconnect.
+      startupConnectTimeoutMs: MCP_STARTUP_CONNECTION_BUDGET_MS,
       oauthStorageDir: join(core.activeOptions.dataDir, 'mcp-oauth'),
       catalogCachePath: join(core.activeOptions.dataDir, 'mcp-catalog-cache.json'),
       ...(oauthEncryptor ? { oauthEncryptor } : {})
     }),
-    SkillRuntime.create(skillsConfigForRuntime(core.activeOptions))
-  ])
+    () => SkillRuntime.create(skillsConfigForRuntime(core.activeOptions)),
+    () => buildComputerUseToolProviders(core.activeOptions.capabilities?.computerUse)
+  )
   let instructionRuntime = new InstructionRuntime(core.activeOptions.capabilities?.instructions)
   const migrationMaintenance = new ScopedMigrationMaintenanceLock()
   let attachmentStore: AttachmentStore | undefined
@@ -449,7 +461,6 @@ export async function createRuntimeServices(
 	    resolveCredential: resolveCapabilityProviderCredential,
 	    proxyUrl: core.activeOptions.modelProxyUrl
 	  })
-	  let computerUseProviders = await buildComputerUseToolProviders(core.activeOptions.capabilities?.computerUse)
 	  let browserUseProviders = buildBrowserUseToolProviders(core.activeOptions.capabilities?.browserUse)
   const designCanvasProvider = {
     id: 'design-canvas',
@@ -522,6 +533,7 @@ export async function createRuntimeServices(
 	  let baseToolProviders = [
     buildGmailToolProvider(gmail, core.threadStore, model.gmailDataPolicy),
     ...(model.githubApp ? [buildGitHubAppProvider(model.githubApp.service, core.threadStore, model.githubApp.mcp)] : []),
+    ...(model.figma ? [buildFigmaToolProvider(model.figma.service, model.figma.state)] : []),
     { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
       tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {

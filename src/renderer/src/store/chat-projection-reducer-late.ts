@@ -242,7 +242,8 @@ export function reduceLateChatProjection(
           toModel: event.toModel,
           recentTurns: event.recentTurns,
           files: event.files,
-          briefDigest: event.briefDigest
+          briefDigest: event.briefDigest,
+          continuationFailure: event.continuationFailure
         }
         return { blocks }
       }
@@ -257,7 +258,8 @@ export function reduceLateChatProjection(
         toModel: event.toModel,
         recentTurns: event.recentTurns,
         files: event.files,
-        briefDigest: event.briefDigest
+        briefDigest: event.briefDigest,
+        continuationFailure: event.continuationFailure
       }
       const blocks = upsertProjectedTimelineBlock(state, block)
       return blocks === state.blocks ? {} : { blocks }

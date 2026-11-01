@@ -10,21 +10,18 @@ import { sessionInstructions } from '../../session/session-instructions.js'
  * by the `session/prompt` result — worker self-reports never end a turn.
  */
 import type { HarnessRoute } from '../../contracts/harness.js'
-import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
+import { resolveSessionUserInput } from '../../session/session-user-input.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import { makeDelegatedAwaitApproval } from '../../ade/delegated-approval.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
-import {
-  recordHandoffInjected,
-  resolveTurnHandoff
-} from '../../handoff/turn-handoff.js'
+import { resolveTurnHandoff } from '../../handoff/turn-handoff.js'
+import { recordAcpHandoff } from './acp-continuation.js'
 import type {
   DelegatedRuntimeCapabilities,
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
-import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
 import { resolveSessionTurnContext, type SessionTurnContext } from '../../session/session-turn-context.js'
 
 import {
@@ -46,7 +43,7 @@ import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
 import { acpSubagentSource } from './acp-subagent-source.js'
 import { openCodeDatabasePath, startOpenCodeChildSessions } from './opencode-child-sessions.js'
 import { devinSessionDatabasePath } from './devin-session-usage.js'
-import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
+import { buildAcpPromptBlocks } from './acp-prompt.js'
 import { resolveAcpDocuments } from './acp-attachment-documents.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
@@ -55,6 +52,7 @@ import {
   finishAcpTrace,
   kunToolsDescriptorOf,
   mapAcpFailure,
+  missingAcpCoordinator,
   resolveAcpCredentialContext,
   startAcpTrace,
   type AcpCredentialEnvInput,
@@ -104,7 +102,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     this.sessions =
       deps.sessionManager ??
       new AcpSessionManager({
-        coordinator: deps.sessionCoordinator ?? missingCoordinator(),
+        coordinator: deps.sessionCoordinator ?? missingAcpCoordinator(),
         debug: deps.debug
       })
   }
@@ -316,6 +314,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           reasoningEffort: turn.reasoningEffort,
           ...(turn.harnessSettings ? { harnessSettings: turn.harnessSettings } : {}),
           sessionMcpServers,
+          recordContinuationEvent: (event) => this.deps.events.record(event),
           items,
           validateLaunch: async () => {
             await this.deps.readiness?.validateTurn(threadId, turnId, signal)
@@ -360,10 +359,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           harnessName: definition.displayName
         })
       : undefined
-    await recordHandoffInjected(
-      (event) => this.deps.events.record(event),
+    await recordAcpHandoff(
+      this.deps.events,
       { threadId, turnId, harnessId: definition.id },
-      turnHandoff
+      turnHandoff,
+      session
     )
     await recordAcpDelegatedRuntime(this.deps.events, {
       threadId,
@@ -382,11 +382,14 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       sandbox: definition.capabilities.facts?.sandbox ?? 'native'
     })
     // Workspace-local Agents and generic settings only appear in a real
-    // session; refresh the composer controls.
+    // session; refresh the composer controls and native model catalog.
+    if (credentialMode === 'native-login' && (!actingModelRoute.providerId || actingModelRoute.providerId === 'default')) {
+      try { this.deps.onNativeSession?.(definition, session) } catch { /* The catalog is advisory. */ }
+    }
     const modeSelector = acpSessionModeSelector(session)
     const nativeAgents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(modeSelector) : []
     const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
-    if (nativeAgents.length || settings.length) {
+    if (nativeAgents.length || settings.length || (credentialMode === 'native-login' && (!actingModelRoute.providerId || actingModelRoute.providerId === 'default'))) {
       await emitter.emitAll([{ kind: 'harness_session_state', threadId, turnId, harnessId: definition.id,
         ...(nativeAgents.length ? { agents: nativeAgents } : {}), ...(settings.length ? { settings } : {}),
         ...(nativeAgents.length && modeSelector?.currentModeId ? { currentModeId: modeSelector.currentModeId } : {}) }]).catch(() => undefined)
@@ -394,15 +397,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
 
     const imageCapable =
       conn.initResult?.agentCapabilities?.promptCapabilities?.image === true
-    // Text attachments are inlined for every agent: an external ACP agent
-    // cannot read Kun's attachment store, so gating the body on image support
-    // used to drop pasted long text without a trace.
-    const inlineDocuments = await resolveAcpDocuments(
-      this.deps.attachmentStore,
-      threadId,
-      workspace,
-      userItem.attachmentIds ?? []
-    )
+    const userInput = await resolveSessionUserInput({
+      userItem, pending: preparation.pendingUserMessages,
+      attachmentStore: this.deps.attachmentStore, threadId, workspace, imageCapable
+    })
     const prompt = buildAcpPromptBlocks({
       handoffBrief: turnHandoff?.brief.text,
       historyTranscript:
@@ -416,19 +414,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       instructionBlocks: sessionInstructions(preparation, [
         ...instructionBlocks, buildClientSurfaceInstruction(resolveTurnClientSurface(turn))
       ], false, turnDynamicContext.instructions),
-      userText: userMessageTextWithComposerContexts(userItem),
-      images: await resolveAcpImages(
-        this.deps.attachmentStore,
-        threadId,
-        workspace,
-        userItem.attachmentIds ?? [],
-        imageCapable
-      ),
-      attachmentPaths: attachmentFallbackPaths(userItem),
+      ...userInput,
       imageCapable,
-      documents: inlineDocuments.documents,
-      unreadableDocuments: inlineDocuments.unreadable,
-      fileReferences: userItem.fileReferences ?? [],
       workspacePath: workspace
     })
 
@@ -693,8 +680,4 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       severity: 'error'
     })
   }
-}
-
-function missingCoordinator(): DelegatedSessionCoordinator {
-  throw new Error('AcpRuntime requires sessionCoordinator')
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MODEL_REASONING_EFFORTS, type ModelReasoningEffort } from './app-settings-types-provider'
 
 /** Lightweight HTTP mirror of Kun's dispatch contract, independent of its loop types. */
 export type AgentDispatchPermissionMode = 'ask-for-approval' | 'approve-for-me' | 'full-access'
@@ -8,8 +9,13 @@ export type AgentDispatchAssignmentRoute = {
   agentId: string; model?: string; providerId?: string; credentialMode?: AgentDispatchCredentialMode
   /** Agent roster role the worker plays; absent = the engine alone. */
   profileId?: string
+  reasoningEffort?: ModelReasoningEffort
 }
-export type AgentDispatchAssignmentView = AgentDispatchAssignmentRoute & { label: string; agentName?: string }
+export type AgentDispatchAssignmentView = AgentDispatchAssignmentRoute & {
+  label: string; agentName?: string
+  /** Host-resolved, read-only workspace choice for this worker. */
+  workspaceIsolation?: 'local' | 'worktree'
+}
 export type AgentDispatchIntentView = {
   intentId: string
   kind: 'worker' | 'workbench'
@@ -55,6 +61,8 @@ export type AgentDispatchTargetView = {
 const permission = z.enum(['ask-for-approval', 'approve-for-me', 'full-access'])
 const assignment = z.object({ label: z.string().min(1).max(64), agentId: z.string().min(1).max(512),
   profileId: z.string().min(1).max(128).optional(),
+  reasoningEffort: z.enum(MODEL_REASONING_EFFORTS).optional(),
+  workspaceIsolation: z.enum(['local', 'worktree']).optional(),
   agentName: z.string().max(512).optional(), model: z.string().max(512).optional(),
   providerId: z.string().min(1).max(128).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional() }).strict()

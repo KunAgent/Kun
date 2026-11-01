@@ -1,9 +1,10 @@
 /**
- * Top bar shown while the rich diff review is active:
- * progress + prev/next navigation + bulk accept/reject. Replaces the
- * CodeMirror panel used by the source editor.
+ * Top bar shown while the rich diff review is active: a Kun mark with the
+ * change count, a pill n/N stepper, and the two bulk decisions (reject all
+ * stays quiet, accept all is the strong ink pill). Replaces the CodeMirror
+ * panel used by the source editor.
  */
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ReactElement } from 'react'
 
@@ -28,47 +29,41 @@ export function WriteDocumentReviewBar({
 }: WriteDocumentReviewBarProps): ReactElement {
   const { t } = useTranslation('common')
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-ds-border bg-ds-card/95 px-4 py-2 text-[12.5px]">
-      <span className="font-medium text-ds-ink">{t('writeDiffReviewing')}</span>
-      <span className="text-ds-muted">
-        {t('writeDiffProgress', { current: Math.min(index + 1, total), total })}
+    <div className="write-review-bar" role="toolbar" aria-label={t('writeDiffReviewing')}>
+      <span className="write-review-bar-mark" aria-hidden="true">K</span>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-ds-ink">
+        {t('writeDiffKunChanges', { count: total })}
       </span>
-      <button
-        type="button"
-        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-ds-border text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
-        onClick={onPrev}
-        disabled={total === 0}
-        aria-label={t('writeDiffPrev')}
-        title={t('writeDiffPrev')}
-      >
-        <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
-      </button>
-      <button
-        type="button"
-        className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-ds-border text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
-        onClick={onNext}
-        disabled={total === 0}
-        aria-label={t('writeDiffNext')}
-        title={t('writeDiffNext')}
-      >
-        <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
-      </button>
-      <div className="ml-auto flex items-center gap-2">
+      <span className="flex-1" />
+      <div className="write-review-stepper">
         <button
           type="button"
-          className="rounded-md border border-red-300/70 px-2.5 py-1 text-red-600 transition hover:bg-red-50 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-950/40"
-          onClick={onRejectAll}
+          onClick={onPrev}
+          disabled={total === 0 || index <= 0}
+          aria-label={t('writeDiffPrev')}
+          title={t('writeDiffPrev')}
         >
-          {t('writeDiffRejectAll')}
+          <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2} />
         </button>
+        <span className="px-1.5 text-[12.5px] tabular-nums text-ds-ink">
+          {t('writeDiffProgress', { current: Math.min(index + 1, total), total })}
+        </span>
         <button
           type="button"
-          className="rounded-md border border-emerald-300/70 px-2.5 py-1 text-emerald-600 transition hover:bg-emerald-50 dark:border-emerald-800/60 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
-          onClick={onAcceptAll}
+          onClick={onNext}
+          disabled={total === 0 || index >= total - 1}
+          aria-label={t('writeDiffNext')}
+          title={t('writeDiffNext')}
         >
-          {t('writeDiffAcceptAll')}
+          <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
         </button>
       </div>
+      <button type="button" className="write-review-bar-button" onClick={onRejectAll}>
+        {t('writeDiffRejectAll')}
+      </button>
+      <button type="button" className="write-review-bar-button is-primary" onClick={onAcceptAll}>
+        {t('writeDiffAcceptAll')}
+      </button>
     </div>
   )
 }

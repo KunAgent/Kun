@@ -1,12 +1,14 @@
-/** Built-in remote apps that a Room Agent may request before configuration. */
+import { APP_PRESETS } from './app-connection-catalog.js'
+
+/** Built-in apps currently available for a Room Agent to request. */
 export const ROOM_APP_CATALOG: Readonly<Record<string, {
   name: string
   url?: string
   connectionKind?: 'native_gmail' | 'native_github'
-}>> = {
-  google_gmail: { name: 'Gmail', connectionKind: 'native_gmail' },
-  github: { name: 'GitHub', connectionKind: 'native_github' }
-}
+}>> = Object.fromEntries(APP_PRESETS.flatMap((preset) => {
+  if (preset.availability !== 'ready' || (preset.kind !== 'native_gmail' && preset.kind !== 'native_github')) return []
+  return [[preset.id, { name: preset.name, connectionKind: preset.kind }]]
+}))
 
 /** Previously suggested Google Workspace servers are unavailable to private Rooms. */
 export const HIDDEN_ROOM_GOOGLE_APP_IDS = [

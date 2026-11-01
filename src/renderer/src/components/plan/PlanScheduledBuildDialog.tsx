@@ -23,6 +23,8 @@ type Props = {
   error: string
   onClose: () => void
   onSubmit: (draft: ScheduleDialogDraft) => Promise<void>
+  /** The plan card's executor; when set the dialog only picks the time. */
+  executor?: { label: string; providerId?: string; model?: string; reasoningEffort?: ScheduleReasoningEffort }
 }
 
 const SCHEDULE_INSTANT_ERROR_KEYS = {
@@ -68,7 +70,7 @@ export function scheduleDraftFromTask(task: ScheduledTaskV1 | null | undefined):
   return { date: `${value('year')}-${value('month')}-${value('day')}`, time: `${value('hour')}:${value('minute')}`, timeZone }
 }
 
-export function PlanScheduledBuildDialog({ settings, orchestration, initialTask, submitting, error, onClose, onSubmit }: Props): ReactElement {
+export function PlanScheduledBuildDialog({ settings, orchestration, initialTask, submitting, error, onClose, onSubmit, executor }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const locale = i18n.resolvedLanguage ?? i18n.language
   const initial = useMemo(() => scheduleDraftFromTask(initialTask), [initialTask])
@@ -113,10 +115,13 @@ export function PlanScheduledBuildDialog({ settings, orchestration, initialTask,
     setReasoningEffort(resolveScheduleReasoningSelection(reasoningEffort, scheduleModelProfileForSelection(selectedProvider, nextModel)))
   }
 
+  const submitProviderId = executor?.providerId || providerId
+  const submitModel = executor?.model || model
+  const canSubmit = instant.ok && Boolean(submitProviderId && submitModel)
   const submit = (): void => {
-    if (!instant.ok || !selectedProvider || !model) return
+    if (!instant.ok || !canSubmit) return
     void onSubmit({
-      providerId, model, reasoningEffort, mode: 'agent',
+      providerId: submitProviderId, model: submitModel, reasoningEffort: executor?.reasoningEffort ?? reasoningEffort, mode: 'agent',
       schedule: { kind: 'at', atTime: instant.iso, timeZone }
     })
   }
@@ -132,9 +137,17 @@ export function PlanScheduledBuildDialog({ settings, orchestration, initialTask,
           <label className="text-[12px] text-ds-muted">{t('planScheduleBuildDate')}<input data-plan-schedule-date className={fieldClass} type="date" value={date} onClick={(event) => openNativePicker(event.currentTarget)} onChange={(event) => setDate(event.target.value)} /></label>
           <label className="text-[12px] text-ds-muted">{t('planScheduleBuildTime')}<input data-plan-schedule-time className={fieldClass} type="time" value={time} onClick={(event) => openNativePicker(event.currentTarget)} onChange={(event) => setTime(event.target.value)} /></label>
           <label className="col-span-2 text-[12px] text-ds-muted">{t('planScheduleBuildTimeZone')}<select className={fieldClass} value={timeZone} onChange={(event) => setTimeZone(event.target.value)}>{supportedTimeZones().map((zone) => <option key={zone}>{zone}</option>)}</select></label>
+          {executor ? (
+            <div data-plan-schedule-executor className="col-span-2 rounded-xl border border-ds-border bg-ds-card-muted/60 px-3 py-2.5 text-[12px] text-ds-muted">
+              <span>{t('planScheduleBuildExecutor')}</span>
+              <span className="ml-2 text-[13px] font-medium text-ds-ink">{executor.label}</span>
+              <div className="mt-1 text-[11.5px]">{t('planScheduleBuildExecutorHint')}</div>
+            </div>
+          ) : (<>
           <label className="text-[12px] text-ds-muted">{t('scheduleProvider')}<select className={fieldClass} value={providerId} onChange={(event) => changeProvider(event.target.value)}>{providers.map((provider) => <option value={provider.providerId} key={provider.providerId}>{provider.label}</option>)}</select></label>
           <label className="text-[12px] text-ds-muted">{t('scheduleModel')}<select className={fieldClass} value={model} onChange={(event) => changeModel(event.target.value)}>{selectedProvider?.modelIds.map((id) => <option key={id}>{id}</option>)}</select></label>
           <label className="col-span-2 text-[12px] text-ds-muted">{t('scheduleReasoning')}<select className={fieldClass} value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value as ScheduleReasoningEffort)}>{reasoningOptions.map((effort) => <option key={effort} value={effort}>{scheduleReasoningLabel(effort, t)}</option>)}</select></label>
+          </>)}
         </div>
         {instant.ok ? <p className="mt-3 text-[11.5px] text-ds-muted">{formatInTimeZone(instant.iso, timeZone, locale)} · {relativeScheduleLabel(instant.iso, Date.now(), locale)}</p> : <p className="mt-3 text-[12px] text-red-600">{scheduleInstantError(instant, t)}</p>}
         {pricing.rule ? (
@@ -149,7 +162,7 @@ export function PlanScheduledBuildDialog({ settings, orchestration, initialTask,
         ) : null}
         {error ? <p className="mt-4 text-[12px] text-red-600" role="alert">{error}</p> : null}
         <p className="mt-4 text-[11.5px] leading-5 text-ds-muted">{t('planScheduleBuildRunningNotice')}</p>
-        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onClose} className="h-10 rounded-full px-4 text-[13px] text-ds-muted hover:bg-ds-hover">{t('cancel')}</button><button type="button" disabled={submitting || !instant.ok || !selectedProvider} onClick={submit} className="inline-flex h-10 items-center gap-2 rounded-full bg-accent px-5 text-[13px] font-medium text-white disabled:opacity-45"><CalendarClock className="h-4 w-4" />{submitting ? t('planScheduleBuildConfirmPending') : t(initialTask ? 'planScheduleBuildModify' : 'planScheduleBuildConfirm')}</button></div>
+        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onClose} className="h-10 rounded-full px-4 text-[13px] text-ds-muted hover:bg-ds-hover">{t('cancel')}</button><button type="button" disabled={submitting || !canSubmit} onClick={submit} className="inline-flex h-10 items-center gap-2 rounded-full bg-accent px-5 text-[13px] font-medium text-white disabled:opacity-45"><CalendarClock className="h-4 w-4" />{submitting ? t('planScheduleBuildConfirmPending') : t(initialTask ? 'planScheduleBuildModify' : 'planScheduleBuildConfirm')}</button></div>
       </div>
     </div>
   )

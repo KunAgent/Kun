@@ -562,6 +562,46 @@ export function reasoningOptionsForModel(
     .filter((option): option is { id: ComposerReasoningEffort; labelKey: string } => Boolean(option))
 }
 
+export type ComposerReasoningSelection = {
+  options: typeof REASONING_OPTIONS
+  current: ComposerReasoningEffort
+  availability: 'supported' | 'unsupported' | 'unknown'
+}
+
+/** One model/connection owns its levels; task cards never invent unreported controls. */
+export function resolveComposerReasoningSelection(input: {
+  groups: readonly ComposerModelMenuGroup[]
+  model: string
+  providerId?: string | null
+  effort?: string
+  allowedEfforts?: readonly ComposerReasoningEffort[]
+  requireReportedLevels?: boolean
+}): ComposerReasoningSelection {
+  const group = input.groups.find((entry) => entry.providerId === input.providerId)
+  const profile = modelProfileForSelection(input.groups, input.model, input.providerId)
+  const nativeHarnessId = group?.nativeHarnessId
+  const nativeModel = nativeHarnessId ? group.modelInfo?.[input.model] : undefined
+  const declared = nativeHarnessId ? nativeModel?.reasoningEfforts : profile?.reasoning?.supportedEfforts
+  const availability = (!nativeHarnessId && profile?.supportsReasoning === false) || declared?.length === 0 ? 'unsupported'
+    : declared ? 'supported' : 'unknown'
+  const nativeChoices = nativeHarnessId && nativeHarnessId !== 'devin'
+    ? input.requireReportedLevels && declared
+      ? ['auto', ...REASONING_OPTIONS.filter((option) => option.id !== 'auto' && declared.includes(option.id)).map((option) => option.id)]
+      : agentModelReasoningChoices(nativeModel)
+    : undefined
+  const adapterChoices = nativeChoices !== undefined || (nativeHarnessId === 'devin' && nativeModel?.reasoningEfforts !== undefined) ||
+    (!profile?.reasoning && profile?.supportsReasoning !== false && input.allowedEfforts !== undefined)
+  const candidates = adapterChoices ? REASONING_OPTIONS : reasoningOptionsForModel(profile)
+  const options = input.requireReportedLevels && availability !== 'supported' ? [] : candidates.filter((option) =>
+    (!input.allowedEfforts || input.allowedEfforts.includes(option.id)) && (!nativeChoices || nativeChoices.includes(option.id)) &&
+    (nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id)))
+  const normalized = adapterChoices ? normalizeComposerReasoningEffortValue(input.effort) ?? 'auto'
+    : normalizeComposerReasoningEffort(input.effort, profile)
+  const current = options.some((option) => option.id === normalized) ? normalized
+    : options.find((option) => option.id === nativeModel?.defaultReasoningEffort)?.id ?? options[0]?.id ?? normalized
+  return { options, current, availability: options.length === 0 && availability === 'supported' ? 'unsupported' : availability }
+}
+
 export function composerMenuSupportsModel(
   group: Pick<ComposerModelMenuGroup, 'modelProfiles'>,
   modelId: string

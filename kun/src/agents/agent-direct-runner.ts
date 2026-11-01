@@ -159,6 +159,10 @@ export class AgentDirectRunner {
     const identity = this.clientId(request)
     const scoped: ThreadRecord = { ...thread, ...request.privateModel, roomContext: { ...thread.roomContext!, requestId: request.id, rootRequestId: request.rootRequestId } }
     const turn = thread.turns.find((item) => item.clientRequestId === identity)
+    if (request.privateContinuation?.kind === 'personal_assistant' && turn?.status === 'queued' && !await roomContinuationIsCurrent(this.deps, request)) {
+      await this.save(row, { ...request, cancellationRequested: true, error: 'Continuation authorization changed before execution.' })
+      return
+    }
     if (!turn && !request.admissionAttempted) {
       // A run record that already attempted admission means an earlier enqueue lost its
       // receipt; that request must surface as recovery_required rather than steer.
@@ -185,7 +189,7 @@ export class AgentDirectRunner {
       // The host publishes an external Agent's reply, so no in-turn delivery gate applies.
       communicationRequired: freshUserRequest && !member.executor,
       finalResponseRequired: !member.executor && (freshUserRequest || request.privateContinuation?.kind === 'app_connection' ||
-        request.privateContinuation?.kind === 'workbench_task'),
+        request.privateContinuation?.kind === 'workbench_task' || request.privateContinuation?.kind === 'personal_assistant'),
       ...request.privateModel })
     if (!turn) {
       if (run.admissionAttempted || request.admissionAttempted) return this.save(row, { ...request, privateRunId: run.id, status: 'recovery_required' })

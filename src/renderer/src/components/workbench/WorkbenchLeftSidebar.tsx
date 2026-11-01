@@ -70,7 +70,7 @@ export type WorkbenchLeftSidebarProps = {
 }
 
 function SidebarFallback(): ReactElement {
-  return <div className="h-full bg-ds-sidebar" />
+  return <div className="h-full" />
 }
 
 export function WorkbenchLeftSidebar({
@@ -143,6 +143,7 @@ export function WorkbenchLeftSidebar({
           onClose={wrapCloseOpt(onCloseExtensionView)}
         />
       ) : normalizedRoute === 'write'
+        || (normalizedRoute === 'papers' && !remoteMobile)
         || (wardrobe && wardrobeFromWork)
         || (normalizedRoute === 'artifacts' && artifactsFromWork) ? (
         <Suspense fallback={<SidebarFallback />}>

@@ -352,9 +352,10 @@ export function useWorkbenchChatComposerProps({
     worktreeBranch,
     onWorktreeBranchChange: setWorktreeBranch,
     onToggleWorktreeMode: () => setUseWorktreePool((value) => !value),
+    // `/new` is the keyboard form of New session: it lands on a reusable empty
+    // thread instead of stacking another empty row beside it.
     onNewCommand: () => void createThread({
       workspaceRoot: activeSkillWorkspace,
-      forceNew: true,
       agentSurface: 'code'
     }),
     onNewRequirement:

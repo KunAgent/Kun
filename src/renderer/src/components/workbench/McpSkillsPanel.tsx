@@ -181,7 +181,7 @@ export function McpSkillsPanel({ workspaceRoot = '', onOpenSettings }: Props): R
         setSavedProjectText(content)
       } else {
         if (globalMcpText !== savedGlobalMcpText) {
-          await window.kunGui.setKunConfigFile(globalMcpText)
+          await window.kunGui.setKunConfigFile(globalMcpText, savedGlobalMcpText)
           setSavedGlobalMcpText(globalMcpText)
         }
         if (globalSkillsDirty) {

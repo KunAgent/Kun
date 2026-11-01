@@ -415,6 +415,7 @@ function Initialize-UpdateTransaction {
   $transaction.StageRoot = $stage
   $transaction.HealthResult = Get-UpdateHealthResultPath
   Assert-InstallerRecoveryFields $transaction
+  Set-InstallerTransactionOwner $transaction
   Write-UpdateTransaction $transaction
   Invoke-InstallerFaultPoint 'prepare.after_journal'
   Write-InstallerResult $stage
@@ -429,10 +430,12 @@ function Invoke-SwitchUpdatePayload {
   Invoke-InstallerFaultPoint 'validate.before_check'
   Assert-PackagedInstallPayloadAt $stage
   if ([string]$transaction.Phase -eq 'payload_switched') { return }
-  Remove-PayloadTreeIfPresent $old
+  $script:UpdateFileWaitMs = 0
+  Stop-UpdatePayloadProcesses $transaction
+  Invoke-UpdateFileOperation { Remove-PayloadTreeIfPresent $old }
   if (Test-Path -LiteralPath $target) {
     if (Test-PathEqual ([string]$transaction.Source) $target) {
-      Move-Item -LiteralPath $target -Destination $old
+      Invoke-UpdateFileOperation { Move-Item -LiteralPath $target -Destination $old -ErrorAction Stop }
       Invoke-InstallerFaultPoint 'switch.after_old_move'
     } elseif (@(Get-ChildItem -LiteralPath $target -Force).Count -eq 0) {
       Remove-Item -LiteralPath $target -Force
@@ -441,10 +444,10 @@ function Invoke-SwitchUpdatePayload {
     }
   }
   try {
-    Move-Item -LiteralPath $stage -Destination $target
+    Invoke-UpdateFileOperation { Move-Item -LiteralPath $stage -Destination $target -ErrorAction Stop }
   } catch {
     if ((Test-Path -LiteralPath $old) -and -not (Test-Path -LiteralPath $target)) {
-      Move-Item -LiteralPath $old -Destination $target
+      Invoke-UpdateFileOperation { Move-Item -LiteralPath $old -Destination $target -ErrorAction Stop }
     }
     throw
   }
@@ -553,21 +556,18 @@ function Invoke-RollbackUpdateTransaction {
     $target = Normalize-FullPath ([string]$transaction.Target)
     $old = Normalize-FullPath ([string]$transaction.OldPayloadRoot)
     $failed = Normalize-FullPath ([string]$transaction.FailedPayloadRoot)
-    $stopResult = Stop-AppProcesses @($target)
-    if ($stopResult.Outcome -ne 'stopped') {
-      Write-BlockingProcessDiagnostic $stopResult
-      throw 'The candidate application could not be stopped before rollback.'
-    }
-    Remove-PayloadTreeIfPresent $failed
+    $script:UpdateFileWaitMs = 0
+    Stop-UpdatePayloadProcesses $transaction
+    Invoke-UpdateFileOperation { Remove-PayloadTreeIfPresent $failed }
     if (Test-Path -LiteralPath $target) {
       if ((Test-PathEqual ([string]$transaction.Source) $target) -and (Test-Path -LiteralPath $old)) {
-        Move-Item -LiteralPath $target -Destination $failed
+        Invoke-UpdateFileOperation { Move-Item -LiteralPath $target -Destination $failed -ErrorAction Stop }
       } elseif (-not (Test-PathEqual ([string]$transaction.Source) $target)) {
-        Move-Item -LiteralPath $target -Destination $failed
+        Invoke-UpdateFileOperation { Move-Item -LiteralPath $target -Destination $failed -ErrorAction Stop }
       }
     }
     if ([bool]$transaction.InPlace -and (Test-Path -LiteralPath $old)) {
-      Move-Item -LiteralPath $old -Destination $target
+      Invoke-UpdateFileOperation { Move-Item -LiteralPath $old -Destination $target -ErrorAction Stop }
     }
     if ([bool]$transaction.InPlace) {
       Restore-TransactionPayloadBackup $transaction

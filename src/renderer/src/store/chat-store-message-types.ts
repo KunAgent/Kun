@@ -53,6 +53,8 @@ export type QueuedUserMessage = {
   messageSource?: 'design_continuation'
   /** Renderer-only guard that prevents a scoped send from falling back to another thread. */
   expectedThreadId?: string
+  /** Renderer-only requirement: never admit this submission in the source checkout. */
+  taskWorkspace?: { sourceRoot: string; workspaceId?: string }
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
@@ -221,4 +223,10 @@ export type ExternalPlanBuildRequest = {
   model?: string
   providerId?: string
   accountId?: string
+  /** Reasoning level for the build turn; omitted leaves it to the Agent. */
+  reasoningEffort?: string
 }
+
+export type ExternalPlanBuildDispatchResult =
+  | { ok: true; threadId: string; workspaceId: string }
+  | { ok: false; error: string }

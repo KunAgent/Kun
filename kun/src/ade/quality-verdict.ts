@@ -134,6 +134,15 @@ export class QualityVerdicts {
           return null
         }
         const superseded = previousDecision(existing)
+        const decidedAt = this.deps.nowIso()
+        // The decision also consumes the matching completion notice, but only
+        // once execution actually settled. An early decision on a running
+        // dispatch must not swallow the result that arrives later. Keep the
+        // first handled timestamp when a later decision supersedes it.
+        const completionHandledAt =
+          current.state === 'completed' || current.state === 'failed'
+            ? current.completionHandledAt ?? decidedAt
+            : undefined
         return {
           verdict: {
             status: input.status,
@@ -144,9 +153,10 @@ export class QualityVerdicts {
             checks: existing?.checks ?? [],
             ...(revision ? { revision } : {}),
             ...(input.notes ? { notes: input.notes } : {}),
-            decidedAt: this.deps.nowIso(),
+            decidedAt,
             ...(superseded?.length ? { superseded } : {})
-          }
+          },
+          ...(completionHandledAt ? { completionHandledAt } : {})
         }
       }
     )

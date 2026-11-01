@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -13,6 +13,7 @@ import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from './ow
 import { launchServiceManagerProcess, type ManagerLaunchOverride } from './manager-launch.js'
 import { runManagerRetireCommand } from '../cli/manager-retire.js'
 import { configureManagerAtomicJsonClient } from '../extensions/atomic-json.js'
+import { windowsStartupDirectory } from '../process/windows-startup-native.js'
 import { HistoryReferenceStore } from '../history/history-reference-store.js'
 
 const roots: string[] = []
@@ -25,9 +26,13 @@ const parents: ChildProcess[] = []
 
 beforeAll(async () => {
   bundleRoot = await realpath(await mkdtemp(join(tmpdir(), 'kun-owned-manager-entry-')))
-  managerEntry = join(bundleRoot, 'manager-entry.mjs')
-  sessionEntry = join(bundleRoot, 'owned-session.mjs')
-  processEntry = join(bundleRoot, 'owned-process.mjs')
+  managerEntry = join(bundleRoot, 'process', 'manager-entry.mjs')
+  sessionEntry = join(bundleRoot, 'process', 'owned-session.mjs')
+  processEntry = join(bundleRoot, 'process', 'owned-process.mjs')
+  // Bundled fixtures must carry the same verified native layout as dist/process.
+  if (process.platform === 'win32') {
+    await cp(windowsStartupDirectory(), join(bundleRoot, 'native', `win32-${process.arch}`), { recursive: true })
+  }
   await symlink(resolve(import.meta.dirname, '../../node_modules'), join(bundleRoot, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
   await build({ entryPoints: [resolve(import.meta.dirname, 'manager-entry.ts')], outfile: managerEntry,
     bundle: true, packages: 'external', format: 'esm', platform: 'node', target: 'node22', logLevel: 'silent' })

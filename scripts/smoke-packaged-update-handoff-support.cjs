@@ -454,7 +454,38 @@ function delay(ms) {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
 }
 
+function argumentValue(name) {
+  const index = process.argv.indexOf(name)
+  if (index < 0) return undefined
+  const value = process.argv[index + 1]
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`)
+  return value
+}
+
+function requiredPath(name) {
+  const value = argumentValue(name)
+  if (!value) throw new Error(`${name} is required`)
+  return resolve(value)
+}
+
+function optionalPath(name) {
+  const value = argumentValue(name)
+  return value ? resolve(value) : undefined
+}
+
+function positiveIntegerArgument(name, fallback) {
+  const value = argumentValue(name)
+  if (value === undefined) return fallback
+  const number = Number(value)
+  if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`${name} must be a positive integer`)
+  return number
+}
+
 module.exports = {
+  argumentValue,
+  requiredPath,
+  optionalPath,
+  positiveIntegerArgument,
   CHAT_MARKER,
   MODEL_NAME,
   NEGATIVE_SCENARIOS,

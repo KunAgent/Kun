@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createApprovalRequest } from '../domain/approval.js'
 import type { ToolDispatchInput } from './turn-execution-types.js'
 import { createToolExecutionContext } from './tool-context-factory.js'
+import { createToolDiscoveryContext } from './tool-discovery-context-factory.js'
 
 function dispatchInput(signal: AbortSignal): ToolDispatchInput {
   return {
@@ -30,6 +31,19 @@ function dispatchInput(signal: AbortSignal): ToolDispatchInput {
 }
 
 describe('createToolExecutionContext', () => {
+  it.each([true, false])('preserves the same preview fence for discovery and execution: %s', (designPreviewOnly) => {
+    const input = { ...dispatchInput(new AbortController().signal), designPreviewOnly }
+    const deps = {
+      memoryEnabled: false,
+      interactiveToolBridge: {
+        awaitApproval: async () => 'deny' as const,
+        awaitUserInput: async () => ({ status: 'cancelled' as const })
+      }
+    }
+    expect(createToolDiscoveryContext(input, deps).designPreviewOnly).toBe(designPreviewOnly || undefined)
+    expect(createToolExecutionContext(input, deps).designPreviewOnly).toBe(designPreviewOnly || undefined)
+  })
+
   it('builds a real approval and user-input execution context', async () => {
     const signal = new AbortController().signal
     const awaitApproval = vi.fn(async () => 'allow' as const)

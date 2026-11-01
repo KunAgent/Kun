@@ -37,6 +37,9 @@ async function replacementCandidates(
       !deps.taskWorkspaces) return null
   // Nothing to switch to: leave the failed worker and its checkout untouched.
   if (!worker.selection?.alternatives?.length && !deps.selector) return null
+  // Only an isolated worktree can be inspected and handed over. A local-isolation
+  // worker edited the source checkout itself: its failure stays with the user.
+  if (deps.taskWorkspaces.get(worker.taskWorkspaceId)?.isolation !== 'worktree') return null
   await deps.deliverer.stopWorker(worker.workerId)
   if (await deps.deliverer.workerBusy(worker.workerId)) return null
   const run = await deps.childRuns.get(worker.workerId).catch(() => null)

@@ -59,6 +59,7 @@ export type WorkThreadRoute = {
   accountId?: string
 }
 import type {
+  ExternalPlanBuildDispatchResult,
   ClearDesignHistoryOptions,
   ClearDesignHistoryResult,
   CreateDesignThreadOptions,
@@ -82,7 +83,7 @@ export type {
   SendMessageOverrides,
   WriteAssistantMessageContext
 }
-export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe' | 'artifacts'
+export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'papers' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe' | 'artifacts'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -593,9 +594,9 @@ export type ChatState = {
    * `planBuild`-marked turn until the worktree is ready, and flags the
    * Review panel when the turn settles.
    */
-  dispatchExternalPlanBuild: (input: ExternalPlanBuildRequest) => Promise<boolean>
+  dispatchExternalPlanBuild: (input: ExternalPlanBuildRequest) => Promise<ExternalPlanBuildDispatchResult>
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>
-  drainQueuedMessages: () => Promise<void>
+  drainQueuedMessages: (threadId?: string) => Promise<void>
   removeQueuedMessage: (id: string) => Promise<void> | void
   restoreQueuedMessage: (id: string, accept?: (message: QueuedUserMessage) => boolean | Promise<boolean>) => Promise<QueuedUserMessage | null>
   reorderQueuedMessage: (id: string, targetId: string, position: 'before' | 'after') => Promise<void> | void

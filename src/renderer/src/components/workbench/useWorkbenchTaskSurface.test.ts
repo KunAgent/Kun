@@ -211,6 +211,32 @@ describe('workbench task mode', () => {
     await act(async () => renderer.unmount())
   })
 
+  it('restores Design ownership without reopening the sidebar on selection or re-selection', async () => {
+    const thread = codeThread({ designProfile: profile })
+    vi.spyOn(useDesignWorkspaceStore.getState(), 'rehydrateArtifacts').mockResolvedValue()
+    vi.spyOn(useDesignWorkspaceStore.getState(), 'loadDesignSettings').mockResolvedValue()
+    let active = true
+    const Harness = () => {
+      useWorkbenchTaskSurface({
+        activeThreadId: active ? thread.id : null, threads: [thread],
+        workspaceRoot: '/workspace', activeSkillWorkspace: '/workspace',
+        createThread: vi.fn(async () => null), deleteThread: vi.fn(async () => undefined),
+        setComposerMode: vi.fn(), setComposerOrchestration: vi.fn()
+      })
+      return null
+    }
+    let renderer!: ReactTestRenderer
+    await act(async () => { renderer = create(createElement(Harness)) })
+    expect(useCodeCanvasDesignSurface.getState().surface?.documentId).toBe(profile.documentTarget.documentId)
+    expect(window.dispatchEvent).not.toHaveBeenCalled()
+    active = false
+    await act(async () => { renderer.update(createElement(Harness)) })
+    active = true
+    await act(async () => { renderer.update(createElement(Harness)) })
+    expect(window.dispatchEvent).not.toHaveBeenCalled()
+    await act(async () => { renderer.unmount() })
+  })
+
   it('preserves a locked AI-image profile after image generation is disabled', async () => {
     const imageProfile: DesignTaskProfile = { ...profile, outputMedium: 'image' }
     const lockedThread = codeThread({ id: 'thread-image', designProfile: imageProfile })
@@ -536,8 +562,9 @@ describe('workbench task mode', () => {
     }
     let renderer!: ReactTestRenderer
     await act(async () => { renderer = create(createElement(Harness, { thread: lockedThread })) })
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    // A locked Design profile keeps the canvas mounted but the next turn is Code.
+    expect(dispatch).not.toHaveBeenCalled()
+    // A locked Design profile restores ownership without revealing the panel;
+    // the next turn remains Code.
     expect(runtime!.taskSurface).toBe('code')
     expect(runtime!.taskSurfaceLocked).toBe(false)
     expect(runtime!.designProfileLocked).toBe(true)

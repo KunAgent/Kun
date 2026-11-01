@@ -209,3 +209,14 @@
 .sidebar-agent-chats-more:hover { background: var(--ds-sidebar-row-hover); color: var(--ds-text); }
 .sidebar-agent-chats-error { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px 10px; color: var(--ds-danger); font-size: 12px; }
 .sidebar-agent-chats-error button { text-decoration: underline; }
+/* 对话 mode: the list fills the sidebar down to the account dock. */
+.sidebar-agent-chats[data-fill] {
+  flex: 1 1 auto;
+  max-height: none;
+}
+.sidebar-agent-chats[data-fill] .sidebar-agent-chats-title {
+  pointer-events: none;
+}
+.sidebar-agent-chats[data-fill] .sidebar-agent-chats-title :is(.lucide-chevron-down, .lucide-chevron-right) {
+  display: none;
+}

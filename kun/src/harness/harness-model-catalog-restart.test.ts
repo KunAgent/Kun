@@ -8,12 +8,9 @@ import type { ServerRuntime } from '../server/routes/server-runtime.js'
 
 const fixture = fileURLToPath(new URL('../runtime/acp/__fixtures__/fake-acp-agent.mjs', import.meta.url))
 const dirs: string[] = []
-const disposers: Array<() => void> = []
 afterEach(async () => {
-  for (const dispose of disposers.splice(0)) dispose()
   vi.restoreAllMocks()
   vi.resetModules()
-  // A disposed probe process may still be releasing its fixture files.
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
@@ -23,7 +20,7 @@ const scenario = (models: string[]) => ({ sessionId: 'probe-session',
     options: models.map((value) => ({ value, name: value })) }] } })
 
 /** Stand-ins for installed OpenCode and CodeMaker: each start and exit is logged. */
-async function agents(exitDelaySeconds = 0) {
+async function agents() {
   const dir = await mkdtemp(join(tmpdir(), 'kun-model-catalog-restart-')); dirs.push(dir)
   const events: string[] = []
   const install = async (id: string, models: string[], body = '') => {
@@ -31,8 +28,7 @@ async function agents(exitDelaySeconds = 0) {
     await writeFile(scenarioPath, JSON.stringify(scenario(models)))
     const command = join(dir, id)
     await writeFile(command, `#!/bin/sh\n${body}` +
-      `FAKE_ACP_SCENARIO='${scenarioPath}' '${process.execPath}' '${fixture}' "$@"\n` +
-      (exitDelaySeconds ? `sleep ${exitDelaySeconds}\n` : ''), { mode: 0o755 })
+      `FAKE_ACP_SCENARIO='${scenarioPath}' '${process.execPath}' '${fixture}' "$@"\n`, { mode: 0o755 })
     return { command, scenarioPath }
   }
   const opencode = await install('opencode', ['opencode/big', 'opencode/small'])
@@ -63,7 +59,6 @@ async function startRuntime(fixtureAgents: Awaited<ReturnType<typeof agents>>) {
     binaryPaths: { opencode: fixtureAgents.opencode.command, codemaker: fixtureAgents.codemaker.command },
     enabledProfiles: [{ harnessId: 'opencode', credentialMode: 'native-login' }, { harnessId: 'codemaker', credentialMode: 'native-login' }] }) }
   const h = createHarnessComposition(() => options as never, { modelCatalogStorePath: fixtureAgents.store })
-  disposers.push(() => h.acpModels.dispose())
   // Detection (`--version`, sign-in status) is a separate, metadata-only check; this covers model listing.
   const status = (id: string): HarnessStatus => ({ harnessId: id, installed: 'yes', login: 'signed-in', checkedAt: '2026-10-19T00:00:00.000Z' })
   const detector = { status: async (id: string) => status(id), cachedStatus: (id: string) => status(id) }
@@ -79,7 +74,7 @@ async function startRuntime(fixtureAgents: Awaited<ReturnType<typeof agents>>) {
     probedModels: (definition) => h.probedModels(definition),
     probeModels: (definition) => h.probeModelsInBackground(definition),
     snapshot: async () => snapshot, defaultModel: () => ({ model: 'test-model' }),
-    // Real processes under a loaded test run: never let the budget mark an engine as still detecting.
+    // Give catalog initialization enough time under a loaded test run.
     discoveryBudgetMs: 12_000 })
   const listed = async () => Object.fromEntries((await codingAgentCatalog(service)).agents
     .map((agent) => [agent.harnessId, agent.models.map((route) => route.model)]))
@@ -90,20 +85,31 @@ async function startRuntime(fixtureAgents: Awaited<ReturnType<typeof agents>>) {
 
 const kept = async (store: string) => JSON.parse(await readFile(store, 'utf8')) as { catalogs: Array<{ harnessId: string }> }
 const listedModels = { opencode: ['opencode/big', 'opencode/small'], codemaker: ['codemaker/pro', 'codemaker/lite'] }
-/** Each case starts real Agent processes and two Runtime compositions. */
+/** Bound the fixture runtime startup under load. */
 const SPAWNING_TEST_TIMEOUT_MS = 30_000
 
-// A delayed shell epilogue makes the signal-versus-exit-log race reproducible.
-it.each([0, 0.1])('lists Agent models after a restart without starting any Agent CLI (exit delay %ss)', async (exitDelay) => {
-  const fixtureAgents = await agents(exitDelay)
+it('shows the Agent default until a real session supplies models, without spawning', async () => {
+  const fixtureAgents = await agents()
   const first = await startRuntime(fixtureAgents)
-  expect(await first.listed()).toEqual(listedModels)
-  // Discovery starts one Agent at a time: each probe process exits before the next starts.
-  const spawns = await fixtureAgents.spawns()
-  expect(spawns).toHaveLength(4)
-  for (let index = 0; index < spawns.length; index += 2) {
-    expect(spawns[index + 1]).toBe(spawns[index]!.replace('start', 'end'))
+  expect(await first.models('codemaker')).toMatchObject({ models: ['default'], catalogStatus: { source: 'fallback' } })
+  expect(await first.listed()).toMatchObject({ codemaker: ['default'] })
+  expect(await fixtureAgents.spawns()).toEqual([])
+  const models = listedModels.codemaker
+  first.h.acpModels.seed(first.h.catalog.get('codemaker')!, { models, modelInfo: models.map((id) => ({ id })) })
+  expect(await first.models('codemaker')).toMatchObject({ models, catalogStatus: { source: 'cache' } })
+  expect(await fixtureAgents.spawns()).toEqual([])
+}, SPAWNING_TEST_TIMEOUT_MS)
+
+it('lists Agent models after a restart without starting any Agent CLI', async () => {
+  const fixtureAgents = await agents()
+  const first = await startRuntime(fixtureAgents)
+  for (const [id, models] of Object.entries(listedModels)) {
+    first.h.acpModels.seed(first.h.catalog.get(id)!, { models, modelInfo: models.map((id) => ({ id })) })
   }
+  expect(await first.listed()).toEqual(listedModels)
+  // Session-backed catalogs never start a second Agent for discovery.
+  const spawns = await fixtureAgents.spawns()
+  expect(spawns).toHaveLength(0)
   // What a Runtime shutdown does; the debounced write would land a second later anyway.
   await first.h.modelCatalogs.flush()
   expect((await kept(fixtureAgents.store)).catalogs).toHaveLength(2)
@@ -114,10 +120,12 @@ it.each([0, 0.1])('lists Agent models after a restart without starting any Agent
   expect(await fixtureAgents.spawns()).toEqual(spawns)
 }, SPAWNING_TEST_TIMEOUT_MS)
 
-it('re-lists only the Agent whose executable changed since the last launch', async () => {
+it('uses the default model instead of probing after an Agent executable changes', async () => {
   const fixtureAgents = await agents()
   const first = await startRuntime(fixtureAgents)
-  await first.listed()
+  for (const [id, models] of Object.entries(listedModels)) {
+    first.h.acpModels.seed(first.h.catalog.get(id)!, { models, modelInfo: models.map((id) => ({ id })) })
+  }
   await first.h.modelCatalogs.flush()
   expect((await kept(fixtureAgents.store)).catalogs).toHaveLength(2)
   // An in-place upgrade: same path, new file, new model list.
@@ -125,14 +133,16 @@ it('re-lists only the Agent whose executable changed since the last launch', asy
   const before = (await fixtureAgents.spawns()).length
 
   const restarted = await startRuntime(fixtureAgents)
-  expect(await restarted.listed()).toEqual({ ...listedModels, opencode: ['opencode/next'] })
-  expect((await fixtureAgents.spawns()).slice(before)).toEqual(['start opencode', 'end opencode'])
+  expect(await restarted.listed()).toEqual({ ...listedModels, opencode: ['default'] })
+  expect((await fixtureAgents.spawns()).slice(before)).toEqual([])
 }, SPAWNING_TEST_TIMEOUT_MS)
 
-it('asks the Agent itself when its models are opened, keeping the last catalog if that fails', async () => {
+it('opens previously observed catalogs without starting an Agent or creating a session', async () => {
   const fixtureAgents = await agents()
   const first = await startRuntime(fixtureAgents)
-  await first.listed()
+  for (const [id, models] of Object.entries(listedModels)) {
+    first.h.acpModels.seed(first.h.catalog.get(id)!, { models, modelInfo: models.map((id) => ({ id })) })
+  }
   await first.h.modelCatalogs.flush()
   expect((await kept(fixtureAgents.store)).catalogs).toHaveLength(2)
   const before = (await fixtureAgents.spawns()).length
@@ -140,13 +150,6 @@ it('asks the Agent itself when its models are opened, keeping the last catalog i
   const restarted = await startRuntime(fixtureAgents)
   const opened = await restarted.models('codemaker')
   expect(opened.models).toEqual(listedModels.codemaker)
-  expect(opened.catalogStatus.source).toBe('native')
-  // Opened by the user: the probe process stays warm for per-model detail lookups.
-  expect((await fixtureAgents.spawns()).slice(before)).toEqual(['start codemaker'])
-
-  await writeFile(fixtureAgents.opencode.scenarioPath, JSON.stringify({ ...scenario([]),
-    newSession: { error: { code: -32603, message: 'Failed to load team settings: fetch timed out' } } }))
-  const failed = await restarted.models('opencode')
-  expect(failed.models).toEqual(listedModels.opencode)
-  expect(failed.catalogStatus).toMatchObject({ source: 'cache', error: { code: 'agent_error' } })
+  expect(opened.catalogStatus.source).toBe('cache')
+  expect((await fixtureAgents.spawns()).slice(before)).toEqual([])
 }, SPAWNING_TEST_TIMEOUT_MS)

@@ -1,9 +1,12 @@
+import { constants } from 'node:fs'
 /**
  * Paper-unit filesystem store: import (arXiv / papers.cool / local PDF),
  * dedupe by arxivId or Cool Papers id, atomic `paper.json` writes, and unit
  * discovery for the sidebar. All paths handled here are already resolved
  * inside the workspace by the IPC layer.
  */
+import { withPaperImportLock } from './paper-import-lock'
+import { createHash } from 'node:crypto'
 import { basename, join, relative } from 'node:path'
 import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import {
@@ -236,6 +239,7 @@ export type PaperImportOptions = {
    * so a paper already filed elsewhere is reused instead of duplicated.
    */
   dedupeRootAbs?: string
+  dedupeRootsAbs?: readonly string[]
 }
 
 /**
@@ -248,6 +252,18 @@ export async function importPaperUnit(
   fetch: PaperFetchContext & { onProgress?: PaperProgressReporter },
   options: PaperImportOptions = {}
 ): Promise<PaperImportOutcome> {
+  return withPaperImportLock(options.dedupeRootAbs ?? parentAbs, () => {
+    fetch.signal?.throwIfAborted()
+    return importPaperUnitUnlocked(parentAbs, resolution, fetch, options)
+  })
+}
+
+async function importPaperUnitUnlocked(
+  parentAbs: string,
+  resolution: PaperSourceResolution,
+  fetch: PaperFetchContext & { onProgress?: PaperProgressReporter },
+  options: PaperImportOptions = {}
+): Promise<PaperImportOutcome> {
   const progress = fetch.onProgress ?? (() => undefined)
   const oaContext: PaperOaFetchContext = {
     signal: fetch.signal,
@@ -255,7 +271,14 @@ export async function importPaperUnit(
     credentials: options.credentials
   }
   await mkdir(parentAbs, { recursive: true })
-  const dedupe = { scopeAbs: options.dedupeRootAbs ?? parentAbs, deep: Boolean(options.dedupeRootAbs) }
+  const roots = [...new Set([options.dedupeRootAbs ?? parentAbs, ...(options.dedupeRootsAbs ?? [])])]
+  const findExisting = async (match: Parameters<typeof findPaperUnitByIds>[1]): Promise<ResolvedPaperUnit | null> => {
+    for (const root of roots) {
+      const hit = await findPaperUnitByIds(root, match, Boolean(options.dedupeRootAbs || options.dedupeRootsAbs))
+      if (hit) return hit
+    }
+    return null
+  }
 
   if (resolution.kind === 'local') {
     const sourcePath = resolution.localPdfPath
@@ -279,21 +302,21 @@ export async function importPaperUnit(
       fetched = work?.title ? work : null
     }
 
-    const existing = await findPaperUnitByIds(dedupe.scopeAbs, {
+    const existing = await findExisting({
       arxivId: fetched?.arxivId ?? identified.arxivId,
       doi: fetched?.doi ?? identified.doi,
       title: fetched?.title ?? identified.titleGuess,
       year: fetched?.year,
       originalPath: sourcePath
-    }, dedupe.deep)
+    })
     if (existing) {
       // Dedupe hit: when the existing unit is metadata-only, attach this PDF.
       if (!existing.meta.pdfFile) {
         const pdfFile = `${basename(existing.dir)}.pdf`
-        await copyFile(sourcePath, join(existing.dir, pdfFile))
+        await copyFile(sourcePath, join(existing.dir, pdfFile), constants.COPYFILE_EXCL)
         const meta = { ...existing.meta, pdfFile }
         await atomicWriteFile(paperMetaPath(existing.dir), `${JSON.stringify(meta, null, 2)}\n`)
-        return { unitDir: existing.dir, meta, reused: false }
+        return { unitDir: existing.dir, meta, reused: true }
       }
       return { unitDir: existing.dir, meta: existing.meta, reused: true }
     }
@@ -343,13 +366,13 @@ export async function importPaperUnit(
 
   if (resolution.kind === 'arxiv') {
     // 4-way dedupe (plan P3.3): search cards carry DOI/title alongside the id.
-    const existing = await findPaperUnitByIds(dedupe.scopeAbs, {
+    const existing = await findExisting({
       arxivId: resolution.arxivId,
       coolId: resolution.coolId,
       doi: options.prefetched?.doi,
       title: options.prefetched?.title,
       year: options.prefetched?.year
-    }, dedupe.deep)
+    })
     if (existing) return { unitDir: existing.dir, meta: existing.meta, reused: true }
     progress('metadata', 'fetching arXiv metadata')
     const meta = await fetchArxivMeta(resolution.arxivId, fetch)
@@ -384,6 +407,8 @@ export async function importPaperUnit(
   }
 
   if (resolution.kind === 'doi') {
+    const known = await findExisting({ doi: resolution.doi })
+    if (known) return { unitDir: known.dir, meta: known.meta, reused: true }
     // Batch imports carry search-card metadata (`prefetched`); otherwise the
     // DOI resolves through Crossref as before.
     const prefetched = options.prefetched
@@ -403,20 +428,20 @@ export async function importPaperUnit(
     if (!work?.title) {
       throw new PaperUnitError('not-found', `DOI ${resolution.doi} was not found.`)
     }
-    const existing = await findPaperUnitByIds(dedupe.scopeAbs, {
+    const existing = await findExisting({
       arxivId: work.arxivId,
       doi: work.doi,
       coolId: prefetched?.coolId,
       title: work.title,
       year: work.year
-    }, dedupe.deep)
+    })
     if (existing) return { unitDir: existing.dir, meta: existing.meta, reused: true }
     if (work.arxivId) {
-      return importPaperUnit(parentAbs, {
+      return importPaperUnitUnlocked(parentAbs, {
         kind: 'arxiv',
         arxivId: work.arxivId,
         sourceUrl: resolution.sourceUrl
-      }, fetch)
+      }, fetch, options)
     }
     const slugHint = `doi-${work.doi.replace(/[^a-z0-9]+/gi, '-').slice(0, 48)}`
     const metaBase = {
@@ -481,20 +506,20 @@ export async function importPaperUnit(
     }
     const meta = outcome.meta
     if (meta.arxivId) {
-      return importPaperUnit(parentAbs, {
+      return importPaperUnitUnlocked(parentAbs, {
         kind: 'arxiv',
         arxivId: meta.arxivId,
         sourceUrl: resolution.url
-      }, fetch)
+      }, fetch, options)
     }
     if (meta.doi) {
-      return importPaperUnit(parentAbs, {
+      return importPaperUnitUnlocked(parentAbs, {
         kind: 'doi',
         doi: meta.doi,
         sourceUrl: resolution.url
-      }, fetch)
+      }, fetch, options)
     }
-    const existing = await findPaperUnitByIds(dedupe.scopeAbs, { title: meta.title, year: meta.year }, dedupe.deep)
+    const existing = await findExisting({ title: meta.title, year: meta.year })
     if (existing) return { unitDir: existing.dir, meta: existing.meta, reused: true }
     const slugHint = `url-${meta.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 48)}`
     const metaBase = {
@@ -539,7 +564,7 @@ export async function importPaperUnit(
   }
 
   // venue import via papers.cool citation_* metadata
-  const existing = await findPaperUnitByIds(dedupe.scopeAbs, { coolId: resolution.coolId }, dedupe.deep)
+  const existing = await findExisting({ coolId: resolution.coolId })
   if (existing) return { unitDir: existing.dir, meta: existing.meta, reused: true }
   progress('metadata', 'fetching papers.cool metadata')
   const page = await fetchCoolPageMeta(
@@ -581,9 +606,17 @@ export function workspaceRelativeDir(rootAbs: string, path: string): string {
   return relative(rootAbs, path).split('\\').join('/')
 }
 
+async function fileSha256(path: string): Promise<string | null> {
+  try {
+    return createHash('sha256').update(await readFile(path)).digest('hex')
+  } catch {
+    return null
+  }
+}
+
 /** Normalized title key for dedupe: lowercase, alphanumeric only. */
 export function paperTitleKey(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return title.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 }
 
 /**
@@ -597,10 +630,9 @@ export async function findPaperUnitByIds(
 ): Promise<ResolvedPaperUnit | null> {
   const units = deep ? await listPaperUnitsDeep(parentAbs) : await listPaperUnits(parentAbs)
   const wantTitle = match.title ? paperTitleKey(match.title) : ''
-  return (
-    units.find((unit) => {
+  const identified = units.find((unit) => {
       if (match.originalPath && unit.meta.originalPath === match.originalPath) return true
-      if (match.arxivId && unit.meta.arxivId === match.arxivId) return true
+      if (match.arxivId && unit.meta.arxivId?.replace(/v\d+$/i, '') === match.arxivId.replace(/v\d+$/i, '')) return true
       if (match.doi && unit.meta.doi?.toLowerCase() === match.doi.toLowerCase()) return true
       if (match.coolId && unit.meta.coolPapers?.id === match.coolId) return true
       if (wantTitle && match.year) {
@@ -608,8 +640,15 @@ export async function findPaperUnitByIds(
         if (sameTitle && (!unit.meta.year || unit.meta.year === match.year)) return true
       }
       return false
-    }) ?? null
-  )
+    })
+  if (identified) return identified
+  if (match.originalPath) {
+    const digest = await fileSha256(match.originalPath)
+    if (digest) for (const unit of units) {
+      if (unit.meta.pdfFile && await fileSha256(join(unit.dir, unit.meta.pdfFile)) === digest) return unit
+    }
+  }
+  return null
 }
 
 /**

@@ -163,6 +163,25 @@ describe('GuiUpdateInstaller preflight', () => {
 })
 
 describe('failed update lifetime recovery', () => {
+  it('does not clear pending or relaunch while the installer owns cutover', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const bootstrap = await import('./update-bootstrap-recovery')
+    const owns = vi.spyOn(bootstrap, 'installerOwnsUpdateCutover').mockReturnValue(true)
+    try {
+      const { app } = await import('electron')
+      const { instance, dependencies } = await readyInstaller()
+      dependencies.prepare.mockRejectedValueOnce(new Error('Runtime stop failed'))
+      await expect(instance.install()).resolves.toMatchObject({ ok: false })
+      await vi.waitFor(() => expect(app.quit).toHaveBeenCalledOnce())
+      expect(owns).toHaveBeenCalled()
+      expect(clearPending).not.toHaveBeenCalled()
+      expect(app.relaunch).not.toHaveBeenCalled()
+    } finally {
+      owns.mockRestore()
+      platform.mockRestore()
+    }
+  })
+
   it('joins normal application cleanup before the relaunched owner can replace it', async () => {
     const { app } = await import('electron')
     const { ManagedRuntimeShutdownCoordinator } = await import('./runtime/managed-runtime-shutdown-coordinator')

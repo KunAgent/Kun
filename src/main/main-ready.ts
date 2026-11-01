@@ -287,6 +287,7 @@ export function startMainApp(): Promise<void> {
 
     await runPostWindowRuntimeStartup(initial, {
       startupState: mainState.startupState,
+      onReady: () => desktopProcessStack.finishStartup(),
       reconcileBundledRuntimeAfterInstall,
       resolveManagedRuntimeStartupTarget,
       managedKunHostCanAutoStart,

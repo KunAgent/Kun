@@ -1,6 +1,8 @@
 import { app } from 'electron'
+import { relaunchApp } from './relaunch-app'
 import { win32 as win32Path } from 'node:path'
 import type { GuiUpdateChannel, GuiUpdateInfo, GuiUpdateInstallResult, GuiUpdateState } from '../shared/gui-update'
+import { installerOwnsUpdateCutover } from './update-bootstrap-recovery'
 import { setWindowsInstallerUpdateSource } from './gui-updater-support'
 import { handoffFailureKind } from './runtime/kun-handoff-failure'
 import {
@@ -514,6 +516,14 @@ export class GuiUpdateInstaller {
 
   private async relaunchAfterClearingPending(): Promise<void> {
     this.recoveryScheduled = false
+    if (process.platform === 'win32') {
+      const pending = await readPendingUpdate()
+      if (pending && installerOwnsUpdateCutover(await readInstallerUpdateTransaction(pending))) {
+        // Keep the recovery record and let the installer finish before any relaunch.
+        app.quit()
+        return
+      }
+    }
     await clearPendingUpdate().catch((error) => {
       console.warn('[kun-gui updater] could not clear pending update before relaunch:', error)
     })
@@ -521,7 +531,7 @@ export class GuiUpdateInstaller {
     this.deps.clearPreparation()
     this.deps.setQuitting(false)
     try {
-      app.relaunch()
+      relaunchApp()
     } catch (error) {
       console.error('[kun-gui updater] failed to relaunch after update install failure:', error)
     } finally {

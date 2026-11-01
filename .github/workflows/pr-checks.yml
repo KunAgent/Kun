@@ -56,7 +56,7 @@ jobs:
 
   package:
     name: Build Linux package (x64)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: quality
     timeout-minutes: 60
     steps:
@@ -75,7 +75,7 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 xvfb xauth
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 file xvfb xauth
 
       - name: Install root dependencies
         run: npm ci
@@ -83,13 +83,22 @@ jobs:
       - name: Build Linux AppImage
         run: npm run dist:linux
 
+      - name: Verify Linux x64 package architecture
+        run: >-
+          node ./scripts/verify-linux-package-architecture.mjs
+          --version "$(node -p "require('./package.json').version")"
+          --arch x64
+          --dist dist
+
       - name: Smoke packaged update handoff (Linux x64)
         timeout-minutes: 20
         env:
           KUN_CI_ALLOW_NO_SANDBOX: '1'
         run: |
           # Exercise the packaged Chromium sandbox instead of bypassing it.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           node ./scripts/configure-linux-chrome-sandbox.cjs --resources dist/linux-unpacked/resources
           npm run smoke:packaged-update-handoff -- --resources dist/linux-unpacked/resources
 
@@ -103,6 +112,7 @@ jobs:
             dist/Kun-*-linux-x86_64.AppImage
             dist/Kun-*-linux-x86_64.AppImage.blockmap
             dist/Kun-*-linux-amd64.deb
+            dist/latest-linux.yml
 
   package-linux-arm64:
     name: Build Linux package (ARM64)
@@ -247,14 +257,28 @@ jobs:
         working-directory: kun
         run: node node_modules/vitest/vitest.mjs run src/attachments/shared-attachment-paths.test.ts src/attachments/shared-attachment-workspace-tools.test.ts src/attachments/shared-attachment-content.test.ts src/remote/files/path-containment.test.ts src/agents/agent-direct-workspace-paths.test.ts
 
+      - name: Test finalized startup helper integrity
+        run: node --test scripts/after-sign.test.cjs
+
+      - name: Build precompiled Windows startup components
+        working-directory: kun
+        run: npm run build:windows-startup
+
       - name: Test Windows process identity and owned startup
         working-directory: kun
-        run: node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts
+        run: node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts src/manager/manager-start-lock.test.ts src/manager/manager-start-lock-windows.test.ts src/manager/manager-start-lock.windows-native.test.ts src/process/windows-startup-native.test.ts
+
+      - name: Test Windows startup lock candidate and deadline
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/manager/manager-start-lock-diagnostics.test.ts src/manager/manager-start-lock-windows-async.test.ts src/manager/manager-start-lock-async.windows-native.test.ts src/manager/startup-attempt.test.ts
+
+      - name: Test startup cancellation and diagnostic presentation
+        run: npx vitest run src/main/startup-failure-window.test.ts src/main/runtime/desktop-process-stack.test.ts src/main/runtime/kun-runtime-health-monitor.test.ts src/main/main-runtime-startup-flow.test.ts
 
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
-        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts src/main/windows-installer-migration.restart.test.ts --no-file-parallelism
+        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts --no-file-parallelism
 
       - name: Upload Windows transaction diagnostics
         if: always()

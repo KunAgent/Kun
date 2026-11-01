@@ -125,6 +125,16 @@ describe('resolveWorkerRoute', () => {
     })
   })
 
+  it('accepts the Agent default or an unverified explicit model when only the ACP fallback is known', async () => {
+    const base = { catalog: catalog as never, probedModels: () => ['default'] }
+    expect(await resolveWorkerRoute({ ...base, agent: { harnessId: 'devin' } }))
+      .toMatchObject({ route: { harnessId: 'devin', model: 'default', credentialMode: 'native-login' } })
+    expect(await resolveWorkerRoute({ ...base, agent: { harnessId: 'devin', model: 'user-model' } }))
+      .toMatchObject({ route: { harnessId: 'devin', model: 'user-model', credentialMode: 'native-login' } })
+    expect(await resolveWorkerRoute({ ...base, probedModels: () => ['real-model'], agent: { harnessId: 'devin', model: 'default' } }))
+      .toMatchObject({ route: { harnessId: 'devin', model: 'default' } })
+  })
+
   it('rejects a model outside the probe result for probe harnesses', async () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,

@@ -3,6 +3,7 @@ import { ActivityStore } from './activity-store.js'
 import { projectRuntimeEvent } from './activity-event-projection.js'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { RegisterUnit } from '../contracts/activity.js'
+import { ChildLauncherSchema } from '../contracts/runtime-event-base.js'
 
 const NOW = '2026-09-01T12:00:00.000Z'
 
@@ -484,5 +485,57 @@ describe('ActivityStore', () => {
     const waited = store.waitForChange(controller.signal, 30_000)
     store.apply('t1', { mainState: 'working' }, 'runtime')
     await expect(waited).resolves.toBeUndefined()
+  })
+})
+
+describe('fast context child source', () => {
+  const childEvent = (extra: Record<string, unknown> = {}) =>
+    ev('turn_started', 'p1', {
+      child: {
+        parentThreadId: 'p1',
+        parentTurnId: 'pt-1',
+        childId: 'child-1',
+        childStatus: 'running',
+        childSeq: 1,
+        ...extra
+      }
+    })
+
+  it('projects the child launcher onto the child unit patch', () => {
+    const [projection] = projectRuntimeEvent(childEvent({ childLauncher: 'fast_context' }))
+    expect(projection).toMatchObject({
+      unitId: 'child-1',
+      patch: { parentThreadId: 'p1', childLauncher: 'fast_context', mainState: 'working' }
+    })
+  })
+
+  it('omits an absent launcher so a known source survives later events', () => {
+    const [projection] = projectRuntimeEvent(childEvent())
+    expect(projection?.patch).not.toHaveProperty('childLauncher')
+  })
+
+  it('registers a fast context child with its source and keeps it through later events', () => {
+    const store = makeStore()
+    registerThread(store, 'p1')
+    store.record(childEvent({ childLauncher: 'fast_context' }))
+    expect(store.get('child-1')).toMatchObject({
+      kind: 'worker',
+      parentThreadId: 'p1',
+      childLauncher: 'fast_context'
+    })
+    store.record(childEvent({ childStatus: 'completed' }))
+    expect(store.get('child-1')).toMatchObject({ childLauncher: 'fast_context', state: 'done' })
+  })
+
+  it('leaves ordinary children without a source', () => {
+    const store = makeStore()
+    registerThread(store, 'p1')
+    store.record(childEvent())
+    expect(store.get('child-1')?.childLauncher).toBeUndefined()
+  })
+
+  it('normalizes the retired explore_agent launcher', () => {
+    expect(ChildLauncherSchema.parse('explore_agent')).toBe('fast_context')
+    expect(ChildLauncherSchema.parse('delegate_task')).toBe('delegate_task')
   })
 })

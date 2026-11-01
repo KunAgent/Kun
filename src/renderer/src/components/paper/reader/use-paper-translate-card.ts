@@ -41,11 +41,14 @@ const TRANSLATE_CARD_AUTO_COLLAPSE_MS = 700
 export function usePaperTranslateCard({
   unitDir,
   workspaceRoot,
-  t
+  t,
+  onOpenTranslated
 }: {
   unitDir: string
   workspaceRoot: string
   t: TFunction
+  /** Global reader opens the generated file without touching Work tabs. */
+  onOpenTranslated?: (outputPath: string) => void
 }): {
   translateCard: PaperTranslateCardState | null
   setTranslateCard: (card: PaperTranslateCardState | null) => void
@@ -104,6 +107,7 @@ export function usePaperTranslateCard({
     })
     const { translatePaperSelection } = await import('../../../paper/paper-translate-actions')
     const result = await translatePaperSelection({
+      workspaceRoot,
       unitDir,
       page: sel.page,
       rects: sel.rects,
@@ -123,7 +127,7 @@ export function usePaperTranslateCard({
         : result.code === 'config' ? t('writePaperTranslateNoModel') : result.message,
       errorCode: result.ok ? undefined : result.code
     } : card)
-  }, [unitDir, t])
+  }, [unitDir, workspaceRoot, t])
 
   const readPaperTextChars = useCallback(async (): Promise<number> => {
     try {
@@ -142,7 +146,7 @@ export function usePaperTranslateCard({
     translateRequestRef.current = requestId
     usePaperStore.getState().beginJob('translate-document', requestId)
     try {
-      const result = await translatePaperDocument({ unitDir, requestId })
+      const result = await translatePaperDocument({ workspaceRoot, unitDir, requestId })
       if (!result.ok) {
         const config = result.code === 'config'
         translateRetryRef.current = config ? () => void executeDocumentTranslate() : null
@@ -154,18 +158,22 @@ export function usePaperTranslateCard({
       }
       setTranslateNotice({ message: result.outputPath, config: false })
       // Open the translated markdown in the right editor group.
-      const root = useWriteWorkspaceStore.getState().workspaceRoot
-      if (root) {
-        await useWriteWorkspaceStore.getState().openFile(
-          root,
-          writeJoinPath(writeJoinPath(root, unitDir), result.outputPath),
-          { groupId: 'secondary', viewMode: 'rich' }
-        )
+      if (onOpenTranslated) {
+        onOpenTranslated(result.outputPath)
+      } else {
+        const root = useWriteWorkspaceStore.getState().workspaceRoot
+        if (root) {
+          await useWriteWorkspaceStore.getState().openFile(
+            root,
+            writeJoinPath(writeJoinPath(root, unitDir), result.outputPath),
+            { groupId: 'secondary', viewMode: 'rich' }
+          )
+        }
       }
     } finally {
       usePaperStore.getState().endJob(requestId)
     }
-  }, [unitDir, t])
+  }, [unitDir, workspaceRoot, t, onOpenTranslated])
 
   const runDocumentTranslate = useCallback(async (): Promise<void> => {
     setTranslateNotice(null)

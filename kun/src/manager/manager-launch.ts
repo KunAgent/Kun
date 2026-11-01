@@ -24,6 +24,7 @@ export async function launchServiceManagerProcess(input: {
   launch?: ManagerLaunchOverride
   appOwner?: AppSessionOwner
   reservationPath?: string
+  beforeLaunch?: () => Promise<unknown>
 }): Promise<{ child: ChildProcess; logPath: string }> {
   await mkdir(input.controlDir, { recursive: true, mode: 0o700 })
   const logPath = join(input.controlDir, 'manager.log')
@@ -37,6 +38,7 @@ export async function launchServiceManagerProcess(input: {
   const runAsNode = input.launch?.runAsNode ?? host.runAsNode
   let child: ChildProcess
   try {
+    await input.beforeLaunch?.()
     const options = {
       detached: !input.appOwner,
       windowsHide: true,
@@ -60,7 +62,7 @@ export async function launchServiceManagerProcess(input: {
       }
     }
     child = input.appOwner
-      ? await spawnOwnedProcess(command, args, { ...options, stdio: [...options.stdio], ownerLossGraceMs: 30_000 })
+      ? await spawnOwnedProcess(command, args, { ...options, stdio: [...options.stdio], ownerLossGraceMs: 30_000, beforeLaunch: input.beforeLaunch })
       : spawn(command, args, { ...options, stdio: [...options.stdio] })
     if (!input.appOwner) child.unref()
   } finally {

@@ -20,6 +20,11 @@ export function isCodeWorkbenchThread(thread: ThreadSummary): boolean {
     thread.executionUnit?.kind !== 'worker'
 }
 
+export function isWorkWorkbenchThread(thread: ThreadSummary): boolean {
+  return thread.agentSurface === 'write' &&
+    (thread.relation ?? 'primary') !== 'side' && !thread.executionUnit
+}
+
 export function encodeThreadCursor(updatedAt: string, id: string): string {
   const updatedAtMs = Number.isFinite(Date.parse(updatedAt)) ? Date.parse(updatedAt) : 0
   return Buffer.from(JSON.stringify([updatedAtMs, id])).toString('base64url')
@@ -58,6 +63,7 @@ export function filterThreadSummaries(
     out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
   }
   if (options.workbenchScope === 'code') out = out.filter(isCodeWorkbenchThread)
+  if (options.workbenchScope === 'work') out = out.filter(isWorkWorkbenchThread)
   if (query) out = out.filter((thread) => threadSearchText(thread).includes(query))
   return out.sort(compareThreadSummaries)
 }

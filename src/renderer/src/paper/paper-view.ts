@@ -31,6 +31,19 @@ export function paperResearchStageActive(
   return paperModeView(state) === 'research'
 }
 
+/**
+ * The research stage only hosts the conversation while the documents own the
+ * Work stage. Once a session tab takes the stage (`assistantMain`), the
+ * research page is hidden or docked beside it and the assistant panel is the
+ * conversation again.
+ */
+export function paperResearchStageOnStage(
+  state: Pick<WriteWorkspaceState, 'editorLayout' | 'paperResearch'>,
+  assistantMain: boolean
+): boolean {
+  return !assistantMain && paperResearchStageActive(state)
+}
+
 /** Research session the conversation resource resolves to (null = new research). */
 export function paperResearchSessionId(
   state: Partial<Pick<WriteWorkspaceState, 'paperResearch'>>

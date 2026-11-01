@@ -21,7 +21,7 @@ const INTERACTIVE_TOOL_NAMES = new Set(['request_user_input', 'user_input'])
  * State is turn-scoped, not context-window-scoped.
  */
 export class ToolStormBreaker {
-  private readonly failures = new Map<string, { count: number; notePath?: string }>()
+  private readonly failures = new Map<string, { count: number; notePath?: string; lastError?: string }>()
   private readonly interactiveThreshold: number
   private readonly browserDuplicateThreshold: number
   private interactiveCount = 0
@@ -42,8 +42,13 @@ export class ToolStormBreaker {
   inspect(call: ToolCallLike): { suppress: boolean; reason?: string } {
     const failure = this.failures.get(toolCallFingerprint(call))
     if (failure && failure.count >= FAILED_CALL_THRESHOLD) {
-      return { suppress: true, reason: `${call.toolName} failed ${failure.count} times with the same arguments in this turn. ` +
-        'Repeated failure guard suppressed this call. Inspect the error, change the approach, or report the blocker; do not retry unchanged.' }
+      const lastError = failure.lastError ? ` Last error: ${failure.lastError}` : ''
+      return {
+        suppress: true,
+        reason: `${call.toolName} failed ${failure.count} times with these exact arguments in this turn.${lastError} ` +
+          'Repeated failure guard suppressed this identical call. Fix the argument the error names and retry the same tool, ' +
+          'use a different tool, or report the blocker; an unchanged retry stays suppressed.'
+      }
     }
     if (!failure && this.failures.size >= MAX_FAILED_CALLS) {
       return { suppress: true, reason: 'The turn exhausted its distinct failed-call tracking budget. Stop retrying and report the blocker.' }
@@ -82,6 +87,7 @@ export class ToolStormBreaker {
       if (!previous && this.failures.size >= MAX_FAILED_CALLS) return
       this.failures.set(fingerprint, {
         count: Math.min(FAILED_CALL_THRESHOLD, (previous?.count ?? 0) + 1),
+        lastError: summarizeToolError(item.output),
         ...(call.toolName === 'notes_read_file' && typeof call.arguments.path === 'string'
           ? { notePath: hash(call.arguments.path) } : {})
       })
@@ -130,6 +136,20 @@ export class ToolStormBreaker {
 
 export function toolCallFingerprint(call: ToolCallLike): string {
   return hash(stableJson([call.toolName, call.arguments]))
+}
+
+/**
+ * Carry the concrete tool error into the suppression reason. Without it the
+ * model is told "do not retry unchanged" but not what was wrong, so it either
+ * repeats the call or abandons a tool it could have fixed.
+ */
+function summarizeToolError(output: unknown): string | undefined {
+  if (!output || typeof output !== 'object') return undefined
+  const error = (output as Record<string, unknown>).error
+  if (typeof error !== 'string') return undefined
+  const single = error.replace(/\s+/g, ' ').trim()
+  if (!single) return undefined
+  return single.length > 300 ? `${single.slice(0, 297)}...` : single
 }
 
 function hash(value: string): string {

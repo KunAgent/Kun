@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentDispatchIntentPublicSchema, type AgentDispatchIntentView } from '@shared/agent-dispatch'
 import type { ChatBlock } from '../../agent/types'
 import { AgentDispatchGroup } from './AgentDispatchCard'
+import { AssistantMarkdown } from './AssistantMarkdown'
 import { Split } from 'lucide-react'
 import { AgentDispatchIntentControls } from './AgentDispatchIntentControls'
 import { rememberAgentIconAliases } from '../../lib/agent-icon-aliases'
@@ -12,7 +13,9 @@ const state = vi.hoisted(() => ({ intent: undefined as AgentDispatchIntentView |
   act: vi.fn(), busy: false, error: '', activeThreadId: 'parent', rows: {} as Record<string, unknown> }))
 const preview = vi.hoisted(() => vi.fn())
 vi.mock('./use-agent-dispatch-intent', () => ({ useAgentDispatchIntent: () => state }))
-vi.mock('react-i18next', () => ({ useTranslation: () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...await importOriginal<typeof import('react-i18next')>(),
+  useTranslation: () => ({
   t: (key: string, values?: Record<string, unknown>) => values ? `${key}:${JSON.stringify(values)}` : key
 }) }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: (select: (value: unknown) => unknown) =>
@@ -20,13 +23,17 @@ vi.mock('../../store/chat-store', () => ({ useChatStore: (select: (value: unknow
 vi.mock('../../store/activity-store', () => ({ useActivityStore: (select: (value: unknown) => unknown) =>
   select({ rows: state.rows }) }))
 vi.mock('../workers/worker-view-store', () => ({ openWorkerSession: preview }))
+vi.mock('../workers/use-team-workers', () => ({ useTeamWorkers: () => ({ overview: undefined }) }))
 vi.mock('./FloatingComposerWorkersPill', () => ({ OPEN_WORKERS_PANEL_EVENT: 'open-workers-panel' }))
 vi.mock('./AgentDispatchIntentControls', () => ({ AgentDispatchIntentControls: (props: { readOnly: boolean }) =>
   createElement('div', { 'data-controls': props.readOnly ? 'read-only' : 'interactive' }) }))
 vi.mock('./AgentDispatchRoutePicker', () => ({
-  AgentDispatchRoutePicker: (props: { route: { agentId: string }; disabled: boolean; onChange: (route: unknown) => void }) =>
-    createElement('button', { 'data-route-picker': props.route.agentId, disabled: props.disabled,
-      onClick: () => props.onChange({ agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }) }),
+  AgentDispatchRoutePicker: (props: { route: { agentId: string }; disabled: boolean; onChange: (route: unknown) => void
+    onPendingChange?: (pending: boolean) => void }) =>
+    createElement('span', null,
+      createElement('button', { 'data-route-picker': props.route.agentId, disabled: props.disabled,
+        onClick: () => props.onChange({ agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }) }),
+      createElement('i', { 'data-route-pending': true, onClick: (pending: boolean) => props.onPendingChange?.(pending) })),
   AgentDispatchRouteLabel: (props: { route: { agentId: string } }) => createElement('span', { 'data-route-label': props.route.agentId })
 }))
 
@@ -39,6 +46,7 @@ beforeEach(() => {
   state.activeThreadId = 'parent'
   state.rows = {}
   state.error = ''
+  state.busy = false
   preview.mockReset()
 })
 afterEach(async () => {
@@ -72,6 +80,62 @@ async function render(): Promise<string> {
 describe('Agent dispatch card', () => {
   const header = () => renderer!.root.findByType('header')
   const headerIcons = () => header().findAll((node) => typeof node.type === 'string' && node.props['data-agent-icon'])
+
+  it('shows a short safe Markdown result above task details without nested scrolling', async () => {
+    state.intent = fixture({ state: 'completed', resultSummary: '## Findings\r\n- Fixed the preview\r\nTests passed' })
+    const text = await render()
+    const result = renderer!.root.findByProps({ 'data-dispatch-result': true })
+    expect(text.indexOf('dispatchIntent.resultBatch')).toBeLessThan(text.indexOf('dispatchIntent.details'))
+    expect(result.findByType('h5').props.id).toBe(result.props['aria-labelledby'])
+    expect(result.findByType(AssistantMarkdown).props).toMatchObject({
+      safeMarkdown: true, streaming: false, text: '## Findings\n- Fixed the preview\nTests passed'
+    })
+    expect(result.findAllByType('button')).toHaveLength(0)
+    expect(result.findAll((node) => /overflow-y|max-h-/.test(node.props.className ?? ''))).toHaveLength(0)
+    expect(result.findAllByType('details')).toHaveLength(0)
+  })
+
+  it.each([Array.from({ length: 40 }, (_, i) => `Finding ${i}`).join('\n'), 'Result '.repeat(200)])(
+    'expands long results accessibly and keeps the full result in page flow', async (summary) => {
+      state.intent = fixture({ state: 'completed', resultSummary: summary })
+      await render()
+      const result = renderer!.root.findByProps({ 'data-dispatch-result': true })
+      const button = result.findByType('button')
+      expect(button.props['aria-expanded']).toBe(false)
+      expect(result.findByType(AssistantMarkdown).props.text.length).toBeLessThan(summary.length)
+      expect(result.findByProps({ id: button.props['aria-controls'] })).toBeDefined()
+      await act(async () => button.props.onClick())
+      expect(button.props['aria-expanded']).toBe(true)
+      expect(result.props['data-result-state']).toBe('expanded')
+      expect(result.findByType(AssistantMarkdown).props.text).toBe(summary.trim())
+      expect(result.findAll((node) => /overflow-y|max-h-/.test(node.props.className ?? ''))).toHaveLength(0)
+      await act(async () => button.props.onClick())
+      expect(button.props['aria-expanded']).toBe(false)
+    })
+
+  it.each([undefined, ' \r\n '])('explains an empty completed result without inventing success', async (summary) => {
+    state.intent = fixture({ state: 'completed', resultSummary: summary })
+    const text = await render()
+    expect(text).toContain('dispatchIntent.resultMissing')
+    expect(renderer!.root.findAllByType(AssistantMarkdown)).toHaveLength(0)
+    expect(text).not.toContain('dispatchIntent.worker.passed')
+  })
+
+  it.each(['running', 'awaiting_parent', 'failed', 'cancelled'] as const)(
+    'does not show an empty result section for %s', async (phase) => {
+      state.intent = fixture({ state: phase })
+      await render()
+      expect(renderer!.root.findAllByProps({ 'data-dispatch-result': true })).toHaveLength(0)
+    })
+
+  it.each(['awaiting_parent', 'failed', 'cancelled'] as const)('preserves available findings in %s', async (phase) => {
+    state.intent = fixture({ state: phase, resultSummary: 'Fixed the preview.\nCancelled: second task' })
+    const text = await render()
+    expect(text).toContain('Cancelled: second task')
+    expect(renderer!.root.findAllByProps({ 'data-dispatch-result': true })).toHaveLength(1)
+    expect(text).not.toContain('dispatchIntent.worker.passed')
+  })
+
 
   it.each(['kun', 'codex', 'claude-code'])('shows the %s icon independently of the model', async (agentId) => {
     state.intent = fixture()
@@ -143,6 +207,22 @@ describe('Agent dispatch card', () => {
     expect(headerIcons()[0].props['data-agent-icon']).toBe('codex')
   })
 
+  it('shows the host-resolved worktree choice and clears its hint for an unvalidated draft route', async () => {
+    state.intent = fixture({ state: 'paused' })
+    state.intent.recommendation.assignments![0].workspaceIsolation = 'worktree'
+    state.intent.recommendation.assignments![1].workspaceIsolation = 'local'
+    const text = await render()
+    expect(text).toContain('dispatchIntent.isolatedWorkspaceHint')
+    const hints = () => renderer!.root.findAll((node) => node.type === 'span' &&
+      node.props['data-dispatch-workspace-isolation'] === 'worktree')
+    expect(hints()).toHaveLength(1)
+    await act(async () => { renderer!.root.findByType(AgentDispatchIntentControls).props.onEdit(state.intent) })
+    expect(hints()).toHaveLength(1)
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[0].props.onClick() })
+    expect(hints()).toHaveLength(0)
+    expect(state.act).not.toHaveBeenCalled()
+  })
+
   it('switches one worker route from a counting-down batch card', async () => {
     state.intent = fixture()
     const text = await render()
@@ -173,6 +253,59 @@ describe('Agent dispatch card', () => {
     expect(state.act).toHaveBeenCalledTimes(2)
     expect(state.act).toHaveBeenLastCalledWith('update', { recommendation: { assignments: [routes[0],
       { agentId: 'codex', model: 'gpt-5', credentialMode: 'native-login' }] } })
+  })
+
+  it('keeps the pickers usable while the hold\'s own pause is in flight', async () => {
+    state.intent = fixture()
+    await render()
+    let resolvePause!: (value: AgentDispatchIntentView) => void
+    state.act.mockImplementation((action: string) => action === 'pause'
+      ? new Promise<AgentDispatchIntentView>((resolve) => { resolvePause = resolve }) : Promise.resolve(undefined))
+    const picker = () => renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[0]
+    await act(async () => { picker().props.onClick() })
+    state.busy = true
+    await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
+    // A disabled chip would swallow the click that opened its menu.
+    expect(picker().props.disabled).toBe(false)
+    state.busy = false
+    await act(async () => { resolvePause(fixture({ state: 'paused', revision: 3, deadline: undefined })) })
+  })
+
+  it('shows why Kun refused a held switch instead of silently reverting', async () => {
+    state.intent = fixture()
+    await render()
+    state.act.mockImplementation(async (action: string) => {
+      if (action === 'pause') {
+        state.intent = fixture({ state: 'paused', revision: 3, deadline: undefined })
+        return state.intent
+      }
+      state.error = 'Codex is signed out'
+      return undefined
+    })
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[0].props.onClick() })
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+    expect(state.act).toHaveBeenLastCalledWith('update', expect.anything())
+    await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
+    expect(JSON.stringify(renderer!.toJSON())).toContain('dispatchIntent.routeUpdateFailed:{\\"message\\":\\"Codex is signed out\\"}')
+  })
+
+  it('keeps the hold open while a picked Agent still loads its models', async () => {
+    state.intent = fixture()
+    await render()
+    state.act.mockImplementation(async (action: string) => {
+      if (action !== 'pause') return undefined
+      state.intent = fixture({ state: 'paused', revision: 3, deadline: undefined })
+      return state.intent
+    })
+    await act(async () => { renderer!.root.findAll((node) => node.props['data-route-pending'])[0].props.onClick(true) })
+    await act(async () => { renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])[1].props.onClick() })
+    await act(async () => { renderer!.root.findAll((node) => node.props['data-route-pending'])[0].props.onClick(true) })
+    await act(async () => { vi.advanceTimersByTime(30_000) })
+    // Neither an update nor a resume while the pick is still loading.
+    expect(state.act).toHaveBeenCalledTimes(1)
+    await act(async () => { renderer!.root.findAll((node) => node.props['data-route-pending'])[0].props.onClick(false) })
+    await act(async () => { vi.advanceTimersByTime(10_000) })
+    expect(state.act).toHaveBeenLastCalledWith('update', expect.anything())
   })
 
   it('updates a waiting card at once when no countdown is running', async () => {

@@ -83,6 +83,7 @@ import type {
 import { registerWorkspaceSpreadsheetIpcHandlers } from './register-workspace-spreadsheet-ipc-handlers'
 import { registerOfficeVersionIpcHandlers } from './register-office-version-ipc-handlers'
 import { registerExtensionArtifactIpcHandlers } from './register-extension-artifact-ipc-handlers'
+import { registerArtifactThumbnailIpcHandlers } from './register-artifact-thumbnail-ipc-handlers'
 
 type WorkspaceFileWatchRecord = {
   watcher: WorkspaceFileWatcherHandle
@@ -135,6 +136,7 @@ export function registerAppFileIpcHandlers(options: RegisterAppIpcHandlersOption
   registerWorkspaceSpreadsheetIpcHandlers({ getMainWindow, logError, logInfo: options.logInfo })
   registerOfficeVersionIpcHandlers({ getMainWindow })
   registerExtensionArtifactIpcHandlers(options)
+  registerArtifactThumbnailIpcHandlers(options)
   const workspaceFileWatchers = new Map<string, WorkspaceFileWatchRecord>()
   const workspaceFileWatchSenders = new Map<number, WorkspaceFileWatchSenderRecord>()
   const releaseWorkspaceFileWatchSender = (sender: WebContents): void => {

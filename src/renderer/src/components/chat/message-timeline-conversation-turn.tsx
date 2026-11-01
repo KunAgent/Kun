@@ -21,6 +21,9 @@ import {
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
 import { DesignOpenCard } from './DesignOpenCard'
+import { groupDesignOpenBlocks } from '../../agent/design-open-request'
+import { latestReportOpenBlocks } from '../../agent/report-open-request'
+import { ReportOpenCard } from './ReportOpenCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
 import { AppSurfaceBlocks } from '../../app-surfaces/AppSurfaceBlocks'
 import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
@@ -147,6 +150,7 @@ export function ConversationTurn({
     runtimeErrorsAfterFinalContent,
     componentPrototypeBlocks,
     designOpenBlocks,
+    reportOpenBlocks,
     diagramPrototypeBlocks,
     conversationVisualizationBlocks,
     appSurfaceBlocks,
@@ -293,6 +297,7 @@ export function ConversationTurn({
     turnFileChanges.length > 0 ||
     componentPrototypeBlocks.length > 0 ||
     designOpenBlocks.length > 0 ||
+    reportOpenBlocks.length > 0 ||
     diagramPrototypeBlocks.length > 0 ||
     conversationVisualizationBlocks.length > 0 ||
     appSurfaceBlocks.length > 0 ||
@@ -429,8 +434,12 @@ export function ConversationTurn({
         />
       ))}
 
-      {designOpenBlocks.map((block) => (
-        <DesignOpenCard key={block.id} block={block} threadId={threadId} requestTurnLive={isProcessing} />
+      {groupDesignOpenBlocks(designOpenBlocks).map((group) => (
+        <DesignOpenCard key={group[0].id} blocks={group} threadId={threadId} requestTurnLive={isProcessing} />
+      ))}
+
+      {latestReportOpenBlocks(reportOpenBlocks).map((block) => (
+        <ReportOpenCard key={block.id} block={block} threadId={threadId} requestTurnLive={isProcessing} />
       ))}
 
       {assistantContentBlocks.map((block) => (

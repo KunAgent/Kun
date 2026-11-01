@@ -1,5 +1,6 @@
 import type { TurnItem, AssistantTextTurnItem } from '../contracts/items.js'
 import type { RuntimeEvent } from '../contracts/events.js'
+import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
 import type {
   DispatchRecord,
   TurnRunOutcome,
@@ -347,11 +348,7 @@ export class ManagerWorkerLifecycle {
   }
 
   private noticeForDispatch(dispatch: DispatchRecord, worker: WorkerRecord): WorkerNotice {
-    const output = dispatch.workerReport?.summary ?? dispatch.resultExcerpt
-    // Unfinished dispatches lead with why they stopped (budget, error, restart).
-    const detail = dispatch.state !== 'completed' && dispatch.failureReason
-      ? output ? `${dispatch.failureReason}\n\nLast worker output: ${output}` : dispatch.failureReason
-      : output
+    const detail = workerResultSummary(dispatch)
     return {
       noticeId: `ntc_${dispatch.dispatchId}`,
       teamId: dispatch.teamId,
@@ -365,7 +362,7 @@ export class ManagerWorkerLifecycle {
       dispatchId: worker.reviewOf ?? dispatch.dispatchId,
       title: dispatch.title,
       harnessLabel: this.harnessLabel(worker),
-      ...(detail ? { detail: detail.slice(0, 4_000) } : {}),
+      ...(detail ? { detail } : {}),
       ...(dispatch.capture
         ? {
             capture: {
@@ -395,7 +392,7 @@ export class ManagerWorkerLifecycle {
     return cause ?? undefined
   }
 
-  /** Tail of the worker's last assistant message for this turn (<=1500). */
+  /** Opening conclusion of the worker's last assistant message for this turn (<=1500). */
   private async lastAssistantExcerpt(
     workerThreadId: string,
     turnId: string
@@ -407,7 +404,7 @@ export class ManagerWorkerLifecycle {
       .map((item) => item.text)
       .filter((text) => text.trim().length > 0)
     const last = texts.at(-1)
-    return last ? last.slice(-1_500) : undefined
+    return last ? clipWorkerResult(last, 1_500) : undefined
   }
 
   /**

@@ -35,6 +35,11 @@ export function selectSidebarWorkerRows(
   for (const row of Object.values(rows)) {
     const parentId = row.parentThreadId?.trim()
     if (row.kind !== 'worker' || row.visibility === 'archived' || !parentId || !row.threadId || parentId === row.threadId) continue
+    // Fast Context retrieval runs stay out of the sidebar task list: they are
+    // shown by their evidence card in the conversation, and counting them here
+    // would add task groups and badges for read-only searching. Rows without a
+    // launcher are kept, so older records are never mis-hidden.
+    if (row.childLauncher === 'fast_context') continue
     const siblings = byParent.get(parentId)
     if (siblings) siblings.push(row)
     else byParent.set(parentId, [row])

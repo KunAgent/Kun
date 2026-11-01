@@ -116,7 +116,7 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
     const step = stepByName(recovery, name)
     const extra = file === 'recovery-safety'
       ? ' src/main/windows-installer-migration.payload-backup.test.ts'
-      : ' src/main/windows-installer-migration.restart.test.ts --no-file-parallelism'
+      : ' src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts --no-file-parallelism'
     assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts${extra}`)
     assert.equal(step.if, undefined)
   }
@@ -148,7 +148,19 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
   const identity = stepByName(recovery, 'Test Windows process identity and owned startup')
   assert.equal(identity['working-directory'], 'kun')
   assert.equal(identity.if, undefined)
-  assert.equal(identity.run, 'node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts')
+  assert.equal(identity.run, 'node node_modules/vitest/vitest.mjs run ' + [
+    'src/server/runtime-process-identity.test.ts',
+    'src/server/runtime-process-identity.windows.test.ts',
+    'src/server/runtime-process-identity.windows-native.test.ts',
+    'src/manager/app-session-reservation.test.ts',
+    'src/manager/owned-service-manager-session.admission.test.ts',
+    'src/manager/owned-service-manager-session.test.ts',
+    'src/process/owned-process-windows.test.ts',
+    'src/manager/manager-start-lock.test.ts',
+    'src/manager/manager-start-lock-windows.test.ts',
+    'src/manager/manager-start-lock.windows-native.test.ts',
+    'src/process/windows-startup-native.test.ts'
+  ].join(' '))
   assert.ok(recovery.steps.indexOf(identity) > recovery.steps.indexOf(stepByName(recovery, 'Install root dependencies')))
   assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
@@ -159,6 +171,29 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
   assert.equal(workflow.jobs['pr-gate'].if, 'always()')
   assert.match(workflow.jobs['pr-gate'].steps[0].with.script, /result !== 'success'/)
   assert.match(workflow.jobs['pr-gate'].steps[0].with.script, /core\.setFailed/)
+})
+
+test('Linux x64 builds keep a stable baseline and verify their packaged architecture', () => {
+  const jobs = [
+    ['pr-checks.yml', 'package', '$(node -p "require(\'./package.json\').version")'],
+    ['release.yml', 'build-linux', '${{ needs.prepare.outputs.version }}'],
+    ['daily-dev-prerelease.yml', 'build-linux', '${{ needs.prepare.outputs.dev_version }}']
+  ]
+  for (const [file, name, version] of jobs) {
+    const job = readWorkflow(file).jobs[name]
+    assert.equal(job['runs-on'], 'ubuntu-22.04', file)
+    assert.match(stepByName(job, 'Install Linux packaging dependencies').run, /\bfile\b/u)
+    const build = job.steps.findIndex(step => step.run === 'npm run dist:linux')
+    const verify = job.steps.findIndex(step => step.name === 'Verify Linux x64 package architecture')
+    const smoke = job.steps.findIndex(step => step.name === 'Smoke packaged update handoff (Linux x64)')
+    const upload = job.steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
+    assert.ok(build >= 0 && verify > build && smoke > verify && upload > smoke, file)
+    assert.match(job.steps[verify].run, /node \.\/scripts\/verify-linux-package-architecture\.mjs/u)
+    assert.ok(job.steps[verify].run.includes(`--version "${version}"`), file)
+    assert.match(job.steps[verify].run, /--arch x64\b/u)
+    assert.match(job.steps[smoke].run, /if \[ -e \/proc\/sys\/kernel\/apparmor_restrict_unprivileged_userns \]; then\s+sudo sysctl -w kernel\.apparmor_restrict_unprivileged_userns=0\s+fi/u)
+    assert.match(job.steps[upload].with.path, /dist\/latest-linux\.yml/u)
+  }
 })
 
 test('stable Linux ARM64 packaging retains the proven PR timeout budget', () => {

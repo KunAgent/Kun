@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist/build/pdf.mjs'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
@@ -10,21 +10,10 @@ import {
 
 const PAGE_RECORD_DEBOUNCE_MS = 1200
 
-/**
- * Reader position persistence (R0): restores `lastPage` once the document is
- * ready, records opened/page activity (debounced), auto-marks a fresh import
- * 「reading」, and publishes the current page to the mode store so the
- * assistant composer chip can show it.
- */
+/** The translated mirror never restores or records position; global readers do not publish Work context. */
 export function usePaperReaderPosition({
-  pdfDocument,
-  unitDir,
-  workspaceRoot,
-  libraryEntry,
-  currentPage,
-  pageCount,
-  scrollToPage,
-  enabled = true
+  pdfDocument, unitDir, workspaceRoot, libraryEntry, currentPage, pageCount,
+  scrollToPage, enabled = true, publishContext = true
 }: {
   pdfDocument: PDFDocumentProxy | null
   unitDir: string
@@ -33,37 +22,46 @@ export function usePaperReaderPosition({
   currentPage: number
   pageCount: number
   scrollToPage: (page: number) => void
-  /** R2.3: the translated mirror never records or restores position. */
   enabled?: boolean
+  publishContext?: boolean
 }): void {
-  const [restoredPage, setRestoredPage] = useState<number | null>(null)
-  const lastRecordedPageRef = useRef(0)
+  const lastRecordedPage = useRef('')
 
   useEffect(() => {
-    if (!enabled || !pdfDocument || restoredPage !== null) return
-    setRestoredPage(-1)
-    void paperReaderRecordOpened(unitDir)
-    if (libraryEntry) void paperReaderAutoMarkReading(libraryEntry)
-    if (typeof window.kunGui?.paperLocalStateRead !== 'function') return
-    void window.kunGui.paperLocalStateRead({ libraryRoot: workspaceRoot }).then((state) => {
-      const lastPage = state.units[unitDir]?.lastPage
-      if (lastPage && lastPage > 1) scrollToPage(lastPage)
-    }).catch(() => undefined)
-  }, [enabled, pdfDocument, restoredPage, scrollToPage, unitDir, workspaceRoot, libraryEntry])
+    if (!enabled || !pdfDocument) return
+    let active = true
+    void paperReaderRecordOpened(unitDir, workspaceRoot)
+    if (typeof window.kunGui?.paperLocalStateRead === 'function') {
+      void window.kunGui.paperLocalStateRead({ libraryRoot: workspaceRoot }).then((state) => {
+        if (!active) return
+        const lastPage = state.units[unitDir]?.lastPage
+        if (lastPage && lastPage > 1) scrollToPage(lastPage)
+      }).catch(() => undefined)
+    }
+    return () => { active = false }
+  }, [enabled, pdfDocument, scrollToPage, unitDir, workspaceRoot])
 
   useEffect(() => {
-    if (!enabled || !currentPage || currentPage === lastRecordedPageRef.current) return
-    lastRecordedPageRef.current = currentPage
+    if (enabled && pdfDocument && libraryEntry) void paperReaderAutoMarkReading(libraryEntry, workspaceRoot)
+  }, [enabled, pdfDocument, libraryEntry, workspaceRoot])
+
+  useEffect(() => {
+    if (!enabled || !pdfDocument || !currentPage) return
+    const key = JSON.stringify([workspaceRoot, unitDir, currentPage, pageCount])
+    if (key === lastRecordedPage.current) return
     const timer = window.setTimeout(() => {
-      void paperReaderRecordPage(unitDir, currentPage, pageCount)
+      lastRecordedPage.current = key
+      void paperReaderRecordPage(unitDir, currentPage, pageCount, workspaceRoot)
     }, PAGE_RECORD_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [enabled, currentPage, pageCount, unitDir])
+  }, [enabled, pdfDocument, currentPage, pageCount, unitDir, workspaceRoot])
 
-  // Paper/page context for the assistant composer chip (U5).
   useEffect(() => {
-    if (!enabled || !currentPage) return
+    if (!enabled || !publishContext || !currentPage) return
     usePaperModeStore.getState().setReaderPage({ unitDir, page: currentPage, pageCount })
-  }, [enabled, currentPage, pageCount, unitDir])
-  useEffect(() => () => usePaperModeStore.getState().setReaderPage(null), [unitDir])
+  }, [enabled, publishContext, currentPage, pageCount, unitDir])
+  useEffect(() => {
+    if (!enabled || !publishContext) return
+    return () => usePaperModeStore.getState().setReaderPage(null)
+  }, [enabled, publishContext, unitDir])
 }

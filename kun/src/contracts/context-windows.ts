@@ -208,7 +208,14 @@ function isSafeNoteLogicalPrefix(value: string): boolean {
   return trimmed === '' || isSafeNoteLogicalPath(trimmed)
 }
 
-const CursorArgSchema = z.string().min(1).max(1024)
+/**
+ * Cursors are optional continuation tokens and models routinely send every
+ * advertised property, including an empty string, instead of omitting the key.
+ * `decodeOffsetCursor` already treats '' as "absent" (offset 0), so an empty
+ * cursor must be accepted here: rejecting it produced an unresolvable loop
+ * where the model could not tell which spelling of "no cursor" was legal.
+ */
+export const CursorArgSchema = z.string().max(1024)
 const PageSizeArgSchema = z.number().int().min(1).max(CONTEXT_WINDOWS_PAGE_MAX).optional()
 const WindowIdArgSchema = z.string().min(1).max(256)
 const QueryArgSchema = z.string().min(1).max(CONTEXT_WINDOWS_QUERY_MAX_CHARS)
@@ -301,7 +308,9 @@ const pageSizeProperty = {
 }
 const cursorProperty = {
   type: 'string',
-  description: 'Opaque cursor from a previous result for the same query.'
+  minLength: 0,
+  description:
+    'Opaque cursor from a previous result for the same query. Omit on the first page; an empty string is treated as absent.'
 }
 const queryProperty = {
   type: 'string',

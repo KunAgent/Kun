@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import type { DesignArtifact } from '../../../design/design-types'
 import { designDocumentResolvedEngine } from '../../../design/design-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
-import type { DesignRuntimeQualityPayload } from '../../../design/design-html-quality'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 import {
   findDesignBoardArtifact,
@@ -55,8 +54,6 @@ export type DesignDocumentCanvasSurfaceProps = {
     brief: string
   ) => boolean | Promise<boolean>
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
   /** Title, read-only notice and host buttons for the floating canvas chrome. */
   chrome?: CanvasViewportChromeSlots
 }
@@ -106,8 +103,6 @@ export function DesignDocumentCanvasSurface({
   onScreenCreated,
   onSvgCreated,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair,
   chrome
 }: DesignDocumentCanvasSurfaceProps): ReactElement {
   const document = useDesignWorkspaceStore((state) =>
@@ -315,8 +310,6 @@ export function DesignDocumentCanvasSurface({
         syncHtmlScreens
         onImplementDesign={onImplementDesign}
         onUseElementAsContext={onUseElementAsContext}
-        onRuntimeQualityFindings={onRuntimeQualityFindings}
-        onRequestQualityRepair={onRequestQualityRepair}
         onDocumentLoadStateChange={handleDocumentLoadStateChange}
         chrome={chrome}
       />

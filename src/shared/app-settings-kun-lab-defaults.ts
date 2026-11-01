@@ -27,7 +27,7 @@ export function defaultKunLabSettings(): KunLabSettingsV1 {
     projectBoard: {
       enabled: false
     },
-    assistantMailbox: { enabled: false }
+    assistantMailbox: { enabled: false, autoContinueEnabled: false }
   }
 }
 

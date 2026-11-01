@@ -394,6 +394,8 @@ describe('ContextWindowService', () => {
       await expect(service.notes.readFile('thread1', { path: 'missing.md' })).rejects.toThrow('history_search_contents')
       await service.notes.writeFile('thread1', { path: 'a.md', text: 'A', expectedRevision: 0 })
       await expect(service.notes.readFile('thread1', { path: 'a.md', cursor: 'invalid' })).rejects.toThrow('without cursor')
+      // Models send the full argument object; an empty cursor means "first page".
+      expect((await service.notes.readFile('thread1', { path: 'a.md', cursor: '', offset: 0 })).revision).toBe(1)
       expect((await service.notes.readFile('thread1', { path: 'a.md' })).revision).toBe(1)
     })
     it('isolates forked notes and keeps parent writes private', async () => {

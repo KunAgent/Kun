@@ -159,6 +159,7 @@ export class HybridThreadStore implements ThreadStore {
   }
 
   async list(options: ThreadStoreListOptions = {}): Promise<ThreadSummary[]> {
+    if (options.workbenchScope === 'work') return (await this.listPage(options)).threads
     await this.ready()
     await this.repairDirtyIndexThreads()
     // SQLite is only a complete list source once startup backfill has finished.

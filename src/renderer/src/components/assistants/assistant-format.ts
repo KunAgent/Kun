@@ -11,6 +11,7 @@ const STATUS_KEYS: Record<RowStatus, string> = {
   blocked: 'assistantMailboxStatusBlocked',
   failed: 'assistantMailboxStatusFailed',
   cancelled: 'assistantMailboxStatusCancelled',
+  cancel_requested: 'assistantMailboxStatusCancelRequested',
   enrolling: 'assistantStatusEnrolling'
 }
 

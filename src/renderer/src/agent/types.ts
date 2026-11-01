@@ -350,6 +350,7 @@ export type ReviewOutput = {
 
 /** Deterministic handoff marker; click expands the rebuilt brief. */
 export type HandoffBlock = {
+  continuationFailure?: import('./handoff-continuation').HandoffContinuationFailure
   kind: 'handoff'
   id: string
   turnId?: string

@@ -17,9 +17,10 @@ import type {
   HarnessSession,
   HarnessSessionStartInput
 } from '../../session/harness-session.js'
-import { HarnessTransportError } from '../../session/harness-session.js'
+import { HarnessTransportError, HarnessSessionUnavailableError } from '../../session/harness-session.js'
 import { CodexClient, type CodexDebugLog } from './codex-client.js'
 import { CodexSession, type CodexRequestRouter } from './codex-session.js'
+import { codexKunToolsConfig } from './codex-kun-tools.js'
 
 export type CodexAgentOptions = {
   /** Test seam: pre-built client/process pair skips spawn + handshake. */
@@ -193,15 +194,16 @@ export class CodexAgent implements HarnessAgent {
       })
       return this.bindSession(thread.id, input)
     } catch (error) {
-      // Dead/garbage-collected native state → SessionTurnRuntime rebases
-      // portable history onto a fresh thread via coordinator.rejectResume.
-      throw new HarnessTransportError(
-        'harness_not_ready',
-        `codex thread/resume failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        error
-      )
+      input.signal.throwIfAborted()
+      // A timeout, busy server, config error or malformed response says nothing
+      // about durable history. Preserve the original error and binding instead.
+      if (error instanceof HarnessTransportError && error.code === 'agent_error'
+        && (error.message === 'no such thread'
+          || error.message === `thread not found: ${nativeId}`
+          || error.message === `no rollout found for thread id ${nativeId}`)) {
+        throw new HarnessSessionUnavailableError(`codex thread/resume failed: ${error.message}`, error)
+      }
+      throw error
     }
   }
 
@@ -268,8 +270,11 @@ function threadParams(
   approvalsReviewer: 'user'
   sandbox: 'read-only'
   developerInstructions?: string
+  config?: Record<string, unknown>
 } {
+  const config = codexKunToolsConfig(input.kunToolServers)
   return {
+    ...(config ? { config } : {}),
     cwd: input.workspacePath,
     ...(input.systemInstructions ? { developerInstructions: input.systemInstructions.join('\n\n') } : {}),
     ...(input.model ? { model: input.model } : {}),

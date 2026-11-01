@@ -112,4 +112,4 @@ export function startNewArtifact(prompt: string): void {
   }, 0)
 }
 
-export const NEW_ARTIFACT_KINDS: readonly LibraryArtifactKind[] = ['design', 'doc', 'slides', 'board']
+export const NEW_ARTIFACT_KINDS: readonly LibraryArtifactKind[] = ['design', 'doc', 'slides', 'report', 'board']

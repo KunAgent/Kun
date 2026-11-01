@@ -18,11 +18,12 @@ import { paperReadingQuestion, type PaperReadingPurpose } from './paper-reading-
  * scoped material and single-model-request rules as the reading dialog
  * apply; the user confirms provider disclosure once for the batch.
  */
-export type PaperBatchPaper = { unitDir: string; meta: PaperUnitMeta }
+export type PaperBatchPaper = { unitDir: string; meta: PaperUnitMeta; workspaceRoot?: string }
 
 export type PaperBatchItemStatus = 'waiting' | 'preparing' | 'running' | 'done' | 'skipped' | 'failed' | 'canceled'
 
 export type PaperBatchItem = {
+  workspaceRoot?: string
   unitDir: string
   title: string
   status: PaperBatchItemStatus
@@ -70,13 +71,15 @@ const TITLE_MAX = 60
 
 let activeTurn: { threadId: string; turnId: string } | null = null
 
-function patchItem(jobId: string, unitDir: string, patch: Partial<PaperBatchItem>): void {
+function patchItem(jobId: string, paper: PaperBatchPaper, patch: Partial<PaperBatchItem>): void {
   usePaperBatchInterpret.setState((state) => {
     if (state.job?.id !== jobId) return state
     return {
       job: {
         ...state.job,
-        items: state.job.items.map((item) => item.unitDir === unitDir ? { ...item, ...patch } : item)
+        items: state.job.items.map((item) => item.unitDir === paper.unitDir &&
+          normalizePath(item.workspaceRoot ?? state.job!.workspaceRoot) === normalizePath(paper.workspaceRoot ?? state.job!.workspaceRoot)
+          ? { ...item, ...patch } : item)
       }
     }
   })
@@ -124,25 +127,25 @@ async function interpretOne(input: {
   t: Translate
 }): Promise<void> {
   const { job, paper, t } = input
-  const root = job.workspaceRoot
-  patchItem(job.id, paper.unitDir, { status: 'preparing' })
+  const root = normalizePath(paper.workspaceRoot ?? job.workspaceRoot)
+  patchItem(job.id, paper, { status: 'preparing' })
   const material = await window.kunGui.paperEvidenceMaterial({ workspaceRoot: root, unitDir: paper.unitDir })
     .catch((error: unknown) => ({ ok: false as const, message: error instanceof Error ? error.message : String(error) }))
   if (jobCanceled(job.id)) return
   if (!material.ok) {
-    patchItem(job.id, paper.unitDir, { status: 'failed', detail: material.message })
+    patchItem(job.id, paper, { status: 'failed', detail: material.message })
     return
   }
   const fullText = material.sourceText
   const sourceText = fullText.slice(0, PAPER_CONTEXT_MAX_CHARS)
   const limited = material.abstractOnly || material.textPartial || fullText.length > PAPER_CONTEXT_MAX_CHARS
   if (!sourceText.trim()) {
-    patchItem(job.id, paper.unitDir, { status: 'skipped', detail: t('paperBatchNoText') })
+    patchItem(job.id, paper, { status: 'skipped', detail: t('paperBatchNoText') })
     return
   }
   // Deeper purposes need the full text; screening works on what there is.
   if (limited && job.purpose !== 'quick-screen') {
-    patchItem(job.id, paper.unitDir, { status: 'skipped', detail: t('paperBatchInsufficient') })
+    patchItem(job.id, paper, { status: 'skipped', detail: t('paperBatchInsufficient') })
     return
   }
   const context = createPaperTurnContext({
@@ -173,9 +176,9 @@ async function interpretOne(input: {
   useChatStore.setState((state) => ({
     threads: state.threads.some((item) => item.id === thread.id) ? state.threads : [thread, ...state.threads]
   }))
-  patchItem(job.id, paper.unitDir, { status: 'running', threadId: thread.id })
+  patchItem(job.id, paper, { status: 'running', threadId: thread.id })
   if (jobCanceled(job.id)) {
-    patchItem(job.id, paper.unitDir, { status: 'canceled' })
+    patchItem(job.id, paper, { status: 'canceled' })
     return
   }
   const question = paperReadingQuestion(job.purpose, { background: '', goal: '', question: '', limited })
@@ -192,7 +195,7 @@ async function interpretOne(input: {
   const outcome = await waitForTurn(thread.id, accepted.turnId, job.id)
   activeTurn = null
   const detail = outcome === 'input' ? t('paperBatchNeedsInput') : outcome === 'timeout' ? t('paperBatchTimeout') : undefined
-  patchItem(job.id, paper.unitDir, {
+  patchItem(job.id, paper, {
     status: outcome === 'done' ? 'done' : outcome === 'canceled' ? 'canceled' : 'failed',
     ...(detail ? { detail } : {})
   })
@@ -212,14 +215,15 @@ export async function startPaperBatchInterpret(input: {
   model: string
   language: string
   t: Translate
-  onOpenSession?: (threadId: string, unitDir: string) => void
+  onOpenSession?: (threadId: string, unitDir: string, workspaceRoot?: string) => void
 }): Promise<void> {
   const analyticsIntent = captureWorkSubmissionIntent()
   if (usePaperBatchInterpret.getState().job?.running) return
   const root = normalizePath(input.workspaceRoot)
   const items: PaperBatchItem[] = input.papers.map((paper) => {
-    const existing = input.skipExisting && paperSessionIds(root, paper.unitDir).length > 0
+    const existing = input.skipExisting && paperSessionIds(normalizePath(paper.workspaceRoot ?? root), paper.unitDir).length > 0
     return {
+      ...(paper.workspaceRoot ? { workspaceRoot: normalizePath(paper.workspaceRoot) } : {}),
       unitDir: paper.unitDir,
       title: paper.meta.title,
       status: existing ? 'skipped' : 'waiting',
@@ -237,12 +241,13 @@ export async function startPaperBatchInterpret(input: {
   usePaperBatchInterpret.setState({ job, request: null })
   for (const paper of input.papers) {
     if (jobCanceled(job.id)) break
-    const item = usePaperBatchInterpret.getState().job?.items.find((candidate) => candidate.unitDir === paper.unitDir)
+    const item = usePaperBatchInterpret.getState().job?.items.find((candidate) => candidate.unitDir === paper.unitDir &&
+      normalizePath(candidate.workspaceRoot ?? root) === normalizePath(paper.workspaceRoot ?? root))
     if (item?.status !== 'waiting') continue
     try {
       await interpretOne({ job, analyticsIntent, paper, providerId: input.providerId, model: input.model, language: input.language, t: input.t })
     } catch (error) {
-      patchItem(job.id, paper.unitDir, { status: 'failed', detail: error instanceof Error ? error.message : String(error) })
+      patchItem(job.id, paper, { status: 'failed', detail: error instanceof Error ? error.message : String(error) })
     }
   }
   const final = usePaperBatchInterpret.getState().job
@@ -251,7 +256,7 @@ export async function startPaperBatchInterpret(input: {
   usePaperBatchInterpret.setState({ job: { ...final, items: settled, running: false } })
   void useChatStore.getState().refreshThreads()
   const done = settled.filter((item) => item.status === 'done')
-  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root) return
+  if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== root && useChatStore.getState().route !== 'papers') return
   const first = done[0]
   usePaperStore.getState().setNotice({
     tone: done.length > 0 ? 'success' : 'info',
@@ -261,7 +266,7 @@ export async function startPaperBatchInterpret(input: {
       failed: settled.filter((item) => item.status === 'failed').length
     }),
     ...(first?.threadId && input.onOpenSession ? {
-      action: { label: input.t('paperBatchOpenFirst'), run: () => input.onOpenSession?.(first.threadId!, first.unitDir) }
+      action: { label: input.t('paperBatchOpenFirst'), run: () => input.onOpenSession?.(first.threadId!, first.unitDir, first.workspaceRoot ?? root) }
     } : {})
   })
 }

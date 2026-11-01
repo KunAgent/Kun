@@ -466,6 +466,11 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
       guiDesignCanvas: input.turn.guiDesignCanvas === true,
       guiExcalidrawCanvas: input.turn.guiExcalidrawCanvas === true,
       guiDesignMode: input.turn.guiDesignMode === true,
+      // Gate the whole batch before dispatch: a browser call may precede the
+      // design publication in the same model response.
+      designPreviewOnly: prepared.toolDiscoveryContext.designPreviewOnly === true ||
+        (prepared.clientSurface === 'gui' && calls.some((call) =>
+          call.toolName === 'design_open' || call.toolName === 'design_component')),
       agentSurface: input.turn.agentSurface ?? 'code',
       guiDesignArtifact: input.turn.guiDesignArtifact,
       modelProviderId: input.modelProviderId,

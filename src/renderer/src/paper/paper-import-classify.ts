@@ -1,3 +1,4 @@
+import { parseBibtexEntries } from '@shared/paper/paper-bibtex'
 /**
  * Per-line import classification for the multiline import dialog (PM4).
  * Pure functions so the queue and tests share one definition of "what is
@@ -49,20 +50,25 @@ export function classifyPaperImportLine(raw: string): PaperImportLine {
   return { raw, kind: 'title', ref: line }
 }
 
-/**
- * Split a textarea blob into lines. A BibTeX paste is a multi-line block —
- * detect a leading `@entry{` and treat the whole blob as one bibtex line.
- */
+/** Keep BibTeX entries intact while accepting ordinary import lines before or after them. */
 export function parsePaperImportInput(text: string): PaperImportLine[] {
   const trimmed = text.trim()
   if (!trimmed) return []
-  if (/^@\w+\s*\{/m.test(trimmed)) {
-    return [{ raw: trimmed, kind: 'bibtex', ref: trimmed }]
+  const linesOf = (value: string): PaperImportLine[] => value.split(/\r?\n/)
+    .map(classifyPaperImportLine).filter((line) => line.kind !== 'empty')
+  if (!/^@\w+\s*\{/m.test(trimmed)) return linesOf(trimmed)
+  const entries = parseBibtexEntries(trimmed)
+  if (!entries.length) return [{ raw: trimmed, kind: 'bibtex', ref: trimmed }]
+  const lines: PaperImportLine[] = []
+  let cursor = 0
+  for (const entry of entries) {
+    const start = trimmed.indexOf(entry.raw, cursor)
+    lines.push(...linesOf(trimmed.slice(cursor, start)))
+    lines.push({ raw: entry.fields.title || entry.citeKey, kind: 'bibtex', ref: entry.raw })
+    cursor = start + entry.raw.length
   }
-  return trimmed
-    .split(/\r?\n/)
-    .map((line) => classifyPaperImportLine(line))
-    .filter((line) => line.kind !== 'empty')
+  lines.push(...linesOf(trimmed.slice(cursor)))
+  return lines
 }
 
 /** Queue entry for a picked/dropped local PDF (path on `ref`). */

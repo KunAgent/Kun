@@ -24,20 +24,21 @@ class EndlessDistinctReadsModel implements ModelClient {
   }
 }
 
+const distinctReadTool = () => LocalToolHost.defineTool({
+  name: 'read',
+  description: 'read',
+  inputSchema: { type: 'object', properties: { path: { type: 'string' } }, additionalProperties: false },
+  policy: 'auto',
+  sideEffect: 'read-only',
+  execute: async (args) => ({ output: { path: args.path, content: 'export {}' } })
+})
+
 describe('child agent turn budget stops', () => {
   it('names the step budget instead of reporting only the last sentence', async () => {
     const model = new EndlessDistinctReadsModel()
-    const read = LocalToolHost.defineTool({
-      name: 'read',
-      description: 'read',
-      inputSchema: { type: 'object', properties: { path: { type: 'string' } }, additionalProperties: false },
-      policy: 'auto',
-      sideEffect: 'read-only',
-      execute: async (args) => ({ output: { path: args.path, content: 'export {}' } })
-    })
     const executor = createChildAgentExecutor({
       model,
-      toolHost: new LocalToolHost({ tools: [read] }),
+      toolHost: new LocalToolHost({ tools: [distinctReadTool()] }),
       prefix: createImmutablePrefix({ systemPrompt: 'test' }),
       defaultModel: model.model,
       runtime: { turnLimits: { maxSteps: 3 } } as RuntimeTuningConfig
@@ -59,5 +60,35 @@ describe('child agent turn budget stops', () => {
       result: { summary: expect.stringContaining('Checking file') }
     })
     expect(model.requests).toBe(3)
+  })
+
+  it('gives an explore-profile worker the configured budget, not the Fast Context cap', async () => {
+    // Regression: profile 'explore' used to select the four-step Fast Context
+    // episode, so an ADE dispatch of Repository Explorer died at step 4 even
+    // with a larger configured budget.
+    const model = new EndlessDistinctReadsModel()
+    const executor = createChildAgentExecutor({
+      model,
+      toolHost: new LocalToolHost({ tools: [distinctReadTool()] }),
+      prefix: createImmutablePrefix({ systemPrompt: 'test' }),
+      defaultModel: model.model,
+      runtime: { turnLimits: { maxSteps: 6 } } as RuntimeTuningConfig
+    })
+
+    await expect(executor({
+      childId: 'child_explore_steps',
+      parentThreadId: 'parent',
+      parentTurnId: 'turn_parent',
+      prompt: 'trace the browser auto-open chain',
+      workspace: '/workspace',
+      model: model.model,
+      profile: 'explore',
+      toolPolicy: 'readOnly',
+      signal: new AbortController().signal
+    })).rejects.toMatchObject({
+      message: 'Child stopped: turn exceeded 6 model steps',
+      failure: { source: 'runtime', code: 'turn_step_limit' }
+    })
+    expect(model.requests).toBe(6)
   })
 })

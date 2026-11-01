@@ -35,7 +35,12 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
 
   async function recover(): Promise<void> {
     input.signal?.throwIfAborted()
-    const records = await Promise.all(paths.map(readReservation))
+    const states = await Promise.all(paths.map(readReservation))
+    // An unreadable record is not evidence that its owner exited. Stopping
+    // processes on unknown ownership is destructive, so the claim path repairs
+    // that path instead: it verifies live owners and archives the rest.
+    if (states.some((state) => state.kind === 'unreadable')) return
+    const records = states.map((state) => state.kind === 'record' ? state.value : null)
     const reservation = records.find((record) => record !== null)
     if (!reservation) return
     for (const record of records) {
@@ -73,7 +78,7 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
       assertOwnerExited()
       for (const path of paths) {
         const current = await readReservation(path)
-        if (JSON.stringify(current) !== JSON.stringify(reservation)) {
+        if (current.kind !== 'record' || JSON.stringify(current.value) !== JSON.stringify(reservation)) {
           throw new Error('Application session changed during recovery; retry to recheck ownership')
         }
       }
@@ -124,9 +129,19 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
   }
 }
 
-async function readReservation(path: string): Promise<Reservation | null> {
-  try { return AppSessionReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8'))) }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error }
+type ReservationState =
+  | { kind: 'record'; value: Reservation }
+  | { kind: 'missing' }
+  | { kind: 'unreadable' }
+
+async function readReservation(path: string): Promise<ReservationState> {
+  let text: string
+  try { text = await readFile(join(path, 'owner.json'), 'utf8') } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
+    throw error
+  }
+  try { return { kind: 'record', value: AppSessionReservationSchema.parse(JSON.parse(text)) } }
+  catch { return { kind: 'unreadable' } }
 }
 
 async function readParticipants(path: string): Promise<Participant[]> {

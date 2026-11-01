@@ -162,6 +162,15 @@ export const clawTaskFromTextPayloadSchema = z
   })
   .strict()
 
+const scheduleTaskHarnessSchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  credentialMode: z.string().trim().max(32).optional(),
+  providerId: z.string().trim().max(128).optional(),
+  model: z.string().trim().max(256).optional(),
+  accountId: z.string().trim().max(128).optional(),
+  reasoningEffort: z.string().trim().max(32).optional()
+}).strict()
+
 export const scheduleTaskCreatePayloadSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
@@ -174,6 +183,7 @@ export const scheduleTaskCreatePayloadSchema = z
     reasoningEffort: scheduleReasoningEffortSchema,
     mode: z.enum(['agent', 'plan']),
     orchestration: z.enum(['direct', 'graph']),
+    harness: scheduleTaskHarnessSchema.optional(),
     schedule: z.object({
       kind: z.literal('at'),
       atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),
@@ -188,6 +198,7 @@ export const scheduleTaskUpdatePayloadSchema = z
     providerId: z.string().trim().min(1).max(128),
     model: modelIdSchema,
     reasoningEffort: scheduleReasoningEffortSchema,
+    harness: scheduleTaskHarnessSchema.optional(),
     schedule: z.object({
       kind: z.literal('at'),
       atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),

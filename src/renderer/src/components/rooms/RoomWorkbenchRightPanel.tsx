@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileEdit, Folders, Globe2, IdCard, MessagesSquare, Shirt, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference, RoomMessage } from '@shared/rooms-api'
@@ -10,7 +10,9 @@ import { WorkbenchFileTreeSidePanel } from '../workbench/WorkbenchFileTreeSidePa
 import type { ChatFileTreeReference } from '../chat/ChatFileTreePanel'
 import type { WorkbenchFileTreeSidePanelView } from '../workbench/useWorkbenchFileTreeController'
 import { WorkbenchRightSidebar } from '../workbench/WorkbenchRightSidebar'
-import { WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
+import { WorkbenchSideRailDivider, WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
+import { RailPortal } from '../workbench/rail-slot'
+import { RailCollapseButton, useRailCollapseStore } from '../workbench/rail-collapse'
 import { useRoomWorkbenchLayout } from './useRoomWorkbenchLayout'
 import { CONVERSATION_INFO_TAB, ROOM_COLLABORATION_TAB, type RoomWorkbenchPanel } from './useRoomWorkbenchPanel'
 import { useRoomRun } from './useRoomRun'
@@ -81,15 +83,20 @@ export function RoomWorkbenchRightPanel({
     if (id === ROOM_COLLABORATION_TAB) onCollaborationClose?.()
     panel.closeTab(id)
   }
-  const tools = [
-    ...(room && info ? [{ id: CONVERSATION_INFO_TAB, label: infoTitle ?? t('conversationInfoTab'), icon: IdCard }] : []),
-    { id: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
-    { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
+  const railCollapsed = useRailCollapseStore((state) => state.collapsed)
+  // Same layout as the Code and Work rails: workspace tools, then the conversation's
+  // own tools, with the wardrobe pinned to the bottom.
+  const toolGroups = [[
     { id: BUILTIN_RIGHT_PANEL_IDS.files, label: t('rightPanelFiles'), icon: Folders },
+    { id: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
+    { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 }
+  ], [
     ...(room?.conversationKind === 'user_agent' ? [{ id: ROOM_COLLABORATION_TAB, label: t('roomsAgentSession'), icon: MessagesSquare }]
       : [{ id: ROOM_COLLABORATION_TAB, label: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }), icon: Users }]),
+    ...(room && info ? [{ id: CONVERSATION_INFO_TAB, label: infoTitle ?? t('conversationInfoTab'), icon: IdCard }] : [])
+  ], [
     { id: BUILTIN_RIGHT_PANEL_IDS.wardrobe, label: t('rightPanelWardrobe'), icon: Shirt }
-  ]
+  ]]
   const fileTitle = panel.contentTarget ? contentPreviewTitle ?? panel.contentTarget.reference.titleSnapshot
     : panel.fileTarget?.path.replaceAll('\\', '/').split('/').at(-1)
   const titles = {
@@ -163,16 +170,24 @@ export function RoomWorkbenchRightPanel({
           </div>
         })}
     </WorkbenchRightSidebar> : null}
-    <WorkbenchSideRailSurface role="navigation" aria-label={t('rightPanelTabs')} className="rooms-workbench-rail">
-      {tools.map(({ id, label, icon: Icon }) => <button key={id} type="button"
-        className={sideRailButtonClass(tabs.expanded && tabs.activeId === id)} aria-label={label} data-tooltip={label}
-        data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : id === CONVERSATION_INFO_TAB ? 'info' : id === ROOM_COLLABORATION_TAB ? 'session'
-          : id === BUILTIN_RIGHT_PANEL_IDS.wardrobe ? 'wardrobe' : undefined}
-        aria-pressed={tabs.expanded && tabs.activeId === id}
-        onClick={() => tabs.expanded && tabs.activeId === id ? panel.collapse() : open(id)}>
-        <Icon className="h-4 w-4" strokeWidth={1.75} />
-      </button>)}
-    </WorkbenchSideRailSurface>
+    {railCollapsed ? null : <RailPortal>
+      <WorkbenchSideRailSurface role="navigation" aria-label={t('rightPanelTabs')} className="rooms-workbench-rail">
+        <RailCollapseButton />
+        <WorkbenchSideRailDivider />
+        {toolGroups.map((group, index) => <Fragment key={index}>
+          {index === toolGroups.length - 1 ? <span className="flex-1" aria-hidden="true" /> : null}
+          {index > 0 ? <WorkbenchSideRailDivider /> : null}
+          {group.map(({ id, label, icon: Icon }) => <button key={id} type="button"
+            className={sideRailButtonClass(tabs.expanded && tabs.activeId === id)} aria-label={label} data-tooltip={label}
+            data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : id === CONVERSATION_INFO_TAB ? 'info' : id === ROOM_COLLABORATION_TAB ? 'session'
+              : id === BUILTIN_RIGHT_PANEL_IDS.wardrobe ? 'wardrobe' : undefined}
+            aria-pressed={tabs.expanded && tabs.activeId === id}
+            onClick={() => tabs.expanded && tabs.activeId === id ? panel.collapse() : open(id)}>
+            <Icon className="h-4 w-4" strokeWidth={1.75} />
+          </button>)}
+        </Fragment>)}
+      </WorkbenchSideRailSurface>
+    </RailPortal>}
   </>
 }
 

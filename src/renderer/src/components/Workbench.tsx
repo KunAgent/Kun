@@ -180,6 +180,7 @@ export function Workbench(): ReactElement {
     updateComposerExecutionSettings
   } = useWorkbenchExecutionSettings({
     setError,
+    activeThreadId,
     onSettingsUpdated: () => void probeRuntime('background')
   })
   const busyRef = useRef(busy)
@@ -459,8 +460,6 @@ export function Workbench(): ReactElement {
     designThreads,
     designHistoryThreadIds,
     hasRegisteredHistory: designHasRegisteredHistory,
-    handleDesignQualityRepairRequest,
-    handleDesignRuntimeQualityFindings,
     implementDesignInCode,
     openDesignMode,
     sendCodeCanvasPrompt,
@@ -634,8 +633,7 @@ export function Workbench(): ReactElement {
     openDesignDocumentInWhiteboard, extensionRightRailItems, extensionRightPanelItems,
     openRightPanelTab, activateRightPanelTab, closeCodeRightTool, toggleFileTreeSidePanel,
     setError, canvasDocumentKey, canvasDocument, sendCodeCanvasPrompt,
-    implementDesignInCode, selectCanvasShape, handleDesignHtmlElementAsContext,
-    handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest
+    implementDesignInCode, selectCanvasShape, handleDesignHtmlElementAsContext
   })
   return <>
     {autoPlanBuildDialog}
@@ -651,7 +649,7 @@ export function Workbench(): ReactElement {
     openCodeMode, openAdeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy, implementDesignInCode,
     handleDesignHtmlElementAsContext, selectCanvasShape, sendDesignPrompt,
-    handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest, rightPanelSharedProps,
+    rightPanelSharedProps,
     designWorkspaceRoot, workspaceRoot, designAssistantModel, resolvedDesignAssistantProviderId,
     designAssistantPickList, setDesignAssistantModel, designComposerReasoningEffort,
     composerFastMode, setDesignComposerReasoningEffort, setComposerFastMode, designContextChips,
@@ -689,7 +687,7 @@ export function Workbench(): ReactElement {
       shortcutContext={{ composerMode, setComposerMode, handleGuiPlanCommand, createThread,
         chooseWorkspace, toggleTerminal, openSettings, useWorktreePool, setUseWorktreePool,
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
-      actions={{ routes: { chat: openCodeMode, 'agent-chat': () => setRoute('agent-chat'), ade: openAdeMode, write: openWriteMode, design: openDesignMode, rooms: () => setRoute('rooms'),
+      actions={{ routes: { chat: openCodeMode, 'agent-chat': () => setRoute('agent-chat'), ade: openAdeMode, write: openWriteMode, papers: () => setRoute('papers'), design: openDesignMode, rooms: () => setRoute('rooms'),
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
         claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView, wardrobe: () => setRoute('wardrobe'), artifacts: () => setRoute('artifacts') },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,

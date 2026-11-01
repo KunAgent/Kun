@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Blocks, Bot, FileDiff, Gauge, ListTree, Quote } from 'lucide-react'
+import { Blocks, Bot, Compass, FileDiff, Gauge, ListTree, Quote } from 'lucide-react'
 import type { WriteRightPanelId } from '../../write/write-right-panel-state'
 import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
 
@@ -8,6 +8,7 @@ const LABEL_KEYS: Record<WriteRightPanelId, string> = {
   outline: 'workRailOutline',
   review: 'workRailReview',
   references: 'workRailReferences',
+  papers: 'workRailPapers',
   subagents: 'rightPanelSubagents',
   mcpSkills: 'rightPanelMcpSkills',
   usage: 'rightPanelProviderQuotas'
@@ -35,6 +36,8 @@ export function WriteRightPanelIcon({
       return <FileDiff {...props} />
     case 'references':
       return <Quote {...props} />
+    case 'papers':
+      return <Compass {...props} />
     case 'subagents':
       return <Bot {...props} />
     case 'mcpSkills':

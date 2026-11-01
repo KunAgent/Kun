@@ -59,11 +59,11 @@ export const CREATE_PLAN_INPUT_SCHEMA: Record<string, unknown> = {
     },
     plan_id: {
       type: 'string',
-      description: 'Optional reserved plan id; when supplied, must match the active plan context.'
+      description: 'Legacy routing hint; omit it. For GUI-reserved plans the host owns the id; otherwise the id is derived from the resolved target.'
     },
     plan_relative_path: {
       type: 'string',
-      description: 'Optional reserved relative path; must live directly under .kunsdd/plan.'
+      description: 'Optional target relative path for context-free Plan turns; must live directly under .kunsdd/plan. Omit for GUI-reserved plans: the host owns the target and ignores this value.'
     }
   },
   required: ['markdown'],
@@ -201,9 +201,9 @@ async function listExistingPlanRelativePaths(
  *
  * 1. Advertises during any Plan-mode turn, or when an explicit GUI
  *    plan context is present.
- * 2. With a GUI plan context, writes only to the reserved path and
- *    uses the host-reserved operation while enforcing workspace/id
- *    parity (refine-in-place).
+ * 2. With a GUI plan context, uses the host-owned target and operation,
+ *    enforcing workspace parity and refine-in-place. Draft filenames may
+ *    be allocated from the title unless the host fixed the path.
  * 3. Without one (free-form plan mode), allocates a fresh
  *    `.kunsdd/plan/<feature>.md` under the active workspace.
  * 4. Writes atomically, observes the abort signal, and returns a
@@ -353,10 +353,9 @@ export async function executeCreatePlanTool(
 }
 
 /**
- * Strict resolution for turns that carry a renderer-advertised GUI plan
- * context: the tool may only write to the reserved path and uses the
- * host-owned operation, with parity checks on workspace, id, and
- * explicit path overrides.
+ * Host-owned resolution for turns carrying a reserved GUI plan context.
+ * Model routing hints cannot select another plan or block saving the active
+ * one. Workspace and path safety are checked against the host context.
  */
 async function resolveReservedTarget(
   input: Partial<CreatePlanToolInput>,
@@ -377,12 +376,6 @@ async function resolveReservedTarget(
   if (contextPlan.operation === 'draft' && !isGuiPlanCurrentRelativePath(reservedRelativePath)) {
     return { error: 'legacy .deepseekgui/plan paths can only be refined' }
   }
-  if (input.plan_relative_path && toRelativePath(input.plan_relative_path) !== contextPlan.relativePath) {
-    return { error: 'plan_relative_path does not match the reserved plan path' }
-  }
-  if (input.plan_id && input.plan_id !== contextPlan.planId) {
-    return { error: 'plan_id does not match the reserved plan id' }
-  }
   const workspaceRoot = contextPlan.workspaceRoot ?? context.workspace
   if (!workspaceRoot) {
     return { error: 'workspace root is required' }
@@ -400,7 +393,7 @@ async function resolveReservedTarget(
     workspaceRoot,
     relativePath,
     planId: relativePath === reservedRelativePath
-      ? contextPlan.planId ?? input.plan_id ?? buildGuiPlanId(workspaceRoot, relativePath)
+      ? contextPlan.planId ?? buildGuiPlanId(workspaceRoot, relativePath)
       : buildGuiPlanId(workspaceRoot, relativePath),
     operation: contextPlan.operation,
     sourceRequest: contextPlan.sourceRequest,

@@ -58,6 +58,44 @@ app.on('window-all-closed', () => app.quit())
   assert.equal(await page.locator('.rooms-message-user .rooms-avatar').evaluateAll((items) =>
     items.filter((item) => getComputedStyle(item).display !== 'none').length), 0, 'own messages carry no avatar')
 
+  // Focus mode drops avatar art and its column, keeping names and run status.
+  const visibleAvatars = () => page.locator('.rooms-message-row > .rooms-avatar').evaluateAll((items) =>
+    items.filter((item) => getComputedStyle(item).display !== 'none').length)
+  const titleAvatar = () => page.locator('.direct-chat-title > .rooms-avatar')
+    .evaluate((item) => getComputedStyle(item).display)
+  const visibleSpacers = () => page.locator('.rooms-message-avatar-spacer').evaluateAll((items) =>
+    items.filter((item) => getComputedStyle(item).display !== 'none').length)
+  // Distance between the message column and the row's left edge: the avatar column.
+  const avatarColumn = () => page.locator('.rooms-message-member').first().evaluate((row) => {
+    const content = row.querySelector('.rooms-message-content')
+    return content ? Math.round(content.getBoundingClientRect().left - row.getBoundingClientRect().left) : -1
+  })
+  assert.ok(await visibleAvatars() > 0, 'avatars show without focus mode')
+  assert.ok(await avatarColumn() > 20, 'the avatar column is reserved without focus mode')
+  assert.notEqual(await titleAvatar(), 'none', 'the chat title shows its portrait without focus mode')
+  await page.evaluate(() => window.roomTurnFixture.focus(true))
+  await page.waitForTimeout(120)
+  assert.equal(await titleAvatar(), 'none', 'the chat title drops its portrait in focus mode')
+  assert.equal(await visibleAvatars(), 0, 'focus mode drops message and activity avatars')
+  assert.equal(await visibleSpacers(), 0, 'focus mode drops the avatar column')
+  assert.equal(await avatarColumn(), 0, 'no avatar column is reserved in focus mode')
+  assert.equal(await page.locator('.rooms-message-author').count(), 2, 'each run header keeps its author entry')
+  assert.deepEqual(await page.locator('.rooms-message-author').evaluateAll((items) => items.map((item) => ({
+    hidden: getComputedStyle(item).display === 'none', name: item.textContent
+  }))), [{ hidden: false, name: '小 Kun' }, { hidden: false, name: '小 Kun' }], 'the author names stay readable')
+  await page.locator('.rooms-message-author').first().focus()
+  assert.equal(await page.locator('.rooms-message-author').first().evaluate((item) => getComputedStyle(item).outlineStyle !== 'none'
+    || getComputedStyle(item).borderRadius !== '0px'), true, 'the author entry shows a focus ring')
+  await page.locator('.rooms-message-author').first().click()
+  assert.deepEqual(await page.evaluate(() => window.roomTurnFixture.members), ['kun'])
+  await screenshot('focus')
+  await page.evaluate(() => window.roomTurnFixture.focus(false))
+  await page.waitForTimeout(120)
+  assert.ok(await visibleAvatars() > 0, 'avatars return without focus mode')
+  assert.notEqual(await titleAvatar(), 'none', 'the chat title portrait returns')
+  assert.equal(await page.locator('.rooms-message-author').count(), 0)
+  await page.locator('.direct-chat-title').click()
+
   // Finished segments start folded; the live one opens because a step failed and one runs.
   assert.equal(await chips.count(), 3)
   assert.deepEqual(await chips.evaluateAll((items) => items.map((item) => item.getAttribute('aria-expanded'))), ['false', 'false', 'true'])
@@ -92,11 +130,25 @@ app.on('window-all-closed', () => app.quit())
   await page.evaluate(() => window.roomTurnFixture.theme('dark'))
   await page.waitForTimeout(150)
   await screenshot('dark')
+  await page.evaluate(() => window.roomTurnFixture.focus(true))
+  await page.waitForTimeout(120)
+  assert.equal(await visibleAvatars(), 0, 'dark focus mode drops avatars too')
+  assert.equal(await avatarColumn(), 0, 'dark focus mode reserves no avatar column')
+  await screenshot('dark-focus')
+  await page.evaluate(() => window.roomTurnFixture.focus(false))
+  await page.waitForTimeout(120)
+  assert.ok(await visibleAvatars() > 0, 'dark mode restores avatars')
   await page.evaluate(() => window.roomTurnFixture.theme('light'))
   await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(420, 900))
   await page.waitForFunction(() => innerWidth === 420)
   assert.ok(await page.locator('[data-rooms-workspace]').evaluate((element) => element.scrollWidth <= element.clientWidth + 1), 'no horizontal overflow when narrow')
   await screenshot('narrow')
+  await page.evaluate(() => window.roomTurnFixture.focus(true))
+  await page.waitForTimeout(120)
+  assert.equal(await visibleAvatars(), 0, 'narrow focus mode still drops avatars')
+  assert.ok(await page.locator('[data-rooms-workspace]').evaluate((element) => element.scrollWidth <= element.clientWidth + 1), 'no horizontal overflow when narrow in focus mode')
+  await screenshot('narrow-focus')
+  await page.evaluate(() => window.roomTurnFixture.focus(false))
   assert.deepEqual(errors, [], 'no renderer errors')
   console.log('PASS: one header per turn, folded work trail, decision line, result card, steer placeholder and labeled stop')
 } catch (error) {

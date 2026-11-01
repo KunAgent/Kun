@@ -57,6 +57,7 @@ jobs:
         run: >-
           npx vitest run
           src/renderer/src/components/rooms/AgentMemoryPanel.test.ts
+          src/renderer/src/components/rooms/AgentMemoryCandidates.test.ts
           src/renderer/src/components/memory/ProjectKnowledgePanel.test.ts
           src/renderer/src/components/memory/MemoryHistory.test.ts
           src/shared/project-memory-interoperability.test.ts
@@ -93,6 +94,15 @@ jobs:
           const persistence = JSON.parse(readFileSync(`${directory}/persistence-report.json`, 'utf8'))
           assert.deepEqual(persistence.erasure, { fileExists: false, retainedHistory: false, replayRecreated: false,
             unrelatedProjectRetained: true, sourceConversationRetained: true, sourceMessageRetained: true })
+          const approval = JSON.parse(readFileSync(`${directory}/targetless-approval-report.json`, 'utf8'))
+          assert.equal(approval.status, 'completed')
+          assert.equal(approval.createdCount, 1)
+          assert.equal(approval.locked, true)
+          assert.equal(approval.conversationId, approval.expectedConversationId)
+          assert.equal(approval.taskId, 'fixture-task')
+          assert.equal(approval.handoffId, 'fixture-handoff')
+          assert.equal(approval.visibleInTask, true)
+          assert.equal(approval.visibleOutsideTask, false)
           assert.ok(readdirSync(directory).filter(name => name.startsWith('electron-') && name.endsWith('.png')).length >= 8)
           NODE
       - name: Upload native screenshots and interaction report

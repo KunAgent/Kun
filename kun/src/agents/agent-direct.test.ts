@@ -18,7 +18,8 @@ import { quickCreateAgent } from './agent-chat-entry.js'
 import { openAgentConversation } from './agent-conversations.js'
 import { controlDirectRequest, updateDirectWorkspace, directActivity } from './agent-direct-service.js'
 import { AgentDirectRunner } from './agent-direct-runner.js'
-import { enqueuePrivateContinuation } from '../rooms/room-continuation-service.js'
+import { privateQueuedTurnAllowed } from '../rooms/private-turn-lifecycle.js'
+import { enqueuePrivateContinuation, roomContinuationIsCurrent, verifyPersonalAssistantSource } from '../rooms/room-continuation-service.js'
 import { ROOM_DIRECT_GUIDANCE } from '../rooms/room-collaboration-guidance.js'
 
 const cleanup: Array<() => Promise<void>> = []
@@ -505,4 +506,49 @@ it('does not acknowledge a recovered turn whose admission is still pending', asy
   expect((await f.advance(sent.requestId)).status).toBe('completed')
   expect(enqueue).toHaveBeenCalledTimes(1)
   expect(await f.store.list('agent_conversation_cursor')).toHaveLength(1)
+})
+
+it('personal assistant continuation requires a verified source, active budget, and current user consent', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'assistant-source', body: 'Delegate a task' })
+  const source = await f.advance(sent.requestId)
+  const thread = (await f.h.threadStore.get(source.threadId))!, now = new Date().toISOString()
+  thread.goal = { threadId: thread.id, objective: 'Finish the delegated request', status: 'active', tokenBudget: 10000,
+    tokensUsed: 1, timeUsedSeconds: 1, createdAt: now, updatedAt: now }
+  await f.h.threadStore.upsert(thread)
+  const taskId = '12345678-1234-1234-1234-123456789012', resultId = '12345678-1234-1234-1234-123456789013'
+  const input = { threadId: thread.id, sourceTurnId: source.turnId!, sourceCallId: 'call-1', assistantTaskId: taskId,
+    assistantOwnerId: '12345678-1234-1234-1234-123456789014', assistantResultId: resultId, goalCreatedAt: now,
+    kind: 'personal_assistant' as const, key: `assistant:${taskId}:${resultId}`, prompt: 'Untrusted assistant result', sourceFingerprint: '' }
+  const item = { kind: 'tool_result', callId: 'call-1', isError: false, output: { serverId: 'kun_assistants', toolName: 'assign_assistant_task',
+    result: { structuredContent: { task: { taskId } } } } }
+  const original = f.deps.sessions.loadItemPage
+  f.deps.sessions.loadItemPage = async () => ({ items: [item as never], hasMore: false, itemBytes: 1 })
+  let allowed = true
+  f.deps.assistantContinuationAuthority = async () => ({ authorized: allowed, result: { id: resultId, body: 'result' } })
+  try {
+    expect(await verifyPersonalAssistantSource(f.deps, input)).toMatchObject({ goalCreatedAt: now })
+    expect(await verifyPersonalAssistantSource(f.deps, { ...input, assistantTaskId: '12345678-1234-1234-1234-123456789099' })).toBeNull()
+    input.sourceFingerprint = (await verifyPersonalAssistantSource(f.deps, input))!.sourceFingerprint
+    expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+    expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+    const rows = await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId })
+    const request = rows.find(row => row.value.privateContinuation?.kind === 'personal_assistant')!
+    expect(request).toBeTruthy()
+    expect(await roomContinuationIsCurrent(f.deps, request.value)).toBe(true)
+    await f.runner.tick(request)
+    const admitted = (await f.store.get<RoomRequestState>('request', request.id))!
+    const queuedThread = (await f.h.threads.getMetadata(source.threadId))!
+    const queued = queuedThread.turns.find(turn => turn.id === admitted.value.turnId)
+    expect(queued?.status).toBe('queued')
+    expect(await privateQueuedTurnAllowed(f.deps.threadStore, queuedThread, queued!)).toBe(true)
+    allowed = false
+    expect(await privateQueuedTurnAllowed(f.deps.threadStore, queuedThread, queued!)).toBe(false)
+    await f.runner.tick(admitted)
+    expect((await f.store.get<RoomRequestState>('request', request.id))!.value.cancellationRequested).toBe(true)
+    expect(await roomContinuationIsCurrent(f.deps, request.value)).toBe(false)
+    expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'different' })).toBe('ignored')
+    allowed = true; thread.goal!.tokensUsed = 10000; await f.h.threadStore.upsert(thread)
+    expect(await roomContinuationIsCurrent(f.deps, request.value)).toBe(false)
+  } finally { f.deps.sessions.loadItemPage = original }
 })

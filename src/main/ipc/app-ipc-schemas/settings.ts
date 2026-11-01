@@ -413,6 +413,14 @@ const scheduledTaskPatchSchema = z.object({
   priority: z.number().int().min(0).max(100).optional(),
   dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(32).optional(),
   useWorktree: z.boolean().optional(),
+  harness: z.object({
+    id: z.string().trim().min(1).max(128),
+    credentialMode: z.string().trim().max(32).optional(),
+    providerId: z.string().trim().max(128).optional(),
+    model: z.string().trim().max(256).optional(),
+    accountId: z.string().trim().max(128).optional(),
+    reasoningEffort: z.string().trim().max(32).optional()
+  }).strict().optional(),
   schedule: scheduledTaskSchedulePatchSchema.optional(),
   createdAt: z.string().max(128).optional(),
   updatedAt: z.string().max(128).optional(),

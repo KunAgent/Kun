@@ -120,6 +120,22 @@ describe('delegation serviceTier propagation', () => {
     expect(executorInput?.serviceTier).toBeUndefined()
   })
 
+  it.each(['off', 'max', 'auto', 'xhigh'] as const)('keeps an explicit worker %s choice through the child request and resume', async (reasoningEffort) => {
+    dir = await mkdtemp(join(tmpdir(), 'delegation-reasoning-'))
+    const inputs: Array<Record<string, unknown>> = []
+    const runtime = makeRuntime(dir, async (input) => { inputs.push({ ...input }); return { summary: 'ok' } })
+    const record = await runtime.runChild({ parentThreadId: 'thr_parent', parentTurnId: 'turn_parent', launcher: 'manager-worker',
+      prompt: 'implement', profile: 'general', reasoningEffort, inheritedReasoningEffort: 'high', inheritSessionDefaults: true,
+      workspace: dir, security: { sandboxRoot: dir, memoryEnabled: false },
+      signal: new AbortController().signal })
+    expect(record.reasoningEffort).toBe(reasoningEffort)
+    expect(inputs[0].reasoningEffort).toBe(reasoningEffort)
+    const resumed = await runtime.resumeChild({ childId: record.id, parentThreadId: 'thr_parent', parentTurnId: 'turn_followup',
+      prompt: 'continue', expectedResumeCount: 0, expectedLaunchers: ['manager-worker'], signal: new AbortController().signal })
+    expect(resumed.reasoningEffort).toBe(reasoningEffort)
+    expect(inputs[1].reasoningEffort).toBe(reasoningEffort)
+  })
+
   it('inherits the parent reasoning effort for default-inherit tools without a profile override', async () => {
     dir = await mkdtemp(join(tmpdir(), 'delegation-tier-'))
     let executorInput: Record<string, unknown> | undefined

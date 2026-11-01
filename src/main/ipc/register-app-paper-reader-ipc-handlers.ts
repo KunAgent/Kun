@@ -1,3 +1,4 @@
+import { paperImportSources } from '../services/paper/paper-import-sources'
 import { app, ipcMain } from 'electron'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
@@ -404,7 +405,9 @@ export function registerAppPaperReaderIpcHandlers(
         if (inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
           throw new PaperUnitError('invalid-unit', 'Import folder must be inside the papers directory.')
         }
-        const result = await importPaperBibtex(workspacePath, papersDirAbs, request.bibtex, job.signal, targetDirAbs)
+        const settings = await store.load()
+        const sources = await paperImportSources(settings, workspacePath, normalizeWritePaperReadingSettings(settings.write?.paperReading).papersDir)
+        const result = await importPaperBibtex(workspacePath, papersDirAbs, request.bibtex, job.signal, targetDirAbs, sources)
         finishPaperJob(request.requestId, 'done', event.sender, job.signal)
         return { ok: true, ...result }
       } catch (error) {

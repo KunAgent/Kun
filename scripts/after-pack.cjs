@@ -16,6 +16,7 @@ const {
 } = require('node:fs')
 const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
+const { validatePackagedKunDependencies } = require('./packaged-kun-dependencies.cjs')
 const { writeRuntimeIntegrityManifest } = require('./after-pack-runtime-integrity.cjs')
 const { trimPackedNodePtyPayload, ensureNodePtyHelpersExecutable } = require('./after-pack-node-pty.cjs')
 const { deduplicatePackedJimpZod } = require('./after-pack-jimp.cjs')
@@ -620,6 +621,10 @@ function prunePackedWhisperResources(context) {
 }
 
 async function afterPack(context) {
+  validatePackagedKunDependencies(
+    context.packager?.projectDir ?? join(__dirname, '..'),
+    join(packedResourcesDir(context), 'app.asar')
+  )
   prunePackedKunDependencies(context)
   materializePackedWorkspaceDependencies(context)
   prunePackedApplicationPayload(context)

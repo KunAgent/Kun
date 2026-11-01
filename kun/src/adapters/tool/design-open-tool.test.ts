@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { buildDesignCanvasLocalTools } from './design-canvas-tool.js'
-import { modelToolDiscoveryContexts } from '../../loop/tool-discovery-context-factory.js'
 import {
   createDesignOpenTool,
   DESIGN_OPEN_TOOL_NAME,
@@ -36,7 +35,7 @@ describe('design_open tool', () => {
     expect(buildDesignCanvasLocalTools().map((tool) => tool.name)).toContain(DESIGN_OPEN_TOOL_NAME)
   })
 
-  it('advertises only on Kun-native GUI Code turns', () => {
+  it('advertises on GUI Code turns, delegated Code harnesses included', () => {
     expect(shouldAdvertiseDesignOpen(codeContext())).toBe(true)
     expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'kun' }))).toBe(true)
     expect(shouldAdvertiseDesignOpen(codeContext({ clientSurface: 'api' }))).toBe(false)
@@ -53,22 +52,10 @@ describe('design_open tool', () => {
     expect(shouldAdvertiseDesignOpen(codeContext({ roomStepKind: 'conversation' }))).toBe(false)
     expect(shouldAdvertiseDesignOpen(codeContext({ roomAgent: true }))).toBe(false)
     expect(shouldAdvertiseDesignOpen(codeContext({ executionUnitKind: 'worker' }))).toBe(false)
-    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'claude-code' }))).toBe(false)
+    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'claude-code' }))).toBe(true)
+    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'codex' }))).toBe(true)
+    expect(shouldAdvertiseDesignOpen(codeContext({ harnessId: 'opencode', agentSurface: 'design' }))).toBe(false)
     expect(shouldAdvertiseDesignOpen(codeContext({ workspace: '  ' }))).toBe(false)
-  })
-
-  it('stays in the cache-stable GUI catalog but only executes in a real Code turn', () => {
-    const codeTurn = codeContext({ threadMode: 'agent' })
-    const designTurn = codeContext({
-      threadMode: 'agent', agentSurface: 'design', guiDesignCanvas: true, guiDesignMode: true
-    })
-    for (const turn of [codeTurn, designTurn]) {
-      const listing = modelToolDiscoveryContexts(turn)
-      expect(listing.length).toBeGreaterThan(1)
-      expect(listing.some(shouldAdvertiseDesignOpen)).toBe(true)
-    }
-    expect(shouldAdvertiseDesignOpen(codeTurn)).toBe(true)
-    expect(shouldAdvertiseDesignOpen(designTurn)).toBe(false)
   })
 
   it('writes every screen into a stable design document in the same turn', async () => {
@@ -130,6 +117,39 @@ describe('design_open tool', () => {
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
+  })
+
+  it('keeps section labels and adds boards to the same document across calls', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-design-open-'))
+    try {
+      const tool = createDesignOpenTool()
+      type Output = { designRequest: { documentId: string; screens: { name: string; section?: string }[] }; message: string }
+      const first = (await tool.execute({
+        title: 'Toast system',
+        screens: [
+          { name: 'Overview', html: '<p>o</p>', section: '  01 Flow  ' },
+          { name: 'Plain', html: '<p>p</p>' }
+        ]
+      }, codeContext({ workspace }))).output as Output
+      const second = (await tool.execute({
+        title: 'Toast system',
+        screens: [{ name: 'Dark', html: '<p>d</p>', section: '02 Themes' }]
+      }, codeContext({ workspace, activeToolCallId: 'call_2' }))).output as Output
+      expect(first.designRequest.screens).toMatchObject([{ name: 'Overview', section: '01 Flow' }, { name: 'Plain' }])
+      expect(first.designRequest.screens[1]).not.toHaveProperty('section')
+      expect(first.message).toContain('[01 Flow] Overview')
+      expect(second.designRequest.documentId).toBe(first.designRequest.documentId)
+      expect(second.designRequest.screens).toMatchObject([{ name: 'Dark', section: '02 Themes' }])
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('asks the agent to plan a multi-board set instead of one long page', () => {
+    const description = createDesignOpenTool().description
+    expect(description).toContain('plan the board set')
+    expect(description).toContain('section')
+    expect(description).toContain('call again with the same title')
   })
 
   it('rejects a missing title, empty screens, blank html and duplicate names', async () => {

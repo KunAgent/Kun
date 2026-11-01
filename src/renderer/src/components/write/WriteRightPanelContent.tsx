@@ -19,6 +19,9 @@ const WriteReviewPanel = lazy(() =>
 const WriteReferencesPanel = lazy(() =>
   import('./WriteReferencesPanel').then((module) => ({ default: module.WriteReferencesPanel }))
 )
+const WorkSessionPapersPanel = lazy(() =>
+  import('./WorkSessionPapersPanel').then((module) => ({ default: module.WorkSessionPapersPanel }))
+)
 const SubagentDetailPanel = lazy(() =>
   import('../subagents/SubagentDetailPanel').then((module) => ({ default: module.SubagentDetailPanel }))
 )
@@ -52,7 +55,15 @@ export function WriteRightPanelContent({
   })))
   // In the centered stage there is no document, so document tools yield to the assistant.
   const stage = useWorkConversationStage()
-  const activeId: WriteRightPanelId = stage && WRITE_DOCUMENT_PANEL_IDS.has(storedActiveId) ? 'assistant' : storedActiveId
+  // 论文 in the stage sits beside the conversation instead of replacing it.
+  const papersBeside = stage && storedActiveId === 'papers'
+  // Work has no 子代理 tool any more: a stored choice falls back to the assistant.
+  const activeId: WriteRightPanelId = papersBeside || storedActiveId === 'subagents' ||
+    (stage && WRITE_DOCUMENT_PANEL_IDS.has(storedActiveId))
+    ? 'assistant'
+    : storedActiveId
+  // The centered stage cannot fold away, so a panel's close returns to the conversation.
+  const collapse = stage ? () => useWriteWorkspaceStore.getState().toggleWriteRightPanel('assistant') : onCollapse
   const activeThreadId = useChatStore((state) => state.activeThreadId)
   const [visited, setVisited] = useState<Set<WriteRightPanelId>>(() => new Set([activeId]))
 
@@ -65,17 +76,19 @@ export function WriteRightPanelContent({
       case 'assistant':
         return <WriteAssistantPanel {...write} className="h-full max-h-full w-full" />
       case 'outline':
-        return <WriteOutlinePanel onCollapse={onCollapse} />
+        return <WriteOutlinePanel onCollapse={collapse} />
       case 'review':
-        return <WriteReviewPanel onCollapse={onCollapse} />
+        return <WriteReviewPanel onCollapse={collapse} />
       case 'references':
-        return <WriteReferencesPanel onCollapse={onCollapse} />
+        return <WriteReferencesPanel onCollapse={collapse} />
+      case 'papers':
+        return <WorkSessionPapersPanel onCollapse={collapse} />
       case 'subagents':
-        return <SubagentDetailPanel className="h-full max-h-full w-full" onCollapse={onCollapse} />
+        return <SubagentDetailPanel className="h-full max-h-full w-full" onCollapse={collapse} />
       case 'mcpSkills':
         return (
           <div className="flex h-full min-h-0 flex-col">
-            <WriteRightPanelHeader id="mcpSkills" onCollapse={onCollapse} />
+            <WriteRightPanelHeader id="mcpSkills" onCollapse={collapse} />
             <div className="relative min-h-0 flex-1">
               <McpSkillsPanel workspaceRoot={workspaceRoot} onOpenSettings={onOpenAgentSettings} />
             </div>
@@ -84,7 +97,7 @@ export function WriteRightPanelContent({
       case 'usage':
         return (
           <div className="flex h-full min-h-0 flex-col">
-            <WriteRightPanelHeader id="usage" onCollapse={onCollapse} />
+            <WriteRightPanelHeader id="usage" onCollapse={collapse} />
             <div className="relative min-h-0 flex-1">
               <UsageQuotaPanel activeThreadId={activeThreadId} active={activeId === 'usage'} />
             </div>
@@ -94,15 +107,24 @@ export function WriteRightPanelContent({
   }
 
   return (
-    <div className="write-right-panel relative h-full min-h-0 w-full">
-      <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
-        {[...visited].map((id) => (
-          <div key={id} hidden={id !== activeId} className="absolute inset-0 min-h-0 overflow-hidden"
-            data-write-right-panel={id}>
-            {renderPanel(id)}
-          </div>
-        ))}
-      </Suspense>
+    <div className="write-right-panel flex h-full min-h-0 w-full">
+      <div className="relative h-full min-h-0 min-w-0 flex-1">
+        <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
+          {[...visited].map((id) => (
+            <div key={id} hidden={id !== activeId} className="absolute inset-0 min-h-0 overflow-hidden"
+              data-write-right-panel={id}>
+              {renderPanel(id)}
+            </div>
+          ))}
+        </Suspense>
+      </div>
+      {papersBeside ? (
+        <aside className="work-session-papers-beside" data-write-right-panel-beside="papers">
+          <Suspense fallback={null}>
+            <WorkSessionPapersPanel onCollapse={collapse} />
+          </Suspense>
+        </aside>
+      ) : null}
     </div>
   )
 }

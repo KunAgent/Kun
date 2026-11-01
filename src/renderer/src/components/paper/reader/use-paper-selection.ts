@@ -40,15 +40,19 @@ export function usePaperSelection({
   unitDir,
   pdfSha256,
   onSelectionChange,
-  onAutoTranslate
+  onAutoTranslate,
+  onQuoteSelection,
+  onAskSelection
 }: {
   rootRef: RefObject<HTMLElement | null>
   workspaceRoot: string
   unitDir: string
   pdfSha256?: string
   onSelectionChange: ((selection: WriteEditorSelectionState) => void) | undefined
-  /** R1.3: fired 250ms after a stable selection when auto-translate is on. */
   onAutoTranslate?: (sel: PendingPaperSelection) => void
+  /** Host readers route quotes/asks to their own assistant instead of Work. */
+  onQuoteSelection?: (selection: PendingPaperSelection) => void
+  onAskSelection?: (question: string, selection: PendingPaperSelection) => void
 }): {
   pending: PendingPaperSelection | null
   askOpen: boolean
@@ -236,13 +240,17 @@ export function usePaperSelection({
   // The passage becomes a quote chip (with its page) on the Work assistant's
   // composer, like a selection in any document; the panel opens on it.
   const quoteSelection = useCallback((selected: PendingPaperSelection): void => {
+    if (onQuoteSelection) {
+      onQuoteSelection(selected)
+      return
+    }
     const write = useWriteWorkspaceStore.getState()
     write.setSelection({
       text: selected.text, ranges: [], charCount: selected.text.length, sourceKind: 'pdf',
       pageStart: selected.page, pageEnd: selected.page, rects: selected.localRects
     })
     write.quoteCurrentSelection(workspaceRoot)
-  }, [workspaceRoot])
+  }, [workspaceRoot, onQuoteSelection])
 
   const addToConversation = useCallback((): void => {
     if (!pending || !selectionMatches(pending)) return
@@ -272,11 +280,14 @@ export function usePaperSelection({
         }
       }
     }))
-    quoteSelection(sel)
-    const bridge = usePaperModeStore.getState().composerBridge
-    if (bridge?.submit) bridge.submit(question)
-    else bridge?.setInput(question)
-  }, [pending, workspaceRoot, unitDir, selectionMatches, quoteSelection])
+    if (onAskSelection) onAskSelection(question, sel)
+    else {
+      quoteSelection(sel)
+      const bridge = usePaperModeStore.getState().composerBridge
+      if (bridge?.submit) bridge.submit(question)
+      else bridge?.setInput(question)
+    }
+  }, [pending, workspaceRoot, unitDir, selectionMatches, quoteSelection, onAskSelection])
 
   return {
     pending,

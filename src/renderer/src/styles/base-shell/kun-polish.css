@@ -1,0 +1,232 @@
+/*
+ * Rounded surface language: one radius ladder, see-through hairlines and three
+ * shadow levels shared by the window frame, sidebar, composer and menus.
+ * macOS draws the sidebar ground over native vibrancy; every other platform
+ * (and "reduce transparency") keeps a solid ground.
+ */
+:root {
+  --kun-radius-xs: 7px;
+  --kun-radius-sm: 10px;
+  --kun-radius-md: 14px;
+  --kun-radius-lg: 18px;
+  --kun-radius-xl: 22px;
+  --kun-radius-pill: 9999px;
+  --kun-card-gutter: 8px;
+  --kun-ground-alpha: 100%;
+  --kun-hair-1: rgba(17, 24, 28, 0.06);
+  --kun-hair-2: rgba(17, 24, 28, 0.09);
+  --kun-hair-3: rgba(17, 24, 28, 0.12);
+  --kun-sunken: #f3f5f5;
+  --kun-shadow-hair: 0 0 0 1px var(--kun-hair-1);
+  --kun-shadow-rest:
+    0 0 0 1px rgba(17, 24, 28, 0.05), 0 1px 2px rgba(16, 24, 40, 0.04),
+    0 12px 32px rgba(16, 24, 40, 0.05);
+  --kun-shadow-lift:
+    0 0 0 1px rgba(17, 24, 28, 0.08), 0 4px 10px rgba(16, 24, 40, 0.05),
+    0 16px 40px rgba(16, 24, 40, 0.12);
+  --kun-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Keep the tint light: the native material already supplies blur and contrast. */
+:root[data-platform='darwin'] {
+  --kun-ground-alpha: 32%;
+}
+
+/* Dark glass: the native material follows the app theme (main syncs
+ * nativeTheme.themeSource), so a heavier dark tint keeps the sidebar dark even
+ * over a light wallpaper while a trace of it still shows through. */
+:root[data-platform='darwin'][data-theme='dark'] {
+  --kun-ground-alpha: 76%;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform='darwin'],
+  :root[data-platform='darwin'][data-theme='dark'] {
+    --kun-ground-alpha: 100%;
+  }
+}
+
+[data-theme='dark'] {
+  --kun-hair-1: rgba(255, 255, 255, 0.07);
+  --kun-hair-2: rgba(255, 255, 255, 0.1);
+  --kun-hair-3: rgba(255, 255, 255, 0.14);
+  --kun-sunken: rgba(255, 255, 255, 0.06);
+  --kun-shadow-hair: 0 0 0 1px var(--kun-hair-1);
+  --kun-shadow-rest:
+    0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.3),
+    0 12px 32px rgba(0, 0, 0, 0.28);
+  --kun-shadow-lift:
+    0 0 0 1px rgba(255, 255, 255, 0.1), 0 4px 10px rgba(0, 0, 0, 0.3),
+    0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-platform='darwin'] body {
+  background-color: transparent;
+}
+
+/* A transparent body cannot reveal vibrancy while its full-window underlay is
+ * opaque. Match the floating workbench's scope; branded scenes keep their base. */
+@media (min-width: 768px) {
+  html[data-platform='darwin']:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on']) body::before {
+    background: transparent;
+  }
+}
+
+/* Right tool rail: fold button at the top, reopen button in the top bar. */
+.kun-rail-toggle {
+  display: inline-flex;
+  width: 38px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--kun-radius-sm);
+  background: transparent;
+  color: var(--ds-text-faint);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.kun-rail-toggle:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.kun-rail-reopen {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 11px;
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent-strong);
+  animation: kun-rail-reopen-in 280ms var(--kun-ease-out) both;
+  transition: background-color 150ms ease;
+}
+
+.kun-rail-reopen:hover {
+  background: color-mix(in srgb, var(--ds-accent) 22%, transparent);
+}
+
+@keyframes kun-rail-reopen-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-rail-reopen {
+    animation: none;
+  }
+}
+
+/* Popovers and menus grow from their trigger: 180ms in, 6px rise, slight scale. */
+.kun-menu-pop {
+  animation: kun-menu-pop-in 180ms var(--kun-ease-out) both;
+  transform-origin: left bottom;
+}
+
+@keyframes kun-menu-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-menu-pop {
+    animation: none;
+  }
+}
+
+/* The tool rail is the work card's own right edge, not a strip of ground beside it. */
+.kun-rail-slot {
+  display: flex;
+  flex: none;
+}
+
+.kun-rail-slot:empty {
+  display: none;
+}
+
+.kun-rail-slot .ds-workbench-side-rail.ds-sidebar-surface {
+  width: 48px;
+  background: transparent;
+  padding: 9px 0 12px;
+}
+
+/* Every top-bar action (trace, extensions, tools) sits in one pill of round chips. */
+.chat-topbar-actions.flex {
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--kun-radius-pill);
+  background: var(--kun-sunken);
+}
+
+.chat-topbar-actions .ds-workbench-top-actions.ds-no-drag {
+  gap: 2px;
+}
+
+.chat-topbar-actions :is(.ds-topbar-action-button, .ds-header-text-button) {
+  height: 30px;
+  border-radius: var(--kun-radius-pill);
+}
+
+.chat-topbar-actions .ds-topbar-action-button {
+  width: 30px;
+}
+
+.chat-topbar-actions :is(.ds-topbar-action-button, .ds-header-text-button):hover {
+  background: var(--ds-surface-card);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+/* The reopen button stands apart from the grey pill. */
+.chat-topbar-actions .kun-rail-reopen {
+  margin-left: 4px;
+  border-radius: var(--kun-radius-pill);
+}
+
+/* Side flyouts grow from the parent menu's edge. */
+.kun-menu-pop-side {
+  transform-origin: left center;
+}
+
+/* Dark: lift hairlines instead of dropping shadows, keep the glass cards legible. */
+[data-theme='dark'] .chat-topbar-actions :is(.ds-topbar-action-button, .ds-header-text-button):hover {
+  box-shadow: 0 0 0 1px var(--kun-hair-2);
+}
+
+[data-theme='dark'] .kun-mode-thumb,
+[data-theme='dark'] .kun-mode-tab[data-thumb-pending='true'] {
+  background: var(--kun-sunken);
+  box-shadow: 0 0 0 1px var(--kun-hair-2);
+}
+
+[data-theme='dark'] .kun-rail-reopen:hover {
+  background: color-mix(in srgb, var(--ds-accent) 28%, transparent);
+}
+
+/* Conversation details: framed image attachments, archive link only on hover. */
+.kun-media-figure {
+  overflow: hidden;
+  border-radius: var(--kun-radius-md);
+  box-shadow:
+    0 0 0 1px var(--kun-hair-2),
+    0 2px 8px rgba(16, 24, 40, 0.06);
+}
+
+[data-archive-history-action] {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+:hover > [data-archive-history-action],
+[data-archive-history-action]:focus-within {
+  opacity: 1;
+}

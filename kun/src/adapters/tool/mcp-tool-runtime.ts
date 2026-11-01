@@ -11,6 +11,7 @@ import { projectMcpSchemaForModel } from './mcp-schema-projection.js'
 import type { McpClientLike, McpServerDiagnostic, McpToolDescriptor } from './mcp-types.js'
 import type { McpSearchCatalogRecord } from './mcp-tool-search.js'
 import type { McpBackgroundReconnectOptions, McpConnectionState } from './mcp-tool-provider.js'
+import { canUseMcpBrowserTool, DESIGN_PREVIEW_INSTRUCTION } from '../../shared/design-preview-policy.js'
 import { mcpCallTimeoutMs } from './mcp-call-budget.js'
 
 const DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS = 5
@@ -116,8 +117,12 @@ export function createMcpLocalTool(
       ? { sideEffect: 'read-only' as const }
       : {}),
     policy: policyFromAnnotations(descriptor.annotations),
-    shouldAdvertise: (context: ToolHostContext) => canUseMcpServer(state.server, context.workspace),
+    shouldAdvertise: (context: ToolHostContext) => canUseMcpServer(state.server, context.workspace) &&
+      canUseMcpBrowserTool(descriptor.name, context),
     execute: async (args, context) => {
+      if (!canUseMcpBrowserTool(descriptor.name, context)) {
+        return { output: { error: DESIGN_PREVIEW_INSTRUCTION }, isError: true }
+      }
       if (!isMcpServerVisible(state.server, context.workspace)) {
         return {
           output: { error: `MCP server ${state.serverId} is not enabled for this workspace` },
@@ -279,6 +284,11 @@ export async function callMcpToolWithReconnect(
   replaySafe = false
 ): Promise<unknown> {
   const signal = context?.abortSignal
+  // Runtime supplies provenance out of band; the model's arguments never choose a source turn.
+  const provenance = state.serverId === 'kun_assistants' && input.name === 'assign_assistant_task' && context?.activeToolCallId
+    ? { _meta: { kunSource: { threadId: context.threadId, turnId: context.turnId, callId: context.activeToolCallId } } }
+    : {}
+  const outbound = { ...input, ...provenance }
   // Track whether the request actually reached `callTool`. A failure while
   // (re)connecting BEFORE the request was sent means the tool definitely did
   // not run, so retrying it on the fresh connection is always safe.
@@ -289,7 +299,7 @@ export async function callMcpToolWithReconnect(
     // means the request never left, so it stays safe to retry.
     await state.client.ready?.()
     sentToServer = true
-    return await state.client.callTool(input, { signal, timeout, context })
+    return await state.client.callTool(outbound, { signal, timeout, context })
   } catch (error) {
     if (signal?.aborted) throw error
     // Deterministic server-side failures (validation errors, bad
@@ -306,7 +316,7 @@ export async function callMcpToolWithReconnect(
       // Either the request never left (safe) or a locally trusted allow-list
       // marked it replay-safe — replay it on the reconnected client.
       const client = await reconnectMcpConnection(state, signal)
-      return client.callTool(input, { signal, timeout, context })
+      return client.callTool(outbound, { signal, timeout, context })
     }
     // A non-idempotent tool dropped mid-flight: it may already have run on the
     // server. Preserve that primary fact even when reconnect also fails: future

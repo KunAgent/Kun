@@ -44,7 +44,8 @@ async function jobIsForgotten(service: AgentMemoryService, isForgotten: IsForgot
     }
   } else if (job.phase === 'candidate') {
     if (await isForgotten({ ...job.candidate, sources: withoutEmptyExcerpts(job.candidate.sources), scope: 'user', agentContext: {
-      schemaVersion: 1, agentId: job.participantAgentId, sourceConversationId: job.roomId,
+      schemaVersion: 1, agentId: job.participantAgentId, sourceConversationId: job.captureScope?.conversationId ?? job.roomId,
+      sourceTaskId: job.captureScope?.taskId, sourceHandoffId: job.captureScope?.handoffId,
       shared: false, sharedConversationIds: [], sharedProjectRoots: [], locked: false
     } }, job.memoryId)) return true
     if (job.targetId) {
@@ -116,7 +117,7 @@ async function scrubJobWithRetry(service: AgentMemoryService, row: RoomStoredDoc
   options: { force?: boolean; now?: number }, operation: () => Promise<void>) {
   const job = row.value, now = options.now ?? Date.now()
   const fingerprint = createHash('sha256').update(JSON.stringify(job.phase === 'capture'
-    ? job.snapshot ?? null : [job.candidate, job.targetId, job.memoryId])).digest('hex')
+    ? job.snapshot ?? null : [job.candidate, job.targetId, job.memoryId, job.captureScope])).digest('hex')
   const failure = job.scrubFailure?.fingerprint === fingerprint ? job.scrubFailure : undefined
   if (!options.force && failure && (failure.nextRetryAt === undefined || now < failure.nextRetryAt)) return
   try {

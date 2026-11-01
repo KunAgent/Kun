@@ -8,15 +8,16 @@ import type { DesignHtmlElementContext } from '../../../../design/design-compose
 import { inferDesignArtifactFoundationRole } from '../../../../design/design-types'
 import { useDesignWorkspaceStore } from '../../../../design/design-workspace-store'
 import { useChatStore } from '../../../../store/chat-store'
-import {
-  type DesignRuntimeQualityPayload
-} from '../../../../design/design-html-quality'
 import { replaceHtmlElementTextInSource } from '../../../../design/design-html-element-edit'
 import { writeDesignWorkspaceFile } from '../../../../design/design-persistence-coordinator'
 import { useDesignHtmlPreview } from '../../DesignHtmlPreviewHost'
 import { HtmlFrameAiCursorOverlay } from './HtmlFrameAiCursorOverlay'
 import { HtmlFrameChrome, htmlFrameChromeOffset } from './HtmlFrameChrome'
 import { HtmlFrameElementPickBar } from './HtmlFrameElementPickBar'
+import { HtmlFrameLayerMenu } from './HtmlFrameLayerMenu'
+import { HtmlFramePickOutline } from './HtmlFramePickOutline'
+import { useCanvasViewportStore } from '../../../../design/canvas/canvas-viewport-store'
+import { useHtmlFramePassivePick } from './use-html-frame-passive-pick'
 import { focusActiveDesignComposer } from '../../useDesignComposerContextState'
 import { HtmlFrameGeneratingCanvas } from './HtmlFrameGeneratingCanvas'
 import { useKunPresenceStore } from '../../../../design/canvas/kun-presence-store'
@@ -39,7 +40,6 @@ import { useHtmlFrameAutoSize } from './use-html-frame-auto-size'
 import { useHtmlFrameAiCursor } from './use-html-frame-ai-cursor'
 import { useHtmlFrameCodeBindings } from './use-html-frame-code-bindings'
 import { useHtmlFrameElementSelection } from './use-html-frame-element-selection'
-import { useHtmlFrameRuntimeQuality } from './use-html-frame-runtime-quality'
 type ScreenOverlayProps = {
   shape: CanvasShape
   workspaceRoot: string
@@ -52,14 +52,8 @@ type ScreenOverlayProps = {
   active: boolean
   interactive: boolean
   panning: boolean
-  /** Element-pick ("修改") mode is on for this frame: clicking selects text/elements. */
-  editing: boolean
-  onDoubleClick: (shapeId: string) => void
   onToggleInteractive?: (shapeId: string) => void
-  onToggleModify: (shapeId: string) => void
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
   /** The whole canvas is read-only (browsing a historical drawing). */
   canvasReadOnly?: boolean
 }
@@ -75,13 +69,8 @@ function ScreenOverlayInner({
   active,
   interactive,
   panning,
-  editing,
-  onDoubleClick,
   onToggleInteractive,
-  onToggleModify,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair,
   canvasReadOnly = false
 }: ScreenOverlayProps): ReactElement {
   const [localPreviewError, setLocalPreviewError] = useState('')
@@ -206,37 +195,46 @@ function ScreenOverlayInner({
   }, [previewAsyncEpoch])
   const previewError = localPreviewError || preview.error
   const { t } = useTranslation('common')
-  const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      onDoubleClick(shape.id)
-    },
-    [shape.id, onDoubleClick]
-  )
+  // Hovering and clicking elements only needs the select tool.
+  const activeTool = useCanvasViewportStore((s) => s.activeTool)
+  const pickAvailable = !isHistoricalVersion && !canvasReadOnly && !panning && !drawingActive && !interactive
+  const pickEnabled = pickAvailable && activeTool === 'select'
+  const pickBodyRef = useRef<HTMLDivElement | null>(null)
   const {
     selectionError,
     hoverRect,
     hoverLabel,
+    hoverSize,
+    hoverParentRect,
     hoverIsSelection,
     selectedElementRect,
+    selectedPadding,
+    measureLines,
+    crumbs,
+    layerMenu,
     selectedElementContext,
     selectionLabel,
     selectionPath,
     canSelectParent,
     canDrillToHit,
     canEditText,
-    hoverAt,
-    clearHover,
-    selectElementAt,
+    hoverClient,
+    leave,
+    selectClient,
     selectParentElement,
     selectHitElement,
+    selectBreadcrumb,
+    openLayerMenu,
+    closeLayerMenu,
+    previewLayer,
+    chooseLayer,
     clearElementSelection,
     updateSelectedElementText
   } = useHtmlFrameElementSelection({
     artifact: renderedArtifact,
     canvasWidth,
     canvasHeight,
-    editing: editing && !isHistoricalVersion && !canvasReadOnly && !panning,
+    enabled: pickEnabled,
     executeScript,
     interactive,
     shapeId: shape.id,
@@ -247,16 +245,17 @@ function ScreenOverlayInner({
     setLocalPreviewError,
     onUseElementAsContext
   })
+  useHtmlFramePassivePick({
+    enabled: pickEnabled,
+    bodyRef: pickBodyRef,
+    onHover: hoverClient,
+    onLeave: leave,
+    onClick: selectClient,
+    onContextMenu: openLayerMenu
+  })
   useEffect(() => {
-    if (!editing || selectedElementContext || canvasReadOnly) return
-    const exit = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      event.preventDefault()
-      onToggleModify(shape.id)
-    }
-    window.addEventListener('keydown', exit)
-    return () => window.removeEventListener('keydown', exit)
-  }, [editing, selectedElementContext, canvasReadOnly, onToggleModify, shape.id])
+    if (!active || activeTool !== 'select') clearElementSelection()
+  }, [active, activeTool, clearElementSelection])
 
   const [elementTextDraft, setElementTextDraft] = useState('')
   const [elementTextOpen, setElementTextOpen] = useState(false)
@@ -337,27 +336,6 @@ function ScreenOverlayInner({
     previewFileUrl: preview.fileUrl,
     previewRevision: preview.revision
   })
-  const {
-    qualityChecked,
-    qualityDetailsOpen,
-    qualityFindings,
-    setQualityDetailsOpen
-  } = useHtmlFrameRuntimeQuality({
-    active,
-    artifactId: artifact?.id,
-    artifactKind,
-    artifactRelativePath,
-    executeScript,
-    interactive,
-    previewAsyncEpochRef,
-    previewRevision: preview.revision,
-    previewWebviewUrl: preview.webviewUrl,
-    shapeId: shape.id,
-    webview,
-    webviewMountNonce,
-    onRuntimeQualityFindings
-  })
-
   // Promote a pending preview to "ready" only once the turn has settled: the file
   // holds a complete standalone HTML document and the agent is no longer streaming.
   // This keeps the transparent generating surface up for the whole write so the
@@ -411,9 +389,9 @@ function ScreenOverlayInner({
     artifact?.kind === 'html' && artifact.previewStatus === 'error' && placeholderPreview
   const retryGeneration = artifact?.id ? () => { requestScreenGenerationRetry(artifact.id) } : undefined
   const elementTextChanged = selectedElementContext ? elementTextDraft !== selectedElementContext.text : false
-  const askKunAboutElement = (): void => {
+  const askKunAboutElement = (promptSeed?: string): void => {
     if (!selectedElementContext) return
-    onUseElementAsContext?.(selectedElementContext)
+    onUseElementAsContext?.(selectedElementContext, promptSeed)
     focusActiveDesignComposer()
   }
   return (
@@ -427,37 +405,29 @@ function ScreenOverlayInner({
         width: screenWidth,
         height: screenHeight,
         zIndex,
-        pointerEvents: htmlFrameOverlayPointerEvents({ panning, interactive, editing }),
+        pointerEvents: htmlFrameOverlayPointerEvents({ panning, interactive }),
         borderRadius: frameRadius,
         ...motionStyle
       }}
-      onDoubleClick={handleDoubleClick}
     >
-      {selectionError && editing ? <div role="status" className="absolute left-2 top-2 z-30 rounded bg-white px-2 py-1 text-xs text-ds-ink">{selectionError}</div> : null}
+      {selectionError && pickEnabled ? <div role="status" className="absolute left-2 top-2 z-30 rounded bg-white px-2 py-1 text-xs text-ds-ink">{selectionError}</div> : null}
       {showChrome ? (
         <HtmlFrameChrome
           active={active}
           artifact={renderedArtifact}
           workspaceRoot={workspaceRoot}
-          artifactId={artifact?.id}
-          artifactRelativePath={artifactRelativePath}
           chromeOffset={chromeOffset}
           drawingActive={drawingActive}
-          editing={editing && !isHistoricalVersion}
+          crumbs={pickEnabled ? crumbs : undefined}
+          onSelectCrumb={selectBreadcrumb}
           failedMessage={failedMessage}
           interactive={interactive}
           previewWebviewUrl={preview.webviewUrl}
-          qualityChecked={qualityChecked}
-          qualityDetailsOpen={qualityDetailsOpen}
-          qualityFindings={qualityFindings}
           screenWidth={screenWidth}
           shapeId={shape.id}
           shapeName={shape.name}
-          onQualityDetailsOpenChange={setQualityDetailsOpen}
-          onRequestQualityRepair={isHistoricalVersion ? undefined : onRequestQualityRepair}
           readOnly={isHistoricalVersion || canvasReadOnly}
           onToggleInteractive={onToggleInteractive}
-          onToggleModify={onToggleModify}
         />
       ) : null}
 
@@ -476,6 +446,7 @@ function ScreenOverlayInner({
         style={{ borderRadius: frameRadius }}
       >
         <div
+          ref={pickBodyRef}
           className="absolute left-0 top-0 overflow-hidden"
           style={{
             width: screenWidth,
@@ -544,44 +515,29 @@ function ScreenOverlayInner({
               {failedMessage}
             </div>
           ) : null}
-          {preview.webviewUrl && editing && !interactive ? (
-            <div
-              className="absolute inset-0 cursor-crosshair"
-              title={t('canvasBoardPickHint')}
-              onPointerDown={selectElementAt}
-              onPointerEnter={hoverAt}
-              onPointerMove={hoverAt}
-              onPointerLeave={clearHover}
-              onDoubleClick={(event) => event.stopPropagation()}
-              data-canvas-element-pick-layer="true"
+          {preview.webviewUrl && pickEnabled ? (
+            <HtmlFramePickOutline
+              zoom={zoom}
+              screenWidth={screenWidth}
+              screenHeight={screenHeight}
+              hoverRect={hoverRect}
+              hoverParentRect={hoverParentRect}
+              hoverLabel={hoverLabel}
+              hoverSize={hoverSize}
+              hoverIsSelection={hoverIsSelection}
+              selectedRect={selectedElementRect}
+              selectedPadding={selectedPadding}
+              measureLines={measureLines}
             />
           ) : null}
-          {hoverRect && editing && !interactive && !hoverIsSelection ? (
-            <div
-              className="pointer-events-none absolute border border-dashed border-accent/70 bg-accent/[0.04]"
-              style={{
-                left: hoverRect.left * zoom,
-                top: hoverRect.top * zoom,
-                width: hoverRect.width * zoom,
-                height: hoverRect.height * zoom
-              }}
-            >
-              {hoverLabel ? (
-                <span className="absolute left-0 top-0 max-w-full truncate rounded-[3px] bg-accent px-1 py-0.5 text-[9.5px] font-medium leading-3 text-white">
-                  {hoverLabel}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          {selectedElementRect && editing && !interactive ? (
-            <div
-              className="pointer-events-none absolute border border-accent bg-accent/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.75)]"
-              style={{
-                left: selectedElementRect.left * zoom,
-                top: selectedElementRect.top * zoom,
-                width: selectedElementRect.width * zoom,
-                height: selectedElementRect.height * zoom
-              }}
+          {layerMenu && pickEnabled ? (
+            <HtmlFrameLayerMenu
+              menu={layerMenu}
+              screenWidth={screenWidth}
+              screenHeight={screenHeight}
+              onPreview={previewLayer}
+              onChoose={chooseLayer}
+              onClose={closeLayerMenu}
             />
           ) : null}
           <HtmlFrameAiCursorOverlay
@@ -592,7 +548,7 @@ function ScreenOverlayInner({
           />
         </div>
       </div>
-          {selectedElementRect && selectedElementContext && editing && !interactive && !panning ? (
+          {selectedElementRect && selectedElementContext && pickEnabled ? (
             <HtmlFrameElementPickBar
               label={selectionLabel}
               path={selectionPath}

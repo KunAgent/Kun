@@ -22,7 +22,6 @@ import { readinessProbeEnvironment } from './harness-readiness-env.js'
 import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
 import { AGY_MODELS_TIMEOUT_MS, agyModelsHandshake } from './antigravity-readiness-probe.js'
-import { customAcpPermission } from '../runtime/acp/acp-provider-permissions.js'
 import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
 import { HarnessReadinessProofFile, type PersistedReadinessProof } from './harness-readiness-store.js'
 
@@ -236,7 +235,7 @@ export class HarnessReadinessService {
       const localSdk = definition.transport === 'cursor-sdk' && handshake?.protocol === 'cursor-sdk-local-api'
       const protocol = terminalLaunch || definition.transport === 'native-loop' || (handshake?.ok === true && (handshake.supported || localSdk) && (route.credentialMode !== 'native-login' || handshake.authRequired !== true))
       const modelMatches = terminalLaunch || route.credentialMode !== 'native-login' || (handshake?.models === undefined
-        ? route.model === 'default'
+        ? definition.transport === 'acp' || route.model === 'default'
         : handshake.models.length > 0 && (route.model === 'default' || handshake.models.includes(route.model)))
       checks.push({ id: 'protocol', ok: protocol && modelMatches, ...(handshake?.detail ? { detail: handshake.detail } : {}) })
       diagnostics = readinessDiagnostics({ definition, status, installation, credentials, handshake,
@@ -261,8 +260,7 @@ export class HarnessReadinessService {
     const usable = !detail && input.level !== 'detect' && checks.length === 4 && checks.every((check) => check.ok)
     const readiness: HarnessReadiness = { profileKey: key, usable, authentication, checks,
       checkedAt: new Date(this.now()).toISOString(), ...(detail ? { detail } : {}), ...(diagnostics ? { diagnostics } : {}) }
-    // The handshake already opened a session: share its catalog so loading the
-    // model list does not start the Agent a second time.
+    // Reuse model metadata returned by transports that support it during initialization.
     if (usable && catalog?.models.length) this.deps.onCatalog?.(definition, catalog)
     const result: HarnessTestResponse = { harnessId: definition.id, transport: definition.transport, level: input.level,
       ok: usable, durationMs: this.now() - started, detect: { durationMs: this.now() - started, ok: status.installed === 'yes', status },
@@ -609,13 +607,12 @@ export class HarnessReadinessService {
     const options = { env, signal, resolveSecretEnv: this.deps.resolveSecretEnv }
     switch (definition.transport) {
       case 'native-loop': return { ok: true, supported: true, protocol: 'native-loop' }
+      // ACP does not offer session-scoped settings until session/new. Defer
+      // those checks to the actual turn instead of creating a history entry.
       case 'acp': return probeAcpHandshake(definition, command, { ...options,
-        session: { model: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' ? snapshot.route.model : undefined,
-          customPermissionMode: customAcpPermission(this.deps.options().harnesses?.defaults?.[definition.id]?.permissionMode, definition),
-          permissionMode: harnessTurnPermissionMode(definition, { ...this.deps.options(),
-            requested: this.deps.options().harnesses?.defaults?.[definition.id]?.permissionMode,
-            unattended: false, allowUnattendedFullAccess: false }) },
-        includeModels: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' })
+        launchPermissionMode: harnessTurnPermissionMode(definition, { ...this.deps.options(),
+          requested: this.deps.options().harnesses?.defaults?.[definition.id]?.permissionMode,
+          unattended: false, allowUnattendedFullAccess: false }) })
       case 'codex-app-server': return probeCodexHandshake(definition, command, { ...options,
         includeModels: snapshot.route.credentialMode === 'native-login' && snapshot.route.model !== 'default' })
       case 'pi-rpc': return probePiHandshake(definition, command, { ...options, includeModels: true })

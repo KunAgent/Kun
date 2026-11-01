@@ -1,9 +1,11 @@
-import { touchThread } from '../domain/thread.js'
+import { touchThread, resolveThreadAgentSurface } from '../domain/thread.js'
+import type { UserTurnItem } from '../contracts/items.js'
 import type { ModelClient } from '../ports/model-client.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { withThreadStoreMutation } from '../services/thread-mutation-coordinator.js'
+import { workUserTitleText } from '../services/work-session-title.js'
 import type { RolesConfig } from '../config/kun-config.js'
 import { canUpgradeThreadTitle } from './thread-title-policy.js'
 import { generateThreadTitle, resolveRoleModel } from './title-generator.js'
@@ -34,7 +36,10 @@ export class ThreadTitleService {
     if (!canUpgradeThreadTitle(thread)) return
 
     const items = await this.deps.sessionStore.loadItems(threadId)
-    const userText = items.find((item) => item.kind === 'user_message')?.text ?? ''
+    const isWork = resolveThreadAgentSurface(thread) === 'write'
+    const userItem = items.find((item): item is UserTurnItem =>
+      item.kind === 'user_message' && (!isWork || !item.messageSource))
+    const userText = userItem && isWork ? workUserTitleText(userItem) : userItem?.text ?? ''
     if (!userText.trim()) return
     const roles = this.deps.getRoles()
     const resolved = resolveRoleModel({
@@ -63,20 +68,21 @@ export class ThreadTitleService {
     })
     if (!title) return
 
-    const updated = await withThreadStoreMutation(this.deps.threadStore, threadId, async () => {
+    const pending = await withThreadStoreMutation(this.deps.threadStore, threadId, async () => {
       const latest = await this.deps.threadStore.get(threadId)
       if (!latest || !canUpgradeThreadTitle(latest)) return null
       const next = touchThread({ ...latest, title, titleAuto: true }, this.deps.nowIso())
       await this.deps.threadStore.upsert(next)
-      return next
+      // Enqueue the event before a manual rename can enqueue its own, without
+      // waiting for event observers under the thread mutation queue.
+      return { notification: this.deps.events.record({
+        kind: 'thread_updated',
+        threadId,
+        title: next.title,
+        titleAuto: true,
+        status: next.status
+      }) }
     })
-    if (!updated) return
-    await this.deps.events.record({
-      kind: 'thread_updated',
-      threadId,
-      title: updated.title,
-      titleAuto: true,
-      status: updated.status
-    })
+    if (pending) await pending.notification
   }
 }

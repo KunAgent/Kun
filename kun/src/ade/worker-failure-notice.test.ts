@@ -22,6 +22,26 @@ afterEach(async () => {
 })
 
 describe('worker failure notices', () => {
+  it('keeps the opening conclusion of long worker output and marks omitted details', async () => {
+    await seedWorker(stores)
+    await seedDispatch(stores, { dispatchId: 'dsp_1', state: 'accepted', title: 'refactor' })
+    await stores.threads.upsert({ ...workerThread(),
+      turns: [turnRecord({ status: 'failed', clientRequestId: 'dsp_1' })] })
+    const harness = makeHarness(stores)
+    harness.deps.sessionStore = { loadItems: vi.fn(async () => [{
+      kind: 'assistant_text', id: 'item_1', threadId: 'wrk_1', turnId: 'turn_w1',
+      text: `Conclusion: preview still broken.\n${'Detail '.repeat(400)}TAIL`
+    }]) } as never
+    await harness.lifecycle.handleWorkerTurnTerminal('wrk_1', 'turn_w1', 'failed')
+    const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_1')
+    expect(dispatch?.resultExcerpt?.startsWith('Conclusion: preview still broken.')).toBe(true)
+    expect(dispatch?.resultExcerpt?.length).toBeLessThanOrEqual(1_500)
+    expect(dispatch?.resultExcerpt).toContain('[truncated]')
+    const [notice] = await stores.notices.pending('thr_mgr')
+    expect(notice?.detail).toContain('Conclusion: preview still broken.')
+    expect(notice?.detail).not.toContain('TAIL')
+  })
+
   it('leads with the budget stop and keeps the last worker output', async () => {
     await seedWorker(stores)
     await seedDispatch(stores, { dispatchId: 'dsp_1', state: 'accepted', title: 'refactor' })

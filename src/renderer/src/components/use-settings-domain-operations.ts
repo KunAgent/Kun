@@ -67,6 +67,9 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     void refreshSkillRoots()
   }, [category, refreshSkillRoots])
 
+  /** Content last read from or written to the shared MCP file. */
+  const mcpSavedTextRef = useRef<string | null>(null)
+
   const loadMcpConfig = async (): Promise<void> => {
     if (typeof window.kunGui?.getKunConfigFile !== 'function') return
     setMcpLoading(true)
@@ -75,6 +78,9 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
       const config = await window.kunGui.getKunConfigFile()
       setMcpConfigPath(config.path)
       setMcpConfigText(config.content)
+      // Baseline for the next save: a Runtime disable that lands after this
+      // read must not be overwritten by the stale editor snapshot.
+      mcpSavedTextRef.current = config.content
       setMcpConfigExists(config.exists)
       setMcpLoaded(true)
     } catch (e) {
@@ -126,7 +132,11 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     setMcpBusy(true)
     setMcpNotice(null)
     try {
-      const result = await window.kunGui.setKunConfigFile(mcpConfigText)
+      const result = await window.kunGui.setKunConfigFile(
+        mcpConfigText,
+        mcpSavedTextRef.current ?? ''
+      )
+      mcpSavedTextRef.current = mcpConfigText
       setMcpConfigPath(result.path)
       setMcpConfigExists(true)
       setMcpNotice({

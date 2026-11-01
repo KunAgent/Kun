@@ -357,8 +357,8 @@ export function FloatingComposerSurfaceView({
                       type="button"
                       disabled={!canOpenComposerMenu}
                       onClick={handleComposerMenuButtonClick}
-                      className={`ds-composer-menu-button ds-no-drag flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 ${
-                        composerMenuOpen ? 'bg-ds-hover text-ds-ink' : ''
+                      className={`ds-composer-menu-button ds-no-drag flex h-9 w-9 shrink-0 items-center justify-center text-ds-muted transition-[background-color,color,border-radius] duration-200 hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 ${
+                        composerMenuOpen ? 'rounded-[11px] bg-ds-hover text-ds-ink' : 'rounded-full'
                       }`}
                       aria-expanded={composerMenuOpen}
                       aria-haspopup="menu"
@@ -366,7 +366,7 @@ export function FloatingComposerSurfaceView({
                       aria-label={t('composerMenuTitle')}
                       title={t('composerMenuTitle')}
                     >
-                      <Plus className="h-5 w-5" strokeWidth={1.8} />
+                      <Plus className={`h-5 w-5 transition-transform duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] ${composerMenuOpen ? 'rotate-45' : ''}`} strokeWidth={1.8} />
                     </button>
                     {agentSwitcher || (taskSurface && onTaskSurfaceChange && !taskSurfaceLocked) ? (
                       adeComposerEnabled && !side && adeComposer ? (

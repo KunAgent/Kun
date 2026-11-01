@@ -149,7 +149,7 @@ export class ManagerRuntime {
   /** Host-only admission used after the shared dispatch decision is claimed. */
   createWorkerNow(
     ctx: ManagerToolContext, rawInput: unknown, toolContext: Parameters<typeof childSecurity>[0],
-    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string }
+    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string; reasoningEffort?: WorkerRecord['reasoningEffort'] }
   ): Promise<WorkerCreateResult> {
     return this.workerCreator.create(ctx, rawInput, toolContext, allocation)
   }

@@ -23,6 +23,8 @@
 .direct-header { gap: 12px; min-height: 70px; }
 .direct-chat-title { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--ds-text); }
 .direct-chat-title strong { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Focus mode keeps the title as the way into the Agent card, without its portrait. */
+html[data-focus-mode='on'] .rooms-workspace .direct-chat-title > .rooms-avatar { display: none; }
 .direct-current-model { display: flex; align-items: center; gap: 5px; min-width: 0; max-width: 260px; font-size: 12px; color: var(--ds-text-muted); padding: 6px 8px; border-radius: 8px; overflow-wrap: anywhere; }
 .direct-current-model:hover { background: var(--ds-surface-hover); }
 .direct-header-spacer { flex: 1; }
@@ -30,6 +32,7 @@
 .direct-empty-chat h2 { font-size: 22px; font-weight: 550; color: var(--ds-text); }
 .direct-empty-chat p { color: var(--ds-text-muted); font-size: 14px; }
 .rooms-workspace[data-private-chat] .rooms-message-meta strong,
+.rooms-workspace[data-private-chat] .rooms-message-author,
 .rooms-workspace[data-private-chat] .rooms-message-role { display: none; }
 .rooms-workspace[data-private-chat] .rooms-message-meta { font-size: 10px; padding: 0 3px; opacity: .65; }
 .rooms-workspace .rooms-message-row:not(.rooms-agent-activity) { padding-bottom: 0; }

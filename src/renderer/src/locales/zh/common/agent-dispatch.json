@@ -1,5 +1,15 @@
 {
   "dispatchIntent": {
+    "reasoningScope": "仅应用于此任务",
+    "reasoningDone": "完成",
+    "reasoningClose": "关闭模型选择器",
+    "reasoningDefault": "任务默认",
+    "reasoningUnavailable": "不可调节",
+    "reasoningInherited": "未单独设置，沿用任务默认；选择档位后覆盖。",
+    "reasoningUnknown": "服务商未提供可调档位",
+    "reasoningUnknownHint": "保留模型默认行为，不猜测可用档位。",
+    "reasoningUnsupported": "此模型不支持调节思考强度",
+    "reasoningUnsupportedHint": "切换到支持调节的模型后，可选择档位。",
     "loading": "正在加载 Agent 任务…",
     "countdown": "{{seconds}} 秒后自动派发",
     "startNow": "立即派发",
@@ -13,6 +23,11 @@
     "save": "保存修改",
     "keepRecommendation": "放弃修改",
     "details": "任务与验收条件",
+    "result": "执行结果",
+    "resultBatch": "任务汇总",
+    "expandResult": "展开完整结果",
+    "collapseResult": "收起结果",
+    "resultMissing": "执行已结束，但尚未收到结果正文。可打开子任务查看详情。",
     "viewProcess": "查看过程",
     "updateFailed": "无法保存推荐方案，任务仍保持暂停。",
     "status": {
@@ -25,7 +40,7 @@
       "uncertain": "正在核对启动状态",
       "running": "Agent 正在执行",
       "awaiting_parent": "等待主 Agent 验收",
-      "completed": "已完成",
+      "completed": "执行结束",
       "failed": "任务未能完成",
       "cancelled": "已取消",
       "stopping": "正在停止"
@@ -48,6 +63,7 @@
     "pause": "暂停",
     "executor": "执行者",
     "routeHint": "可为每个任务切换 Agent 和模型；调整时倒计时会暂停，停手 10 秒后重新开始计时。",
+    "isolatedWorkspaceHint": "独立 worktree：基于 Git 提交运行，不包含原目录未提交的改动。",
     "holdHint": "正在调整，倒计时已暂停 · {{seconds}} 秒内无操作后重新开始计时",
     "agentMenuHint": "只改这一路任务的执行 Agent，修改后重新计时。",
     "roleLabel": "角色",
@@ -61,7 +77,12 @@
       "pending": "等待启动",
       "working": "执行中",
       "waiting": "需要处理",
-      "done": "已完成",
+      "done": "执行结束",
+      "awaiting_review": "执行结束 · 待验收",
+      "needs_changes": "需返工",
+      "rejected": "验收拒绝",
+      "passed": "验收通过",
+      "waived": "验收已豁免",
       "failed": "失败",
       "cancelled": "已取消"
     },
@@ -70,7 +91,8 @@
       "user_input": "等待输入",
       "question": "等待回答",
       "terminal_prompt": "等待终端输入"
-    }
+    },
+    "agentNoModel": "{{agent}} 没有可用的模型，已保留原来的选择。请先在 Agent 设置里登录或配置模型。"
   },
   "roomsWorkbenchDispatchPolicyHint": "Code 任务卡片按当前对话权限处理：需要确认、自动审批或完全访问。无人回应的卡片会在「设置 › 协作」设定的等待时间后启动。其他操作使用上面的策略。",
   "dispatchPreference": {

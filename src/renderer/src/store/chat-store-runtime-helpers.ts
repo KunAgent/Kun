@@ -10,13 +10,14 @@ import {
   applyClientUserMessageSourceMeta,
   isBackgroundShellNoticeUserMessage
 } from '@shared/background-shell-notice'
-import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../lib/workspace-path'
 import { shouldAutoTitleThread } from '../lib/thread-title'
 import { getProvider } from '../agent/registry'
 import { ensureThreadBinding } from './review-store'
 import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import type { ChatState } from './chat-store-types'
 import { emptyLiveProjection } from './chat-store-live-projection'
+import { queuedTaskWorkspaceMatches, queuedTaskWorkspaceRequirement, rememberQueuedTaskWorkspace } from './task-workspace-queue-identity'
 
 type ThreadDetailProviderLike = {
   getThreadDetail: (threadId: string) => Promise<{ blocks: ChatBlock[] }>
@@ -365,16 +366,18 @@ export async function findReusableEmptyThreadId(
 ): Promise<string | null> {
   const normalizedWorkspace = normalizeWorkspaceRoot(workspaceRoot)
   if (!normalizedWorkspace) return null
+  const usable = (thread: NormalizedThread): boolean =>
+    isThreadAvailableForNewSession(thread) && isReusableThread(thread)
 
   const activeThread = state.activeThreadId
     ? state.threads.find((thread) => thread.id === state.activeThreadId)
     : null
   if (
     activeThread &&
-    isReusableThread(activeThread) &&
+    usable(activeThread) &&
     shouldAutoTitleThread(activeThread) &&
     normalizeWorkspaceRoot(activeThread.workspace) === normalizedWorkspace &&
-    !threadHasUserMessage(state.blocks)
+    activeThreadIsUntouched(state)
   ) {
     return activeThread.id
   }
@@ -383,7 +386,7 @@ export async function findReusableEmptyThreadId(
     .filter(
       (thread) =>
         thread.id !== activeThread?.id &&
-        isReusableThread(thread) &&
+        usable(thread) &&
         shouldAutoTitleThread(thread) &&
         normalizeWorkspaceRoot(thread.workspace) === normalizedWorkspace
     )
@@ -407,6 +410,40 @@ export async function findReusableEmptyThreadId(
     }
   }))
   return checked.find((id): id is string => id !== null) ?? null
+}
+
+/**
+ * A thread is only reusable as a New-session landing page when it never
+ * belonged to a workflow: no side/task relation, no room, no bot origin, no
+ * team or worker binding, and no running turn. Archiving hides it entirely.
+ */
+export function isThreadAvailableForNewSession(thread: NormalizedThread): boolean {
+  if (thread.archived === true) return false
+  if (thread.roomContext || thread.workbenchOrigin || thread.taskOrigin || thread.executionUnit) return false
+  if (thread.relation === 'side' || thread.relation === 'task' || thread.relation === 'fork') return false
+  if (thread.status && runtimeStatusLooksRunning(thread.status)) return false
+  if (thread.latestTurnStatus && runtimeStatusLooksRunning(thread.latestTurnStatus)) return false
+  return true
+}
+
+/**
+ * The selected thread is reusable only while nothing is in flight on it: a
+ * queued message, an unconfirmed send, an unfinished tool block, or a pending
+ * hydration all mean the user already started something there.
+ */
+export function activeThreadIsUntouched(
+  state: Pick<ChatState,
+    'busy' | 'busyUnconfirmed' | 'blocks' | 'queuedMessages' | 'threadLoadingId' |
+    'threadRefreshingId' | 'activeThreadId' | 'lastSeq'>
+): boolean {
+  if (state.busy || state.busyUnconfirmed) return false
+  if (state.queuedMessages.length > 0) return false
+  if (state.activeThreadId && state.threadLoadingId === state.activeThreadId) return false
+  if (state.activeThreadId && state.threadRefreshingId === state.activeThreadId) return false
+  // Any recorded event means the thread is not the blank page it looks like.
+  if ((state.lastSeq ?? 0) > 0) return false
+  if (threadHasUserMessage(state.blocks)) return false
+  return !threadHasPendingRuntimeWork(state.blocks)
 }
 
 /** Legacy rows without `turnCount` still need a detail request; cap how many New task may wait on. */
@@ -439,6 +476,8 @@ function threadHasUserMessage(blocks: ChatBlock[]): boolean {
   return blocks.some((block) => block.kind === 'user')
 }
 
+const readyWorkspaceBindings = new Map<string, Promise<unknown>>()
+
 /** Ready task workspace: PATCH the binding, patch the thread, drain queue. */
 export async function bindReadyTaskWorkspace(
   event: TaskWorkspaceThreadEvent,
@@ -446,12 +485,23 @@ export async function bindReadyTaskWorkspace(
   get: () => ChatState,
   stillCurrent: () => boolean = () => true
 ): Promise<void> {
-  if (!stillCurrent() || event.unitId) return
+  if (!stillCurrent() || event.unitId || event.state !== 'ready') return
   const thread = get().threads.find((item) => item.id === event.threadId) ??
     get().adeThreads?.find((item) => item.id === event.threadId)
   if (thread?.taskWorkspaceId && thread.taskWorkspaceId !== event.workspaceId) return
   const path = event.workspace?.path?.trim()
   if (!path) return
+  const prep = useTaskWorkspaceStore.getState().prepByThread[event.threadId]
+  const requirement = queuedTaskWorkspaceRequirement(event.threadId)
+  const identity = { ownerThreadId: event.threadId, workspaceId: event.workspaceId,
+    sourceRoot: event.workspace?.sourceRoot ?? prep?.sourceRoot }
+  if (requirement && (!queuedTaskWorkspaceMatches(requirement, identity) || !identity.sourceRoot ||
+    workspaceRootScopeKey(path) === workspaceRootScopeKey(identity.sourceRoot))) return
+  if (requirement && !rememberQueuedTaskWorkspace(identity, set, get)) return
+  const alreadyBound = (thread?.taskWorkspaceId === event.workspaceId &&
+    workspaceRootScopeKey(thread.workspace) === workspaceRootScopeKey(path)) ||
+    (prep?.bound && prep.workspaceId === event.workspaceId &&
+      workspaceRootScopeKey(prep.path) === workspaceRootScopeKey(path))
   try {
     useTaskWorkspaceStore.setState((state) => {
       const prep = state.prepByThread[event.threadId]
@@ -459,11 +509,23 @@ export async function bindReadyTaskWorkspace(
         [event.threadId]: { ...prep, state: 'setting-up' as const } } } : {}
     })
     const provider = getProvider()
-    if (provider.bindThreadTaskWorkspace) {
-      await provider.bindThreadTaskWorkspace(event.threadId, {
-        taskWorkspaceId: event.workspaceId,
-        workspace: path
-      })
+    if (!provider.bindThreadTaskWorkspace && !alreadyBound) {
+      throw new Error('Task workspace binding is unavailable')
+    }
+    if (provider.bindThreadTaskWorkspace && !alreadyBound) {
+      const key = JSON.stringify([event.threadId, event.workspaceId, path])
+      let binding = readyWorkspaceBindings.get(key)
+      if (!binding) {
+        binding = provider.bindThreadTaskWorkspace(event.threadId, {
+          taskWorkspaceId: event.workspaceId, workspace: path
+        })
+        readyWorkspaceBindings.set(key, binding)
+      }
+      try {
+        await binding
+      } finally {
+        if (readyWorkspaceBindings.get(key) === binding) readyWorkspaceBindings.delete(key)
+      }
     }
     const sourceRoot = useTaskWorkspaceStore.getState().prepByThread[event.threadId]?.sourceRoot
     if (sourceRoot && normalizeWorkspaceRoot(sourceRoot) !== normalizeWorkspaceRoot(path)) {
@@ -486,12 +548,12 @@ export async function bindReadyTaskWorkspace(
     useTaskWorkspaceStore.setState((state) => {
       const prep = state.prepByThread[event.threadId]
       return prep ? { prepByThread: { ...state.prepByThread,
-        [event.threadId]: { ...prep, state: 'ready' as const } } } : {}
+        [event.threadId]: { ...prep, state: 'ready' as const, bound: true } } } : {}
     })
-    if (get().activeThreadId === event.threadId) void get().drainQueuedMessages()
+    await get().drainQueuedMessages(event.threadId)
   } catch (error) {
     markThreadWorkspacePrepFailed(event.threadId, error instanceof Error ? error.message : String(error))
-    if (!stillCurrent()) return
+    if (!stillCurrent() || get().activeThreadId !== event.threadId) return
     set({ error: error instanceof Error ? error.message : String(error) })
   }
 }

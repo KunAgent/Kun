@@ -60,6 +60,7 @@ describe('WriteInlineAgent', () => {
 
   it('keeps quote and configured selection actions available', async () => {
     const onQuoteSelection = vi.fn()
+    const onReleaseSelection = vi.fn()
     const onQuickAction = vi.fn()
     const quickAction = {
       id: 'polish',
@@ -72,15 +73,20 @@ describe('WriteInlineAgent', () => {
       renderer = create(createElement(WriteInlineAgent, {
         action,
         onQuoteSelection,
+        onReleaseSelection,
         quickActions: [quickAction],
         onQuickAction
       }))
     })
 
-    renderer!.root.findByProps({ 'aria-label': 'writeSelectionQuote' }).props.onClick({ nativeEvent: {} })
+    // Quote now lives in the pill row on top of the menu.
+    renderer!.root.findByProps({ 'data-selection-action': 'quote' }).props.onClick()
     renderer!.root.findByProps({ 'aria-label': quickAction.label }).props.onClick({ nativeEvent: {} })
 
     expect(onQuoteSelection).toHaveBeenCalledOnce()
+    // The quote empties the live selection; the frozen copy must go too, or
+    // the menu stays open and every further click quotes the same text again.
+    expect(onReleaseSelection).toHaveBeenCalledTimes(2)
     expect(onQuickAction).toHaveBeenCalledWith(quickAction)
   })
 })

@@ -361,6 +361,7 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
         providerId: input.providerId,
         model: input.model,
         reasoningEffort: input.reasoningEffort,
+        ...(input.harness ? { harness: input.harness } : {}),
         schedule: input.schedule
       })
       return task ? { ok: true, task } : { ok: false, message: 'Scheduled task was not found.' }

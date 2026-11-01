@@ -1,16 +1,15 @@
-import { useState, type ReactElement } from 'react'
+import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
-  FileText,
-  GraduationCap,
+  ChevronDown,
+  Copy,
   MessageSquare,
   MoreHorizontal,
+  PanelRight,
   PencilLine,
   Search,
-  Shapes,
-  Telescope,
   Trash2
 } from 'lucide-react'
 import { useChatStore } from '../../store/chat-store'
@@ -28,10 +27,14 @@ import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 import { SidebarActionDialog, type SidebarActionDialogState } from '../chat/SidebarProjectOverlays'
 import { RoomPopover } from '../rooms/RoomPopover'
 import { WorkSidebarSection } from './WorkSidebarSection'
+import { useWorkViewStore } from '../../write/work-view-store'
 import { useWorkSessions } from './use-work-sessions'
 import '../rooms/conversation-manage.css'
+import { readSessionsExpanded, writeSessionsExpanded } from './work-sidebar-layout'
+import { contextMenuPoint, KunContextMenu, type KunContextMenuPoint } from '../context-menu/KunContextMenu'
 
-const VISIBLE_SESSIONS = 8
+/** Folded, the list shows the latest few; the open session always stays in view. */
+export const VISIBLE_SESSIONS = 5
 /** Below this age a session reads "just now" instead of ticking seconds. */
 const JUST_NOW_MS = 60_000
 
@@ -40,15 +43,6 @@ function anchorName(anchor: WorkSessionEntry['anchor'], boardTitle: (id: string)
   if (anchor.kind === 'file' || anchor.kind === 'paper') return writeBasenameFromPath(anchor.path)
   if (anchor.kind === 'whiteboard') return boardTitle(anchor.boardId) ?? ''
   return ''
-}
-
-function AnchorIcon({ anchor }: { anchor: WorkSessionEntry['anchor'] }): ReactElement {
-  const props = { className: 'h-3.5 w-3.5', strokeWidth: 1.8, 'aria-hidden': true as const }
-  if (anchor.kind === 'file') return <FileText {...props} />
-  if (anchor.kind === 'whiteboard') return <Shapes {...props} />
-  if (anchor.kind === 'paper') return <GraduationCap {...props} />
-  if (anchor.kind === 'research') return <Telescope {...props} />
-  return <MessageSquare {...props} />
 }
 
 /**
@@ -60,14 +54,25 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   const { t, i18n } = useTranslation('common')
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [showAll, setShowAll] = useState(false)
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
   const [actionDialog, setActionDialog] = useState<SidebarActionDialogState | null>(null)
+  const [rowMenu, setRowMenu] = useState<{ session: WorkSessionEntry; point: KunContextMenuPoint } | null>(null)
+  const dismissRowMenu = useCallback(() => setRowMenu(null), [])
   const searching = searchOpen && query.trim().length > 0
-  const { root, sessions, loading, patchThread, forgetThread, reload } = useWorkSessions(searching ? query : '')
+  const { root, sessions, loading, hasMore, error, loadMore, patchThread, forgetThread, reload } =
+    useWorkSessions(searching ? query : '')
   const whiteboards = useWriteWorkspaceStore((state) => state.whiteboards)
   const spaceKey = writeWorkspaceKey(root)
   const current = useWorkSessionStore((state) => state.current[spaceKey])
+  const [expandedBySpace, setExpandedBySpace] = useState(() => readSessionsExpanded())
+  const showAll = expandedBySpace[spaceKey] === true
+  const listRef = useRef<HTMLDivElement | null>(null)
+  const toggleShowAll = (): void => {
+    const next = !showAll
+    setExpandedBySpace(writeSessionsExpanded(spaceKey, next))
+    // Folding returns to the latest sessions at the top.
+    if (!next) listRef.current?.scrollTo?.({ top: 0 })
+  }
   const activity = useChatStore(useShallow((state): WriteResourceActivityContext & { route: string } => ({
     route: state.route,
     threads: state.threads,
@@ -142,6 +147,17 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
       }
     })
   }
+  const openSession = (session: WorkSessionEntry): void => {
+    useWorkViewStore.getState().showSession()
+    void openWorkSession(session, undefined, { restoreWorkbench: false })
+  }
+  // Beside: the file keeps the stage and the session joins it in the split.
+  const openSessionBeside = (session: WorkSessionEntry): void => {
+    const view = useWorkViewStore.getState()
+    if (!view.split) view.toggleSplit()
+    view.showDocument()
+    void openWorkSession(session, undefined, { restoreWorkbench: false })
+  }
   const confirmActionDialog = async (): Promise<void> => {
     const dialog = actionDialog
     if (!dialog || dialog.submitting) return
@@ -157,8 +173,12 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
   // not picked up yet, shows as the current row.
   const inList = sessions.some((session) => session.id === current)
   const draftRow = current !== undefined && !searching && (current === '' || (current === activity.activeThreadId && !inList))
-  const visible = showAll || searching ? sessions : sessions.slice(0, VISIBLE_SESSIONS)
+  const openId = activity.route === 'write' ? activity.activeThreadId : null
+  const folded = sessions.slice(0, VISIBLE_SESSIONS)
+  const openBeyondFold = openId ? sessions.find((session, index) => index >= VISIBLE_SESSIONS && session.id === openId) : undefined
+  const visible = showAll || searching ? sessions : openBeyondFold ? [...folded, openBeyondFold] : folded
   const hidden = sessions.length - visible.length
+  const canFold = !searching && sessions.length > VISIBLE_SESSIONS
 
   const actions = (
     <>
@@ -193,10 +213,11 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
         </div>
       ) : null}
       <div className="work-sessions" data-work-sessions>
+        <div ref={listRef} className="work-sessions-scroll" data-expanded={showAll && canFold ? 'true' : undefined}>
         {draftRow ? (
           <div className="work-session-item" data-work-session-draft>
             <button type="button" className="work-session-row" aria-current="true">
-              <span className="work-session-anchor"><MessageSquare className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden /></span>
+              <span className="work-session-anchor" aria-hidden="true">K</span>
               <span className="work-session-title" data-placeholder="true">{t('workSessionNew')}</span>
               <span className="work-session-time">{t('workSessionDraft')}</span>
             </button>
@@ -220,10 +241,15 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
             )
           }
           return (
-            <div key={session.id} className="work-session-item" data-work-session={session.id}>
+            <div key={session.id} className="work-session-item" data-work-session={session.id}
+              data-menu-target={rowMenu?.session.id === session.id ? 'true' : undefined}
+              onContextMenu={(event) => {
+                event.preventDefault()
+                setRowMenu({ session, point: contextMenuPoint(event) })
+              }}>
               <button type="button" className="work-session-row" aria-current={isCurrent ? 'true' : undefined}
-                title={sessionLabel(session)} onClick={() => void openWorkSession(session)}>
-                <span className="work-session-anchor"><AnchorIcon anchor={session.anchor} /></span>
+                title={sessionLabel(session)} onClick={() => openSession(session)}>
+                <span className="work-session-anchor" aria-hidden="true">K</span>
                 <span className="work-session-title" data-placeholder={session.title ? undefined : 'true'}>
                   {sessionLabel(session)}
                 </span>
@@ -234,6 +260,10 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
                 ) : session.updatedAt ? (
                   <span className="work-session-time">{sessionTime(session.updatedAt)}</span>
                 ) : null}
+              </button>
+              <button type="button" className="work-session-side rooms-icon-button" data-work-session-side
+                title={t('workOpenBeside')} aria-label={t('workOpenBeside')} onClick={() => openSessionBeside(session)}>
+                <PanelRight size={14} aria-hidden="true" />
               </button>
               <RoomPopover label={t('workSessionMore')} trigger={<MoreHorizontal size={14} />}
                 className="work-session-menu rooms-icon-button" align="end" width={188}>
@@ -264,12 +294,26 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
             </div>
           )
         })}
-        {hidden > 0 || (showAll && sessions.length > VISIBLE_SESSIONS && !searching) ? (
-          <button type="button" className="work-session-more" onClick={() => setShowAll((value) => !value)}>
-            {hidden > 0 ? t('workSessionShowMore', { count: hidden }) : t('workSessionShowLess')}
+        </div>
+        {canFold && (showAll || hidden > 0) ? (
+          <button type="button" className="work-session-more" data-work-sessions-fold aria-expanded={showAll}
+            onClick={toggleShowAll}>
+            <ChevronDown className="work-session-more-chevron h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+            {showAll ? t('workSessionShowLess') : t('workSessionShowMore', { count: hidden })}
           </button>
         ) : null}
-        {sessions.length === 0 && !draftRow ? (
+        {error ? <p className="work-session-loading" role="alert">{t('workSessionLoadFailed')}</p> : null}
+        {error === 'initial' ? (
+          <button type="button" className="work-session-more" onClick={reload} disabled={loading}>
+            {t('workSessionRetry')}
+          </button>
+        ) : hasMore && (showAll || searching || !canFold) ? (
+          <button type="button" className="work-session-more" data-work-sessions-load-more
+            onClick={loadMore} disabled={loading}>
+            {loading ? t('workSessionLoading') : error === 'more' ? t('workSessionRetry') : t('workSessionLoadMore')}
+          </button>
+        ) : null}
+        {sessions.length === 0 && !draftRow && !error ? (
           loading ? (
             <p className="work-session-loading">{t('workSessionLoading')}</p>
           ) : (
@@ -277,6 +321,22 @@ export function WorkSessionsSection({ onOpenArchives }: { onOpenArchives: () => 
           )
         ) : null}
       </div>
+      {rowMenu ? (
+        <KunContextMenu point={rowMenu.point} label={sessionLabel(rowMenu.session)} onDismiss={dismissRowMenu} entries={[
+          { id: 'open', label: t('workMenuOpen'), icon: <MessageSquare aria-hidden="true" />, onSelect: () => openSession(rowMenu.session) },
+          { id: 'openBeside', label: t('workMenuOpenBesideFiles'), icon: <PanelRight aria-hidden="true" />,
+            onSelect: () => openSessionBeside(rowMenu.session) },
+          'separator',
+          { id: 'rename', label: t('sidebarThreadRename'), icon: <PencilLine aria-hidden="true" />,
+            onSelect: () => setRenaming({ id: rowMenu.session.id, value: rowMenu.session.title }) },
+          { id: 'copyTitle', label: t('workTabMenuCopyTitle'), icon: <Copy aria-hidden="true" />,
+            onSelect: () => void navigator.clipboard?.writeText?.(sessionLabel(rowMenu.session))?.catch(() => undefined) },
+          { id: 'archive', label: t('sidebarThreadArchive'), icon: <Archive aria-hidden="true" />, onSelect: () => archiveSession(rowMenu.session) },
+          'separator',
+          { id: 'delete', label: t('sidebarThreadDelete'), icon: <Trash2 aria-hidden="true" />, danger: true,
+            onSelect: () => requestDelete(rowMenu.session) }
+        ]} />
+      ) : null}
       {actionDialog ? (
         <SidebarActionDialog
           state={actionDialog}

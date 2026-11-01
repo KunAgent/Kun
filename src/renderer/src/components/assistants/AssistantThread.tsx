@@ -30,7 +30,7 @@ export function assistantTimeline(assistantId: string, tasks: AssistantTaskView[
 }
 
 const FINAL: AssistantTaskStatus[] = ['done', 'blocked', 'failed', 'cancelled']
-const ORDER: Record<AssistantTaskStatus, number> = { queued: 0, sent: 0, received: 1, working: 2, done: 3, blocked: 3, failed: 3, cancelled: 3 }
+const ORDER: Record<AssistantTaskStatus, number> = { queued: 0, sent: 0, received: 1, working: 2, done: 3, blocked: 3, failed: 3, cancelled: 3, cancel_requested: 2 }
 
 function TaskProgress({ task }: { task: AssistantTaskView }): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -94,7 +94,10 @@ export function AssistantThread({ assistant, tasks, notes, busy, onReply, onCanc
             {entry.task.title ? <h3 className="text-[15px] font-semibold">{entry.task.title}</h3> : null}
             <p className="whitespace-pre-wrap break-words text-[13.5px] leading-[21px] text-ds-ink">{entry.task.body}</p>
             <TaskProgress task={entry.task} />
-            {isOpenAssistantTask(entry.task.status) ? <button type="button" disabled={busy} onClick={() => onCancel(entry.task)}
+            {entry.task.delivery?.receivedAt ? <p className="text-[12px] text-ds-muted">{t(entry.task.delivery.consumedAt ? 'assistantDeliveryConsumed' : 'assistantDeliveryDownloaded')}</p> : null}
+            {entry.task.status === 'cancel_requested' ? <p role="status" className="text-[12px] text-amber-600">{t('assistantMailboxStatusCancelRequested')}</p> : null}
+            {entry.task.cancellationError ? <p role="alert" className="text-[12px] text-ds-danger">{t('assistantCancellationNeedsAttention')}</p> : null}
+            {isOpenAssistantTask(entry.task.status) && entry.task.status !== 'cancel_requested' ? <button type="button" disabled={busy} onClick={() => onCancel(entry.task)}
               className="self-start text-[11.5px] text-ds-muted transition hover:text-ds-danger disabled:opacity-50">{t('assistantMailboxCancelTask')}</button> : null}
           </div>
         </article> : entry.type === 'update' ? <article className="flex max-w-[600px] gap-2.5">
@@ -112,6 +115,7 @@ export function AssistantThread({ assistant, tasks, notes, busy, onReply, onCanc
         </article> : entry.note.from === 'you' ? <article className="flex max-w-[520px] flex-col gap-1 self-end">
           <span className="self-end text-[12px] text-ds-muted">{t('roomsSidebarYou')} · {time(entry.at)}{entry.about ? ` · ${t('assistantReplyTo', { title: entry.about })}` : ''}</span>
           <div className="whitespace-pre-wrap break-words rounded-[16px_16px_6px_16px] border border-ds-border bg-ds-userbubble text-ds-userbubbleFg px-3.5 py-2.5 text-[13.5px] leading-[21px]">{entry.note.body}</div>
+          {entry.note.delivery ? <span className="text-[11.5px] text-ds-muted">{t(`assistantNoteDelivery_${entry.note.delivery}`)}</span> : null}
         </article> : <article className="flex max-w-[600px] gap-2.5">
           <AssistantLogo kind={assistant.kind} name={assistant.name} icon={assistant.icon} size={30} />
           <div className="flex min-w-0 flex-col gap-1.5">

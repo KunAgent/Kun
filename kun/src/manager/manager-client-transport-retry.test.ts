@@ -78,4 +78,71 @@ describe('Manager transport recovery', () => {
     await expect(requestManagerJson(manager, '/read', { fetch: fetchImpl, timeoutMs: 10 })).rejects.toBeDefined()
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
+
+  it('reports an expired Manager deadline as a typed transport timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+      }))
+      const pending = requestManagerJson(manager, '/v1/documents/settings', {
+        fetch: fetchImpl as typeof globalThis.fetch,
+        timeoutMs: 25
+      })
+      const rejected = expect(pending).rejects.toMatchObject({
+        name: 'ServiceManagerTransportError',
+        kind: 'timeout',
+        message: 'Kun Service Manager connection failed (timeout; 25ms).'
+      })
+      await vi.advanceTimersByTimeAsync(25)
+      await rejected
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives a timed-out read one fresh budget before failing the caller', async () => {
+    vi.useFakeTimers()
+    try {
+      let calls = 0
+      const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => {
+        calls += 1
+        if (calls === 1) {
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+          })
+        }
+        return Promise.resolve(Response.json({ result: { id: 'thread-1' } }))
+      })
+      vi.stubGlobal('fetch', fetchImpl)
+      const pending = callManagerStore(manager, 'thread', 'get', { threadId: 'thread-1' })
+      await vi.advanceTimersByTimeAsync(30_000)
+      await expect(pending).resolves.toEqual({ id: 'thread-1' })
+      expect(fetchImpl).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('never replays a write after a Manager deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchImpl = vi.fn((_url: unknown, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+      }))
+      vi.stubGlobal('fetch', fetchImpl)
+      const pending = callManagerStore(manager, 'session', 'appendEvent', { event: {} })
+      const rejected = expect(pending).rejects.toMatchObject({
+        name: 'ServiceManagerTransportError', kind: 'timeout'
+      })
+      await vi.advanceTimersByTimeAsync(30_000)
+      await rejected
+      expect(fetchImpl).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
+  })
 })

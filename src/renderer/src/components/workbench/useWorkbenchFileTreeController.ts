@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { keepFilePreviewTargets, type FilePreviewCloseScope } from './file-preview-close-scope'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import type { NormalizedThread } from '../../agent/types'
 import {
@@ -369,15 +370,27 @@ export function useWorkbenchFileTreeController({
     )
   }
 
-  function closeOtherWorkspaceFilePreviewTargets(target: WorkspaceFileTarget): void {
+  function closeOtherWorkspaceFilePreviewTargets(target: WorkspaceFileTarget, scope: FilePreviewCloseScope = 'others'): void {
     suppressCurrentOfficePreviewFocus()
-    const next = closeOtherFilePreviewTargets(
+    const next = keepFilePreviewTargets(
       openFilePreviewTargetsRef.current,
       target,
-      new Set(pinnedFilePreviewTargetKeysRef.current)
+      new Set(pinnedFilePreviewTargetKeysRef.current),
+      scope
     )
     updateOpenFilePreviewTargets(next)
-    selectFilePreviewTarget(target)
+    const activeKey = workspaceFileTargetKey(filePreviewTargetRef.current)
+    const keys = next.map((item) => workspaceFileTargetKey(item))
+    // The anchor takes the stage when it survives; otherwise keep the open tab, then the first left.
+    const nextActive = keys.includes(workspaceFileTargetKey(target)) ? target
+      : keys.includes(activeKey) ? filePreviewTargetRef.current : next[0] ?? null
+    if (nextActive) {
+      selectFilePreviewTarget(nextActive)
+      return
+    }
+    selectFilePreviewTarget(null)
+    if (closeRightPanelTab) closeRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.file)
+    else setRightPanelMode(null)
   }
 
   function togglePreserveFilePreviewTargets(): void {

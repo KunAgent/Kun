@@ -1,5 +1,6 @@
 import { registerAgentLifecycleRoutes } from './register-agent-lifecycle-routes.js'
 import { registerAgentWorkRoutes } from './register-agent-work-routes.js'
+import { registerAssistantContinuationRoutes } from './register-assistant-continuation-routes.js'
 import { registerRoomResultInboxRoutes } from './register-room-result-inbox-routes.js'
 import { registerRoomPermissionRoutes } from './register-room-permission-routes.js'
 import { registerAgentChatRoutes } from './register-agent-chat-routes.js'
@@ -101,6 +102,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerAgentChatRoutes(add, runtime)
   registerAgentWorkRoutes(add)
   registerRoomResultInboxRoutes(add)
+  registerAssistantContinuationRoutes(add)
   registerRoomProfileRoutes(add, runtime)
   registerRoomWardrobeRoutes(add)
   registerAgentIdentityRoutes(add)

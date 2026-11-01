@@ -292,7 +292,7 @@ describe('WorkbenchSideRail', () => {
     const order = ['Files', 'Changes', 'Plan', 'Preview', 'Open branch conversation', 'Subagents', 'Whiteboard', 'MCP &amp; Skills']
       .map((label) => html.indexOf(`data-tooltip="${label}"`))
     expect(order).toEqual([...order].sort((left, right) => left - right))
-    expect(html.match(/ds-side-rail-divider/g)).toHaveLength(2)
+    expect(html.match(/ds-side-rail-divider/g)).toHaveLength(3)
     expect(html).toContain('ds-extension-side-rail-group')
     expect(html).not.toContain('data-tooltip="Extension Views"')
     expect(html).not.toContain('aria-label="Open extension Views"')

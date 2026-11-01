@@ -14,6 +14,8 @@
   "settingsIaPermissions": "अनुमतियाँ",
   "settingsIaSkills": "स्किल",
   "settingsIaMcp": "MCP टूल",
+  "settingsIaConnections": "कनेक्शन",
+  "settingsIaConnectionsDesc": "Notion, GitHub, Figma और Gmail के खाते और API टोकन।",
   "settingsIaProjects": "प्रोजेक्ट कॉन्फ़िग",
   "settingsIaHarnesses": "बाहरी एजेंट",
   "settingsIaCollaboration": "सहयोग",

@@ -2,7 +2,11 @@ import { useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, ChevronRight, Loader2, Palette } from 'lucide-react'
 import type { ToolBlock } from '../../agent/types'
-import { readDesignOpenRequest, type DesignOpenRequestMetadata } from '../../agent/design-open-request'
+import {
+  mergeDesignOpenRequests,
+  readDesignOpenRequest,
+  type DesignOpenRequestMetadata
+} from '../../agent/design-open-request'
 import { useChatStore } from '../../store/chat-store'
 import { openAgentDesignCanvas } from '../../design/agent-design-ingest'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
@@ -10,27 +14,38 @@ import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 
 export type DesignOpenCardState = 'designing' | 'ready' | 'failed' | 'legacy' | 'interrupted'
 
-/** A call that stopped streaming without a result (stopped reply) no longer spins. */
+/**
+ * A call that stopped streaming without a result (stopped reply) no longer
+ * spins; boards written by earlier calls of the same design stay openable.
+ */
 export function designOpenCardState(
   request: DesignOpenRequestMetadata,
   requestTurnLive: boolean
 ): DesignOpenCardState {
-  if (request.status === 'pending') return requestTurnLive ? 'designing' : 'interrupted'
+  if (request.status === 'pending') {
+    if (requestTurnLive) return 'designing'
+    return request.screens.length > 0 ? 'ready' : 'interrupted'
+  }
   return request.status
 }
 
 /**
- * Transcript card for a Code agent's `design_open` call: the design lives on
- * the canvas, and the card is the way back to it — one click opens it beside
- * the conversation.
+ * Transcript card for a Code agent's design: the `design_open` calls that
+ * built it (same title) share one card. The design lives on the canvas, and
+ * the card is the way back to it — one click opens it beside the conversation.
  */
-export function DesignOpenCard({ block, threadId, requestTurnLive }: {
-  block: ToolBlock
+export function DesignOpenCard({ blocks, threadId, requestTurnLive }: {
+  blocks: readonly ToolBlock[]
   threadId?: string
   requestTurnLive: boolean
 }): ReactElement | null {
   const { t } = useTranslation('common')
-  const request = useMemo(() => readDesignOpenRequest(block), [block])
+  const request = useMemo(() => mergeDesignOpenRequests(
+    blocks.flatMap((block) => {
+      const parsed = readDesignOpenRequest(block)
+      return parsed ? [parsed] : []
+    })
+  ), [blocks])
   const thread = useChatStore((state) => threadId
     ? state.threads.find((candidate) => candidate.id === threadId)
     : undefined)
@@ -55,13 +70,16 @@ export function DesignOpenCard({ block, threadId, requestTurnLive }: {
       return
     }
     setOpening(true)
-    void openAgentDesignCanvas({ threadId, workspaceRoot, request }).finally(() => setOpening(false))
+    void openAgentDesignCanvas({ threadId, workspaceRoot, request: { ...request, status: 'ready' } })
+      .finally(() => setOpening(false))
   }
 
   const targetLabel = request.target === 'app'
     ? t('designAgentCardTargetApp')
     : request.target === 'web' ? t('designAgentCardTargetWeb') : ''
-  const screens = request.screenCount > 0 ? t('designAgentCardScreens', { count: request.screenCount }) : ''
+  // While designing, count the boards still streaming; afterwards only the written ones.
+  const boardCount = state === 'designing' ? request.screenCount : request.screens.length || request.screenCount
+  const screens = boardCount > 0 ? t('designAgentCardScreens', { count: boardCount }) : ''
   const meta = state === 'designing'
     ? [t('designAgentCardDesigning'), screens].filter(Boolean).join(' · ')
     : state === 'failed'

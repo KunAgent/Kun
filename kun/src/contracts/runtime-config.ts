@@ -13,9 +13,40 @@ import {
   RuntimeTuningConfigSchema,
   TokenEconomyConfigSchema
 } from '../config/kun-config.js'
-import { KunCapabilitiesConfig } from './capabilities.js'
+import { KunCapabilitiesConfig, McpServerConfig } from './capabilities.js'
 import { HooksConfigSchema } from '../hooks/hook-config.js'
 import { NativeAgentNetworkSnapshot } from './native-agent-network.js'
+
+/**
+ * The Runtime owns the live MCP server set. A hot apply may replace it only
+ * with the set it derived from, so a stale GUI snapshot cannot resurrect a
+ * server that the Runtime disabled in the meantime.
+ */
+export const McpServersUpdate = z
+  .object({
+    mode: z.enum(['preserve', 'replace']),
+    /** Servers the caller read before editing; required when replacing. */
+    base: z.record(z.string().min(1), McpServerConfig).optional()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.mode === 'replace' && !value.base) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['base'],
+        message: 'replacing MCP servers requires the set that was read'
+      })
+    }
+    if (value.mode === 'preserve' && value.base) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['base'],
+        message: 'preserve mode must not carry a server set'
+      })
+    }
+  })
+
+export type McpServersUpdatePayload = z.infer<typeof McpServersUpdate>
 
 const RuntimeConfigApplyServeConfig = KunServeConfigSchema.omit({
   host: true,
@@ -72,6 +103,8 @@ export const RuntimeConfigApplyRequest = z
     roles: RolesConfigSchema.optional(),
     fastContext: FastContextConfigSchema.optional(),
     capabilities: KunCapabilitiesConfig.optional(),
+    /** Present whenever the caller sends capabilities that include MCP. */
+    mcpServers: McpServersUpdate.optional(),
     hooks: HooksConfigSchema.optional(),
     quality: QualityConfigSchema.optional(),
     lab: LabConfigSchema.optional(),

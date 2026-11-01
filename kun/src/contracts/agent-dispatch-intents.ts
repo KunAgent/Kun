@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ApprovalPolicySchema, ApprovalReviewerSchema, SandboxModeSchema } from './policy.js'
 import { ActingTurnModelRouteSchema } from './turn-acting-route.js'
+import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 
 export const AgentDispatchKindSchema = z.enum(['worker', 'workbench'])
 export type AgentDispatchKind = z.infer<typeof AgentDispatchKindSchema>
@@ -33,6 +34,7 @@ export const AgentDispatchAssignmentRouteSchema = z.object({
   /** Agent roster role the worker plays; absent = the engine alone. */
   profileId: z.string().min(1).max(128).optional(),
   model: z.string().max(512).optional(),
+  reasoningEffort: TurnReasoningEffortSchema.optional(),
   providerId: z.string().min(1).max(128).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional()
 }).strict()
@@ -40,7 +42,9 @@ export type AgentDispatchAssignmentRoute = z.infer<typeof AgentDispatchAssignmen
 
 export const AgentDispatchAssignmentSchema = AgentDispatchAssignmentRouteSchema.extend({
   label: z.string().min(1).max(64),
-  agentName: z.string().max(512).optional()
+  agentName: z.string().max(512).optional(),
+  /** Host-resolved isolation, shown on the card and reused at admission; not an editable route field. */
+  workspaceIsolation: z.enum(['local', 'worktree']).optional()
 }).strict()
 export type AgentDispatchAssignment = z.infer<typeof AgentDispatchAssignmentSchema>
 

@@ -80,6 +80,7 @@ export class ActivityStore implements RuntimeEventObserver {
       ...(input.roomId ? { roomId: input.roomId } : {}),
       ...(input.metadataPending ? { metadataPending: true } : {}),
       ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
+      ...(input.childLauncher ? { childLauncher: input.childLauncher } : {}),
       ...(input.teamId ? { teamId: input.teamId } : {}),
       harnessId: input.harnessId,
       title: input.title,
@@ -351,6 +352,7 @@ export class ActivityStore implements RuntimeEventObserver {
         threadId: child.childId,
         ...(this.options.threadMetadata ? { metadataPending: true } : {}),
         parentThreadId: child.parentThreadId,
+        ...(child.childLauncher ? { childLauncher: child.childLauncher } : {}),
         harnessId: 'kun',
         title: (child.childLabel ?? child.childId).slice(0, 200),
         workspace: { path: '', kind: 'directory' }

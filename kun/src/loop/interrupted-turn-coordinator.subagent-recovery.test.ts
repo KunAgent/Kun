@@ -39,7 +39,10 @@ describe('InterruptedTurnCoordinator subagent recovery context', () => {
       events: { record } as never,
       nowIso: () => '2026-08-19T00:01:00.000Z',
       nowMs: () => Date.parse('2026-08-19T00:01:00.000Z'),
-      runTurn
+      runTurn,
+      loadSessionItems: async () => [
+        { turnId: 'turn_interrupted', kind: 'tool_call', role: 'tool', status: 'completed' }
+      ] as never
     })
 
     await expect(coordinator.resumeInterruptedTurns([{
@@ -117,6 +120,9 @@ describe('InterruptedTurnCoordinator subagent recovery context', () => {
       nowIso: () => '2026-08-19T00:01:00.000Z',
       nowMs: () => Date.parse('2026-08-19T00:01:00.000Z'),
       runTurn,
+      loadSessionItems: async () => [
+        { turnId: 'turn_interrupted', kind: 'assistant_text', role: 'assistant', status: 'completed' }
+      ] as never,
       interruptedResume: {
         setTimer: (callback) => {
           scheduled = callback

@@ -1,5 +1,6 @@
+import { useTeamWorkers } from '../workers/use-team-workers'
 import { useChatStore } from '../../store/chat-store'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, GitBranch, ShieldCheck, Split, Timer } from 'lucide-react'
 import {
@@ -16,6 +17,7 @@ import { assignmentRoute, dispatchAssignments, dispatchRoutesEditable, replaceAs
   sameAssignmentRoute } from './agent-dispatch-card-model'
 import { openWorkerSession } from '../workers/worker-view-store'
 import { TaskSuggestionCard } from './TaskSuggestionCard'
+import { AssistantMarkdown } from './AssistantMarkdown'
 import { AgentIcon } from '../agent-icon'
 import { agentIconId } from '../../lib/agent-icon-aliases'
 import { isTaskSuggestionBlock } from './task-suggestion-card-model'
@@ -42,6 +44,33 @@ export function AgentDispatchGroup({ blocks, readOnly = false }: { blocks: reado
     : <AgentDispatchCard key={block.id} block={block} readOnly={readOnly} />)}</div>
 }
 
+function AgentDispatchResult({ intent, count }: { intent: AgentDispatchIntentView; count: number }) {
+  const { t } = useTranslation('common')
+  const id = useId()
+  const [expanded, setExpanded] = useState(false)
+  const summary = intent.resultSummary?.replace(/\r\n?/g, '\n').trim() ?? ''
+  if (!summary && intent.state !== 'completed') return null
+  const preview = summary.split('\n').slice(0, 8).join('\n').slice(0, 800).trimEnd()
+  const canExpand = preview.length < summary.length
+  const text = canExpand && !expanded ? `${preview}\n…` : summary
+  return <section className="min-w-0 space-y-2 border-t border-ds-border-muted px-4 py-3"
+    data-dispatch-result data-result-state={expanded ? 'expanded' : 'preview'} aria-labelledby={`${id}-title`}>
+    <h5 id={`${id}-title`} className="text-[13px] font-semibold text-ds-ink">
+      {t(count > 1 ? 'dispatchIntent.resultBatch' : 'dispatchIntent.result')}
+    </h5>
+    <div id={`${id}-body`}>
+      {summary ? <AssistantMarkdown text={text} streaming={false} safeMarkdown
+        className="ds-markdown whitespace-pre-wrap break-words text-[13.5px] leading-6 text-ds-ink" />
+        : <p className="text-[13px] leading-6 text-ds-muted">{t('dispatchIntent.resultMissing')}</p>}
+    </div>
+    {canExpand ? <button type="button" aria-expanded={expanded} aria-controls={`${id}-body`}
+      onClick={() => setExpanded((value) => !value)}
+      className="rounded-md px-2 py-1 text-[13px] font-medium text-ds-ink hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      {t(expanded ? 'dispatchIntent.collapseResult' : 'dispatchIntent.expandResult')}
+    </button> : null}
+  </section>
+}
+
 type Draft = { title: string; task: string; routes: AgentDispatchAssignmentRoute[] }
 
 const fieldClass = 'w-full rounded-lg border border-ds-border bg-ds-main px-2.5 py-2 text-ds-ink focus:border-accent focus:outline-none'
@@ -52,10 +81,11 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const id = block.meta!.dispatchIntentId as string
   const parsed = AgentDispatchIntentPublicSchema.safeParse(block.meta?.dispatchIntent)
   const { intent, act, busy, error } = useAgentDispatchIntent(id, parsed.success ? parsed.data : undefined)
+  const { overview } = useTeamWorkers(intent?.source.threadId ?? null, Boolean(intent?.target?.dispatchIds?.length))
   const [draft, setDraft] = useState<Draft>()
   const [saveError, setSaveError] = useState('')
   const [routeFailed, setRouteFailed] = useState(false)
-  const hold = useDispatchInteractionHold(intent, act)
+  const hold = useDispatchInteractionHold(intent, act, (ok) => setRouteFailed(!ok))
   const intentState = intent?.state
   // The editor belongs to a paused card; any other transition (resume elsewhere, cancel) closes it.
   useEffect(() => { if (intentState && intentState !== 'paused') setDraft(undefined) }, [intentState])
@@ -70,6 +100,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const canEditRoutes = !locked && dispatchRoutesEditable(intent) && (Boolean(recommendation.assignments) || !batch)
   const localRoutes = draft?.routes ?? hold.routes
   const shown = localRoutes ? assignments.map((assignment, index) => ({ label: assignment.label, ...localRoutes[index],
+    ...(sameAssignmentRoute(localRoutes[index], assignment) ? { workspaceIsolation: assignment.workspaceIsolation } : {}),
     ...(localRoutes[index].agentId === assignment.agentId && assignment.agentName ? { agentName: assignment.agentName } : {}) }))
     : assignments
   const iconIds = shown.map((assignment) => agentIconId(assignment.agentId))
@@ -77,6 +108,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const workerIds = intent.target?.workerIds ?? (intent.target?.threadId ? [intent.target.threadId] : [])
   const openWorker = (workerId: string, label?: string) => openWorkerSession(workerId, label)
   const changeRoute = (index: number, route: AgentDispatchAssignmentRoute) => {
+    setRouteFailed(false)
     if (draft) { setDraft({ ...draft, routes: replaceAssignmentRoute(draft.routes, index, route) }); return }
     // A counting-down card holds the pick until the user stops for a moment.
     if (hold.changeRoute(index, route)) return
@@ -111,8 +143,9 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
           {batch ? t('dispatchIntent.batchTitle', { n: assignments.length }) : recommendation.title}
         </h4>
       </div>
-      <AgentDispatchStatusBadge intent={intent} />
+      <AgentDispatchStatusBadge intent={intent} dispatches={overview?.dispatches} />
     </header>
+    <AgentDispatchResult key={id} intent={intent} count={assignments.length} />
     {draft ? <div className="space-y-2 border-t border-ds-border-muted px-4 py-3 text-[13px]">
       {!batch ? <input value={draft.title} maxLength={512} aria-label={t('dispatchIntent.title')}
         onChange={(event) => setDraft({ ...draft, title: event.target.value })} className={fieldClass} /> : null}
@@ -120,8 +153,9 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
         placeholder={batch ? t('dispatchIntent.batchTaskHint') : undefined}
         onChange={(event) => setDraft({ ...draft, task: event.target.value })} className={`${fieldClass} text-[12.5px] leading-5`} />
     </div> : null}
-    <AgentDispatchAssignmentList intent={intent} assignments={shown} editable={canEditRoutes} busy={busy}
-      onRouteChange={changeRoute} onInteract={hold.touch} onOpenWorker={openWorker} />
+    {/* Held picks stay local, so the hold's own pause must not lock the pickers (a disabled chip eats the click). */}
+    <AgentDispatchAssignmentList intent={intent} dispatches={overview?.dispatches} assignments={shown} editable={canEditRoutes} busy={busy && !hold.holding}
+      onRouteChange={changeRoute} onInteract={hold.touch} onPendingChange={hold.setPending} onOpenWorker={openWorker} />
     <footer className="space-y-2.5 border-t border-ds-border-muted px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ds-faint">
         {workspaceName ? <span className="inline-flex min-w-0 items-center gap-1" title={recommendation.workspace}>
@@ -160,9 +194,6 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
       {!draft && routeFailed && error ? <p role="alert" className="break-words text-xs text-red-600 dark:text-red-300">
         {t('dispatchIntent.routeUpdateFailed', { message: error })}</p> : null}
       {intent.replacementReason ? <p className="break-words text-xs text-ds-muted">{intent.replacementReason}</p> : null}
-      {intent.resultSummary ? <div className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-ds-subtle px-3 py-2 text-[12px] leading-5 text-ds-ink">
-        {intent.resultSummary}
-      </div> : null}
     </footer>
   </section>
 }

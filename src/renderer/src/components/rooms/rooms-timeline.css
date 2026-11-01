@@ -139,6 +139,27 @@
 .rooms-message-role {
   color: var(--ds-text-muted);
 }
+/* The author name carries the member entry whenever the avatar is not shown. */
+.rooms-message-author {
+  max-width: 55%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rooms-message-author:hover { text-decoration: underline; text-underline-offset: 2px; }
+.rooms-message-author:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
 .rooms-message-meta time {
   white-space: nowrap;
   color: var(--ds-text-faint);
@@ -394,3 +415,12 @@
     transition: none;
   }
 }
+
+/* Focus mode: no avatar art and no reserved avatar column, so names, times and
+ * run status line up with the message content. */
+html[data-focus-mode='on'] .rooms-workspace .rooms-message-row > .rooms-avatar,
+html[data-focus-mode='on'] .rooms-workspace .rooms-message-row > .rooms-message-avatar-spacer {
+  display: none;
+}
+html[data-focus-mode='on'] .rooms-workspace .rooms-message-system { padding-left: 0; }
+html[data-focus-mode='on'] .rooms-workspace .rooms-timeline-gates { width: 100%; margin-inline-start: 0; }

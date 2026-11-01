@@ -7,6 +7,7 @@ import { useChatStore } from './store/chat-store'
 import { normalizeWorkspaceRoot } from './lib/workspace-path'
 import { ensureCodexReferenceWatcher } from './history-reference/codex-reference-watcher'
 import { currentRemoteSurface } from './mobile/use-remote-surface'
+import { startTaskWorkspaceQueueRecovery } from './store/task-workspace-queue-recovery'
 
 type AppShellModule = typeof import('./AppShell')
 let preparedAppShell: AppShellModule['default'] | null = null
@@ -93,6 +94,11 @@ function SharedModelConnectionsLifecycle(): null {
   return null
 }
 
+function TaskWorkspaceQueueLifecycle(): null {
+  useEffect(() => startTaskWorkspaceQueueRecovery(useChatStore.setState, useChatStore.getState), [])
+  return null
+}
+
 function StartupShell(): React.ReactElement {
   return <KunLoader fill label="Loading Kun..." />
 }
@@ -103,6 +109,7 @@ export default function App(): React.ReactElement {
     <AppErrorBoundary>
       <DocumentUsabilityLifecycle />
       <SharedModelConnectionsLifecycle />
+      <TaskWorkspaceQueueLifecycle />
       <Suspense fallback={<StartupShell />}>
         <AppShell />
       </Suspense>

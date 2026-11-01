@@ -1,6 +1,6 @@
 import { useId, type CSSProperties, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowRight, FileText, Image as ImageIcon, Layers, Palette, Presentation, Search, Shapes, Table2, type LucideIcon } from 'lucide-react'
+import { ArrowRight, ChartLine, FileText, Image as ImageIcon, Layers, Palette, Presentation, Search, Shapes, Table2, type LucideIcon } from 'lucide-react'
 import { LIBRARY_ARTIFACT_KIND_STYLE, LIBRARY_ARTIFACT_KINDS, type LibraryArtifactKind } from '../../artifacts/artifact-types'
 import { ARTIFACT_KIND_LABEL_KEYS } from '../../artifacts/artifact-view-model'
 import './whats-new-spotlight.css'
@@ -10,6 +10,7 @@ const KIND_ICONS: Record<LibraryArtifactKind, LucideIcon> = {
   design: Palette,
   doc: FileText,
   slides: Presentation,
+  report: ChartLine,
   sheet: Table2,
   board: Shapes,
   image: ImageIcon

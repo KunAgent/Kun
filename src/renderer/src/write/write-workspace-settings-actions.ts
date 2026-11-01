@@ -184,6 +184,12 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
     const generation = nextSettingsRequest()
     const inlineRevisionAtRequest = inlineCompletionSettingsRevision
     const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
+    const previousRoot = get().workspaceRoot
+    const rootChanged = normalizePath(previousRoot) !== normalized
+    if (rootChanged && previousRoot) {
+      const canLeave = await prepareActiveWriteFileForNavigation(get, previousRoot)
+      if (!requestIsCurrent(generation) || !canLeave) return
+    }
     const roots = compactWorkspaceRoots([normalized, ...get().workspaceRoots])
     set({ workspaceRoots: roots, settingsLoading: false })
     try {
@@ -200,7 +206,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
         resetPaperWorkspaceContent()
         get().setPaperResearch({ sessionId: null })
       }
-      await get().initializeWorkspace(write.activeWorkspaceRoot)
+      await get().initializeWorkspace(write.activeWorkspaceRoot, { navigationPrepared: rootChanged })
     } catch (error) {
       if (!requestIsCurrent(generation)) return
       set({ settingsError: error instanceof Error ? error.message : String(error) })

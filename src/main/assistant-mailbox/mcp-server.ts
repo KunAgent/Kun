@@ -54,9 +54,7 @@ const failed = (error: unknown) => ({
   isError: true
 })
 
-export async function runAssistantMcpServerFromArgv(argv: string[]): Promise<boolean> {
-  const launch = parseAssistantMcpLaunch(argv)
-  if (!launch) return false
+export function createAssistantMcpServer(launch: Launch): McpServer {
   const server = new McpServer({ name: 'kun-assistants', version: '0.1.0' })
   const call = (route: string, body: Record<string, unknown>) => callAssistantEndpoint(launch, route, body)
 
@@ -72,16 +70,17 @@ export async function runAssistantMcpServerFromArgv(argv: string[]): Promise<boo
   })
 
   server.registerTool('assign_assistant_task', {
-    description: 'Send a task to one of the user\'s personal assistants. Delivery is asynchronous: the assistant picks it up on its next check (usually within 20 minutes) and reports back. Write self-contained instructions, including the expected result and anything that needs the user\'s confirmation. Use get_assistant_results later to read progress and results.',
+    description: 'Send a task to one of the user\'s personal assistants. Delivery is asynchronous: the assistant picks it up on its next check (usually within 20 minutes) and reports back. Write self-contained instructions, including the expected result and anything that needs the user\'s confirmation. Delegation does not create new human authorization. Use get_assistant_results later to read progress and results.',
     inputSchema: {
       assistant: z.string().min(1).describe('Assistant name or id from list_assistants'),
       title: z.string().max(200).optional().describe('Short task title'),
       instructions: z.string().min(1).max(30000).describe('Complete instructions for the assistant'),
       deadline: z.string().optional().describe('Optional ISO 8601 deadline with timezone offset')
     }
-  }, async (args) => {
+  }, async (args, extra) => {
     try {
-      const result = await call('/tasks/assign', args)
+      const source = extra._meta?.kunSource
+      const result = await call('/tasks/assign', { ...args, ...(source ? { __kunSource: source } : {}) })
       return ok('Task queued for the assistant. Results arrive asynchronously; if it is urgent, tell the user they can nudge the assistant with the wakeMessage below.', result)
     } catch (error) { return failed(error) }
   })
@@ -94,7 +93,7 @@ export async function runAssistantMcpServerFromArgv(argv: string[]): Promise<boo
     }
   }, async (args) => {
     try {
-      return ok('Task cancelled.', await call('/tasks/cancel', { taskId: args.task_id, reason: args.reason }))
+      return ok('Cancellation requested; check get_assistant_results for the assistant confirmation.', await call('/tasks/cancel', { taskId: args.task_id, reason: args.reason }))
     } catch (error) { return failed(error) }
   })
 
@@ -115,6 +114,22 @@ export async function runAssistantMcpServerFromArgv(argv: string[]): Promise<boo
     } catch (error) { return failed(error) }
   })
 
+  server.registerTool('wait_assistant_results', {
+    description: 'Wait up to 30 seconds for a task to change. Pass updateToken from a previous result as after. This keeps the current model turn waiting; it does not wake a model after the turn ends.',
+    inputSchema: { task_id: z.string().min(4), after: z.string().regex(/^[a-f0-9]{64}$/).optional(), timeout_seconds: z.number().int().min(0).max(30).optional() },
+    annotations: { readOnlyHint: true }
+  }, async args => {
+    try { return ok('Assistant task state.', await call('/tasks/wait', { taskId: args.task_id, after: args.after, timeoutMs: (args.timeout_seconds ?? 30) * 1000 })) }
+    catch (error) { return failed(error) }
+  })
+
+  return server
+}
+
+export async function runAssistantMcpServerFromArgv(argv: string[]): Promise<boolean> {
+  const launch = parseAssistantMcpLaunch(argv)
+  if (!launch) return false
+  const server = createAssistantMcpServer(launch)
   await server.connect(new StdioServerTransport())
   return true
 }

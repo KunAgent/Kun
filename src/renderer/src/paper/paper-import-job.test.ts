@@ -6,6 +6,8 @@ import { usePaperFreshFolders } from './paper-import-fresh'
 import { findImportItem, runPaperImport, undoPaperImport, usePaperImportJobs } from './paper-import-job'
 import { planPaperImport, type ImportCandidate } from './paper-import-plan'
 
+vi.mock('./paper-space', () => ({ paperSpaceReadingSettings: () => ({ papersDir: 'papers' }), ensurePaperSpace: vi.fn(async () => '/Users/me/space') }))
+
 const ROOT = '/Users/me/space'
 const t = (key: string, options?: Record<string, unknown>): string => `${key}${options ? JSON.stringify(options) : ''}`
 
@@ -45,7 +47,7 @@ describe('paper import job', () => {
     delete (window as unknown as { kunGui?: unknown }).kunGui
   })
 
-  it('creates folders, imports one paper at a time and marks the target folders fresh', async () => {
+  it('imports every candidate at the fixed root without creating folders', async () => {
     const bridge = installBridge()
     const plan = planPaperImport(
       [candidate('1', { group: 'A' }), candidate('2', { group: 'B' }), candidate('3', { group: 'A' })],
@@ -53,14 +55,14 @@ describe('paper import job', () => {
     )
     await runPaperImport({ scope: 's', plan, folder: 'topic', t })
 
-    expect(bridge.paperCreateGroup.mock.calls.map(([arg]) => arg.group).sort()).toEqual(['topic/A', 'topic/B'])
+    expect(bridge.paperCreateGroup).not.toHaveBeenCalled()
     expect(bridge.paperImportBatch).toHaveBeenCalledTimes(3)
     const parents = bridge.paperImportBatch.mock.calls.map(([arg]) => arg.parentDir)
-    expect(parents).toEqual(['papers/topic/A', 'papers/topic/A', 'papers/topic/B'])
+    expect(parents).toEqual(['papers', 'papers', 'papers'])
     const job = usePaperImportJobs.getState().jobs.s!
     expect(job.running).toBe(false)
     expect(job.items.map((item) => item.status)).toEqual(['imported', 'imported', 'imported'])
-    expect(usePaperFreshFolders.getState().byRoot['/Users/me/space']).toEqual({ 'topic/A': 2, 'topic/B': 1 })
+    expect(usePaperFreshFolders.getState().byRoot['/Users/me/space']).toBeUndefined()
     const notice = usePaperStore.getState().notice
     expect(notice?.message).toContain('paperImportDoneToFolder')
     expect(notice?.action?.label).toBe('paperImportUndo')
@@ -86,7 +88,7 @@ describe('paper import job', () => {
     installBridge({
       paperLibraryList: vi.fn(async () => ({
         ok: true,
-        entries: [{ unitDir: 'papers/topic/2401.1', hasPdf: false }, { unitDir: 'papers/topic/2401.2', hasPdf: true }],
+        entries: [{ unitDir: 'papers/2401.1', hasPdf: false }, { unitDir: 'papers/2401.2', hasPdf: true }],
         counts: {},
         tags: [],
         groups: []
@@ -118,7 +120,7 @@ describe('paper import job', () => {
 
     await undoPaperImport('s', t)
     expect(bridge.paperTrashUnit).toHaveBeenCalledTimes(1)
-    expect(bridge.paperTrashUnit.mock.calls[0]![0].unitDir).toBe('papers/topic/2401.1')
+    expect(bridge.paperTrashUnit.mock.calls[0]![0].unitDir).toBe('papers/2401.1')
     expect(usePaperStore.getState().notice?.message).toContain('paperImportUndone')
   })
 

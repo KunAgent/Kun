@@ -37,5 +37,8 @@ export const kunLabPatchSchema = z.object({
   projectBoard: z.object({
     enabled: z.boolean().optional()
   }).strict().optional(),
-  assistantMailbox: z.object({ enabled: z.boolean().optional() }).strict().optional()
+  assistantMailbox: z.object({
+    enabled: z.boolean().optional(),
+    autoContinueEnabled: z.boolean().optional()
+  }).strict().optional()
 }).strict()

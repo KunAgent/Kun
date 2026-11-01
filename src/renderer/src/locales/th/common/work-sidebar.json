@@ -11,9 +11,15 @@
   "workSidebarSearchPlaceholder": "ค้นหาเซสชัน",
   "workSessionNew": "เซสชันใหม่",
   "workSessionMore": "การทำงานเพิ่มเติม",
+  "workOpenBeside": "เปิดในแผงด้านข้าง",
+  "workSwapToFile": "แสดงไฟล์ตรงกลาง",
+  "workSwapToSession": "แสดงเซสชันตรงกลาง",
   "workSessionShowMore": "แสดงเพิ่มอีก {{count}} รายการ",
   "workSessionShowLess": "ย่อลง",
   "workSessionLoading": "กำลังโหลดเซสชัน…",
+  "workSessionLoadMore": "โหลดเซสชันก่อนหน้า",
+  "workSessionLoadFailed": "ไม่สามารถโหลดเซสชันได้",
+  "workSessionRetry": "ลองอีกครั้ง",
   "workSessionNoMatches": "ไม่มีเซสชันที่ตรงกัน",
   "workHomeTitle": "วันนี้อยากทำงานอะไรกับ Kun?",
   "workHomeSubtitle": "เขียนเอกสาร อ่านบทความ จัดระเบียบข้อมูล — เริ่มด้วยประโยคเดียว",
@@ -24,5 +30,6 @@
   "workAssistantEmptyTitlePapers": "ผู้ช่วยวิจัยพร้อมแล้ว",
   "workAssistantEmptySubPapers": "เลือกข้อความในบทความเพื่ออ้างอิง หรือเลือกการดำเนินการด้านล่าง",
   "workSessionArchived": "เก็บถาวร \"{{title}}\" แล้ว",
-  "workSessionUndo": "เลิกทำ"
+  "workSessionUndo": "เลิกทำ",
+  "workFilesResize": "ลากเพื่อปรับความสูงส่วนไฟล์"
 }

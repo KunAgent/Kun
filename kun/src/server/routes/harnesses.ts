@@ -200,9 +200,8 @@ export async function listHarnessModels(
   if (!definition || definition.availability === 'retired') return ERRORS.notFound(`unavailable harness: ${parsedId.data}`)
 
   const url = new URL(request.url)
-  if (url.searchParams.get('refresh') === '1') harnesses.invalidateModels?.(definition.id)
-  // Only this process's own probe counts as cached; a catalog kept from before
-  // a restart is served as a fallback below, never instead of asking the Agent.
+  if (url.searchParams.get('refresh') === '1' && definition.transport !== 'acp') harnesses.invalidateModels?.(definition.id)
+  // A live session's catalog is distinct from one kept across restarts.
   const cachedModels = (harnesses.liveProbedModels ?? harnesses.probedModels)?.(definition)
   const selectedModelParam = url.searchParams.get('selected_model')?.trim() || undefined
   const reply = (body: Record<string, unknown>, source: 'native' | 'cache' | 'fallback' | 'provider' | 'static',
@@ -328,7 +327,12 @@ export async function listHarnessModels(
       }
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
         if (selectedModelParam && selectedModelParam.length > 1024) return ERRORS.validation('invalid model id')
-        return replyCatalog(await harnesses.acpModels.probeCatalog(definition, selectedModelParam))
+        const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModelParam)
+        if (catalog.models.length > 0) return reply({ harnessId: definition.id, ...catalog }, 'cache')
+        const kept = harnesses.modelCatalogs?.get(definition)
+        if (kept) return reply({ harnessId: definition.id, ...kept.catalog }, 'cache', kept.fetchedAt)
+        return reply({ harnessId: definition.id, models: definition.staticModels.length ? definition.staticModels : ['default'],
+          message: 'Native model options become available after a conversation starts.' }, 'fallback')
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
         return replyCatalog(await harnesses.codexModels.probeCatalog(definition))

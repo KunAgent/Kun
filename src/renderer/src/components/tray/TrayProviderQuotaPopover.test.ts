@@ -119,7 +119,7 @@ describe('TrayProviderQuotaPopover', () => {
     vi.clearAllMocks()
   })
 
-  it('lists every provider on one page with subscriptions as rings', async () => {
+  it('lists every provider on one page with subscriptions as bars', async () => {
     const api = createApi()
     let renderer!: ReactTestRenderer
     await act(async () => {
@@ -129,7 +129,9 @@ describe('TrayProviderQuotaPopover', () => {
     expect(renderer.root.findAllByProps({ role: 'tab' })).toHaveLength(0)
     expect((document.documentElement.dataset as Record<string, string>).platform).toBe('win32')
     expect(renderer.root.findByType('main').props['data-context-ready']).toBe('true')
-    const ring = renderer.root.findByProps({ className: 'kq-ring', 'data-quota-metric': 'weekly' })
+    const ring = renderer.root
+      .findByProps({ className: 'kq-meter', 'data-quota-metric': 'weekly' })
+      .findByProps({ className: 'kq-meter-value' })
     expect(ring.props.title).toContain('23 / 100 requests')
     const html = JSON.stringify(renderer.toJSON())
     expect(html).toContain('23%')
@@ -137,7 +139,7 @@ describe('TrayProviderQuotaPopover', () => {
     expect(html).toContain('1 more without a quota to read: Claude subscription')
     expect(renderer.root.findAllByProps({ 'data-provider-icon': 'codex' }).length).toBeGreaterThan(0)
 
-    // A ring turns every meter to what is left.
+    // A meter's figure turns every meter to what is left.
     await act(async () => ring.props.onClick())
     expect(JSON.stringify(renderer.toJSON())).toContain('77%')
 
@@ -231,7 +233,7 @@ describe('TrayProviderQuotaPopover', () => {
 
     const html = JSON.stringify(renderer.toJSON())
     expect(html).toContain('provider offline')
-    expect(renderer.root.findAllByProps({ className: 'kq-ring' })).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ className: 'kq-meter' })).toHaveLength(1)
     await act(async () => renderer.unmount())
   })
 

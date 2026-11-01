@@ -32,6 +32,7 @@ import {
   applyThreadCursor,
   filterThreadSummaries,
   isCodeWorkbenchThread,
+  isWorkWorkbenchThread,
   pageThreadSummaries
 } from '../domain/thread-list-query.js'
 import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
@@ -110,6 +111,8 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     }
     if (options.workbenchScope === 'code') {
       threads = threads.filter(isCodeWorkbenchThread)
+    } else if (options.workbenchScope === 'work') {
+      threads = threads.filter(isWorkWorkbenchThread)
     }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))

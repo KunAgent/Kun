@@ -37,6 +37,7 @@ import { useWorkComposerReferences } from '../../write/work-composer-references'
 import { retrieveWorkbenchWriteContext } from './workbench-write-retrieval'
 import { readWriteDocumentSha256 } from './read-write-document-sha256'
 import { beginWorkSubmission, observeWorkSubmission } from '../../product-analytics/work'
+import { useWorkPaperSearchMode, withWorkPaperSearchScope } from '../../write/work-paper-search-mode'
 
 export type WorkbenchWriteSendDeps = {
   activeThreadId: string | null
@@ -292,6 +293,8 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
       recoverWriteReferenceContextError(error, setError, restorePrompt)
       return
     }
+    // 找论文: the turn carries the paper-search scope line; the bubble keeps the typed text.
+    promptText = withWorkPaperSearchScope(promptText, useWorkPaperSearchMode.getState())
     if (officeDocument && !writeOfficeSemanticContextMatches(officeDocument)) {
       restorePrompt()
       return

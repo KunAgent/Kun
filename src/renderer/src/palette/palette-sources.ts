@@ -11,6 +11,7 @@ import {
   FolderOpen,
   GitFork,
   LayoutGrid,
+  LibraryBig,
   ListTodo,
   MessageCircleMore,
   MessageSquare,
@@ -101,6 +102,7 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   chat: 'code',
   'agent-chat': 'sidebarConversations',
   write: 'write',
+  papers: 'workSidebarPapersNav',
   design: 'design',
   settings: 'settings',
   plugins: 'plugins',
@@ -119,6 +121,7 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   chat: Code2,
   'agent-chat': MessageSquare,
   write: PencilLine,
+  papers: LibraryBig,
   design: Palette,
   settings: Settings,
   plugins: LayoutGrid,
@@ -173,6 +176,7 @@ const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   terminal: 'terminal',
   debug: 'settingsIaDiagnostics',
   storage: 'storageRelocation',
+  storageCleanup: 'storageCleanup',
   dataMigration: 'settingsNavMigration'
 }
 
@@ -210,6 +214,7 @@ const SETTINGS_SECTION_DESCRIPTION_KEYS: Partial<Record<SettingsRouteSection, st
   debug: 'settingsIaDiagnosticsDesc',
   terminal: 'settingsIaTerminalDesc',
   storage: 'storageRelocationSubtitle',
+  storageCleanup: 'storageCleanupDesc',
   dataMigration: 'dataMigrationSubtitle'
 }
 

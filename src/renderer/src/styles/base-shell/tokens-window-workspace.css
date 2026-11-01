@@ -120,38 +120,6 @@
   --ds-windows-titlebar-height: 40px;
 }
 
-.workspace-mode-tabs {
-  isolation: isolate;
-}
-
-.workspace-mode-trigger {
-  min-width: 8.5rem;
-}
-
-.workspace-mode-menu {
-  background: var(--ds-surface-elevated);
-  box-shadow: var(--ds-shadow-overlay);
-}
-
-.workspace-mode-active-icon,
-.workspace-mode-option-icon[data-active='true'] {
-  color: color-mix(in srgb, var(--ds-accent) 68%, #0f8b91);
-}
-
-.workspace-mode-option:hover,
-.workspace-mode-option:focus-visible {
-  background: var(--ds-sidebar-row-hover);
-}
-
-.workspace-mode-option[data-selected='true'] {
-  background: color-mix(in srgb, var(--ds-accent-soft) 72%, transparent);
-}
-
-.workspace-mode-option[data-selected='true']:hover,
-.workspace-mode-option[data-selected='true']:focus-visible {
-  background: color-mix(in srgb, var(--ds-accent-soft) 88%, var(--ds-sidebar-row-hover));
-}
-
 [data-theme='dark'] {
   --kun-dark-ui-effective-background: var(--kun-dark-ui-background, #181818);
   --kun-dark-ui-effective-border: var(--kun-dark-ui-border, #272727);

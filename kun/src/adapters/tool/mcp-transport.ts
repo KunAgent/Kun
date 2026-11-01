@@ -8,6 +8,7 @@ import {
   type Transport
 } from '@modelcontextprotocol/client'
 import { OwnedStdioClientTransport } from './mcp-owned-stdio.js'
+import type { McpOAuthLifetime } from './mcp-oauth-lifetime.js'
 import type { McpServerConfig } from '../../contracts/capabilities.js'
 import { isKunManagedGitHubMcpServer } from '../../contracts/builtin-mcp.js'
 import { KUN_VERSION } from '../../version.js'
@@ -36,6 +37,9 @@ type OAuthTransport = Transport & {
   finishAuth?: (callbackParams: URLSearchParams) => Promise<void>
 }
 
+/** Custom fetch handed to the SDK transports; see {@link createTransport}. */
+export type McpTransportFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+
 const MCP_HEADER_ENV_REFERENCE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g
 
 type SdkClientFacade = Client & {
@@ -60,6 +64,7 @@ export type SdkMcpClientOptions = {
   interactive?: boolean
   /** Optional encryptor; when present, persisted OAuth tokens are encrypted at rest. */
   encryptor?: import('../../security/secret-store.js').SecretEncryptor
+  lifetime?: McpOAuthLifetime
 }
 
 export { McpAuthorizationRequiredError, isMcpAuthorizationRequiredError }
@@ -69,8 +74,10 @@ export async function createSdkMcpClient(
   server: McpServerConfig,
   options: SdkMcpClientOptions = {}
 ): Promise<McpClientLike> {
+  options.lifetime?.signal.throwIfAborted()
   const managedGitHub = isKunManagedGitHubMcpServer(server)
   const connectionServer = await resolveBuiltinGitHubMcpCredentials(serverId, server)
+  options.lifetime?.signal.throwIfAborted()
   const client = new Client(
     { name: `kun-${serverId}`, version: KUN_VERSION },
     mcpClientOptions(connectionServer)
@@ -92,9 +99,10 @@ export async function createSdkMcpClient(
     storageDir: options.storageDir ?? '',
     openExternal: options.openExternal,
     interactive: options.interactive ?? false,
+    lifetime: options.lifetime,
     ...(options.encryptor ? { encryptor: options.encryptor } : {})
   })
-  let transport = createTransport(connectionServer, authProvider)
+  let transport = createTransport(connectionServer, authProvider, authProvider?.oauthFetch)
   try {
     await client.connect(transport, { timeout: connectionServer.timeoutMs })
   } catch (error) {
@@ -125,14 +133,25 @@ export async function createSdkMcpClient(
     }
     try {
       const callbackParams = await authProvider.waitForAuthorizationCallback()
+      options.lifetime?.signal.throwIfAborted()
       await transport.finishAuth(callbackParams)
+      options.lifetime?.signal.throwIfAborted()
     } catch (authError) {
       await authProvider.recordAuthorizationError(errorMessage(authError)).catch(() => undefined)
       await client.close().catch(() => undefined)
       throw authError
     }
-    transport = createTransport(connectionServer, authProvider)
-    await client.connect(transport, { timeout: connectionServer.timeoutMs })
+    transport = createTransport(connectionServer, authProvider, authProvider?.oauthFetch)
+    try {
+      await client.connect(transport, { timeout: connectionServer.timeoutMs })
+    } catch (error) {
+      await client.close().catch(() => undefined)
+      throw error
+    }
+  }
+  if (options.lifetime?.signal.aborted) {
+    await client.close().catch(() => undefined)
+    options.lifetime.signal.throwIfAborted()
   }
   return {
     listTools: (listOptions) => {
@@ -247,13 +266,15 @@ export async function authorizeMcpServerOAuth(
     storageDir: string
     openExternal?: (url: URL) => void | Promise<void>
     encryptor?: import('../../security/secret-store.js').SecretEncryptor
+    lifetime?: McpOAuthLifetime
   }
 ): Promise<McpOAuthAuthorizeResult> {
   const provider = createMcpOAuthProvider(serverId, server, {
     storageDir: options.storageDir,
     openExternal: options.openExternal ?? defaultOpenExternal,
     interactive: true,
-    encryptor: options.encryptor
+    encryptor: options.encryptor,
+    lifetime: options.lifetime
   })
   if (!provider) {
     return { serverId, status: 'disabled', authorized: false }
@@ -264,7 +285,8 @@ export async function authorizeMcpServerOAuth(
       storageDir: options.storageDir,
       openExternal: options.openExternal ?? defaultOpenExternal,
       interactive: true,
-      encryptor: options.encryptor
+      encryptor: options.encryptor,
+      lifetime: options.lifetime
     })
   } catch (error) {
     await provider.recordAuthorizationError(errorMessage(error)).catch(() => undefined)
@@ -275,7 +297,17 @@ export async function authorizeMcpServerOAuth(
   return { serverId, status: diagnostics.status, authorized: diagnostics.status === 'authorized' }
 }
 
-export function createTransport(server: McpServerConfig, authProvider?: OAuthClientProvider): OAuthTransport {
+export function createTransport(
+  server: McpServerConfig,
+  authProvider?: OAuthClientProvider,
+  /**
+   * Fetch used by the SDK for this transport's traffic *and* for the OAuth
+   * discovery/token-endpoint calls of `auth()`. Passing the provider's
+   * coordinated fetch keeps a refresh POST and the credential write in one
+   * grant-scoped transaction shared across connections and runtime processes.
+   */
+  oauthFetch?: McpTransportFetch
+): OAuthTransport {
   switch (server.transport) {
     case 'stdio': {
       const cwd = resolveMcpServerCwd(server)
@@ -291,6 +323,7 @@ export function createTransport(server: McpServerConfig, authProvider?: OAuthCli
       const headers = resolveMcpHeaders(server.headers)
       return new StreamableHTTPClientTransport(new URL(server.url ?? ''), {
         ...(authProvider ? { authProvider } : {}),
+        ...(oauthFetch ? { fetch: oauthFetch } : {}),
         requestInit: { headers }
       })
     }
@@ -298,8 +331,9 @@ export function createTransport(server: McpServerConfig, authProvider?: OAuthCli
       const headers = resolveMcpHeaders(server.headers)
       return new SSEClientTransport(new URL(server.url ?? ''), {
         ...(authProvider ? { authProvider } : {}),
+        ...(oauthFetch ? { fetch: oauthFetch } : {}),
         requestInit: { headers },
-        eventSourceInit: { fetch: fetchWithHeaders(headers) }
+        eventSourceInit: { fetch: fetchWithHeaders(headers, oauthFetch) }
       })
     }
   }
@@ -329,13 +363,13 @@ export function resolveMcpHeaders(
   return resolved
 }
 
-export function fetchWithHeaders(headers: Record<string, string>): typeof fetch {
+export function fetchWithHeaders(headers: Record<string, string>, baseFetch: McpTransportFetch = fetch): typeof fetch {
   return (input, init) => {
     const mergedHeaders = new Headers(init?.headers)
     for (const [key, value] of Object.entries(headers)) {
       mergedHeaders.set(key, value)
     }
-    return fetch(input, { ...init, headers: mergedHeaders })
+    return baseFetch(input, { ...init, headers: mergedHeaders })
   }
 }
 

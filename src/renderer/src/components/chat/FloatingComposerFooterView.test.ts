@@ -31,7 +31,9 @@ function translate(key: string, values: Record<string, unknown> = {}): string {
     sessionUsageLoading: 'Loading usage',
     sessionUsageUnavailable: 'No usage yet',
     usageHistoryOpen: 'Open usage history',
-    usageHistoryTitle: 'Usage history'
+    usageHistoryTitle: 'Usage history',
+    composerShortcut: 'Enter to send · Shift+Enter for newline',
+    composerShortcutShiftEnter: 'Shift+Enter to send · Enter for newline'
   } as Record<string, string>
   return text[key] ?? key
 }
@@ -223,6 +225,19 @@ describe('FloatingComposerFooterView', () => {
 
   it('omits the footer from compact composers', () => {
     expect(renderFooter({ compact: true })).toBe('')
+  })
+
+  it('uses the configured send shortcut for the editable Work composer only', () => {
+    const work = { compact: true, route: 'write', agentSwitcher: true, canEditComposer: true }
+    expect(renderFooter({ ...work, composerSendKey: 'enter' }))
+      .toContain('Enter to send · Shift+Enter for newline')
+    expect(renderFooter({ ...work, composerSendKey: 'shiftEnter' }))
+      .toContain('Shift+Enter to send · Enter for newline')
+    expect(renderFooter({ ...work, route: 'chat' })).toBe('')
+    expect(renderFooter({ ...work, agentSwitcher: false })).toBe('')
+    expect(renderFooter({ ...work, canEditComposer: false })).toBe('')
+    expect(renderFooter({ ...work, busy: true })).toBe('')
+    expect(renderFooter({ ...work, composerInterrupt: { kind: 'approval' } })).toBe('')
   })
 
   it('defines the planned container-query reductions without wrapping the footer', async () => {

@@ -13,6 +13,7 @@ export type PaperTranslateSelectionResult =
   | { ok: false; code?: string; message: string }
 
 export async function translatePaperSelection(input: {
+  workspaceRoot?: string
   unitDir: string
   page: number
   rects: PaperRect[]
@@ -23,6 +24,11 @@ export async function translatePaperSelection(input: {
   if (typeof window.kunGui?.paperTranslateSelection !== 'function') {
     return { ok: false, message: 'Translation bridge unavailable.' }
   }
+  const owner = usePaperMarksStore.getState()
+  const root = input.workspaceRoot ?? owner.workspaceRoot
+  const stillCurrent = (): boolean => usePaperMarksStore.getState().workspaceRoot === root &&
+    usePaperMarksStore.getState().unitDir === input.unitDir
+  if (!stillCurrent()) return { ok: false, code: 'source-changed', message: 'The open paper has changed.' }
   const result = await window.kunGui.paperTranslateSelection({
     text: input.text,
     targetLanguage: translate.targetLanguage,
@@ -30,6 +36,7 @@ export async function translatePaperSelection(input: {
     model: translate.inheritModel ? undefined : translate.model || undefined
   })
   if (!result.ok) return { ok: false, code: result.code, message: result.message }
+  if (!stillCurrent()) return { ok: false, code: 'source-changed', message: 'The open paper has changed.' }
   const markId = nextPaperMarkId()
   // Register a translate card locally; the marks-write IPC persists cards
   // alongside annotations (per-id files under marks/).
@@ -54,6 +61,7 @@ export async function translatePaperSelection(input: {
 }
 
 export async function translatePaperDocument(input: {
+  workspaceRoot: string
   unitDir: string
   requestId: string
 }): Promise<{ ok: true; outputPath: string } | { ok: false; code?: string; message: string }> {
@@ -63,7 +71,7 @@ export async function translatePaperDocument(input: {
     return { ok: false, message: 'Translation bridge unavailable.' }
   }
   const result = await window.kunGui.paperTranslateDocument({
-    workspaceRoot: state.workspaceRoot,
+    workspaceRoot: input.workspaceRoot,
     unitDir: input.unitDir,
     targetLanguage: translate.targetLanguage,
     providerId: translate.inheritModel ? undefined : translate.providerId || undefined,

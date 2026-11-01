@@ -125,10 +125,13 @@ html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not(
   )
   .ds-composer-shell {
   overflow: visible;
-  border: 1px solid var(--ds-border);
-  border-radius: var(--ds-radius-card);
+  border: 0;
+  border-radius: var(--kun-radius-xl);
   background: var(--ds-surface-elevated);
-  box-shadow: none;
+  box-shadow:
+    0 0 0 1px var(--kun-hair-2),
+    0 2px 6px rgba(16, 24, 40, 0.04),
+    0 10px 28px rgba(16, 24, 40, 0.05);
 }
 
 html:not([data-theme='dark']):not([data-ikun-mode='on']):not([data-color-palette='parchment']):not(
@@ -136,12 +139,12 @@ html:not([data-theme='dark']):not([data-ikun-mode='on']):not([data-color-palette
   )
   .ds-chat-stage[data-empty-task-layout='true']
   .ds-composer-shell.ds-chat-composer {
-  border-color: #e5e7eb;
-  border-radius: 24px;
+  border-radius: var(--kun-radius-xl);
   background: rgba(255, 255, 255, 0.985);
   box-shadow:
-    0 16px 42px rgba(32, 55, 90, 0.09),
-    0 4px 12px rgba(32, 55, 90, 0.04);
+    0 0 0 1px var(--kun-hair-2),
+    0 2px 6px rgba(16, 24, 40, 0.04),
+    0 14px 36px rgba(16, 24, 40, 0.07);
 }
 
 html:not([data-theme='dark']):not([data-ikun-mode='on']):not([data-color-palette='parchment']):not(
@@ -159,11 +162,10 @@ html:not([data-theme='dark']):not([data-ikun-mode='on']):not([data-color-palette
   )
   .ds-chat-stage[data-empty-task-layout='true']
   .ds-composer-shell.ds-chat-composer.ds-chat-composer-focus {
-  border-color: #cfd8f3;
   box-shadow:
-    0 0 0 3px rgba(111, 139, 255, 0.08),
-    0 18px 46px rgba(32, 55, 90, 0.1),
-    0 4px 12px rgba(32, 55, 90, 0.04);
+    0 0 0 1px var(--kun-hair-3),
+    0 2px 6px rgba(16, 24, 40, 0.05),
+    0 16px 40px rgba(16, 24, 40, 0.09);
 }
 
 html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not(

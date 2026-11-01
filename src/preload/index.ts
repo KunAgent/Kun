@@ -13,6 +13,7 @@ import { registerExtensionContentScriptPreload } from './extension-content-scrip
 import { parseAppEnvironment } from './app-environment'
 import { createDesktopStartupPreloadApi } from './startup-state'
 import { createStorageRelocationWorkbenchApi } from './storage-relocation-workbench'
+import { createStorageCleanupApi } from './storage-cleanup-api'
 import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorization'
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
@@ -59,6 +60,7 @@ const api = {
   appEnvironment,
   startup: createDesktopStartupPreloadApi(),
   storageRelocation: createStorageRelocationWorkbenchApi(),
+  storageCleanup: createStorageCleanupApi(),
   sharedClientState: {
     read: () => ipcRenderer.invoke('shared-client-state:get'),
     write: (expectedRevision, entries) =>
@@ -114,6 +116,7 @@ const api = {
   listOfficeVersions: (payload) => ipcRenderer.invoke('file:office-version-list', payload),
   readOfficeVersion: (payload) => ipcRenderer.invoke('file:office-version-read', payload),
   restoreOfficeVersion: (payload) => ipcRenderer.invoke('file:office-version-restore', payload),
+  renderArtifactThumbnail: (request) => ipcRenderer.invoke('artifacts:render-thumbnail', request),
   resolveKunApproval: (request) => ipcRenderer.invoke('approval:decide', request),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   restartKunServe: () => ipcRenderer.invoke('runtime:restart-serve'),
@@ -207,8 +210,8 @@ const api = {
     ipcRenderer.invoke('ui-plugin:theme:deactivate'),
   getKunConfigFile: () =>
     ipcRenderer.invoke('kun:config:read'),
-  setKunConfigFile: (content) =>
-    ipcRenderer.invoke('kun:config:write', content),
+  setKunConfigFile: (content: string, baseContent: string) =>
+    ipcRenderer.invoke('kun:config:write', content, baseContent),
   ...createGitHubMcpAuthorizationPreloadApi(ipcRenderer),
   openKunConfigDir: () =>
     ipcRenderer.invoke('kun:config:open-dir'),

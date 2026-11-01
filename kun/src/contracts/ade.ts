@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 import { HarnessRouteSchema } from './harness.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from './capabilities-core.js'
 import { ChildSecuritySnapshot } from '../delegation/delegation-runtime-contracts.js'
@@ -27,6 +28,8 @@ export const WorkerRecordSchema = z
     role: z.string().max(64).optional(),
     /** Frozen route chosen at creation (01: harness/provider/model/credential). */
     route: HarnessRouteSchema,
+    /** Optional depth chosen on this worker's dispatch card; retained across follow-ups. */
+    reasoningEffort: TurnReasoningEffortSchema.optional(),
     /** Profile that produced this route when the worker selector chose one. */
     profileId: z.string().min(1).max(128).optional(),
     /**
@@ -223,6 +226,13 @@ export const DispatchRecordSchema = z
       .strict()
       .optional(),
     verdict: QualityVerdictSchema.optional(),
+    /**
+     * Host-maintained: the manager or user recorded a quality decision after
+     * this dispatch already reached `completed`/`failed`. The matching
+     * completion notice needs no further wake-up; it does not mean the work
+     * succeeded or the final answer was delivered.
+     */
+    completionHandledAt: z.string().optional(),
     /** Target version for an ephemeral cross-review dispatch. */
     revision: ReviewRevisionSchema.optional(),
     failureReason: z.string().max(4_000).optional(),

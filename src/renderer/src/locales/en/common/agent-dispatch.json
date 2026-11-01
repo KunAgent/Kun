@@ -1,5 +1,15 @@
 {
   "dispatchIntent": {
+    "reasoningScope": "Only applies to this task",
+    "reasoningDone": "Done",
+    "reasoningClose": "Close model picker",
+    "reasoningDefault": "Task default",
+    "reasoningUnavailable": "Not adjustable",
+    "reasoningInherited": "Uses the task default until you choose a level.",
+    "reasoningUnknown": "The provider has not reported adjustable levels",
+    "reasoningUnknownHint": "Keeps the model default without guessing supported levels.",
+    "reasoningUnsupported": "This model does not support reasoning adjustment",
+    "reasoningUnsupportedHint": "Choose a model that supports adjustment to select a level.",
     "loading": "Loading Agent task…",
     "countdown": "Dispatches in {{seconds}}s",
     "startNow": "Dispatch now",
@@ -13,6 +23,11 @@
     "save": "Save changes",
     "keepRecommendation": "Discard changes",
     "details": "Task and acceptance criteria",
+    "result": "Result",
+    "resultBatch": "Combined results",
+    "expandResult": "Show full result",
+    "collapseResult": "Collapse result",
+    "resultMissing": "Execution ended, but no result text was returned. Open the task for details.",
     "viewProcess": "View process",
     "updateFailed": "Could not save the recommendation. The task remains paused.",
     "status": {
@@ -25,7 +40,7 @@
       "uncertain": "Checking task startup",
       "running": "Agent is working",
       "awaiting_parent": "Waiting for the main Agent to review",
-      "completed": "Completed",
+      "completed": "Execution finished",
       "failed": "Could not complete task",
       "cancelled": "Cancelled",
       "stopping": "Stopping"
@@ -48,6 +63,7 @@
     "pause": "Pause",
     "executor": "Runs on",
     "routeHint": "Switch the Agent or model for each task; the countdown pauses while you adjust and restarts 10 seconds after you stop.",
+    "isolatedWorkspaceHint": "Isolated worktree: runs from a Git commit, without uncommitted changes in the source folder.",
     "holdHint": "Adjusting, countdown paused · restarts after {{seconds}}s without changes",
     "agentMenuHint": "Changes only this task's Agent; the timer restarts.",
     "roleLabel": "Role",
@@ -61,7 +77,12 @@
       "pending": "Not started",
       "working": "Working",
       "waiting": "Needs attention",
-      "done": "Done",
+      "done": "Execution finished",
+      "awaiting_review": "Finished · awaiting review",
+      "needs_changes": "Needs changes",
+      "rejected": "Review rejected",
+      "passed": "Review passed",
+      "waived": "Review waived",
       "failed": "Failed",
       "cancelled": "Cancelled"
     },
@@ -70,7 +91,8 @@
       "user_input": "Waiting for input",
       "question": "Waiting for an answer",
       "terminal_prompt": "Waiting at a terminal prompt"
-    }
+    },
+    "agentNoModel": "{{agent}} has no usable model, so the previous choice was kept. Sign in or set up a model in Agent settings first."
   },
   "roomsWorkbenchDispatchPolicyHint": "Code task cards follow this conversation’s permissions: confirmation, automatic review, or full access. A card with no reply starts after the window set in Settings › Collaboration. Other actions use the policy above.",
   "dispatchPreference": {

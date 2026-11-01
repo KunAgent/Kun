@@ -15,6 +15,7 @@ import {
   workspaceRootIdentityKey
 } from '../../lib/workspace-path'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { threadDisplayUpdatedAtMs } from '../../lib/empty-thread-activation'
 import {
   projectPathForWorktreeRecord,
   resolveProjectWorkspacePath,
@@ -504,7 +505,9 @@ export function sortSidebarThreads(threads: NormalizedThread[]): NormalizedThrea
   return [...threads].sort((a, b) => {
     if (a.pinned === true && b.pinned !== true) return -1
     if (b.pinned === true && a.pinned !== true) return 1
-    return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+    // A reused empty session sorts by its New-session activation, not by the
+    // older content timestamp the runtime left on the thread.
+    return threadDisplayUpdatedAtMs(b) - threadDisplayUpdatedAtMs(a)
   })
 }
 

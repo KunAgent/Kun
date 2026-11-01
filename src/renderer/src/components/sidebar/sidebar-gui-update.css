@@ -1,19 +1,22 @@
 /* GUI update chip beside Settings in the sidebar footer, and its card (SidebarGuiUpdate). */
 .ds-sidebar-footer-bar {
-  --ds-update-fg: #0f6e3c;
-  --ds-update-bg: rgba(18, 138, 74, 0.09);
-  --ds-update-border: rgba(18, 138, 74, 0.28);
-  --ds-update-solid: #128a4a;
+  --ds-update-fg: var(--ds-text);
+  --ds-update-bg: var(--ds-surface-subtle);
+  --ds-update-border: var(--ds-border-strong);
+  --ds-update-solid: var(--ds-text-muted);
+  --ds-update-primary-bg: var(--ds-surface-subtle);
+  --ds-update-primary-hover: var(--ds-surface-hover);
   --ds-update-danger-fg: #b8372e;
   --ds-update-danger-bg: rgba(214, 73, 63, 0.1);
   --ds-update-danger-border: rgba(214, 73, 63, 0.3);
 }
 
 [data-theme='dark'] .ds-sidebar-footer-bar {
-  --ds-update-fg: #6fd69c;
-  --ds-update-bg: rgba(64, 201, 119, 0.13);
-  --ds-update-border: rgba(64, 201, 119, 0.34);
-  --ds-update-solid: #40c977;
+  --ds-update-fg: var(--ds-text-muted);
+  --ds-update-bg: var(--ds-surface-elevated);
+  --ds-update-border: color-mix(in srgb, var(--ds-text) 22%, transparent);
+  --ds-update-primary-bg: color-mix(in srgb, var(--ds-text) 10%, var(--ds-surface-elevated));
+  --ds-update-primary-hover: color-mix(in srgb, var(--ds-text) 16%, var(--ds-surface-elevated));
   --ds-update-danger-fg: #f8736a;
   --ds-update-danger-bg: rgba(248, 115, 106, 0.14);
   --ds-update-danger-border: rgba(248, 115, 106, 0.34);
@@ -25,8 +28,8 @@
   flex: none;
   align-items: center;
   gap: 4px;
-  height: 28px;
-  padding: 0 8px 0 6px;
+  height: 32px;
+  padding: 0 6px;
   border: 1px solid var(--ds-update-border);
   border-radius: 999px;
   background: var(--ds-update-bg);
@@ -44,11 +47,11 @@
 .ds-sidebar-update-chip:hover,
 .ds-sidebar-update-chip[aria-expanded='true'] {
   border-color: color-mix(in srgb, var(--ds-update-fg) 45%, transparent);
-  background: color-mix(in srgb, var(--ds-update-bg) 100%, var(--ds-update-solid) 7%);
+  background: color-mix(in srgb, var(--ds-update-bg) 85%, var(--ds-update-solid));
 }
 
 .ds-sidebar-update-chip:focus-visible {
-  outline: 2px solid var(--ds-update-solid);
+  outline: 2px solid var(--ds-focus-ring);
   outline-offset: 2px;
 }
 
@@ -93,7 +96,7 @@
 /* No room beside the settings gear: icon only. The label keeps its width so the chip can measure it. */
 .ds-sidebar-update-chip[data-compact='true'] {
   justify-content: center;
-  width: 28px;
+  width: 32px;
   padding: 0;
 }
 
@@ -122,20 +125,27 @@
   position: absolute;
   right: 0;
   /* Clear the footer divider above the bar. */
-  bottom: calc(100% + 16px);
+  bottom: calc(100% + 12px);
   left: 0;
   z-index: 40;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
+  max-height: max(120px, calc(100vh - 160px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
   border: 1px solid var(--ds-border);
   border-radius: 14px;
-  background: var(--ds-surface-card);
+  background: var(--ds-surface-elevated);
   box-shadow: var(--ds-shadow-overlay);
   color: var(--ds-text);
   text-align: left;
   cursor: default;
+}
+
+.ds-sidebar-update-card > * {
+  flex-shrink: 0;
 }
 
 .ds-sidebar-update-card-head {
@@ -182,8 +192,8 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   color: var(--ds-text-faint);
   transition: background-color 150ms ease, color 150ms ease;
@@ -218,7 +228,7 @@
 }
 
 .ds-sidebar-update-progress-track {
-  height: 6px;
+  height: 4px;
   overflow: hidden;
   border-radius: 999px;
   background: color-mix(in srgb, var(--ds-text-faint) 22%, transparent);
@@ -251,14 +261,22 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--ds-border);
-  border-radius: 999px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   color: var(--ds-text-muted);
   font-size: 12.5px;
-  white-space: nowrap;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
   transition: background-color 150ms ease, color 150ms ease;
+}
+
+.ds-sidebar-update-button svg {
+  flex: none;
 }
 
 .ds-sidebar-update-button:hover:not(:disabled) {
@@ -267,16 +285,16 @@
 }
 
 .ds-sidebar-update-button[data-primary='true'] {
-  padding: 0 14px;
-  border-color: transparent;
-  background: var(--ds-control);
-  color: var(--ds-control-foreground);
+  padding: 6px 12px;
+  border-color: var(--ds-update-border);
+  background: var(--ds-update-primary-bg);
+  color: var(--ds-text);
   font-weight: 600;
 }
 
 .ds-sidebar-update-button[data-primary='true']:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ds-control) 88%, var(--ds-control-foreground));
-  color: var(--ds-control-foreground);
+  background: var(--ds-update-primary-hover);
+  color: var(--ds-text);
 }
 
 .ds-sidebar-update-button:disabled {

@@ -1,28 +1,37 @@
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
+import { ManagerStartLockError as LegacyManagerStartLockError } from '../../kun/src/manager/manager-start-lock-support.js'
+import { ManagerStartLockError } from '../../kun/src/manager/manager-start-lock-diagnostics.js'
+import { WindowsStartupIntegrityError } from '../../kun/src/process/windows-startup-native.js'
 import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
-import { OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
+import { AppSessionConflictError, OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
+import { StartupDeadlineError } from '../../kun/src/manager/startup-attempt.js'
 import { KunHandoffError } from './runtime/kun-installed-build-handoff'
+import { STARTUP_ACTION_PROTOCOL } from './startup-failure-page'
 
-const STARTUP_ACTION_PROTOCOL = 'kun-startup-action:'
 const MAX_FAILURE_MESSAGE_LENGTH = 1_200
+const STARTUP_FAILURE_ACTIONS = ['retry', 'open-logs', 'open-log-file', 'copy-diagnostics', 'quit'] as const
 
-export type StartupFailureAction = 'retry' | 'open-logs' | 'quit'
+export type StartupFailureAction = 'retry' | 'open-logs' | 'open-log-file' | 'copy-diagnostics' | 'quit'
+export type StartupFailureKind =
+  | 'integrity'
+  | 'start-lock'
+  | 'orphaned'
+  | 'manager-leftover'
+  | 'manager-unavailable'
+  | 'manager-exited'
+  | 'runtime-auth'
+  | 'client-busy'
+  | 'handoff'
+  | 'generic'
 export type StartupFailurePresentation = {
+  kind: StartupFailureKind
   message: string
   handoff: boolean
   retryable: boolean
   recheck?: boolean
   orphaned?: boolean
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
 }
 
 export function sanitizeStartupFailureMessage(error: unknown): string {
@@ -37,8 +46,40 @@ export function sanitizeStartupFailureMessage(error: unknown): string {
 }
 
 export function startupFailurePresentation(error: unknown): StartupFailurePresentation {
+  if (error instanceof WindowsStartupIntegrityError) {
+    return { kind: 'integrity', message: sanitizeStartupFailureMessage(error), handoff: false, retryable: false }
+  }
+  if (error instanceof ManagerStartLockError) {
+    const d = error.diagnostic
+    const explanation = d.errno === 'EACCES' || d.errno === 'EPERM'
+      ? 'Kun cannot access the startup coordination file. Check that this user can access the selected data and settings directories.'
+      : d.ownerState === 'unknown'
+        ? 'Kun cannot verify the previous process birth identity. Close the previous Kun or terminal session, then retry.'
+        : ['empty', 'malformed', 'invalid'].includes(d.ownerState ?? '')
+          ? 'The previous startup record is incomplete. Kun could not safely verify ownership for recovery.'
+          : 'Another Kun or terminal session is starting or using this profile. Wait for it to finish or close that session, then retry.'
+    return { kind: 'start-lock', message: `${explanation}\nScope: ${d.scope}\nPhase: ${d.phase}\nWaited: ${d.waitedMs}ms\nAttempt: ${d.attemptId}`,
+      handoff: false, retryable: true, recheck: true }
+  }
+  if (error instanceof StartupDeadlineError) {
+    return { kind: 'generic', message: `${error.message}. Retry will recheck the same profile and its owned processes. Saved conversations and settings are preserved.`,
+      handoff: false, retryable: true }
+  }
+  if (error instanceof LegacyManagerStartLockError) {
+    const hint = error.reason === 'busy'
+      ? 'Another Kun window or terminal may still be starting or closing. Let it finish, or quit that client, then Recheck Kun.'
+      : error.reason === 'io'
+        ? 'Check that your Windows account can access the lock directory and that it is available. Recheck after correcting the access problem.'
+        : 'Kun could not safely confirm the previous startup owner. Quit the other Kun client and Recheck, or share the startup log for diagnosis.'
+    return {
+      kind: 'start-lock',
+      message: sanitizeStartupFailureMessage(`${hint}\n\n${error.message}\n\nRecheck preserves saved conversations and settings. It does not delete unknown ownership records or stop another live client.`),
+      handoff: false, retryable: true, recheck: true
+    }
+  }
   if (error instanceof OrphanedAppSessionError) {
     return {
+      kind: 'orphaned',
       message: sanitizeStartupFailureMessage(`${error.message}\n\nRecover Kun verifies the previous application has exited, stops its recorded leftover Runtime processes, then stops its data service. Processes whose ownership cannot be verified are left untouched. Saved conversations and settings are preserved.`),
       handoff: false, retryable: true, orphaned: true
     }
@@ -60,6 +101,7 @@ export function startupFailurePresentation(error: unknown): StartupFailurePresen
         'Recheck verifies ownership before recovery. If ownership cannot be verified, no process or saved data will be changed.'
       ]
     return {
+      kind: leftover ? 'manager-leftover' : 'manager-unavailable',
       message: sanitizeStartupFailureMessage(lines.join('\n')),
       handoff: false, retryable: true, recheck: true
     }
@@ -69,6 +111,7 @@ export function startupFailurePresentation(error: unknown): StartupFailurePresen
     const parsed = parseStartupRuntimeError(error)
     if (parsed.code === 'runtime_auth_required' || parsed.code === 'unauthorized') {
       return {
+        kind: 'runtime-auth',
         message: 'The local Kun Runtime rejected the desktop access credential. Retry will stop only this desktop app\'s Runtime and start it again with the saved credential.',
         handoff: false,
         retryable: true
@@ -76,12 +119,14 @@ export function startupFailurePresentation(error: unknown): StartupFailurePresen
     }
     if (parsed.code === 'client_runtime_owner_busy') {
       return {
+        kind: 'client-busy',
         message: `${parsed.message || 'Another Kun client owns this Runtime.'}\nClose the other Kun GUI or TUI, then retry. Kun will not stop another client automatically because it may have active work.`,
         handoff: false,
         retryable: true
       }
     }
     return {
+      kind: /\bexited before readiness\b/i.test(sanitized) ? 'manager-exited' : 'generic',
       message: sanitized,
       handoff: false,
       retryable: true
@@ -100,6 +145,7 @@ export function startupFailurePresentation(error: unknown): StartupFailurePresen
     ...(owner?.buildId ? [`Build: ${owner.buildId.slice(0, 12)}`] : [])
   ].join('\n')
   return {
+    kind: 'handoff',
     message: sanitizeStartupFailureMessage(detail),
     handoff: true,
     retryable: error.retryable
@@ -125,82 +171,35 @@ function parseStartupRuntimeError(error: unknown): { code: string; message: stri
 export function parseStartupFailureAction(targetUrl: string): StartupFailureAction | null {
   if (!targetUrl.startsWith(STARTUP_ACTION_PROTOCOL)) return null
   const action = targetUrl.slice(STARTUP_ACTION_PROTOCOL.length).replace(/^\/+/, '')
-  return action === 'retry' || action === 'open-logs' || action === 'quit'
-    ? action
+  return (STARTUP_FAILURE_ACTIONS as readonly string[]).includes(action)
+    ? action as StartupFailureAction
     : null
 }
 
-export function startupFailureHtml(
-  message: string,
-  logDir: string,
-  options: {
-    handoff?: boolean
-    retryable?: boolean
-    busy?: boolean
-    recheck?: boolean
-    orphaned?: boolean
-    appVersion?: string
-    execPath?: string
-  } = {}
-): string {
-  const safeMessage = escapeHtml(message || 'Unknown startup error')
-  const safeLogDir = escapeHtml(logDir || 'Log directory is unavailable')
-  const handoff = options.handoff === true
-  const busy = options.busy === true
-  const retryable = options.retryable !== false
-  const heading = handoff ? 'Kun could not complete the update handoff' : 'Kun could not finish starting'
-  const explanation = handoff
-    ? retryable
-      ? 'Kun identified the previous local owner. It will pause and checkpoint active work before retrying the safe handoff, without deleting your saved conversations.'
-      : 'Kun could not safely verify the previous local owner, so it left the process, active work, and saved data untouched.'
-    : 'The application is still running so you can inspect the failure or retry. The diagnostic detail is:'
-  const primaryAction = busy
-    ? `<span class="working">${options.orphaned ? 'Recovering leftover Kun processes…' : options.recheck ? 'Checking Service Manager ownership…' : handoff ? 'Safely stopping old Kun…' : 'Stopping this desktop Runtime safely…'}</span>`
-    : retryable
-      ? `<a class="primary" href="${STARTUP_ACTION_PROTOCOL}retry">${options.orphaned ? 'Recover Kun' : options.recheck ? 'Recheck Kun' : handoff ? 'Safely stop old Kun and retry' : 'Retry Kun'}</a>`
-      : ''
-  const launchLines = [
-    options.appVersion ? `This app version: ${options.appVersion}` : '',
-    options.execPath ? `This app path: ${options.execPath}` : ''
-  ].filter(Boolean)
-  const launchHtml = launchLines.length === 0
-    ? ''
-    : `<p>This launch:</p>\n    <div class="path">${escapeHtml(launchLines.join('\n'))}</div>`
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kun startup recovery</title>
-  <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: #111318; color: #f3f4f6; }
-    main { max-width: 680px; margin: 0 auto; padding: 44px 40px; }
-    h1 { margin: 0 0 14px; font-size: 27px; }
-    p { color: #c5c9d3; line-height: 1.55; }
-    pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; border-radius: 10px; background: #1c2028; color: #ffcfcc; }
-    .path { color: #aeb6c5; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
-    a { padding: 10px 16px; border-radius: 8px; color: #f8fafc; background: #303746; text-decoration: none; }
-    a.primary { background: #5b5ce2; }
-    .working { padding: 10px 16px; border-radius: 8px; color: #d7d9ff; background: #34355f; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>${heading}</h1>
-    <p>${explanation}</p>
-    <pre>${safeMessage}</pre>
-    ${launchHtml}
-    <p>Log directory:</p>
-    <div class="path">${safeLogDir}</div>
-    <div class="actions">
-      ${primaryAction}
-      <a href="${STARTUP_ACTION_PROTOCOL}open-logs">Open log folder</a>
-      <a href="${STARTUP_ACTION_PROTOCOL}quit">Quit</a>
-    </div>
-  </main>
-</body>
-</html>`
+/** Copy only allowlisted local facts, never raw log text, causes or environment. */
+export function startupFailureDiagnostics(error: unknown, context?: { kind: string; appVersion: string }): string {
+  const home = homedir()
+  const pattern = new RegExp(home.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'giu')
+  const redactPath = (path: string) => path.replace(pattern, '[home]')
+  let facts: Record<string, unknown>
+  if (error instanceof ManagerStartLockError) {
+    const { scope, path, phase, waitedMs, ownerPid, ownerState, errno, attemptId } = error.diagnostic
+    facts = { code: error.code, reason: error.reason, scope, path: redactPath(path), phase,
+      waitedMs, ownerPid, ownerState, errno, attemptId }
+  } else if (error instanceof LegacyManagerStartLockError) {
+    facts = { code: error.code, reason: error.reason, path: redactPath(error.lockPath),
+      waitedMs: error.waitedMs, ownerPid: error.ownerPid, errno: error.filesystemCode }
+  } else if (error instanceof StartupDeadlineError) {
+    facts = { code: error.code, ...error.progress }
+  } else if (error instanceof WindowsStartupIntegrityError) {
+    facts = { code: error.code }
+  } else if (error instanceof AppSessionConflictError) {
+    facts = { code: error.code, path: redactPath(error.path) }
+  } else {
+    const code = parseStartupRuntimeError(error).code
+    facts = { code: /^[a-zA-Z0-9_]{1,80}$/u.test(code) ? code : 'startup_failed' }
+  }
+  return JSON.stringify({ ...context, ...facts }, null, 2)
 }
+
+export { startupFailureHtml } from './startup-failure-page'

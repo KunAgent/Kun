@@ -104,7 +104,6 @@ describe('canvas motion preview wrappers', () => {
       active: true,
       interactive: false,
       panning: false,
-      editing: false,
       onDoubleClick: () => undefined
     }))
 
@@ -135,9 +134,7 @@ describe('canvas motion preview wrappers', () => {
       active: true,
       interactive: false,
       panning: false,
-      editing: false,
-      onDoubleClick: () => undefined,
-      onToggleModify: () => undefined
+      onToggleInteractive: undefined
     }))
 
     expect(html).toContain('data-canvas-motion-target="html-frame"')

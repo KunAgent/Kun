@@ -4,9 +4,12 @@ import {
   TrajectoryFilterSchema
 } from '../../contracts/trajectory.js'
 import { TrajectoryQueryService } from '../../services/trajectory-query-service.js'
+import { TrajectorySummaryCache } from '../../services/trajectory-summary-cache.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
+
+const summaries = new WeakMap<ServerRuntime, TrajectorySummaryCache>()
 
 const TrajectoryQuerySchema = z.object({
   limit: z.preprocess((value) => {
@@ -42,7 +45,12 @@ export async function trajectorySummaryResponse(
 ): Promise<JsonResponse> {
   const service = await serviceFor(runtime, threadId)
   if ('error' in service) return service.error
-  return jsonResponse(await service.value.summary(threadId))
+  let cache = summaries.get(runtime)
+  if (!cache) {
+    cache = new TrajectorySummaryCache()
+    summaries.set(runtime, cache)
+  }
+  return jsonResponse(await cache.get(threadId, service.version, () => service.value.summary(threadId)))
 }
 
 export async function trajectoryDetailResponse(
@@ -62,10 +70,12 @@ export async function trajectoryDetailResponse(
 }
 
 async function serviceFor(runtime: ServerRuntime, threadId: string): Promise<
-  | { value: TrajectoryQueryService }
+  | { value: TrajectoryQueryService; version: string }
   | { error: JsonResponse }
 > {
-  const thread = await runtime.threadService.get(threadId)
+  // Turns already live in metadata. Loading their bodies here duplicates the
+  // canonical item read performed by the trajectory projection itself.
+  const thread = await runtime.threadService.getMetadata(threadId)
   if (!thread) {
     return { error: ERRORS.notFound(`thread not found: ${threadId}`) }
   }
@@ -73,6 +83,7 @@ async function serviceFor(runtime: ServerRuntime, threadId: string): Promise<
     return { error: ERRORS.unavailable('trajectory recorder is unavailable') }
   }
   return {
-    value: new TrajectoryQueryService(runtime.llmDebug, runtime.sessionStore, async () => thread.turns)
+    value: new TrajectoryQueryService(runtime.llmDebug, runtime.sessionStore, async () => thread.turns),
+    version: `${thread.updatedAt}:${runtime.eventBus?.highestSeq(threadId) ?? 0}`
   }
 }

@@ -140,6 +140,13 @@ export type KunToolBridgeHostDeps = {
   enforceReadOnly?: boolean
   /** Fallback call-id prefix when the transport did not supply one. */
   callIdPrefix?: string
+  /**
+   * Tools whose Kun result item is applied to the turn as well. A transport
+   * whose harness transcript cannot carry Kun's result (the Kun Tools MCP
+   * server: ACP agents and Codex report their own lossy MCP call items) lists
+   * the tools the GUI renders from that item, such as design_open's card.
+   */
+  recordResultItemTools?: ReadonlySet<string>
   nowIso?: () => string
 }
 
@@ -594,6 +601,12 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         await deps.receipts.awaitReceipt(result.item.output.receiptKey, 30_000)
         if (finalized) return finalized
         return { output: 'Renderer receipt timed out; the canvas was not verified.', isError: true }
+      }
+      if (deps.recordResultItemTools?.has(call.toolName) && !result.item.isError) {
+        await deps.turns.applyItem(threadId, {
+          ...result.item,
+          id: `item_toolresult_${turnId}_${toolCall.callId}_${deps.ids.next('kun')}`
+        })
       }
       // The SDK stream later synthesizes the tool_result item; park the
       // client sideband so the event mapper can attach it.

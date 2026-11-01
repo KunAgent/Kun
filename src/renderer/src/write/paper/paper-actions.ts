@@ -5,6 +5,9 @@ import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
 import { newPaperRequestId, usePaperStore } from './paper-store'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { ensurePaperSpace, openPaperSpaceItem, refreshPaperSpace, paperSpaceReadingSettings } from '../../paper/paper-space'
+import { paperSpaceItemKey } from '../../paper/paper-space-store'
+import { upgradePaperMeta } from '@shared/paper/paper-meta-v2'
 import { openPaperInterpretation, openPaperUnit } from './paper-open-layout'
 import { buildPaperInterpretPrompt } from './paper-interpret-prompt'
 import {
@@ -66,29 +69,28 @@ export async function importPaper(
   const requestId = newPaperRequestId()
   usePaperStore.getState().beginJob('import', requestId)
   try {
+    const targetRoot = await ensurePaperSpace()
     const result = await window.kunGui.paperImport({
-      workspaceRoot,
+      workspaceRoot: targetRoot,
       input: deps.input ?? '',
       ...(deps.localPdfPath ? { localPdfPath: deps.localPdfPath } : {}),
-      parentDir: deps.settings.papersDir,
+      parentDir: paperSpaceReadingSettings().papersDir,
       requestId
     })
-    if (!workspaceIsCurrent(workspaceRoot)) return result.ok
     if (!result.ok) {
       errorNotice(t, result.code, result.message)
       return false
     }
-    usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
-    paperNotice({
-      tone: 'success',
-      message: t('writePaperImportDone', { title: result.meta.title })
-    })
-    await refreshWorkspace(workspaceRoot)
-    if (!workspaceIsCurrent(workspaceRoot)) return true
-    await openPaperUnit({ workspaceRoot, unitDir: result.unitDir, meta: result.meta })
+    const sourceRoot = result.workspaceRoot ?? targetRoot
+    if (workspaceIsCurrent(sourceRoot)) usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
+    paperNotice({ tone: 'success', message: t('writePaperImportDone', { title: result.meta.title }) })
+    await refreshPaperSpace()
+    await openPaperSpaceItem({ key: paperSpaceItemKey(sourceRoot, result.unitDir), libraryRoot: sourceRoot,
+      entry: { unitDir: result.unitDir, meta: upgradePaperMeta(result.meta), group: '',
+        hasPdf: Boolean(result.meta.pdfFile), hasNotes: true, interpretationCount: result.meta.interpretations?.length ?? 0 } })
     deps.onImported?.(result.unitDir, result.meta)
-    if (deps.settings.autoPreprocess) {
-      void preprocessPaper({ ...deps, unitDir: result.unitDir })
+    if (deps.settings.autoPreprocess && !result.reused) {
+      void preprocessPaper({ ...deps, workspaceRoot: sourceRoot, unitDir: result.unitDir }).then(() => refreshPaperSpace())
     }
     return true
   } catch (error) {

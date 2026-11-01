@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { formatRelativeTime } from '../../lib/format-relative-time'
+import { threadDisplayUpdatedAt } from '../../lib/empty-thread-activation'
 import type { SddDraftHistoryItem } from '../../sdd/sdd-draft-history'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
@@ -220,7 +221,9 @@ export function ThreadRow({
   const worktreeLabel = worktreeRecord
     ? t('sidebarThreadWorktree', { branch: worktreeBranch })
     : ''
-  const updatedLabel = formatRelativeTime(thread.updatedAt, locale)
+  // A New-session click that reused this empty thread counts as recent activity
+  // in the row label, while the thread's real `updatedAt` stays untouched.
+  const updatedLabel = formatRelativeTime(threadDisplayUpdatedAt(thread), locale)
   const scheduledTime = scheduledActivity?.nextRunAt
     ? (() => {
         const date = new Date(scheduledActivity.nextRunAt)
@@ -257,7 +260,7 @@ export function ThreadRow({
     <SidebarTreeRow
       active={active}
       actionsVisibility={deleting ? 'visible' : 'hidden'}
-      actionsLayout="overlay"
+      actionsLayout="swap"
       actions={(
         <>
           {!archived ? (
@@ -269,6 +272,7 @@ export function ThreadRow({
               ariaLabel={pinned ? t('sidebarThreadUnpin') : t('sidebarThreadPin')}
               active={pinned}
               stopPropagation
+              className="!h-[26px] !w-[26px]"
             >
               {pinned
                 ? <PinOff className="h-3 w-3" strokeWidth={1.9} />
@@ -282,6 +286,7 @@ export function ThreadRow({
             title={archived ? t('sidebarThreadRestore') : t('sidebarThreadArchive')}
             ariaLabel={archived ? t('sidebarThreadRestore') : t('sidebarThreadArchive')}
             stopPropagation
+            className="!h-[26px] !w-[26px]"
           >
             {deleting
               ? <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />
@@ -296,6 +301,7 @@ export function ThreadRow({
             title={t('sidebarThreadDelete')}
             ariaLabel={t('sidebarThreadDelete')}
             stopPropagation
+            className="!h-[26px] !w-[26px]"
           >
             <Trash2 className="h-3 w-3" strokeWidth={1.9} />
           </SidebarIconButton>
@@ -363,7 +369,7 @@ export function ThreadRow({
           {thread.title}
         </span>
         <span className={`ml-auto flex min-w-[3.75rem] shrink-0 items-center justify-end gap-1.5 transition ${
-          deleting ? 'opacity-0' : 'group-hover:opacity-0 group-focus-within:opacity-0'
+          deleting ? 'hidden' : 'group-hover:hidden group-focus-within:hidden'
         }`}>
           {taskGroup && !taskGroup.collapsed ? null : <span className="shrink-0 text-right text-[12px] leading-4 text-ds-faint tabular-nums">
             {updatedLabel}

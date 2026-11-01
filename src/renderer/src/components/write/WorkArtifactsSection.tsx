@@ -21,7 +21,7 @@ export function WorkArtifactsSection({ workspaceRoot }: { workspaceRoot: string 
     : 0
 
   return (
-    <div className="mb-1" data-work-artifacts-entry="true">
+    <div data-work-artifacts-entry="true">
       <SidebarTreeRow
         title={t('artifactsNav')}
         ariaLabel={t('artifactsNav')}

@@ -10,27 +10,13 @@ import {
   XCircle
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import {
-  localPdfImportLine,
-  parsePaperImportInput
-} from '../../../paper/paper-import-classify'
-import {
-  cancelPaperImportItem,
-  newPaperImportItem,
-  pickPaperImportCandidate,
-  runPaperImportQueue,
-  type PaperImportQueueItem,
-  type PaperImportItemStatus
-} from '../../../paper/paper-import-queue'
-import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { PaperSearchCandidates } from './PaperSearchCandidates'
-import { PaperImportFolderPicker } from './PaperImportFolderPicker'
-import { currentImportParentDir } from '../../../paper/paper-import-target'
+import { pickPaperImportCandidate, type PaperImportItemStatus } from '../../../paper/paper-import-queue'
 import { usePaperImportDraft } from '../../../paper/paper-import-draft'
-import { rememberPaperSpace } from '../../../paper/paper-mode-actions'
 import { usePaperBatchInterpret } from '../../../paper/paper-batch-interpret'
-import { openPaperUnit } from '../../../write/paper/paper-open-layout'
-import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../../write/write-workspace-store'
+import { openPaperSpace, openPaperSpaceItem, refreshPaperSpace } from '../../../paper/paper-space'
+import { usePaperSpaceStore } from '../../../paper/paper-space-store'
+import { appendPaperImportFiles, cancelPaperImportSessionItem, editFailedPaperImportInput, startPaperImportSession, usePaperImportSession } from '../../../paper/paper-import-session'
+import { PaperSearchCandidates } from './PaperSearchCandidates'
 
 const STATUS_ICON: Record<PaperImportItemStatus, ReactElement> = {
   pending: <CircleDashed className="h-3.5 w-3.5 text-ds-faint" strokeWidth={2} />,
@@ -50,172 +36,66 @@ const ACTIVE: ReadonlySet<PaperImportItemStatus> = new Set([
   'importing'
 ])
 
-/**
- * Multiline import dialog (PM4): paste arXiv ids/URLs, DOIs, papers.cool
- * links, publisher URLs, BibTeX blocks, or bare titles — one status row per
- * line, 2 concurrent imports, per-row cancel and pick for title matches.
- * Papers land in the current space; PDFs dropped elsewhere arrive here and
- * start at once. A finished run summarizes what was added (and what was
- * already there) and offers the next step: open, interpret all, or browse.
- */
-export function PaperImportDialog({
-  workspaceRoot,
-  papersDir,
-  folderPicker = false,
-  onClose
-}: {
-  workspaceRoot: string
-  papersDir?: string
-  /** Paper mode: let the user file imports into a library folder. */
-  folderPicker?: boolean
-  onClose: () => void
-}): ReactElement {
+/** A view of the app-owned import task. Closing or navigating never cancels it. */
+export function PaperImportDialog({ onClose }: { onClose: () => void }): ReactElement {
   const { t } = useTranslation('common')
-  const [value, setValue] = useState('')
-  const [items, setItems] = useState<PaperImportQueueItem[]>([])
-  const [downloadPdfs, setDownloadPdfs] = useState(true)
-  const [running, setRunning] = useState(false)
+  const { value, items, downloadPdfs, running, finished, error } = usePaperImportSession()
   const [dragOver, setDragOver] = useState(false)
-  const [finished, setFinished] = useState(false)
-  const itemsRef = useRef(items)
-  itemsRef.current = items
-  const refreshEntries = usePaperModeStore((s) => s.refreshEntries)
-  const defaultWorkspaceRoot = useWriteWorkspaceStore((s) => s.defaultWorkspaceRoot)
-  const spaceName = workspaceRoot === defaultWorkspaceRoot ? t('writeDefaultSpace') : writeBasenameFromPath(workspaceRoot)
-
-  const patchItem = (next: PaperImportQueueItem): void => {
-    setItems((prev) => prev.map((item) => (item.id === next.id ? next : item)))
-  }
-
-  const appendLines = (lines: Parameters<typeof newPaperImportItem>[0][]): void => {
-    if (!lines.length) return
-    setItems((prev) => [...prev, ...lines.map(newPaperImportItem)])
-  }
+  const queued = usePaperImportDraft((state) => state.pdfs)
+  const start = (): Promise<void> => startPaperImportSession()
+  const spaceName = t('workSidebarLibrary')
 
   const pickFiles = async (): Promise<void> => {
-    if (running || typeof window.kunGui?.pickLocalFiles !== 'function') return
+    if (typeof window.kunGui?.pickLocalFiles !== 'function') return
     const picked = await window.kunGui.pickLocalFiles()
-    if (picked.canceled) return
-    const pdfs = picked.paths.filter((path) => /\.pdf$/i.test(path))
-    const bibs = picked.paths.filter((path) => /\.bib$/i.test(path))
-    if (pdfs.length) appendLines(pdfs.map(localPdfImportLine))
-    for (const bib of bibs) await appendBibFile(bib)
-    if (!pdfs.length && !bibs.length && picked.paths.length) {
-      setItems((prev) => prev)
-    }
+    if (!picked.canceled) await appendPaperImportFiles(picked.paths)
   }
-
-  const appendBibFile = async (path: string): Promise<void> => {
-    const result = await window.kunGui.readWorkspaceFile({ path })
-    if (result.ok && result.content.trim()) {
-      appendLines(parsePaperImportInput(result.content))
-    }
-  }
-
   const onDrop = (event: DragEvent<HTMLDivElement>): void => {
     event.preventDefault()
     setDragOver(false)
-    if (running) return
-    const files = Array.from(event.dataTransfer?.files ?? [])
-    for (const file of files) {
-      const path =
-        typeof window.kunGui?.getPathForFile === 'function'
-          ? window.kunGui.getPathForFile(file)
-          : ''
-      if (!path) continue
-      if (/\.pdf$/i.test(path)) appendLines([localPdfImportLine(path)])
-      else if (/\.bib$/i.test(path)) void appendBibFile(path)
-    }
+    const paths = Array.from(event.dataTransfer?.files ?? []).map((file) => window.kunGui.getPathForFile(file)).filter(Boolean)
+    void appendPaperImportFiles(paths)
   }
 
-  const parseTextarea = (): PaperImportQueueItem[] => {
-    const lines = parsePaperImportInput(value)
-    if (!lines.length) return []
-    const created = lines.map(newPaperImportItem)
-    setItems((prev) => [...prev, ...created])
-    setValue('')
-    return created
-  }
-
-  const start = async (extra: PaperImportQueueItem[] = []): Promise<void> => {
-    const created = parseTextarea()
-    const known = new Set(itemsRef.current.map((item) => item.id))
-    const queue = [...itemsRef.current, ...extra.filter((item) => !known.has(item.id)), ...created].filter(
-      (item) => item.status === 'pending'
-    )
-    if (!queue.length) return
-    setRunning(true)
-    setFinished(false)
-    try {
-      await runPaperImportQueue(
-        queue,
-        { workspaceRoot, papersDir: folderPicker ? currentImportParentDir() : papersDir, downloadPdfs },
-        { onItem: patchItem }
-      )
-    } finally {
-      setRunning(false)
-      setFinished(true)
-      refreshEntries()
-      if (itemsRef.current.some((item) => item.status === 'done' && !item.reused)) void rememberPaperSpace(workspaceRoot)
-    }
-  }
-
-  // Esc closes and ⌘/Ctrl+Enter imports, wherever focus is (a dropped
-  // import starts without focusing the dialog).
-  const keysRef = useRef({ running, onClose, start })
-  keysRef.current = { running, onClose, start }
+  const keysRef = useRef({ running, onClose })
+  keysRef.current = { running, onClose }
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      const { running: busy, onClose: close, start: run } = keysRef.current
-      if (busy) return
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        close()
-      } else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault()
-        void run()
+      if (event.key === 'Escape') { event.preventDefault(); keysRef.current.onClose() }
+      else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !keysRef.current.running) {
+        event.preventDefault(); void startPaperImportSession()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-
-  // PDFs dropped on the library or the space start right away.
   useEffect(() => {
-    const dropped = usePaperImportDraft.getState().take()
-    if (!dropped.length) return
-    const created = dropped.map((path) => newPaperImportItem(localPdfImportLine(path)))
-    setItems((prev) => [...prev, ...created])
-    void start(created)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    const paths = usePaperImportDraft.getState().take()
+    if (paths.length) void appendPaperImportFiles(paths).then(() => startPaperImportSession())
+  }, [queued])
 
   const imported = items.filter((item) => item.status === 'done' && item.unitDir && item.meta)
   const added = imported.filter((item) => !item.reused).length
   const failed = items.filter((item) => item.status === 'failed').length
-  const openSingle = (): void => {
+  const openSingle = async (): Promise<void> => {
     const [item] = imported
-    if (!item?.unitDir || !item.meta) return
+    if (!item?.unitDir || !item.workspaceRoot) return
     onClose()
-    void openPaperUnit({ workspaceRoot, unitDir: item.unitDir, meta: item.meta })
+    await refreshPaperSpace()
+    const found = usePaperSpaceStore.getState().items.find((paper) => paper.libraryRoot === item.workspaceRoot && paper.entry.unitDir === item.unitDir)
+    if (found) await openPaperSpaceItem(found)
   }
   const interpretAll = (): void => {
-    const papers = imported.flatMap((item) => item.unitDir && item.meta ? [{ unitDir: item.unitDir, meta: item.meta }] : [])
+    const papers = imported.flatMap((item) => item.unitDir && item.meta && item.workspaceRoot
+      ? [{ unitDir: item.unitDir, meta: item.meta, workspaceRoot: item.workspaceRoot }] : [])
+    const root = usePaperImportSession.getState().workspaceRoot
+    if (!root) return
     onClose()
-    usePaperBatchInterpret.getState().openDialog(workspaceRoot, papers)
+    usePaperBatchInterpret.getState().openDialog(root, papers)
   }
-  const browseLibrary = (): void => {
-    onClose()
-    useWriteWorkspaceStore.getState().openPaperViewTab('library')
-  }
-
+  const browseLibrary = (): void => { onClose(); void openPaperSpace() }
   const cancelAll = (): void => {
-    for (const item of itemsRef.current) {
-      if (ACTIVE.has(item.status)) {
-        cancelPaperImportItem(item)
-        patchItem({ ...item })
-      }
-    }
+    for (const item of usePaperImportSession.getState().items) cancelPaperImportSessionItem(item)
   }
 
   const anyActive = items.some((item) => ACTIVE.has(item.status))
@@ -223,7 +103,7 @@ export function PaperImportDialog({
   return (
     <div
       className="ds-no-drag fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/18 px-4 backdrop-blur-[2px] dark:bg-black/35"
-      onMouseDown={() => { if (!running) onClose() }}
+      onMouseDown={onClose}
     >
       <div
         role="dialog"
@@ -233,7 +113,7 @@ export function PaperImportDialog({
         onDragOver={(event) => { event.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`flex max-h-[80vh] w-full max-w-lg flex-col rounded-[24px] border bg-ds-card p-5 shadow-[0_24px_72px_rgba(20,47,95,0.22)] ${
+        className={`flex max-h-[80vh] w-full max-w-2xl flex-col rounded-[24px] border bg-ds-card p-5 shadow-[0_24px_72px_rgba(20,47,95,0.22)] ${
           dragOver ? 'border-accent-tint/60' : 'border-ds-border'
         }`}
       >
@@ -241,18 +121,22 @@ export function PaperImportDialog({
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-tint/10 text-accent">
             <GraduationCap className="h-5 w-5" strokeWidth={1.9} />
           </span>
-          <h2 className="min-w-0 truncate text-[18px] font-semibold tracking-[-0.035em] text-ds-ink" title={workspaceRoot}>
+          <h2 className="min-w-0 flex-1 truncate text-[18px] font-semibold tracking-[-0.035em] text-ds-ink" title={t('paperSpaceOneSpace')}>
             {t('paperImportIntoSpace', { space: spaceName })}
           </h2>
+          <button type="button" aria-label={t('close')} onClick={onClose} className="shrink-0 rounded-lg p-1 text-ds-faint hover:bg-ds-hover hover:text-ds-ink">
+            <X className="h-4 w-4" strokeWidth={1.9} />
+          </button>
         </div>
         <p className="mt-2 text-[13px] leading-6 text-ds-muted">
-          {t('writePaperImportLinesDesc')}
+          {t('writePaperImportLinesDesc')} {t('paperSpaceImportHint')}
         </p>
 
+        {error ? <p role="alert" className="mt-3 text-[13px] text-red-500">{error}</p> : null}
         <textarea
           value={value}
           disabled={running}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => usePaperImportSession.setState({ value: event.target.value })}
           placeholder={t('writePaperImportLinesPlaceholder')}
           spellCheck={false}
           rows={4}
@@ -269,13 +153,12 @@ export function PaperImportDialog({
             <FileUp className="h-3.5 w-3.5" strokeWidth={1.9} />
             {t('writePaperImportPickFiles')}
           </button>
-          {folderPicker ? <PaperImportFolderPicker className="ml-auto" /> : null}
-          <label className={`${folderPicker ? '' : 'ml-auto '}inline-flex items-center gap-1.5 text-[12.5px] text-ds-muted`}>
+          <label className="ml-auto inline-flex items-center gap-1.5 text-[12.5px] text-ds-muted">
             <input
               type="checkbox"
               checked={downloadPdfs}
               disabled={running}
-              onChange={(event) => setDownloadPdfs(event.target.checked)}
+              onChange={(event) => usePaperImportSession.setState({ downloadPdfs: event.target.checked })}
               className="h-3.5 w-3.5 accent-accent"
             />
             {t('writePaperImportDownloadPdfs')}
@@ -300,13 +183,22 @@ export function PaperImportDialog({
                     <button
                       type="button"
                       aria-label={t('writePaperCancel')}
-                      onClick={() => { cancelPaperImportItem(item); patchItem({ ...item }) }}
+                      onClick={() => cancelPaperImportSessionItem(item)}
                       className="shrink-0 rounded p-0.5 text-ds-faint transition hover:text-ds-ink"
                     >
                       <X className="h-3.5 w-3.5" strokeWidth={2} />
                     </button>
                   ) : null}
                 </div>
+                {item.pdfError ? <p className="mt-1 text-[11.5px] text-amber-600 dark:text-amber-400" role="status">
+                  {t('paperImportPdfFailed', { message: item.pdfError })}
+                </p> : null}
+                {item.status === 'failed' && !item.sourceFile && item.line.kind !== 'localPdf' ? <textarea
+                  value={item.retryInput ?? item.line.ref} rows={item.line.kind === 'bibtex' ? 3 : 1} disabled={running}
+                  aria-label={t('writePaperImportLinesPlaceholder')} placeholder={t('writePaperImportLinesPlaceholder')}
+                  onChange={(event) => editFailedPaperImportInput(item.id, event.target.value)}
+                  className="mt-2 w-full resize-y rounded-lg border border-ds-border bg-ds-card px-2 py-1.5 font-mono text-[12px] text-ds-ink focus:border-accent focus:outline-none"
+                /> : null}
                 {item.status === 'picking' && item.candidates ? (
                   <PaperSearchCandidates
                     candidates={item.candidates}
@@ -325,7 +217,7 @@ export function PaperImportDialog({
               {t('paperImportSummary', { added, existing: imported.length - added, failed })}
             </span>
             {imported.length === 1 ? (
-              <button type="button" onClick={openSingle}
+              <button type="button" onClick={() => void openSingle()}
                 className="rounded-lg px-2 py-1 font-medium text-accent transition hover:bg-accent/10">
                 {t('workPaperOpen')}
               </button>
@@ -343,7 +235,10 @@ export function PaperImportDialog({
           </div>
         ) : null}
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <span className="mr-auto self-center text-[12px] text-ds-muted">{t('paperSpaceImportBackground')}</span>
+          {failed > 0 ? <button type="button" disabled={running} onClick={() => void startPaperImportSession(true)}
+            className="rounded-xl border border-ds-border px-3 py-2 text-[13px] text-accent disabled:opacity-55">{t('paperSpaceRetryFailed', { count: failed })}</button> : null}
           {anyActive ? (
             <button
               type="button"
@@ -364,7 +259,7 @@ export function PaperImportDialog({
           )}
           <button
             type="button"
-            disabled={running}
+            disabled={running || (!value.trim() && !items.some((item) => item.status === 'pending'))}
             onClick={() => void start()}
             title="⌘/Ctrl + Enter"
             className="rounded-xl bg-accent px-3 py-2 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55"

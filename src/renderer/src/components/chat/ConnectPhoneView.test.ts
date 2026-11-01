@@ -67,9 +67,9 @@ describe('ConnectPhoneView', () => {
 
     expect(html).toContain('Use your phone to connect kun')
     expect(html).toContain('Generate authorization QR')
-    expect(html).toContain('max-w-[760px]')
+    expect(html).toContain('role="radiogroup"')
     expect(html).toContain('grid-cols-4')
-    expect(html).toContain('w-full min-w-0 items-center justify-center')
+    expect(html).toContain('role="radio"')
     expect(html).toContain('TELE')
     expect(html).not.toContain('Kun usage')
   })

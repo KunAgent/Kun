@@ -55,7 +55,7 @@ export type KunLabSettingsV1 = {
   codexReferenceBranches: { enabled: boolean }
   projectBoard: KunLabProjectBoardSettingsV1
   /** Personal assistants (Cue, Grok Bot, Muse, dots) driven through Kun's assistant mailbox. */
-  assistantMailbox: { enabled: boolean }
+  assistantMailbox: { enabled: boolean; autoContinueEnabled?: boolean }
 }
 
 /** Partial settings patch for the Lab section and the PPT image asset preference. */
@@ -69,5 +69,5 @@ export type KunLabSettingsPatchV1 = {
   claudeCodeReferenceBranches?: { enabled?: boolean }
   codexReferenceBranches?: { enabled?: boolean }
   projectBoard?: Partial<KunLabProjectBoardSettingsV1>
-  assistantMailbox?: { enabled?: boolean }
+  assistantMailbox?: { enabled?: boolean; autoContinueEnabled?: boolean }
 }

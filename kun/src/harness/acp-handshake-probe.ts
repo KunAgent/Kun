@@ -44,6 +44,8 @@ export type AcpHandshakeProbeDeps = {
   signal?: AbortSignal
   /** Resolved selected-profile environment; overrides definition secrets. */
   env?: Record<string, string>
+  /** Startup flags may depend on permission mode, even without a session. */
+  launchPermissionMode?: string
   /** Optional local session metadata; never sends a prompt or authenticates. */
   includeModels?: boolean
   /** Exercise the same pre-prompt model/mode setup as a real turn, without inference. */
@@ -82,7 +84,7 @@ async function launchAcp(input: Launch): Promise<AcpProcess> {
       harnessId: input.definition.id,
       signal: input.signal,
       command: input.command,
-      args: acpLaunchArgs(input.definition, input.deps.session?.permissionMode),
+      args: acpLaunchArgs(input.definition, input.deps.launchPermissionMode ?? input.deps.session?.permissionMode),
       env: input.env,
       secretEnv: input.secretEnv,
       credentialEnv: input.deps.env,
@@ -120,7 +122,9 @@ async function isolatedSessionOutcome(
     conn = AcpConnection.start({ process: child, identity: 'handshake-probe-isolated' })
     new AcpClientHost().attach(conn)
     await raceProbeAbort(conn.initialize({ timeoutMs, fileWrites: launch.definition.acpClientWrites !== false }), launch.signal)
-    await raceProbeAbort(conn.rpc.request(ACP_AGENT_METHODS.sessionNew, { cwd: workspace, mcpServers: [] }, { timeoutMs }), launch.signal)
+    if (launch.deps.session || launch.deps.includeModels) {
+      await raceProbeAbort(conn.rpc.request(ACP_AGENT_METHODS.sessionNew, { cwd: workspace, mcpServers: [] }, { timeoutMs }), launch.signal)
+    }
     return 'passes'
   } catch (error) {
     if (launch.signal.aborted || (error instanceof AcpError && error.code === 'request_timeout')) return undefined
@@ -207,7 +211,9 @@ export async function probeAcpHandshake(
     signal.throwIfAborted()
     let models: string[] | undefined
     let catalog: HarnessModelCatalog | undefined
-    let detail: string | undefined
+    let detail: string | undefined = deps.includeModels || deps.session
+      ? undefined
+      : 'ACP initialized; session creation, model and permission settings are checked when a conversation starts.'
     if (deps.includeModels || deps.session) {
       stage = 'session/new'
       workspace = await mkdtemp(join(tmpdir(), 'kun-acp-readiness-'))

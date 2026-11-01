@@ -30,7 +30,7 @@
   "sidebarUpdateCurrent": "現在 {{version}}",
   "sidebarUpdateManualHint": "手動インストール",
   "sidebarUpdateDownloadingHint": "ダウンロード後に再起動してインストールします",
-  "sidebarUpdateBodyAvailable": "ダウンロードが終わると Kun が再起動してインストールを完了します。",
+  "sidebarUpdateBodyAvailable": "ダウンロードが終わると Kun が再起動してインストールを完了します。実行中のタスクを先に終了してください。",
   "sidebarUpdateBodyManual": "このバージョンはダウンロードページから手動でインストールしてください。",
   "sidebarUpdateDownloadAndRestart": "ダウンロードして再起動",
   "sidebarUpdateRestartNow": "今すぐ再起動",

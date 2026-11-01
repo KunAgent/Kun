@@ -174,7 +174,7 @@
 .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-user > :is(.rooms-avatar, .rooms-message-avatar-spacer) { display: none; }
 .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-meta { padding: 0; color: var(--ds-text-muted); font-size: 12px; opacity: 1; }
 .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-member .rooms-message-meta { align-items: center; }
-.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-member .rooms-message-meta strong { display: inline; }
+.rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-member .rooms-message-meta :is(strong, .rooms-message-author) { display: inline; }
 .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-meta time { color: var(--ds-text-muted); }
 .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-bubble { border: 0; }
 .rooms-workspace[data-rooms-workspace][data-private-chat] .rooms-message-row .rooms-message-bubble:not(.rooms-message-wide):not(:has(pre, table, .ds-code-block)) { max-width: min(42.5rem, 100%); }

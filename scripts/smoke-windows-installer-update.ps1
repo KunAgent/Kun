@@ -5,7 +5,12 @@ function Invoke-SmokeAutomaticUpdate([string]$Scenario) {
   Assert-True ($script:installLocation.StartsWith($script:root + '\', [StringComparison]::OrdinalIgnoreCase)) `
     'The automatic update smoke must own its temporary installation.'
   Find-KunRegistration
-  $version = (Get-Content (Join-Path $PSScriptRoot '..\package.json') -Raw | ConvertFrom-Json).version
+  # Read the actual installed payload: CI can override the source package version.
+  $archive = Join-Path $script:installLocation 'resources\app.asar'
+  $version = & node (Join-Path $PSScriptRoot 'smoke-windows-installer-version.cjs') $archive
+  Assert-True ($LASTEXITCODE -eq 0) "[$Scenario] Unable to read the installed app version."
+  Assert-True (-not [string]::IsNullOrWhiteSpace($version)) "[$Scenario] Installed app version is empty."
+  Write-Host "[$Scenario] Installed app version: $version"
   $sentinel = Join-Path $script:installLocation 'smoke-preserved-user-file.txt'
   $sentinelValue = 'owned smoke user file ' + [Guid]::NewGuid().ToString('N')
   Set-Content -LiteralPath $sentinel -Value $sentinelValue -Encoding UTF8

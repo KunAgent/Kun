@@ -111,6 +111,21 @@ public static class KunInstallerPayloadCopy {
     EnsureDirectory(path.Substring(0, separator));
     if (!CreateDirectoryW(path, IntPtr.Zero)) throw Error("Cannot create payload directory", path);
   }
+  static int retryWaitMs;
+  static void RetrySharingViolation(Func<bool> operation, string label, string path) {
+    int delay = 100;
+    while (!operation()) {
+      int error = Marshal.GetLastWin32Error();
+      if ((error != 32 && error != 33) || retryWaitMs >= 10000) {
+        throw new IOException(label + ": " + path, new Win32Exception(error));
+      }
+      int wait = Math.Min(delay, 10000 - retryWaitMs);
+      Console.Error.WriteLine("FILE_BUSY win32Error=" + error + " retryMs=" + wait + " waitedMs=" + retryWaitMs);
+      System.Threading.Thread.Sleep(wait);
+      retryWaitMs += wait;
+      delay = Math.Min(1000, delay * 2);
+    }
+  }
   static void CopyTree(string source, string destination) {
     uint attributes = Attributes(source, false);
     uint existing = Attributes(destination, true);
@@ -122,7 +137,11 @@ public static class KunInstallerPayloadCopy {
       if (existing != Invalid && (existing & ReadOnly) != 0 && !SetFileAttributesW(destination, existing & ~ReadOnly)) {
         throw Error("Cannot replace read-only payload file", destination);
       }
-      if (!CopyFileW(source, destination, false)) throw Error("Cannot copy payload to " + destination, source);
+      RetrySharingViolation(delegate {
+        Attributes(source, false);
+        Attributes(destination, true);
+        return CopyFileW(source, destination, false);
+      }, "Cannot copy payload", destination);
     }
   }
   static void DeleteTree(string path) {
@@ -131,8 +150,10 @@ public static class KunInstallerPayloadCopy {
       foreach (string name in Children(path)) DeleteTree(path + @"\" + name);
     }
     if ((attributes & ReadOnly) != 0 && !SetFileAttributesW(path, attributes & ~ReadOnly)) throw Error("Cannot clear read-only payload", path);
-    bool deleted = (attributes & Directory) != 0 ? RemoveDirectoryW(path) : DeleteFileW(path);
-    if (!deleted) throw Error("Cannot remove stale payload backup", path);
+    RetrySharingViolation(delegate {
+      Attributes(path, false);
+      return (attributes & Directory) != 0 ? RemoveDirectoryW(path) : DeleteFileW(path);
+    }, "Cannot remove stale payload backup", path);
   }
   public static void Validate(string path) {
     ValidateAncestors(path);
@@ -185,12 +206,14 @@ public static class KunInstallerPayloadCopy {
       " bytes=" + size.ToString(System.Globalization.CultureInfo.InvariantCulture);
   }
   public static void Remove(string path) {
+    retryWaitMs = 0;
     ValidateAncestors(path);
     string target = Extended(path);
     ValidateTree(target, true);
     if (Attributes(target, true) != Invalid) DeleteTree(target);
   }
   public static void Copy(string source, string destination, bool replaceDestination) {
+    retryWaitMs = 0;
     // Roots are normalized by the caller; never delete or copy overlapping trees.
     if (String.Equals(source, destination, StringComparison.OrdinalIgnoreCase) ||
         source.StartsWith(destination + @"\", StringComparison.OrdinalIgnoreCase) ||

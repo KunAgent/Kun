@@ -42,4 +42,5 @@ export type SettingsRouteSection =
   | 'terminal'
   | 'debug'
   | 'storage'
+  | 'storageCleanup'
   | 'dataMigration'

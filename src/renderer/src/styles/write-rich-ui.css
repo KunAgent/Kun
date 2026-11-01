@@ -551,3 +551,34 @@
   pointer-events: none;
   height: 0;
 }
+
+/* Under the title: save state · length · pending Kun changes. */
+.write-doc-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 0 0 6px;
+  color: var(--ds-text-faint);
+  font-size: 12.5px;
+  user-select: none;
+}
+.write-doc-status > * + *::before {
+  content: '·';
+  margin-right: 10px;
+  color: var(--ds-text-faint);
+}
+.write-doc-status-save.is-dirty,
+.write-doc-status-save.is-saving { color: var(--ds-text-muted); }
+.write-doc-status-save.is-error { color: #c2410c; }
+.write-doc-status-review {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0;
+  color: var(--ds-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.write-doc-status-review:hover { text-decoration: underline; }

@@ -13,7 +13,7 @@
   &nbsp;·&nbsp;
   <a href="https://www.kun-agent.com/docs">文档</a>
   &nbsp;·&nbsp;
-  <a href="./release/release-v0.4.0.md">更新日志</a>
+  <a href="./release/release-v0.4.4.md">更新日志</a>
   &nbsp;·&nbsp;
   <a href="./README.en.md">English</a>
 </p>
@@ -33,7 +33,7 @@
 
 ## Kun 能做什么
 
-Kun 是跑在你电脑上的桌面应用。代码、文档和 Agent 对话共用一个本地运行时；会话、记忆和设置都留在本机，模型由你自己接入。
+Kun 是跑在你电脑上的桌面应用。Code、Work 和对话共用一个本地运行时：写代码、做设计、处理文档和论文，也能把任务交给不同的 Agent 协作完成。会话、记忆和设置留在本机，模型由你自己接入。
 
 <table>
   <tr>
@@ -46,7 +46,13 @@ Kun 是跑在你电脑上的桌面应用。代码、文档和 Agent 对话共用
   </tr>
 </table>
 
-还有：插件与技能市场（MCP / Skills）、提醒与定时任务、终端 TUI、手机远程、Kun 账号与衣橱。完整列表见 [0.4.0 更新日志](release/release-v0.4.0.md)。
+- **Code / Design**：项目、终端、Git 与 Diff 放在一处。先在 Design 画布中比较多屏、状态与方案，确认后再交给 Agent 实现；Claude Code、Codex 等外部 Agent 也能打开设计。
+- **Work / 论文**：会话与文件用标签页组织，需要时分屏对照；选中文字即可改写、扩写或引用到会话，选中表格单元格可查看统计并交给 Kun 分析。独立论文库集中管理导入、阅读、笔记与相关会话。
+- **对话 / Agent 协作**：与个人 Agent、Codex、Claude Code、OpenCode 私聊或拉群，为计划选择执行 Agent，分派任务并查看各自的进展和结果。个人助理任务工作流可在“设置 → Lab”启用，需服务端开放并完成助理接入。
+- **报告 / 产物**：让 Kun 把实际数据整理成指标、图表和说明组成的报告，直接在对话里查看，并保存到产物库继续打开或更新；缩略图帮助你更快找到需要的产物。
+- **连接 / 扩展**：统一管理可用的 GitHub、Gmail 连接，通过 MCP / Skills、Loops 和 Extension 平台扩展工作流。本地模型网关复用同一份 Provider 配置。
+
+还有：提醒与定时任务、存储管理、终端 TUI、手机远程、Kun 账号与衣橱。最新变化见 [0.4.4 更新日志](release/release-v0.4.4.md)。
 
 ## 三步开始
 

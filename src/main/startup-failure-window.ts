@@ -1,12 +1,17 @@
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
+import { relaunchApp } from './relaunch-app'
 import { appIcon } from './main-app-context'
 import { logError, logWarn } from './logger'
 import {
   parseStartupFailureAction,
   sanitizeStartupFailureMessage,
   startupFailurePresentation,
-  startupFailureHtml
+  startupFailureHtml,
+  startupFailureDiagnostics
 } from './startup-failure-content'
+import { startupFailureCopy, startupFailureLanguage } from './startup-failure-copy'
+import { readStartupLogTail, startupLogSource } from './startup-failure-log'
+import type { StartupFailurePageOptions } from './startup-failure-page'
 
 export const STARTUP_RECOVERY_TIMEOUT_MS = 45_000
 
@@ -33,9 +38,9 @@ export function showStartupFailureWindow(
   try {
     const window = new BrowserWindow({
       width: 760,
-      height: 560,
-      minWidth: 620,
-      minHeight: 460,
+      height: 640,
+      minWidth: 560,
+      minHeight: 480,
       title: 'Kun startup recovery',
       icon: appIcon.isEmpty() ? undefined : appIcon,
       autoHideMenuBar: true,
@@ -51,20 +56,35 @@ export function showStartupFailureWindow(
       appVersion: app.getVersion(),
       execPath: process.execPath
     }
+    const locale = app.getLocale()
+    const copy = startupFailureCopy(startupFailureLanguage(locale))
+    const logSource = startupLogSource(message, logDir)
+    // A missing referenced log is itself a finding; a missing desktop log is not.
+    const logTail = () => {
+      if (!logSource) return undefined
+      const tail = readStartupLogTail(logSource.path)
+      return tail || !logSource.referenced ? tail ?? undefined : null
+    }
     let recoveryInFlight = false
     let recoveryController: AbortController | undefined
-    const htmlOptions = (busy = false) => ({
+    let diagnosticError = error
+    let notice: StartupFailurePageOptions['notice']
+    const htmlOptions = (busy = false): StartupFailurePageOptions => ({
+      kind: presentation.kind,
       handoff: presentation.handoff,
       retryable: presentation.handoff ? canRecoverHandoff : presentation.retryable,
       recheck: presentation.recheck,
       orphaned: presentation.orphaned,
       busy,
+      locale,
+      notice,
+      logTail: logTail(),
       ...launchIdentity
     })
-    const render = (detail: string, busy = false): void => {
+    const render = (busy = false): void => {
       if (window.isDestroyed()) return
       void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupFailureHtml(
-        detail,
+        message,
         logDir,
         htmlOptions(busy)
       ))}`).catch((loadError) => {
@@ -77,7 +97,8 @@ export function showStartupFailureWindow(
       recoveryInFlight = true
       const controller = new AbortController()
       recoveryController = controller
-      render(message, true)
+      notice = undefined
+      render(true)
       let rejectAborted!: (error: unknown) => void
       const aborted = new Promise<never>((_resolve, reject) => { rejectAborted = reject })
       const onAbort = () => rejectAborted(controller.signal.reason)
@@ -85,23 +106,35 @@ export function showStartupFailureWindow(
       const timer = presentation.handoff ? undefined : setTimeout(() => controller.abort(new Error(
         'Recovery timed out after 45 seconds. Kun has not restarted. Retry to recheck the remaining processes, or quit and reopen the app.'
       )), STARTUP_RECOVERY_TIMEOUT_MS)
+      let operationTask: Promise<void> | undefined
+      let operationPending = false
       try {
         // Catch synchronous failures too, and never relaunch on a late result
         // after timeout, window close, or an explicit Quit.
-        await Promise.race([operation(controller.signal), aborted])
+        operationPending = true
+        operationTask = operation(controller.signal).finally(() => { operationPending = false })
+        await Promise.race([operationTask, aborted])
         controller.signal.throwIfAborted()
         if (window.isDestroyed()) return
-        app.relaunch()
+        relaunchApp()
         app.quit()
       } catch (recoveryError) {
+        diagnosticError = recoveryError
         const detail = sanitizeStartupFailureMessage(recoveryError)
         logWarn('startup', 'Kun startup retry cleanup failed.', { message: detail })
-        render(`${message}\n\nRetry failed: ${detail}`)
+        notice = { tone: 'error', text: `${copy.retryFailed} ${detail}` }
+        render(Boolean(operationTask && operationPending))
       } finally {
         if (timer) clearTimeout(timer)
         controller.signal.removeEventListener('abort', onAbort)
-        recoveryInFlight = false
-        recoveryController = undefined
+        const settled = () => {
+          recoveryInFlight = false
+          recoveryController = undefined
+        }
+        if (operationTask && operationPending) {
+          // Aborting does not establish that the original cleanup has stopped.
+          void operationTask.catch(() => undefined).then(() => { settled(); render() })
+        } else settled()
       }
     }
     window.once('closed', () => recoveryController?.abort(new Error('Recovery window closed')))
@@ -124,11 +157,19 @@ export function showStartupFailureWindow(
       } else if (action === 'quit') {
         recoveryController?.abort(new Error('Recovery cancelled by Quit'))
         app.quit()
+      } else if (action === 'copy-diagnostics') {
+        clipboard.writeText(startupFailureDiagnostics(diagnosticError, {
+          kind: presentation.kind, appVersion: launchIdentity.appVersion
+        }))
+        if (recoveryInFlight) return
+        notice = { tone: 'info', text: copy.copied }
+        render()
       } else {
-        void shell.openPath(logDir).then((openError) => {
+        const target = action === 'open-log-file' && logSource ? logSource.path : logDir
+        void shell.openPath(target).then((openError) => {
           if (!openError) return
-          logWarn('startup', 'Failed to open startup log directory.', { message: openError })
-          dialog.showErrorBox('Could not open log folder', openError)
+          logWarn('startup', 'Failed to open startup log location.', { message: openError })
+          dialog.showErrorBox('Could not open the log', openError)
         })
       }
     })

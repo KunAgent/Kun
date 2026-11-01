@@ -94,7 +94,7 @@ export function WorkContextChip({ context, disabled = false }: {
                       if (!current) void useChatStore.getState().selectWriteThread(thread.id)
                     }}>
                     {current ? <Check size={15} aria-hidden="true" /> : <span className="work-space-menu-gap" />}
-                    <span className="work-space-menu-name">{workSessionDisplayTitle(thread.title) || t('workSessionNew')}</span>
+                    <span className="work-space-menu-name">{workSessionDisplayTitle(thread.title, thread.titleAuto, thread.id) || t('workSessionNew')}</span>
                   </button>
                 )
               })}

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -369,6 +369,38 @@ describe('syncGuiManagedKunConfig', () => {
       topKMax: 9,
       minScore: 0.2
     })
+  })
+
+  it('does not re-enable a server after an interrupted cross-file disable during GUI startup', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const mcpConfigPath = join(tempRoot, 'mcp.json')
+    const transactionPath = join(tempRoot, 'mcp-transaction.json')
+    const descriptor = { enabled: false, transport: 'stdio', command: 'old-server', trustScope: 'user' }
+    // Simulate interruption after the runtime file was updated but before the shared file was updated.
+    writeFileSync(configPath, JSON.stringify({ capabilities: { mcp: { servers: { app: descriptor } } } }))
+    writeFileSync(mcpConfigPath, JSON.stringify({ servers: { app: { ...descriptor, enabled: true } } }))
+    // The runtime records the in-flight transaction (with its owner) before writing either file.
+    writeFileSync(transactionPath, JSON.stringify({
+      version: 2,
+      txnId: 'txn-crashed',
+      owner: { pid: 999999, host: 'crashed-host', startedAt: new Date().toISOString() },
+      phase: 'abandoned',
+      startedAt: new Date().toISOString(),
+      serverIds: ['app']
+    }))
+    const module = await import('./kun-process')
+    try {
+      await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), { mcpConfigPath })
+    } catch {
+      // Rejecting startup is also fail-closed; verify the persisted runtime state below.
+    }
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(config.capabilities.mcp.servers.app.enabled).toBe(false)
+    // The stale shared entry is repaired so it cannot resurrect the server later.
+    const shared = JSON.parse(readFileSync(mcpConfigPath, 'utf8')) as any
+    expect(shared.servers.app.enabled).toBe(false)
+    expect(existsSync(transactionPath)).toBe(false)
   })
 
   it('imports GUI-managed MCP servers into runtime capabilities', async () => {

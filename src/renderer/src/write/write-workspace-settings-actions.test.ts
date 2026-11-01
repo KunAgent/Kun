@@ -33,6 +33,7 @@ afterEach(() => {
   useWriteWorkspaceStore.setState({
     workspaceRoot: '',
     workspaceRoots: [],
+    documentsByPath: {},
     inlineCompletion: defaultWriteSettings().inlineCompletion,
     settingsLoading: false,
     settingsError: null
@@ -78,10 +79,33 @@ describe('write workspace settings actions', () => {
     await selectingFirst
 
     expect(initializeWorkspace).toHaveBeenCalledTimes(1)
-    expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/b')
+    expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/b', { navigationPrepared: true })
     expect(useWriteWorkspaceStore.getState().workspaceRoots).toContain('/workspace/b')
     expect(useWriteWorkspaceStore.getState().workspaceRoots).not.toContain('/workspace/a')
   })
+  it('does not persist or initialize a new Work root when dirty-file navigation is canceled', async () => {
+    const setSettings = vi.spyOn(rendererRuntimeClient, 'setSettings')
+    const initializeWorkspace = vi.fn(async () => undefined)
+    const confirm = vi.fn(() => false)
+    vi.stubGlobal('window', { confirm })
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: '/workspace/docs', workspaceRoots: ['/workspace/docs'], autoSaveEnabled: false,
+      documentsByPath: {
+        '/workspace/docs/a.md': { kind: 'text', path: '/workspace/docs/a.md', saveStatus: 'dirty' }
+      } as never,
+      initializeWorkspace
+    })
+
+    await useWriteWorkspaceStore.getState().selectWriteWorkspace('/workspace/other')
+
+    expect(confirm).toHaveBeenCalled()
+    expect(setSettings).not.toHaveBeenCalled()
+    expect(initializeWorkspace).not.toHaveBeenCalled()
+    expect(useWriteWorkspaceStore.getState().workspaceRoot).toBe('/workspace/docs')
+    expect(useWriteWorkspaceStore.getState().workspaceRoots).toEqual(['/workspace/docs'])
+    expect(useWriteWorkspaceStore.getState().documentsByPath['/workspace/docs/a.md'].saveStatus).toBe('dirty')
+  })
+
   it('loads mobile documents independently of the host paper mode without persisting a switch', async () => {
     const settings = normalizeAppSettings({ write: {
       defaultWorkspaceRoot: '/workspace/docs', activeWorkspaceRoot: '/workspace/library',

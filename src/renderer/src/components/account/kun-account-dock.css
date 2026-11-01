@@ -4,10 +4,22 @@
   display: flex;
   flex-direction: column;
   padding: 4px;
-  border: 1px solid var(--ds-sidebar-row-ring);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--ds-sidebar-row-active) 70%, transparent);
-  box-shadow: 0 1px 2px rgb(16 24 40 / 0.04);
+  border: 0;
+  border-radius: var(--kun-radius-md);
+  background: color-mix(in srgb, var(--ds-surface-card) 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 55%, transparent);
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.kun-account-dock:hover,
+.kun-account-dock:has(.kun-account-card[data-open]) {
+  background: color-mix(in srgb, var(--ds-surface-card) 88%, transparent);
+  box-shadow:
+    0 1px 2px rgb(16 24 40 / 0.06),
+    0 6px 16px rgb(16 24 40 / 0.06),
+    0 0 0 1px color-mix(in srgb, white 70%, transparent);
 }
 
 [data-theme='dark'] .kun-account-dock {
@@ -19,7 +31,7 @@
   gap: 4px;
   padding-right: 3px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 /* The dock is already the surface; an open menu only tints the account row. */
@@ -49,31 +61,6 @@
   margin-top: 3px;
   padding: 4px 1px 0;
   border-top: 1px solid var(--ds-sidebar-divider);
-}
-
-.kun-account-dock-bar .ds-focus-mode-switch {
-  height: 28px;
-}
-
-/* Without the Settings label the row has room for "Focus" down to the narrowest sidebar. */
-@container (max-width: 216px) {
-  .kun-account-dock-bar .ds-focus-mode-switch {
-    padding-left: 9px;
-  }
-
-  .kun-account-dock-bar .ds-focus-mode-switch-label {
-    display: inline;
-  }
-}
-
-@container (max-width: 168px) {
-  .kun-account-dock-bar .ds-focus-mode-switch {
-    padding-left: 7px;
-  }
-
-  .kun-account-dock-bar .ds-focus-mode-switch-label {
-    display: none;
-  }
 }
 
 /* Focus mode: no frame, one quiet row; the face is the account entry. */
@@ -115,17 +102,13 @@
   box-shadow: 0 0 0 2px var(--ds-bg-sidebar);
 }
 
-.kun-account-focus-row .ds-focus-mode-switch {
-  height: 28px;
+[data-theme='dark'] .kun-account-dock {
+  background: color-mix(in srgb, var(--ds-surface-card) 55%, transparent);
+  box-shadow: inset 0 0 0 1px var(--kun-hair-1);
 }
 
-/* Face, Focus and three tools: the label goes first when the row runs short. */
-@container (max-width: 236px) {
-  .kun-account-focus-row:has(.kun-account-mini) .ds-focus-mode-switch {
-    padding-left: 7px;
-  }
-
-  .kun-account-focus-row:has(.kun-account-mini) .ds-focus-mode-switch-label {
-    display: none;
-  }
+[data-theme='dark'] .kun-account-dock:hover,
+[data-theme='dark'] .kun-account-dock:has(.kun-account-card[data-open]) {
+  background: color-mix(in srgb, var(--ds-surface-card) 92%, transparent);
+  box-shadow: 0 0 0 1px var(--kun-hair-2);
 }

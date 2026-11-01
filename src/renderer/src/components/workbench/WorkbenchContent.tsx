@@ -1,6 +1,7 @@
 import { useEffect, useMemo, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
+import { RailSlot } from './rail-slot'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
 import { EXTERNAL_SUBAGENT_SOURCE_LABELS, externalSubagentSourceForThread } from '../../agent/external-subagent'
 import { AgentBrowserFloatingPreview } from '../AgentBrowserFloatingPreview'
@@ -144,7 +145,8 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onBackdropClose={toggleLeftSidebar}
       />
 
-      <div className="ds-workbench-card relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="ds-workbench-card relative flex min-h-0 min-w-0 flex-1">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       {activeExtensionCenterView ? (
         <main className="ds-stage-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -321,6 +323,8 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
           />
         </div>
       ) : null}
+      </div>
+      <RailSlot />
       </div>
       <DeclarativeContextMenuOverlay
         contributions={extensionHostContextMenus.filter(

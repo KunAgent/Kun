@@ -522,6 +522,21 @@ describe('Kun runtime config service', () => {
     })
   })
 
+  it('requires a restart when an authority section is rejected', () => {
+    expect(classifyManagedRuntimeHotApplyResponse(200, true, JSON.stringify({
+      ok: true,
+      rejectedSections: {
+        serve: { code: 'authority_rejected', message: 'approval policy was not applied' }
+      }
+    }))).toEqual({
+      result: 'restart_required',
+      message: 'approval policy was not applied',
+      sections: {
+        serve: { code: 'authority_rejected', message: 'approval policy was not applied' }
+      }
+    })
+  })
+
   it('projects provider catalogs when callers pass appSettings without schedule MCP', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-providers-'))
     const base = normalizeAppSettings({} as AppSettingsV1)

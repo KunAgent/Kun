@@ -30,7 +30,7 @@
   "sidebarUpdateCurrent": "ปัจจุบัน {{version}}",
   "sidebarUpdateManualHint": "ติดตั้งด้วยตนเอง",
   "sidebarUpdateDownloadingHint": "เมื่อดาวน์โหลดเสร็จจะรีสตาร์ตเพื่อติดตั้ง",
-  "sidebarUpdateBodyAvailable": "เมื่อดาวน์โหลดเสร็จ Kun จะรีสตาร์ตเพื่อติดตั้งให้เสร็จ",
+  "sidebarUpdateBodyAvailable": "เมื่อดาวน์โหลดเสร็จ Kun จะรีสตาร์ตเพื่อติดตั้งให้เสร็จ โปรดทำงานที่กำลังดำเนินอยู่ให้เสร็จก่อน",
   "sidebarUpdateBodyManual": "เวอร์ชันนี้ต้องติดตั้งเองจากหน้าดาวน์โหลด",
   "sidebarUpdateDownloadAndRestart": "ดาวน์โหลดและรีสตาร์ต",
   "sidebarUpdateRestartNow": "รีสตาร์ตเลย",

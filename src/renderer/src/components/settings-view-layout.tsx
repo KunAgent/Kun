@@ -70,6 +70,9 @@ const EasterEggSettingsSection = lazySection(() =>
 const ClawSettingsSection = lazySection(() =>
   import('./settings-section-claw').then((module) => ({ default: module.ClawSettingsSection }))
 )
+const ConnectionsSettingsSection = lazySection(() =>
+  import('./settings-section-connections').then((module) => ({ default: module.ConnectionsSettingsSection }))
+)
 const UpdatesSettingsSection = lazySection(() =>
   import('./settings-section-updates').then((module) => ({ default: module.UpdatesSettingsSection }))
 )
@@ -84,6 +87,9 @@ const DataMigrationSettingsSection = lazySection(() =>
 )
 const StorageRelocationSettingsSection = lazySection(() =>
   import('./settings-section-storage-relocation').then((module) => ({ default: module.StorageRelocationSettingsSection }))
+)
+const StorageCleanupSettingsSection = lazySection(() =>
+  import('./settings-section-storage-cleanup').then((module) => ({ default: module.StorageCleanupSettingsSection }))
 )
 const UninstallSettingsSection = lazySection(() =>
   import('./settings-section-uninstall').then((module) => ({ default: module.UninstallSettingsSection }))
@@ -110,11 +116,13 @@ const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
   shortcuts: KeyboardShortcutsSettingsSection.preload,
   easterEgg: EasterEggSettingsSection.preload,
   claw: ClawSettingsSection.preload,
+  connections: ConnectionsSettingsSection.preload,
   updates: UpdatesSettingsSection.preload,
   terminal: TerminalSettingsSection.preload,
   debug: LlmDebugSettingsSection.preload,
   dataMigration: DataMigrationSettingsSection.preload,
   storage: StorageRelocationSettingsSection.preload,
+  storageCleanup: StorageCleanupSettingsSection.preload,
   uninstall: UninstallSettingsSection.preload
 }
 
@@ -149,7 +157,8 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
   const pageRef = useRef<HTMLDivElement | null>(null)
   useSettingsArrivalFlash(pageRef, arrival)
   const autoApplyCategory = category !== 'extensions' &&
-    category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall'
+    category !== 'dataMigration' && category !== 'storage' && category !== 'storageCleanup' &&
+    category !== 'uninstall'
   // These two pages edit a draft and save it with their own button.
   const explicitSavePanel = category === 'collaboration' || category === 'projects'
   // Workspaces carry their own header and use the full content width.
@@ -254,6 +263,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={sectionContext} /> : null}
               {category === 'easterEgg' ? <EasterEggSettingsSection ctx={sectionContext} /> : null}
               {category === 'claw' ? <ClawSettingsSection ctx={sectionContext} /> : null}
+              {category === 'connections' ? <ConnectionsSettingsSection ctx={sectionContext} /> : null}
               {category === 'updates' ? <UpdatesSettingsSection ctx={sectionContext} /> : null}
               {category === 'terminal' ? <TerminalSettingsSection ctx={sectionContext} /> : null}
               {category === 'debug' ? <LlmDebugSettingsSection ctx={sectionContext} /> : null}
@@ -264,6 +274,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
                 </>
               ) : null}
               {category === 'storage' ? <StorageRelocationSettingsSection /> : null}
+              {category === 'storageCleanup' ? <StorageCleanupSettingsSection /> : null}
               {category === 'uninstall' ? <UninstallSettingsSection /> : null}
             </Suspense>
           </div>

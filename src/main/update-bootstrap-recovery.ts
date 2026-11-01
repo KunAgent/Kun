@@ -1,4 +1,6 @@
 import { app } from 'electron'
+import { relaunchApp } from './relaunch-app'
+import { runtimeProcessIsAlive } from '../../kun/src/server/runtime-process-identity.js'
 import {
   GUI_UPDATE_BACKUP_GRACE_MS,
   GUI_UPDATE_MAX_HEALTH_ATTEMPTS,
@@ -23,6 +25,7 @@ export type UpdateBootstrapRecoveryDeps = {
   relaunch: () => void
   exit: (code: number) => void
   readTransaction?: (match: { oldVersion: string, newVersion: string }) => Promise<InstallerUpdateTransaction | null>
+  installerIsAlive?: typeof runtimeProcessIsAlive
   log?: (message: string) => void
 }
 
@@ -30,7 +33,7 @@ const defaultDeps: UpdateBootstrapRecoveryDeps = {
   platform: process.platform,
   version: () => app.getVersion(),
   scheduleRollback: scheduleUpdateRollbackAfterExit,
-  relaunch: () => app.relaunch(),
+  relaunch: relaunchApp,
   exit: (code) => app.exit(code)
 }
 
@@ -91,12 +94,34 @@ async function startRecoveryFromCommittedUpdate(deps: UpdateBootstrapRecoveryDep
   })
 }
 
+export function installerOwnsUpdateCutover(
+  transaction: InstallerUpdateTransaction | null,
+  isAlive: typeof runtimeProcessIsAlive = runtimeProcessIsAlive
+): boolean {
+  return Boolean(transaction?.installerPid && transaction.installerProcessIdentity &&
+    ['prepared', 'payload_switched', 'awaiting_health', 'cleanup_pending', 'rolling_back'].includes(transaction.phase) &&
+    isAlive(transaction.installerPid, {
+      startedAt: transaction.installerProcessIdentity.slice('win32-v1:'.length),
+      processIdentity: transaction.installerProcessIdentity
+    }))
+}
+
 /** Runs before services and the Kun runtime load so startup crashes count. */
 export async function recoverUpdateBeforeRuntimeStart(
   deps: UpdateBootstrapRecoveryDeps = defaultDeps
 ): Promise<boolean> {
   if (deps.platform !== 'win32') return false
   const [pending, result] = await Promise.all([readPendingUpdate(), readPendingUpdateResult()])
+  if (pending) {
+    const transaction = await (deps.readTransaction ?? readInstallerUpdateTransaction)(pending)
+    if (installerOwnsUpdateCutover(transaction, deps.installerIsAlive)) {
+      // Do not clear pending recovery or arm runtime/watchdog recovery while
+      // the exact installer still owns cutover. Health probes use a separate entry.
+      deps.log?.('[kun-gui updater] startup deferred while the update installer is active')
+      deps.exit(0)
+      return true
+    }
+  }
   if (pending && result?.outcome === 'success' && deps.version() === pending.oldVersion) {
     await Promise.all([clearGuiUpdateRecovery(), clearPendingUpdate(), clearPendingUpdateResult()])
     return false

@@ -13,6 +13,7 @@ import type { TurnItem, UserFileReference } from '../contracts/items.js'
 import type { TurnRunOutcome } from '../loop/turn-execution-types.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { DelegatedSessionPreparation } from '../runtime/delegated-session-binding.js'
+import type { McpServer } from '../runtime/acp/acp-schema.js'
 import type { SpawnOwnedProcessOptions } from '../process/owned-process.js'
 import type { ChildProcess } from 'node:child_process'
 
@@ -33,6 +34,14 @@ export class HarnessTransportError extends Error {
   ) {
     super(message)
     this.name = 'HarnessTransportError'
+  }
+}
+
+/** Only an adapter-confirmed missing native session permits a portable rebase. */
+export class HarnessSessionUnavailableError extends HarnessTransportError {
+  constructor(message: string, detail?: unknown) {
+    super('harness_not_ready', message, detail)
+    this.name = 'HarnessSessionUnavailableError'
   }
 }
 
@@ -83,6 +92,12 @@ export type HarnessSessionStartInput = {
   /** Prior items snapshot for coordinator.prepare. */
   items: readonly TurnItem[]
   preparation: DelegatedSessionPreparation
+  /**
+   * Kun Tools MCP descriptors for this session (stable per Kun thread; the
+   * grant behind them is re-pinned every turn). Transports that can register
+   * MCP servers on their native session pass them on.
+   */
+  kunToolServers?: readonly McpServer[]
   signal: AbortSignal
 }
 
@@ -192,7 +207,7 @@ export interface HarnessAgent {
   readonly info: HarnessAgentInfo
   /** Start a new native session. */
   startSession(input: HarnessSessionStartInput): Promise<HarnessSession>
-  /** Resume a parked/live native session; throw to trigger portable rebase. */
+  /** Resume a parked/live native session; only HarnessSessionUnavailableError permits rebase. */
   resumeSession?(input: HarnessSessionStartInput): Promise<HarnessSession>
   /** Capability surface for coordinator fingerprints (native resume etc). */
   sessionCapabilities(): { continuation: 'native' | 'portable'; fingerprint: unknown }

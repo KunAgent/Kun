@@ -34,10 +34,10 @@ export function TurnUndoCardButton({ undo }: { undo: TurnChangeUndoState }): Rea
       title={title}
       aria-label={title}
       data-turn-undo-action={undo.undone ? 'reapply' : 'undo'}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-55 ${
+      className={`inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
         undo.undone
-          ? 'border-accent bg-accent text-white hover:brightness-110'
-          : 'border-ds-border bg-ds-card text-ds-ink hover:bg-ds-hover'
+          ? 'bg-accent text-white hover:brightness-110'
+          : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
       }`}
     >
       {undo.pending

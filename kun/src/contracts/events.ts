@@ -1,5 +1,6 @@
 import { AgentDispatchIntentEvent } from './agent-dispatch-event.js'
 import { TaskSuggestionEvent } from './task-suggestion-event.js'
+import { HarnessContinuationFailureSchema, HarnessContinuationPayloadSchema } from './harness-continuation.js'
 import { z } from 'zod'
 import { ContextSnapshotEvent } from './context-snapshot.js'
 export { ContextSnapshotEvent, RequestContextTokenBreakdownSchema, type RequestContextTokenBreakdown } from './context-snapshot.js'
@@ -54,6 +55,9 @@ import { HarnessConfigOptionSchema, HarnessSessionSettingListSchema } from './ha
  * SSE stream can be replayed with `since_seq` after reconnects.
  */
 export const RuntimeEventKind = z.enum([
+  'harness_continuation_failed',
+  'harness_session_recreated',
+  'harness_session_recreation_failed',
   'agent_dispatch_intent',
   'task_suggestion',
   'thread_created',
@@ -430,6 +434,16 @@ export const BashSessionEvent = RuntimeEventBase.extend({
 })
 export type BashSessionEvent = z.infer<typeof BashSessionEvent>
 
+export const HarnessContinuationFailedEvent = RuntimeEventBase.merge(HarnessContinuationPayloadSchema).extend({
+  kind: z.literal('harness_continuation_failed')
+})
+export const HarnessSessionRecreatedEvent = RuntimeEventBase.merge(HarnessContinuationPayloadSchema).extend({
+  kind: z.literal('harness_session_recreated')
+})
+export const HarnessSessionRecreationFailedEvent = RuntimeEventBase.merge(HarnessContinuationPayloadSchema).extend({
+  kind: z.literal('harness_session_recreation_failed')
+})
+
 export const DelegatedRuntimeCapabilitiesSchema = z.object({
   nativeResume: z.boolean(),
   structuredStreaming: z.boolean(),
@@ -519,6 +533,7 @@ export type GraphRuntimeEvent = z.infer<typeof GraphRuntimeEvent>
  */
 export const HandoffInjectedEvent = RuntimeEventBase.extend({
   kind: z.literal('handoff_injected'),
+  continuationFailure: HarnessContinuationFailureSchema.optional(),
   harnessId: HarnessIdSchema.optional(),
   reason: z.enum(['harness-switch', 'rebase', 'worker-dispatch', 'context-overflow']),
   mode: z.enum(['full', 'delta']),
@@ -620,6 +635,9 @@ export const CanvasReceiptEvent = RuntimeEventBase.extend({
 export type CanvasReceiptEvent = z.infer<typeof CanvasReceiptEvent>
 
 export const RuntimeEvent = z.discriminatedUnion('kind', [
+HarnessContinuationFailedEvent,
+HarnessSessionRecreatedEvent,
+HarnessSessionRecreationFailedEvent,
   AgentDispatchIntentEvent,
   TaskSuggestionEvent,
   ItemEvent,

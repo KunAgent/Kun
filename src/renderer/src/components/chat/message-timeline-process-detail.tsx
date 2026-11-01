@@ -1,3 +1,4 @@
+import { handoffRestartLabel } from '../../agent/handoff-continuation'
 import { AcpToolDetail } from './AcpToolDetail'
 import { useWorkPresentation } from '../../product-analytics/work-presentation'
 import { ToolBlockDetails } from './ToolBlockDetails'
@@ -126,6 +127,8 @@ export function builtInToolLabel(
       return t('toolBuiltinDesignComponent')
     case 'design_open':
       return t('toolBuiltinDesignOpen')
+    case 'report_open':
+      return t('toolBuiltinReportOpen')
     default:
       return undefined
   }
@@ -529,7 +532,7 @@ export function describeProcessBlock(
     return block.handoffMode === 'delta'
       ? t('adeHandoffDelta', { agent: block.toHarnessName })
       : block.reason === 'rebase'
-        ? t('adeHandoffRestart', { agent: block.toHarnessName, turns: block.recentTurns })
+        ? handoffRestartLabel(t, block)
         : t('adeHandoff', {
           agent: block.toHarnessName,
           turns: block.recentTurns,

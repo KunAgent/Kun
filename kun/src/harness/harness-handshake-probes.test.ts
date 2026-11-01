@@ -9,6 +9,7 @@ import { probeCodexHandshake } from './codex-handshake-probe.js'
 import { probePiHandshake } from './pi-handshake-probe.js'
 import { startHarnessProcess, type HarnessProcess } from '../session/harness-process.js'
 import { HarnessCatalog } from './harness-catalog.js'
+import { HarnessReadinessService } from './harness-readiness.js'
 
 vi.mock('../session/harness-process.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../session/harness-process.js')>(), startHarnessProcess: vi.fn()
@@ -21,6 +22,64 @@ const probes = [
 ]
 const spawn = vi.mocked(startHarnessProcess)
 beforeEach(() => { spawn.mockReset() })
+it('readiness admits an unverified ACP model without creating a session', async () => {
+  const child = fixture({ sessionError: true })
+  spawn.mockResolvedValue(child.process)
+  const profiles = [{ harnessId: 'opencode', credentialMode: 'native-login' as const }]
+  const enabledCatalog = new HarnessCatalog({ enabledProfiles: () => profiles })
+  const definition = enabledCatalog.get('opencode')!
+  const service = new HarnessReadinessService({
+    options: () => ({}), catalog: enabledCatalog,
+    detector: { status: async () => ({ harnessId: 'opencode', installed: 'yes', login: 'signed-in',
+      resolvedCommand: 'fixture', checkedAt: new Date().toISOString() }) }
+  })
+  const result = await service.test(definition, { level: 'handshake', credentialMode: 'native-login', model: 'selected-native-model' })
+  expect(result).toMatchObject({ ok: true, handshake: { ok: true, detail: expect.stringContaining('when a conversation starts') } })
+  expect(child.requests.map((request) => request.method)).toEqual(['initialize'])
+  expect(child.stop).toHaveBeenCalledOnce()
+})
+
+it('keeps Qoder startup permission flags in the sessionless readiness check', async () => {
+  const child = fixture()
+  spawn.mockResolvedValue(child.process)
+  const profiles = [{ harnessId: 'qoder', credentialMode: 'native-login' as const }]
+  const enabledCatalog = new HarnessCatalog({ enabledProfiles: () => profiles })
+  const definition = enabledCatalog.get('qoder')!
+  const service = new HarnessReadinessService({
+    options: () => ({ approvalPolicy: 'auto', sandboxMode: 'danger-full-access', approvalReviewer: 'user',
+      harnesses: { defaults: { qoder: { permissionMode: 'bypass_permissions' } } } } as never),
+    catalog: enabledCatalog,
+    detector: { status: async () => ({ harnessId: 'qoder', installed: 'yes', login: 'signed-in',
+      resolvedCommand: 'fixture', checkedAt: new Date().toISOString() }) }
+  })
+  const result = await service.test(definition, { level: 'handshake', credentialMode: 'native-login', model: 'default' })
+  expect(result.handshake?.ok).toBe(true)
+  expect(child.requests.map((request) => request.method)).toEqual(['initialize'])
+  expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ args: ['--acp', '--permission-mode', 'bypass_permissions'] }))
+})
+
+it('does not create a session during an isolated initialization retry', async () => {
+  const methods: string[] = []
+  let launches = 0
+  spawn.mockImplementation(async () => {
+    const attempt = ++launches
+    const stdin = new PassThrough(), stdout = new PassThrough()
+    stdin.on('data', (chunk: Buffer) => {
+      const request = JSON.parse(chunk.toString())
+      methods.push(request.method)
+      if (request.id === undefined) return
+      const response = attempt === 1
+        ? { id: request.id, error: { code: -32603, message: 'Internal service failure' } }
+        : { id: request.id, result: { protocolVersion: 1, agentCapabilities: {} } }
+      queueMicrotask(() => stdout.write(JSON.stringify(response) + '\n'))
+    })
+    return { stdin, stdout, exit: new Promise(() => undefined), stop: async () => { stdout.end() },
+      sanitizedStderrTail: () => '' } as unknown as HarnessProcess
+  })
+  expect((await probeAcpHandshake(catalog.get('opencode')!, 'fixture')).ok).toBe(false)
+  expect(methods).toEqual(['initialize', 'initialize'])
+})
+
 it('classifies an actual ACP auth_required response as login required without authenticating or prompting', async () => {
   const child = fixture({ authRequired: true })
   spawn.mockResolvedValue(child.process)

@@ -9,7 +9,7 @@ import type { ImportSheetPrefs } from './paper-import-sheet-prefs'
  * The runner (`paper-import-job.ts`) executes a plan; the sheet builds one.
  */
 
-export type ImportOwned = { unitDir: string; group: string }
+export type ImportOwned = { unitDir: string; group: string; workspaceRoot?: string }
 
 export type ImportCandidate = {
   /** Selection / status identity, unique inside one candidate list. */

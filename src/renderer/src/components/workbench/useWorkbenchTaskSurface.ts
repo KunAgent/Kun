@@ -189,7 +189,6 @@ export function useWorkbenchTaskSurface(input: {
       if (restored.documents.some((document) => document.id === documentId)) {
         restored.switchActiveDocument(documentId)
       }
-      requestCodeCanvasPanelOpen()
     }
     void restoreLegacyDefaultDocument()
     return () => { cancelled = true }
@@ -241,7 +240,7 @@ export function useWorkbenchTaskSurface(input: {
         if (targetIsCurrent()) restoreDesignExecutionContext()
       })
     }
-    requestCodeCanvasPanelOpen()
+    // Hydration restores ownership, not a new request to reveal the sidebar.
   }, [
     restoreDesignDocumentId,
     restoreDesignTaskId,

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
 import { useWorkbenchChatStarters } from './use-workbench-chat-starters'
+import { OPEN_PLUGINS_EVENT } from '../chat/FloatingComposerActionFlyout'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import type { ChatState } from '../../store/chat-store-types'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
-import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { startWorkSession } from '../../write/work-session-actions'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
@@ -266,10 +266,8 @@ export function useWorkbenchNavigationController({
             designRef.docId
           )
         }
-        // Even an unlocked Design task without a committed profile belongs to
-        // the Code workbench. Open the whiteboard now; its provisional binding
-        // can arrive on the first accepted turn without changing routes.
-        requestCodeCanvasPanelOpen()
+        // Restore the document binding without overriding the conversation's
+        // remembered sidebar visibility (or opening an empty whiteboard).
         await selectThread(id, { selectionGuard: isCurrentRequest })
         if (!isCurrentRequest()) return
         if (!designRef) {
@@ -436,6 +434,13 @@ export function useWorkbenchNavigationController({
     setConnectPhoneSidebarOpen(false)
     openPlugins(sidebarView === 'claw' ? 'claw' : 'chat')
   }, [beginNavigation, openPlugins, setConnectPhoneSidebarOpen, sidebarView])
+
+  useEffect(() => {
+    // The composer's + menu asks for the Plugins page through a window event.
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
+    window.addEventListener(OPEN_PLUGINS_EVENT, openPluginsView)
+    return () => window.removeEventListener(OPEN_PLUGINS_EVENT, openPluginsView)
+  }, [openPluginsView])
 
   const openExtensionsView = useCallback((): void => {
     beginNavigation()

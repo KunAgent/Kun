@@ -209,12 +209,36 @@ export function resolveHtmlElementPickSelection(
   return { element, ancestors, hit }
 }
 
+/** Selection rooted at `chain[index]`, ancestors being the usable nodes above it. */
+export function htmlElementSelectionFromChainIndex(
+  chain: HtmlElementPickChain,
+  index: number
+): HtmlElementPickSelection | null {
+  const element = chain.chain[index]
+  if (!element) return null
+  return {
+    element,
+    hit: chain.chain[0],
+    ancestors: chain.chain
+      .slice(index + 1)
+      .filter((candidate) => isUsableAncestor(candidate) && !isOversizedContainer(candidate, chain))
+      .slice(0, MAX_ANCESTORS)
+  }
+}
+
 /** The clicked node differs from the resolved component: offer "select inner element". */
 export function htmlElementSelectionCanDrillToHit(selection: HtmlElementPickSelection): boolean {
   return selection.hit.selector !== selection.element.selector
 }
 
-function semanticName(candidate: HtmlElementPickCandidate): string {
+type SemanticSource = Pick<HtmlElementPickCandidate, 'tagName' | 'componentName' | 'role'>
+
+/** Shared by pick candidates and element-map boxes so both label alike. */
+export function semanticNameOf(candidate: SemanticSource): string {
+  return semanticName(candidate)
+}
+
+function semanticName(candidate: SemanticSource): string {
   if (candidate.componentName) return candidate.componentName
   const role = candidate.role?.toLowerCase()
   if (role && COMPONENT_ROLES.has(role)) {
@@ -251,7 +275,7 @@ export function htmlElementPickPathLabels(selection: HtmlElementPickSelection): 
   return [outward[0], '…', ...outward.slice(-2)]
 }
 
-function buildSerializerSource(): string {
+export function buildSerializerSource(): string {
   // Runs inside the webview guest. Keep it dependency-free and defensive: any
   // throw becomes a null result so the host shows "pick again".
   return `
@@ -358,6 +382,34 @@ export function buildHtmlElementPickScript(point: { x: number; y: number }): str
       viewportWidth: Math.round(window.innerWidth),
       viewportHeight: Math.round(window.innerHeight),
       chain
+    };
+  } catch (error) {
+    return { ok: false, reason: 'error', message: error instanceof Error ? error.message : String(error) };
+  }
+})()`
+}
+
+/**
+ * Pick the element a map box stands for. The guest keeps the elements of its
+ * last report, so a token mismatch means the page changed since the hover and
+ * the caller falls back to a point pick.
+ */
+export function buildHtmlElementBoxPickScript(boxId: number, token: number): string {
+  const id = Math.max(0, Math.trunc(boxId))
+  return `(() => {
+  try {
+    ${buildSerializerSource()}
+    const state = window.__kunPickMap;
+    if (!state || state.token !== ${Math.trunc(token)}) return { ok: false, reason: 'stale' };
+    const element = state.els[${id}];
+    if (!element || !element.isConnected) return { ok: false, reason: 'stale' };
+    if (element.closest(SENSITIVE)) return { ok: false, reason: 'sensitive' };
+    return {
+      ok: true,
+      hitTagName: element.tagName.toLowerCase(),
+      viewportWidth: Math.round(window.innerWidth),
+      viewportHeight: Math.round(window.innerHeight),
+      chain: [serialize(element), ...chainFrom(element.parentElement).slice(0, 9)]
     };
   } catch (error) {
     return { ok: false, reason: 'error', message: error instanceof Error ? error.message : String(error) };

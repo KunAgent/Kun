@@ -2,7 +2,7 @@
 // end-to-end encrypted messages, so it never leaves Main and is stored encrypted by the OS
 // keychain (Electron safeStorage), one file per Kun account.
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile, rename } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 export type SecretCipher = {
@@ -44,7 +44,9 @@ export class AssistantSecretStore {
     if (this.cache) return this.cache
     try {
       const parsed = JSON.parse(await (await this.cipher()).decrypt(await readFile(this.path))) as SecretFile
-      this.cache = new Map(Object.entries(parsed.version === 1 ? parsed.entries : {}))
+      if (parsed.version !== 1 || !parsed.entries || typeof parsed.entries !== 'object' || Array.isArray(parsed.entries) ||
+          !Object.values(parsed.entries).every(entry => typeof entry.secret === 'string' && Number.isFinite(Date.parse(entry.createdAt)))) throw new Error('ASSISTANT_SECRET_STORE_UNSUPPORTED')
+      this.cache = new Map(Object.entries(parsed.entries))
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       this.cache = new Map()
@@ -57,8 +59,10 @@ export class AssistantSecretStore {
     const encrypted = await (await this.cipher()).encrypt(JSON.stringify(file))
     await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
     const temporary = `${this.path}.${randomUUID()}.tmp`
-    await writeFile(temporary, encrypted, { mode: 0o600 })
+    const handle = await open(temporary, 'wx', 0o600)
+    try { await handle.writeFile(encrypted); await handle.sync() } finally { await handle.close() }
     await rename(temporary, this.path)
+    if (process.platform !== 'win32') { const directory = await open(dirname(this.path), 'r'); try { await directory.sync() } finally { await directory.close() } }
   }
 
   private serial<T>(work: () => Promise<T>): Promise<T> {

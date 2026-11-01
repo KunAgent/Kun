@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { pickHighlights } from '@shared/release-notes-summary'
 import { loadWhatsNewContent, releaseNotesLanguage } from './whats-new-content'
 
 const note = (version: string, feature: string): string =>
@@ -53,6 +54,28 @@ describe('loadWhatsNewContent', () => {
     )
     expect(content.current?.fixes).toHaveLength(7)
     expect(content.older.map((summary) => summary.version)).toEqual(['0.4.2'])
+    expect(content.changelogUrl).toBe(changelogUrl)
+  })
+
+  it.each(['zh', 'en'] as const)('loads bundled 0.4.4 in %s with curated update highlights', async (language) => {
+    const changelogUrl = 'https://github.com/KunAgent/Kun/compare/v0.4.3...v0.4.4'
+    const content = await loadWhatsNewContent(
+      { version: 'v0.4.4', previousVersion: '0.4.2', changelogUrl },
+      language
+    )
+    expect(content.current?.version).toBe('0.4.4')
+    expect(content.current?.intro).toContain(language === 'zh' ? '0.4.4 让资料' : 'Kun 0.4.4 brings sources')
+    expect(content.current?.features).toHaveLength(8)
+    expect(content.current?.fixes).toHaveLength(8)
+    const highlights = content.current ? pickHighlights(content.current) : null
+    expect(highlights?.highlights.map((item) => item.title)).toEqual(language === 'zh'
+      ? ['Work 标签页与论文空间', '分区多画板设计', '数据报告与产物预览']
+      : ['Work tabs and paper space', 'Sectioned multi-board designs', 'Data reports and artifact previews'])
+    expect(highlights?.alsoUpdated).toEqual(language === 'zh'
+      ? ['工作台与新版引导', '统一应用连接入口', '个人助理任务工作流（Lab）', '存储管理与清理']
+      : ['Workbench and guided tours', 'Unified app connections', 'Personal-assistant task workflows (Lab)', 'Storage management and cleanup'])
+    expect(content.older.map((summary) => summary.version)).toEqual(['0.4.3'])
+    expect(content.previousVersion).toBe('0.4.2')
     expect(content.changelogUrl).toBe(changelogUrl)
   })
 

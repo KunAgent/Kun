@@ -35,7 +35,7 @@ export type HarnessRuntimeComposition = {
   catalog: HarnessCatalog
   readiness: HarnessReadinessService
   detector: HarnessDetector
-  /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
+  /** ACP catalogs observed on real native-login sessions. */
   acpModels: AcpModelProbe
   /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
   agentSdkModels: AgentSdkModelProbe
@@ -148,8 +148,7 @@ export function createHarnessComposition(
   const onCatalog = (definition: HarnessDefinition, catalog: HarnessModelCatalog): void =>
     modelCatalogs.record(definition, catalog)
   const acpModels = new AcpModelProbe({
-    binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
-    resolveSecretEnv: deps.resolveSecretEnv, onCatalog
+    binaryPath: (id) => harnessCommandOverride(options().harnesses, id), onCatalog
   })
   const agentSdkModels = new AgentSdkModelProbe({
     onCatalog,
@@ -178,10 +177,11 @@ export function createHarnessComposition(
           ? codexModels.peek(definition)
           : undefined
   const probedModels = (definition: HarnessDefinition): string[] | undefined =>
-    liveProbedModels(definition) ?? modelCatalogs.get(definition)?.catalog.models
+    liveProbedModels(definition) ?? modelCatalogs.get(definition)?.catalog.models ??
+      (definition.transport === 'acp' && definition.staticModels.length === 0 ? ['default'] : undefined)
   // Discovery never holds one Agent's probe process while starting the next.
   const probeLive = (definition: HarnessDefinition): Promise<string[]> =>
-    definition.transport === 'acp' ? acpModels.probe(definition, { keepWarm: false })
+    definition.transport === 'acp' ? acpModels.probe(definition)
       : definition.transport === 'agent-sdk' ? agentSdkModels.probe(definition)
         : definition.transport === 'codex-app-server' ? codexModels.probe(definition)
           : definition.transport === 'pi-rpc' ? piModels.probe(definition)
@@ -208,9 +208,10 @@ export function createHarnessComposition(
     ...(deps.readinessProofStorePath ? { proofStorePath: deps.readinessProofStorePath } : {}),
     onCatalog: (definition, catalog) => {
       if (definition.transport === 'acp') acpModels.seed(definition, catalog)
-      else if (definition.transport === 'antigravity-cli') antigravityModels.seed(definition, catalog)
-      else return
-      modelCatalogs.record(definition, catalog)
+      else if (definition.transport === 'antigravity-cli') {
+        antigravityModels.seed(definition, catalog)
+        modelCatalogs.record(definition, catalog)
+      }
     } })
   // Refreshing one Agent must not discard another Agent's catalog.
   const invalidateModels = (id: string): void => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createWriteDocumentSession, emptyWriteEditorLayout } from './write-editor-layout'
+import { createWriteDocumentSession, emptyWriteEditorLayout, writeEditorItemKey } from './write-editor-layout'
 import { clearWriteWorkspaceSaveQueueForTests } from './write-save-coordinator'
 import { useWriteWorkspaceStore } from './write-workspace-store'
 import { initialState } from './write-workspace-store-helpers'
@@ -406,6 +406,20 @@ describe('write editor group actions', () => {
     expect(state.activeWhiteboardId).toBeNull()
     expect(state.activeFilePath).toBe('/work/b.md')
     expect(state.whiteboards['board-1']).toBe(board)
+    expect(Object.keys(state.documentsByPath)).toEqual(['/work/a.md', '/work/b.md'])
+  })
+
+  it('closes the paper library tab like any other paper view tab', async () => {
+    useWriteWorkspaceStore.getState().openPaperViewTab('library')
+    useWriteWorkspaceStore.getState().openPaperViewTab('discover:search')
+    let state = useWriteWorkspaceStore.getState()
+    expect(state.editorLayout.groups[0].tabs.map((tab) => writeEditorItemKey(tab)))
+      .toEqual(['paper-view:library', '/work/a.md', '/work/b.md', 'paper-view:discover:search'])
+
+    await expect(state.closeTab('primary', 'paper-view:library')).resolves.toBe(true)
+    state = useWriteWorkspaceStore.getState()
+    expect(state.editorLayout.groups[0].tabs.map((tab) => writeEditorItemKey(tab)))
+      .toEqual(['/work/a.md', '/work/b.md', 'paper-view:discover:search'])
     expect(Object.keys(state.documentsByPath)).toEqual(['/work/a.md', '/work/b.md'])
   })
 

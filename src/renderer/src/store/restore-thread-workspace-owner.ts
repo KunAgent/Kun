@@ -6,6 +6,7 @@ import {
   receiveTaskWorkspaceRecord, useTaskWorkspaceStore
 } from './task-workspace-store'
 import { bindReadyTaskWorkspace } from './chat-store-runtime-helpers'
+import { queuedTaskWorkspaceRequirement, queuedTaskWorkspaceMatches } from './task-workspace-queue-identity'
 
 const BINDABLE = new Set(['ready', 'captured', 'integrated', 'conflict', 'preserved'])
 
@@ -25,8 +26,11 @@ export async function restoreThreadWorkspaceOwner(
   const repairBoundFailure = Boolean(target?.taskWorkspaceId && previous?.state === 'failed')
   if (!provider.listTaskWorkspaces || (target?.taskWorkspaceId && !repairBoundFailure) ||
     (readThreadWorktreeRegistry().worktrees[threadId] && !repairBoundFailure) || target?.relation === 'side') return true
-  const expected = previous || target?.executionConfig?.isolation === 'worktree'
-  if (expected) markThreadWorkspacePreparing(threadId, previous?.workspaceId ?? '')
+  const requirement = queuedTaskWorkspaceRequirement(threadId)
+  const expected = previous || requirement || target?.executionConfig?.isolation === 'worktree'
+  if (expected) markThreadWorkspacePreparing(threadId,
+    requirement?.taskWorkspace?.workspaceId ?? previous?.workspaceId ?? '',
+    requirement?.taskWorkspace?.sourceRoot ?? previous?.sourceRoot)
   try {
     const result = await provider.listTaskWorkspaces({ ownerThreadId: threadId })
     if (!stillCurrent()) return false
@@ -35,9 +39,11 @@ export async function restoreThreadWorkspaceOwner(
     if (currentBinding && (!repairBoundFailure || currentBinding !== target?.taskWorkspaceId)) return true
     const owner = result.records.filter((record) => record.ownerThreadId === threadId &&
       !record.unitId && record.state !== 'removed' &&
+      (!requirement || queuedTaskWorkspaceMatches(requirement, record)) &&
       (!currentBinding || record.workspaceId === currentBinding)).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
     if (!owner) {
-      if (expected) clearThreadWorkspacePrep(threadId)
+      // An empty lookup is not proof that an in-flight create never committed.
+      if (expected && !requirement) clearThreadWorkspacePrep(threadId)
       return true
     }
     const currentPrep = useTaskWorkspaceStore.getState().prepByThread[threadId]

@@ -24,6 +24,7 @@ import type { LlmDebugSink } from '../services/llm-debug-recorder.js'
 import type { TaskWorkspaceLister } from '../handoff/turn-handoff.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { HarnessSecretRefResolver } from '../harness/harness-secret-env.js'
+import type { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { DEFAULT_APPROVAL_REVIEWER } from '../contracts/policy.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
@@ -45,6 +46,8 @@ export type CodexRuntimeSharedDeps = {
   attachmentStore?: AttachmentStore
   taskWorkspaces?: TaskWorkspaceLister
   debugSink?: LlmDebugSink
+  /** Kun Tools MCP grants; only the main runtime passes it (workers stay without). */
+  kunToolsMcp?: KunToolsMcpProvider
   nowIso: () => string
 }
 
@@ -90,6 +93,7 @@ export function buildCodexAppServerDeps(
       harnesses.detector.recordLaunchFailure(id, detail),
     ...(deps.debugSink ? { debugSink: deps.debugSink } : {}),
     nowIso: deps.nowIso,
+    ...(deps.kunToolsMcp ? { kunToolsMcp: deps.kunToolsMcp } : {}),
     ...(deps.taskWorkspaces ? { taskWorkspaces: deps.taskWorkspaces } : {})
   }
 }

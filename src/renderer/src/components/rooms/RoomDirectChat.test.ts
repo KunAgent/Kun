@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { RoomDirectHeader, RoomDirectProgress } from './RoomDirectChat'
 import type { AgentDirectActivity, Room } from '@shared/rooms-api'
+import { useFocusModeStore } from '../../store/focus-mode-store'
+import { readStylesheetBundle } from '../../testing/stylesheet-bundle'
 
 vi.mock('./agent-client', () => ({
   agentPath: (id: string) => '/v1/agents/' + id,
@@ -48,7 +50,20 @@ describe('RoomDirectHeader session sidebar button', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
   })
-  afterEach(() => { if (renderer) act(() => renderer.unmount()) })
+  afterEach(() => {
+    if (renderer) act(() => renderer.unmount())
+    useFocusModeStore.getState().setEnabled(false)
+  })
+
+  it('keeps the title as the Agent card entry while focus mode hides its portrait', async () => {
+    const onInfo = vi.fn()
+    useFocusModeStore.getState().setEnabled(true)
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...baseProps(), onInfo })) })
+    await act(async () => { renderer.root.findByProps({ className: 'direct-chat-title' }).props.onClick() })
+    expect(onInfo).toHaveBeenCalledOnce()
+    const css = await readStylesheetBundle(new URL('./rooms-direct.css', import.meta.url))
+    expect(css).toContain("html[data-focus-mode='on'] .rooms-workspace .direct-chat-title > .rooms-avatar")
+  })
 
   it('exposes all Agent settings directly from embedded private chat', async () => {
     const onManageAgents = vi.fn()

@@ -14,6 +14,7 @@ export const ARTIFACT_KIND_LABEL_KEYS: Record<LibraryArtifactKind, string> = {
   design: 'artifactsKindDesign',
   doc: 'artifactsKindDoc',
   slides: 'artifactsKindSlides',
+  report: 'artifactsKindReport',
   sheet: 'artifactsKindSheet',
   board: 'artifactsKindBoard',
   image: 'artifactsKindImage'
@@ -33,7 +34,7 @@ export function filterArtifacts(items: readonly LibraryArtifact[], filter: Artif
 
 export function countByKind(items: readonly LibraryArtifact[]): Record<ArtifactKindFilter, number> {
   const counts: Record<ArtifactKindFilter, number> = {
-    all: items.length, design: 0, doc: 0, slides: 0, sheet: 0, board: 0, image: 0
+    all: items.length, design: 0, doc: 0, slides: 0, report: 0, sheet: 0, board: 0, image: 0
   }
   for (const item of items) counts[item.kind] += 1
   return counts

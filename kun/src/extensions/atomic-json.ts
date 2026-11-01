@@ -8,6 +8,7 @@ import {
 } from '../manager/data-mutex-context.js'
 import { extensionError } from './errors.js'
 import type { ManagerResourceFence } from '../manager/resource-lease-state.js'
+import { isServiceManagerTimeoutError } from '../manager/usage-errors.js'
 
 export type AtomicJsonMutationOptions = {
   signal?: AbortSignal
@@ -162,6 +163,7 @@ export class AtomicJsonFile<T> {
 }
 
 const MAX_MANAGER_WRITE_ATTEMPTS = 8
+const MANAGER_READ_ATTEMPTS = 2
 
 export type ManagerAtomicJsonConfig = {
   baseUrl: string
@@ -268,6 +270,24 @@ async function readManagerSnapshot(
   ifNoneMatch: string | undefined
 ): Promise<ManagerAtomicJsonSnapshot | { revision: number; etag: string; unchanged: true }>
 async function readManagerSnapshot(
+  manager: ManagerAtomicJsonConfig,
+  path: string,
+  ifNoneMatch?: string
+): Promise<ManagerAtomicJsonSnapshot | { revision: number; etag: string; unchanged: true }> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await readManagerSnapshotOnce(manager, path, ifNoneMatch)
+    } catch (error) {
+      // Reads carry no side effect, so a Manager deadline can be retried once.
+      // Shared JSON feeds turn-critical registries (provider configuration,
+      // thread settings); failing the whole turn on the first slow answer is
+      // far more damaging than one extra bounded wait.
+      if (attempt >= MANAGER_READ_ATTEMPTS || !isServiceManagerTimeoutError(error)) throw error
+    }
+  }
+}
+
+async function readManagerSnapshotOnce(
   manager: ManagerAtomicJsonConfig,
   path: string,
   ifNoneMatch?: string

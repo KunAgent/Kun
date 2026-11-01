@@ -9,9 +9,12 @@ import {
   watchTurnCompletionNotification
 } from './chat-store-runtime'
 import { rememberThreadComposerSelection } from './chat-store-helpers'
+import { resolveThreadComposerState } from './chat-store-thread-composer-state'
+import type { ModelReasoningEffort } from '@shared/app-settings'
 import { prepareAdeThreadWorktree } from './chat-store-thread-send-worktree'
 import { snapshotThreadProjection } from './thread-snapshot-cache'
 import { watchPlanBuildReview } from './plan-build-watch'
+import { useTaskWorkspaceStore } from './task-workspace-store'
 import {
   createClientTurnRequestId,
   type StoreActionContext,
@@ -43,8 +46,7 @@ export function createPlanBuildActions(
     dispatchExternalPlanBuild: async (input) => {
       const provider = getProvider()
       if (!provider.createTaskWorkspace) {
-        set({ error: i18n.t('common:planBuildExternalUnsupported') })
-        return false
+        return { ok: false, error: i18n.t('common:planBuildExternalUnsupported') }
       }
       try {
         const harnessId = input.harnessId.trim()
@@ -69,7 +71,8 @@ export function createPlanBuildActions(
             'user',
             harnessId
               ? { harnessId, credentialMode: input.credentialMode?.trim() ?? '' }
-              : undefined
+              : undefined,
+            (input.reasoningEffort?.trim() || undefined) as ModelReasoningEffort | undefined
           )
         }
         const clientRequestId = createClientTurnRequestId()
@@ -87,7 +90,8 @@ export function createPlanBuildActions(
             : {}),
           ...(input.model?.trim() ? { model: input.model.trim() } : {}),
           ...(input.providerId?.trim() ? { providerId: input.providerId.trim() } : {}),
-          ...(input.accountId?.trim() ? { accountId: input.accountId.trim() } : {})
+          ...(input.accountId?.trim() ? { accountId: input.accountId.trim() } : {}),
+          ...(input.reasoningEffort?.trim() ? { reasoningEffort: input.reasoningEffort.trim() } : {})
         }
         // Same activation semantics as a fresh selectThread: park the outgoing
         // projection, drop the old SSE subscription, and clear the view before
@@ -109,8 +113,12 @@ export function createPlanBuildActions(
             turnCompleteNotificationSource(previous.activeThreadId, previous)
           )
         }
+        // The build conversation opens on the picked model and level, not the
+        // previous composer's.
+        const composerState = resolveThreadComposerState(get(), thread)
         set((s) => ({
           ...clearedThreadSelection(),
+          ...composerState,
           route: 'ade',
           activeThreadId: thread.id,
           lastAdeThreadId: thread.id,
@@ -134,11 +142,14 @@ export function createPlanBuildActions(
           startFrom: { kind: 'current-head' },
           label: input.title?.trim() || input.displayText
         })
-        if (record) watchPlanBuildReview(record.workspaceId, thread.id)
-        return true
+        if (!record) {
+          return { ok: false, error: useTaskWorkspaceStore.getState().prepByThread[thread.id]?.error ||
+            i18n.t('common:planBuildHandoffFailed') }
+        }
+        watchPlanBuildReview(record.workspaceId, thread.id)
+        return { ok: true, threadId: thread.id, workspaceId: record.workspaceId }
       } catch (error) {
-        set({ error: formatRuntimeError(error) })
-        return false
+        return { ok: false, error: formatRuntimeError(error) }
       }
     }
   }

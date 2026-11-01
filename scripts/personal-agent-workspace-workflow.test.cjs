@@ -13,8 +13,9 @@ test('private workspace smoke is required on native macOS and Windows for releva
   for (const path of ['src/main/browser-use/**', 'src/renderer/src/components/rooms/**',
     'kun/src/agents/agent-direct*', 'kun/src/agents/agent-artifact*', 'src/shared/browser-use.ts',
     'src/renderer/src/components/chat/ChatFileTreePanel*', 'src/renderer/src/components/chat/ChatFileTreeRowViews*',
-    'scripts/smoke-personal-agent-workspace*', 'scripts/smoke-direct-model*',
-    'scripts/personal-agent-workspace-workflow.test.cjs', '.github/workflows/personal-agent-workspace-smoke.yml']) {
+    'scripts/smoke-personal-agent-workspace*', 'scripts/smoke-workspace-tool-consent.cjs', 'scripts/smoke-workspace-approval-events.cjs', 'scripts/smoke-direct-model*',
+    'scripts/personal-agent-workspace-workflow.test.cjs', 'src/main/ipc/workspace-tool-consent-contract.test.ts',
+    '.github/workflows/personal-agent-workspace-smoke.yml']) {
     assert.ok(workflow.on.pull_request.paths.includes(path), path)
   }
   assert.deepEqual(workflow.permissions, { contents: 'read' })
@@ -29,6 +30,8 @@ test('private workspace smoke is required on native macOS and Windows for releva
   const smoke = commands.findIndex((command) => command?.includes('--personal-workspace-only'))
   const ensure = commands.indexOf('npm run ensure:electron')
   const build = commands.indexOf('npm run build')
+  const consentContract = commands.findIndex((command) => command?.includes('workspace-tool-consent-contract.test.ts'))
+  assert(consentContract >= 0 && consentContract < build)
   assert(ensure >= 0 && build >= 0 && smoke > ensure && smoke > build)
   assert.equal(job.steps[smoke].if, undefined)
   assert.equal(job.steps[smoke]['timeout-minutes'], 10)
