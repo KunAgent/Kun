@@ -1,3 +1,5 @@
+import type { NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
+import type { FollowUpReceipt } from '../contracts/collaboration-effects.js'
 import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { createHash } from 'node:crypto'
 import type { DelegatedSteering } from './delegated-steering.js'
@@ -93,7 +95,9 @@ export interface TurnServiceOperations {
   enqueueTurn(input: {
     threadId: string
     request: StartTurnRequest
-  }, options?: { attachmentAliases?: AttachmentAliases }): Promise<StartTurnResponse>;
+  }, options?: { attachmentAliases?: AttachmentAliases; nativeFollowUp?: NativeFollowUpAdmission }): Promise<StartTurnResponse>;
+  /** Authoritative native receipt; a missing visible turn is never proof of non-admission. */
+  lookupNativeFollowUpRequest(input: { threadId: string; admission: NativeFollowUpAdmission }): Promise<FollowUpReceipt>;
   /**
    * Promote the oldest queued turn to running after re-running full
    * admission. Returns null when execution cannot start yet (busy thread,

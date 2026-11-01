@@ -1,3 +1,4 @@
+import { NativeFollowUpRequestsSchema } from './native-followup-requests.js'
 import { RemoteForkSchema, RemoteRewindSchema } from './remote-history.js'
 import { ThreadTaskOriginSchema } from './thread-task-origin.js'
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
@@ -259,6 +260,8 @@ export const ExtensionThreadMetadataSchema = z.object({
 export type ExtensionThreadMetadata = z.infer<typeof ExtensionThreadMetadataSchema>
 
 export const ThreadSchemaBase = z.object({
+  /** Host receipts survive edits to the visible turn history. */
+  nativeFollowUpRequests: NativeFollowUpRequestsSchema.optional(),
   /** Host-owned Rooms execution provenance and frozen capability ceiling. */
   roomContext: RoomThreadContextSchema.optional(),
   /** Host-written: this Code/Work thread was started by a bot Agent. Never accepted from a request. */

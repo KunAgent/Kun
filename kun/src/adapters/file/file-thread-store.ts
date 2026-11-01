@@ -1,3 +1,4 @@
+import { retainNativeFollowUpRequests } from '../../domain/native-followup-requests.js'
 import { hasThreadHistoryReference } from '../hybrid/hybrid-thread-reference-lookup.js'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -88,7 +89,7 @@ export class FileThreadStore implements ThreadStore {
   async upsert(thread: ThreadRecord): Promise<ThreadRecord> {
     return this.withThreadWrite(thread.id, async () => {
       const current = await this.readThread(thread.id)
-      return this.writeThread({ ...thread, revision: (current?.revision ?? -1) + 1 })
+      return this.writeThread({ ...retainNativeFollowUpRequests(current, thread), revision: (current?.revision ?? -1) + 1 })
     })
   }
 
@@ -100,7 +101,7 @@ export class FileThreadStore implements ThreadStore {
       const current = await this.readThread(thread.id)
       const revision = current?.revision ?? 0
       if (!current || revision !== expectedRevision) return { applied: false, revision }
-      const stored = await this.writeThread({ ...thread, revision: revision + 1 })
+      const stored = await this.writeThread({ ...retainNativeFollowUpRequests(current, thread), revision: revision + 1 })
       return { applied: true, thread: stored, revision: stored.revision ?? revision + 1 }
     })
   }

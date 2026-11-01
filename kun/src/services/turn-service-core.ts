@@ -1,3 +1,6 @@
+import { TurnConflictError } from './turn-conflict-error.js'
+import { nativeFollowUpOperations } from './native-followup-admission.js'
+import type { NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
 import { createHash } from 'node:crypto'
 import type { ThreadAgentSurface, ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -75,6 +78,8 @@ import { turnServiceItemPersistenceOperations } from './turn-service-item-persis
 import type { TurnServiceOperations } from './turn-service-operations-contract.js'
 
 export type TurnServiceDeps = {
+  /** Manager serializes this operation against stop/takeover, not just a preflight read. */
+  withFollowUpAdmission?: <T>(input: { thread: ThreadRecord; admission: NativeFollowUpAdmission; stage: 'enqueue' | 'promote' }, operation: () => Promise<T>) => Promise<T>
   threadStore: ThreadStore
   sessionStore: SessionStore
   events: RuntimeEventRecorder
@@ -164,7 +169,7 @@ export type TurnServiceDeps = {
   nowIso: () => string
 }
 
-export class TurnConflictError extends Error {}
+export { TurnConflictError } from './turn-conflict-error.js'
 
 export class TurnInProgressError extends TurnConflictError {
   constructor(message: string) {
@@ -322,7 +327,7 @@ export class TurnService {
     threadId: string
     request: StartTurnRequest
   }, requestFingerprint: string | undefined) => Promise<StartTurnResponse | null>
-  declare private idempotentStartFromThread: (thread: ThreadRecord, request: StartTurnRequest, requestFingerprint: string | undefined) => StartTurnResponse | null
+  declare private idempotentStartFromThread: (thread: ThreadRecord, request: StartTurnRequest, requestFingerprint: string | undefined, allowNativeRetry?: boolean) => StartTurnResponse | null
   declare private isRetryableFailedAdmission: (turn: Turn) => boolean
   declare private idempotentStartFromTurn: (
     turn: Turn,
@@ -355,7 +360,8 @@ export class TurnService {
     thread: ThreadRecord,
     input: { threadId: string; request: StartTurnRequest },
     allocatedTurnId?: string,
-    attachmentAliases?: import('../contracts/attachment-aliases.js').AttachmentAliases
+    attachmentAliases?: import('../contracts/attachment-aliases.js').AttachmentAliases,
+    nativeFollowUp?: NativeFollowUpAdmission
   ) => Promise<{ turnId: string; userItem: TurnItem }>
   declare private completeQueuedTurnAdmission: (input: {
     threadId: string
@@ -491,6 +497,7 @@ export interface TurnService extends TurnServiceOperations {}
 
 installServiceOperations(
   TurnService.prototype,
+  nativeFollowUpOperations,
   turnServiceAdmissionOperations,
   turnServiceSteeringOperations,
   turnServiceCompactionOperations,

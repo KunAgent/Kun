@@ -1,3 +1,4 @@
+import { replayNativeFollowUpRequest } from './native-followup-admission.js'
 import { validateAttachmentAliases, type AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { restartSourceIsCurrent, insertRecoveryTurn } from '../domain/queue-execution-state.js'
 import { resolveTurnReviewRequests } from './review-composer-context.js'
@@ -539,6 +540,9 @@ async findIdempotentStart(this: TurnService, input: {
     const projection = this['deps'].threadStore.getMetadata
       ? await this['deps'].threadStore.getMetadata(input.threadId)
       : await this['deps'].threadStore.get(input.threadId)
+    if (projection?.nativeFollowUpRequests?.some((row) => row.admission.requestId === clientRequestId)) {
+      return replayNativeFollowUpRequest(projection, input.request, requestFingerprint)
+    }
     const projectedTurn = projection?.turns.find((turn) =>
       turn.clientRequestId === clientRequestId && !this['isRetryableFailedAdmission'](turn) && !isPendingQueuedAdmission(turn)
     )
@@ -568,8 +572,11 @@ async findIdempotentStart(this: TurnService, input: {
 idempotentStartFromThread(this: TurnService,
     thread: ThreadRecord,
     request: StartTurnRequest,
-    requestFingerprint: string | undefined
+    requestFingerprint: string | undefined,
+    allowNativeRetry = false
   ): StartTurnResponse | null {
+    const native = replayNativeFollowUpRequest(thread, request, requestFingerprint, allowNativeRetry)
+    if (native) return native
     const clientRequestId = request.clientRequestId?.trim()
     if (!clientRequestId) return null
     const turn = thread.turns.find((candidate) =>

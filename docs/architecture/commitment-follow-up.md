@@ -145,6 +145,37 @@ approval/input references are shown only while the actual gate still exists.
 source, disconnected Runtime, or missing capability must not be shown as active
 automatic follow-up.
 
+## Native receiver receipts (PR03 primitive)
+
+Native follow-up uses the existing `TurnService.enqueueTurn` queue, original
+thread/workspace and native execution lease. Its host-only options reference the
+immutable effect/attempt/admission key; public `StartTurnRequest` does not accept
+that authorization. Without the host admission guard or conditional ThreadStore
+writes, native follow-up fails closed. The production Workbench/Manager adapter
+is a subsequent integration step; this primitive does not enable automatic work.
+
+A bounded `nativeFollowUpRequests` ledger lives in existing ThreadStore metadata,
+not a new queue or database. File, hybrid/SQLite and in-memory stores retain its
+identities across history rewind, omission and snapshot restore. It holds at most
+1,000 receipts per thread and refuses new identities at capacity rather than
+evicting a tombstone and making an old request executable again. The native
+request fingerprint and logical effect fingerprint are separately immutable.
+
+A preparation revision increases only after verified non-admission. Completion
+and negative rollback use metadata CAS; an old negative snapshot cannot override
+a newer preparation. A missing visible turn or failed lookup is `unknown`, never
+proof of non-admission. `preparing` remains pending until canonical user input is
+committed or verified rollback is persisted. A durable execution-start marker
+prevents a restored queued snapshot from executing an already-started request.
+Ordinary queued edits cannot change a payload owned by an immutable effect.
+
+The host guard wraps queue commit and the promotion CAS/controller installation,
+not just a preflight read, and must serialize them against stop/takeover. It is
+rechecked when a queued turn is promoted. Receipt lookup does not reconcile or
+execute work. Native terminal receipt is a logical result, not proof that every
+background process or external harness has stopped; the physical stop predicate
+and guarded effect/Runtime lifecycle still have to supply that proof.
+
 ## Verification entry points
 
 - `kun/src/contracts/collaboration-followup.test.ts`: strict document/envelope
@@ -162,7 +193,15 @@ automatic follow-up.
 - `kun/src/agents/followup/legacy-boundaries.test.ts`: real SQLite/native link
   writes, physical thread aliases, old API bypass prevention and stop proof.
 
-These tests verify the storage/control foundation. They are not evidence of a
-production GitHub run, automatic continuation, UI acceptance, or a completed
-cross-adapter lifecycle experiment. Those require the native execution/source
-adapters and end-to-end evidence in addition to these invariants.
+- `kun/src/services/native-followup-admission.test.ts`: stable request identity,
+  pending/canonical-input recovery, lost responses, negative proof CAS, stale
+  snapshots, clock rollback and host-guard promotion/stop interleavings.
+- `kun/src/services/native-followup-module-order.test.ts`: receiver-first and
+  service-first module initialization without an installation cycle.
+- `kun/src/adapters/native-followup-receipts.test.ts`: real file/hybrid SQLite
+  persistence/reopen, conditional writes, retention and bounded tombstones.
+
+These tests verify the storage/control and native receiver primitives. They are
+not evidence of a production GitHub run, automatic continuation, UI acceptance,
+or a completed cross-adapter lifecycle experiment. Those require the production
+execution/source adapters and end-to-end evidence in addition to these invariants.
