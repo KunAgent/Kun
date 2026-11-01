@@ -9,9 +9,6 @@ import { SidebarProjectsHeader } from './SidebarProjectsHeader'
 import { SidebarEmpty, SidebarThreadSkeleton, ThreadRow, ThreadRunningIndicator } from './SidebarProjectRows'
 import {
   FolderContextMenu,
-  MoveThreadDialog,
-  SidebarActionDialog,
-  SidebarFolderDialog,
   ThreadContextMenu,
   ThreadRenameDialog,
   WorkspaceContextMenu,
@@ -23,6 +20,8 @@ import {
   type ThreadContextMenuState,
   type WorkspaceContextMenuState
 } from './SidebarProjectOverlays'
+import { SidebarProjectsDialogs } from './SidebarProjectsDialogs'
+import { SidebarScheduledThreadsHint } from './SidebarScheduledThreadsHint'
 import {
   sidebarThreadActivity,
   sortSidebarThreads,
@@ -144,6 +143,9 @@ export type SidebarProjectsContentProps = {
   closeMoveThreadDialog: () => void
   confirmThreadWorkspaceMove: (thread: NormalizedThread, workspacePath: string, record?: SidebarThreadWorktreeRecord) => void
   submitMoveThreadDialog: () => Promise<void>; closeActionDialog: () => void; submitActionDialog: () => Promise<void>
+  /** Scheduled-run sessions live in Automation; this points the user there. */
+  scheduledThreadCount: number
+  onOpenSchedule: () => void
 }
 
 export function SidebarProjectsContent(props: SidebarProjectsContentProps): ReactElement {
@@ -171,9 +173,9 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
     handleDeleteThread, handleRestoreThread, openWorkspaceInSystem, handleArchiveWorkspaceThreads,
     handleRemoveWorkspace, archivableWorkspaceThreads, closeRenameThreadDialog,
     submitRenameThreadDialog, closeMoveThreadDialog, confirmThreadWorkspaceMove,
-    submitMoveThreadDialog, closeActionDialog, submitActionDialog
+    submitMoveThreadDialog, closeActionDialog, submitActionDialog,
+    scheduledThreadCount, onOpenSchedule
   } = props
-
   const runningLabel = t('sidebarThreadRunning')
 
   const renderThreadRow = (
@@ -658,42 +660,26 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
         />
       ) : null}
 
-      {folderDialog ? (
-        <SidebarFolderDialog
-          state={folderDialog}
-          onClose={() => setFolderDialog(null)}
-          onValueChange={(value) =>
-            setFolderDialog((current) => current ? { ...current, value, error: '' } : current)
-          }
-          onSubmit={submitFolderDialog}
-          t={t}
-        />
-      ) : null}
+      <SidebarScheduledThreadsHint
+        count={scheduledThreadCount}
+        label={t('sidebarScheduledSessionsHint', { count: scheduledThreadCount })}
+        onOpen={onOpenSchedule}
+      />
 
-      {moveThreadDialog ? (
-        <MoveThreadDialog
-          state={moveThreadDialog}
-          onClose={closeMoveThreadDialog}
-          onPickTarget={(targetWorkspace) =>
-            confirmThreadWorkspaceMove(
-              moveThreadDialog.thread,
-              targetWorkspace,
-              worktreeRecordForSidebarThread(moveThreadDialog.thread, threadWorktrees)
-            )
-          }
-          onConfirm={submitMoveThreadDialog}
-          t={t}
-        />
-      ) : null}
-
-      {actionDialog ? (
-        <SidebarActionDialog
-          state={actionDialog}
-          onClose={closeActionDialog}
-          onConfirm={() => void submitActionDialog()}
-          t={t}
-        />
-      ) : null}
+      <SidebarProjectsDialogs
+        folderDialog={folderDialog}
+        setFolderDialog={setFolderDialog}
+        submitFolderDialog={submitFolderDialog}
+        moveThreadDialog={moveThreadDialog}
+        closeMoveThreadDialog={closeMoveThreadDialog}
+        confirmThreadWorkspaceMove={confirmThreadWorkspaceMove}
+        submitMoveThreadDialog={submitMoveThreadDialog}
+        actionDialog={actionDialog}
+        closeActionDialog={closeActionDialog}
+        submitActionDialog={submitActionDialog}
+        threadWorktrees={threadWorktrees}
+        t={t}
+      />
     </div>
   )
 }

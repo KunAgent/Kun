@@ -511,6 +511,7 @@
   "sidebarThreadScheduledMultiple": "예약 작업 {{count}}개 · 다음 {{time}}",
   "sidebarThreadScheduledQueued": "예약 작업이 시작을 기다리는 중",
   "sidebarThreadScheduledTimePending": "시간 미정",
+  "sidebarScheduledSessionsHint": "{{count}}개의 예약 작업 세션이 자동화에 있습니다",
   "sidebarThreadForkBadge": "포크",
   "sidebarThreadForked": "갈라진 실",
   "sidebarThreadForkedFrom": "{{title}}에서 분기됨",

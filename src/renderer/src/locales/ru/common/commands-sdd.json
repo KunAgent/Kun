@@ -511,6 +511,7 @@
   "sidebarThreadScheduledMultiple": "Запланировано задач: {{count}} · следующая {{time}}",
   "sidebarThreadScheduledQueued": "Запланированная задача ожидает запуска",
   "sidebarThreadScheduledTimePending": "время не указано",
+  "sidebarScheduledSessionsHint": "{{count}} сеансов плановых задач в «Автоматизации»",
   "sidebarThreadForkBadge": "Вилка",
   "sidebarThreadForked": "Раздвоенная нить",
   "sidebarThreadForkedFrom": "Разветвлено из {{title}}",

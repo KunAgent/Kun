@@ -524,6 +524,7 @@
   "sidebarThreadScheduledMultiple": "已设置 {{count}} 个定时任务，下次 {{time}}",
   "sidebarThreadScheduledQueued": "定时任务正在等待开始",
   "sidebarThreadScheduledTimePending": "时间待定",
+  "sidebarScheduledSessionsHint": "{{count}} 个定时任务会话在「自动化」中",
   "sidebarThreadForkBadge": "分叉",
   "sidebarThreadForked": "分叉会话",
   "sidebarThreadForkedFrom": "分叉自 {{title}}",

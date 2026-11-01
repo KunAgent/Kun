@@ -511,6 +511,7 @@
   "sidebarThreadScheduledMultiple": "予定タスク {{count}} 件・次回 {{time}}",
   "sidebarThreadScheduledQueued": "予定タスクは開始待ちです",
   "sidebarThreadScheduledTimePending": "時刻未定",
+  "sidebarScheduledSessionsHint": "{{count}} 件のスケジュール実行セッションは「自動化」にあります",
   "sidebarThreadForkBadge": "フォーク",
   "sidebarThreadForked": "分岐したスレッド",
   "sidebarThreadForkedFrom": "{{title}} からフォークされました",
