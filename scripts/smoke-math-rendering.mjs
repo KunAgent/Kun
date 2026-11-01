@@ -5,8 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import { _electron as electron } from 'playwright-core'
 import { build } from 'esbuild'
-import { createServer, normalizePath } from 'vite'
-import { mathCases, mathRenderingFixture, workMathMarkdown } from './math-rendering-ui-fixture.mjs'
+import { createMathRenderingServer } from './math-rendering-server.mjs'
+import { mathCases, workMathMarkdown } from './math-rendering-ui-fixture.mjs'
 
 // Native Electron is authoritative. --serve exposes the identical fixture for
 // supplementary browser diagnosis only; it does not produce a passing report.
@@ -15,40 +15,15 @@ const repository = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(repository, 'node_modules/.kun-math-smoke-'))
 const evidence = resolve(process.env.KUN_MATH_EVIDENCE || 'dist/math-rendering-smoke')
 await mkdir(evidence, { recursive: true })
-const fixtureId = normalizePath(join(repository, '__math_rendering_fixture.tsx'))
-const fixtureUrl = '/__math_rendering_fixture.tsx'
 const exportPath = join(temporary, 'work-export.html')
 const fontsPath = join(dirname(require.resolve('katex/dist/katex.min.css')), 'fonts')
 const checks = [], failures = [], errors = [], externalRequests = [], metrics = [], interactionTraces = []
 let server, application, page, origin, fatal
-const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"></head><body><div id="root"></div><script type="module" src="${fixtureUrl}"></script></body></html>`
 try {
-  server = await createServer({
-    configFile: false, root: repository, cacheDir: join(temporary, 'vite-cache'),
-    esbuild: { jsx: 'automatic' }, optimizeDeps: { entries: [] }, css: { postcss: repository },
-    resolve: { alias: {
-      '@renderer': resolve(repository, 'src/renderer/src'),
-      '@shared': resolve(repository, 'src/shared'),
-      '@kun/provider-catalog': resolve(repository, 'packages/provider-catalog/src/index.ts'),
-      '@kun/extension-api': resolve(repository, 'packages/extension-api/src/index.ts')
-    } },
-    server: { host: '127.0.0.1', port: 0 },
-    plugins: [{ name: 'math-rendering-fixture', enforce: 'pre',
-      resolveId(id) { if (id === fixtureUrl || id === fixtureId) return fixtureId },
-      load(id) { if (id === fixtureId) return mathRenderingFixture() },
-      configureServer(vite) {
-        vite.middlewares.use(async (request, response, next) => {
-          if (request.url?.split('?')[0] !== '/__math') return next()
-          response.setHeader('Content-Type', 'text/html')
-          response.end(await vite.transformIndexHtml('/__math', html))
-        })
-      }
-    }]
-  })
-  await server.listen()
+  server = await createMathRenderingServer(repository, temporary)
   origin = server.resolvedUrls.local[0]
   if (process.argv.includes('--serve')) {
-    console.log(origin + '__math')
+    console.log(origin)
     await new Promise(() => {})
   }
   // Bundle the actual main-process export service, preserving its Electron,
@@ -88,7 +63,7 @@ app.on('window-all-closed',()=>app.quit());`)
   page.setDefaultTimeout(20_000)
   page.on('pageerror', error => errors.push(error.stack || error.message))
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
-  await page.goto(origin + '__math', { timeout: 90_000 })
+  await page.goto(origin, { timeout: 90_000 })
   await page.waitForFunction(() => window.mathFixture?.editorReady(), undefined, { timeout: 90_000 })
   await page.locator('[data-surface="title"] .katex').first().waitFor()
   await page.evaluate(() => document.fonts.ready)
