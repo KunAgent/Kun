@@ -40,12 +40,15 @@ const Protocol5Discovery = z.object({
   logPath: z.string().min(1).max(4_096).optional()
 })
 
-async function readProtocol5Discovery(controlDir: string) {
+// Frozen protocol-6 shape, immediately before the follow-up store fence.
+const Protocol6Discovery = Protocol5Discovery.extend({ protocolVersion: z.literal(6) })
+
+async function readProtocolDiscovery(controlDir: string, version: 5 | 6) {
   const path = join(controlDir, 'manager.json')
   try {
     const details = await stat(path)
     if (!details.isFile() || details.size > 64 * 1024) return null
-    const parsed = Protocol5Discovery.safeParse(JSON.parse(await readFile(path, 'utf8')))
+    const parsed = (version === 5 ? Protocol5Discovery : Protocol6Discovery).safeParse(JSON.parse(await readFile(path, 'utf8')))
     return parsed.success ? parsed.data : null
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) return null
@@ -84,25 +87,25 @@ async function fixture(options: { sharedData?: boolean; healthPatch?: Record<str
   return { root, discovery, input, request, executeMemory }
 }
 
-describe('memory lifecycle Manager compatibility fence', () => {
-  it('rejects a protocol-5 Manager before a new Runtime can issue data requests', async () => {
+describe('Manager data capability compatibility fence', () => {
+  it.each([5, 6] as const)('rejects a protocol-%s Manager before a new Runtime can issue data requests', async (version) => {
     const test = await fixture()
-    await writeFile(managerDiscoveryPath(test.root), JSON.stringify({ ...test.discovery, protocolVersion: 5 }))
+    await writeFile(managerDiscoveryPath(test.root), JSON.stringify({ ...test.discovery, protocolVersion: version }))
     await expect(ensureServiceManager(test.input)).rejects.toMatchObject({ kind: 'protocol_incompatible' })
     expect(test.request).not.toHaveBeenCalled()
     expect(test.executeMemory).not.toHaveBeenCalled()
   })
 
-  it('rejects a new Manager through the real client with its frozen protocol-5 reader', async () => {
+  it.each([5, 6] as const)('rejects a new Manager through the real client with its frozen protocol-%s reader', async (version) => {
     const test = await fixture()
-    expect(test.discovery.protocolVersion).toBe(6)
-    expect(await readProtocol5Discovery(test.root)).toBeNull()
+    expect(test.discovery.protocolVersion).toBe(7)
+    expect(await readProtocolDiscovery(test.root, version)).toBeNull()
     vi.resetModules()
     vi.doMock('./manager-discovery.js', async (importOriginal) => ({
       ...await importOriginal<typeof import('./manager-discovery.js')>(),
-      KUN_MANAGER_PROTOCOL_VERSION: 5,
-      ManagerDiscoveryRecordSchema: Protocol5Discovery,
-      readManagerDiscovery: readProtocol5Discovery
+      KUN_MANAGER_PROTOCOL_VERSION: version,
+      ManagerDiscoveryRecordSchema: version === 5 ? Protocol5Discovery : Protocol6Discovery,
+      readManagerDiscovery: (directory: string) => readProtocolDiscovery(directory, version)
     }))
     const oldClient = await import('./manager-client.js')
     await expect(oldClient.ensureServiceManager(test.input)).rejects.toMatchObject({ kind: 'protocol_incompatible' })
@@ -110,20 +113,20 @@ describe('memory lifecycle Manager compatibility fence', () => {
     expect(test.executeMemory).not.toHaveBeenCalled()
   })
 
-  it('rejects inconsistent protocol-6 discovery and protocol-5 health', async () => {
-    const test = await fixture({ healthPatch: { protocolVersion: 5 } })
+  it.each([5, 6] as const)('rejects inconsistent protocol-7 discovery and protocol-%s health', async (version) => {
+    const test = await fixture({ healthPatch: { protocolVersion: version } })
     await expect(ensureServiceManager(test.input)).rejects.toMatchObject({ kind: 'protocol_incompatible' })
     expect(test.request).toHaveBeenCalledTimes(1)
     expect(test.executeMemory).not.toHaveBeenCalled()
   })
 
-  it('rejects a current-protocol Manager missing the lifecycle capability', async () => {
+  it.each(['memory-lifecycle-v1', 'collaboration-followup-store-v1'])('rejects a current-protocol Manager missing %s', async (capability) => {
     const test = await fixture()
     const fetch = test.input.fetch!
     test.input.fetch = async (url, init) => {
       const response = await fetch(url, init)
       const health = await response.json() as { capabilities: string[] }
-      return Response.json({ ...health, capabilities: health.capabilities.filter((value) => value !== 'memory-lifecycle-v1') })
+      return Response.json({ ...health, capabilities: health.capabilities.filter((value) => value !== capability) })
     }
     await expect(ensureServiceManager(test.input)).rejects.toMatchObject({ kind: 'capability_incompatible' })
     expect(test.request).toHaveBeenCalledTimes(1)
@@ -137,7 +140,7 @@ describe('memory lifecycle Manager compatibility fence', () => {
     })
     expect(test.request).toHaveBeenCalledTimes(1)
     const health = await (await test.request(`${test.discovery.baseUrl}/health`)).json()
-    expect(health).toMatchObject({ protocolVersion: 6, capabilities: expect.arrayContaining(['memory-lifecycle-v1']) })
+    expect(health).toMatchObject({ protocolVersion: 7, capabilities: expect.arrayContaining(['memory-lifecycle-v1', 'collaboration-followup-store-v1']) })
     expect(test.executeMemory).not.toHaveBeenCalled()
   })
 
@@ -148,7 +151,9 @@ describe('memory lifecycle Manager compatibility fence', () => {
         headers: { authorization: `Bearer ${test.discovery.managerToken}` }
       })
       expect(response.status).toBe(200)
-      expect((await response.json()).capabilities).not.toContain('memory-lifecycle-v1')
+      const capabilities = (await response.json()).capabilities
+      expect(capabilities).not.toContain('memory-lifecycle-v1')
+      expect(capabilities).not.toContain('collaboration-followup-store-v1')
     }
     await expect(ensureServiceManager(test.input)).rejects.toMatchObject({ kind: 'capability_incompatible' })
     expect(test.executeMemory).not.toHaveBeenCalled()

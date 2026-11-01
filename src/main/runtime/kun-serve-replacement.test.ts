@@ -13,7 +13,7 @@ const runtimeExecutablePath = process.platform === 'win32'
 const manager: ServiceManagerConnection = {
   discovery: {
     version: 1,
-    protocolVersion: 6,
+    protocolVersion: 7,
     instanceId: 'manager-current',
     pid: 900,
     startedAt: '2026-08-13T00:00:00.000Z',

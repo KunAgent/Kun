@@ -1,3 +1,4 @@
+import { CollaborationQuerySchema, CollaborationDocumentKindSchema } from '../contracts/collaboration-store.js'
 import { RoomMemoryErasure } from '../rooms/room-memory-erasure.js'
 import { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
@@ -27,7 +28,7 @@ import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
 const Operations = z.enum(['get', 'list', 'listRooms', 'sidebarPage', 'replyPage', 'searchRooms', 'roomRepositories', 'runSummary',
-  'commit', 'scrubMemoryData', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
+  'collaborationQuery', 'commit', 'scrubMemoryData', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
 
 export function addManagerRoomRoutes(router: Router, input: {
   managerToken: string
@@ -59,6 +60,7 @@ export function addManagerRoomRoutes(router: Router, input: {
               beforeSeq: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(100).optional() }).strict().parse(body.value)
             result = await input.roomStore.replyPage(value); break
           }
+          case 'collaborationQuery': result = await input.roomStore.collaborationQuery(CollaborationQuerySchema.parse(body.value)); break
           case 'sidebarPage': result = await input.roomStore.sidebarPage(RoomSidebarQuery.parse(body.value)); break
           case 'searchRooms': result = await input.roomStore.searchRooms(RoomSearchQuerySchema.parse(body.value)); break
           case 'roomRepositories': z.object({}).strict().parse(body.value); result = await input.roomStore.roomRepositories(); break
@@ -96,7 +98,7 @@ export function addManagerRoomRoutes(router: Router, input: {
           case 'commit': {
             const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional() })
               .strict().parse(body.value)
-            if (!value.fence && value.input.puts.some((put) => (put.kind.startsWith('peer_') ||
+            if (!value.fence && value.input.puts.some((put) => (put.kind === 'agent_commitment' || CollaborationDocumentKindSchema.safeParse(put.kind).success || put.kind.startsWith('peer_') ||
               ['agent_lifecycle', 'agent_import', 'shared_attachment', 'shared_block', 'shared_resource', 'shared_receipt', 'shared_actor', 'desktop_schedule_run', 'remote_history', 'remote_receipt', 'remote_attachment_admission', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim', 'room_run', 'room_poll', 'room_reactions', 'room_avatar', 'room_proposal', 'room_reminder', 'workbench_link'].includes(put.kind)))) {
               throw new ResourceFenceStaleError()
             }

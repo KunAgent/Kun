@@ -13,7 +13,7 @@ const startedAt = '2026-08-21T00:00:00.000Z'
 function manager(): ManagerHandoffDiscoveryRecord {
   return {
     version: 1,
-    protocolVersion: 6,
+    protocolVersion: 7,
     instanceId: 'manager-current',
     pid: 900,
     startedAt,

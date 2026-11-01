@@ -1,0 +1,168 @@
+# Commitment follow-up: storage and authority boundaries
+
+## Ownership
+
+`AgentCommitment` remains the strict schema-version-1 user goal. Follow-up does
+not add transient execution fields to that object. A Commitment is not a worker,
+a recurring goal loop, an application lifetime owner, or an execution permission.
+
+Service Manager is the single physical writer of `rooms.sqlite`. Runtime owns
+semantic transitions while it holds the `rooms-coordinator` resource lease. New
+follow-up writes, **including old `agent_commitment` writes**, require the current
+Runtime participant and fencing token at the Manager boundary. Manager checks
+the fence before receipt replay and inside the SQLite transaction. A lost response
+may replay the same request; an obsolete Runtime may not use that receipt to
+regain mutation authority.
+
+Services await ownership only when admitting a new user mutation. They assert
+ownership again before committing. Recovery must not wait its way into a new
+lease and continue an old side effect. Read-only projections remain available
+when a Runtime is not the current writer.
+
+## Version and rollout fences
+
+- Minimum Manager wire protocol: **7**.
+- Required storage capability: **`collaboration-followup-store-v1`**.
+- Room SQLite schema: **5**, migrated transactionally from 4.
+- Each new document carries `schemaVersion: 1`; its persisted RoomStore revision
+  is separate from its logical generation.
+- Protocol-5 and protocol-6 discovery readers reject protocol 7. New clients
+  reject either old protocol before any business-data request. A current protocol
+  without the capability is also incompatible. Manager does not advertise the
+  capability when the shared business store is unavailable.
+- The migration validates pre-existing sidecars, installs indexes, and changes
+  `PRAGMA user_version` in one transaction. Invalid data or ambiguous active
+  ownership aborts the migration; nothing is deleted or silently reassigned.
+- Existing Commitment JSON, revisions, insertion sequence, request receipts, and
+  event scope are unchanged. No tracking, ownership, model-sharing grant, or
+  source subscription is inferred from legacy free-text links.
+- The data capability is **not** an automatic-execution capability. Runtime's
+  follow-up feature defaults off unless explicitly configured. Automatic
+  continuation and GitHub observation have separate capability checks. Missing
+  receipt, lookup, cancellation, or idempotency support must remain manual-only.
+
+## Documents
+
+The shared store contains narrowly scoped records, not a second scheduler:
+
+| Record | Durable meaning |
+| --- | --- |
+| `commitment_control` | User tracking intent, monotonic generation and authorization epoch, policy reference, budget ledger, next bounded wake |
+| `commitment_link` | Actual typed target, `owned` or `referenced`, provenance, active binding and target stop intent |
+| `commitment_subscription` | Authorized resource and event kinds, durable poll cursor/ETag and next due time |
+| `collaboration_source` | Provider account/credential **references**, generations, health and authorization barrier; never a token |
+| `collaboration_source_grant` | Explicit read scope, expiry/revocation, and separately bounded model/provider/thread sharing |
+| `collaboration_event` | Immutable host provenance and provider object revision; external bodies are untrusted context |
+| `commitment_event_binding` | Immutable event/goal/purpose/decision-version association with observed input revisions |
+| `commitment_execution` | Stable attempt/request identity, phase, permit and authoritative execution receipt |
+| `commitment_effect` | Outbox admission key, claim/fence/expiry, retry or reconciliation state, outcome certainty |
+| `commitment_attention` | Concrete decision, approval, input, acceptance, or recovery obligation tied to versioned facts |
+| `collaboration_policy` | User-evidenced actions and limits, expiry, and fingerprint of the authorized Commitment scope |
+
+`stage` is intentionally absent from persisted control. Runtime derives it from
+execution facts and unresolved obligations. A model's completion prose cannot
+write an authoritative stage or a source/user permission.
+
+## Transaction invariants
+
+1. **CAS and replay:** Every write names the expected document revision. A
+   request ID is replayable only for the original fingerprint. Control absence
+   is checked by legacy updates, so concurrent tracking enable cannot be missed.
+2. **Immutable identity:** Scope, source identity, event/binding identity,
+   admission/request IDs and captured envelope identity cannot be rewritten.
+   Generations, epochs, revisions and timestamps cannot move backwards.
+3. **One owned executor:** One active Commitment may own a real execution target.
+   Thread and Workbench references to that thread share an ownership domain;
+   RoomTask aliases are checked against their real execution thread inside the
+   write transaction. Changing a live owned task's execution thread is rejected.
+4. **Referenced is not owned:** A referenced resource grants no cancellation or
+   execution authority. Whole-Commitment stop never traverses referenced targets.
+   Cross-room association is not inferred merely because an Agent ID matches.
+5. **Uncertain outcomes retain identity:** An unconfirmed dispatch is not an
+   ordinary failure. It retains its admission/request identity and may only be
+   reconciled. A failure string, stopped flag, interrupted chat turn, expired
+   claim or transport timeout does not prove absence of the physical writer.
+6. **Authority changes invalidate pending work:** Scope/policy changes advance
+   generation and authorization epoch as appropriate. Stop persists its intent
+   before cancellation. New admissions must compare these versions again at
+   the actual executor boundary; preflight reads alone are insufficient.
+7. **Side effects are outside store transactions:** SQLite stores claims,
+   permits, intent and receipts. It never invokes a model, provider, process,
+   timer-driven execution, or a native approval decision.
+8. **Terminal does not mean accepted:** A tracked Commitment cannot be completed
+   by a legacy PATCH containing an arbitrary evidence string. Acceptance must
+   ultimately consume the current versioned obligation and result facts. The
+   store rejects legacy terminal writes without that path.
+
+## User controls
+
+Controls are request-idempotent and revision checked. Enable and policy changes
+require a current actual user message in the source room, current membership,
+and an unexpired policy. External provider text or a model-authored message
+cannot serve as that evidence.
+
+- **Pause:** invalidates pending follow-up admission; preserves tracking history
+  and already admitted work. It does not claim to stop an executing process.
+- **Resume:** applies only to still-enabled, nonterminal tracking. A changed goal
+  fingerprint or expired policy requires fresh explicit authorization first.
+- **Disable:** stops further tracking admission without cancelling existing work
+  or deleting its history. Resume is not an implicit enable.
+- **Stop occurrence:** persists cancellation intent for one execution identity.
+- **Stop owned target:** persists intent on that exact active owned execution
+  binding. It cannot cancel a referenced target or a non-execution resource.
+- **Stop Commitment:** advances the generation and authorization barrier, records
+  a legacy-compatible cancelled status, and prevents further follow-up admission.
+  Physical work remains `stopping` until authoritative reconciliation proves exit.
+- **Reopen:** a separate explicit operation with Commitment and control revisions,
+  user evidence and a fresh valid policy. It rejects outstanding effects,
+  unfinished execution records, unknown target outcomes, and physical writers
+  not proven stopped. It never silently resets accumulated attempt spending.
+
+The old native Workbench confirmation/admission and RoomTask start/retry writes
+also inspect the owner control **inside the Manager transaction**. They cannot
+queue owned work around a pause, disable, stop, changed scope, or terminal goal.
+Untracked work keeps its existing behavior. Service-side checks alone are not
+used as the final fence.
+
+## Bounded reads and projection
+
+`collaborationQuery` is a discriminated, strictly parsed set of parameterized
+queries: by Commitment; active links/subscriptions/unfinished executions/pending
+effects/open attention; due subscriptions; available or expired effect claims;
+unknown-effect and execution reconciliation; source subscriptions; unbound
+source events; and active ownership. Callers do not send SQL or general filters.
+
+Pages use a bounded limit (at most 100) and tuple keyset cursors with an ID tie
+breaker. Mutable `nextPollAt`/retry/update times, rather than immutable insertion
+sequence, drive due scheduling. Cursor kinds cannot be mixed. A service allows
+at most 30 active links per Commitment. Projection work is bounded and signals
+incomplete data rather than inferring completion from a truncated page.
+
+Projection reads metadata and native execution facts, not full conversation
+history. It verifies target provenance and physical stop proof. Native
+approval/input references are shown only while the actual gate still exists.
+`stopping` and `recovery_required` take precedence over completed text. A disabled
+source, disconnected Runtime, or missing capability must not be shown as active
+automatic follow-up.
+
+## Verification entry points
+
+- `kun/src/contracts/collaboration-followup.test.ts`: strict document/envelope
+  contracts, bounds and provenance separation.
+- `kun/src/rooms/room-collaboration.test.ts`: SQL queries, tuple pagination,
+  identity immutability, claims, ownership and receipt invariants.
+- `kun/src/rooms/room-collaboration-migration.test.ts`: real v4 schema fixture,
+  repeated startup, exact legacy JSON/receipt preservation and rollback.
+- `kun/src/manager/remote-room-store.test.ts`: real router/remote-store mutation
+  fence, stale participant rejection and transactional receipt replay.
+- `kun/src/manager/manager-memory-compatibility.test.ts`: real client with frozen
+  protocol-5/protocol-6 discovery readers and capability mismatch checks.
+- `kun/src/agents/followup/service.test.ts`: explicit controls, user evidence,
+  release switches, old PATCH races and reauthorization.
+- `kun/src/agents/followup/legacy-boundaries.test.ts`: real SQLite/native link
+  writes, physical thread aliases, old API bypass prevention and stop proof.
+
+These tests verify the storage/control foundation. They are not evidence of a
+production GitHub run, automatic continuation, UI acceptance, or a completed
+cross-adapter lifecycle experiment. Those require the native execution/source
+adapters and end-to-end evidence in addition to these invariants.

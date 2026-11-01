@@ -105,6 +105,7 @@ export async function workbenchFixture(options: WorkbenchFixtureOptions = {}) {
       workbench: resolveWorkbenchPolicy(options.policy) }) }] })
   const wakes = { count: 0 }
   const deps = { store, dataDir: directory, model: () => ({ model: 'test-model', providerId: 'p1' }), profiles: () => ({}),
+    assertOwnership: () => store.assertOwnership(),
     threadStore: new InMemoryThreadStore(), ...stub.services } as unknown as RoomRuntimeDeps
   const bridge = new WorkbenchBridge(deps, service, () => { wakes.count++ })
   bindRoomPeerStore(deps.threadStore, store)

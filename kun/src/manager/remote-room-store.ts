@@ -1,3 +1,4 @@
+import { CollaborationQuerySchema, type CollaborationQuery } from '../contracts/collaboration-store.js'
 import type { RoomMemoryErasure } from '../rooms/room-memory-erasure.js'
 import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
@@ -47,6 +48,12 @@ export class RemoteRoomStore implements RoomStore {
   async list<T = unknown>(kind: RoomDocumentKind, options: RoomStoreListOptions = {}): Promise<RoomStoredDocument<T>[]> {
     return tickCachedRead(`list\0${kind}\0${JSON.stringify(options)}`, async () =>
       z.array(RoomStoredDocumentSchema).parse(await this.call('list', { kind, options })) as RoomStoredDocument<T>[])
+  }
+
+  async collaborationQuery<T = unknown>(input: CollaborationQuery): Promise<RoomStoredDocument<T>[]> {
+    const query = CollaborationQuerySchema.parse(input)
+    return tickCachedRead(`collaboration\0${JSON.stringify(query)}`, async () =>
+      z.array(RoomStoredDocumentSchema).parse(await this.call('collaborationQuery', query)) as RoomStoredDocument<T>[])
   }
 
   async commit(input: RoomStoreCommit): Promise<RoomStoreCommitResult> {

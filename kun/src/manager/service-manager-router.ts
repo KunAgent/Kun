@@ -121,7 +121,7 @@ export function buildServiceManagerRouter(input: {
         capability !== 'history-reference-sources-v1' &&
         capability !== 'history-reference-sources-v2' &&
         capability !== 'agent-direct-chat-v1' && capability !== 'rooms-init-im-v1' && capability !== 'agent-identities-v1' &&
-        !capability.startsWith('room-store-') &&
+        !capability.startsWith('room-store-') && capability !== 'collaboration-followup-store-v1' &&
         capability !== 'item-turn-page-v1' && capability !== 'item-call-page-v1'
       )
   router.add('GET', '/health', () => {

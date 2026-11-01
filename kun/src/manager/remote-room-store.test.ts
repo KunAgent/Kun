@@ -1,3 +1,5 @@
+import { CollaborationDocumentKindSchema } from '../contracts/collaboration-store.js'
+import { control, scope } from '../rooms/room-collaboration-test-fixtures.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,7 +41,7 @@ async function manager() {
   const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
   resources.push({ root, data, server })
   const connection: ServiceManagerConnection = { discovery: {
-    version: 1, protocolVersion: 6, instanceId: 'room-test-manager', pid: process.pid,
+    version: 1, protocolVersion: 7, instanceId: 'room-test-manager', pid: process.pid,
     startedAt: new Date().toISOString(), host: '127.0.0.1', port: server.port,
     baseUrl: `http://127.0.0.1:${server.port}`, managerToken: 'room-manager-token',
     serviceVersion: 'test', dataDir: join(root, 'data'), settingsPath: join(root, 'settings.json')
@@ -48,6 +50,30 @@ async function manager() {
 }
 
 describe('room data over the real Manager HTTP boundary', () => {
+  it.each(CollaborationDocumentKindSchema.options)('rejects unfenced collaboration kind %s before record validation', async (kind) => {
+    const { store } = await manager()
+    await expect(store.commit({ requestId: kind, checks: [{ kind, id: 'new', expectedRevision: null }],
+      puts: [{ kind, id: 'new', value: {} }] })).rejects.toBeInstanceOf(RoomStoreConflictError)
+    expect(await store.get(kind, 'new')).toBeNull()
+  })
+
+  it('fences collaboration receipt replays while preserving scoped queries for recovery', async () => {
+    const { store, connection, state } = await manager()
+    const lease = new RoomExecutionLease({ manager: connection, flavor: 'production', instanceId: 'production-runtime' })
+    leases.push(lease); expect(await lease.start()).toBe(true)
+    const fence = lease.getFence()!, fenced = new RemoteRoomStore(connection, { getFence: () => fence })
+    const input = { requestId: 'control', checks: [{ kind: 'commitment_control' as const, id: 'commitment', expectedRevision: null }],
+      puts: [{ kind: 'commitment_control' as const, id: 'commitment', value: control() }] }
+    await expect(fenced.commit(input)).resolves.toMatchObject({ duplicate: false })
+    await expect(fenced.commit(input)).resolves.toMatchObject({ duplicate: true })
+    state.releaseResource(fence)
+    await expect(fenced.commit(input)).rejects.toBeInstanceOf(RoomStoreConflictError)
+    await expect(store.commit(input)).rejects.toBeInstanceOf(RoomStoreConflictError)
+    expect(await store.collaborationQuery({ kind: 'by_commitment', ...scope, documentKind: 'commitment_control' }))
+      .toMatchObject([{ revision: 0, value: control() }])
+    expect(await store.collaborationQuery({ kind: 'by_commitment', ...scope, sourceRoomId: 'other', documentKind: 'commitment_control' })).toEqual([])
+  })
+
   it('proxies atomic request deduplication, pagination and conflicts with Manager as sole physical owner', async () => {
     const { store, data } = await manager()
     const input = { requestId: 'create-a', checks: [{ kind: 'room' as const, id: 'room-a', expectedRevision: null }],

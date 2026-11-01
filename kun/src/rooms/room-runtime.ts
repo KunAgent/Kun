@@ -5,6 +5,7 @@ import { AgentProfileImportService } from '../agents/agent-profile-import.js'
 import { AgentLifecycleService } from '../agents/agent-lifecycle-service.js'
 import { reconcileRoomNotificationGates } from './room-notification-observer.js'
 import { AgentCommitmentService } from '../agents/agent-commitment-service.js'
+import { FollowUpService } from '../agents/followup/service.js'
 import { AgentArtifactLibrary, bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
 import { bindAgentCommitmentService } from '../agents/agent-commitment-tools.js'
 import { RoomTaskDueQueue } from './room-task-due-queue.js'
@@ -64,6 +65,7 @@ export class RoomRuntime {
   readonly lifecycle: AgentLifecycleService
   readonly agents: AgentIdentityService
   readonly commitments: AgentCommitmentService
+  readonly followUp: FollowUpService
   readonly artifactLibrary: AgentArtifactLibrary
   readonly service: RoomService
   readonly product: RoomProductService
@@ -105,6 +107,8 @@ export class RoomRuntime {
     this.service = new RoomService(deps.store, () => this.wake())
     this.service.setAgentDirectory(this.agents)
     this.commitments = new AgentCommitmentService(deps, this.agents)
+    this.followUp = new FollowUpService(deps, { wake: () => this.wake(),
+      features: deps.followUpFeatures ?? (() => ({ enabled: false, auto: false, github: false })) })
     this.artifactLibrary = new AgentArtifactLibrary(deps)
     bindAgentCommitmentService(deps.threadStore, this.commitments)
     bindAgentArtifactLibrary(deps.threadStore, this.artifactLibrary)

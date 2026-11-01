@@ -98,7 +98,7 @@ describe('kunRuntimeAdapter startup readiness', () => {
       configureKunManagerDataPlaneForCurrentProcess({
         discovery: {
           version: 1,
-          protocolVersion: 6,
+          protocolVersion: 7,
           instanceId: 'manager-startup-readiness',
           pid: process.pid,
           startedAt,

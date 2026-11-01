@@ -122,6 +122,7 @@ export type RoomTaskExecution = {
   contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
+  followUpFeatures?: () => { enabled: boolean; auto: boolean; github: boolean }
   assistantContinuationAuthority?: (input: import('./room-continuation-dispatch.js').RoomContinuation) => Promise<{ authorized: boolean; unavailable?: boolean; result?: { id: string; body: string } }>
 
   /** Global execution ceiling; per-room limits remain independently enforced. */
