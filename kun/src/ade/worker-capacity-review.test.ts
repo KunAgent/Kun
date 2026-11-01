@@ -110,7 +110,7 @@ it.each(['aborted', 'archived', 'deleted'] as const)('suppresses legacy failure 
 })
 
 
-it('settles creation and a competing notice ACK without a team-lock deadlock', async () => {
+it('allows notice ACK while workspace creation is suspended', async () => {
   const f = await setup('ask-for-approval')
   f.workspace.path = f.root
   await f.teams.ensure('parent')
@@ -123,8 +123,8 @@ it('settles creation and a competing notice ACK without a team-lock deadlock', a
   await vi.waitFor(() => expect(f.taskWorkspaces.create).toHaveBeenCalledTimes(1))
   let acked = false
   const ack = f.notices.ack('parent', ['older']).then(() => { acked = true })
-  expect(acked).toBe(false)
-  release()
+  try { await vi.waitFor(() => expect(acked).toBe(true), { timeout: 300 }) }
+  finally { release(); await creation; await ack }
   expect((await creation).ok).toBe(true)
   await ack
   expect(await f.notices.pending('parent')).toHaveLength(0)

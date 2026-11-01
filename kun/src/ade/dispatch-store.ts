@@ -9,8 +9,8 @@ import { readAdeJson, withAdeTeamMutex, writeAdeJson } from './ade-file.js'
 /** — terminal states have no outgoing transitions. */
 export const ALLOWED_DISPATCH_TRANSITIONS: Record<DispatchState, readonly DispatchState[]> = {
   pending: ['delivering', 'cancelled', 'failed'],
-  delivering: ['accepted', 'uncertain', 'failed'],
-  uncertain: ['accepted', 'delivering', 'failed'],
+  delivering: ['accepted', 'uncertain', 'failed', 'cancelled'],
+  uncertain: ['accepted', 'delivering', 'failed', 'cancelled'],
   accepted: ['completed', 'failed', 'cancelled'],
   completed: [],
   failed: [],

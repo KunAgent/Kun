@@ -1,4 +1,4 @@
-import { withAdeTeamMutex } from './ade-file.js'
+import { withAdeTeamMutex, withAdeCreationMutex } from './ade-file.js'
 import { workerCapacity, workerLimitReport } from './team-execution-policy.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
 import type { WorkerRecord, DispatchRecord } from '../contracts/ade.js'
@@ -188,7 +188,16 @@ export class ManagerWorkerCreator {
       effectivePermissionMode = permission.requestedMode.id
     }
     // Approval is settled above; serialize the final slot check through worker persistence.
-    const created = await withAdeTeamMutex(team.teamId, async (): Promise<WorkerCreateResult | { worker: WorkerRecord; dispatch: DispatchRecord }> => {
+    const created = await withAdeCreationMutex(team.teamId, async (): Promise<WorkerCreateResult | { worker: WorkerRecord; dispatch: DispatchRecord }> => {
+      if (allocation) {
+        const worker = await this.deps.teams.worker(team.teamId, allocation.workerId)
+        const dispatch = await this.deps.dispatches.get(team.teamId, allocation.dispatchId)
+        if (worker && dispatch) return { worker, dispatch }
+        const intent = await this.deps.agentDispatchService?.get(allocation.intentId)
+        if (intent?.cancellationRequested || intent?.takenOver || ctx.signal.aborted) {
+          return { ok: false, refusal: 'admission', userReport: 'Worker creation was cancelled or taken over.' }
+        }
+      }
       const capacity = await workerCapacity(this.deps, ctx.threadId)
       const allocated = allocation && (await this.deps.teams.worker(team.teamId, allocation.workerId))?.state === 'active'
       if (!capacity.available && !allocated) return { ok: false, refusal: 'worker_limit', capacity,
@@ -227,45 +236,59 @@ export class ManagerWorkerCreator {
           }
         }
       }
-      const security = this.workerSecurity(childSecurity(toolContext), tws?.path ?? ctx.workspace)
-      const nativeMode = definition.permissionModes.find((mode) => mode.id === effectivePermissionMode)
-      const policySource = !allocation && effectivePermissionMode !== permission.effective
-        ? kunToolPermissionModeSettings(nativeMode?.kunPermissionMode ?? ctx.authority.kunPermissionMode)
-        : toolContext.approvalPolicy ? toolContext : kunToolPermissionModeSettings(ctx.authority.kunPermissionMode)
-      const inheritedPolicy = intersectDispatchPolicy(policySource, nativeMode?.kunPermissionMode ?? ctx.authority.kunPermissionMode)
-      const worker: WorkerRecord = {
-        workerId,
-        label: input.label,
-        ...(input.role ? { role: input.role } : {}),
-        route,
-        ...(allocation?.reasoningEffort ? { reasoningEffort: allocation.reasoningEffort } : {}),
-        ...(profileId ? { profileId } : {}),
-        ...(selection ? { selection } : {}),
-        permissionMode: effectivePermissionMode,
-        permissionSnapshot: inheritedPolicy,
-        ...(allocation ? { dispatchIntentId: allocation.intentId } : {}),
-        lifecycle: input.lifecycle ?? 'persistent',
-        ...(tws ? { taskWorkspaceId: tws.workspaceId } : {}),
-        securitySnapshot: security,
-        control: 'manager',
-        state: 'active',
-        createdAt: this.deps.nowIso()
-      }
-      await this.deps.teams.upsertWorker(team.teamId, worker)
-      this.deps.activity?.register({
-        unitId: workerId,
-        kind: 'worker',
-        threadId: workerId,
-        parentThreadId: ctx.threadId,
-        teamId: team.teamId,
-        harnessId: route.harnessId,
-        title: input.label,
-        workspace: {
-          path: tws?.path ?? ctx.workspace,
-          kind: isolation === 'worktree' ? 'worktree' : isolation === 'directory' ? 'directory' : 'local'
-        },
-        reviewRequired: true,
-        reviewStatus: 'pending'
+      return withAdeTeamMutex(team.teamId, async () => {
+        const current = allocation ? await this.deps.agentDispatchService?.get(allocation.intentId) : undefined
+        if (ctx.signal.aborted || current?.cancellationRequested || current?.takenOver) {
+          return { ok: false, refusal: 'admission', userReport: 'Worker creation was cancelled or taken over.' }
+        }
+        const existingWorker = allocation ? await this.deps.teams.worker(team.teamId, allocation.workerId) : undefined
+        if (existingWorker && (existingWorker.state !== 'active' || existingWorker.control !== 'manager')) {
+          return { ok: false, refusal: 'admission', userReport: 'Worker control changed during workspace preparation.' }
+        }
+        const finalCapacity = await workerCapacity(this.deps, ctx.threadId)
+        if (!finalCapacity.available && existingWorker?.state !== 'active') {
+          return { ok: false, refusal: 'worker_limit', capacity: finalCapacity,
+            userReport: workerLimitReport(finalCapacity, language) }
+        }
+        const security = this.workerSecurity(childSecurity(toolContext), tws?.path ?? ctx.workspace)
+        const nativeMode = definition.permissionModes.find((mode) => mode.id === effectivePermissionMode)
+        const policySource = !allocation && effectivePermissionMode !== permission.effective
+          ? kunToolPermissionModeSettings(nativeMode?.kunPermissionMode ?? ctx.authority.kunPermissionMode)
+          : toolContext.approvalPolicy ? toolContext : kunToolPermissionModeSettings(ctx.authority.kunPermissionMode)
+        const inheritedPolicy = intersectDispatchPolicy(policySource, nativeMode?.kunPermissionMode ?? ctx.authority.kunPermissionMode)
+        const worker: WorkerRecord = {
+          workerId,
+          label: input.label,
+          ...(input.role ? { role: input.role } : {}),
+          route,
+          ...(allocation?.reasoningEffort ? { reasoningEffort: allocation.reasoningEffort } : {}),
+          ...(profileId ? { profileId } : {}),
+          ...(selection ? { selection } : {}),
+          permissionMode: effectivePermissionMode,
+          permissionSnapshot: inheritedPolicy,
+          ...(allocation ? { dispatchIntentId: allocation.intentId } : {}),
+          lifecycle: input.lifecycle ?? 'persistent',
+          ...(tws ? { taskWorkspaceId: tws.workspaceId } : {}),
+          securitySnapshot: security,
+          control: 'manager',
+          state: 'active',
+          createdAt: this.deps.nowIso()
+        }
+        await this.deps.teams.upsertWorker(team.teamId, worker)
+        this.deps.activity?.register({
+          unitId: workerId,
+          kind: 'worker',
+          threadId: workerId,
+          parentThreadId: ctx.threadId,
+          teamId: team.teamId,
+          harnessId: route.harnessId,
+          title: input.label,
+          workspace: {
+            path: tws?.path ?? ctx.workspace,
+            kind: isolation === 'worktree' ? 'worktree' : isolation === 'directory' ? 'directory' : 'local'
+          },
+          reviewRequired: true,
+          reviewStatus: 'pending'
       })
       const dispatch: DispatchRecord = {
         ...(allocation ? { dispatchIntentId: allocation.intentId } : {}),
@@ -284,6 +307,7 @@ export class ManagerWorkerCreator {
       }
       await this.deps.dispatches.create(dispatch)
       return { worker, dispatch }
+      })
     })
     if (!('worker' in created)) return created
     const { worker, dispatch } = created

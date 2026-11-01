@@ -1,4 +1,4 @@
-import { withAdeTeamMutex } from './ade-file.js'
+import { withAdeTeamMutex, withAdeCreationMutex } from './ade-file.js'
 import { workerCapacity, workerLimitReport } from './team-execution-policy.js'
 import { newManagerWorkRefusal } from './new-work-admission.js'
 import { z } from 'zod'
@@ -204,12 +204,12 @@ export class ReviewRequests {
       state: 'active',
       createdAt: now
     }
-    const refusal = await withAdeTeamMutex(team.teamId, async () => {
+    const refusal = await withAdeCreationMutex(team.teamId, () => withAdeTeamMutex(team.teamId, async () => {
       const capacity = await workerCapacity(this.deps, ctx.threadId)
       if (!capacity.available) return this.refuse('worker_limit', workerLimitReport(capacity, language))
       await this.deps.teams.upsertWorker(team.teamId, reviewer)
       return undefined
-    })
+    }))
     if (refusal) return refusal
     this.deps.activity?.register({
       unitId: workerId,
