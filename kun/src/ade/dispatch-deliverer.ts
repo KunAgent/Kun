@@ -206,8 +206,8 @@ export class DispatchDeliverer {
     if (dispatch.state !== 'failed' || !dispatch.failureReason) return
     const worker = await this.deps.teams.worker(dispatch.teamId, dispatch.workerId)
     if (worker && (worker.control === 'user' || worker.state !== 'active')) return
-    if (!worker && dispatch.dispatchIntentId) {
-      const intent = await this.deps.agentDispatchService?.get(dispatch.dispatchIntentId)
+    if (!worker) {
+      const intent = dispatch.dispatchIntentId ? await this.deps.agentDispatchService?.get(dispatch.dispatchIntentId) : undefined
       if (intent?.cancellationRequested || intent?.takenOver) return
       const source = await this.deps.threads.get(dispatch.teamId)
       if (!source || source.status === 'archived' || source.status === 'deleted') return

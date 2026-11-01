@@ -1,3 +1,4 @@
+import { workerBatchResult } from './worker-batch-result.js'
 import { stableAgentDispatchIntentId } from '../delegation/agent-dispatch-service.js'
 import { workerCapacity, workerLimitReport } from './team-execution-policy.js'
 import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
@@ -68,10 +69,8 @@ export class ManagerWorkerDispatch {
   async createBatch(ctx: ManagerToolContext, raw: unknown, context: ToolHostContext) {
     const { items } = WorkerCreateBatchInputSchema.parse(raw)
     const result = await this.propose(ctx, items, context)
-    return {
-      ...result, pending: result.ok ? items.length : 0, requested: items.length, created: 0, failed: result.ok ? 0 : items.length,
-      skipped: 0, dispatched: 0, items: items.map((item, index) => ({ index, label: item.label, result }))
-    }
+    const intent = result.dispatchIntentId ? await this.deps.agentDispatchService?.get(result.dispatchIntentId) : undefined
+    return workerBatchResult(this.deps, result, intent, intent ? this.inputs(intent) : items)
   }
 
   private async resolve(ctx: ManagerToolContext, input: WorkerCreateInput, previousAgent?: SavedAgent) {
@@ -307,6 +306,7 @@ export class ManagerWorkerDispatch {
           const skippedIds = assignmentIds(intent, skipped)
           await this.deps.dispatches.create({ ...skippedIds, dispatchIntentId: intent.intentId, teamId: ctx.threadId, parentTurnId: ctx.turnId,
             title: inputs[skipped].label, task: inputs[skipped].task, mode: 'queue', state: 'failed',
+            prelaunchDisposition: skipped === index ? 'refused' : 'skipped',
             failureReason: skipped === index ? result.userReport : `Skipped after dispatch refusal: ${result.userReport}`,
             createdAt: this.deps.nowIso(), updatedAt: this.deps.nowIso() })
           const failed = await this.deps.dispatches.get(ctx.threadId, skippedIds.dispatchId)

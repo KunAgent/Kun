@@ -48,8 +48,11 @@ export async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', ha
   })
   const delegation = { runChild, resumeChild: vi.fn(), abortChild: vi.fn(() => false) }
   const notices = new FileWorkerNoticeStore(root, nowIso)
-  const deliverer = new DispatchDeliverer({ teams, dispatches, threads, childRuns, notices,
-    taskWorkspaces: taskWorkspaces as never, delegation, turns: { interruptTurn: vi.fn() } as never })
+  let sink: import('./worker-notice-store.js').WorkerNoticeSink = notices
+  const noticeSink = { enqueue: (notice: import('../contracts/ade.js').WorkerNotice) => sink.enqueue(notice) }
+  const delivererDeps = { teams, dispatches, threads, childRuns, notices: noticeSink,
+    taskWorkspaces: taskWorkspaces as never, delegation, turns: { interruptTurn: vi.fn() } as never }
+  const deliverer = new DispatchDeliverer(delivererDeps)
   const disabled = new Set<string>()
   const store = new FileAgentDispatchIntentStore(root)
   const service = new AgentDispatchService({ store,
@@ -62,7 +65,7 @@ export async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', ha
   const runtime = new ManagerRuntime({
     language: () => locale.value,
     agentDispatchService: service, teams, dispatches, childRuns, threads,
-    questions: new FileQuestionStore(root, nowIso), notices,
+    questions: new FileQuestionStore(root, nowIso), notices: noticeSink,
     turns: { getTurn: async (id: string, turnId: string) => (await threads.get(id))?.turns.find((entry) => entry.id === turnId) ?? null } as never,
     sessionStore: { loadItems: async () => [] } as never,
     catalog: { get: (id: string) => { const base = BUILTIN_HARNESSES.find((entry) => entry.id === id)
@@ -85,7 +88,7 @@ export async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', ha
     signal: context.abortSignal, awaitApproval: context.awaitApproval })
   const assignment = { label: 'Independent task', task: 'Implement a bounded change and verify it.',
     context: { constraints: ['Existing behavior remains correct.'] }, workspace: { isolation: 'worktree' as const } }
-  return { locale, root, notices, source, clock, context, ctx, runtime, service, teams, dispatches, childRuns,
+  return { delivererDeps, wireNotices: (next: typeof sink) => { sink = next }, locale, root, notices, source, clock, context, ctx, runtime, service, teams, dispatches, childRuns,
     runChild, taskWorkspaces, disabled, threads, assignment, workspace, deliverer, capabilitiesForRoute, store }
 }
 

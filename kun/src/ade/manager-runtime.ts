@@ -174,8 +174,9 @@ export class ManagerRuntime {
     created: number
     failed: number
     skipped: number
+    refused?: number
     dispatched: number
-    items: Array<{ index: number; label: string; result: WorkerCreateResult | 'skipped' }>
+    items: Array<{ index: number; label: string; state?: string; dispatchId?: string; result: WorkerCreateResult | 'skipped' }>
     userReport: string
     followUp?: string
   }> {

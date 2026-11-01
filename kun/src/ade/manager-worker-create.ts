@@ -188,7 +188,7 @@ export class ManagerWorkerCreator {
       effectivePermissionMode = permission.requestedMode.id
     }
     // Approval is settled above; serialize the final slot check through worker persistence.
-    return withAdeTeamMutex(team.teamId, async () => {
+    const created = await withAdeTeamMutex(team.teamId, async (): Promise<WorkerCreateResult | { worker: WorkerRecord; dispatch: DispatchRecord }> => {
       const capacity = await workerCapacity(this.deps, ctx.threadId)
       const allocated = allocation && (await this.deps.teams.worker(team.teamId, allocation.workerId))?.state === 'active'
       if (!capacity.available && !allocated) return { ok: false, refusal: 'worker_limit', capacity,
@@ -283,39 +283,43 @@ export class ManagerWorkerCreator {
         updatedAt: this.deps.nowIso()
       }
       await this.deps.dispatches.create(dispatch)
-      const delivered = await this.deps.deliverer.tryDeliver(team.teamId, dispatch.dispatchId)
-      return {
-        ok: true,
-        capacity: await workerCapacity(this.deps, ctx.threadId),
-        workerId,
-        dispatchId: dispatch.dispatchId,
-        ...(worker.taskWorkspaceId ? { taskWorkspaceId: worker.taskWorkspaceId } : {}),
-        dispatched: delivered.accepted,
-        ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),
-        route,
-        ...(selection ? { selection: { ...selection, ...(profileId ? { profileId } : {}) } } : {}),
-        permissionMode: {
-          ...(permission.requestedMode ? { requested: permission.requestedMode.id } : {}),
-          effective: effectivePermissionMode,
-          // After a confirmed escalation the worker runs at the requested mode.
-          downgraded: permission.downgraded && effectivePermissionMode === permission.effective
-        },
-        userReport: reportWorkerCreated(
-          {
-            worker,
-            dispatch,
-            pendingReason: delivered.pendingReason,
-            permission: {
-              ...permission,
-              downgraded: permission.downgraded && effectivePermissionMode === permission.effective
-            },
-            harnessLabel: definition.displayName,
-            selectionReason: selection?.reason
-          },
-          language
-        )
-      }
+      return { worker, dispatch }
     })
+    if (!('worker' in created)) return created
+    const { worker, dispatch } = created
+    const workerId = worker.workerId
+    const delivered = await this.deps.deliverer.tryDeliver(team.teamId, dispatch.dispatchId)
+    return {
+      ok: true,
+      capacity: await workerCapacity(this.deps, ctx.threadId),
+      workerId,
+      dispatchId: dispatch.dispatchId,
+      ...(worker.taskWorkspaceId ? { taskWorkspaceId: worker.taskWorkspaceId } : {}),
+      dispatched: delivered.accepted,
+      ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),
+      route,
+      ...(selection ? { selection: { ...selection, ...(profileId ? { profileId } : {}) } } : {}),
+      permissionMode: {
+        ...(permission.requestedMode ? { requested: permission.requestedMode.id } : {}),
+        effective: effectivePermissionMode,
+        // After a confirmed escalation the worker runs at the requested mode.
+        downgraded: permission.downgraded && effectivePermissionMode === permission.effective
+      },
+      userReport: reportWorkerCreated(
+        {
+          worker,
+          dispatch,
+          pendingReason: delivered.pendingReason,
+          permission: {
+            ...permission,
+            downgraded: permission.downgraded && effectivePermissionMode === permission.effective
+          },
+          harnessLabel: definition.displayName,
+          selectionReason: selection?.reason
+        },
+        language
+      )
+    }
   }
 
 }
