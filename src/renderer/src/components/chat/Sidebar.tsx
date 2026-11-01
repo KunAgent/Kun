@@ -345,6 +345,7 @@ export function Sidebar({
           onDeleteThread={onDeleteThread}
           onRestoreThread={onRestoreThread}
           onSearchQueryChange={onThreadSearchChange}
+          onOpenSchedule={onScheduleOpen}
           t={t}
         />
       ) : null}

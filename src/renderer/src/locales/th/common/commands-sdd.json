@@ -511,6 +511,7 @@
   "sidebarThreadScheduledMultiple": "งานที่กำหนดไว้ {{count}} งาน · ถัดไป {{time}}",
   "sidebarThreadScheduledQueued": "งานที่กำหนดไว้กำลังรอเริ่ม",
   "sidebarThreadScheduledTimePending": "รอระบุเวลา",
+  "sidebarScheduledSessionsHint": "{{count}} เซสชันงานตามกำหนดอยู่ในระบบอัตโนมัติ",
   "sidebarThreadForkBadge": "ส้อม",
   "sidebarThreadForked": "ด้ายแยก",
   "sidebarThreadForkedFrom": "แยกจาก {{title}}",

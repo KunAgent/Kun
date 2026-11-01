@@ -55,6 +55,7 @@ function sidebarProjectProps(overrides: Record<string, unknown> = {}) {
     onDeleteThread: vi.fn(async () => undefined),
     onRestoreThread: vi.fn(async () => undefined),
     onSearchQueryChange: vi.fn(),
+    onOpenSchedule: vi.fn(),
     t: (key: string, opts?: Record<string, unknown>) =>
       key === 'sidebarWorkspaceShowMore' ? `sidebarWorkspaceShowMore:${String(opts?.count)}` : key,
     ...overrides

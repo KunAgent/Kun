@@ -13,6 +13,7 @@ import {
   type SidebarThreadActivityContext
 } from '../../components/chat/sidebar-project-selectors'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { withoutScheduledTaskThreads } from '../../components/chat/scheduled-task-threads'
 import { MobileHome, type MobileThreadActivity } from './MobileHome'
 import { useMobileProjectThreads } from './use-mobile-project-threads'
 import { aggregateThreadActivity, mobileThreadActivity } from '../lib/thread-activity'
@@ -116,8 +117,10 @@ export function MobileCodeHome({ onOpen, onOpenSettings, segments }: {
   const classification = useThreadClassificationRegistries(chat.threads)
   // Groups carry their threads, so project meta is one pass over the list
   // instead of a full-inventory scan per project row on every thread update.
+  // Scheduled runs keep their sessions in Automation; the phone home lists projects only.
+  const visibleThreads = useMemo(() => withoutScheduledTaskThreads(chat.threads), [chat.threads])
   const projectGroups = useMemo(() => selectCodeProjectGroups({
-    threads: chat.threads,
+    threads: visibleThreads,
     workspaceRoot: chat.root,
     workspaceRoots: chat.roots,
     conversationRoot: chat.conversationRoot,
@@ -127,12 +130,12 @@ export function MobileCodeHome({ onOpen, onOpenSettings, segments }: {
     writeRegistry: classification.writeRegistry,
     designRegistry: classification.designRegistry,
     sddRegistry: classification.sddRegistry
-  }), [chat.clawChannels, chat.conversationRoot, chat.removed, chat.root, chat.roots, chat.threads, classification])
+  }), [chat.clawChannels, chat.conversationRoot, chat.removed, chat.root, chat.roots, visibleThreads, classification])
   const projects = useMemo(() => projectGroups.map(([workspacePath]) => workspacePath), [projectGroups])
-  const codeThreads = useMemo(() => sortSidebarThreads(chat.threads.filter((thread) =>
+  const codeThreads = useMemo(() => sortSidebarThreads(visibleThreads.filter((thread) =>
     isCodeThread(thread, chat.clawChannels, classification.writeRegistry,
       classification.designRegistry, classification.sddRegistry)
-  )), [chat.threads, chat.clawChannels, classification])
+  )), [visibleThreads, chat.clawChannels, classification])
   const recent = useMemo(() => codeThreads.slice(0, RECENT_LIMIT), [codeThreads])
   const projectMeta = useMemo(() => {
     const meta = new Map<string, { lastActive: string; activity: MobileThreadActivity | null }>()
