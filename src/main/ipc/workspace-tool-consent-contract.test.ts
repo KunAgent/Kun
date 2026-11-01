@@ -153,7 +153,9 @@ describe('workspace smoke consent observation contract', () => {
         expect((await roomRunItems(deps, 'room-1', 'run-1')).items).toEqual([])
       } finally {
         turnAbort.abort(); await waiting?.catch(() => undefined); abort.abort(); await pump; vi.unstubAllGlobals(); await sessions.close()
-        await rm(directory, { recursive: true, force: true })
+        // Windows directory removal can transiently report ENOTEMPTY/EPERM.
+        // Use bounded backoff without swallowing persistent cleanup failures.
+        await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
       }
     })
 })
