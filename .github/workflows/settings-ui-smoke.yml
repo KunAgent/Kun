@@ -48,6 +48,9 @@ jobs:
         with:
           node-version: '22.23.1'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
 
       - name: Install dependencies and native Electron
         run: |
@@ -97,7 +100,7 @@ jobs:
           node scripts/smoke-settings-ui.mjs --baseline 2>&1 | tee dist/settings-ui/before/launch.log
 
       - name: Verify real final source and capture screenshots
-        if: always()
+        if: always() && !cancelled()
         shell: bash
         env:
           DEBUG: pw:browser
@@ -108,7 +111,7 @@ jobs:
           node scripts/smoke-settings-ui.mjs 2>&1 | tee dist/settings-ui/after/launch.log
 
       - name: Upload native before/after screenshots and measured coverage
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: settings-ui-${{ matrix.os }}
@@ -117,11 +120,11 @@ jobs:
           retention-days: 14
 
       - name: Prepare bounded review images and full measured reports
-        if: always()
+        if: always() && !cancelled()
         run: node scripts/prepare-settings-ui-evidence.mjs
 
       - name: Upload bounded native image review
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: settings-ui-review-${{ matrix.os }}
@@ -130,7 +133,7 @@ jobs:
           retention-days: 14
 
       - name: Upload full compressed measured reports
-        if: always()
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: settings-ui-reports-${{ matrix.os }}

@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { fullTestPlan, largeHistoryTest } from './test-execution-plan.mjs'
+import { fullTestPlan, largeHistoryTest, parseTestShard } from './test-execution-plan.mjs'
 
 const require = createRequire(import.meta.url)
 
@@ -72,9 +72,14 @@ function runVitest(executable, args, env = process.env) {
 }
 
 const requested = process.argv.slice(2)
+// CI uses an environment variable so sharding cannot bypass the ABI-aware plan.
+const shard = parseTestShard(process.env.KUN_TEST_SHARD)
+if (shard && requested.length > 0) {
+  throw new Error('KUN_TEST_SHARD requires the full suite without focused test arguments')
+}
 if (currentNodeCanLoadSqlite()) {
   if (requested.length > 0) process.exit(runVitest(process.execPath, requested))
-  for (const step of fullTestPlan(doctorFiles)) {
+  for (const step of fullTestPlan(doctorFiles, false, shard)) {
     const status = runVitest(process.execPath, step.args)
     if (status !== 0) process.exit(status)
   }
@@ -96,7 +101,7 @@ if (!electron) {
 const electronEnv = { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
 
 if (requested.length === 0) {
-  for (const step of fullTestPlan(doctorFiles, true)) {
+  for (const step of fullTestPlan(doctorFiles, true, shard)) {
     const status = step.runtime === 'electron'
       ? runVitest(electron, step.args, electronEnv)
       : runVitest(process.execPath, step.args)

@@ -7,7 +7,7 @@ const ordinaryTest = 'src/memory/memory-relation-pagination.test.ts'
 
 // Execute the real routing script in an isolated process. Simulate only ABI
 // availability and child launches: never rebuild or replace installed addons.
-function route(requested, mismatched = true) {
+function route(requested, mismatched = true, shard = '') {
   const runner = new URL('./run-tests.mjs', import.meta.url).href
   const source = `
     import Module, { syncBuiltinESMExports } from 'node:module'
@@ -30,7 +30,7 @@ function route(requested, mismatched = true) {
     await import(${JSON.stringify(runner)})
   `
   const result = spawnSync(process.execPath, ['--input-type=module', '--eval', source], {
-    encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '' }
+    encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '', KUN_TEST_SHARD: shard }
   })
   assert.equal(result.status, 0, result.stderr)
   return result.stdout.trim().split('\n').map((line) => JSON.parse(line))
@@ -64,4 +64,23 @@ test('matching Node ABI uses the normal single-run path', () => {
 
 test('an ordinary focused request does not launch Electron', () => {
   assert.deepEqual(route([ordinaryTest]), [{ args: [ordinaryTest], electron: false }])
+})
+
+test('CI shards execute the full ABI-aware plan and isolate large history only on shard one', () => {
+  for (const mismatched of [false, true]) {
+    const first = route([], mismatched, '1/4')
+    const other = route([], mismatched, '2/4')
+    assert.equal(first.length, mismatched ? 3 : 2)
+    assert.equal(other.length, mismatched ? 2 : 1)
+    assert.deepEqual(first.at(-1), {
+      args: ['src/manager/large-thread-mutations.test.ts', '--maxWorkers=1'], electron: mismatched
+    })
+    for (const call of other) assert.ok(call.args.includes('--shard=2/4'))
+    if (mismatched) {
+      assert.equal(other[0].electron, false)
+      assert.ok(other[0].args.includes(contextTest))
+      assert.equal(other[1].electron, true)
+      assert.ok(other[1].args.includes(contextTest))
+    }
+  }
 })
