@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict')
 const { spawnSync } = require('node:child_process')
-const { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, statSync, utimesSync } = require('node:fs')
+const { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, renameSync, statSync, symlinkSync, utimesSync } = require('node:fs')
 const { tmpdir } = require('node:os')
 const { dirname, join } = require('node:path')
 const test = require('node:test')
@@ -16,7 +16,7 @@ function fixture(t) {
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), value)
   }
-  put('.gitignore', [...outputs, '.cache', 'node_modules'].map(path => `${path}/`).join('\n'))
+  put('.gitignore', [...outputs, '.cache', 'node_modules'].map(path => `${path}/`).join('\n') + '\n.env\n.env.*\n')
   put('src/app.ts', 'export const value = 1')
   put('package-lock.json', '{}')
   let launches = 0
@@ -80,6 +80,39 @@ test('lockfiles and installed dependency metadata invalidate reuse', t => {
     f.run()
   }
   assert.equal(f.launches(), 5)
+})
+
+test('ignored Vite dotenv additions, edits and deletions invalidate every current envDir', t => {
+  const f = fixture(t)
+  f.run()
+  let expected = 1
+  for (const root of ['.', 'kun', 'src/canvas-app']) {
+    for (const name of ['.env', '.env.local', '.env.production', '.env.production.local', '.env.custom']) {
+      const path = join(root, name)
+      f.put(path, 'VITE_FIXTURE=private-dotenv-one')
+      assert.equal(spawnSync('git', ['check-ignore', '-q', path], { cwd: f.root }).status, 0)
+      f.run()
+      f.put(path, 'VITE_FIXTURE=private-dotenv-two')
+      f.run()
+      rmSync(join(f.root, path))
+      f.run()
+      expected += 3
+      f.run()
+      assert.equal(f.launches(), expected, path)
+      assert.ok(!readFileSync(join(f.root, '.cache/app-build.json'), 'utf8').includes('private-dotenv'))
+    }
+  }
+})
+
+// Creating file symlinks requires extra privileges on Windows.
+test('symlinked dotenv target content participates in reuse checks', { skip: process.platform === 'win32' }, t => {
+  const f = fixture(t)
+  f.put('node_modules/private-env', 'VITE_FIXTURE=one')
+  symlinkSync(join(f.root, 'node_modules/private-env'), join(f.root, '.env.production.local'))
+  f.run()
+  f.put('node_modules/private-env', 'VITE_FIXTURE=two')
+  f.run()
+  assert.equal(f.launches(), 2)
 })
 
 test('deleting or changing an emitted chunk or entire output directory forces a rebuild', t => {

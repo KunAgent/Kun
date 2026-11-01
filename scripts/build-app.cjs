@@ -2,7 +2,7 @@
 
 const { createHash } = require('node:crypto')
 const { spawnSync } = require('node:child_process')
-const { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, mkdirSync, rmSync, renameSync, writeFileSync } = require('node:fs')
+const { existsSync, lstatSync, statSync, readdirSync, readFileSync, readlinkSync, mkdirSync, rmSync, renameSync, writeFileSync } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 
 const outputs = ['out', 'kun/dist', 'resources/bundled-extensions',
@@ -19,6 +19,12 @@ function hashPaths(root, paths) {
     hash.update(`mode:${stat.mode}\0`)
     if (stat.isSymbolicLink()) {
       hash.update(`link:${readlinkSync(absolute)}\0`)
+      const target = statSync(absolute)
+      if (target.isFile()) {
+        hash.update(`${target.mode}:${target.size}:`)
+        hash.update(readFileSync(absolute))
+        hash.update('\0')
+      }
     } else if (stat.isDirectory()) {
       hash.update('directory\0')
       for (const entry of readdirSync(absolute).sort()) visit(join(path, entry))
@@ -39,7 +45,18 @@ function inputFingerprint(root, env = process.env) {
     cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024
   })
   if (files.status !== 0) return null // Source archives still build, without reuse.
-  const paths = [...new Set(files.stdout.split('\0').filter(Boolean)),
+  const dotenvPaths = []
+  // Vite loads ignored dotenv files inside child processes, after this parent
+  // environment is captured. Include their names and bytes so additions,
+  // changes and removals at every current Vite envDir invalidate reuse.
+  for (const directory of ['.', 'kun', 'src/canvas-app']) {
+    const absolute = join(root, directory)
+    if (!existsSync(absolute)) continue
+    for (const name of readdirSync(absolute).filter(name => /^\.env(?:\.|$)/.test(name))) {
+      dotenvPaths.push(directory === '.' ? name : `${directory}/${name}`)
+    }
+  }
+  const paths = [...new Set([...files.stdout.split('\0').filter(Boolean), ...dotenvPaths]),
     'node_modules/.package-lock.json', 'kun/node_modules/.package-lock.json']
   const buildEnv = Object.fromEntries(Object.entries(env)
     .filter(([key]) => !/^(?:npm_|PWD$|OLDPWD$|SHLVL$|_$|INIT_CWD$|KUN_FORCE_BUILD$)/.test(key))
