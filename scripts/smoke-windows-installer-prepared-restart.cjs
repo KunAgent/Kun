@@ -4,6 +4,7 @@ const { spawn, execFile } = require('node:child_process')
 const { promisify } = require('node:util')
 const { readFile, readdir, writeFile } = require('node:fs/promises')
 const { join, win32 } = require('node:path')
+const { pendingFingerprint, samePending, captureRestartOutput } = require('./smoke-windows-installer-pending-protection.cjs')
 const { digest } = require('./gui-upgrade-feed.cjs')
 const { selectOwnedWindowsProcesses } = require('./smoke-windows-installer-cross-version.cjs')
 const execute = promisify(execFile)
@@ -78,6 +79,15 @@ async function observePreparedRestart(operations) {
     const sample = await operations.sample(launch)
     record.samples++
     record.lastObservation = sample.summary
+    if (!launch && sample.window && sample.oldExited && sample.pendingPresent && sample.installerVerified && sample.pendingFingerprint) {
+      record.pendingOriginal ??= sample.pendingFingerprint
+    }
+    if (launch && (sample.window || sample.stageStarted) && sample.installerVerified && record.pendingOriginal) {
+      if (!samePending(record.pendingOriginal, sample.pendingFingerprint)) {
+        record.pendingProtectionFailure ??= { at: sample.summary.at, kind: sample.pendingFingerprint ? 'identity_or_bytes_changed' : 'pending_missing' }
+      } else record.retainedSamples = (record.retainedSamples || 0) + 1
+      if (sample.startedOldGui && sample.reconcileDenied) record.reconcileDenied ??= sample.reconcileDenied
+    }
     if (!launch && sample.oldExited && sample.window && sample.pendingPresent && sample.installerVerified) {
       await operations.preserve('before-launch')
       // Snapshotting can take time. Recheck the boundary immediately before spawn.
@@ -129,6 +139,7 @@ function startPreparedRestartObservation(options) {
   let stopped = false
   let launched
   let launchError
+  let outputCapture
   let verifiedInstallerIdentity
   const verifyPreparedOwner = createPreparedOwnerVerifier(options)
   const launchTime = Date.now()
@@ -197,12 +208,14 @@ function startPreparedRestartObservation(options) {
         }
       }
     }
-    const pending = await readText(pendingPath)
+    const fingerprint = await pendingFingerprint(pendingPath)
+    const pending = fingerprint !== null
+    const denial = outputCapture?.denial()
     const finalLog = await readText(installerLog) || ''
     const stillWindow = window && preparedWindow(finalLog)
-    const summary = { at: new Date().toISOString(), window: stillWindow, pendingPresent: pending !== null,
+    const summary = { at: new Date().toISOString(), window: stillWindow, pendingPresent: pending, pendingFingerprint: fingerprint, reconcileDenied: denial,
       installerVerified, startedOldGui, currentTransaction, launchError: launchError?.message }
-    return { window: stillWindow, pendingPresent: pending !== null, installerVerified, startedOldGui,
+    return { window: stillWindow, pendingPresent: pending, pendingFingerprint: fingerprint, reconcileDenied: denial, installerVerified, startedOldGui,
       oldExited: !options.processIsAlive(options.oldPid), stageStarted: finalLog.includes('START action=StageExtractedUpdatePayload'), summary }
   }
   const done = observePreparedRestart({ now: Date.now, timeoutMs: 10 * 60_000,
@@ -218,7 +231,8 @@ function startPreparedRestartObservation(options) {
         throw new Error('Fresh prepared authorization disappeared during payload verification')
       }
       const atMs = Date.now()
-      const child = spawn(options.executable, [], { env: options.environment, stdio: 'ignore' })
+      const child = spawn(options.executable, [], { env: options.environment, stdio: ['ignore', 'pipe', 'pipe'] })
+      outputCapture = captureRestartOutput(child, options.root)
       child.on('error', error => { launchError = error })
       launched = { pid: child.pid, at: new Date(atMs).toISOString(), atMs, version: '0.4.3', archiveSha512: sha512,
         executable: options.executable, arguments: [] }
@@ -227,7 +241,7 @@ function startPreparedRestartObservation(options) {
       return launched
     }
   }).catch(error => observationFailure(error, launchTime))
-  return { done, stop: async () => { stopped = true; const result = await done; Object.assign(options.record, result); return result } }
+  return { done, stop: async () => { stopped = true; const result = await done; Object.assign(options.record, result); await outputCapture?.flush(); return result } }
 }
 
 module.exports = { observationFailure, parseWindowsJson, creationIdentity, selectTransactionInstaller, createPreparedOwnerVerifier, hasOldStartup, preparedWindow, observePreparedRestart, startPreparedRestartObservation }

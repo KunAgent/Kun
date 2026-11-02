@@ -13,6 +13,7 @@ const { parse } = require('yaml')
 const { sanitizeDiagnostic } = require('./stage-windows-upgrade-evidence.cjs')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
+const { pendingProtectionOption, assertPendingProtection, classifyReconciliation, readReconciliationState, reconciliationSummary } = require('./smoke-windows-installer-pending-protection.cjs')
 const { startPreparedRestartObservation } = require('./smoke-windows-installer-prepared-restart.cjs')
 const { verifyPrCandidateSource } = require('./pr-gui-candidate-source.cjs')
 const { upgradeOptions, verifyPublishedSource, captureWindowsUpgrade, stopVerifiedInstallers, assertCandidateExtractionTrace } = require('./smoke-windows-installer-cross-version.cjs')
@@ -388,6 +389,22 @@ async function scenario(input, name, record, persistReport) {
     await gui.page.screenshot({ path: join(root, 'after.png') })
     record.version = expectedVersion
     journal.phase('post_upgrade_verified', { version: expectedVersion, pid: gui.processInfo.pid })
+    if (input.requirePendingProtection) {
+      journal.phase('pending_protection_reconciliation')
+      const reconciled = await poll(async () => {
+        const state = await readReconciliationState(userData, installerRecovery, join(root, 'installer.log'))
+        const classification = classifyReconciliation(state, { oldVersion: input.baselineVersion, newVersion: input.version })
+        record.pendingReconciliation = reconciliationSummary(state, classification)
+        journal.persist()
+        // Grace is diagnostic context, not acceptance: only the normal GUI may
+        // finalize its recovery records, and this lane must observe completion.
+        return classification === 'finalized' ? classification : undefined
+      }, TIMEOUT, 'legitimate post-runtime-health pending reconciliation')
+      journal.event('pending_protection_reconciled', { classification: reconciled })
+      // Still complete normal updater outcome observation when overlap was missed.
+      // Such a timing-only run is inconclusive, never a strict acceptance pass.
+      if (record.preparedRestart?.status !== 'inconclusive') assertPendingProtection(record.preparedRestart)
+    }
     journal.phase('closing_inspection_gui')
     record.inspectionCloseProof = await closeGuiWithExitEvidence(gui, journal.eventPath, TIMEOUT)
     journal.phase('inspection_gui_closed', record.inspectionCloseProof)
@@ -487,6 +504,7 @@ async function main() {
   const harnessCommit = checkout.stdout.trim()
   const source = process.env.GUI_UPGRADE_SOURCE || 'release-candidate'
   assert.ok(['pull-request', 'release-candidate', 'published-release'].includes(source), 'Unknown GUI upgrade candidate source')
+  const requirePendingProtection = pendingProtectionOption(flags, { source, platform: process.platform, baselineVersion, scenarios })
   const candidateCommit = source === 'pull-request'
     ? await verifyPrCandidateSource(directory, version, harnessCommit)
     : source === 'published-release'
@@ -499,7 +517,7 @@ async function main() {
   assert.ok(metadata.files.some((file) => file.url === candidateName))
   const downloads = await mkdtemp(join(tmpdir(), 'kun-upgrade-baseline-'))
   const baselineName = process.platform === 'win32' ? `Kun-${baselineVersion}-win-x64.exe` : `Kun-${baselineVersion}-mac-${process.arch}.zip`
-  const report = { version, source, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
+  const report = { version, source, requirePendingProtection, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
     artifact: candidateName, sha512: await digest(join(directory, candidateName)), scenarios: [],
     status: 'running', phase: 'baseline_download', cleanupErrors: [] }
   const output = resolve(flags.get('--report') || `gui-upgrade-${process.platform}.json`)
@@ -520,7 +538,7 @@ async function main() {
     persist()
     feed = flags.has('--feed-url') ? null : await startCandidateFeed(directory, manifestName, version)
     for (const name of scenarios) {
-      await recordScenario(report, name, record => scenario({ version, baselineVersion, source, candidate: join(directory, candidateName),
+      await recordScenario(report, name, record => scenario({ version, baselineVersion, source, requirePendingProtection, candidate: join(directory, candidateName),
         baseline: join(downloads, baselineName), feedUrl: flags.get('--feed-url') || feed.url }, name, record, persist), persist)
     }
     report.status = report.scenarios.some(record => record.status === 'inconclusive') ? 'inconclusive' : 'passed'

@@ -323,14 +323,15 @@ test('normal startup evidence requires fresh timestamp, actual old version and e
   assert.equal(preparedWindow('NSIS update-boundary=prepared\nSTART action=StageExtractedUpdatePayload'), false)
 })
 
-test('prepared restart is isolated from required acceptance and has a separate non-gating native job', async () => {
+test('prepared restart requires candidate overlap and cleanup while keeping released control observational', async () => {
   const flags = new Map([['--version', '0.4.4'], ['--baseline-version', '0.4.3'], ['--scenarios', 'restart-prepared']])
   assert.equal(upgradeOptions(flags, 'win32').scenarios[0], 'restart-prepared')
   assert.throws(() => upgradeOptions(flags, 'darwin'))
   assert.throws(() => upgradeOptions(new Map([...flags, ['--scenarios', 'normal,restart-prepared']]), 'win32'))
   const workflow = parse(await readFile(join(__dirname, '../.github/workflows/pr-checks.yml'), 'utf8'))
-  assert.equal(workflow.jobs['windows-prepared-restart']['continue-on-error'], true)
-  assert.ok(!workflow.jobs['pr-gate'].needs.includes('windows-prepared-restart'))
+  assert.equal(workflow.jobs['windows-prepared-restart']['continue-on-error'], "${{ matrix.source == 'published-release' }}")
+  assert.ok(workflow.jobs['pr-gate'].needs.includes('windows-prepared-restart'))
+  assert.ok(workflow.jobs['report-pr-check-feedback'].needs.includes('windows-prepared-restart'))
   const steps = workflow.jobs['windows-prepared-restart'].steps
   const stage = steps.findIndex(step => step.id === 'stage_windows_evidence')
   const upload = steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
@@ -344,6 +345,9 @@ test('prepared restart is isolated from required acceptance and has a separate n
   const script = await readFile(join(__dirname, 'smoke-gui-upgrade.cjs'), 'utf8')
   assert.match(script, /entry\.pid !== record\.preparedRestart\?\.launch\?\.pid/)
   assert.match(script, /report\.status === 'inconclusive'\) process\.exitCode = 2/)
+  assert.match(script, /return classification === 'finalized' \? classification : undefined/)
+  assert.doesNotMatch(script, /\['finalized', 'healthy-runtime-with-valid-recovery-grace'\]\.includes/)
+  assert.match(steps.map(step => step.run || '').join('\n'), /--require-pending-protection/)
 })
 
 const { creationIdentity, selectTransactionInstaller, parseWindowsJson } = require('./smoke-windows-installer-prepared-restart.cjs')
