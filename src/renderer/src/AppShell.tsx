@@ -25,6 +25,7 @@ import { useRemoteSurface } from './mobile/use-remote-surface'
 import { useRemoteReconnectRecovery } from './use-remote-reconnect-recovery'
 import { clearCurrentlyVisibleUnreadCompletions } from './store/unread-completions'
 import { startActivityFeed, stopActivityFeed, useActivityStore } from './store/activity-store'
+import { startPetActivityPublisher, stopPetActivityPublisher } from './pets/pet-publisher'
 import {
   startActivityNotifications,
   stopActivityNotifications
@@ -134,6 +135,12 @@ export default function AppShell(): React.ReactElement {
       stopActivityNotifications()
     }
   }, [adeEnabled, surface])
+
+  useEffect(() => {
+    if (surface !== 'desktop') return
+    startPetActivityPublisher()
+    return () => stopPetActivityPublisher()
+  }, [surface])
 
   useEffect(() => {
     // Streaming updates touch unrelated state many times a second; only the

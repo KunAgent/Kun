@@ -110,3 +110,29 @@ test('shared Ubuntu test matrix covers every original npm test component with fo
   assert.equal(release.jobs.tests.uses, pr.jobs.tests.uses)
   assert.equal(release.jobs.tests.if, release.jobs.quality.if)
 })
+
+test('parallel packaging preserves required cross-version and prepared-restart candidate gates', () => {
+  for (const name of ['windows-cross-version', 'windows-prepared-restart']) {
+    const job = pr.jobs[name]
+    assert.deepEqual(job.needs, ['package-windows'])
+    assert.equal(job.if, undefined)
+    assert.equal(job['continue-on-error'], "${{ matrix.source == 'published-release' }}")
+    assert.deepEqual(job.strategy.matrix.source, ['published-release', 'pull-request'])
+    assert.equal(job.strategy['fail-fast'], false)
+    for (const gateName of ['pr-gate', 'report-pr-check-feedback']) {
+      assert.ok(pr.jobs[gateName].needs.includes(name))
+      assert.ok(pr.jobs[gateName].steps[0].with.script.includes(`needs['${name}'].result`))
+    }
+    const download = job.steps.find(step => step.name === 'Download exact PR candidate from this run')
+    assert.equal(download.with.name, 'pr-windows-nsis-package')
+  }
+  const restart = pr.jobs['windows-prepared-restart'].steps.find(step => step.run?.includes('$protection'))
+  assert.match(restart.run, /--require-pending-protection', 'true'/)
+  assert.match(restart.run, /@protection/)
+  const scripts = require('../package.json').scripts
+  assert.ok(scripts['test:packaging'].includes('./scripts/bundled-pets.test.cjs'))
+  for (const name of ['build-app', 'ci-workflow-performance', 'smoke-windows-installer-pending-protection',
+    'smoke-windows-installer-relaunch', 'stage-windows-upgrade-evidence']) {
+    assert.ok(scripts['test:release-workflows'].includes(`./scripts/${name}.test.cjs`), name)
+  }
+})

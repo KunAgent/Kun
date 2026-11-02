@@ -4,6 +4,7 @@ import {
   ACTIVITY_HIDDEN_INTERVAL_MS,
   ACTIVITY_POLL_WAIT_MS,
   activityFeedCoversThread,
+  setPetOverlayActivityLive,
   startActivityFeed,
   stopActivityFeed,
   useActivityStore,
@@ -69,6 +70,7 @@ function depsHarness(overrides: Partial<ActivityFeedDeps> = {}) {
 }
 
 afterEach(() => {
+  setPetOverlayActivityLive(false)
   stopActivityFeed()
   useActivityStore.setState({ rows: {}, cursor: null, status: 'idle' })
 })
@@ -160,6 +162,25 @@ describe('activity feed store', () => {
       expect(waits.slice(0, 2)).toEqual([ACTIVITY_POLL_WAIT_MS, 0])
       expect(sleeps).toContain(ACTIVITY_HIDDEN_INTERVAL_MS)
     })
+  })
+
+  it('keeps the normal poll cadence while the pet is open and the window is hidden', async () => {
+    let calls = 0
+    const { deps, waits, sleeps, setHidden } = depsHarness()
+    setPetOverlayActivityLive(true)
+    deps.poll = vi.fn((_cursor, waitMs, signal) => {
+      void _cursor
+      waits.push(waitMs)
+      calls += 1
+      if (calls === 1) {
+        setHidden(true)
+        return Promise.resolve({ type: 'activity' as const, cursor: 'c2', changes: [] })
+      }
+      return parkedPoll(signal)
+    })
+    startActivityFeed(deps)
+    await vi.waitFor(() => expect(waits.slice(0, 2)).toEqual([ACTIVITY_POLL_WAIT_MS, ACTIVITY_POLL_WAIT_MS]))
+    expect(sleeps).not.toContain(ACTIVITY_HIDDEN_INTERVAL_MS)
   })
 
   it('clears rows and cursor on stop so stale coverage cannot linger', async () => {

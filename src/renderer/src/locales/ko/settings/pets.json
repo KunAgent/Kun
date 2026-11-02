@@ -1,0 +1,28 @@
+{
+  "settingsNavPets": "펫",
+  "petsTitle": "데스크톱 펫",
+  "petsDesc": "데스크톱 펫을 고르고 화면에 유지하며 Codex 펫 패키지를 가져옵니다.",
+  "petsDesktopOnly": "데스크톱 펫은 Kun 데스크톱 앱에서만 사용할 수 있습니다.",
+  "petsLoading": "펫을 불러오는 중...",
+  "petsLoadError": "펫 라이브러리를 불러오지 못했습니다.",
+  "petsEmpty": "펫이 없습니다. pet.json 패키지를 Kun 펫 폴더에 넣은 뒤 새로고침하세요.",
+  "petsSelectFirst": "데스크톱에 표시하기 전에 사용할 수 있는 펫을 선택하세요.",
+  "petsCurrent": "현재 선택한 펫",
+  "petsNone": "선택 안 함",
+  "petsImported": "가져온 펫",
+  "petsWake": "펫 표시",
+  "petsHide": "펫 숨기기",
+  "petsImportErrors": "가져오기 오류",
+  "petsShow": "데스크톱에 펫 표시",
+  "petsImportCodex": "Codex 펫 자동 가져오기",
+  "petsRefresh": "새로고침",
+  "petsOpenKunDir": "Kun 펫 폴더 열기",
+  "petsOpenCodexDir": "Codex 펫 폴더 열기",
+  "petsSourceMissing": "원본 패키지 없음",
+  "petsReport": "실패 {{failed}}, 누락 {{missing}}",
+  "petsSource": {
+    "kun-builtin": "기본 제공",
+    "kun-local": "로컬",
+    "codex-custom": "Codex"
+  }
+}

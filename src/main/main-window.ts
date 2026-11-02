@@ -24,6 +24,7 @@ import {
   traceStartup
 } from './main-app-context'
 import { isAppQuitInProgress } from './main-lifecycle'
+import { attachDesktopPetWindow } from './pets/pet-service'
 import {
   handleMainWindowClose,
   showRendererContextMenu
@@ -98,6 +99,7 @@ export function createWindow(options: {
     window.setTitle(windowTitle)
   })
   mainState.mainWindow = window
+  attachDesktopPetWindow(window)
   hardenTrustedRendererWindow(window, 'workbench')
   mainState.bindExtensionMainWindow?.(window)
   if (usesCustomDesktopTitleBar) {

@@ -1,4 +1,6 @@
 import type { ToolHostContext } from '../../ports/tool-host.js'
+import { toolResultTextWithoutImages } from '../../loop/tool-result-image.js'
+import { prepareToolResultImageBudget } from '../../loop/tool-result-image-budget.js'
 
 export function isUnknownOutcomeError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'unknownOutcome' in error && error.unknownOutcome === true)
@@ -11,10 +13,14 @@ export async function offloadLargeToolOutput(
   toolName: string,
   context: ToolHostContext
 ): Promise<unknown> {
+  const prepared = prepareToolResultImageBudget(output)
+  output = prepared.output
+  const imageFields = prepared.imageFields
   if (!context.artifactStore) return output
   let content: string
   try {
-    content = typeof output === 'string' ? output : JSON.stringify(output)
+    content = imageFields ? toolResultTextWithoutImages(output)
+      : typeof output === 'string' ? output : JSON.stringify(output)
   } catch {
     return output
   }
@@ -26,7 +32,8 @@ export async function offloadLargeToolOutput(
       byteSize: stored.meta.byteSize,
       lineCount: stored.meta.lineCount,
       truncated: stored.summary.truncated,
-      preview: stored.summary.inline
+      preview: stored.summary.inline,
+      ...imageFields
     }
   } catch {
     return output

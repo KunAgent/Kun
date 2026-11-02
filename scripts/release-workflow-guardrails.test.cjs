@@ -117,7 +117,7 @@ test('native Windows recovery, speech and path boundaries run independently and 
     const step = stepByName(recovery, name)
     const extra = file === 'recovery-safety'
       ? ' src/main/windows-installer-migration.payload-backup.test.ts'
-      : ' src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts --no-file-parallelism'
+      : ' src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts src/main/windows-installer-pending-lease.test.ts --no-file-parallelism'
     assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts${extra}`)
     assert.equal(step.if, undefined)
   }
