@@ -20,9 +20,14 @@ function upgradeOptions(flags, platform) {
   for (const value of [version, baselineVersion]) assert.match(value || '', /^\d+\.\d+\.\d+$/)
   const scenarios = flags.has('--scenarios') ? flags.get('--scenarios').split(',')
     : platform === 'win32' ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']
-  assert.ok(scenarios.length && scenarios.every(name => ['normal', 'busy', 'rollback', 'manual'].includes(name)),
+  assert.ok(scenarios.length && scenarios.every(name => ['normal', 'busy', 'rollback', 'manual', 'restart-prepared'].includes(name)),
     'Unknown GUI upgrade scenario')
   assert.equal(new Set(scenarios).size, scenarios.length, 'Duplicate GUI upgrade scenario')
+  if (scenarios.includes('restart-prepared')) {
+    assert.equal(platform, 'win32', 'Prepared restart requires native Windows')
+    assert.equal(baselineVersion, '0.4.3', 'Prepared restart requires released 0.4.3')
+    assert.equal(scenarios.length, 1, 'Prepared restart must run separately from required acceptance')
+  }
   return { version, baselineVersion, scenarios }
 }
 

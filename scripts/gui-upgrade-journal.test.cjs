@@ -79,3 +79,12 @@ test('cleanup-only failure cannot become a passed acceptance record', async () =
   assert.equal(report.status, 'failed')
   assert.equal(report.scenarios[0].phase, 'cleanup')
 })
+
+test('a timing-only observation cannot be promoted from inconclusive to passed', async () => {
+  const report = { status: 'running', scenarios: [] }
+  await recordScenario(report, 'restart-prepared', async record => {
+    record.status = 'inconclusive'
+    record.preparedRestart = { reason: 'stage_started_before_proven_overlap' }
+  }, () => {})
+  assert.equal(report.scenarios[0].status, 'inconclusive')
+})

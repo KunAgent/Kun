@@ -138,3 +138,25 @@ test('plain sensitive assignments redact the entire line and fail closed across 
   const multiline = sanitizeDiagnostic('healthToken="FIRST\nSECOND\nTHIRD', '.txt')
   for (const secret of ['FIRST', 'SECOND', 'THIRD']) assert.ok(!multiline.includes(secret), multiline)
 })
+
+
+test('prepared-window snapshots use the same owned redacted staging path, not a prefix wildcard', async t => {
+  const f = await fixture(t)
+  const names = ['prepared-restart-before-launch.json', 'prepared-restart-pending-removed.json',
+    'prepared-restart-observation-end.json']
+  for (const name of names) await writeFile(join(f.root, name), JSON.stringify({
+    pending: '{"oldVersion":"0.4.3","HealthToken":"private-token"}',
+    transactions: [{ name: 'owned-update.json', text: '{"Phase":"prepared","HealthToken":"private-token"}' }],
+    processes: { processes: [{ ProcessId: 123, CreationDate: '2026-11-02T00:00:00.1234560Z' }] }
+  }))
+  await writeFile(join(f.root, 'prepared-restart-unrelated.json'), '{"secret":"do not collect"}')
+  const result = await stageEvidence(f)
+  for (const name of names) {
+    assert.ok(result.files.some(file => file.path.endsWith(name)))
+    const text = await readFile(join(f.outputDirectory, 'scenario-1', name), 'utf8')
+    assert.doesNotMatch(text, /private-token/)
+    assert.equal(JSON.parse(text).processes.processes[0].ProcessId, 123)
+    assert.match(await readFile(join(f.root, name), 'utf8'), /private-token/)
+  }
+  assert.ok(!result.files.some(file => file.path.includes('prepared-restart-unrelated')))
+})

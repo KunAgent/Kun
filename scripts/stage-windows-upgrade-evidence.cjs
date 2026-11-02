@@ -12,6 +12,7 @@ const MAX_TOTAL_BYTES = 8 * 1024 * 1024
 const MAX_FILES = 128
 const ROOT_FILES = new Set(['scenario.json', 'updater-events.jsonl', 'installer.log', 'installer-result.json',
   'upgrade-source.json', 'windows-processes.json', 'windows-paths.json', 'failure.txt',
+  'prepared-restart-before-launch.json', 'prepared-restart-pending-removed.json', 'prepared-restart-observation-end.json',
   'dialogue-diagnostics.json', 'runtime-diagnostics.json', 'gui.stdout.log', 'gui.stderr.log'])
 const SECRET_KEY = /(?:token|secret|password|credential|authorization|api[-_]?key|commandline)/i
 

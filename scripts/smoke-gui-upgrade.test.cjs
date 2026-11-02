@@ -258,3 +258,151 @@ test('terminal dialogue console errors share artifact credential sanitization', 
     return true
   })
 })
+
+const { preparedWindow, hasOldStartup, observePreparedRestart } = require('./smoke-windows-installer-prepared-restart.cjs')
+
+function restartFixture(samples) {
+  let time = 0
+  let index = 0
+  const events = []
+  const saved = []
+  const launched = { pid: 99, atMs: 1, version: '0.4.3', arguments: [] }
+  const operations = { now: () => time, timeoutMs: 1000, stopped: () => false,
+    sample: async () => samples[Math.min(index++, samples.length - 1)],
+    pause: async ms => { time += ms }, preserve: async label => { saved.push(label) },
+    event: (name, detail) => events.push({ name, detail }), launch: async () => launched }
+  return { operations, events, saved, launched }
+}
+const preparedSample = { oldExited: true, window: true, pendingPresent: true, installerVerified: true,
+  stageStarted: false, summary: { at: 'prepared' } }
+const stagedSample = { ...preparedSample, window: false, stageStarted: true, summary: { at: 'staged' } }
+
+test('prepared restart launches normal old GUI only inside a rechecked authenticated prepared window', async () => {
+  const fixture = restartFixture([preparedSample, preparedSample,
+    { ...preparedSample, startedOldGui: true, pendingPresent: false, summary: { at: 'pending-removed' } }, stagedSample])
+  const result = await observePreparedRestart(fixture.operations)
+  assert.equal(result.status, 'observed')
+  assert.equal(result.reason, 'pending_removed_during_prepared_overlap')
+  assert.deepEqual(result.launch.arguments, [])
+  assert.deepEqual(fixture.saved, ['before-launch', 'pending-removed', 'observation-end'])
+})
+
+test('missed prepared overlap is inconclusive, including Stage winning the launch-preflight race', async () => {
+  for (const samples of [[stagedSample], [preparedSample, stagedSample],
+    [preparedSample, preparedSample, stagedSample]]) {
+    const fixture = restartFixture(samples)
+    const result = await observePreparedRestart(fixture.operations)
+    assert.equal(result.status, 'inconclusive')
+    assert.equal(result.pendingRemoval, undefined)
+  }
+})
+
+test('pending disappearance is not attributed to a restart without old startup and installer ownership', async () => {
+  for (const change of [{ startedOldGui: false }, { installerVerified: false }]) {
+    const fixture = restartFixture([preparedSample, preparedSample,
+      { ...preparedSample, startedOldGui: true, pendingPresent: false, ...change }, stagedSample])
+    const result = await observePreparedRestart(fixture.operations)
+    assert.equal(result.status, 'inconclusive')
+    assert.equal(result.pendingRemoval, undefined)
+  }
+  for (const change of [{ oldExited: false }, { installerVerified: false }, { pendingPresent: false }]) {
+    const fixture = restartFixture([{ ...preparedSample, ...change }, stagedSample])
+    assert.equal((await observePreparedRestart(fixture.operations)).launch, undefined)
+  }
+})
+
+test('normal startup evidence requires fresh timestamp, actual old version and exact executable', () => {
+  const executable = 'C:\\fixture\\Kun.exe'
+  const launch = { atMs: Date.parse('2026-11-02T07:00:00Z') }
+  const line = (time, version, path = executable) => `[${time}] [INFO] [startup] Desktop startup entered. - detail: ${JSON.stringify({ appVersion: version, executablePath: path }, null, 2)}\n`
+  assert.equal(hasOldStartup(line('2026-11-02T07:00:01Z', '0.4.3'), launch, executable), true)
+  assert.equal(hasOldStartup(line('2026-11-02T06:59:59Z', '0.4.3'), launch, executable), false)
+  assert.equal(hasOldStartup(line('2026-11-02T07:00:01Z', '0.4.4'), launch, executable), false)
+  assert.equal(hasOldStartup(line('2026-11-02T07:00:01Z', '0.4.3', 'C:\\other\\Kun.exe'), launch, executable), false)
+  assert.equal(preparedWindow('NSIS update-boundary=prepared'), true)
+  assert.equal(preparedWindow('NSIS update-boundary=prepared\nSTART action=StageExtractedUpdatePayload'), false)
+})
+
+test('prepared restart is isolated from required acceptance and has a separate non-gating native job', async () => {
+  const flags = new Map([['--version', '0.4.4'], ['--baseline-version', '0.4.3'], ['--scenarios', 'restart-prepared']])
+  assert.equal(upgradeOptions(flags, 'win32').scenarios[0], 'restart-prepared')
+  assert.throws(() => upgradeOptions(flags, 'darwin'))
+  assert.throws(() => upgradeOptions(new Map([...flags, ['--scenarios', 'normal,restart-prepared']]), 'win32'))
+  const workflow = parse(await readFile(join(__dirname, '../.github/workflows/pr-checks.yml'), 'utf8'))
+  assert.equal(workflow.jobs['windows-prepared-restart']['continue-on-error'], true)
+  assert.ok(!workflow.jobs['pr-gate'].needs.includes('windows-prepared-restart'))
+  const steps = workflow.jobs['windows-prepared-restart'].steps
+  const stage = steps.findIndex(step => step.id === 'stage_windows_evidence')
+  const upload = steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
+  assert.ok(stage >= 0 && upload > stage)
+  assert.equal(steps[stage].if, 'always()')
+  assert.match(steps[stage].run, /stage-windows-upgrade-evidence\.cjs.*--output artifacts\/windows-prepared-restart/)
+  assert.equal(steps[upload].if, "${{ always() && steps.stage_windows_evidence.outcome == 'success' }}")
+  assert.equal(steps[upload].with.path, 'artifacts/windows-prepared-restart')
+  assert.doesNotMatch(steps[upload].with.path, /GUI_UPGRADE_EVIDENCE|APPDATA|\*/)
+
+  const script = await readFile(join(__dirname, 'smoke-gui-upgrade.cjs'), 'utf8')
+  assert.match(script, /entry\.pid !== record\.preparedRestart\?\.launch\?\.pid/)
+  assert.match(script, /report\.status === 'inconclusive'\) process\.exitCode = 2/)
+})
+
+const { creationIdentity, selectTransactionInstaller, parseWindowsJson } = require('./smoke-windows-installer-prepared-restart.cjs')
+
+test('native prepared-restart adapter authenticates raw PascalCase transaction against precise CIM creation identity', () => {
+  const executable = 'C:\\fixture\\Kun\\Kun.exe'
+  const installer = 'C:\\fixture\\downloaded-installer.exe'
+  const time = '2026-11-02T07:51:01.1234560Z'
+  const transaction = { Phase: 'prepared', OldVersion: '0.4.3', NewVersion: '0.4.4',
+    Source: 'C:\\fixture\\Kun', InstallerPid: 3512, InstallerProcessIdentity: `win32-v1:${time}` }
+  const row = { ProcessId: 3512, ParentProcessId: 1200, ExecutablePath: installer, CreationDate: time }
+  const expected = { executable, verifiedInstallerPaths: [installer], newVersion: '0.4.4' }
+  assert.equal(selectTransactionInstaller('\uFEFF' + JSON.stringify(transaction), [row], expected), row)
+  for (const changed of [
+    { CreationDate: '2026-11-02T07:51:01.1234570Z' }, // Recycled within the same millisecond.
+    { CreationDate: '/Date(1793605861123)/' }, // Native precision was lost.
+    { ProcessId: 3513 }, { ExecutablePath: 'C:\\other\\installer.exe' }, { CreationDate: null }
+  ]) assert.equal(selectTransactionInstaller(JSON.stringify(transaction), [{ ...row, ...changed }], expected), null)
+  for (const changed of [{ InstallerPid: undefined, installerPid: 3512 },
+    { InstallerProcessIdentity: 'win32-v1:invalid' }, { Phase: 'payload_switched' },
+    { Source: 'C:\\other' }, { OldVersion: '0.4.2' }, { NewVersion: '0.4.5' }]) {
+    assert.equal(selectTransactionInstaller(JSON.stringify({ ...transaction, ...changed }), [row], expected), null)
+  }
+  assert.equal(creationIdentity('2026-11-02T07:51:01.123456Z'), `win32-v1:${time}`)
+  assert.equal(creationIdentity('2026-11-02T07:51:01.1234561Z'), null)
+  assert.deepEqual(parseWindowsJson('\uFEFF{"pid":123}'), { pid: 123 })
+  assert.throws(() => parseWindowsJson('\uFEFF{bad'))
+})
+
+const { createPreparedOwnerVerifier } = require('./smoke-windows-installer-prepared-restart.cjs')
+test('only post-launch continuity may use a previously authenticated prepared owner', () => {
+  const installer = 'C:\\fixture\\installer.exe'
+  const time = '2026-11-02T07:51:01.1234560Z'
+  const transaction = { Phase: 'prepared', OldVersion: '0.4.3', NewVersion: '0.4.4',
+    Source: 'C:\\fixture\\Kun', InstallerPid: 3512, InstallerProcessIdentity: `win32-v1:${time}` }
+  const raw = JSON.stringify(transaction)
+  const row = { ProcessId: 3512, ExecutablePath: installer, CreationDate: time }
+  const expected = { executable: 'C:\\fixture\\Kun\\Kun.exe', verifiedInstallerPaths: [installer], newVersion: '0.4.4' }
+  const verify = createPreparedOwnerVerifier(expected)
+  assert.equal(verify(null, [row], true), null, 'No authenticated owner exists yet')
+  assert.equal(verify(raw, [row]), row)
+  assert.equal(verify(null, [row]), null, 'Deleted journal cannot authorize a launch')
+  const changed = JSON.stringify({ ...transaction, Phase: 'rolled_back' })
+  assert.equal(verify(changed, [row]), null, 'Changed journal cannot authorize a launch')
+  assert.equal(verify(null, [row], true), row, 'Post-launch deletion does not imply owner exit')
+  assert.equal(verify(changed, [row], true), row, 'Post-launch mutation does not imply owner exit')
+  assert.equal(verify(null, [{ ...row, CreationDate: '2026-11-02T07:51:01.1234570Z' }], true), null,
+    'Recycled PID cannot inherit the cached owner')
+  assert.equal(verify(raw, [], true), null, 'An exited owner is not revived by its journal')
+})
+
+
+test('prepared observation failures never copy malformed JSON or credential fragments into reports', () => {
+  const { observationFailure } = require('./smoke-windows-installer-prepared-restart.cjs')
+  const failure = observationFailure(new SyntaxError('Unexpected token PRIVATE_CREDENTIAL in JSON'), 123)
+  assert.deepEqual(failure, { status: 'inconclusive', reason: 'observation_error', startedAt: 123, errorName: 'SyntaxError' })
+  assert.doesNotMatch(JSON.stringify(failure), /PRIVATE_CREDENTIAL/)
+  assert.deepEqual(observationFailure({ name: 'PRIVATE_CREDENTIAL', code: 'PRIVATE_CREDENTIAL' }, 123), {
+    status: 'inconclusive', reason: 'observation_error', startedAt: 123, errorName: 'Error'
+  })
+  assert.equal(observationFailure({ name: 'Error', code: 'EACCES' }, 123).errorCode, 'EACCES')
+})

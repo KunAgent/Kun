@@ -13,6 +13,7 @@ const { parse } = require('yaml')
 const { sanitizeDiagnostic } = require('./stage-windows-upgrade-evidence.cjs')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
+const { startPreparedRestartObservation } = require('./smoke-windows-installer-prepared-restart.cjs')
 const { verifyPrCandidateSource } = require('./pr-gui-candidate-source.cjs')
 const { upgradeOptions, verifyPublishedSource, captureWindowsUpgrade, stopVerifiedInstallers, assertCandidateExtractionTrace } = require('./smoke-windows-installer-cross-version.cjs')
 const { closeGuiWithExitEvidence, attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
@@ -213,6 +214,7 @@ async function scenario(input, name, record, persistReport) {
   settings.guiUpdate = { channel: 'stable' }
   await writeFile(join(userData, 'kun-settings.json'), JSON.stringify(settings))
   let gui
+  let preparedRestart
   let failure
   try {
     journal.phase('baseline_installation')
@@ -286,6 +288,12 @@ async function scenario(input, name, record, persistReport) {
       await captureMacProcesses(root, 'before-install')
       await gui.page.exposeFunction('__kunRecordUpgradeResult', installControl.recordResult)
       journal.phase('install_requested', { pid: oldPid, version: input.baselineVersion, executable })
+      if (name === 'restart-prepared') {
+        record.preparedRestart = { status: 'running' }
+        preparedRestart = startPreparedRestartObservation({ root, userData, installerRecovery, dataDir,
+          executable, environment, oldPid, processIsAlive, newVersion: input.version, verifiedInstallerPaths: record.verifiedInstallerPaths,
+          record: record.preparedRestart, event: journal.event })
+      }
       await gui.page.evaluate(() => {
         void window.kunGui.installGuiUpdate().then((result) => {
           window.__upgradeResult = result
@@ -310,6 +318,7 @@ async function scenario(input, name, record, persistReport) {
           return value.outcome ? value : undefined
         }, 10 * 60_000, 'installer-authored transaction result')
         await writeFile(join(root, 'installer-result.json'), JSON.stringify(result, null, 2))
+        if (preparedRestart) await preparedRestart.stop()
         if (input.source === 'pull-request') {
           assertCandidateExtractionTrace(await readFile(join(root, 'installer.log'), 'utf8'))
           record.extractionTraceVerified = true
@@ -333,7 +342,7 @@ async function scenario(input, name, record, persistReport) {
             'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
             'if($p -and $p.MainWindowHandle -ne 0){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle}} }); ' +
             'ConvertTo-Json -Compress -InputObject $rows')
-          return parseInstallerJson(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.mainWindowHandle > 0)
+          return parseInstallerJson(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.pid !== record.preparedRestart?.launch?.pid && entry.mainWindowHandle > 0)
         }, 10 * 60_000, 'installer relaunch with a real GUI window')
         record.automaticRelaunch = { ...relaunched, source: 'CIM/MainWindowHandle', guiWindowObserved: true,
           observedAt: new Date().toISOString(), beforeHarnessLaunch: true }
@@ -397,6 +406,7 @@ async function scenario(input, name, record, persistReport) {
     await gui?.page.screenshot({ path: join(root, 'failure.png') }).catch(() => undefined)
     await writeFile(join(root, 'failure.txt'), error.stack ?? String(error)).catch(() => undefined)
   } finally {
+    if (preparedRestart) await preparedRestart.stop()
     await cleanupScenario(journal, [
       ['stop-failed-installer', async () => {
         if (failure) await stopVerifiedInstallers(record.verifiedInstallerPaths || [])
@@ -452,7 +462,7 @@ async function scenario(input, name, record, persistReport) {
       journal.phase('cleanup')
       journal.fail(failure)
     }
-    if (!failure) record.status = 'passed'
+    if (!failure) record.status = record.preparedRestart?.status === 'inconclusive' ? 'inconclusive' : 'passed'
     journal.persist()
     process.stdout.write(`GUI upgrade evidence: ${root}\n`)
   }
@@ -513,7 +523,7 @@ async function main() {
       await recordScenario(report, name, record => scenario({ version, baselineVersion, source, candidate: join(directory, candidateName),
         baseline: join(downloads, baselineName), feedUrl: flags.get('--feed-url') || feed.url }, name, record, persist), persist)
     }
-    report.status = 'passed'
+    report.status = report.scenarios.some(record => record.status === 'inconclusive') ? 'inconclusive' : 'passed'
     report.phase = 'completed'
   } catch (error) {
     failure = error
@@ -538,6 +548,7 @@ async function main() {
     persist()
   }
   if (failure) throw failure
+  if (report.status === 'inconclusive') process.exitCode = 2
 }
 
 if (require.main === module) main().catch((error) => { console.error(error); process.exitCode = 1 })
