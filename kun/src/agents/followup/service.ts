@@ -2,7 +2,9 @@ import type { z } from 'zod'
 import { AgentCommitmentSchema } from '../../contracts/agent-commitments.js'
 import { CollaborationPolicySchema, CommitmentControlSchema, type CommitmentControl, type CommitmentLink } from '../../contracts/collaboration-followup.js'
 import { EnableCommitmentTracking, UpdateCommitmentTracking, ReopenCommitmentTracking,
-  FollowUpMutation, ContinueCommitment, type ContinueCommitmentResult, type CommitmentTrackingAction, type FollowUpPolicyInput } from '../../contracts/collaboration-followup-api.js'
+  FollowUpMutation, ContinueCommitment, AttentionListQuery, type ContinueCommitmentResult,
+  type CommitmentTrackingAction, type FollowUpPolicyInput } from '../../contracts/collaboration-followup-api.js'
+import type { CommitmentAttention } from '../../contracts/collaboration-attention.js'
 import type { RoomRuntimeDeps } from '../../rooms/room-runtime-types.js'
 import { agentStableId } from '../agent-identity-service.js'
 import { FollowUpState, FollowUpError, followUpCheck, followUpPut, followUpScope, commitmentScopeFingerprint,
@@ -188,6 +190,16 @@ export class FollowUpService {
   }
   resolveAttention(agentId: string, id: string, attentionId: string, input: unknown) {
     return resolveBusinessAttention(this.state, agentId, id, attentionId, input)
+  }
+  /** Bounded keyset page of attention for one commitment, scoped to its own room. */
+  async attentionList(agentId: string, id: string, raw: unknown) {
+    const state = this.state
+    await state.ready()
+    const input = AttentionListQuery.parse(raw)
+    const commitment = await state.commitment(agentId, id)
+    return state.deps.store.collaborationQuery<CommitmentAttention>({ kind: 'attention',
+      participantAgentId: commitment.value.participantAgentId,
+      sourceRoomId: commitment.value.sourceRoomId, ...input })
   }
 
   private validatePolicy(policy: z.infer<typeof FollowUpPolicyInput>, now: string) {

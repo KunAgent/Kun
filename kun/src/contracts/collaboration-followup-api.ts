@@ -114,3 +114,17 @@ export const BusinessAttentionResult = z.object({
   controlRevision: FollowUpRevision
 }).strict()
 export type BusinessAttentionResult = z.infer<typeof BusinessAttentionResult>
+
+/** Keyset cursor over (priority, updatedAt, id), matching the attention index. */
+export const AttentionCursor = z.object({
+  priority: z.number().int().min(0).max(100), at: FollowUpTime, id: FollowUpId
+}).strict()
+export const AttentionListQuery = z.object({
+  status: z.enum(['open', 'resolved', 'superseded', 'expired']).default('open'),
+  cursor: AttentionCursor.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50)
+}).strict()
+export type AttentionListQuery = z.infer<typeof AttentionListQuery>
+
+/** Read-only tracking projection: what the user sees, never an execution grant. */
+export const FollowUpTrackingQuery = z.object({}).strict()
