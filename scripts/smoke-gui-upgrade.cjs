@@ -13,6 +13,7 @@ const { parse } = require('yaml')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
 const { verifyPrCandidateSource } = require('./pr-gui-candidate-source.cjs')
+const { upgradeOptions, verifyPublishedSource, captureWindowsUpgrade, stopVerifiedInstallers, assertCandidateExtractionTrace } = require('./smoke-windows-installer-cross-version.cjs')
 const { closeGuiWithExitEvidence, attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
 const { createScenarioJournal, cleanupScenario, recordScenario,
   claimScenarioDirectory, preserveScenarioDirectory } = require('./gui-upgrade-journal.cjs')
@@ -150,6 +151,7 @@ async function settle(page, saved) {
 
 async function scenario(input, name, record, persistReport) {
   record.targetVersion = input.version
+  record.baselineVersion = input.baselineVersion
   // NSIS resolves its recovery journal through Windows Known Folders, not the
   // child's APPDATA override. Keep both payload and journal beneath the actual
   // disposable account's AppData for the installer's restricted fault injection.
@@ -212,13 +214,13 @@ async function scenario(input, name, record, persistReport) {
     gui = await startGui(executable, environment, userData, undefined, { journal, label: 'baseline' })
     record.baselinePid = gui.processInfo.pid
     record.baselineLauncherPid = gui.app.process().pid
-    assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), '0.3.7')
+    assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), input.baselineVersion)
     journal.phase('baseline_started', gui.processInfo)
     const saved = await chat(gui.page, workspace, `upgrade-history-${name}`)
     await settle(gui.page, saved)
     if (name !== 'manual') {
       journal.phase('legacy_provider_settings')
-      await prepareReleasedGuiUpdate(gui.page, '0.3.7', record)
+      await prepareReleasedGuiUpdate(gui.page, input.baselineVersion, record)
       journal.persist()
     }
     const before = await gui.page.evaluate(() => window.kunGui.getSettings())
@@ -252,6 +254,9 @@ async function scenario(input, name, record, persistReport) {
       const expectedDigest = await digest(input.candidate)
       const downloadedDigests = await Promise.all(downloaded.paths.map((path) => digest(path)))
       assert.ok(downloadedDigests.includes(expectedDigest), 'GUI downloaded bytes differ from the verified candidate')
+      record.downloadedPaths = downloaded.paths
+      record.verifiedInstallerPaths = downloaded.paths.filter((path, index) =>
+        /\.exe$/i.test(path) && downloadedDigests[index] === expectedDigest)
       journal.phase('candidate_downloaded', { paths: downloaded.paths, sha512: expectedDigest })
       if (name === 'rollback') {
         await gui.app.evaluate(({ app }) => {
@@ -262,7 +267,7 @@ async function scenario(input, name, record, persistReport) {
       }
       await captureMacProcesses(root, 'before-install')
       await gui.page.exposeFunction('__kunRecordUpgradeResult', installControl.recordResult)
-      journal.phase('install_requested', { pid: oldPid, version: '0.3.7', executable })
+      journal.phase('install_requested', { pid: oldPid, version: input.baselineVersion, executable })
       await gui.page.evaluate(() => {
         void window.kunGui.installGuiUpdate().then((result) => {
           window.__upgradeResult = result
@@ -287,6 +292,10 @@ async function scenario(input, name, record, persistReport) {
           return value.outcome ? value : undefined
         }, 10 * 60_000, 'installer-authored transaction result')
         await writeFile(join(root, 'installer-result.json'), JSON.stringify(result, null, 2))
+        if (input.source === 'pull-request') {
+          assertCandidateExtractionTrace(await readFile(join(root, 'installer.log'), 'utf8'))
+          record.extractionTraceVerified = true
+        }
         if (name === 'rollback') {
           assert.equal(result.code, 'payload_switch_failed')
           assert.equal(result.outcome, 'aborted')
@@ -331,7 +340,7 @@ async function scenario(input, name, record, persistReport) {
     journal.phase('inspection_started')
     await stopInstalledGui(executable)
     gui = await startGui(executable, environment, userData, undefined, { journal, label: 'inspection' })
-    const expectedVersion = name === 'rollback' ? '0.3.7' : input.version
+    const expectedVersion = name === 'rollback' ? input.baselineVersion : input.version
     assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), expectedVersion)
     const after = await gui.page.evaluate(() => window.kunGui.getSettings())
     assert.equal(after.agents.kun.model, before.agents.kun.model)
@@ -359,6 +368,9 @@ async function scenario(input, name, record, persistReport) {
   } catch (error) {
     failure = error
     journal.fail(error)
+    await captureWindowsUpgrade(root, { executable, installerRecovery, userData, downloadedPaths: record.downloadedPaths || [] }).catch(diagnosticError => {
+      journal.event('diagnostic_capture_failed', { error: diagnosticError.message })
+    })
     await captureMacUpdateDiagnostics(root, bundle).catch((diagnosticError) => {
       record.diagnosticErrors ??= []
       record.diagnosticErrors.push(diagnosticError.message)
@@ -368,6 +380,9 @@ async function scenario(input, name, record, persistReport) {
     await writeFile(join(root, 'failure.txt'), error.stack ?? String(error)).catch(() => undefined)
   } finally {
     await cleanupScenario(journal, [
+      ['stop-failed-installer', async () => {
+        if (failure) await stopVerifiedInstallers(record.verifiedInstallerPaths || [])
+      }],
       // A failed baseline may already have exited and relaunched itself.
       // Stop only this scenario's executable before waiting on Playwright.
       ['stop-installed-gui', () => stopInstalledGui(executable)],
@@ -388,7 +403,9 @@ async function scenario(input, name, record, persistReport) {
       }],
       ['stop-recovery-gui', () => stopInstalledGui(executable)],
       ['uninstall-windows-fixture', async () => {
-        if (process.platform !== 'win32') return
+        // A failed update is evidence, not a clean-install fixture. Do not let an
+        // uninstaller retire registration or erase rollback state on failure.
+        if (process.platform !== 'win32' || failure) return
         const uninstaller = join(installParent, 'Kun', 'Uninstall Kun.exe')
         const copy = join(root, 'uninstall.exe')
         await copyFile(uninstaller, copy)
@@ -436,22 +453,24 @@ async function main() {
   const flags = new Map()
   for (let i = 2; i < process.argv.length; i += 2) flags.set(process.argv[i], process.argv[i + 1])
   const directory = resolve(flags.get('--directory') || 'dist')
-  const version = flags.get('--version')
+  const { version, baselineVersion, scenarios } = upgradeOptions(flags, process.platform)
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('--version is required')
   const checkout = await run('git', ['rev-parse', 'HEAD'])
   const harnessCommit = checkout.stdout.trim()
   const source = process.env.GUI_UPGRADE_SOURCE || 'release-candidate'
-  assert.ok(['pull-request', 'release-candidate'].includes(source), 'Unknown GUI upgrade candidate source')
+  assert.ok(['pull-request', 'release-candidate', 'published-release'].includes(source), 'Unknown GUI upgrade candidate source')
   const candidateCommit = source === 'pull-request'
     ? await verifyPrCandidateSource(directory, version, harnessCommit)
-    : await verifyCandidateSource(version, process.env.CANDIDATE_TAG || `v${version}`,
+    : source === 'published-release'
+      ? await verifyPublishedSource(version, directory)
+      : await verifyCandidateSource(version, process.env.CANDIDATE_TAG || `v${version}`,
       process.env.CANDIDATE_COMMIT || harnessCommit)
   const manifestName = process.platform === 'win32' ? 'latest.yml' : 'latest-mac.yml'
   const { metadata } = await validateFeed(directory, manifestName, version)
   const candidateName = process.platform === 'win32' ? `Kun-${version}-win-x64.exe` : `Kun-${version}-mac-${process.arch}.zip`
   assert.ok(metadata.files.some((file) => file.url === candidateName))
   const downloads = await mkdtemp(join(tmpdir(), 'kun-upgrade-baseline-'))
-  const baselineName = process.platform === 'win32' ? 'Kun-0.3.7-win-x64.exe' : `Kun-0.3.7-mac-${process.arch}.zip`
+  const baselineName = process.platform === 'win32' ? `Kun-${baselineVersion}-win-x64.exe` : `Kun-${baselineVersion}-mac-${process.arch}.zip`
   const report = { version, source, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
     artifact: candidateName, sha512: await digest(join(directory, candidateName)), scenarios: [],
     status: 'running', phase: 'baseline_download', cleanupErrors: [] }
@@ -461,18 +480,19 @@ async function main() {
   let feed
   let failure
   try {
-    await run('gh', ['release', 'download', 'v0.3.7', '-R', 'KunAgent/Kun',
+    await run('gh', ['release', 'download', `v${baselineVersion}`, '-R', 'KunAgent/Kun',
       '-p', baselineName, '-p', manifestName, '-D', downloads], { timeout: 10 * 60_000 })
     const baselineMetadata = parse(await readFile(join(downloads, manifestName), 'utf8'))
     const baselineFile = baselineMetadata.files.find((file) => file.url === baselineName)
     assert.ok(baselineFile)
     assert.equal(await digest(join(downloads, baselineName)), baselineFile.sha512)
-    report.baseline = { version: '0.3.7', artifact: baselineName, sha512: baselineFile.sha512 }
+    report.baseline = { version: baselineVersion, artifact: baselineName, sha512: baselineFile.sha512,
+      commit: await verifyPublishedSource(baselineVersion, downloads) }
     report.phase = 'scenarios'
     persist()
     feed = flags.has('--feed-url') ? null : await startCandidateFeed(directory, manifestName, version)
-    for (const name of process.platform === 'win32' ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']) {
-      await recordScenario(report, name, record => scenario({ version, candidate: join(directory, candidateName),
+    for (const name of scenarios) {
+      await recordScenario(report, name, record => scenario({ version, baselineVersion, source, candidate: join(directory, candidateName),
         baseline: join(downloads, baselineName), feedUrl: flags.get('--feed-url') || feed.url }, name, record, persist), persist)
     }
     report.status = 'passed'
