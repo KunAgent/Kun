@@ -29,6 +29,8 @@ describe('pending metadata lease integration (static contracts)', () => {
     expect(lease).toContain("kernel32::CloseHandle(p $KunInstallerPendingLease)")
     expect(lease).not.toMatch(/Delete |SetFileAttributes|Exec /)
     const abort = lease.slice(lease.indexOf('!macro KunAbortPendingLease'), lease.indexOf('!macro KunPendingLeaseFunctions'))
+    expect(abort).toContain('Call KunReleasePendingLease\n  DetailPrint "${MESSAGE}"\n  Call KunTryRelaunchOldApp')
+    expect(abort.indexOf('Call KunTryRelaunchOldApp')).toBeLessThan(abort.indexOf('Quit'))
     expect(abort).not.toContain('KunWriteAutomaticUpdateResult')
     expect(abort).not.toContain('KunRestoreAutomaticUpdateBackup')
     // System plugin r0..r9 are $0..$9, uppercase R0..R9 are $R0..$R9.
