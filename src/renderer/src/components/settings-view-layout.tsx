@@ -72,6 +72,9 @@ const StorageRelocationSettingsSection = lazySection(() =>
 const UninstallSettingsSection = lazySection(() =>
   import('./settings-section-uninstall').then((module) => ({ default: module.UninstallSettingsSection }))
 )
+const PetsSettingsSection = lazySection(() =>
+  import('./settings-section-pets').then((module) => ({ default: module.PetsSettingsSection }))
+)
 const WriteDebugLogModal = lazy(() =>
   import('./settings-debug-log').then((module) => ({ default: module.WriteDebugLogModal }))
 )
@@ -96,7 +99,8 @@ const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
   debug: LlmDebugSettingsSection.preload,
   dataMigration: DataMigrationSettingsSection.preload,
   storage: StorageRelocationSettingsSection.preload,
-  uninstall: UninstallSettingsSection.preload
+  uninstall: UninstallSettingsSection.preload,
+  pets: PetsSettingsSection.preload
 }
 
 function preloadSettingsCategory(category: SettingsCategory): void {
@@ -154,6 +158,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
         goBack={goBack}
         extensionSettingsAvailable={extensionSettingsAvailable}
         platform={window.kunGui.platform}
+        desktopShell={window.kunGui?.isRemoteWeb !== true}
         onPreloadCategory={preloadSettingsCategory}
         t={t}
       />
@@ -210,6 +215,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
             key={category}
           >
             {category === 'general' ? <GeneralSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'pets' ? <PetsSettingsSection /> : null}
             {category === 'extensions' && extensionSettingsService ? (
               <ExtensionDeclarativeSettingsPane
                 contributions={extensionSettingsContributions}

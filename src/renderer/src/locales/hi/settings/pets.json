@@ -1,0 +1,28 @@
+{
+  "settingsNavPets": "पालतू",
+  "petsTitle": "डेस्कटॉप पालतू",
+  "petsDesc": "डेस्कटॉप पालतू चुनें, उसे स्क्रीन पर रखें, और Codex पैकेज आयात करें।",
+  "petsDesktopOnly": "डेस्कटॉप पालतू केवल Kun डेस्कटॉप ऐप में उपलब्ध हैं।",
+  "petsLoading": "पालतू लोड हो रहे हैं...",
+  "petsLoadError": "पालतू लाइब्रेरी लोड नहीं हो सकी।",
+  "petsEmpty": "अभी कोई पालतू नहीं है। pet.json पैकेज Kun फ़ोल्डर में रखकर रिफ्रेश करें।",
+  "petsSelectFirst": "डेस्कटॉप पर दिखाने से पहले एक उपलब्ध पालतू चुनें।",
+  "petsCurrent": "चुना हुआ पेट",
+  "petsNone": "कोई नहीं",
+  "petsImported": "आयात किए गए पेट",
+  "petsWake": "पेट दिखाएं",
+  "petsHide": "पेट छिपाएं",
+  "petsImportErrors": "आयात त्रुटियां",
+  "petsShow": "पालतू को डेस्कटॉप पर दिखाएँ",
+  "petsImportCodex": "Codex पालतू अपने आप आयात करें",
+  "petsRefresh": "रिफ्रेश",
+  "petsOpenKunDir": "Kun पालतू फ़ोल्डर खोलें",
+  "petsOpenCodexDir": "Codex पालतू फ़ोल्डर खोलें",
+  "petsSourceMissing": "मूल पैकेज गायब है",
+  "petsReport": "{{failed}} विफल, {{missing}} गायब",
+  "petsSource": {
+    "kun-builtin": "अंतर्निहित",
+    "kun-local": "स्थानीय",
+    "codex-custom": "Codex"
+  }
+}

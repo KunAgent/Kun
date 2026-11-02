@@ -10,6 +10,7 @@ import {
   GitBranch,
   HardDrive,
   Keyboard,
+  PawPrint,
   Mic,
   Palette,
   PenLine,
@@ -49,6 +50,7 @@ export type SettingsCategory =
   | 'storage'
   | 'dataMigration'
   | 'uninstall'
+  | 'pets'
 
 /** Decorative icon-tile hues. Each one resolves to a theme token in settings-chrome.css. */
 export type SettingsIconTone =
@@ -70,6 +72,7 @@ export type SettingsNavigationItem = {
   tone: SettingsIconTone
   extensionOnly?: boolean
   windowsOnly?: boolean
+  desktopOnly?: boolean
 }
 
 export type SettingsNavigationGroup = {
@@ -84,6 +87,7 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
     labelKey: 'settingsGroupCore',
     items: [
       { category: 'general', labelKey: 'general', icon: Settings, tone: 'slate' },
+      { category: 'pets', labelKey: 'petsTitle', navigationLabelKey: 'settingsNavPets', icon: PawPrint, tone: 'pink', desktopOnly: true },
       { category: 'providers', labelKey: 'providers', icon: Server, tone: 'blue' },
       { category: 'integrations', labelKey: 'integrations', icon: Plug, tone: 'green' },
       { category: 'extensions', labelKey: 'extensions', icon: Puzzle, tone: 'violet', extensionOnly: true }
@@ -172,6 +176,7 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
 
 const SETTINGS_CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategory, string> = {
   general: 'subtitle',
+  pets: 'petsDesc',
   providers: 'providersDesc',
   integrations: 'integrationsDesc',
   extensions: 'extensionsDesc',
@@ -215,16 +220,19 @@ export function settingsCategoryDescriptionKey(category: SettingsCategory): stri
 /** Platform and extension guards shared by the full sidebar and the compact picker. */
 export function visibleSettingsNavigationGroups({
   extensionSettingsAvailable,
-  platform
+  platform,
+  desktopShell = false
 }: {
   extensionSettingsAvailable: boolean
   platform: string
+  desktopShell?: boolean
 }): SettingsNavigationGroup[] {
   return SETTINGS_NAVIGATION_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) =>
       (!item.extensionOnly || extensionSettingsAvailable) &&
-      (!item.windowsOnly || platform === 'win32')
+      (!item.windowsOnly || platform === 'win32') &&
+      (!item.desktopOnly || desktopShell)
     )
   })).filter((group) => group.items.length > 0)
 }

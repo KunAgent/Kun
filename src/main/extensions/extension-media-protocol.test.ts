@@ -127,7 +127,8 @@ describe('kun-media protocol', () => {
     expect(registerSchemesAsPrivileged).toHaveBeenCalledWith([
       expect.objectContaining({ scheme: 'kun-extension' }),
       expect.objectContaining({ scheme: 'kun-media' }),
-      expect.objectContaining({ scheme: 'kun-workspace-preview' })
+      expect.objectContaining({ scheme: 'kun-workspace-preview' }),
+      expect.objectContaining({ scheme: 'kun-pet' })
     ])
   })
 

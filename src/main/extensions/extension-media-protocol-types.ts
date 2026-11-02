@@ -14,6 +14,7 @@ import type {
   ExtensionViewSessionRegistry
 } from './extension-view-sessions'
 import { KUN_EXTENSION_PRIVILEGED_SCHEME } from './extension-resource-protocol'
+import { PET_ASSET_SCHEME } from '../../shared/pets'
 import { KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME } from '../services/workspace-preview-protocol'
 
 import {
@@ -137,7 +138,11 @@ export function registerKunExtensionPlatformSchemesAsPrivileged(protocol: Scheme
   protocol.registerSchemesAsPrivileged([
     KUN_EXTENSION_PRIVILEGED_SCHEME,
     KUN_MEDIA_PRIVILEGED_SCHEME,
-    KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME
+    KUN_WORKSPACE_PREVIEW_PRIVILEGED_SCHEME,
+    {
+      scheme: PET_ASSET_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, bypassCSP: false, stream: true }
+    }
   ])
 }
 

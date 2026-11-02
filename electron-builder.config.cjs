@@ -298,6 +298,11 @@ module.exports = {
       to: 'officecli/legal',
       filter: ['LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.txt']
     },
+    {
+      from: 'resources/pets',
+      to: 'pets',
+      filter: ['**/*']
+    },
   ],
   artifactName: `${productName}-${artifactVersion}-\${os}-\${arch}.\${ext}`,
   ...(developmentFlavor

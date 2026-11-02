@@ -57,6 +57,23 @@ function defaultDeps(): ActivityFeedDeps {
 
 let feedGeneration = 0
 let feedAbort: AbortController | null = null
+let petOverlayLive = false
+const petLiveWaiters = new Set<() => void>()
+
+export function activityFeedGeneration(): number {
+  return feedGeneration
+}
+
+export function setPetOverlayActivityLive(live: boolean): void {
+  petOverlayLive = live
+  if (!live) return
+  for (const wake of petLiveWaiters) wake()
+  petLiveWaiters.clear()
+}
+
+export function petOverlayKeepsActivityLive(): boolean {
+  return petOverlayLive
+}
 
 /** Idempotent: restarting bumps the generation so stale loops stop writing. */
 export function startActivityFeed(deps: ActivityFeedDeps = defaultDeps()): void {
@@ -88,6 +105,22 @@ export function activityFeedCoversThread(threadId: string | null | undefined): b
   const state = useActivityStore.getState()
   if (state.status !== 'live') return false
   return Object.values(state.rows).some((row) => row.threadId === id)
+}
+
+function sleepUnlessPetLive(deps: ActivityFeedDeps, signal: AbortSignal): Promise<void> {
+  if (petOverlayLive || signal.aborted) return Promise.resolve()
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      petLiveWaiters.delete(finish)
+      resolve()
+    }
+    petLiveWaiters.add(finish)
+    signal.addEventListener('abort', finish, { once: true })
+    void deps.sleep(ACTIVITY_HIDDEN_INTERVAL_MS).then(finish)
+  })
 }
 
 function applyChanges(changes: ActivityChange[]): void {
@@ -123,7 +156,7 @@ async function runFeed(
         backoff = ERROR_BACKOFF_START_MS
         continue
       }
-      const hidden = deps.isHidden()
+      const hidden = deps.isHidden() && !petOverlayLive
       const result = await deps.poll(
         useActivityStore.getState().cursor ?? '',
         hidden ? 0 : ACTIVITY_POLL_WAIT_MS,
@@ -139,7 +172,7 @@ async function runFeed(
       applyChanges(result.changes)
       useActivityStore.setState({ cursor: result.cursor, status: 'live' })
       backoff = ERROR_BACKOFF_START_MS
-      if (hidden) await deps.sleep(ACTIVITY_HIDDEN_INTERVAL_MS)
+      if (hidden) await sleepUnlessPetLive(deps, signal)
     } catch {
       if (generation !== feedGeneration || signal.aborted) return
       useActivityStore.setState({ status: 'error' })

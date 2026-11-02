@@ -664,6 +664,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   disposeTerminal: (sessionId: string) => Promise<boolean>
   onTerminalData: (handler: (payload: TerminalDataPayload) => void) => () => void
   onTerminalExit: (handler: (payload: TerminalExitPayload) => void) => () => void
+  pets: import('./pets').PetDesktopBridge
 }
 
 export type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from './kun-gui-api-protected-approval'

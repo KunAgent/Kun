@@ -525,6 +525,8 @@ export async function initializeMainServices(input: {
       }
     })
     configureManagedWeixinBridgeUrlResolver(ensureWeixinBridgeRpcUrl)
+    const { startDesktopPets } = await import('./pets/pet-service')
+    await startDesktopPets()
 
   return {
     initial,

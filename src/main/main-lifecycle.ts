@@ -47,6 +47,7 @@ import {
   shutdownLocalWhisperService
 } from './services/local-whisper-service'
 import { shutdownLocalSanottsDownloads } from './services/local-sanotts-download-service'
+import { shutdownDesktopPets } from './pets/pet-service'
 import { shutdownLocalSanottsSynthesis } from './services/local-sanotts-synthesis-service'
 import {
   ManagedRuntimeShutdownCoordinator
@@ -186,6 +187,7 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
   })
   let browserUseBinding: ReturnType<typeof beginBrowserUseHostShutdown> | undefined
   await cleanup.group([
+    { name: 'desktop-pets', run: shutdownDesktopPets },
     { name: 'browser-admission', run: () => { browserUseBinding = beginBrowserUseHostShutdown() } },
     { name: 'sanotts-downloads', run: shutdownLocalSanottsDownloads }
   ], cleanup.deadline(1_000))

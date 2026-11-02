@@ -10,6 +10,7 @@ describe('renderer content security policy', () => {
 
     expect(imgSrc.split(/\s+/)).toContain('blob:')
     expect(imgSrc.split(/\s+/)).toContain('kun-extension:')
+    expect(imgSrc.split(/\s+/)).toContain('kun-pet:')
     expect(imgSrc.split(/\s+/)).not.toContain('https:')
   })
 })

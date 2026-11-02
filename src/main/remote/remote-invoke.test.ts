@@ -98,7 +98,9 @@ describe('remote allowlist shape', () => {
       'computer-use:permissions',
       'gui:update-install',
       'uninstall:start',
-      'extension:install'
+      'extension:install',
+      'kun:pets:list',
+      'kun:pets:overlay:action'
     ]) {
       expect(REMOTE_ALLOWED_INVOKE_CHANNELS.has(channel)).toBe(false)
     }

@@ -17,6 +17,7 @@ export type NamedPreloadName =
   | 'storage-relocation-recovery'
   | 'runtime-data-recovery'
   | 'tray-quota'
+  | 'pet-overlay'
   | 'protected-room-dialog'
 
 export function resolvePreloadPath(

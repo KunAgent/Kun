@@ -17,6 +17,7 @@ import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
+import { petsPreloadApi } from './pets-bridge'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -669,6 +670,7 @@ const api = {
     ipcRenderer.on('remote:status-changed', wrapped)
     return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
   },
-  ...paperApi
+  ...paperApi,
+  pets: petsPreloadApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

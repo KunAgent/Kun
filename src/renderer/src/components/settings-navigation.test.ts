@@ -47,6 +47,13 @@ describe('settings navigation model', () => {
     expect(windows).toContain('storage')
     expect(windows).toContain('extensions')
     expect(windows).toHaveLength(23)
+    expect(mac).not.toContain('pets')
+    const desktop = categories(visibleSettingsNavigationGroups({
+      extensionSettingsAvailable: false,
+      platform: 'darwin',
+      desktopShell: true
+    }))
+    expect(desktop).toContain('pets')
   })
 
   it('matches short names, full names, groups and descriptions case-insensitively', () => {

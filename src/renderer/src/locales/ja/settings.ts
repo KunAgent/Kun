@@ -18,6 +18,7 @@ import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 import onboarding from './settings/onboarding.json'
+import pets from './settings/pets.json'
 
 const settings = {
   ...providerConfiguration,
@@ -39,7 +40,8 @@ const settings = {
   guiUpdateErrFeedUnavailable: '現在、利用できる更新元がありません。後でもう一度試すか、ダウンロードページを利用してください。',
   ...speak,
   ...ade,
-  ...onboarding
+  ...onboarding,
+  ...pets
 }
 
 export default settings
