@@ -12,6 +12,7 @@ import { FollowUpState, FollowUpError, followUpCheck, followUpPut, followUpScope
 import { stopFollowUp } from './stop.js'
 import { createFollowUpLink, releaseFollowUpLink } from './links.js'
 import { openBusinessAttention, resolveBusinessAttention } from './attention.js'
+import { createSourceGrant, revokeSourceGrant as revokeSourceGrantImpl } from './sources.js'
 import { projectFollowUp, followUpTargetFact } from './projection.js'
 
 export type FollowUpControlResult = { control: CommitmentControl; controlRevision: number }
@@ -184,6 +185,13 @@ export class FollowUpService {
   stop(agentId: string, id: string, input: unknown) { return stopFollowUp(this.state, agentId, id, input) }
   link(agentId: string, id: string, input: unknown) { return createFollowUpLink(this.state, agentId, id, input) }
   releaseLink(agentId: string, id: string, input: unknown) { return releaseFollowUpLink(this.state, agentId, id, input) }
+  // External read consent. A grant widens only what may be read, never what may execute.
+  grantSource(agentId: string, id: string, input: unknown) {
+    return createSourceGrant(this.state, agentId, id, input)
+  }
+  revokeSourceGrant(agentId: string, id: string, input: unknown) {
+    return revokeSourceGrantImpl(this.state, agentId, id, input)
+  }
   // Business questions are host-raised and user-answered; neither grants execution.
   openAttention(agentId: string, id: string, input: unknown) {
     return openBusinessAttention(this.state, agentId, id, input)

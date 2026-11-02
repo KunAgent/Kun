@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { FollowUpId, FollowUpRevision, FollowUpTime, FollowUpUserEvidenceSchema,
   ContinuationModeSchema, NewWorkModeSchema, CollaborationPolicySchema, FollowUpLinkTargetSchema,
-  FollowUpArtifactVersionSchema, FollowUpEvidenceRefSchema } from './collaboration-followup.js'
+  FollowUpArtifactVersionSchema, FollowUpEvidenceRefSchema, FollowUpPullRequestSchema,
+  FollowUpReadKindSchema } from './collaboration-followup.js'
 
 export const FollowUpMutation = z.object({
   clientRequestId: FollowUpId, expectedControlRevision: FollowUpRevision
@@ -52,6 +53,33 @@ export const ManualFollowUpDispatch = z.object({ shouldDispatch: z.boolean(), di
 export type ManualFollowUpDispatch = z.infer<typeof ManualFollowUpDispatch>
 export const CommitmentTrackingActionSchema = z.enum(['pause', 'resume', 'disable'])
 export type CommitmentTrackingAction = z.infer<typeof CommitmentTrackingActionSchema>
+
+/** Grants are account-level; a repository never carries its own credential. */
+export const FollowUpModelShareSchema = z.object({
+  allowed: z.boolean(), threadId: FollowUpId,
+  providers: z.array(z.object({ providerId: FollowUpId, model: FollowUpId }).strict()).max(20)
+}).strict().refine((value) => !value.allowed || value.providers.length > 0,
+  'model sharing requires explicit provider/model scope')
+export const CreateSourceGrant = FollowUpMutation.extend({
+  sourceId: FollowUpId, resource: FollowUpPullRequestSchema,
+  allowedReads: z.array(FollowUpReadKindSchema).min(1).max(6),
+  modelShare: FollowUpModelShareSchema, continuationAllowed: z.boolean(),
+  expiresAt: FollowUpTime, userEvidence: FollowUpUserEvidenceSchema
+}).strict().refine((value) => new Set(value.allowedReads).size === value.allowedReads.length,
+  'allowed reads must be unique')
+export type CreateSourceGrant = z.infer<typeof CreateSourceGrant>
+/** Revocation is immediate: continuations must re-check the grant on every use. */
+export const RevokeSourceGrant = FollowUpMutation.extend({
+  grantId: FollowUpId, expectedGrantRevision: FollowUpRevision
+}).strict()
+export type RevokeSourceGrant = z.infer<typeof RevokeSourceGrant>
+export const SourceGrantResult = z.object({
+  grantId: FollowUpId, grantRevision: FollowUpRevision, controlRevision: FollowUpRevision,
+  revokedAt: FollowUpTime.optional()
+}).strict()
+export type SourceGrantResult = z.infer<typeof SourceGrantResult>
+/** Longest a user consent may stand before it must be renewed in person. */
+export const SOURCE_GRANT_MAX_TTL_MS = 24 * 60 * 60 * 1000
 
 export const FollowUpErrorCodeSchema = z.enum([
   'STALE_REVISION', 'STALE_ATTENTION', 'SOURCE_GRANT_EXPIRED', 'AUTHORIZATION_CHANGED',

@@ -85,6 +85,16 @@ export function registerAgentWorkRoutes(add: Add) {
     const input = await body(request)
     return rooms.exclusive(() => rooms.followUp.releaseLink(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
   })
+  // External read consent. A grant never widens execution or model authority.
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/grants', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.grantSource(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/grants/:grantId/revoke', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.revokeSourceGrant(Id.parse(params.agentId),
+      Id.parse(params.commitmentId), input))
+  })
   add('POST', '/v1/agents/:agentId/commitments/:commitmentId/cancel', async (rooms, request, { params }) => {
     const input = Action.parse(await body(request))
     return rooms.exclusive(() => rooms.commitments.update(Id.parse(params.agentId), Id.parse(params.commitmentId), { ...input, status: 'cancelled' }))
