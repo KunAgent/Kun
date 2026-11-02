@@ -256,8 +256,11 @@ export function TimelineRuntimeError({
   const detail = block.detail?.trim() || (agentError ? errorView.detail : '') || ''
   const requestFailure = block.modelRequestFailure
   const providerResponded = requestFailure?.requestState === 'provider_responded'
-  const sentNoResponse = requestFailure?.requestState === 'sent_no_response'
   const requestNotSent = requestFailure?.requestState === 'not_sent'
+  const streamInterrupted = !providerResponded && !requestNotSent &&
+    (block.streamPartialOutput !== undefined || code === 'stream_replay_conflict')
+  const replayConflict = streamInterrupted && code === 'stream_replay_conflict'
+  const sentNoResponse = !streamInterrupted && requestFailure?.requestState === 'sent_no_response'
   // Restart interrupts get friendly localized copy; the raw runtime message
   // stays available in the collapsible detail.
   const localizedMessage =
@@ -286,13 +289,17 @@ export function TimelineRuntimeError({
           requestFailure?.category === 'model_not_found' || requestFailure?.category === 'request'
         ? t('modelErrorProviderSummaryRejected')
         : t('modelErrorProviderSummaryGeneric')
-  const sourceSummary = providerResponded
-    ? providerSummary
-    : sentNoResponse
-      ? t('modelErrorNoResponseSummary')
-      : requestNotSent
-        ? t('modelErrorNotSentSummary')
-        : ''
+  const sourceSummary = replayConflict
+    ? t('modelStreamReplayConflictSummary')
+    : streamInterrupted
+      ? t(block.streamPartialOutput ? 'modelStreamInterruptedPartial' : 'modelStreamInterruptedSummary')
+      : providerResponded
+        ? providerSummary
+        : sentNoResponse
+          ? t('modelErrorNoResponseSummary')
+          : requestNotSent
+            ? t('modelErrorNotSentSummary')
+            : ''
   const message = (localizedMessage || sourceSummary || (agentError ? errorView.message : '') || block.text.trim() || block.detail?.trim() || block.code?.trim() || '')
   const showCode = Boolean(code && !message.toLowerCase().includes(code.toLowerCase()))
   const providerIdentity = [requestFailure?.providerId, requestFailure?.model].filter(Boolean).join(' · ')
@@ -322,18 +329,22 @@ export function TimelineRuntimeError({
         strokeWidth={1.9}
       />}
       <div className="min-w-0 flex-1">
-        {requestFailure ? (
+        {requestFailure || streamInterrupted ? (
           <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={`rounded-full border px-2 py-0.5 text-[11.5px] font-medium ${
               providerResponded
                 ? 'border-red-300/70 bg-red-100/70 text-red-800 dark:border-red-800/70 dark:bg-red-950/45 dark:text-red-200'
                 : 'border-orange-300/70 bg-orange-100/70 text-orange-800 dark:border-orange-800/70 dark:bg-orange-950/45 dark:text-orange-200'
             }`}>
-              {providerResponded
-                ? t('modelErrorSourceProvider')
-                : sentNoResponse
-                  ? t('modelErrorSourceNoResponse')
-                  : t('modelErrorSourceNotSent')}
+              {replayConflict
+                ? t('modelStreamReplayConflict')
+                : streamInterrupted
+                  ? t('modelStreamInterrupted')
+                  : providerResponded
+                    ? t('modelErrorSourceProvider')
+                    : sentNoResponse
+                      ? t('modelErrorSourceNoResponse')
+                      : t('modelErrorSourceNotSent')}
             </span>
             {providerIdentity ? (
               <span className="break-all font-mono text-[11.5px] text-ds-muted">{providerIdentity}</span>

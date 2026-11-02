@@ -1,4 +1,5 @@
 import { restoredThreadContextSnapshot } from './thread-context-snapshot'
+import { interruptedStreamPartialOutput } from '../agent/stream-interruption'
 import type { ChatBlock } from '../agent/types'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
 import type { ChatState } from './chat-store-types'
@@ -54,6 +55,7 @@ export function reduceLateChatProjection(
     case 'runtime_error_received': {
       const event = action.payload
       const view = context.runtimeErrorView(event)
+      const streamPartialOutput = interruptedStreamPartialOutput(event.details)
       const block: Extract<ChatBlock, { kind: 'system' }> = {
         kind: 'system',
         id: event.itemId,
@@ -62,6 +64,7 @@ export function reduceLateChatProjection(
         text: event.modelRequestFailure ? event.message : view.message,
         ...(view.code ? { code: view.code } : {}),
         ...(view.detail ? { detail: view.detail } : {}),
+        ...(streamPartialOutput !== undefined ? { streamPartialOutput } : {}),
         ...(event.modelRequestFailure ? { modelRequestFailure: event.modelRequestFailure } : {}),
         severity: event.severity ?? 'error',
         runtimeError: true

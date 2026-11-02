@@ -1,6 +1,5 @@
 import type { CacheRequestSignature } from '../cache/cache-diagnostics.js'
 import { utf8PrefixWithinBytes } from '../shared/utf8-text-blocks.js'
-import { redactSecretText } from '../config/secret-redaction.js'
 import type { PipelineStage } from '../contracts/events.js'
 import type {
   ModelClient,
@@ -25,7 +24,7 @@ import {
 } from './model-stream-collector.js'
 import type { LoopTelemetry } from './loop-telemetry.js'
 import type { TurnExecutionFailure } from './turn-execution-types.js'
-import { modelRequestFailureContext, recordModelPreflightFailure } from './model-request-failure-context.js'
+import { modelRequestFailureContext, recordModelPreflightFailure, sanitizeModelFailure, sanitizeModelDiagnostic } from './model-request-failure-context.js'
 import { rewriteStreamDisconnectFailure } from './stream-disconnection-failure.js'
 import {
   modelContextOverflowError,
@@ -407,21 +406,21 @@ export class ModelRoundEngine {
               // Drop the raw transport error; the aborted outcome below owns
               // settlement.
               if (input.signal.aborted) break
-              const modelErrorMessage = redactSecretText(intent.message)
-              // Even older extension adapters can prove that this error came
-              // from the model stream without supplying a detailed category.
-              const modelFailureDetails = { modelFailure: intent.failure ?? { category: 'unknown' } }
+              const modelErrorMessage = sanitizeModelDiagnostic(intent.message)
+              const modelErrorCode = intent.code ? sanitizeModelDiagnostic(intent.code) : undefined
+              const modelFailure = sanitizeModelFailure(intent.failure)
+              const modelFailureDetails = { modelFailure: modelFailure ?? { category: 'unknown' } }
               const rewritten = rewriteStreamDisconnectFailure({
                 error: modelErrorMessage,
-                ...(intent.code ? { code: intent.code } : {}),
+                ...(modelErrorCode ? { code: modelErrorCode } : {}),
                 details: modelFailureDetails
               })
               const modelRequestFailure = modelRequestFailureContext({
-                request: input.request, failure: intent.failure, code: intent.code
+                request: input.request, failure: modelFailure, code: modelErrorCode
               })
               this.deps.rememberFailure(input.turnId, rewritten ? { ...rewritten, ...(modelRequestFailure ? { modelRequestFailure } : {}) } : {
                 error: modelErrorMessage,
-                ...(intent.code ? { code: intent.code } : {}),
+                ...(modelErrorCode ? { code: modelErrorCode } : {}),
                 details: modelFailureDetails,
                 ...(modelRequestFailure ? { modelRequestFailure } : {}),
                 severity: 'error'
@@ -436,7 +435,7 @@ export class ModelRoundEngine {
                   threadId: input.threadId,
                   turnId: input.turnId,
                   message: modelErrorMessage,
-                  code: intent.code,
+                  code: modelErrorCode,
                   details: modelFailureDetails,
                   ...(modelRequestFailure ? { modelRequestFailure } : {}),
                   severity: 'error'

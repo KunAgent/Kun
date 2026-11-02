@@ -341,7 +341,7 @@ describe('CompatModelClient interrupted stream retry', () => {
     expect(chunks.some((chunk) => chunk.kind === 'error')).toBe(false)
   })
 
-  it('retries a terminated stream after final text and emits only the unseen suffix', async () => {
+  it('stops after delivered text rather than replaying a terminated stream', async () => {
     let calls = 0
     const fetchImpl = (async () => {
       calls += 1
@@ -370,22 +370,16 @@ describe('CompatModelClient interrupted stream retry', () => {
 
     const chunks = await drain(streamClient.stream({ ...request(), model: 'gpt-5.6-sol' }))
 
-    expect(calls).toBe(2)
+    expect(calls).toBe(1)
     expect(chunks.filter((chunk) => chunk.kind === 'assistant_text_delta')).toEqual([
-      { kind: 'assistant_text_delta', text: 'partial' },
-      { kind: 'assistant_text_delta', text: ' done' }
+      { kind: 'assistant_text_delta', text: 'partial' }
     ])
-    expect(chunks).toContainEqual(expect.objectContaining({
-      kind: 'retrying',
-      attempt: 1,
-      maxAttempts: 3,
-      reason: 'stream_transport'
-    }))
-    expect(chunks.at(-1)).toEqual({ kind: 'completed', stopReason: 'stop' })
-    expect(chunks.some((chunk) => chunk.kind === 'error')).toBe(false)
+    expect(chunks.at(-1)).toMatchObject({ kind: 'error', code: 'stream_read_error',
+      failure: { responsePhase: 'interrupted', partialOutput: true, failoverAllowed: false } })
+    expect(chunks.some((chunk) => chunk.kind === 'retrying' || chunk.kind === 'completed')).toBe(false)
   })
 
-  it('uses another configured retry when a replay diverges from visible text', async () => {
+  it('does not make divergent replay attempts after visible text', async () => {
     let calls = 0
     const fetchImpl = (async () => {
       calls += 1
@@ -418,13 +412,12 @@ describe('CompatModelClient interrupted stream retry', () => {
 
     const chunks = await drain(streamClient.stream({ ...request(), model: 'gpt-5.6-sol' }))
 
-    expect(calls).toBe(3)
-    expect(chunks.filter((chunk) => chunk.kind === 'retrying')).toHaveLength(2)
+    expect(calls).toBe(1)
+    expect(chunks.filter((chunk) => chunk.kind === 'retrying')).toHaveLength(0)
     expect(chunks.filter((chunk) => chunk.kind === 'assistant_text_delta')).toEqual([
-      { kind: 'assistant_text_delta', text: 'partial' },
-      { kind: 'assistant_text_delta', text: ' recovery' }
+      { kind: 'assistant_text_delta', text: 'partial' }
     ])
-    expect(chunks.at(-1)).toEqual({ kind: 'completed', stopReason: 'stop' })
+    expect(chunks.at(-1)).toMatchObject({ kind: 'error', code: 'stream_read_error' })
   })
 
   it('defers a tool call until a retried stream completes and emits it once', async () => {
@@ -494,7 +487,7 @@ describe('CompatModelClient interrupted stream retry', () => {
       code: 'stream_read_error',
       failure: { category: 'network', failoverAllowed: true }
     })
-    expect(exhaustedError?.kind === 'error' ? exhaustedError.message : '').toContain('all 5 configured stream retries were exhausted')
+    expect(exhaustedError?.kind === 'error' ? exhaustedError.message : '').toContain('all 5 configured request retries were exhausted')
   })
 
   it('does not retry a reasoning-only terminated stream when maxAttempts is zero', async () => {

@@ -206,6 +206,12 @@ export type ModelFailureMetadata = {
   reason?: ModelFailureReason
   /** True only when the provider supplied an HTTP or protocol-level error response. */
   responseReceived?: boolean
+  /** A successful response stream ended before its terminal event. */
+  responsePhase?: 'interrupted'
+  /** Whether assistant text was already delivered before interruption. */
+  partialOutput?: boolean
+  /** First sanitized transport failure when recovery later fails. */
+  firstStreamFailure?: { code: string; message: string }
   /** False only when this failed attempt stopped before invoking the transport. */
   requestSent?: boolean
   httpStatus?: number

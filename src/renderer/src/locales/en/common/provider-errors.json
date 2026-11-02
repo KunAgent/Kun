@@ -1,4 +1,9 @@
 {
+  "modelStreamInterrupted": "Response interrupted",
+  "modelStreamInterruptedPartial": "The response was interrupted. Partial content was preserved; you can continue typing.",
+  "modelStreamInterruptedSummary": "The response was interrupted before completion.",
+  "modelStreamReplayConflict": "Response recovery failed",
+  "modelStreamReplayConflictSummary": "Earlier output was preserved. The cause of the original interruption is unknown; you can continue the conversation.",
   "modelErrorSourceProvider": "Provider response",
   "modelErrorSourceNoResponse": "No provider response",
   "modelErrorSourceNotSent": "Request not sent",

@@ -1,4 +1,9 @@
 {
+  "modelStreamInterrupted": "प्रतिक्रिया बाधित हुई",
+  "modelStreamInterruptedPartial": "प्रतिक्रिया बाधित हुई। कुछ सामग्री सुरक्षित है; आप आगे लिख सकते हैं।",
+  "modelStreamInterruptedSummary": "प्रतिक्रिया पूरी होने से पहले बाधित हुई।",
+  "modelStreamReplayConflict": "उत्तर पुनर्प्राप्त नहीं हुआ",
+  "modelStreamReplayConflictSummary": "पिछला आउटपुट सुरक्षित है। पहली बार बाधित होने का कारण अज्ञात है; आप बातचीत जारी रख सकते हैं।",
   "modelErrorSourceProvider": "प्रदाता की प्रतिक्रिया",
   "modelErrorSourceNoResponse": "प्रदाता से कोई प्रतिक्रिया नहीं",
   "modelErrorSourceNotSent": "अनुरोध नहीं भेजा गया",

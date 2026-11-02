@@ -60,6 +60,12 @@ export function rewriteStreamDisconnectFailure(input: {
   const existingDetails = typeof input.details === 'object' && input.details !== null
     ? input.details as Record<string, unknown>
     : {}
+  const failure = existingDetails.modelFailure
+  if (failure && typeof failure === 'object') {
+    const metadata = failure as { responseReceived?: unknown; httpStatus?: unknown; providerCode?: unknown }
+    if (metadata.responseReceived === true ||
+      (typeof metadata.httpStatus === 'number' && metadata.httpStatus >= 400) || metadata.providerCode) return null
+  }
   const rawMessage = typeof existingDetails.rawMessage === 'string'
     ? existingDetails.rawMessage
     : input.error

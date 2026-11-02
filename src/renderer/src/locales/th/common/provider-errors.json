@@ -1,4 +1,9 @@
 {
+  "modelStreamInterrupted": "การตอบกลับขัดข้อง",
+  "modelStreamInterruptedPartial": "การตอบกลับขัดข้อง โดยเก็บเนื้อหาบางส่วนไว้แล้ว คุณสามารถพิมพ์ต่อได้",
+  "modelStreamInterruptedSummary": "การตอบกลับขัดข้องก่อนเสร็จสมบูรณ์",
+  "modelStreamReplayConflict": "กู้คืนคำตอบไม่สำเร็จ",
+  "modelStreamReplayConflictSummary": "เก็บข้อความก่อนหน้าไว้แล้ว ไม่ทราบสาเหตุของการขัดจังหวะครั้งแรก คุณสามารถสนทนาต่อได้",
   "modelErrorSourceProvider": "การตอบกลับจากผู้ให้บริการ",
   "modelErrorSourceNoResponse": "ไม่มีการตอบกลับจากผู้ให้บริการ",
   "modelErrorSourceNotSent": "ยังไม่ได้ส่งคำขอ",

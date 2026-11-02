@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatState } from './chat-store-types'
-import { completionProjectionEffects } from './chat-projection-effects'
+import { completionProjectionEffects, terminalFailureProjectionEffects } from './chat-projection-effects'
 
 describe('chat projection effects', () => {
+  it('drains the queue after failure without prematurely releasing an occupied worktree', () => {
+    expect(terminalFailureProjectionEffects('thread_1', false).map((effect) => effect.type)).toEqual([
+      'sync_completion_poll', 'refresh_threads', 'drain_queued_messages'
+    ])
+  })
+
   it('describes completion browser work explicitly in stable order', () => {
     const effects = completionProjectionEffects({
       state: {} as ChatState,
