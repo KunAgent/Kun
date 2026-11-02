@@ -28,6 +28,8 @@ Var /GLOBAL KunInstallerInPlaceUpdate
 Var /GLOBAL KunInstallerAbortCode
 Var /GLOBAL KunInstallerAbortPhase
 Var /GLOBAL KunInstallerAbortMessage
+Var /GLOBAL KunInstallerPendingLease
+Var /GLOBAL KunInstallerPendingLeasePath
 Var /GLOBAL KunInstallerPendingResultPath
 Var /GLOBAL KunInstallerHealthResultPath
 Var /GLOBAL KunInstallerHealthToken
@@ -83,6 +85,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
   InitPluginsDir
   StrCpy $KunInstallerPowerShellPath "$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"
   File /oname=$PLUGINSDIR\kun-windows-installer-migration.ps1 "${PROJECT_DIR}\build\windows-installer-migration.ps1"
+  File /oname=$PLUGINSDIR\windows-installer-pending-lease.ps1 "${PROJECT_DIR}\build\windows-installer-pending-lease.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-paths.ps1 "${PROJECT_DIR}\build\windows-installer-migration-paths.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-journal.ps1 "${PROJECT_DIR}\build\windows-installer-migration-journal.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-filesystem.ps1 "${PROJECT_DIR}\build\windows-installer-migration-filesystem.ps1"
@@ -504,6 +507,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
       ${endif}
       System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_HEALTH_RESULT", "$KunInstallerHealthResultPath").r0'
       Call KunSetMigrationEnvironment
+      Call KunAcquirePendingLease
     ${endif}
     Delete "$KunInstallerResultPath"
     !insertmacro kunRunMigrationHelper Prepare

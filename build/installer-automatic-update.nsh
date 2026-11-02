@@ -1,3 +1,4 @@
+!include "${PROJECT_DIR}\build\installer-pending-lease.nsh"
 !include "${PROJECT_DIR}\build\installer-update-scope.nsh"
 !include "${PROJECT_DIR}\build\installer-update-observability.nsh"
 !include "${PROJECT_DIR}\build\installer-update-extraction.nsh"
@@ -9,8 +10,8 @@
     StrCpy $KunInstallerAbortPhase "${PHASE}"
     StrCpy $KunInstallerAbortMessage "${MESSAGE}"
     Call KunRestoreAutomaticUpdateBackup
-    Call KunTryRelaunchOldApp
     Call KunWriteAutomaticUpdateResult
+    Call KunTryRelaunchOldApp
   ${endif}
   !endif
   SetErrorLevel 2
@@ -27,8 +28,8 @@
       StrCpy $KunInstallerAbortPhase "health"
       StrCpy $KunInstallerAbortMessage "The candidate application did not pass its first-launch health check."
       Call KunRestoreAutomaticUpdateBackup
-      Call KunTryRelaunchOldApp
       Call KunWriteAutomaticUpdateResult
+      Call KunTryRelaunchOldApp
       SetErrorLevel 2
       Quit
     ${endif}
@@ -47,6 +48,7 @@
 !macroend
 
 !macro KunAutomaticUpdateFunctions
+  !insertmacro KunPendingLeaseFunctions
   !insertmacro KunAutomaticUpdateScopeFunctions
   !insertmacro KunAutomaticUpdateObservabilityFunctions
   !insertmacro KunAutomaticUpdateExtractionFunctions
@@ -57,6 +59,7 @@
     ReadEnvStr $KunInstallerPendingResultPath "KUN_PENDING_UPDATE_RESULT"
     ${if} $KunInstallerPendingResultPath == ""
       !insertmacro kunRunMigrationHelper FinalizeUpdateTransaction
+      Call KunReleasePendingLease
       Return
     ${endif}
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_PENDING_RESULT", "$KunInstallerPendingResultPath").r0'
@@ -64,6 +67,7 @@
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_ABORT_PHASE", "$KunInstallerAbortPhase").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_ABORT_MESSAGE", "$KunInstallerAbortMessage").r0'
     !insertmacro kunRunMigrationHelper WriteUpdateResult
+    Call KunReleasePendingLease
     ${if} $KunInstallerHelperExitCode != 0
       DetailPrint "Kun could not record the automatic-update result: $KunInstallerHelperOutput"
       Return

@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'RecoverInstallerUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'StageExtractedUpdatePayload', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
+  [ValidateSet('ValidatePendingLease', 'ResolvePath', 'ResolveSource', 'ResolveUpdateScope', 'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'RecoverInstallerUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'StageExtractedUpdatePayload', 'SwitchUpdatePayload', 'ValidateCutover', 'RollbackUpdateTransaction', 'ResolveHealthToken', 'ValidateHealthResult', 'CommitUpdateTransaction', 'FinalizeUpdateTransaction', 'StopProcesses', 'Recover', 'Prepare', 'FallbackCleanup', 'Restore', 'ValidatePayload', 'BackupPayload', 'RestorePayloadBackup', 'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath', 'WriteUpdateResult')]
   [string]$Action,
   [string]$ResultPath = '',
   [switch]$Bounded
@@ -168,6 +168,10 @@ try {
     "uacInner=$(Get-EnvironmentValue 'KUN_INSTALLER_UAC_INNER')"
   )
   switch ($Action) {
+    'ValidatePendingLease' {
+      . (Join-Path $PSScriptRoot 'windows-installer-pending-lease.ps1')
+      Assert-PendingUpdateLease
+    }
     'ResolvePath' {
       Write-ResolvedInstallTarget (Resolve-InstallTarget)
     }

@@ -72,7 +72,7 @@ async function recordScenario(report, name, action, persist) {
       record.phase = 'cleanup'
       throw new Error(`${name}: scenario cleanup failed`)
     }
-    record.status = 'passed'
+    if (record.status !== 'inconclusive') record.status = 'passed'
   } catch (error) {
     record.status = 'failed'
     record.error ??= error.message || String(error)

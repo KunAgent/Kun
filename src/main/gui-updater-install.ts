@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { relaunchApp } from './relaunch-app'
 import { win32 as win32Path } from 'node:path'
 import type { GuiUpdateChannel, GuiUpdateInfo, GuiUpdateInstallResult, GuiUpdateState } from '../shared/gui-update'
+import { logInfo } from './logger'
 import { installerOwnsUpdateCutover } from './update-bootstrap-recovery'
 import { setWindowsInstallerUpdateSource } from './gui-updater-support'
 import { handoffFailureKind } from './runtime/kun-handoff-failure'
@@ -286,6 +287,14 @@ export class GuiUpdateInstaller {
     if (outcome.kind === 'unconfirmed') {
       console.warn('[kun-gui updater] update transaction finalize unconfirmed:', outcome.reason)
       return 'unconfirmed'
+    }
+    // Only the confirmed native helper path proves finalization. Missing-context
+    // cleanup and already-finalized records are deliberately not marked.
+    if (outcome.kind === 'finalized' && outcome.phase === 'finalized') {
+      logInfo('kun-gui updater', 'Native update transaction finalized.', {
+        event: 'native_update_finalized', pid: process.pid,
+        version: app.getVersion(), executablePath: process.execPath
+      })
     }
     return outcome.kind
   }
