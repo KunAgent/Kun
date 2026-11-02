@@ -1,0 +1,28 @@
+{
+  "settingsNavPets": "Pets",
+  "petsTitle": "Desktop pets",
+  "petsDesc": "Choose a desktop pet, keep it on screen, and import Codex pet packages.",
+  "petsDesktopOnly": "Desktop pets are available in the Kun desktop app.",
+  "petsLoading": "Loading pets...",
+  "petsLoadError": "Kun could not load the pet library.",
+  "petsEmpty": "No pets yet. Add a pet.json package to the Kun pets folder and refresh.",
+  "petsSelectFirst": "Choose an available pet before showing it on the desktop.",
+  "petsCurrent": "Current pet",
+  "petsNone": "None selected",
+  "petsImported": "Imported pets",
+  "petsWake": "Show pet",
+  "petsHide": "Hide pet",
+  "petsImportErrors": "Import errors",
+  "petsShow": "Show the pet on the desktop",
+  "petsImportCodex": "Import pets from Codex automatically",
+  "petsRefresh": "Refresh",
+  "petsOpenKunDir": "Open Kun pets folder",
+  "petsOpenCodexDir": "Open Codex pets folder",
+  "petsSourceMissing": "Original package missing",
+  "petsReport": "{{failed}} failed, {{missing}} missing",
+  "petsSource": {
+    "kun-builtin": "Built-in",
+    "kun-local": "Local",
+    "codex-custom": "Codex"
+  }
+}

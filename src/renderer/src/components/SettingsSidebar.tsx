@@ -76,6 +76,7 @@ export function SettingsSidebar({
   setCategory,
   extensionSettingsAvailable = false,
   platform = 'unknown',
+  desktopShell = false,
   onPreloadCategory,
   t
 }: {
@@ -84,6 +85,7 @@ export function SettingsSidebar({
   setCategory: Dispatch<SetStateAction<SettingsCategory>>
   extensionSettingsAvailable?: boolean
   platform?: string
+  desktopShell?: boolean
   /** Warms a destination's code before it is opened (hover, focus, search match). */
   onPreloadCategory?: (category: SettingsCategory) => void
   t: (key: string) => string
@@ -93,8 +95,8 @@ export function SettingsSidebar({
   const [navElement, setNavElement] = useState<HTMLElement | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
   const groups = useMemo(
-    () => visibleSettingsNavigationGroups({ extensionSettingsAvailable, platform }),
-    [extensionSettingsAvailable, platform]
+    () => visibleSettingsNavigationGroups({ extensionSettingsAvailable, platform, desktopShell }),
+    [extensionSettingsAvailable, platform, desktopShell]
   )
   const filteredGroups = useMemo(() => filterSettingsNavigationGroups(groups, query, t), [groups, query, t])
   const searching = query.trim().length > 0

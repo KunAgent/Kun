@@ -248,7 +248,7 @@ export function SettingsView(): ReactElement {
     installGuiUpdate,
     resetGuiUpdateState
   } = useSettingsGuiUpdate({
-    category: category === 'extensions' ? 'general' : category,
+    category: category === 'extensions' || category === 'pets' ? 'general' : category,
     channel: formGuiUpdateChannel,
     form,
     t

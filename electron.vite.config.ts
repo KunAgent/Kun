@@ -59,7 +59,8 @@ export default defineConfig({
           'extension-protected-surface': resolve('src/preload/extension-protected-surface.ts'),
           'storage-relocation-recovery': resolve('src/preload/storage-relocation-recovery.ts'),
           'runtime-data-recovery': resolve('src/preload/runtime-data-recovery.ts'),
-          'tray-quota': resolve('src/preload/tray-quota.ts')
+          'tray-quota': resolve('src/preload/tray-quota.ts'),
+          'pet-overlay': resolve('src/preload/pet-overlay.ts')
         },
         output: {
           format: 'cjs',
@@ -109,7 +110,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
-          'tray-quota': resolve('src/renderer/tray-quota.html')
+          'tray-quota': resolve('src/renderer/tray-quota.html'),
+          'pet-overlay': resolve('src/renderer/pet-overlay.html')
         }
       }
     },
