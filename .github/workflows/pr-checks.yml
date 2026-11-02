@@ -396,23 +396,18 @@ jobs:
           $version = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { '0.4.4' } else { node -p "require('./package.json').version" }
           $scenarios = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { 'normal' } else { 'normal,busy,rollback' }
           node scripts/smoke-gui-upgrade.cjs --directory cross-version-candidate --version $version --baseline-version 0.4.3 --scenarios $scenarios --report windows-cross-version.json
-      - name: Preserve cross-version logs and transaction evidence
+      - name: Stage owned cross-version evidence on the checkout volume
+        id: stage_windows_evidence
         if: always()
+        run: node scripts/stage-windows-upgrade-evidence.cjs --report windows-cross-version.json --output artifacts/windows-cross-version
+      - name: Preserve cross-version logs and transaction evidence
+        if: ${{ always() && steps.stage_windows_evidence.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: windows-cross-version-${{ matrix.source }}
           if-no-files-found: warn
           retention-days: 14
-          path: |
-            windows-cross-version.json*
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/*.json
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/*.jsonl
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/*.log
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/*.txt
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/*.png
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/installer-recovery*/*.json
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/desktop-profile*/logs/**
-            ${{ env.GUI_UPGRADE_EVIDENCE }}/kun-gui-upgrade-*/desktop-profile*/pending-update*.json
+          path: artifacts/windows-cross-version
 
   pr-gate:
     name: PR gate

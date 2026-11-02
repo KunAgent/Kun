@@ -10,6 +10,7 @@ const { tmpdir, homedir } = require('node:os')
 const { join, resolve } = require('node:path')
 const { _electron: electron } = require('playwright-core')
 const { parse } = require('yaml')
+const { sanitizeDiagnostic } = require('./stage-windows-upgrade-evidence.cjs')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
 const { verifyPrCandidateSource } = require('./pr-gui-candidate-source.cjs')
@@ -141,12 +142,22 @@ async function chat(page, workspace, title) {
   return { thread, turn }
 }
 
-async function settle(page, saved) {
+async function settle(page, saved, observation = {}) {
+  let terminalFailure
   return poll(async () => {
     const turn = await request(page, `/v1/threads/${saved.thread.id}/turns/${saved.turn.turnId}`)
-    if (turn.status === 'failed' || turn.status === 'cancelled') throw new Error(`Test dialogue ${turn.status}`)
+    const summary = { status: turn.status, modelRequests: observation.modelRequests?.() }
+    if (turn.status === 'failed' || turn.status === 'cancelled') {
+      // Keep only bounded diagnostic text, never the model request or credentials.
+      const detail = sanitizeDiagnostic(String(turn.error || turn.failure?.reason || 'No runtime error detail')
+        .replace(/(?:sk-|packaged-handoff-smoke-key)[A-Za-z0-9_-]*/g, '[REDACTED]'), '.txt').slice(0, 2048)
+      summary.error = detail
+      terminalFailure = new Error(`Test dialogue ${turn.status}: ${detail}; modelRequests=${summary.modelRequests ?? 'unknown'}`)
+      observation.record?.(summary)
+      return false
+    }
     return turn.status === 'completed' ? turn : undefined
-  }, TIMEOUT, 'test dialogue completion')
+  }, TIMEOUT, 'test dialogue completion', () => { if (terminalFailure) throw terminalFailure })
 }
 
 async function scenario(input, name, record, persistReport) {
@@ -157,6 +168,7 @@ async function scenario(input, name, record, persistReport) {
   // disposable account's AppData for the installer's restricted fault injection.
   const temporaryParent = process.platform === 'win32' ? process.env.APPDATA : tmpdir()
   const root = await mkdtemp(join(temporaryParent, `kun-gui-upgrade-${name}-`))
+  await writeFile(join(root, '.upgrade-acceptance-owner'), root)
   const journal = createScenarioJournal(record, root, persistReport)
   const installControl = createInstallRequestControl(journal)
   const pollInstalling = (operation, timeout, description) => poll(operation, timeout, description, installControl.check)
@@ -216,8 +228,14 @@ async function scenario(input, name, record, persistReport) {
     record.baselineLauncherPid = gui.app.process().pid
     assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), input.baselineVersion)
     journal.phase('baseline_started', gui.processInfo)
+    const effectiveSettings = await gui.page.evaluate(() => window.kunGui.getSettings())
+    const selectedProvider = effectiveSettings.provider?.providers?.find(provider => provider.id === 'deepseek')
+    assert.equal(selectedProvider?.baseUrl, model.baseUrl,
+      'Released GUI must retain the loopback fixture provider URL before sending any dialogue')
     const saved = await chat(gui.page, workspace, `upgrade-history-${name}`)
-    await settle(gui.page, saved)
+    await settle(gui.page, saved, { modelRequests: () => model.state.requests,
+      record: summary => journal.event('baseline_dialogue_failed', summary) })
+    assert.ok(model.state.requests > 0, 'Baseline dialogue must reach the real loopback model fixture')
     if (name !== 'manual') {
       journal.phase('legacy_provider_settings')
       await prepareReleasedGuiUpdate(gui.page, input.baselineVersion, record)
@@ -524,4 +542,4 @@ async function main() {
 
 if (require.main === module) main().catch((error) => { console.error(error); process.exitCode = 1 })
 
-module.exports = { startGui, prepareReleasedGuiUpdate, parseInstallerJson, createGuiUpgradeEnvironment }
+module.exports = { startGui, prepareReleasedGuiUpdate, parseInstallerJson, createGuiUpgradeEnvironment, settle }

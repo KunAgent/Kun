@@ -182,7 +182,12 @@ test('Windows CI compares published control and required same-run PR candidate w
   assert.match(commands, /--baseline-version 0\.4\.3/)
   assert.match(commands, /'normal,busy,rollback'/)
   assert.doesNotMatch(commands, /release (create|edit|upload)|publish-r2/)
-  assert.ok(job.steps.some(step => step.uses === 'actions/upload-artifact@v4' && step.if === 'always()'))
+  const stage = job.steps.findIndex(step => step.id === 'stage_windows_evidence')
+  const upload = job.steps.findIndex(step => step.uses === 'actions/upload-artifact@v4')
+  assert.ok(stage >= 0 && upload > stage)
+  assert.equal(job.steps[stage].if, 'always()')
+  assert.equal(job.steps[upload].if, "${{ always() && steps.stage_windows_evidence.outcome == 'success' }}")
+  assert.equal(job.steps[upload].with.path, 'artifacts/windows-cross-version')
   assert.ok(workflow.jobs['pr-gate'].needs.includes('windows-cross-version'))
 })
 
@@ -226,4 +231,30 @@ test('Windows failure evidence excludes unrelated processes and all command line
   assert.equal(selectOwnedWindowsProcesses(rows, paths, 2).processes.length, 2)
   assert.deepEqual(selectOwnedWindowsProcesses(rows, {}).processes, [])
   assert.deepEqual(selectOwnedWindowsProcesses(rows, { executable: 'Kun.exe', verifiedInstallerPaths: ['candidate.exe'] }).processes, [])
+})
+
+test('terminal dialogue failures fail immediately with bounded redacted runtime evidence', async () => {
+  const { settle } = require('./smoke-gui-upgrade.cjs')
+  const records = []
+  let reads = 0
+  const page = { evaluate: async () => { reads++; return {
+    status: 'failed', error: 'Provider rejected Bearer sk-private-secret packaged-handoff-smoke-key'
+  } } }
+  await assert.rejects(settle(page, { thread: { id: 'thread' }, turn: { turnId: 'turn' } }, {
+    modelRequests: () => 0, record: summary => records.push(summary)
+  }), /Test dialogue failed: Provider rejected Bearer \[REDACTED\] \[REDACTED\]; modelRequests=0/)
+  assert.equal(reads, 1)
+  assert.equal(records[0].status, 'failed')
+  assert.doesNotMatch(JSON.stringify(records), /sk-private|packaged-handoff-smoke-key/)
+})
+
+
+test('terminal dialogue console errors share artifact credential sanitization', async () => {
+  const { settle } = require('./smoke-gui-upgrade.cjs')
+  const page = { evaluate: async () => ({ status: 'failed',
+    error: 'Authorization: Basic YWJj\nhttps://user:password@example.test?access_token=secret' }) }
+  await assert.rejects(settle(page, { thread: { id: 'thread' }, turn: { turnId: 'turn' } }), error => {
+    assert.doesNotMatch(error.message, /YWJj|user:password|access_token=secret/)
+    return true
+  })
 })
