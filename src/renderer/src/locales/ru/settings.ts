@@ -23,6 +23,7 @@ import onboarding from './settings/onboarding.json'
 import assistantMailboxSettings from './settings/assistant-mailbox.json'
 import terminalDock from './settings/terminal-dock.json'
 import storageCleanup from './settings/storage-cleanup.json'
+import pets from './settings/pets.json'
 
 const settings = {
   ...providerConfiguration,
@@ -49,7 +50,8 @@ const settings = {
   ...onboarding,
   ...assistantMailboxSettings,
   ...terminalDock,
-  ...storageCleanup
+  ...storageCleanup,
+  ...pets
 }
 
 export default settings

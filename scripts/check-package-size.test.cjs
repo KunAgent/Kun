@@ -161,6 +161,7 @@ test('reports root and Kun dependencies plus aggregate extra resources', (t) => 
     ['ppt-toolchain/PROVENANCE.md', 41],
     ['installer-recovery/windows-installer-migration.ps1', 43],
     ['bin/kun', 47],
+    ['pets/anya/spritesheet.webp', 53],
     ['THIRD_PARTY_NOTICES.md', 31]
   ]
   for (const [relativePath, bytes] of files) {
@@ -183,7 +184,8 @@ test('reports root and Kun dependencies plus aggregate extra resources', (t) => 
   assert.equal(componentBytes['ppt-toolchain'], 41)
   assert.equal(componentBytes['installer-recovery'], 43)
   assert.equal(componentBytes['bin'], 47)
-  assert.equal(componentBytes['extra-resources'], 19 + 23 + 29 + 31)
+  assert.equal(componentBytes['pets'], 53)
+  assert.equal(componentBytes['extra-resources'], 19 + 23 + 29 + 31 + 53)
 })
 
 test('serializes machine-readable JSON reports', () => {

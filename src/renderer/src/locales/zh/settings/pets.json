@@ -1,0 +1,28 @@
+{
+  "settingsNavPets": "宠物",
+  "petsTitle": "桌面宠物",
+  "petsDesc": "选择桌面宠物、保持显示，并导入 Codex 宠物包。",
+  "petsDesktopOnly": "桌面宠物只在 Kun 桌面应用中可用。",
+  "petsLoading": "正在加载宠物...",
+  "petsLoadError": "Kun 无法加载宠物库。",
+  "petsEmpty": "还没有宠物。把包含 pet.json 的宠物包放进 Kun 宠物目录后刷新。",
+  "petsSelectFirst": "先选择一个可用宠物，再把它显示在桌面上。",
+  "petsCurrent": "当前选择的宠物",
+  "petsNone": "未选择",
+  "petsImported": "已导入宠物",
+  "petsWake": "唤醒宠物",
+  "petsHide": "收起宠物",
+  "petsImportErrors": "导入错误",
+  "petsShow": "在桌面显示宠物",
+  "petsImportCodex": "自动导入 Codex 宠物",
+  "petsRefresh": "刷新",
+  "petsOpenKunDir": "打开 Kun 宠物目录",
+  "petsOpenCodexDir": "打开 Codex 宠物目录",
+  "petsSourceMissing": "原始宠物包已缺失",
+  "petsReport": "{{failed}} 个失败，{{missing}} 个来源缺失",
+  "petsSource": {
+    "kun-builtin": "内置",
+    "kun-local": "本地",
+    "codex-custom": "Codex"
+  }
+}

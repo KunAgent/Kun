@@ -1,0 +1,6 @@
+{
+  "id": "zodiac-pig",
+  "displayName": "Zodiac Pig",
+  "description": "A Chinese zodiac pig pet based directly on the provided nine reference poses.",
+  "spritesheetPath": "spritesheet.webp"
+}
