@@ -78,6 +78,17 @@ export const SourceGrantResult = z.object({
   revokedAt: FollowUpTime.optional()
 }).strict()
 export type SourceGrantResult = z.infer<typeof SourceGrantResult>
+/** The version a client negotiates. It names this surface, not a promise of remote support. */
+export const FOLLOW_UP_API_VERSION = 'collaboration-followup-v1'
+export const FollowUpCapability = z.object({
+  apiVersion: z.literal(FOLLOW_UP_API_VERSION),
+  features: z.object({ tracking: z.boolean(), manualContinuation: z.boolean(),
+    attention: z.boolean(), sourceGrants: z.boolean(), githubReader: z.boolean() }).strict(),
+  /** Only modes that can actually execute are advertised. */
+  modes: z.object({ continuation: z.array(ContinuationModeSchema).min(1),
+    newWork: z.array(NewWorkModeSchema).min(1) }).strict()
+}).strict()
+export type FollowUpCapability = z.infer<typeof FollowUpCapability>
 /** Longest a user consent may stand before it must be renewed in person. */
 export const SOURCE_GRANT_MAX_TTL_MS = 24 * 60 * 60 * 1000
 

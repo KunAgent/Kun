@@ -36,6 +36,8 @@ export function registerAgentWorkRoutes(add: Add) {
     const input = await body(request)
     return rooms.exclusive(() => rooms.commitments.update(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
   })
+  // Negotiation is commitment-independent: a client can learn the surface before one exists.
+  add('GET', '/v1/agents/follow-up/capabilities', async (rooms) => rooms.followUp.capability())
   add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/continue', async (rooms, request, { params }) => {
     const input = await body(request)
     return rooms.exclusive(() => rooms.followUp.continueExplicitly(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
