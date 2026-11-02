@@ -13,7 +13,8 @@ import {
   isPendingReceiptOutput,
   type CanvasReceiptRegistry
 } from '../services/canvas-receipt-registry.js'
-import { prepareBrowserUseToolResultForPersistence } from './tool-result-image.js'
+import { prepareBrowserUseToolResultForPersistence, toolResultTextWithoutImages } from './tool-result-image.js'
+import { prepareToolResultImageBudget } from './tool-result-image-budget.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import { toolPresentationKind } from '../contracts/tool-presentation-fields.js'
 import type { ToolPresentation } from '../contracts/tool-presentation.js'
@@ -225,7 +226,12 @@ export class ToolExecutionService {
     // Register before publishing the result. Otherwise the renderer can receive
     // the SSE item and POST its receipt before this process knows the key.
     await this.registerPendingDesignReceipt(threadId, turnId, call, result)
-    const browserSafeItem = prepareBrowserUseToolResultForPersistence(result.item)
+    // Bound bytes before the browser's transient cache sees them, including
+    // results from hosts other than LocalToolHost.
+    const boundedItem = result.item.kind === 'tool_result'
+      ? { ...result.item, output: prepareToolResultImageBudget(result.item.output).output }
+      : result.item
+    const browserSafeItem = prepareBrowserUseToolResultForPersistence(boundedItem)
     await this.deps.turns.applyItem(
       threadId,
       await this.materializeLargeToolResult(threadId, turnId, call, browserSafeItem)
@@ -481,9 +487,10 @@ export class ToolExecutionService {
     item: TurnItem
   ): Promise<TurnItem> {
     if (!this.deps.artifactStore || item.kind !== 'tool_result') return item
+    const { imageFields } = prepareToolResultImageBudget(item.output)
     let content: string
     try {
-      content = JSON.stringify(item.output)
+      content = imageFields ? toolResultTextWithoutImages(item.output) : JSON.stringify(item.output)
     } catch {
       content = String(item.output)
     }
@@ -506,7 +513,8 @@ export class ToolExecutionService {
           lineCount: stored.meta.lineCount,
           mimeType: stored.meta.mimeType ?? 'application/json',
           inline: stored.summary.inline,
-          truncated: true
+          truncated: true,
+          ...imageFields
         }
       }
     } catch (error) {
@@ -516,7 +524,8 @@ export class ToolExecutionService {
           artifactUnavailable: true,
           byteSize,
           preview: content.slice(0, TOOL_RESULT_PREVIEW_CHARS),
-          reason: error instanceof Error ? error.message : String(error)
+          reason: error instanceof Error ? error.message : String(error),
+          ...imageFields
         }
       }
     }

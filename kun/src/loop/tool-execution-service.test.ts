@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Jimp } from 'jimp'
+import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
+import { createReadLocalTool } from '../adapters/tool/builtin-read-tool.js'
 import { makeToolResultItem } from '../domain/item.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { ToolHost, ToolHostContext, ToolHostResult } from '../ports/tool-host.js'
@@ -9,6 +15,9 @@ import { InflightTracker } from './inflight-tracker.js'
 import { ToolCancellationRegistry } from './tool-cancellation-registry.js'
 import { TOOL_ABORT_OUTCOME_UNKNOWN_CODE, ToolExecutionService } from './tool-execution-service.js'
 import { InMemoryArtifactStore, type ArtifactStore } from '../artifacts/artifact-store.js'
+import { extractToolResultImages, rehydrateTransientBrowserUseOutputsForForward, clearTransientBrowserUseOutputsForTest } from './tool-result-image.js'
+import { DEFAULT_IMAGE_MAX_BASE64_BYTES } from '../adapters/tool/builtin-tool-types.js'
+import { projectCompatMessages } from '../adapters/model/compat-message-projector.js'
 
 const call = {
   callId: 'call_1',
@@ -74,6 +83,118 @@ function makeService(input: {
 }
 
 describe('ToolExecutionService', () => {
+  it('forwards a genuine >1 MiB PNG through read, host, persistence and durable replay', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-persist-image-'))
+    try {
+      const image = new Jimp({ width: 600, height: 600 })
+      let seed = 42
+      for (let i = 0; i < image.bitmap.data.length; i += 4) {
+        for (let channel = 0; channel < 3; channel++) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+          image.bitmap.data[i + channel] = seed >>> 24
+        }
+        image.bitmap.data[i + 3] = 255
+      }
+      const bytes = await image.getBuffer('image/png')
+      expect((await Jimp.read(bytes)).width).toBe(600)
+      const data = bytes.toString('base64')
+      expect(Buffer.byteLength(data)).toBeGreaterThan(1024 * 1024)
+      expect(Buffer.byteLength(data)).toBeLessThan(DEFAULT_IMAGE_MAX_BASE64_BYTES)
+      await writeFile(join(workspace, 'noise.png'), bytes)
+      const artifacts = new InMemoryArtifactStore()
+      const put = vi.spyOn(artifacts, 'put')
+      const readCall = { ...call, arguments: { path: 'noise.png' } }
+      const host = new LocalToolHost({ tools: [createReadLocalTool()] })
+      const result = await host.execute(readCall, { ...context, workspace, artifactStore: artifacts })
+      expect(result.item).toMatchObject({ kind: 'tool_result', isError: false })
+      const { service, turns } = makeService({ artifactStore: artifacts })
+      await service.persistResult('thread_1', 'turn_1', readCall, result)
+      const persisted = vi.mocked(turns.applyItem).mock.calls[0]?.[1]
+      if (persisted?.kind !== 'tool_result') throw new Error('expected tool result')
+      const replayed: TurnItem = JSON.parse(JSON.stringify(persisted))
+      const toolCall: TurnItem = { ...persisted, kind: 'tool_call', role: 'assistant', arguments: readCall.arguments }
+      expect(extractToolResultImages(persisted.output)).toEqual([
+        { mimeType: 'image/png', dataBase64: data, width: 600, height: 600 }
+      ])
+      expect(put).not.toHaveBeenCalled()
+      const projected = projectCompatMessages({
+        threadId: 'thread_1', turnId: 'turn_1', model: 'vision', systemPrompt: '',
+        prefix: [], history: [toolCall, replayed], tools: [], abortSignal: new AbortController().signal
+      }, { thinkingMode: false, supportsImages: true })
+      expect(JSON.stringify(projected)).toContain(`data:image/png;base64,${data}`)
+    } finally { await rm(workspace, { recursive: true, force: true }) }
+  })
+
+  it.each(['image', 'computer_screenshot'])('preserves >1 MiB %s vision bytes through persistence and replay projection', async (kind) => {
+    const artifacts = new InMemoryArtifactStore()
+    const put = vi.spyOn(artifacts, 'put')
+    const { service, turns } = makeService({ artifactStore: artifacts })
+    const data = 'A'.repeat(2 * 1024 * 1024)
+    const item = makeToolResultItem({
+      id: 'large_image', threadId: 'thread_1', turnId: 'turn_1', callId: 'call_1', toolName: 'read',
+      output: { kind, mime_type: 'image/png', data_base64: data }
+    })
+    await service.persistResult('thread_1', 'turn_1', call, { item, approved: true })
+    const persisted = vi.mocked(turns.applyItem).mock.calls[0]?.[1]
+    if (persisted?.kind !== 'tool_result') throw new Error('expected tool result')
+    // Reparse the durable JSON shape, not the original host object.
+    const replayed: TurnItem = JSON.parse(JSON.stringify(persisted))
+    expect(extractToolResultImages(persisted.output)).toEqual([{ mimeType: 'image/png', dataBase64: data }])
+    expect(put).not.toHaveBeenCalled()
+    const toolCall: TurnItem = { ...persisted, kind: 'tool_call', role: 'assistant', arguments: {} }
+    for (const supportsImages of [true, false]) {
+      const projected = projectCompatMessages({
+        threadId: 'thread_1', turnId: 'turn_1', model: 'vision', systemPrompt: '',
+        prefix: [], history: [toolCall, replayed], tools: [], abortSignal: new AbortController().signal
+      }, { thinkingMode: false, supportsImages })
+      expect(JSON.stringify(projected).includes(`data:image/png;base64,${data}`)).toBe(supportsImages)
+      if (!supportsImages) expect(JSON.stringify(projected)).not.toContain(data)
+    }
+  })
+
+  it.each([false, true])('retains images when large metadata is externalized (storage failure=%s)', async (failure) => {
+    const artifacts = new InMemoryArtifactStore()
+    const put = vi.spyOn(artifacts, 'put')
+    if (failure) put.mockRejectedValue(new Error('disk unavailable'))
+    const { service, turns } = makeService({ artifactStore: artifacts })
+    const data = 'A'.repeat(2 * 1024 * 1024)
+    const item = makeToolResultItem({
+      id: 'large_metadata_image', threadId: 'thread_1', turnId: 'turn_1', callId: 'call_1', toolName: 'read',
+      output: { kind: 'image', mime_type: 'image/png', data_base64: data, text: 'x'.repeat(2 * 1024 * 1024) }
+    })
+    await service.persistResult('thread_1', 'turn_1', call, { item, approved: true })
+    const persisted = vi.mocked(turns.applyItem).mock.calls[0]?.[1]
+    if (persisted?.kind !== 'tool_result') throw new Error('expected tool result')
+    expect(extractToolResultImages(persisted.output)).toHaveLength(1)
+    expect(put.mock.calls[0]?.[0].content).not.toContain(data)
+    expect(persisted.output).toMatchObject(failure ? { artifactUnavailable: true } : { artifactId: expect.any(String) })
+    const output = persisted.output as Record<string, unknown>
+    expect(String(output.inline ?? output.preview)).not.toContain(data.slice(0, 80))
+  })
+
+  it('bounds browser images before transient caching and never persists their bytes', async () => {
+    clearTransientBrowserUseOutputsForTest()
+    try {
+      const { service, turns } = makeService()
+      const kept = 'A'.repeat(2 * 1024 * 1024)
+      const omitted = 'B'.repeat(DEFAULT_IMAGE_MAX_BASE64_BYTES + 4)
+      const item = makeToolResultItem({
+        id: 'browser_large', threadId: 'thread_1', turnId: 'turn_1', callId: 'call_1', toolName: 'browser_use',
+        output: { kind: 'browser_screenshot', images: [
+          { mime_type: 'image/png', data_base64: kept }, { mime_type: 'image/png', data_base64: omitted }
+        ] }
+      })
+      await service.persistResult('thread_1', 'turn_1', { ...call, toolName: 'browser_use' }, { item, approved: true })
+      const persisted = vi.mocked(turns.applyItem).mock.calls[0]?.[1]
+      if (persisted?.kind !== 'tool_result') throw new Error('expected tool result')
+      expect(JSON.stringify(persisted)).not.toContain(kept)
+      expect(JSON.stringify(persisted)).not.toContain(omitted)
+      const forwarded = rehydrateTransientBrowserUseOutputsForForward([persisted])[0]
+      if (forwarded.kind !== 'tool_result') throw new Error('expected tool result')
+      expect(extractToolResultImages(forwarded.output)).toEqual([{ mimeType: 'image/png', dataBase64: kept }])
+    } finally { clearTransientBrowserUseOutputsForTest() }
+  })
+
   it('externalizes oversized generic tool output before persisting the result', async () => {
     const artifacts = new InMemoryArtifactStore()
     const { service, turns } = makeService({ artifactStore: artifacts })
