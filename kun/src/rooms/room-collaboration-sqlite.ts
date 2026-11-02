@@ -40,6 +40,8 @@ export function initializeCollaborationIndexes(db: DatabaseSync): void {
     CREATE UNIQUE INDEX IF NOT EXISTS collaboration_owned_target ON room_documents(${followUpTargetKeySql})
       WHERE kind='commitment_link' AND json_extract(document,'$.active')=1
       AND json_extract(document,'$.ownership')='owned';
+    CREATE INDEX IF NOT EXISTS collaboration_task_thread ON room_documents(
+      json_extract(document,'$.task.executionThreadId'),id) WHERE kind='task';
     CREATE UNIQUE INDEX IF NOT EXISTS collaboration_effect_admission ON room_documents(
       json_extract(document,'$.admissionKey')) WHERE kind='commitment_effect';
     CREATE UNIQUE INDEX IF NOT EXISTS collaboration_execution_request ON room_documents(
@@ -57,6 +59,7 @@ type Row = {
 
 export function queryCollaboration<T = unknown>(db: DatabaseSync, input: CollaborationQuery): RoomStoredDocument<T>[] {
   const query = CollaborationQuerySchema.parse(input)
+  if (query.kind === 'owned_thread') return ownedThread<T>(db, query.threadId)
   const args: (string | number)[] = []
   const where: string[] = []
   let at = "json_extract(document,'$.updatedAt')", order = 'ASC', limit = 1
@@ -133,7 +136,23 @@ export function queryCollaboration<T = unknown>(db: DatabaseSync, input: Collabo
   args.push(limit)
   const ordering = query.kind === 'owned_target' ? '' : `ORDER BY ${priority ? "json_extract(document,'$.priority') DESC," : ''}${at} ${order},id ${order}`
   const rows = db.prepare(`SELECT * FROM room_documents WHERE ${where.join(' AND ')} ${ordering} LIMIT ?`).all(...args) as Row[]
-  return rows.map((row) => ({ kind: row.kind, id: row.id, revision: row.revision, seq: row.seq,
+  return rows.map(storedRow<T>)
+}
+
+/** Indexed aliases, bounded even if a corrupt database contains multiple owners. */
+function ownedThread<T>(db: DatabaseSync, threadId: string): RoomStoredDocument<T>[] {
+  const owned = "l.kind='commitment_link' AND json_extract(l.document,'$.active')=1 AND json_extract(l.document,'$.ownership')='owned'"
+  const key = followUpTargetKeySql.replaceAll('document', 'l.document')
+  const rows = db.prepare(`SELECT l.* FROM room_documents l WHERE ${owned} AND (${key})=?
+    UNION ALL SELECT l.* FROM room_documents t JOIN room_documents l
+      ON (${key})=json_array('room_task',t.id) AND ${owned}
+      WHERE t.kind='task' AND json_extract(t.document,'$.task.executionThreadId')=? LIMIT 2`)
+    .all(JSON.stringify(['thread', threadId]), threadId) as Row[]
+  return rows.map(storedRow<T>)
+}
+
+function storedRow<T>(row: Row): RoomStoredDocument<T> {
+  return { kind: row.kind, id: row.id, revision: row.revision, seq: row.seq,
     ...(row.room_id ? { roomId: row.room_id } : {}), ...(row.task_id ? { taskId: row.task_id } : {}),
-    value: JSON.parse(row.document) as T }))
+    value: JSON.parse(row.document) as T }
 }

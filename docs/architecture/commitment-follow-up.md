@@ -159,9 +159,41 @@ admission and local controller registration must occupy the same short
 arbitration scope as stop/takeover. Model, provider, GitHub, and external process
 work must stay outside it. A Manager-owned physical writer queue additionally
 keeps an in-flight persistence operation ahead of later control commits when an
-RPC reservation expires during I/O. The native ThreadStore writer and production
-host callback still have to join this boundary before automatic native execution
-can be exposed; the RoomStore reservation alone does not complete that contract.
+RPC reservation expires during I/O. ThreadStore upsert and revision-CAS now join
+this queue at the physical metadata write, after acquiring the existing thread
+mutation queue. Manager resolves active ownership through the actual thread,
+Workbench, and RoomTask aliases, rather than trusting a native flag in the RPC.
+Raw new queued/running turns and queued-to-running promotions on owned targets
+require the exact typed target and native request, immutable template fingerprint,
+live Manager reservation, and a current, non-revoked native permit. Enqueue also
+requires the current dispatch claim; promotion rechecks the durable permit even
+if the earlier claim has expired. The generic RoomStore RPC cannot mint that
+native permit.
+
+Already-admitted receipt finalization, current-owner running progress, and
+cancellation remain writable after stop. Retained native receipt history blocks
+restored executable snapshots, including snapshots that omit the history or
+arrive after ownership was released. Native authority-bearing input cannot be rewritten
+or admission progress rewound; runtime-derived progress such as resolved skills can
+still be recorded after the turn starts. Initial admission compares omitted request
+fields against the existing thread's inherited execution settings and resolves the
+same task/design surface as normal admission. The initial native tier requires the
+Kun harness with provider credentials, a pinned or inherited model, and no ungranted
+attachment aliases or precomputed gateway/skill grants. Presentation-only prompt
+bodies live in the SessionStore, not ThreadStore metadata; initial/promotion input is checked
+against the reserved request at its actual start boundary. Promotion additionally
+requires the exact completed user item from the validated durable item index;
+transient live checkpoints and in-memory projections are not admission evidence.
+Prompts are checked in bounded fragments; promotion proof is capped at 256 KiB
+UTF-8. If the index is unavailable, Manager schedules its existing index rebuild and
+refuses the start; the accepted queued request remains available for reconciliation
+under the same identity.
+
+Production permit issuance and the native host callback must still be joined
+before automatic execution is exposed. Source-backed native admission fails
+closed until the qualified source/grant adapter is present. These Manager HTTP
+tests seed a trusted issuer result; they do not claim end-to-end dispatch or
+source-authorization coverage.
 
 Commit reservations are resource-scoped: a nested follow-up scope cannot reuse
 an enclosing thread commit ID. Same-resource reentry is allowed only for the

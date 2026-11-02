@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { StartTurnRequest } from './turns.js'
 import {
   CommitmentRecordFields, FollowUpId, FollowUpRevision, FollowUpTime, FollowUpFingerprint,
   FollowUpEnvelopeSchema
@@ -24,10 +25,13 @@ export const FollowUpClaimSchema = z.object({
 export const CommitmentExecutionSchema = z.object({
   ...CommitmentRecordFields, attemptId: FollowUpId, requestId: FollowUpId, effectId: FollowUpId,
   envelope: FollowUpEnvelopeSchema, fingerprint: FollowUpFingerprint,
+  nativeRequest: z.object({ threadId: FollowUpId, request: StartTurnRequest }).strict().optional(),
   phase: z.enum(['reserved', 'admitted', 'accepted', 'reconciling', 'terminal']),
   permit: z.object({
     admissionKey: FollowUpId, controlRevision: FollowUpRevision,
-    claimToken: FollowUpRevision, issuedAt: FollowUpTime, revokedAt: FollowUpTime.optional()
+    claimToken: FollowUpRevision, issuedAt: FollowUpTime, revokedAt: FollowUpTime.optional(),
+    native: z.object({ threadId: FollowUpId, requestFingerprint: FollowUpFingerprint,
+      issuanceId: FollowUpId }).strict().optional()
   }).strict().optional(),
   receipt: FollowUpReceiptSchema.optional(), nextReconcileAt: FollowUpTime.nullable(),
   stopRequestedAt: FollowUpTime.optional()
@@ -35,6 +39,8 @@ export const CommitmentExecutionSchema = z.object({
   value.requestId === value.envelope.requestId && value.effectId === value.envelope.effectId &&
   value.commitmentId === value.envelope.commitmentId && value.sourceRoomId === value.envelope.sourceRoomId,
   'execution and envelope identities must agree')
+  .refine((value) => !value.nativeRequest || value.nativeRequest.request.clientRequestId === value.requestId,
+    'native request must retain the receiver request identity')
   .refine((value) => value.phase === 'reserved' || value.phase === 'terminal' || Boolean(value.permit),
     'admitted execution requires a durable permit')
   .refine((value) => !value.receipt || value.receipt.requestId === value.requestId && value.receipt.fingerprint === value.fingerprint,

@@ -26,7 +26,7 @@ const immutable: Record<CollaborationDocumentKind, readonly string[]> = {
   collaboration_source_grant: ['sourceId', 'accountRef', 'resource', 'userEvidence'],
   collaboration_event: [],
   commitment_event_binding: ['eventId', 'candidateGrantRef', 'purpose'],
-  commitment_execution: ['attemptId', 'requestId', 'effectId', 'envelope', 'fingerprint'],
+  commitment_execution: ['attemptId', 'requestId', 'effectId', 'envelope', 'fingerprint', 'nativeRequest'],
   commitment_effect: ['effectId', 'kind', 'requestId', 'admissionKey', 'fingerprint', 'envelope'],
   commitment_attention: ['kind', 'sourceRef', 'artifactVersion', 'attemptId', 'question', 'choices'],
   collaboration_policy: ['userEvidence', 'commitmentFingerprint']
@@ -73,7 +73,7 @@ export function validateCollaborationWrite(db: DatabaseSync, input: {
       const permit = value.permit as Record<string, unknown> | undefined
       if (oldPermit) {
         if (!permit) fail('execution permit cannot be erased')
-        for (const key of ['admissionKey', 'controlRevision', 'claimToken', 'issuedAt']) {
+        for (const key of ['admissionKey', 'controlRevision', 'claimToken', 'issuedAt', 'native']) {
           if (!isDeepStrictEqual(oldPermit[key], permit?.[key])) fail('execution permit identity cannot change')
         }
         if (oldPermit.revokedAt && oldPermit.revokedAt !== permit?.revokedAt) fail('execution revocation cannot be undone')

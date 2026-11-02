@@ -32,6 +32,7 @@ export const CollaborationQuerySchema = z.discriminatedUnion('kind', [
     cursor: z.object({ priority: z.number().int().min(0).max(100), at: FollowUpTime, id: FollowUpId }).strict().optional(),
     limit: Limit }).strict(),
   z.object({ kind: z.literal('owned_target'), targetKey: z.string().min(1).max(1024) }).strict(),
+  z.object({ kind: z.literal('owned_thread'), threadId: FollowUpId }).strict(),
   z.object({ kind: z.literal('source_subscriptions'), sourceId: FollowUpId,
     cursor: Cursor.optional(), limit: Limit }).strict()
 ])

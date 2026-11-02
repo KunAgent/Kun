@@ -100,6 +100,8 @@ export type ItemHistoryPageOptions = {
   /** Read a bounded content fragment of one public item in the exact turn. */
   itemId?: string
   contentOffset?: number
+  /** Host-only request: use the validated durable index, never live checkpoints. */
+  durableOnly?: true
   maxItems: number
   maxBytes: number
 }
@@ -258,6 +260,8 @@ export interface SessionStore {
   loadItems(threadId: string): Promise<TurnItem[]>
   /** Optional bounded history read used by renderer timeline hydration. */
   loadItemPage?(threadId: string, options: ItemHistoryPageOptions): Promise<ItemHistoryPage>
+  /** Bounded authoritative history without transient/live overlays; fail closed if unavailable. */
+  loadDurableItemPage?(threadId: string, options: ItemHistoryPageOptions): Promise<ItemHistoryPage>
   /**
    * Optional bounded, lock-free text scan over item history.
    *

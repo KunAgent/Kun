@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto'
-import { z } from 'zod'
 import { withManagerDataMutex, type ManagerDataMutexIdentity } from './data-mutex.js'
 import { CollaborationDocumentKindSchema } from '../contracts/collaboration-store.js'
 import type { RoomStore, RoomStoreCommit } from '../rooms/room-store.js'
 import { currentManagerDataCommitId, currentManagerDataMutexContext } from './data-mutex-context.js'
-import { ManagerResourceFenceSchema, ResourceFenceStaleError } from './resource-lease-state.js'
+import { ResourceFenceStaleError } from './resource-lease-state.js'
+import type { FollowUpArbitrationFence } from './followup-arbitration-contracts.js'
+export { FollowUpArbitrationFenceSchema, type FollowUpArbitrationFence } from './followup-arbitration-contracts.js'
 import type { ServiceManagerState } from './service-manager-state.js'
 
 // Lock order is native thread mutation -> follow-up arbitration. Cancellation
@@ -12,10 +13,6 @@ import type { ServiceManagerState } from './service-manager-state.js'
 export const FOLLOW_UP_ARBITRATION_RESOURCE = 'commitment-followup'
 export const FOLLOW_UP_ARBITRATION_LEASE = `data:${createHash('sha256')
   .update(FOLLOW_UP_ARBITRATION_RESOURCE).digest('hex').slice(0, 32)}`
-export const FollowUpArbitrationFenceSchema = z.object({
-  fence: ManagerResourceFenceSchema, commitId: z.string().min(1).max(256)
-}).strict()
-export type FollowUpArbitrationFence = z.infer<typeof FollowUpArbitrationFenceSchema>
 
 export function currentFollowUpArbitrationFence(): FollowUpArbitrationFence | undefined {
   const context = currentManagerDataMutexContext(), commitId = currentManagerDataCommitId()

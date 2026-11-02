@@ -1,9 +1,8 @@
 import { TurnConflictError } from './turn-conflict-error.js'
 import { nativeFollowUpOperations } from './native-followup-admission.js'
 import type { NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
-import { createHash } from 'node:crypto'
 import type { ThreadAgentSurface, ThreadRecord, ThreadStatus } from '../contracts/threads.js'
-import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
+export { fingerprintStartTurnRequest, canonicalizeFingerprintValue } from '../domain/turn-request-fingerprint.js'
 import type {
   CompactRequest,
   CompactResponse,
@@ -510,27 +509,6 @@ installServiceOperations(
   turnServiceItemPersistenceOperations
 )
 
-
-export function fingerprintStartTurnRequest(request: StartTurnRequest): string | undefined {
-  if (!request.clientRequestId?.trim()) return undefined
-  const normalized = StartTurnRequestSchema.parse(request)
-  // ackNoticeIds is transport metadata the renderer refetches per attempt;
-  // hashing it would break idempotent replay of an otherwise identical send.
-  const { ackNoticeIds: _ackNoticeIds, ...content } = normalized
-  const canonical = canonicalizeFingerprintValue(content)
-  return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')
-}
-
-export function canonicalizeFingerprintValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalizeFingerprintValue)
-  if (!value || typeof value !== 'object') return value
-  const canonical: Record<string, unknown> = {}
-  for (const key of Object.keys(value).sort()) {
-    const entry = (value as Record<string, unknown>)[key]
-    if (entry !== undefined) canonical[key] = canonicalizeFingerprintValue(entry)
-  }
-  return canonical
-}
 
 export function isActiveTurn(turn: Turn): turn is Turn & { status: 'queued' | 'running' } {
   return turn.status === 'queued' || turn.status === 'running'

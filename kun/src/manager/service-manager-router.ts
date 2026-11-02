@@ -27,6 +27,7 @@ import {
 
 import {
   ManagerResourceFenceSchema,
+  ResourceFenceStaleError,
   RESOURCE_COMMIT_TTL_MS,
   RESOURCE_LEASE_TTL_MS
 } from './resource-lease-state.js'
@@ -57,7 +58,10 @@ import {
 import { addHostPowerRoute } from './service-manager-router-host-power.js'
 import { addManagerAtomicJsonRoutes } from './service-manager-router-atomic-json.js'
 import { addManagerRoomRoutes } from './service-manager-router-rooms.js'
-import { ManagerFollowUpWriteArbitration } from './followup-arbitration.js'
+import { ManagerFollowUpWriteArbitration, assertFollowUpArbitrationFence } from './followup-arbitration.js'
+import { managerFollowUpThreadWriteGuard } from './followup-thread-writes.js'
+import { withThreadAdmissionWriteGuard } from './thread-admission-context.js'
+import { NativeFollowUpPermitError } from './native-followup-write-scope.js'
 import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
 import {
   flushRenewal,
@@ -409,14 +413,23 @@ export function buildServiceManagerRouter(input: {
           input.state, 'thread', operation.data, envelope,
           (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
+        if (envelope.followUp) assertFollowUpArbitrationFence(input.state, envelope.followUp.arbitration)
         return await mutationReplay.execute(envelope.replay,
-          ['thread', operation.data, envelope.value, envelope.turnFence], async () => {
+          ['thread', operation.data, envelope.value, envelope.turnFence, envelope.followUp], async () => {
             assertCurrent?.()
-            const result = await input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent)
+            const guard = managerFollowUpThreadWriteGuard({ state: input.state,
+              roomStore: input.sharedData!.roomStore, writes: followUpWrites, scope: envelope.followUp })
+            const result = await withThreadAdmissionWriteGuard(guard, () =>
+              input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent))
             return jsonResponse({ result })
           })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid thread-store request', error.issues)
+        if (error instanceof ResourceFenceStaleError) return resourceFenceStale()
+        if (error instanceof NativeFollowUpPermitError) return jsonResponse({ code: error.code, message: error.message }, 409)
+        if (error instanceof Error && 'code' in error && error.code === 'native_followup_request_conflict') {
+          return jsonResponse({ code: error.code, message: error.message }, 409)
+        }
         if (error instanceof StaleTurnFenceError) {
           return jsonResponse({ code: error.code, message: error.message }, 409)
         }

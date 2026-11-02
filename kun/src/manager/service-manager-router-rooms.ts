@@ -24,6 +24,8 @@ import { authorizedAsync, validation } from './service-manager-router-auth.js'
 import { MAX_MANAGER_DATA_BODY_BYTES, type ServiceManagerState } from './service-manager-state.js'
 import { resourceFenceStale } from './service-manager-router-fenced-mutation.js'
 import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from './service-manager-router-persistence.js'
+import { NativeFollowUpPermitError } from './native-followup-write-scope.js'
+import { assertNoNativePermitMint } from './followup-permit-writes.js'
 import { FollowUpArbitrationFenceSchema, ManagerFollowUpWriteArbitration,
   assertFollowUpArbitrationFence, requiresFollowUpArbitration } from './followup-arbitration.js'
 
@@ -115,6 +117,7 @@ export function addManagerRoomRoutes(router: Router, input: {
               }
               // Revalidate before durable request replay as well as the physical transaction.
               assertWrite()
+              await assertNoNativePermitMint(input.roomStore, value.input)
               return input.roomStore.commit(value.input, assertWrite)
             })
             break
@@ -136,6 +139,7 @@ export function addManagerRoomRoutes(router: Router, input: {
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid room-store request', error.issues)
         if (error instanceof ResourceFenceStaleError) return resourceFenceStale()
+        if (error instanceof NativeFollowUpPermitError) return jsonResponse({ code: error.code, message: error.message }, 409)
         if (error instanceof RoomStoreConflictError) return jsonResponse({
           code: 'room_store_conflict', message: error.message, currentRevision: error.currentRevision
         }, 409)

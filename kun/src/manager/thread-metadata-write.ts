@@ -4,6 +4,7 @@ import { ThreadSchema, type ThreadRecord } from '../contracts/threads.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore, ThreadStoreConditionalWrite } from '../ports/thread-store.js'
 import { projectSessionItemsOntoExistingTurns } from '../services/thread-item-projection.js'
+import { guardThreadAdmissionWrite } from './thread-admission-context.js'
 
 const RequestSchema = z.object({
   thread: ThreadSchema,
@@ -26,15 +27,17 @@ export async function writeThreadMetadata(
     const items = await sessionStore.loadItems(thread.id)
     thread = projectSessionItemsOntoExistingTurns(stripThreadItemBodies(thread), items) ?? thread
   }
-  assertCurrent?.()
-  if (conditional) {
-    const result = await threadStore.upsertIfRevision!(thread, body.expectedRevision!)
-    return body.metadataOnly && result.thread
-      ? { ...result, thread: stripThreadItemBodies(result.thread) }
-      : result
-  }
-  const stored = await threadStore.upsert(thread)
-  return body.metadataOnly ? stripThreadItemBodies(stored) : stored
+  return guardThreadAdmissionWrite(threadStore, thread, async () => {
+    assertCurrent?.()
+    if (conditional) {
+      const result = await threadStore.upsertIfRevision!(thread, body.expectedRevision!)
+      return body.metadataOnly && result.thread
+        ? { ...result, thread: stripThreadItemBodies(result.thread) }
+        : result
+    }
+    const stored = await threadStore.upsert(thread)
+    return body.metadataOnly ? stripThreadItemBodies(stored) : stored
+  }, sessionStore)
 }
 
 /** Keep the ThreadStore return contract without another hydrated HTTP response. */
