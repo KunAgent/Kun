@@ -167,8 +167,17 @@ Raw new queued/running turns and queued-to-running promotions on owned targets
 require the exact typed target and native request, immutable template fingerprint,
 live Manager reservation, and a current, non-revoked native permit. Enqueue also
 requires the current dispatch claim; promotion rechecks the durable permit even
-if the earlier claim has expired. The generic RoomStore RPC cannot mint that
-native permit.
+if the earlier claim has expired. Promotion also requires the exact current native
+turn execution lease owned by the same Runtime as the arbitration reservation;
+both fences are rechecked after asynchronous proof and before persistence. The
+generic RoomStore RPC cannot mint that
+native permit. An owned native link also captures a fingerprint of the real
+thread's workspace, owner, capability ceiling, model route and permission scope.
+The permit must carry the same fingerprint, and Manager checks both the current
+and proposed thread at enqueue and promotion. Active native work cannot be hidden
+by omitting its receipt row or deleting its turn from a metadata update; changing
+its target scope requires settlement and explicit reauthorization. Display-only
+names, activity timestamps and ordinary turn history are excluded from this scope.
 
 Already-admitted receipt finalization, current-owner running progress, and
 cancellation remain writable after stop. Retained native receipt history blocks
@@ -178,22 +187,30 @@ or admission progress rewound; runtime-derived progress such as resolved skills 
 still be recorded after the turn starts. Initial admission compares omitted request
 fields against the existing thread's inherited execution settings and resolves the
 same task/design surface as normal admission. The initial native tier requires the
-Kun harness with provider credentials, a pinned or inherited model, and no ungranted
-attachment aliases or precomputed gateway/skill grants. Presentation-only prompt
-bodies live in the SessionStore, not ThreadStore metadata; initial/promotion input is checked
-against the reserved request at its actual start boundary. Promotion additionally
-requires the exact completed user item from the validated durable item index;
-transient live checkpoints and in-memory projections are not admission evidence.
-Prompts are checked in bounded fragments; promotion proof is capped at 256 KiB
-UTF-8. If the index is unavailable, Manager schedules its existing index rebuild and
-refuses the start; the accepted queued request remains available for reconciliation
-under the same identity.
+Kun harness with provider credentials and the linked thread's non-empty model;
+a request may repeat, but cannot change, the linked model, provider, account,
+mode, approval policy, sandbox mode or approval reviewer. It also rejects
+ungranted attachment aliases and precomputed gateway/skill grants.
+Presentation-only prompt bodies live in the SessionStore, not ThreadStore metadata;
+initial/promotion input is checked against the reserved request at its actual start
+boundary. Promotion requires the sole complete user item for the turn from the
+validated durable item index, including matching context, file references, workspace
+and surface fields. It flushes pending checkpoints and rejects extra live or cached
+turn items; an overlay is never used as durable evidence. The prompt is limited to
+256 KiB UTF-8 and the full record and live proof to 1 MiB. If the index is unavailable,
+Manager schedules its existing index rebuild and refuses the start; the accepted
+queued request remains available for reconciliation under the same identity.
 
 Production permit issuance and the native host callback must still be joined
 before automatic execution is exposed. Source-backed native admission fails
 closed until the qualified source/grant adapter is present. These Manager HTTP
 tests seed a trusted issuer result; they do not claim end-to-end dispatch or
-source-authorization coverage.
+source-authorization coverage. The Manager also refuses direct deletion of an
+actively owned thread or one with an unsettled native receipt, serializing that
+check with ownership changes; ordinary unowned deletion remains available. This
+is a fail-closed interim boundary, not a completed user-facing detach/stop flow.
+User-takeover and durable deletion/receipt retention still need their own
+physical-stop proof before this capability can be enabled.
 
 Commit reservations are resource-scoped: a nested follow-up scope cannot reuse
 an enclosing thread commit ID. Same-resource reentry is allowed only for the

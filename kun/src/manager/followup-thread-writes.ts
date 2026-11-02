@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { NativeFollowUpRequest } from '../contracts/native-followup-requests.js'
+import type { TurnMutationFence } from '../contracts/runtime-flavor.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { StartTurnRequest, Turn } from '../contracts/turns.js'
 import { CommitmentExecutionSchema, CommitmentEffectSchema } from '../contracts/collaboration-effects.js'
@@ -7,12 +8,16 @@ import { CommitmentControlSchema, CommitmentLinkSchema, CollaborationPolicySchem
 import { AgentCommitmentSchema } from '../contracts/agent-commitments.js'
 import { retainNativeFollowUpRequests } from '../domain/native-followup-requests.js'
 import { fingerprintStartTurnRequest } from '../domain/turn-request-fingerprint.js'
+import { nativeFollowUpTargetFingerprint } from '../domain/native-followup-target.js'
+import { makeUserItem } from '../domain/item.js'
+import { resolveThreadAgentSurface } from '../domain/thread.js'
 import { followUpPolicyCurrent } from '../agents/followup/state.js'
 import { resolveDesignTurnAdmission } from '../services/turn-service-design-admission.js'
 import type { RoomStore } from '../rooms/room-store.js'
 import type { SessionStore } from '../ports/session-store.js'
 import { assertFollowUpArbitrationFence, type ManagerFollowUpWriteArbitration } from './followup-arbitration.js'
 import { NativeFollowUpPermitError, type NativeFollowUpWriteScope } from './native-followup-write-scope.js'
+import { assertManualFollowUpEvidence } from './manual-followup-evidence.js'
 import type { ServiceManagerState } from './service-manager-state.js'
 import type { ThreadAdmissionWriteGuard } from './thread-admission-context.js'
 
@@ -24,11 +29,14 @@ const immutableTurnFields = ['clientRequestId', 'clientRequestFingerprint', 'pap
   'collaborationEnabled', 'serviceTier', 'clientSurface', 'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'attachmentIds',
   'composerContexts', 'guiPlan', 'guiDesignCanvas', 'guiExcalidrawCanvas', 'guiDesignMode',
   'agentSurface', 'designProfile', 'designDocumentTarget', 'writeContext', 'persona', 'guiDesignArtifact',
-  'mode', 'orchestration', 'disableUserInput', 'imContext', 'planBuild', 'workspaceCheckpointRequestId'] as const
+  'mode', 'orchestration', 'disableUserInput', 'imContext', 'planBuild', 'workspaceCheckpointRequestId',
+  // Host-resolved routing and hard gates must not move under an admitted turn.
+  'actingModelRoute', 'requiredToolGate'] as const
 
 // These are resolved by the runtime after a turn starts, but must not be
 // injected into a pending queue entry or changed during its promotion.
-const queuedOnlyTurnFields = ['activeSkillIds', 'gatewayAliasGrants', 'workspaceCheckpointId'] as const
+const queuedOnlyTurnFields = ['activeSkillIds', 'gatewayAliasGrants', 'workspaceCheckpointId',
+  'extensionBudgetTokenBaseline', 'extensionModelRequests', 'extensionToolInvocations'] as const
 
 // Pure request fields must match even when omitted: otherwise a metadata
 // writer can add authority or instructions without changing the fingerprint.
@@ -44,15 +52,18 @@ const nonBlank = (value: string | undefined): string | undefined => value?.trim(
 function assertInitialNativeSettings(thread: ThreadRecord | null | undefined, request: StartTurnRequest, turn: Turn): void {
   const fail = (message: string): never => { throw new NativeFollowUpPermitError(message) }
   if (!thread || turn.threadId !== thread.id) return fail('native target thread does not match')
-  const model = nonBlank(request.model) ?? nonBlank(thread.model)
-  // If an old thread has no model, the host must pin its resolved default;
-  // the Manager cannot safely infer a runtime-specific default.
-  if (!model) return fail('native model must be pinned')
-  const requestedProviderId = nonBlank(request.providerId)
+  // A request may repeat the bound route, but must not move user context to a
+  // different model, provider, or account without a new user authorization.
+  const model = nonBlank(thread.model)
   const threadProviderId = nonBlank(thread.providerId)
-  const providerId = requestedProviderId ?? threadProviderId ?? 'default'
-  const accountId = nonBlank(request.accountId) ??
-    (!requestedProviderId || requestedProviderId === threadProviderId ? thread.accountId : undefined)
+  const providerId = threadProviderId ?? 'default'
+  const accountId = nonBlank(thread.accountId)
+  if (!model || nonBlank(request.model) && nonBlank(request.model) !== model ||
+    nonBlank(request.providerId) && nonBlank(request.providerId) !== providerId ||
+    nonBlank(request.accountId) && nonBlank(request.accountId) !== accountId ||
+    request.mode !== undefined && request.mode !== thread.mode) {
+    return fail('native request changes the linked execution route')
+  }
   const inheritedHarness = request.harnessId ?? thread.harnessId ?? thread.executionConfig?.route.harnessId
   const credentialMode = request.credentialMode ??
     (thread.executionConfig?.route.harnessId === 'kun' ? thread.executionConfig.route.credentialMode : undefined) ?? 'provider'
@@ -67,6 +78,13 @@ function assertInitialNativeSettings(thread: ThreadRecord | null | undefined, re
   // native queue writer. Attachment aliases require a separate host grant.
   if (turn.activeSkillIds.length || turn.attachmentAliases !== undefined) {
     return fail('native queue contains ungranted runtime-derived settings')
+  }
+  // A continuation cannot choose a different approval or sandbox regime just
+  // by placing an override in its otherwise immutable request template.
+  for (const key of ['approvalPolicy', 'sandboxMode', 'approvalReviewer'] as const) {
+    if (request[key] !== undefined && request[key] !== thread[key]) {
+      return fail('native request changes linked permissions: ' + key)
+    }
   }
   const expected = {
     model, providerId, accountId,
@@ -120,9 +138,19 @@ export function nativeFollowUpAdmissionChanges(prior: ThreadRecord | null | unde
   }
   for (const row of effective.nativeFollowUpRequests ?? []) {
     const old = oldRows.get(row.admission.requestId)
+    const turn = next.turns.find((candidate) => candidate.id === row.turnId)
+    if (old?.phase === 'preparing' && row.phase === 'known_not_admitted') {
+      throw new NativeFollowUpPermitError('native rollback requires authoritative negative reconciliation')
+    }
+    if (old?.phase === 'preparing' && row.phase === 'admitted') {
+      if (!turn || turn.status !== 'queued' || turn.admissionPending || !turn.admissionCompletedAt) {
+        throw new NativeFollowUpPermitError('native acceptance requires completed queue admission')
+      }
+      changes.set(turn.id, { turn, row, stage: 'enqueue' })
+      continue
+    }
     const prepared = !old || row.preparationRevision > old.preparationRevision
     if (!prepared) continue
-    const turn = next.turns.find((candidate) => candidate.id === row.turnId)
     if (!turn || turn.status !== 'queued' || row.phase !== 'preparing' || turns.has(turn.id) && active(turns.get(turn.id))) {
       throw new NativeFollowUpPermitError('new native preparation must introduce its queued turn')
     }
@@ -134,10 +162,47 @@ export function nativeFollowUpAdmissionChanges(prior: ThreadRecord | null | unde
 /** Installed at the Manager RPC, invoked inside the existing per-thread mutation queue. */
 export function managerFollowUpThreadWriteGuard(input: {
   state: ServiceManagerState; roomStore: RoomStore; writes: ManagerFollowUpWriteArbitration;
-  scope?: NativeFollowUpWriteScope; now?: () => string
+  scope?: NativeFollowUpWriteScope; turnFence?: TurnMutationFence; now?: () => string
 }): ThreadAdmissionWriteGuard {
   return (store, next, write, sessions) => input.writes.run(async () => {
     const prior = store.getMetadata ? await store.getMetadata(next.id) : await store.get(next.id)
+    if (prior) {
+      const oldTurns = new Map(prior.turns.map((turn) => [turn.id, turn]))
+      const newTurns = new Map(next.turns.map((turn) => [turn.id, turn]))
+      const activeNativeIds = (prior.nativeFollowUpRequests ?? []).map((row) => row.turnId)
+        .filter((id) => active(oldTurns.get(id)))
+      if (activeNativeIds.some((id) => !newTurns.has(id))) {
+        throw new NativeFollowUpPermitError('active native execution cannot be removed before settlement')
+      }
+      if (activeNativeIds.length && nativeFollowUpTargetFingerprint(prior) !== nativeFollowUpTargetFingerprint(next)) {
+        throw new NativeFollowUpPermitError('native target authority cannot change while work is active')
+      }
+      // Terminal receipts must reflect a real terminal transition, not a forged row or queued completion.
+      const effective = retainNativeFollowUpRequests(prior, next)
+      for (const oldRow of prior.nativeFollowUpRequests ?? []) {
+        const row = effective.nativeFollowUpRequests?.find(candidate => candidate.admission.requestId === oldRow.admission.requestId)
+        const before = oldTurns.get(oldRow.turnId), after = newTurns.get(oldRow.turnId)
+        if (!row || !before) continue
+        const terminal = after?.status === 'completed' ? 'completed' : after?.status === 'failed' ? 'failed'
+          : after?.status === 'aborted' ? 'cancelled' : undefined
+        if (row.terminalStatus && (!oldRow.terminalStatus || after) && row.terminalStatus !== terminal) {
+          throw new NativeFollowUpPermitError('native terminal receipt does not match a terminal turn')
+        }
+        if (!oldRow.terminalStatus && row.terminalStatus && after) {
+          if (before.status === 'queued' && (after.status === 'completed' || after.startedAt)) {
+            throw new NativeFollowUpPermitError('an unstarted native turn cannot be reported as executed')
+          }
+          if (before.status === 'running') {
+            const fence = input.turnFence
+            if (!fence || fence.threadId !== prior.id || fence.turnId !== before.id) {
+              throw new NativeFollowUpPermitError('native terminal outcome requires the executing turn fence')
+            }
+            try { input.state.assertTurnMutationFence(fence) }
+            catch { throw new NativeFollowUpPermitError('native terminal outcome has a stale turn fence') }
+          }
+        }
+      }
+    }
     const changes = nativeFollowUpAdmissionChanges(prior, next)
     if (!changes.length) return write()
     const owners = await input.roomStore.collaborationQuery({ kind: 'owned_thread', threadId: next.id })
@@ -146,18 +211,42 @@ export function managerFollowUpThreadWriteGuard(input: {
     const owner = CommitmentLinkSchema.parse(owners[0].value), change = changes[0]
     if (owner.stopRequestedAt || !change.row || change.stage !== input.scope.stage ||
       !isDeepStrictEqual(change.row.admission, input.scope.admission)) throw new NativeFollowUpPermitError()
-    await assertNativeFollowUpPermit({ ...input, scope: input.scope, threadId: next.id, thread: prior,
+    const assertCoordinator = (): void => {
+      const coordinator = input.scope!.coordinatorFence, arbitration = input.scope!.arbitration.fence
+      if (coordinator.resource !== 'rooms-coordinator' || coordinator.ownerFlavor !== arbitration.ownerFlavor ||
+        coordinator.ownerInstanceId !== arbitration.ownerInstanceId ||
+        input.state.registration(coordinator.ownerFlavor)?.instanceId !== coordinator.ownerInstanceId) {
+        throw new NativeFollowUpPermitError('native admission requires the current rooms coordinator')
+      }
+      try { input.state.assertResource(coordinator) }
+      catch { throw new NativeFollowUpPermitError('rooms coordinator fence is no longer current') }
+    }
+    const assertPromotionLease = (): void => {
+      if (change.stage !== 'promote') return
+      const lease = input.state.lease(next.id), arbitration = input.scope!.arbitration.fence
+      if (!lease || lease.turnId !== change.turn.id || lease.ownerFlavor !== arbitration.ownerFlavor ||
+        lease.ownerInstanceId !== arbitration.ownerInstanceId) {
+        throw new NativeFollowUpPermitError('native promotion requires the current turn owner lease')
+      }
+      try { input.state.assertTurnMutationFence(lease) }
+      catch { throw new NativeFollowUpPermitError('native turn owner lease is no longer current') }
+    }
+    assertCoordinator()
+    assertPromotionLease()
+    await assertNativeFollowUpPermit({ ...input, scope: input.scope, threadId: next.id, thread: prior, next,
       row: change.row, turn: change.turn, sessions, owner, now: input.now?.() ?? new Date().toISOString() })
     // Shared physical serialization remains held until filesystem/SQLite persistence settles.
     // A replacement Runtime can no longer commit stop ahead of this outstanding write.
     assertFollowUpArbitrationFence(input.state, input.scope.arbitration)
+    assertCoordinator()
+    assertPromotionLease()
     return write()
   })
 }
 
 export async function assertNativeFollowUpPermit(input: {
   state: ServiceManagerState; roomStore: RoomStore; scope: NativeFollowUpWriteScope; threadId: string;
-  thread: ThreadRecord | null | undefined; row: NativeFollowUpRequest; turn: Turn; sessions: SessionStore;
+  thread: ThreadRecord | null | undefined; next: ThreadRecord; row: NativeFollowUpRequest; turn: Turn; sessions: SessionStore;
   owner: ReturnType<typeof CommitmentLinkSchema.parse>; now: string
 }): Promise<void> {
   const { roomStore: store, scope, row, owner, now } = input
@@ -186,6 +275,12 @@ export async function assertNativeFollowUpPermit(input: {
     (execution.nativeRequest.request.prompt !== input.turn.prompt && input.turn.prompt !== '')) {
     return fail('native queued request does not match its permit')
   }
+  if (!input.thread || !owner.nativeTarget || owner.nativeTarget.threadId !== input.threadId ||
+    owner.nativeTarget.fingerprint !== permit.native.targetFingerprint ||
+    nativeFollowUpTargetFingerprint(input.thread) !== owner.nativeTarget.fingerprint ||
+    nativeFollowUpTargetFingerprint(input.next) !== owner.nativeTarget.fingerprint) {
+    return fail('native target authority changed since it was linked')
+  }
   if (owner.commitmentId !== envelope.commitmentId || owner.sourceRoomId !== envelope.sourceRoomId ||
     owner.participantAgentId !== execution.participantAgentId || !isDeepStrictEqual(owner.target, envelope.target)) {
     return fail('native target does not match its owner')
@@ -202,8 +297,8 @@ export async function assertNativeFollowUpPermit(input: {
     !isDeepStrictEqual(request.composerContexts ?? [], input.turn.composerContexts ?? [])) {
     return fail('native turn attachments do not match its reserved request')
   }
-  if (scope.stage === 'promote') {
-    await assertNativeUserItem(input.sessions, row, execution.nativeRequest.request.prompt)
+  if (scope.stage === 'promote' || row.phase === 'admitted') {
+    await assertNativeUserItem(input.sessions, row, request, input.thread, input.turn)
   }
   if (scope.stage === 'enqueue' && (effect.status !== 'dispatching' || !effect.claim ||
     effect.claim.ownerId !== scope.arbitration.fence.ownerInstanceId || effect.claim.token !== scope.claimToken ||
@@ -221,44 +316,48 @@ export async function assertNativeFollowUpPermit(input: {
     control.sourceRoomId !== envelope.sourceRoomId || control.participantAgentId !== execution.participantAgentId ||
     !policyRow || policyRow.revision !== envelope.policyVersion || !policy?.allowedActions.includes('continue') ||
     !followUpPolicyCurrent(commitment, control, policy, now)) return fail('native authorization was revoked or changed')
+  if (permit.native.manualEventId) {
+    if (!execution.dispatch || scope.claimToken < execution.dispatch.claimToken) {
+      return fail('manual native dispatch has not been authorized')
+    }
+    await assertManualFollowUpEvidence({ store, execution, commitment, control, policy, owner })
+  }
   // Pausing/disabling bumps generation but does not revoke a permit already issued
   // under this authorization epoch. Stop, takeover and scope changes do revoke it.
   // Source-backed admission is enabled only with the qualified source/grant adapter.
   if (envelope.source) return fail('source-backed native admission is not yet available')
 }
 
-/** Never trust the RPC's metadataOnly flag or its submitted prompt at promotion. */
-async function assertNativeUserItem(sessions: SessionStore, row: NativeFollowUpRequest, prompt: string): Promise<void> {
+/** Never trust the RPC's metadata or a renderer-oriented, truncated history preview. */
+export async function assertNativeUserItem(sessions: SessionStore, row: NativeFollowUpRequest,
+  request: StartTurnRequest, thread: ThreadRecord, turn: Turn): Promise<void> {
   const fail = (): never => { throw new NativeFollowUpPermitError('canonical native user input is missing or changed') }
-  // Exact-item requests return content fragments, not item envelopes. First
-  // verify the bounded turn page's actual user-message identity and lifecycle.
   if (!sessions.loadDurableItemPage) throw new NativeFollowUpPermitError('durable native user input could not be verified')
-  if (prompt.length > 256 * 1024 || Buffer.byteLength(prompt, 'utf8') > 256 * 1024) return fail()
-  const durablePage = sessions.loadDurableItemPage.bind(sessions)
-  const load = async (...args: Parameters<typeof durablePage>) => {
-    try { return await durablePage(...args) }
-    catch { throw new NativeFollowUpPermitError('durable native user input could not be verified') }
+  if (request.prompt.length > 256 * 1024 || Buffer.byteLength(request.prompt, 'utf8') > 256 * 1024) return fail()
+  let page: Awaited<ReturnType<NonNullable<SessionStore['loadDurableItemPage']>>>
+  try {
+    page = await sessions.loadDurableItemPage(row.threadId, {
+      turnId: row.turnId, exactItemId: row.userMessageItemId, maxItems: 1, maxBytes: 1024 * 1024
+    })
+  } catch { throw new NativeFollowUpPermitError('durable native user input could not be verified') }
+  const item = page.items[0]
+  if (page.items.length !== 1 || !item || item.kind !== 'user_message' || item.role !== 'user' ||
+    item.status !== 'completed' || item.id !== row.userMessageItemId || item.threadId !== row.threadId ||
+    item.turnId !== row.turnId || item.text !== request.prompt) return fail()
+  const design = resolveDesignTurnAdmission({ thread, request, turnId: row.turnId })
+  const expected = makeUserItem({ id: row.userMessageItemId, threadId: row.threadId, turnId: row.turnId,
+    text: request.prompt, displayText: request.displayText, messageSource: request.messageSource,
+    attachmentIds: turn.attachmentIds, attachmentAliases: turn.attachmentAliases, composerContexts: turn.composerContexts,
+    fileReferences: request.fileReferences, workspaceCheckpointId: request.workspaceCheckpointId,
+    workspace: thread.workspace, historyRefId: thread.historyRefId,
+    threadAgentSurface: design.locksSurface && design.effectiveSurface
+      ? design.effectiveSurface : resolveThreadAgentSurface(thread),
+    agentSurface: turn.agentSurface, designProfile: turn.designProfile, designDocumentTarget: turn.designDocumentTarget,
+    designImagePlacementTarget: request.designImagePlacementTarget })
+  if (expected.kind !== 'user_message') return fail()
+  for (const key of ['displayText', 'messageSource', 'attachmentIds', 'attachmentAliases', 'composerContexts',
+    'reviewRequests', 'fileReferences', 'historyRefId', 'workspaceCheckpointId', 'workspace', 'threadAgentSurface',
+    'agentSurface', 'designProfile', 'designDocumentTarget', 'designImagePlacementTarget'] as const) {
+    if (!isDeepStrictEqual(item[key], expected[key])) return fail()
   }
-  const options = { turnId: row.turnId, maxItems: 100, maxBytes: 256 * 1024 }
-  const page = await load(row.threadId, { ...options, anchorTurnId: row.turnId })
-  const matches = page.items.filter((candidate) => candidate.id === row.userMessageItemId)
-  const item = matches[0]
-  if (matches.length !== 1 || !item || item.kind !== 'user_message' || item.role !== 'user' || item.status !== 'completed' ||
-    item.threadId !== row.threadId || item.turnId !== row.turnId) return fail()
-  // Content pages contain at most 8 KiB characters each, independently of
-  // maxBytes. Compare bounded fragments without trusting a display preview.
-  let offset = 0
-  for (let round = 0; round < 33; round += 1) {
-    const part = await load(row.threadId, { ...options, itemId: row.userMessageItemId, contentOffset: offset })
-    const content = part.content
-    if (!content || content.itemId !== item.id || content.field !== 'text' || content.offset !== offset ||
-      content.totalChars !== prompt.length || content.text !== prompt.slice(offset, offset + content.text.length)) return fail()
-    offset += content.text.length
-    if (content.nextOffset === undefined) {
-      if (offset !== prompt.length) return fail()
-      return
-    }
-    if (content.nextOffset !== offset || content.nextOffset >= prompt.length) return fail()
-  }
-  return fail()
 }

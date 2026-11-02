@@ -1,4 +1,7 @@
 import { CollaborationQuerySchema, CollaborationDocumentKindSchema } from '../contracts/collaboration-store.js'
+import { ContinueCommitment } from '../contracts/collaboration-followup-api.js'
+import type { ThreadStore } from '../ports/thread-store.js'
+import type { SessionStore } from '../ports/session-store.js'
 import { RoomMemoryErasure } from '../rooms/room-memory-erasure.js'
 import { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
@@ -26,18 +29,28 @@ import { resourceFenceStale } from './service-manager-router-fenced-mutation.js'
 import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from './service-manager-router-persistence.js'
 import { NativeFollowUpPermitError } from './native-followup-write-scope.js'
 import { assertNoNativePermitMint } from './followup-permit-writes.js'
+import { stageManualFollowUp } from './manual-followup-stage.js'
+import { issueManualNativeFollowUpPermit } from './native-followup-permit-issuer.js'
+import { claimManualFollowUp } from './manual-followup-claim.js'
+import { reconcileManualFollowUp } from './manual-followup-reconcile.js'
+import { beginManualFollowUpDispatch } from './manual-followup-dispatch.js'
 import { FollowUpArbitrationFenceSchema, ManagerFollowUpWriteArbitration,
   assertFollowUpArbitrationFence, requiresFollowUpArbitration } from './followup-arbitration.js'
 
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
 const Operations = z.enum(['get', 'list', 'listRooms', 'sidebarPage', 'replyPage', 'searchRooms', 'roomRepositories', 'runSummary',
-  'collaborationQuery', 'commit', 'scrubMemoryData', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
+  'collaborationQuery', 'commit', 'stageManualFollowUp', 'claimManualFollowUp', 'issueManualFollowUpPermit',
+  'beginManualFollowUpDispatch', 'reconcileManualFollowUp', 'scrubMemoryData', 'getRequest', 'events',
+  'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
 
 export function addManagerRoomRoutes(router: Router, input: {
   managerToken: string
   state: ServiceManagerState
   roomStore: SqliteRoomStore
+  threadStore: ThreadStore
+  sessionStore?: SessionStore
+  manualFollowUpEnabled?: () => boolean
   statePersistence?: () => { degraded: boolean }
   followUpWrites?: ManagerFollowUpWriteArbitration
 }): void {
@@ -46,7 +59,9 @@ export function addManagerRoomRoutes(router: Router, input: {
     request, input.managerToken, async () => {
       const operation = Operations.safeParse(context.params.operation)
       if (!operation.success) return validation('invalid room-store operation')
-      if (['commit', 'scrubMemoryData'].includes(operation.data) && isManagerPersistenceDegraded(input.statePersistence)) {
+      if (['commit', 'scrubMemoryData', 'stageManualFollowUp', 'claimManualFollowUp', 'issueManualFollowUpPermit',
+        'beginManualFollowUpDispatch', 'reconcileManualFollowUp'].includes(operation.data) &&
+        isManagerPersistenceDegraded(input.statePersistence)) {
         return managerPersistenceDegradedResponse()
       }
       const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
@@ -120,6 +135,42 @@ export function addManagerRoomRoutes(router: Router, input: {
               await assertNoNativePermitMint(input.roomStore, value.input)
               return input.roomStore.commit(value.input, assertWrite)
             })
+            break
+          }
+          case 'stageManualFollowUp': {
+            const value = z.object({ participantAgentId: Id, commitmentId: Id, command: ContinueCommitment,
+              fence: ManagerResourceFenceSchema, arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await stageManualFollowUp({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'claimManualFollowUp': {
+            const value = z.object({ attemptId: Id, fence: ManagerResourceFenceSchema,
+              arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await claimManualFollowUp({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'issueManualFollowUpPermit': {
+            const value = z.object({ attemptId: Id, claimToken: z.number().int().nonnegative(),
+              fence: ManagerResourceFenceSchema, arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await issueManualNativeFollowUpPermit({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'beginManualFollowUpDispatch': {
+            const value = z.object({ attemptId: Id, claimToken: z.number().int().nonnegative(),
+              fence: ManagerResourceFenceSchema, arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await beginManualFollowUpDispatch({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'reconcileManualFollowUp': {
+            const value = z.object({ attemptId: Id, fence: ManagerResourceFenceSchema,
+              arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await reconcileManualFollowUp({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, sessions: input.sessionStore, writes: followUpWrites,
+              enabled: () => input.manualFollowUpEnabled?.() === true })
             break
           }
           case 'scrubMemoryData': {

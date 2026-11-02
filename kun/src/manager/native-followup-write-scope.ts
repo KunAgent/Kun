@@ -2,10 +2,12 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { z } from 'zod'
 import { NativeFollowUpAdmissionSchema } from '../contracts/native-followup-requests.js'
 import { FollowUpArbitrationFenceSchema } from './followup-arbitration-contracts.js'
+import { ManagerResourceFenceSchema } from './resource-lease-state.js'
 
 export const NativeFollowUpWriteScopeSchema = z.object({
   admission: NativeFollowUpAdmissionSchema, stage: z.enum(['enqueue', 'promote']),
-  claimToken: z.number().int().nonnegative(), arbitration: FollowUpArbitrationFenceSchema
+  claimToken: z.number().int().nonnegative(), arbitration: FollowUpArbitrationFenceSchema,
+  coordinatorFence: ManagerResourceFenceSchema
 }).strict()
 export type NativeFollowUpWriteScope = z.infer<typeof NativeFollowUpWriteScopeSchema>
 const writes = new AsyncLocalStorage<NativeFollowUpWriteScope>()

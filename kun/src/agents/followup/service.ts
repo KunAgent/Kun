@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import { AgentCommitmentSchema } from '../../contracts/agent-commitments.js'
 import { CollaborationPolicySchema, CommitmentControlSchema, type CommitmentControl, type CommitmentLink } from '../../contracts/collaboration-followup.js'
 import { EnableCommitmentTracking, UpdateCommitmentTracking, ReopenCommitmentTracking,
-  FollowUpMutation, type CommitmentTrackingAction, type FollowUpPolicyInput } from '../../contracts/collaboration-followup-api.js'
+  FollowUpMutation, ContinueCommitment, type ContinueCommitmentResult, type CommitmentTrackingAction, type FollowUpPolicyInput } from '../../contracts/collaboration-followup-api.js'
 import type { RoomRuntimeDeps } from '../../rooms/room-runtime-types.js'
 import { agentStableId } from '../agent-identity-service.js'
 import { FollowUpState, FollowUpError, followUpCheck, followUpPut, followUpScope, commitmentScopeFingerprint,
@@ -162,6 +162,19 @@ export class FollowUpService {
       puts: [followUpPut(prior, control), followUpPut(commitment, value),
         { kind: 'collaboration_policy', id: policy.id, roomId: control.sourceRoomId, value: policy }],
       events: [this.event(control.sourceRoomId, agentId, id, 'reopened')], result })
+    return result
+  }
+
+  async continueExplicitly(agentId: string, id: string, raw: unknown): Promise<ContinueCommitmentResult> {
+    const state = this.state
+    await state.ready()
+    state.requireEnabled()
+    const command = ContinueCommitment.parse(raw), commitment = await state.commitment(agentId, id)
+    if (commitment.value.sourceRoomId !== command.sourceRoomId || !state.deps.manualFollowUp) {
+      throw new FollowUpError('CAPABILITY_UNAVAILABLE', 'manual follow-up authority is unavailable for this commitment')
+    }
+    const result = await state.deps.manualFollowUp.stage(agentId, id, command)
+    state.options.wake()
     return result
   }
 

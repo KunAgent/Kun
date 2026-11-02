@@ -22,17 +22,21 @@ export const FollowUpClaimSchema = z.object({
   generation: FollowUpRevision, authorizationEpoch: FollowUpRevision
 }).strict()
 
+export const CommitmentExecutionPermitSchema = z.object({
+  admissionKey: FollowUpId, controlRevision: FollowUpRevision,
+  claimToken: FollowUpRevision, issuedAt: FollowUpTime, revokedAt: FollowUpTime.optional(),
+  native: z.object({ threadId: FollowUpId, requestFingerprint: FollowUpFingerprint,
+    targetFingerprint: FollowUpFingerprint, issuanceId: FollowUpId, manualEventId: FollowUpId.optional() }).strict().optional()
+}).strict()
+export type CommitmentExecutionPermit = z.infer<typeof CommitmentExecutionPermitSchema>
+
 export const CommitmentExecutionSchema = z.object({
   ...CommitmentRecordFields, attemptId: FollowUpId, requestId: FollowUpId, effectId: FollowUpId,
   envelope: FollowUpEnvelopeSchema, fingerprint: FollowUpFingerprint,
   nativeRequest: z.object({ threadId: FollowUpId, request: StartTurnRequest }).strict().optional(),
   phase: z.enum(['reserved', 'admitted', 'accepted', 'reconciling', 'terminal']),
-  permit: z.object({
-    admissionKey: FollowUpId, controlRevision: FollowUpRevision,
-    claimToken: FollowUpRevision, issuedAt: FollowUpTime, revokedAt: FollowUpTime.optional(),
-    native: z.object({ threadId: FollowUpId, requestFingerprint: FollowUpFingerprint,
-      issuanceId: FollowUpId }).strict().optional()
-  }).strict().optional(),
+  permit: CommitmentExecutionPermitSchema.optional(),
+  dispatch: z.object({ id: FollowUpId, startedAt: FollowUpTime, claimToken: FollowUpRevision }).strict().optional(),
   receipt: FollowUpReceiptSchema.optional(), nextReconcileAt: FollowUpTime.nullable(),
   stopRequestedAt: FollowUpTime.optional()
 }).strict().refine((value) => value.id === value.attemptId && value.attemptId === value.envelope.attemptId &&
@@ -43,6 +47,8 @@ export const CommitmentExecutionSchema = z.object({
     'native request must retain the receiver request identity')
   .refine((value) => value.phase === 'reserved' || value.phase === 'terminal' || Boolean(value.permit),
     'admitted execution requires a durable permit')
+  .refine((value) => !value.dispatch || Boolean(value.permit?.native) && value.phase !== 'reserved' &&
+    value.dispatch.claimToken >= value.permit!.claimToken, 'native dispatch requires its durable permit')
   .refine((value) => !value.receipt || value.receipt.requestId === value.requestId && value.receipt.fingerprint === value.fingerprint,
     'execution receipt identity mismatch')
 export type CommitmentExecution = z.infer<typeof CommitmentExecutionSchema>

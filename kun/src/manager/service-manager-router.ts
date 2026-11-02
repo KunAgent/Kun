@@ -60,7 +60,8 @@ import { addManagerAtomicJsonRoutes } from './service-manager-router-atomic-json
 import { addManagerRoomRoutes } from './service-manager-router-rooms.js'
 import { ManagerFollowUpWriteArbitration, assertFollowUpArbitrationFence } from './followup-arbitration.js'
 import { managerFollowUpThreadWriteGuard } from './followup-thread-writes.js'
-import { withThreadAdmissionWriteGuard } from './thread-admission-context.js'
+import { managerFollowUpThreadDeletionGuard } from './followup-thread-deletion.js'
+import { withThreadAdmissionWriteGuard, withThreadDeletionGuard } from './thread-admission-context.js'
 import { NativeFollowUpPermitError } from './native-followup-write-scope.js'
 import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
 import {
@@ -91,6 +92,7 @@ export function buildServiceManagerRouter(input: {
   recordParticipant?: (participant: { pid: number; instanceId: string; startedAt: string }) => Promise<void>
   state: ServiceManagerState
   sharedData?: ManagerSharedDataStore
+  manualFollowUpEnabled?: () => boolean
   documents?: RevisionedDocumentStore
   requestShutdown?: () => void
   flushState?: () => Promise<void>
@@ -113,6 +115,9 @@ export function buildServiceManagerRouter(input: {
     managerToken: input.managerToken,
     state: input.state,
     roomStore: input.sharedData.roomStore,
+    threadStore: input.sharedData.threadStore,
+    sessionStore: input.sharedData.sessionStore,
+    manualFollowUpEnabled: input.manualFollowUpEnabled,
     statePersistence: input.statePersistence,
     followUpWrites
   })
@@ -418,9 +423,12 @@ export function buildServiceManagerRouter(input: {
           ['thread', operation.data, envelope.value, envelope.turnFence, envelope.followUp], async () => {
             assertCurrent?.()
             const guard = managerFollowUpThreadWriteGuard({ state: input.state,
-              roomStore: input.sharedData!.roomStore, writes: followUpWrites, scope: envelope.followUp })
-            const result = await withThreadAdmissionWriteGuard(guard, () =>
-              input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent))
+              roomStore: input.sharedData!.roomStore, writes: followUpWrites, scope: envelope.followUp,
+              turnFence: envelope.turnFence })
+            const deleteGuard = managerFollowUpThreadDeletionGuard({ rooms: input.sharedData!.roomStore,
+              writes: followUpWrites, assertCurrent })
+            const result = await withThreadDeletionGuard(deleteGuard, () => withThreadAdmissionWriteGuard(guard, () =>
+              input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent)))
             return jsonResponse({ result })
           })
       } catch (error) {

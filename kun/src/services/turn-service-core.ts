@@ -443,6 +443,12 @@ export class TurnService {
     this.maxConcurrentTurns = normalizeMaxConcurrentTurns(deps.maxConcurrentTurns)
   }
 
+  /** Install the host-owned follow-up fence once the Rooms coordinator exists. */
+  setFollowUpAdmissionGuard(guard: NonNullable<TurnServiceDeps['withFollowUpAdmission']>): void {
+    if (this.deps.withFollowUpAdmission) throw new Error('follow-up admission guard is already configured')
+    this.deps.withFollowUpAdmission = guard
+  }
+
   /** Global persisted workload, including room and delegated side threads. */
   async capacitySnapshot(): Promise<TurnCapacitySnapshot> {
     const { threadStore } = this.deps

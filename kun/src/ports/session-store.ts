@@ -102,6 +102,8 @@ export type ItemHistoryPageOptions = {
   contentOffset?: number
   /** Host-only request: use the validated durable index, never live checkpoints. */
   durableOnly?: true
+  /** Host-only: return the complete sole item in a durable turn, or fail closed. */
+  exactItemId?: string
   maxItems: number
   maxBytes: number
 }

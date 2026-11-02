@@ -123,6 +123,18 @@ export type RoomTaskExecution = {
 }
 export type RoomRuntimeDeps = {
   followUpFeatures?: () => { enabled: boolean; auto: boolean; github: boolean }
+  manualFollowUp?: {
+    stage: (participantAgentId: string, commitmentId: string,
+      command: import('../contracts/collaboration-followup-api.js').ContinueCommitment) =>
+      Promise<import('../contracts/collaboration-followup-api.js').ContinueCommitmentResult>
+    /** Manager-only steps; each revalidates its own authority and fence. */
+    claim: (attemptId: string) => Promise<import('../contracts/collaboration-followup-api.js').ManualFollowUpClaim>
+    issue: (attemptId: string, claimToken: number) =>
+      Promise<import('../contracts/collaboration-effects.js').CommitmentExecutionPermit>
+    beginDispatch: (attemptId: string, claimToken: number) =>
+      Promise<import('../contracts/collaboration-followup-api.js').ManualFollowUpDispatch>
+    reconcile: (attemptId: string) => Promise<import('../contracts/collaboration-effects.js').FollowUpReceipt>
+  }
   assistantContinuationAuthority?: (input: import('./room-continuation-dispatch.js').RoomContinuation) => Promise<{ authorized: boolean; unavailable?: boolean; result?: { id: string; body: string } }>
 
   /** Global execution ceiling; per-room limits remain independently enforced. */

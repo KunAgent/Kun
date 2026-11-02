@@ -86,8 +86,13 @@ export type CommitmentControl = z.infer<typeof CommitmentControlSchema>
 export const CommitmentLinkSchema = z.object({
   ...CommitmentRecordFields, target: FollowUpLinkTargetSchema,
   ownership: z.enum(['owned', 'referenced']), active: z.boolean(), stopRequestedAt: FollowUpTime.optional(),
+  // Captured by the host when linking; absence means legacy/unqualified, not unlimited authority.
+  nativeTarget: z.object({ threadId: FollowUpId, fingerprint: FollowUpFingerprint }).strict().optional(),
   userEvidence: FollowUpUserEvidenceSchema
-}).strict()
+}).strict().refine((value) => !value.nativeTarget || value.ownership === 'owned' &&
+  (value.target.kind === 'room_task' ||
+    (value.target.kind === 'thread' || value.target.kind === 'workbench_link') && value.target.threadId === value.nativeTarget.threadId),
+  'native target authority must belong to its owned execution thread')
 export type CommitmentLink = z.infer<typeof CommitmentLinkSchema>
 
 export const FollowUpReadKindSchema = z.enum(['head', 'checks', 'reviews', 'review_comments', 'comments', 'state'])

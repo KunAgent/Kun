@@ -271,6 +271,18 @@ async function readIndexedPage(
   view: ItemIndexView,
   options: ItemHistoryPageOptions
 ): Promise<ItemHistoryPage> {
+  if (options.exactItemId) {
+    const row = view.latest.get(options.exactItemId)
+    if (view.turnItemCounts.get(options.turnId!) !== 1 || !row || row.turnId !== options.turnId) {
+      throw new Error('durable turn does not contain exactly its reserved item')
+    }
+    if (!row.isPublic) return { items: [], hasMore: false, itemBytes: 0 }
+    if (row.recordBytes > options.maxBytes) throw new Error('durable item exceeds exact proof budget')
+    const handle = await open(sourcePath, 'r')
+    try {
+      return { items: [await readIndexedItem(handle, row)], hasMore: false, itemBytes: row.recordBytes }
+    } finally { await handle.close() }
+  }
   if (isItemContentRequest(options)) {
     const row = view.latest.get(options.itemId!)
     if (!row?.isPublic || row.turnId !== options.turnId) return { items: [], hasMore: false, itemBytes: 0 }

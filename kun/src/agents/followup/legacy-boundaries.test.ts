@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { nativeFollowUpTargetFingerprint } from '../../domain/native-followup-target.js'
 import { RoomTaskSchema } from '../../contracts/room-tasks.js'
 import { WorkbenchLinkSchema } from '../../contracts/workbench-links.js'
 import { putRoomDocument } from '../../rooms/room-service.js'
@@ -35,6 +36,23 @@ async function roomTask(f: FollowUpFixture, threadId: string, id = 'room-task') 
 }
 
 describe('tracked commitments at legacy and native persistence boundaries', () => {
+  it.each(['thread', 'workbench_link', 'room_task'] as const)('freezes the real %s target authority at ownership', async (kind) => {
+    const f = await fixture(), target = f.addTarget()
+    const wb = kind === 'workbench_link' ? await workbench(f, target.threadId) : undefined
+    const task = kind === 'room_task' ? await roomTask(f, target.threadId) : undefined
+    const requested = kind === 'thread' ? target : kind === 'workbench_link'
+      ? { kind, linkId: wb!.id, threadId: target.threadId } : { kind, taskId: task!.task.id }
+    const original = f.stub.threads.get(target.threadId)!
+    await enable(f)
+    const linked = await own(f, requested)
+    expect(linked.link.nativeTarget).toEqual({ threadId: target.threadId, fingerprint: nativeFollowUpTargetFingerprint(original) })
+    const before = await f.store.get('commitment_link', linked.link.id)
+    const changed = { ...linked.link, nativeTarget: { ...linked.link.nativeTarget!, fingerprint: 'b'.repeat(64) } }
+    await expect(putRoomDocument(f.store, 'commitment_link', linked.link.id, f.room.id, changed, before))
+      .rejects.toThrow('identity cannot change')
+    expect(await f.store.get('commitment_link', linked.link.id)).toEqual(before)
+  })
+
   it.each(['pause', 'disable', 'stop'] as const)('does not let old Workbench confirm bypass %s', async (controlAction) => {
     const f = await fixture(), target = f.addTarget()
     const wb = await workbench(f, target.threadId)
@@ -164,6 +182,7 @@ describe('tracked commitments at legacy and native persistence boundaries', () =
     const f = await fixture(), target = f.addTarget('referenced', 'running')
     await enable(f)
     const linked = await own(f, target, 'referenced')
+    expect(linked.link.nativeTarget).toBeUndefined()
     await expect(f.followUp.stop('agent-1', f.commitment.id, { ...action('stop-target', 1), scope: 'target',
       targetId: linked.link.id, expectedTargetRevision: 0 })).rejects.toThrow('active owned target')
     await f.followUp.stop('agent-1', f.commitment.id, { ...action('stop-all', 1), scope: 'commitment', targetId: f.commitment.id })

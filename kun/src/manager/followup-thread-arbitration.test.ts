@@ -52,6 +52,8 @@ describe('Manager physical follow-up arbitration', () => {
       const previous = h.scope.arbitration
       expect(h.state.endResourceCommit(previous.fence, previous.commitId)).toBe(true)
       expect(h.state.releaseResource(previous.fence)).toBe(true)
+      // The fixture's coordinator reservation is what the replacement must take over.
+      expect(h.state.releaseResource(h.scope.coordinatorFence)).toBe(true)
       h.state.register({ flavor: 'development', instanceId: 'replacement', pid: process.pid,
         startedAt: new Date().toISOString(), host: '127.0.0.1', port: 18899,
         baseUrl: 'http://127.0.0.1:18899', runtimeToken: 'replacement-token' })

@@ -1,4 +1,5 @@
 import { latestExecutedTurn } from '../domain/queue-execution-state.js'
+import { withNativeFollowUpAdmission } from './native-followup-admission.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -259,9 +260,11 @@ async markTurnAdmissionCompleted(this: TurnService,
       }
       try {
         if (native) {
-          const result = await this['deps'].threadStore.upsertIfRevision?.(next, current.revision ?? 0)
-          if (!result?.applied || !result.thread) throw new Error('native admission changed before commit')
-          return result.thread
+          return await withNativeFollowUpAdmission(this, current, native.admission, 'enqueue', async () => {
+            const result = await this['deps'].threadStore.upsertIfRevision?.(next, current.revision ?? 0)
+            if (!result?.applied || !result.thread) throw new Error('native admission changed before commit')
+            return result.thread
+          })
         }
         return await this['deps'].threadStore.upsert(next)
       } catch (error) {

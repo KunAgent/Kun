@@ -20,7 +20,7 @@ const schemas: Record<CollaborationDocumentKind, z.ZodType> = {
   collaboration_policy: CollaborationPolicySchema
 }
 const immutable: Record<CollaborationDocumentKind, readonly string[]> = {
-  commitment_control: [], commitment_link: ['target', 'ownership', 'userEvidence'],
+  commitment_control: [], commitment_link: ['target', 'ownership', 'userEvidence', 'nativeTarget'],
   commitment_subscription: ['sourceId', 'grantRef', 'resource'],
   collaboration_source: ['provider', 'accountRef', 'credentialRef'],
   collaboration_source_grant: ['sourceId', 'accountRef', 'resource', 'userEvidence'],
@@ -78,6 +78,7 @@ export function validateCollaborationWrite(db: DatabaseSync, input: {
         }
         if (oldPermit.revokedAt && oldPermit.revokedAt !== permit?.revokedAt) fail('execution revocation cannot be undone')
       }
+      if (before.dispatch && !isDeepStrictEqual(before.dispatch, value.dispatch)) fail('native dispatch intent cannot be changed or erased')
       if (before.phase === 'terminal' && value.phase !== 'terminal') fail('terminal execution cannot be revived')
     }
     if (kind === 'collaboration_source_grant' && before.revokedAt && before.revokedAt !== value.revokedAt) {

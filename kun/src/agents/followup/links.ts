@@ -6,6 +6,7 @@ import { CommitmentLinkSchema, followUpTargetKey, type FollowUpLinkTarget,
 import type { CollaborationSourceGrant, CollaborationSource } from '../../contracts/collaboration-events.js'
 import { CreateCommitmentLink, ReleaseCommitmentLink } from '../../contracts/collaboration-followup-api.js'
 import type { RoomTaskExecution } from '../../rooms/room-runtime-types.js'
+import { nativeFollowUpTargetFingerprint } from '../../domain/native-followup-target.js'
 import type { RoomStoreCommit } from '../../rooms/room-store.js'
 import { agentStableId } from '../agent-identity-service.js'
 import { FollowUpError, followUpCheck, followUpPut, followUpScope, type FollowUpState } from './state.js'
@@ -14,8 +15,11 @@ export type LinkResult = { link: CommitmentLink; linkRevision: number; controlRe
 
 /** Validate actual target provenance before acquiring ownership, never a model's label or taskId alias. */
 export async function validateFollowUpTarget(state: FollowUpState, value: AgentCommitment,
-  target: FollowUpLinkTarget, ownership: CommitmentLink['ownership']): Promise<NonNullable<RoomStoreCommit['checks']>> {
+  target: FollowUpLinkTarget, ownership: CommitmentLink['ownership']): Promise<{
+    checks: NonNullable<RoomStoreCommit['checks']>; nativeTarget?: CommitmentLink['nativeTarget']
+  }> {
   const checks: NonNullable<RoomStoreCommit['checks']> = []
+  let nativeTarget: CommitmentLink['nativeTarget']
   const fail = (): never => { throw new FollowUpError('AUTHORIZATION_CHANGED', 'linked target is outside the commitment scope') }
   const thread = async (id: string) => {
     const metadata = await state.deps.threads.getMetadata(id)
@@ -23,6 +27,7 @@ export async function validateFollowUpTarget(state: FollowUpState, value: AgentC
       metadata.roomContext?.participantAgentId === value.participantAgentId && metadata.roomContext.roomId === value.sourceRoomId ||
       metadata.workbenchOrigin?.agentId === value.participantAgentId && metadata.workbenchOrigin.roomId === value.sourceRoomId
     )) fail()
+    if (ownership === 'owned') nativeTarget = { threadId: id, fingerprint: nativeFollowUpTargetFingerprint(metadata!) }
     return metadata
   }
   switch (target.kind) {
@@ -74,7 +79,7 @@ export async function validateFollowUpTarget(state: FollowUpState, value: AgentC
     }
     case 'ade': throw new FollowUpError('CAPABILITY_UNAVAILABLE', 'external execution association requires a verified adapter')
   }
-  return checks
+  return { checks, nativeTarget }
 }
 
 export async function createFollowUpLink(state: FollowUpState, agentId: string, id: string, raw: unknown): Promise<LinkResult> {
@@ -90,10 +95,12 @@ export async function createFollowUpLink(state: FollowUpState, agentId: string, 
   const links = await state.deps.store.collaborationQuery({ kind: 'commitment_activity', ...followUpScope(commitment.value), category: 'links', limit: 30 })
   if (links.length === 30) throw new FollowUpError('CAPABILITY_UNAVAILABLE', 'a commitment supports at most 30 active links')
   const checks: NonNullable<RoomStoreCommit['checks']> = await state.userEvidence(commitment.value, input.userEvidence)
-  checks.push(...await validateFollowUpTarget(state, commitment.value, input.target, input.ownership))
+  const validated = await validateFollowUpTarget(state, commitment.value, input.target, input.ownership)
+  checks.push(...validated.checks)
   const now = state.now(), linkId = agentStableId('commitment-link', id, input.clientRequestId)
   const link = CommitmentLinkSchema.parse({ schemaVersion: 1, id: linkId, ...followUpScope(commitment.value),
-    target: input.target, ownership: input.ownership, active: true, userEvidence: input.userEvidence, createdAt: now, updatedAt: now })
+    target: input.target, ownership: input.ownership, active: true, nativeTarget: validated.nativeTarget,
+    userEvidence: input.userEvidence, createdAt: now, updatedAt: now })
   // Binding changes invalidate unadmitted decisions; a link never silently expands the prior authorization.
   const nextControl = { ...control.value, generation: control.value.generation + 1, updatedAt: now, nextWakeAt: now }
   const result: LinkResult = { link, linkRevision: 0, controlRevision: control.revision + 1 }

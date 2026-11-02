@@ -27,6 +27,10 @@ export function registerAgentWorkRoutes(add: Add) {
     const input = await body(request)
     return rooms.exclusive(() => rooms.commitments.update(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
   })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/continue', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.continueExplicitly(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
   add('POST', '/v1/agents/:agentId/commitments/:commitmentId/cancel', async (rooms, request, { params }) => {
     const input = Action.parse(await body(request))
     return rooms.exclusive(() => rooms.commitments.update(Id.parse(params.agentId), Id.parse(params.commitmentId), { ...input, status: 'cancelled' }))

@@ -44,6 +44,8 @@ export const CollaborationEventSchema = z.object({
     z.object({ kind: z.literal('reminder'), reminderId: FollowUpId, occurrenceId: FollowUpId }).strict(),
     z.object({ kind: z.literal('execution_receipt'), attemptId: FollowUpId, requestId: FollowUpId }).strict()
   ]),
+  // Written only by Manager when handling an explicit user continuation command.
+  userAction: z.object({ actionId: FollowUpId, issuedAt: FollowUpTime }).strict().optional(),
   // Provider bodies live outside metadata; their contents cannot set host provenance or permissions.
   payloadRef: FollowUpId.optional(), summary: z.string().max(1000),
   contextOnly: z.boolean()

@@ -5,9 +5,10 @@ import { AgentCommitmentSchema } from '../contracts/agent-commitments.js'
 import { CollaborationPolicySchema } from '../contracts/collaboration-followup.js'
 import type { NativeFollowUpRequest } from '../contracts/native-followup-requests.js'
 import { ThreadSchema, type ThreadRecord } from '../contracts/threads.js'
-import { TurnSchema } from '../contracts/turns.js'
+import { TurnSchema, type StartTurnRequest } from '../contracts/turns.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { fingerprintStartTurnRequest } from '../domain/turn-request-fingerprint.js'
+import { nativeFollowUpTargetFingerprint } from '../domain/native-followup-target.js'
 import { commitmentScopeFingerprint } from '../agents/followup/state.js'
 import { base, scope, control, link, effect, execution, time, userEvidence } from '../rooms/room-collaboration-test-fixtures.js'
 import type { RoomDocumentKind } from '../rooms/room-store.js'
@@ -19,7 +20,9 @@ import { requestManagerJson, type ServiceManagerConnection } from './manager-cli
 import { FOLLOW_UP_ARBITRATION_LEASE } from './followup-arbitration.js'
 import type { NativeFollowUpWriteScope } from './native-followup-write-scope.js'
 
-export async function nativeManagerFixture(prompt = 'Continue this repair', model?: string) {
+export async function nativeManagerFixture(prompt = 'Continue this repair', model?: string,
+  permissions: Pick<StartTurnRequest, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'> = {},
+  manualFollowUpEnabled?: () => boolean) {
   const root = await mkdtemp(join(tmpdir(), 'kun-native-authority-'))
   const data = await ManagerSharedDataStore.create(join(root, 'data'))
   const state = new ServiceManagerState()
@@ -27,7 +30,7 @@ export async function nativeManagerFixture(prompt = 'Continue this repair', mode
     startedAt: new Date().toISOString(), host: '127.0.0.1', port: 18899,
     baseUrl: 'http://127.0.0.1:18899', runtimeToken: 'runtime-token' })
   const router = buildServiceManagerRouter({ managerToken: 'manager-token', instanceId: 'manager',
-    startedAt: time, state, sharedData: data })
+    startedAt: time, state, sharedData: data, manualFollowUpEnabled })
   const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0 })
   const connection: ServiceManagerConnection = { discovery: { version: 1, protocolVersion: 7,
     instanceId: 'manager', pid: process.pid, startedAt: time, host: '127.0.0.1', port: server.port,
@@ -41,13 +44,14 @@ export async function nativeManagerFixture(prompt = 'Continue this repair', mode
     return data.roomStore.commit({ requestId: `fixture:${++seq}`, checks: [{ kind, id, expectedRevision: old?.revision ?? null }],
       puts: [{ kind, id, value }] })
   }
+  const targetFingerprint = nativeFollowUpTargetFingerprint(thread)
   const e = { ...effect(), status: 'dispatching' as const, retryAt: null,
     claim: { ownerId: 'runtime', token: 1, generation: 0, authorizationEpoch: 0, expiresAt: '2999-01-01T00:00:00.000Z' } }
-  const request = { prompt, clientRequestId: e.requestId, ...(model ? { model } : {}) }
+  const request = { prompt, clientRequestId: e.requestId, ...(model ? { model } : {}), ...permissions }
   const requestFingerprint = fingerprintStartTurnRequest(request)!
   const exec = { ...execution(), nativeRequest: { threadId: thread.id, request }, phase: 'admitted' as const,
     permit: { admissionKey: e.admissionKey, claimToken: 1, controlRevision: 0, issuedAt: time,
-      native: { threadId: thread.id, requestFingerprint, issuanceId: 'manager-issued-fixture' } } }
+      native: { threadId: thread.id, requestFingerprint, targetFingerprint, issuanceId: 'manager-issued-fixture' } } }
   const commitment = AgentCommitmentSchema.parse({ ...base('commitment'), participantAgentId: scope.participantAgentId,
     sourceRoomId: scope.sourceRoomId,
     sourceMessageId: 'message', objective: 'Repair', acceptance: 'Tests pass', status: 'in_progress',
@@ -61,7 +65,8 @@ export async function nativeManagerFixture(prompt = 'Continue this repair', mode
   const queued = TurnSchema.parse({ id: 'turn', threadId: thread.id, status: 'queued', prompt: request.prompt,
     createdAt: time, clientRequestId: e.requestId, clientRequestFingerprint: requestFingerprint, admissionPending: true,
     model: model ?? thread.model, providerId: thread.providerId ?? 'default', harnessId: 'kun', credentialMode: 'provider',
-    approvalPolicy: thread.approvalPolicy, sandboxMode: thread.sandboxMode, approvalReviewer: thread.approvalReviewer,
+    approvalPolicy: request.approvalPolicy ?? thread.approvalPolicy, sandboxMode: request.sandboxMode ?? thread.sandboxMode,
+    approvalReviewer: request.approvalReviewer ?? thread.approvalReviewer,
     mode: thread.mode, collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
     agentSurface: 'code', composerContexts: [] })
   const row: NativeFollowUpRequest = { threadId: thread.id, admission, requestFingerprint,
@@ -72,23 +77,37 @@ export async function nativeManagerFixture(prompt = 'Continue this repair', mode
     ownerFlavor: 'production', ownerInstanceId: 'runtime' })
   const fence = acquired.lease
   state.beginResourceCommit(fence, 'native-commit')
+  const coordinator = state.acquireResource({ resource: 'rooms-coordinator',
+    ownerFlavor: 'production', ownerInstanceId: 'runtime' }).lease
   const writeScope: NativeFollowUpWriteScope = { admission, stage: 'enqueue', claimToken: 1,
+    coordinatorFence: { resource: coordinator.resource, ownerFlavor: coordinator.ownerFlavor,
+      ownerInstanceId: coordinator.ownerInstanceId, fencingToken: coordinator.fencingToken },
     arbitration: { fence: { resource: fence.resource, ownerFlavor: fence.ownerFlavor,
       ownerInstanceId: fence.ownerInstanceId, fencingToken: fence.fencingToken }, commitId: 'native-commit' } }
   const seed = async (target?: Parameters<typeof link>[1]) => {
     await put('agent_commitment', commitment.id, commitment)
     await put('commitment_control', commitment.id, control())
     await put('collaboration_policy', policy.id, policy)
-    await put('commitment_link', 'link', link('link', target))
+    await put('commitment_link', 'link', { ...link('link', target),
+      nativeTarget: { threadId: thread.id, fingerprint: targetFingerprint } })
     await put('commitment_effect', e.id, e)
     // Seed a trusted issuer result directly. These tests do not claim to exercise permit issuance.
     await put('commitment_execution', exec.id, exec)
   }
-  const send = (value: ThreadRecord, followUp?: NativeFollowUpWriteScope, conditional = true, metadataOnly = false) =>
-    requestManagerJson(connection, `/v1/data/thread/${conditional ? 'upsertIfRevision' : 'upsert'}`, {
+  const send = (value: ThreadRecord, followUp?: NativeFollowUpWriteScope, conditional = true, metadataOnly = false,
+    acquirePromotionLease = true) => {
+    if (followUp?.stage === 'promote' && acquirePromotionLease && !state.lease(thread.id)) {
+      state.acquireLease({ threadId: thread.id, turnId: row.turnId, ownerFlavor: 'production', ownerInstanceId: 'runtime' })
+    }
+    const lease = state.lease(thread.id)
+    const turnFence = lease && { threadId: lease.threadId, turnId: lease.turnId, ownerFlavor: lease.ownerFlavor,
+      ownerInstanceId: lease.ownerInstanceId, fencingToken: lease.fencingToken }
+    return requestManagerJson(connection, `/v1/data/thread/${conditional ? 'upsertIfRevision' : 'upsert'}`, {
       method: 'POST', body: { value: { thread: value, ...(metadataOnly ? { metadataOnly: true } : {}),
-        ...(conditional ? { expectedRevision: value.revision ?? 0 } : {}) }, ...(followUp ? { followUp } : {}) }
+        ...(conditional ? { expectedRevision: value.revision ?? 0 } : {}) }, ...(followUp ? { followUp } : {}),
+      ...(turnFence ? { turnFence } : {}) }
     })
+  }
   const close = async () => { await server.close(); await data.close(); await rm(root, { recursive: true, force: true }) }
   return { root, data, state, server, connection, thread, next, row, exec, e, commitment, policy,
     scope: writeScope, put, seed, send, close }

@@ -33,6 +33,22 @@ export const CreateCommitmentLink = FollowUpMutation.extend({
 export const ReleaseCommitmentLink = FollowUpMutation.extend({
   linkId: FollowUpId, expectedLinkRevision: FollowUpRevision
 }).strict()
+/** An explicit user request; model or external event content is not action authority. */
+export const ContinueCommitment = FollowUpMutation.extend({
+  sourceRoomId: FollowUpId, linkId: FollowUpId, expectedLinkRevision: FollowUpRevision,
+  expectedPolicyRevision: FollowUpRevision, userEvidence: FollowUpUserEvidenceSchema
+}).strict()
+export type ContinueCommitment = z.infer<typeof ContinueCommitment>
+export const ContinueCommitmentResult = z.object({
+  requestId: FollowUpId, effectId: FollowUpId, attemptId: FollowUpId, status: z.literal('pending')
+}).strict()
+export type ContinueCommitmentResult = z.infer<typeof ContinueCommitmentResult>
+export const ManualFollowUpClaim = z.object({
+  effectId: FollowUpId, attemptId: FollowUpId, token: FollowUpRevision, expiresAt: z.string().datetime()
+}).strict()
+export type ManualFollowUpClaim = z.infer<typeof ManualFollowUpClaim>
+export const ManualFollowUpDispatch = z.object({ shouldDispatch: z.boolean(), dispatchId: FollowUpId }).strict()
+export type ManualFollowUpDispatch = z.infer<typeof ManualFollowUpDispatch>
 export const CommitmentTrackingActionSchema = z.enum(['pause', 'resume', 'disable'])
 export type CommitmentTrackingAction = z.infer<typeof CommitmentTrackingActionSchema>
 
