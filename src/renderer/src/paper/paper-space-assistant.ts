@@ -1,49 +1,119 @@
+import i18n from '../i18n'
 import { useChatStore } from '../store/chat-store'
 import { getProvider } from '../agent/registry'
 import type { AttachmentReference } from '../agent/types'
 import { writeJoinPath } from '../write/write-workspace-store-helpers'
-import { usePaperSpaceStore } from './paper-space-store'
+import { paperSpaceItemKey, usePaperSpaceStore } from './paper-space-store'
+import { paperAssistantSession, patchPaperAssistant, type PaperSpaceImage } from './paper-space-assistant-state'
 
-export type PaperSpaceImage = { dataBase64: string; name: string }
+export type { PaperSpaceImage } from './paper-space-assistant-state'
 export type PaperSpaceAssistantInput = {
   workspaceRoot: string
   unitDir?: string
   title?: string
   prompt?: string
   images?: readonly PaperSpaceImage[]
+  /** Only the composer send consumes its draft. Reading-purpose actions do not. */
+  consumeDraft?: boolean
 }
 
-/** Never route a paper request through Work's composer, attachments, or workspace selection. */
+const creating = new Map<string, Promise<string>>()
+
+function readerIsCurrent(key: string): boolean {
+  return useChatStore.getState().route === 'papers' && usePaperSpaceStore.getState().readerKey === key
+}
+
+/** Restore only this paper's projection; selection never changes the current route. */
+export async function selectPaperSpaceAssistant(key: string): Promise<void> {
+  const threadId = paperAssistantSession(key).threadId
+  if (!threadId || !readerIsCurrent(key) || useChatStore.getState().activeThreadId === threadId) return
+  await useChatStore.getState().selectThread(threadId, { selectionGuard: () => readerIsCurrent(key) })
+}
+
+async function ensurePaperAssistantThread(input: PaperSpaceAssistantInput, key: string): Promise<string> {
+  const existing = paperAssistantSession(key).threadId
+  if (existing) return existing
+  const pending = creating.get(key)
+  if (pending) return pending
+  const promise = (async () => {
+    const draft = paperAssistantSession(key)
+    const model = draft.model
+    const providerId = draft.providerId
+    const thread = await getProvider().createThread({
+      workspace: input.workspaceRoot,
+      title: input.title || input.unitDir || 'PDF',
+      mode: 'agent', agentSurface: 'write',
+      ...(model ? { model } : {}),
+      ...(providerId ? { providerId } : {})
+    })
+    patchPaperAssistant(key, { threadId: thread.id })
+    useChatStore.setState((chat) => ({
+      threads: chat.threads.some((item) => item.id === thread.id) ? chat.threads : [thread, ...chat.threads]
+    }))
+    return thread.id
+  })()
+  creating.set(key, promise)
+  try { return await promise } finally { creating.delete(key) }
+}
+
+/** Paper requests stay in the PDF rail and use the paper's own trusted source root. */
 export async function openPaperSpaceAssistant(input: PaperSpaceAssistantInput): Promise<string | null> {
   const root = input.workspaceRoot.trim()
-  if (!root) return null
-  const store = useChatStore.getState()
-  const route = store.route
-  const readerKey = usePaperSpaceStore.getState().readerKey
-  const current = (): boolean => useChatStore.getState().route === route && usePaperSpaceStore.getState().readerKey === readerKey
-  const threadId = await store.createThread({ workspaceRoot: root, forceNew: true, useWorktreePool: false, activationGuard: current })
-  if (!threadId || !current() || useChatStore.getState().activeThreadId !== threadId) return null
-  const attachments: AttachmentReference[] = []
-  const provider = getProvider()
-  for (const image of input.images ?? []) {
-    if (!current() || useChatStore.getState().activeThreadId !== threadId) return null
-    if (!provider.uploadAttachment) throw new Error('Image attachments are unavailable.')
-    const uploaded = await provider.uploadAttachment({ ...image, mimeType: 'image/png', workspace: root, threadId })
-    attachments.push({ ...uploaded, kind: 'image' })
+  const key = input.unitDir ? paperSpaceItemKey(root, input.unitDir) : null
+  if (!root || !key || !readerIsCurrent(key)) return null
+  const before = paperAssistantSession(key)
+  patchPaperAssistant(key, { layout: 'assistant', error: null })
+  if (!input.prompt?.trim()) {
+    await selectPaperSpaceAssistant(key)
+    return paperAssistantSession(key).threadId
   }
-  if (!current() || useChatStore.getState().activeThreadId !== threadId) return null
-  const unitDir = input.unitDir
-  const fileReferences = unitDir ? [{ path: writeJoinPath(root, unitDir), relativePath: unitDir,
-    name: input.title || unitDir, kind: 'directory' as const }] : []
-  useChatStore.setState({ route: 'chat' })
-  if (input.prompt?.trim()) {
+  if (before.sending) return null
+  if (useChatStore.getState().runtimeConnection !== 'ready') {
+    patchPaperAssistant(key, { error: i18n.t('common:runtimeActionNeedsConnection') })
+    return null
+  }
+  const current = (): boolean => readerIsCurrent(key)
+  patchPaperAssistant(key, { sending: true })
+  try {
+    const threadId = await ensurePaperAssistantThread({ ...input, workspaceRoot: root }, key)
+    if (!current()) return null
+    await selectPaperSpaceAssistant(key)
+    const selected = (): boolean => current() && useChatStore.getState().activeThreadId === threadId
+    if (!selected()) return null
+    const attachments: AttachmentReference[] = []
+    const provider = getProvider()
+    for (const image of input.images ?? []) {
+      if (!selected()) return null
+      if (!provider.uploadAttachment) throw new Error('Image attachments are unavailable.')
+      const uploaded = await provider.uploadAttachment({ ...image, mimeType: 'image/png', workspace: root, threadId })
+      attachments.push({ ...uploaded, kind: 'image' })
+    }
+    if (!selected()) return null
+    const unitDir = input.unitDir
+    const fileReferences = unitDir ? [{ path: writeJoinPath(root, unitDir), relativePath: unitDir,
+      name: input.title || unitDir, kind: 'directory' as const }] : []
     const sent = await useChatStore.getState().sendMessage(input.prompt.trim(), 'agent', {
-      expectedThreadId: threadId, agentSurface: 'code', attachmentIds: attachments.map((item) => item.id),
-      attachments, fileReferences, composerContexts: []
+      expectedThreadId: threadId, submissionGuard: selected, agentSurface: 'write', attachmentIds: attachments.map((item) => item.id),
+      attachments, fileReferences, composerContexts: [],
+      ...(before.model !== undefined ? { model: before.model, providerId: before.providerId ?? '' } : {})
     })
-    if (!sent) return null
+    if (!sent) {
+      patchPaperAssistant(key, { error: useChatStore.getState().error || 'The message was not sent.' })
+      return null
+    }
+    // A user may keep editing while upload/admission is pending. Never erase those edits.
+    const latest = paperAssistantSession(key)
+    if (input.consumeDraft) patchPaperAssistant(key, {
+      ...(latest.input === before.input ? { input: '' } : {}),
+      images: latest.images.filter((image) => !input.images?.includes(image))
+    })
+    return threadId
+  } catch (error) {
+    patchPaperAssistant(key, { error: error instanceof Error ? error.message : String(error) })
+    return null
+  } finally {
+    patchPaperAssistant(key, { sending: false })
   }
-  return threadId
 }
 
 export function submitPaperSpaceAssistantPrompt(workspaceRoot: string, prompt: string, unitDir?: string): Promise<string | null> {

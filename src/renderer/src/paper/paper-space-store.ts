@@ -32,6 +32,7 @@ type PaperSpaceState = {
   loaded: boolean
   view: PaperSpaceView
   readerKey: string | null
+  openReaderKeys: string[]
   libraryScrollTop: number
   filter: PaperLibraryFilter
   sort: PaperLibrarySort
@@ -59,6 +60,7 @@ export const usePaperSpaceStore = create<PaperSpaceState>((set) => ({
   loaded: false,
   view: 'library',
   readerKey: null,
+  openReaderKeys: [],
   libraryScrollTop: 0,
   filter: emptyPaperLibraryFilter(),
   sort: PAPER_DEFAULT_SORT,

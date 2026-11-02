@@ -7,6 +7,7 @@ export type WorkStripEntry =
   | { kind: 'draft'; key: string }
   | { kind: 'document'; key: string; groupId: WriteEditorGroupId; item: WriteEditorItem }
   | { kind: 'library'; key: string; tab: WorkLibraryTab }
+| { kind: 'paper'; key: string; readerKey: string }
 
 export type WorkTabCloseScope = 'self' | 'others' | 'right' | 'all'
 

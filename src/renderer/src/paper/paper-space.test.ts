@@ -146,3 +146,34 @@ describe('the global paper space', () => {
     expect(usePaperSpaceStore.getState().view).toBe('discover:search')
   })
 })
+
+
+describe('paper reader tab identity', () => {
+it('deduplicates repeat opens and keeps source roots distinct when returning to the library', async () => {
+await refreshPaperSpace()
+const items = usePaperSpaceStore.getState().items
+await openPaperSpaceItem(items[0])
+await openPaperSpaceItem(items[0])
+await openPaperSpaceItem(items[1])
+expect(usePaperSpaceStore.getState().openReaderKeys).toEqual(items.map((item) => item.key))
+await openPaperSpace('library')
+expect(usePaperSpaceStore.getState().readerKey).toBeNull()
+expect(usePaperSpaceStore.getState().openReaderKeys).toEqual(items.map((item) => item.key))
+})
+
+it('prunes deleted papers on refresh but preserves a reader whose source temporarily fails', async () => {
+await refreshPaperSpace()
+const items = usePaperSpaceStore.getState().items
+await openPaperSpaceItem(items[0])
+await openPaperSpaceItem(items[1])
+list.mockImplementation(async ({ workspaceRoot }: { workspaceRoot: string }) => workspaceRoot === '/legacy'
+? { ok: false, code: 'io', message: 'permission denied' } : listing([]))
+await refreshPaperSpace()
+const key = paperSpaceItemKey('/legacy', 'papers/same')
+expect(usePaperSpaceStore.getState().openReaderKeys).toEqual([key])
+expect(usePaperSpaceStore.getState().readerKey).toBe(key)
+list.mockResolvedValue(listing([]))
+await refreshPaperSpace()
+expect(usePaperSpaceStore.getState()).toMatchObject({ readerKey: null, openReaderKeys: [] })
+})
+})

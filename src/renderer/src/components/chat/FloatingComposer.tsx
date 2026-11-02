@@ -391,7 +391,7 @@ export function FloatingComposer({
   const runningGraphTurn = showCodeExecutionControls && graphEnabled && busy &&
     currentTurnOrchestration === 'graph' && !graphPlanningNeedsCorrection
   const canCreateNewThread = runtimeReady && route !== 'claw' && Boolean(effectiveWorkspaceRoot) && Boolean(onNewCommand)
-  const showGoalMenuOption = showCodeExecutionControls && route !== 'claw' && route !== 'write', canOpenGoalPanel = canCompose && showGoalMenuOption
+  const showGoalMenuOption = showCodeExecutionControls && route !== 'claw' && route !== 'write' && route !== 'papers', canOpenGoalPanel = canCompose && showGoalMenuOption
   const canRunReview = adeComposer.harnessId === 'kun' && canCompose && route !== 'claw' && Boolean(onReviewCommand)
   const canToggleWorktreeMode = canCompose && !activeThreadId && route !== 'claw' && Boolean(onToggleWorktreeMode)
   const canOpenComposerMenu = showComposerMenuButton && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canToggleAutoPlanBuildMode || showGraphMenuOption || canCreateNewThread || canOpenGoalPanel || canRunReview || canPickAttachment || route === 'chat' || (canCompose && Boolean(codeAgentPresets && onComposerPersonaChange)))
@@ -446,7 +446,7 @@ export function FloatingComposer({
     onRemove: onRemoveFileReference
   })
   const promptEnhance = useComposerPromptEnhance({
-    available: !side, editable: canEditComposer, input, setInput, textareaRef: draft.textareaRef, setCursor: fileMentions.setCursor, activeThreadId,
+    available: !side && route !== 'papers', editable: canEditComposer, input, setInput, textareaRef: draft.textareaRef, setCursor: fileMentions.setCursor, activeThreadId,
     providerId: composerProviderId ?? '', model: composerModel ?? '', kunHarness: adeComposer.harnessId === 'kun',
     agentLabel: adeComposer.harnessId !== 'kun' && adeComposer.credentialMode === 'native-login' ? adeComposer.harnessLabel : undefined
   })
@@ -469,9 +469,9 @@ export function FloatingComposer({
     harnessCommands: adeComposer.harnessCommands ?? undefined,
     onDismiss: () => setInput('')
   })
-  const slashCommands = slashCommandMenu.commands
-  const filteredSlashCommands = slashCommandMenu.filteredCommands
-  const highlightedSlashCommand = slashCommandMenu.highlightedCommand
+  const slashCommands = route === 'papers' ? [] : slashCommandMenu.commands
+  const filteredSlashCommands = route === 'papers' ? [] : slashCommandMenu.filteredCommands
+  const highlightedSlashCommand = route === 'papers' ? undefined : slashCommandMenu.highlightedCommand
   const composerRootRef = useRef<HTMLDivElement | null>(null)
   const composerShellRef = useRef<HTMLDivElement | null>(null)
   const composerMenuButtonRef = useRef<HTMLButtonElement | null>(null)

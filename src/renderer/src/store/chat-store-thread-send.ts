@@ -252,21 +252,15 @@ export async function sendThreadMessage(
       requestedAgentSurface === 'write' || Boolean(queued?.writeContext ?? overrides?.writeContext)
     )
     const expectedThreadStillActive = (): boolean => Boolean(
-      !expectedThreadId ||
-      (
-        get().activeThreadId === expectedThreadId &&
-        (
-          requestedAgentSurface !== 'design' ||
-          (
-            get().route === 'chat' &&
-            designSubmissionMatchesCodeThread(
+      (!overrides?.submissionGuard || overrides.submissionGuard()) &&
+      (!expectedThreadId ||
+        (get().activeThreadId === expectedThreadId &&
+          (requestedAgentSurface !== 'design' ||
+            (get().route === 'chat' && designSubmissionMatchesCodeThread(
               get().threads.find((thread) => thread.id === expectedThreadId) ?? null,
               designProfile,
               designDocumentTarget
-            )
-          )
-        )
-      )
+            )))))
     )
     let writeContext = queued?.writeContext ?? overrides?.writeContext
     const scopedWriteThread = !writeContext && requestedAgentSurface === 'write' && expectedThreadId

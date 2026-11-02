@@ -45,5 +45,9 @@
   "paperSpaceHideSidebar": "Hide sidebar",
   "paperSpaceNotesSave": "Save notes",
   "paperSpaceNotesReload": "Reload notes",
-  "paperSpaceNotesDiscardConfirm": "Discard your unsaved paper notes?"
+  "paperSpaceNotesDiscardConfirm": "Discard your unsaved paper notes?",
+  "paperAssistantCollapse": "Collapse paper assistant",
+  "paperAssistantReady": "Read and ask, side by side",
+  "paperAssistantScope": "Ask about this PDF or quote a passage. This conversation stays with this paper.",
+  "paperAssistantDraftHint": "Quoting stages a draft. Review it before sending."
 }
