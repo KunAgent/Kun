@@ -45,7 +45,6 @@ on:
       - 'kun/src/contracts/rooms.ts'
       - 'kun/src/server/routes/register-agent-chat-routes.ts'
       - 'scripts/personal-agent-workspace-workflow.test.cjs'
-      - 'docs/personal-agent-workspace.md'
       - '.github/workflows/personal-agent-workspace-smoke.yml'
 permissions:
   contents: read
@@ -70,6 +69,9 @@ jobs:
         with:
           node-version: '22.23.1'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
       - run: npm ci
       - name: Verify offline fixture and workflow contracts
         run: node --test scripts/smoke-isolated-paths.test.cjs scripts/smoke-direct-model.test.cjs scripts/smoke-personal-agent-workspace.test.cjs scripts/personal-agent-workspace-workflow.test.cjs scripts/smoke-agent-model-controls.test.cjs

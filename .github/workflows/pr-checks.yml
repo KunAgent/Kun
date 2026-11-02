@@ -10,18 +10,55 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: pr-checks-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '22.23.1'
   GH_TOKEN: ${{ github.token }}
 
 jobs:
+  changes:
+    name: Detect CI changes
+    runs-on: ubuntu-latest
+    outputs:
+      ci: ${{ steps.paths.outputs.ci }}
+    steps:
+      - name: Filter documentation-only changes
+        id: paths
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            // Fail open for GitHub's 3,000-file API limit: never skip unseen code.
+            let ci = true
+            if (pr.changed_files <= 3000) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo, pull_number: pr.number, per_page: 100
+              })
+              const isDoc = path => path.startsWith('docs/') || path === 'README' ||
+                /^README(?:[._-][a-z0-9-]+)*\.(?:md|mdx|rst|txt)$/i.test(path)
+              ci = files.length !== pr.changed_files || files.length === 0 || files.some(file =>
+                !isDoc(file.filename) || (file.previous_filename && !isDoc(file.previous_filename)))
+            }
+            core.setOutput('ci', String(ci))
+            core.summary.addRaw(ci ? 'Code changes: run all CI gates.' : 'Documentation only: no build or test jobs needed.').write()
+
+  tests:
+    name: Unit tests
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
+    uses: ./.github/workflows/ci-tests.yml
+    permissions:
+      contents: read
+
   quality:
     name: Quality gates
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -48,16 +85,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm test
-
       - name: Production dependency audit
         run: npm run audit:production
 
   package:
     name: Build Linux package (x64)
     runs-on: ubuntu-22.04
-    needs: quality
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 60
     steps:
       - name: Check out repository
@@ -117,7 +152,8 @@ jobs:
   package-linux-arm64:
     name: Build Linux package (ARM64)
     runs-on: ubuntu-24.04-arm
-    needs: quality
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 180
     steps:
       - name: Check out repository
@@ -174,7 +210,8 @@ jobs:
   package-macos:
     name: Build ad-hoc macOS packages (PR)
     runs-on: macos-latest
-    needs: quality
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 90
     env:
       # PR validation intentionally uses the afterPack ad-hoc signature only.
@@ -232,6 +269,8 @@ jobs:
 
   windows-recovery:
     name: Windows recovery safety
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -300,7 +339,8 @@ jobs:
   package-windows:
     name: Build Windows NSIS installer (PR)
     runs-on: windows-latest
-    needs: [quality, windows-recovery]
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 240
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -463,6 +503,8 @@ jobs:
     name: PR gate
     runs-on: ubuntu-latest
     needs:
+      - changes
+      - tests
       - quality
       - package
       - package-linux-arm64
@@ -478,6 +520,8 @@ jobs:
         with:
           script: |
             const results = [
+              ['Changed paths', '${{ needs.changes.result }}'],
+              ['Unit tests', '${{ needs.tests.result }}'],
               ['Quality gates', '${{ needs.quality.result }}'],
               ['Build Linux package', '${{ needs.package.result }}'],
               ['Build Linux package (ARM64)', '${{ needs['package-linux-arm64'].result }}'],
@@ -487,7 +531,9 @@ jobs:
               ['Windows 0.4.3 GUI upgrade', '${{ needs['windows-cross-version'].result }}'],
               ['Windows prepared restart protection', '${{ needs['windows-prepared-restart'].result }}'],
             ]
-            const unsuccessful = results.filter(([, result]) => result !== 'success')
+            const docsOnly = '${{ needs.changes.result }}' === 'success' && '${{ needs.changes.outputs.ci }}' === 'false'
+            const unsuccessful = results.filter(([name, result]) =>
+              result !== 'success' && !(docsOnly && name !== 'Changed paths' && result === 'skipped'))
             if (unsuccessful.length > 0) {
               core.setFailed(
                 `Required jobs did not succeed:\n${unsuccessful
@@ -500,6 +546,8 @@ jobs:
     name: Report PR check feedback
     runs-on: ubuntu-latest
     needs:
+      - changes
+      - tests
       - quality
       - package
       - package-linux-arm64
@@ -510,7 +558,9 @@ jobs:
       - windows-prepared-restart
     if: >-
       ${{
-        always() &&
+        always() && !cancelled() &&
+        needs.changes.result == 'success' &&
+        needs.changes.outputs.ci == 'true' &&
         github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository
       }}
@@ -525,6 +575,7 @@ jobs:
         with:
           script: |
             const jobResults = [
+              ['Unit tests', '${{ needs.tests.result }}'],
               ['Quality gates', '${{ needs.quality.result }}'],
               ['Build Linux package', '${{ needs.package.result }}'],
               ['Build Linux package (ARM64)', '${{ needs['package-linux-arm64'].result }}'],

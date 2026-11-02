@@ -58,7 +58,7 @@ test('stable release reruns quality gates on the merge commit before preparation
   assert.equal(quality.name, 'Release quality gates')
   assert.equal(quality['timeout-minutes'], 45)
   assert.equal(normalizedExpression(quality.if), normalizedExpression(prepare.if))
-  assert.deepEqual(prepare.needs, ['quality'])
+  assert.deepEqual(prepare.needs, ['quality', 'tests'])
   assert.equal(stepByName(quality, 'Typecheck').env.NODE_OPTIONS,
     stepByName(readWorkflow('pr-checks.yml').jobs.quality, 'Typecheck').env.NODE_OPTIONS)
 
@@ -72,7 +72,6 @@ test('stable release reruns quality gates on the merge commit before preparation
     'npm ci',
     'npm run typecheck',
     'npm run lint',
-    'npm test',
     'npm run audit:production'
   ])
 })
@@ -88,7 +87,9 @@ test('manual candidate builds run quality and packaging without touching publish
     assert.equal(checkout.with.ref, source)
   }
   assert.match(stepByName(workflow.jobs.prepare, 'Compute release version').run, /--candidate-only/)
-  assert.deepEqual(workflow.jobs.prepare.needs, ['quality'])
+  assert.deepEqual(workflow.jobs.prepare.needs, ['quality', 'tests'])
+  assert.equal(workflow.jobs.tests.with.ref, source)
+  assert.equal(workflow.jobs.tests.uses, './.github/workflows/ci-tests.yml')
 })
 
 test('PR quality catches production advisories before the stable release merge', () => {
@@ -98,15 +99,15 @@ test('PR quality catches production advisories before the stable release merge',
   assert.equal(audit.run, 'npm run audit:production')
 })
 
-test('native Windows recovery, speech and path boundaries run early and fail closed before packaging and PR acceptance', () => {
+test('native Windows recovery, speech and path boundaries run independently and fail closed at PR acceptance', () => {
   const workflow = readWorkflow('pr-checks.yml')
   const recovery = workflow.jobs['windows-recovery']
   assert.equal(recovery['runs-on'], 'windows-latest')
-  assert.equal(recovery.needs, undefined)
-  assert.equal(recovery.if, undefined)
+  assert.equal(recovery.needs, 'changes')
+  assert.equal(recovery.if, "needs.changes.outputs.ci == 'true'")
   assert.equal(recovery['continue-on-error'], undefined)
   assert.equal(recovery['timeout-minutes'], 20)
-  assert.deepEqual(workflow.permissions, { contents: 'read' })
+  assert.deepEqual(workflow.permissions, { contents: 'read', 'pull-requests': 'read' })
   assert.equal(recovery.permissions, undefined)
   for (const step of recovery.steps) assert.equal(step['continue-on-error'], undefined)
   for (const [name, file] of [
@@ -162,7 +163,7 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
     'src/process/windows-startup-native.test.ts'
   ].join(' '))
   assert.ok(recovery.steps.indexOf(identity) > recovery.steps.indexOf(stepByName(recovery, 'Install root dependencies')))
-  assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
+  assert.equal(workflow.jobs['package-windows'].needs, 'changes')
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
     const job = workflow.jobs[name]
     assert.ok(job.needs.includes('windows-recovery'))
