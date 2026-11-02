@@ -107,6 +107,8 @@ export const FollowUpEndpointCheckpointSchema = z.object({
   endpoint: FollowUpReadKindSchema, etag: z.string().max(512).optional(),
   cursor: z.string().max(2048).optional(), completedAt: FollowUpTime.optional()
 }).strict()
+export type FollowUpReadKind = z.infer<typeof FollowUpReadKindSchema>
+export type FollowUpEndpointCheckpoint = z.infer<typeof FollowUpEndpointCheckpointSchema>
 export const CommitmentSubscriptionSchema = z.object({
   ...CommitmentRecordFields, sourceId: FollowUpId, grantRef: FollowUpId,
   resource: FollowUpPullRequestSchema, enabled: z.boolean(),
