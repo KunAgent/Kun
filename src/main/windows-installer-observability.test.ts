@@ -67,6 +67,13 @@ describe('Windows installer boundary observability (static NSIS contracts)', () 
   it('preserves caller registers and the error flag while appending diagnostics', () => {
     const body = functionBody('KunRecordAutomaticUpdateBoundary')
     expect(body).toContain('Push $R8\n    Push $R9')
+    // The builder's generated flag predicate writes $R9. Using it after saving
+    // the error boolean would hide a failed CopyFiles operation in tracing.
+    const generator = readFileSync(join(dirname(require.resolve('app-builder-lib/package.json')),
+      'out/targets/nsis/nsisScriptGenerator.js'), 'utf8')
+    expect(generator).toContain('StdUtils.TestParameter} $R9')
+    expect(body).not.toContain('${isUpdated}')
+    expect(body).toContain('${if} $KunInstallerTransactionPath != ""')
     expect(body).toContain('${if} ${Errors}\n      StrCpy $R9 1')
     expect(body).toContain('FileOpen $R8 "$KunInstallerDiagnosticPath" a')
     expect(body).toContain('FileSeek $R8 0 END\n        ${ifNot} ${Errors}\n          FileWrite')

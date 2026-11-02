@@ -11,7 +11,10 @@ Var /GLOBAL KunInstallerUpdateBoundary
     ${if} ${Errors}
       StrCpy $R9 1
     ${endif}
-    ${if} ${isUpdated}
+    ; isUpdated invokes StdUtils.TestParameter with $R9 as its output. Do not
+    ; use it here: $R9 owns the saved error flag until this function returns.
+    ; Only automatic preparation/recovery sets the transaction path.
+    ${if} $KunInstallerTransactionPath != ""
     ${andIf} $KunInstallerDiagnosticPath != ""
       ClearErrors
       FileOpen $R8 "$KunInstallerDiagnosticPath" a

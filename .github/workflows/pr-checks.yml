@@ -278,7 +278,7 @@ jobs:
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
-        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts --no-file-parallelism
+        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts src/main/windows-installer-pending-lease.test.ts --no-file-parallelism
 
       - name: Upload Windows transaction diagnostics
         if: always()
@@ -360,6 +360,105 @@ jobs:
             dist/latest.yml
             dist/pr-candidate-source.json
 
+  windows-cross-version:
+    name: Windows 0.4.3 GUI upgrade (${{ matrix.source }})
+    runs-on: windows-latest
+    needs: [package-windows]
+    timeout-minutes: 90
+    # The published control is observational: its failure must not mask a
+    # successful repair. The PR candidate remains a required gate.
+    continue-on-error: ${{ matrix.source == 'published-release' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [published-release, pull-request]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GUI_UPGRADE_SOURCE: ${{ matrix.source }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - name: Download exact PR candidate from this run
+        if: matrix.source == 'pull-request'
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-windows-nsis-package
+          path: cross-version-candidate
+      - name: Download published 0.4.4 control without publishing anything
+        if: matrix.source == 'published-release'
+        run: gh release download v0.4.4 -R KunAgent/Kun -p 'Kun-0.4.4-win-x64.exe' -p 'latest.yml' -D cross-version-candidate
+      - name: Upgrade normally launched released 0.4.3 through its real updater
+        run: |
+          $version = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { '0.4.4' } else { node -p "require('./package.json').version" }
+          $scenarios = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { 'normal' } else { 'normal,busy,rollback' }
+          node scripts/smoke-gui-upgrade.cjs --directory cross-version-candidate --version $version --baseline-version 0.4.3 --scenarios $scenarios --report windows-cross-version.json
+      - name: Stage owned cross-version evidence on the checkout volume
+        id: stage_windows_evidence
+        if: always()
+        run: node scripts/stage-windows-upgrade-evidence.cjs --report windows-cross-version.json --output artifacts/windows-cross-version
+      - name: Preserve cross-version logs and transaction evidence
+        if: ${{ always() && steps.stage_windows_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cross-version-${{ matrix.source }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: artifacts/windows-cross-version
+
+  windows-prepared-restart:
+    name: Windows prepared restart observation (${{ matrix.source }})
+    runs-on: windows-latest
+    needs: [package-windows]
+    timeout-minutes: 90
+    # The released control is observational; the repaired candidate must prove
+    # overlap and normal GUI cleanup. Inconclusive exit 2 cannot satisfy the gate.
+    continue-on-error: ${{ matrix.source == 'published-release' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [published-release, pull-request]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GUI_UPGRADE_SOURCE: ${{ matrix.source }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - name: Download exact PR candidate from this run
+        if: matrix.source == 'pull-request'
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-windows-nsis-package
+          path: cross-version-candidate
+      - name: Download published 0.4.4 control without publishing anything
+        if: matrix.source == 'published-release'
+        run: gh release download v0.4.4 -R KunAgent/Kun -p 'Kun-0.4.4-win-x64.exe' -p 'latest.yml' -D cross-version-candidate
+      - name: Upgrade normally launched released 0.4.3 through its real updater
+        run: |
+          $version = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { '0.4.4' } else { node -p "require('./package.json').version" }
+          $scenarios = 'restart-prepared'
+          $protection = if ($env:GUI_UPGRADE_SOURCE -eq 'pull-request') { @('--require-pending-protection', 'true') } else { @() }
+          node scripts/smoke-gui-upgrade.cjs --directory cross-version-candidate --version $version --baseline-version 0.4.3 --scenarios $scenarios --report windows-cross-version.json @protection
+      - name: Stage owned prepared-restart evidence on the checkout volume
+        id: stage_windows_evidence
+        if: always()
+        run: node scripts/stage-windows-upgrade-evidence.cjs --report windows-cross-version.json --output artifacts/windows-prepared-restart
+      - name: Preserve prepared-restart logs and transaction evidence
+        if: ${{ always() && steps.stage_windows_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-prepared-restart-${{ matrix.source }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: artifacts/windows-prepared-restart
+
   pr-gate:
     name: PR gate
     runs-on: ubuntu-latest
@@ -370,6 +469,8 @@ jobs:
       - package-macos
       - package-windows
       - windows-recovery
+      - windows-cross-version
+      - windows-prepared-restart
     if: always()
     steps:
       - name: Require every PR job to succeed
@@ -383,6 +484,8 @@ jobs:
               ['Build ad-hoc macOS packages (PR)', '${{ needs['package-macos'].result }}'],
               ['Build Windows NSIS installer (PR)', '${{ needs['package-windows'].result }}'],
               ['Windows recovery safety', '${{ needs['windows-recovery'].result }}'],
+              ['Windows 0.4.3 GUI upgrade', '${{ needs['windows-cross-version'].result }}'],
+              ['Windows prepared restart protection', '${{ needs['windows-prepared-restart'].result }}'],
             ]
             const unsuccessful = results.filter(([, result]) => result !== 'success')
             if (unsuccessful.length > 0) {
@@ -403,6 +506,8 @@ jobs:
       - package-macos
       - package-windows
       - windows-recovery
+      - windows-cross-version
+      - windows-prepared-restart
     if: >-
       ${{
         always() &&
@@ -426,6 +531,8 @@ jobs:
               ['Build ad-hoc macOS packages (PR)', '${{ needs['package-macos'].result }}'],
               ['Build Windows NSIS installer (PR)', '${{ needs['package-windows'].result }}'],
               ['Windows recovery safety', '${{ needs['windows-recovery'].result }}'],
+              ['Windows 0.4.3 GUI upgrade', '${{ needs['windows-cross-version'].result }}'],
+              ['Windows prepared restart protection', '${{ needs['windows-prepared-restart'].result }}'],
             ]
             const failed = jobResults.filter(([, result]) => result !== 'success')
             const failedJobs = failed.map(([name, result]) => `- ${name} (${result})`).join('\n')

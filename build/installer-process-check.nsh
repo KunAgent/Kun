@@ -1,3 +1,5 @@
+!include "${PROJECT_DIR}\build\installer-extraction-tracing.nsh"
+
 !macro customCheckAppRunning
   !ifdef BUILD_UNINSTALLER
     ${if} $INSTDIR == ""
@@ -61,6 +63,7 @@
 
     KunInstallDirProcessesStopped:
   !else
+    !insertmacro KunInstallExtractionTracing
     Call KunPrepareInstallMigration
     StrCpy $appExe "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
     ${ifNot} ${Silent}
