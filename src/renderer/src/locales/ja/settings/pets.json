@@ -1,0 +1,28 @@
+{
+  "settingsNavPets": "ペット",
+  "petsTitle": "デスクトップペット",
+  "petsDesc": "デスクトップペットを選び、表示したままにし、Codex のペットパッケージを読み込みます。",
+  "petsDesktopOnly": "デスクトップペットは Kun デスクトップアプリでのみ使えます。",
+  "petsLoading": "ペットを読み込んでいます...",
+  "petsLoadError": "ペットライブラリを読み込めませんでした。",
+  "petsEmpty": "ペットがありません。pet.json を含むパッケージを Kun のペットフォルダに追加して更新してください。",
+  "petsSelectFirst": "デスクトップに表示する前に、使えるペットを選択してください。",
+  "petsCurrent": "選択中のペット",
+  "petsNone": "未選択",
+  "petsImported": "読み込んだペット",
+  "petsWake": "ペットを表示",
+  "petsHide": "ペットをしまう",
+  "petsImportErrors": "読み込みエラー",
+  "petsShow": "ペットをデスクトップに表示",
+  "petsImportCodex": "Codex のペットを自動で読み込む",
+  "petsRefresh": "更新",
+  "petsOpenKunDir": "Kun のペットフォルダを開く",
+  "petsOpenCodexDir": "Codex のペットフォルダを開く",
+  "petsSourceMissing": "元のパッケージがありません",
+  "petsReport": "失敗 {{failed}}、欠損 {{missing}}",
+  "petsSource": {
+    "kun-builtin": "内蔵",
+    "kun-local": "ローカル",
+    "codex-custom": "Codex"
+  }
+}

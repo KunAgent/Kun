@@ -13,7 +13,8 @@ const PRELOAD_BRIDGES = {
   'extension-protected-surface.cjs': undefined,
   'storage-relocation-recovery.cjs': 'kunStorageRelocationRecovery',
   'runtime-data-recovery.cjs': 'kunRuntimeDataRecovery',
-  'tray-quota.cjs': 'kunTrayQuota'
+  'tray-quota.cjs': 'kunTrayQuota',
+  'pet-overlay.cjs': 'kunPetOverlay'
 }
 
 // Model Electron's sandboxed preload loader, not Node's unrestricted require.
@@ -112,6 +113,11 @@ async function checkBuiltPreloads(directory) {
       const bridge = PRELOAD_BRIDGES[file]
       if (bridge) assert(loaded.bridges.has(bridge), `${file} did not expose ${bridge} on ${platform}`)
       if (file === 'index.cjs') await assertWorkbenchBridge(loaded)
+      if (file === 'pet-overlay.cjs') {
+        assert(!loaded.bridges.has('kunGui'), 'Pet overlay preload must not expose the workbench bridge')
+        assert.equal(typeof loaded.bridges.get('kunPetOverlay')?.getBootstrap, 'function')
+        assert.equal(typeof loaded.bridges.get('kunPetOverlay')?.closeOverlay, 'function')
+      }
     }
   }
   return files.length

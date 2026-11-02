@@ -1,0 +1,28 @@
+{
+  "settingsNavPets": "Питомцы",
+  "petsTitle": "Питомцы на рабочем столе",
+  "petsDesc": "Выберите питомца, оставьте его на экране и импортируйте пакеты Codex.",
+  "petsDesktopOnly": "Питомцы доступны только в приложении Kun для компьютера.",
+  "petsLoading": "Загрузка питомцев...",
+  "petsLoadError": "Не удалось загрузить библиотеку питомцев.",
+  "petsEmpty": "Питомцев пока нет. Добавьте пакет с pet.json в папку Kun и обновите список.",
+  "petsSelectFirst": "Сначала выберите доступного питомца, затем покажите его на рабочем столе.",
+  "petsCurrent": "Текущий питомец",
+  "petsNone": "Не выбран",
+  "petsImported": "Импортированные питомцы",
+  "petsWake": "Показать питомца",
+  "petsHide": "Скрыть питомца",
+  "petsImportErrors": "Ошибки импорта",
+  "petsShow": "Показывать питомца на рабочем столе",
+  "petsImportCodex": "Автоматически импортировать питомцев Codex",
+  "petsRefresh": "Обновить",
+  "petsOpenKunDir": "Открыть папку питомцев Kun",
+  "petsOpenCodexDir": "Открыть папку питомцев Codex",
+  "petsSourceMissing": "Исходный пакет отсутствует",
+  "petsReport": "Ошибок: {{failed}}, отсутствует: {{missing}}",
+  "petsSource": {
+    "kun-builtin": "Встроенный",
+    "kun-local": "Локальный",
+    "codex-custom": "Codex"
+  }
+}

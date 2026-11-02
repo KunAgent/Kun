@@ -1,0 +1,21 @@
+html, body, #root { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+.pet-overlay { position: relative; width: 100%; height: 100%; background: transparent; pointer-events: none; }
+.pet-hit { position: absolute; right: 8px; bottom: 8px; pointer-events: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; background: transparent; }
+.pet-sprite {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  box-shadow: none;
+  background-repeat: no-repeat;
+  image-rendering: auto;
+  cursor: grab;
+}
+.pet-sprite:active { cursor: grabbing; }
+.pet-bubble { max-width: 240px; padding: 8px 10px; border-radius: 12px; background: rgba(22, 24, 28, 0.92); color: white; font: 12px/1.4 sans-serif; pointer-events: auto; }
+.pet-bubble p { margin: 4px 0; }
+.pet-actions { display: flex; gap: 6px; }
+.pet-actions button, .pet-bubble button { border: 0; border-radius: 8px; padding: 4px 8px; background: white; color: #15171a; font: inherit; }
+.pet-note { max-width: 220px; color: #d7dbe2; font: 11px/1.3 sans-serif; }
