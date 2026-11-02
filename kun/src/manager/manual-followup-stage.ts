@@ -8,6 +8,7 @@ import { CollaborationPolicySchema, CommitmentControlSchema, CommitmentLinkSchem
 import type { z } from 'zod'
 import { RoomMessageSchema, RoomSchema } from '../contracts/rooms.js'
 import { followUpCheck, followUpPolicyCurrent } from '../agents/followup/state.js'
+import { assertBudget } from '../agents/followup/budget.js'
 import { manualContinueCommandFingerprint, manualContinueFingerprint, manualContinueIds,
   manualContinueRequest, manualContinueSourceId } from '../agents/followup/manual-contract.js'
 import { nativeFollowUpTargetFingerprint } from '../domain/native-followup-target.js'
@@ -127,7 +128,12 @@ export function stageManualFollowUp(input: {
       input.store.collaborationQuery({ kind: 'commitment_activity', ...scope, category: 'effects', limit: 1 })
     ])
     if (activeExecutions.length || activeEffects.length) return fail('another follow-up outcome is unsettled')
-    const createdAt = now(), base = (id: string) => ({ schemaVersion: 1 as const, id, createdAt, updatedAt: createdAt })
+    const createdAt = now()
+    // Read-only check: staging never rewrites the control row, which is the anchor the
+    // evidence reservation and command fingerprint were authorised against. Only one
+    // attempt can be in flight at a time, so nothing can slip between check and dispatch.
+    assertBudget(policy, control, createdAt)
+    const base = (id: string) => ({ schemaVersion: 1 as const, id, createdAt, updatedAt: createdAt })
     const evidenceRefs = [{ kind: 'event' as const, id: ids.eventId, revision: 0 }]
     const envelope = FollowUpEnvelopeSchema.parse({ schemaVersion: 1, commitmentId: scope.commitmentId,
       sourceRoomId: scope.sourceRoomId, generation: control.generation,

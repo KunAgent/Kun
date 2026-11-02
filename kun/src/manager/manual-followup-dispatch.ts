@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { CommitmentExecutionSchema } from '../contracts/collaboration-effects.js'
+import { CommitmentControlSchema } from '../contracts/collaboration-followup.js'
+import { followUpPut } from '../agents/followup/state.js'
+import { consumeAttempt } from '../agents/followup/budget.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import type { ManagerResourceFence } from './resource-lease-state.js'
@@ -47,9 +50,17 @@ export function beginManualFollowUpDispatch(input: {
     const dispatch = { id: randomUUID(), startedAt: timestamp, claimToken: input.claimToken }
     const next = CommitmentExecutionSchema.parse({ ...verified.execution, dispatch,
       nextReconcileAt: new Date(Date.parse(timestamp) + 15_000).toISOString(), updatedAt: timestamp })
+    // The attempt is spent in the same commit that records the dispatch, so retrying
+    // this attempt id cannot spend a second one.
+    const controlRow = await input.store.get('commitment_control', next.commitmentId)
+    if (!controlRow) throw new NativeFollowUpPermitError('native dispatch has no tracking control')
+    const nextControl = CommitmentControlSchema.parse(consumeAttempt(
+      CommitmentControlSchema.parse(controlRow.value), timestamp))
     const result = { shouldDispatch: true, dispatchId: dispatch.id }
-    await input.store.commit({ requestId: `manual-dispatch-${randomUUID()}`, checks: verified.checks,
-      puts: [{ kind: 'commitment_execution', id: next.id, roomId: next.sourceRoomId, value: next }], result }, () => {
+    await input.store.commit({ requestId: `manual-dispatch-${randomUUID()}`,
+      checks: verified.checks,
+      puts: [{ kind: 'commitment_execution', id: next.id, roomId: next.sourceRoomId, value: next },
+        followUpPut(controlRow, nextControl)], result }, () => {
       assertCurrent()
       assertIdle()
       if (!verified.effect.claim || verified.effect.claim.expiresAt <= now() || verified.policy.expiresAt <= now()) {

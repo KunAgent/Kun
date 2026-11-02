@@ -70,7 +70,9 @@ export const CommitmentRecordFields = {
 
 export const FollowUpBudgetSchema = z.object({
   windowStart: FollowUpTime, windowEnd: FollowUpTime,
-  reserved: FollowUpRevision, consumed: FollowUpRevision, totalConsumed: FollowUpRevision
+  reserved: FollowUpRevision, consumed: FollowUpRevision, totalConsumed: FollowUpRevision,
+  // Needed for minimumIntervalMs; absent on rows written before budgets were enforced.
+  lastAttemptAt: FollowUpTime.optional()
 }).strict().refine((value) => value.windowEnd > value.windowStart, 'budget window must advance')
 
 export const CommitmentControlSchema = z.object({
