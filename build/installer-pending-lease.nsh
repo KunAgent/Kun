@@ -4,8 +4,11 @@
 !macro KunAbortPendingLease MESSAGE
   ; No Prepare mutation has happened. Never publish a result to a path whose
   ; authentication failed, or alter an existing recovery transaction here.
+  ; The desktop app already quit to launch this installer. Return to the
+  ; installed executable. The unauthenticated record gets no result file.
   Call KunReleasePendingLease
   DetailPrint "${MESSAGE}"
+  Call KunTryRelaunchOldApp
   SetErrorLevel 2
   Quit
 !macroend

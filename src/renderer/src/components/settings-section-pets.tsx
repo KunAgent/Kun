@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FolderOpen, RefreshCw } from 'lucide-react'
-import { PET_CELL_HEIGHT, PET_CELL_WIDTH, PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSpriteVersion, type PetSummary } from '@shared/pets'
+import { PET_CELL_HEIGHT, PET_CELL_WIDTH, PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSummary } from '@shared/pets'
 import { staticFrame } from '../pets/pet-animation'
 import { settingsButtonClass } from './settings-button'
 import './settings-pets.css'
@@ -137,26 +137,23 @@ export function PetsSettingsSection(): ReactElement {
 
 function PetPreview({ pet, pose, large = false }: { pet: PetSummary; pose: 'idle' | 'waiting'; large?: boolean }): ReactElement {
   const frame = staticFrame(pose, pet.spriteVersionNumber)
-  return (
-    <span
-      aria-hidden
-      className="pet-static-preview"
-      style={previewStyle(pet.spritesheetUrl ?? '', pet.spriteVersionNumber, frame.backgroundPosition, large)}
-    />
-  )
-}
-
-function previewStyle(url: string, version: PetSpriteVersion, position: string, large: boolean): React.CSSProperties {
   const width = large ? 72 : 42
-  // Grid items ignore aspect-ratio here, so a width-only box collapses and
-  // Chromium never paints the spritesheet. Give the cell an explicit height.
   const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
-  return {
-    width,
-    height,
-    backgroundImage: `url("${url}")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundSize: `${PET_SHEET_COLUMNS * 100}% ${petSheetRowsForVersion(version) * 100}%`,
-    backgroundPosition: position
-  }
+  const rows = petSheetRowsForVersion(pet.spriteVersionNumber)
+  return (
+    <span aria-hidden className="pet-static-preview" style={{ width, height }}>
+      <img
+        alt=""
+        src={pet.spritesheetUrl}
+        draggable={false}
+        style={{
+          width: width * PET_SHEET_COLUMNS,
+          height: height * rows,
+          maxWidth: 'none',
+          maxHeight: 'none',
+          transform: `translate(${-frame.column * width}px, ${-frame.row * height}px)`
+        }}
+      />
+    </span>
+  )
 }

@@ -12,6 +12,9 @@ describe('renderer content security policy', () => {
     expect(imgSrc.split(/\s+/)).toContain('kun-extension:')
     expect(imgSrc.split(/\s+/)).toContain('kun-pet:')
     expect(imgSrc.split(/\s+/)).not.toContain('https:')
+
+    const connectSrc = csp.match(/connect-src\s+([^;]+)/)?.[1] ?? ''
+    expect(connectSrc.split(/\s+/)).toContain('kun-pet:')
   })
 
   it('lets workspace audio, video and sandboxed HTML previews load from their lease scheme only', () => {

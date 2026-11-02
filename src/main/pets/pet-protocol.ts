@@ -1,3 +1,4 @@
+import type { Protocol } from 'electron'
 import { readFile, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { PET_ASSET_HOST, PET_ASSET_SCHEME } from '../../shared/pets'
@@ -26,6 +27,27 @@ export function parsePetAssetUrl(url: string): { petId: string; version: string 
   }
   if (!PET_ID.test(petId) || petId.includes('..') || petId.includes('/') || petId.includes('\\')) return null
   return { petId, version: parsed.searchParams.get('v') }
+}
+
+type PetAssetBinding = { lookup: PetAssetLookup; libraryRoot: string }
+
+let petAssets: PetAssetBinding | null = null
+
+export function bindPetAssetReader(next: PetAssetBinding | null): void {
+  petAssets = next
+}
+
+/**
+ * Install before the first BrowserWindow. Electron snapshots custom-scheme
+ * loaders per renderer at creation, so a later `protocol.handle` still serves
+ * the pet overlay (created afterwards) while the already-open workbench fails
+ * image loads with ERR_UNKNOWN_URL_SCHEME.
+ */
+export function registerPetAssetProtocol(protocol: Pick<Protocol, 'handle'>): void {
+  protocol.handle(PET_ASSET_SCHEME, (request) => {
+    if (!petAssets) return Promise.resolve(denied())
+    return readPetAsset(request.url, petAssets.lookup, petAssets.libraryRoot)
+  })
 }
 
 export async function readPetAsset(url: string, lookup: PetAssetLookup, libraryRoot: string): Promise<Response> {
