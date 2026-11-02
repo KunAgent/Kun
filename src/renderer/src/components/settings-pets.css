@@ -180,9 +180,16 @@
   height: 45px;
   overflow: hidden;
   background-color: transparent;
-  background-repeat: no-repeat;
-  background-position: 0% 0%;
-  image-rendering: auto;
+  /* Default uiFontScale applies body zoom; custom-scheme sprites do not paint until it is canceled. */
+  zoom: calc(1 / var(--ds-ui-scale, 1));
+}
+
+.pet-static-preview img {
+  display: block;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  user-select: none;
 }
 
 .pets-settings-preview .pet-static-preview {

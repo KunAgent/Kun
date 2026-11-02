@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -99,13 +101,13 @@ describe('pets settings section', () => {
     const settings = { ...defaultPetSettings(), selectedPetId: visible.id }
     install([visible], settings)
     const renderer = await renderSection()
-    const previews = renderer.root.findAll((node) => node.props.className === 'pet-static-preview')
-    expect(previews).toHaveLength(2)
-    for (const preview of previews) {
-      expect(preview.props.style.height).toBeGreaterThan(0)
-      expect(preview.props.style.backgroundImage).toContain('kun-pet://asset/')
-      expect(preview.props.style.backgroundSize).toBe('800% 900%')
-    }
+    const images = renderer.root.findAllByType('img')
+    expect(images).toHaveLength(2)
+    expect(images.map((image) => image.props.src)).toEqual([
+      visible.spritesheetUrl,
+      visible.spritesheetUrl
+    ])
+    expect(images.map((image) => image.props.style.width)).toEqual([72 * 8, 42 * 8])
   })
 
   it('keeps the selected pet pressed and reports a failed refresh', async () => {
@@ -131,5 +133,10 @@ describe('pets settings section', () => {
     vi.stubGlobal('window', { kunGui: {} })
     const hidden = await renderSection()
     expect(JSON.stringify(hidden.toJSON())).toContain('petsDesktopOnly')
+  })
+
+  it('cancels workbench body zoom for sprite previews', () => {
+    const css = readFileSync(resolve('src/renderer/src/components/settings-pets.css'), 'utf8')
+    expect(css).toMatch(/\.pet-static-preview\s*\{[^}]*zoom:\s*calc\(1\s*\/\s*var\(--ds-ui-scale,\s*1\)\)/)
   })
 })

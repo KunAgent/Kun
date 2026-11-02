@@ -1,5 +1,6 @@
 import { startPlanWorktreeSweeper } from './services/plan-worktree-sweeper'
 import { registerArtProtocol } from './art-assets/protocol'
+import { registerPetAssetProtocol } from './pets/pet-protocol'
 import { sharedWorkspacePreviewProtocols } from './services/workspace-preview-protocol'
 import { app, dialog, protocol, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
@@ -231,6 +232,7 @@ export function startMainApp(): Promise<void> {
   return app.whenReady().then(async () => {
     traceStartup('app.whenReady:start')
     registerArtProtocol(protocol)
+    registerPetAssetProtocol(protocol)
     sharedWorkspacePreviewProtocols().register(protocol)
     if (!gotSingleInstanceLock) {
       await explainConflictingDesktopInstance()
