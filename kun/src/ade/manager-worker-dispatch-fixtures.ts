@@ -62,7 +62,7 @@ export async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', ha
   const capabilitiesForRoute = vi.fn<import('./manager-runtime-deps.js').ManagerRuntimeDeps['capabilitiesForRoute']>(
     async () => KUN_NATIVE_CAPABILITIES)
   const locale = { value: 'en' }
-  const runtime = new ManagerRuntime({
+  const runtimeDeps: import('./manager-runtime-deps.js').ManagerRuntimeDeps = {
     language: () => locale.value,
     agentDispatchService: service, teams, dispatches, childRuns, threads,
     questions: new FileQuestionStore(root, nowIso), notices: noticeSink,
@@ -78,7 +78,8 @@ export async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', ha
     ids: { next: (prefix) => `${prefix}_unused` }, teamLimits: () => ({ hardWorkers, softWorkers: Math.min(4, hardWorkers) }),
     harnessDefaults, ...(roster ? { roster } : {}),
     providerPool: async () => ({ models: ['main-model', 'other-model'] }), allowUnattendedFullAccess: () => true
-  })
+  }
+  const runtime = new ManagerRuntime(runtimeDeps)
   await service.start()
   const context: ToolHostContext = { threadId: source.id, turnId: 'source-turn', workspace: '/repo', ...policy,
     activeToolCallId: 'worker-call', actingModelRoute: { model: 'main-model', providerId: 'test' },
@@ -88,7 +89,7 @@ export async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', ha
     signal: context.abortSignal, awaitApproval: context.awaitApproval })
   const assignment = { label: 'Independent task', task: 'Implement a bounded change and verify it.',
     context: { constraints: ['Existing behavior remains correct.'] }, workspace: { isolation: 'worktree' as const } }
-  return { delivererDeps, wireNotices: (next: typeof sink) => { sink = next }, locale, root, notices, source, clock, context, ctx, runtime, service, teams, dispatches, childRuns,
+  return { runtimeDeps, delivererDeps, wireNotices: (next: typeof sink) => { sink = next }, locale, root, notices, source, clock, context, ctx, runtime, service, teams, dispatches, childRuns,
     runChild, taskWorkspaces, disabled, threads, assignment, workspace, deliverer, capabilitiesForRoute, store }
 }
 

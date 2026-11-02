@@ -359,6 +359,17 @@ export class ManagerWorkerDispatch {
     }
   }
 
+  /** Recover the gap between persisting a failed intent and persisting its notice. */
+  async reconcileFailuresOnStartup(): Promise<void> {
+    for (const intent of await this.deps.agentDispatchService?.list() ?? []) {
+      if (intent.kind !== 'worker' || intent.state !== 'failed') continue
+      // Reuse stable notice IDs and the live suppression checks; never restart admission.
+      await this.reportPrelaunchFailure(intent.intentId).catch((error) => {
+        console.warn(`[kun] ade intent failure replay failed for ${intent.intentId}:`, error)
+      })
+    }
+  }
+
   async reportPrelaunchFailure(intentId: string): Promise<void> {
     const intent = await this.deps.agentDispatchService?.get(intentId)
     if (!intent || intent.kind !== 'worker' || intent.state !== 'failed' ||

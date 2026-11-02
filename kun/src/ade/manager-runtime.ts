@@ -355,6 +355,7 @@ export class ManagerRuntime {
    */
   async reconcileOnStartup(): Promise<void> {
     await this.lifecycle.reconcileOnStartup()
+    await this.workerDispatch.reconcileFailuresOnStartup()
   }
 
   /** Manager context for tool execution — built from host-side records. */
