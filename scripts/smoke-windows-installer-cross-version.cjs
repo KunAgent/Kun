@@ -5,7 +5,7 @@ const { execFile } = require('node:child_process')
 const { promisify } = require('node:util')
 const { mkdtemp, readFile, writeFile, cp, mkdir, readdir } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
-const { join } = require('node:path')
+const { join, win32 } = require('node:path')
 const { parse } = require('yaml')
 const { digest } = require('./gui-upgrade-feed.cjs')
 const run = promisify(execFile)
@@ -62,15 +62,51 @@ async function verifyPublishedSource(version, directory, execute = run, platform
   return commit
 }
 
+// Keep runner/bootstrap/other-account command lines out of uploaded artifacts.
+// Process identity is PID + creation time + executable, not a mutable name.
+function selectOwnedWindowsProcesses(rows, paths, limit = 128) {
+  const normalize = value => typeof value === 'string' ? win32.normalize(value).toLowerCase() : ''
+  const anchor = value => typeof value === 'string' && win32.isAbsolute(value) && /\.exe$/i.test(value) ? normalize(value) : ''
+  const executable = anchor(paths.executable)
+  const installRoot = executable ? win32.dirname(executable) + '\\' : ''
+  const installers = new Set((paths.verifiedInstallerPaths || []).map(anchor).filter(Boolean))
+  const owned = new Set(rows.filter(row => {
+    const path = normalize(row.ExecutablePath)
+    return path && (path === executable || (installRoot && path.startsWith(installRoot)) || installers.has(path))
+  }).map(row => row.ProcessId))
+  const createdAt = value => {
+    const serialized = typeof value === 'string' && value.match(/^\/Date\((-?\d+)(?:[+-]\d+)?\)\/$/)
+    return serialized ? Number(serialized[1]) : Date.parse(value)
+  }
+  const byPid = new Map(rows.map(row => [row.ProcessId, row]))
+  let previousSize = -1
+  while (previousSize !== owned.size) {
+    previousSize = owned.size
+    for (const row of rows) {
+      const parent = byPid.get(row.ParentProcessId)
+      // A recycled parent PID is not evidence of ownership. Missing or invalid
+      // creation times fail closed; directly verified roots remain visible.
+      if (owned.has(row.ParentProcessId) && parent &&
+          createdAt(row.CreationDate) >= createdAt(parent.CreationDate)) owned.add(row.ProcessId)
+    }
+  }
+  const selected = rows.filter(row => owned.has(row.ProcessId))
+  const fields = ['ProcessId', 'ParentProcessId', 'Name', 'ExecutablePath', 'CreationDate', 'KernelModeTime', 'UserModeTime']
+  return { truncated: selected.length > limit, processes: selected.slice(0, limit).map(row =>
+    Object.fromEntries(fields.map(field => [field, row[field]]))) }
+}
+
 async function captureWindowsUpgrade(root, paths, execute = run) {
   if (process.platform !== 'win32') return
-  // Capture before any cleanup: installer CPU, children, command lines and the
+  // Capture before any cleanup: owned installer CPU, children, identity and the
   // transaction distinguish native extraction stalls from old-GUI recovery.
   const command = "$ErrorActionPreference='Stop'; Get-CimInstance Win32_Process | " +
-    'Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine,CreationDate,KernelModeTime,UserModeTime | ConvertTo-Json -Depth 4'
+    'Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CreationDate,KernelModeTime,UserModeTime | ConvertTo-Json -Depth 4'
   const processes = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command],
     { timeout: 30_000, maxBuffer: 16 * 1024 * 1024 })
-  await writeFile(join(root, 'windows-processes.json'), processes.stdout)
+  const parsed = JSON.parse(processes.stdout || '[]')
+  const snapshot = selectOwnedWindowsProcesses(Array.isArray(parsed) ? parsed : [parsed], paths)
+  await writeFile(join(root, 'windows-processes.json'), JSON.stringify(snapshot, null, 2))
   await writeFile(join(root, 'windows-paths.json'), JSON.stringify(paths, null, 2))
   for (const [name, path] of [['installer-recovery-snapshot', paths.installerRecovery], ['desktop-profile-snapshot', paths.userData]]) {
     const snapshot = join(root, name)
@@ -108,4 +144,4 @@ async function stopVerifiedInstallers(paths, execute = run) {
   { timeout: 30_000, maxBuffer: 1024 * 1024 })
 }
 
-module.exports = { RELEASE_SHA256, upgradeOptions, verifyPublishedSource, captureWindowsUpgrade, stopVerifiedInstallers, assertCandidateExtractionTrace }
+module.exports = { RELEASE_SHA256, upgradeOptions, verifyPublishedSource, captureWindowsUpgrade, stopVerifiedInstallers, assertCandidateExtractionTrace, selectOwnedWindowsProcesses }

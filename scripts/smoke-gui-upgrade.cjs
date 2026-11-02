@@ -368,7 +368,7 @@ async function scenario(input, name, record, persistReport) {
   } catch (error) {
     failure = error
     journal.fail(error)
-    await captureWindowsUpgrade(root, { executable, installerRecovery, userData, downloadedPaths: record.downloadedPaths || [] }).catch(diagnosticError => {
+    await captureWindowsUpgrade(root, { executable, installerRecovery, userData, verifiedInstallerPaths: record.verifiedInstallerPaths || [] }).catch(diagnosticError => {
       journal.event('diagnostic_capture_failed', { error: diagnosticError.message })
     })
     await captureMacUpdateDiagnostics(root, bundle).catch((diagnosticError) => {

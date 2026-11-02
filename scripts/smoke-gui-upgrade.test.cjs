@@ -204,3 +204,26 @@ test('candidate native run must demonstrate the compiled extraction tracing over
   assert.throws(() => assertCandidateExtractionTrace(log.replace('7z-extract-returned', 'missing')), /compiled extraction marker/)
   assert.throws(() => assertCandidateExtractionTrace(markers.reverse().map(step => `NSIS update-boundary=${step}`).join('\n')))
 })
+
+
+test('Windows failure evidence excludes unrelated processes and all command lines', () => {
+  const { selectOwnedWindowsProcesses } = require('./smoke-windows-installer-cross-version.cjs')
+  const rows = [
+    { ProcessId: 1, ParentProcessId: 0, ExecutablePath: 'C:\\runner\\worker.exe', CommandLine: 'SECRET' },
+    { ProcessId: 2, ParentProcessId: 1, ExecutablePath: 'C:\\fixture\\Kun\\Kun.exe', CreationDate: '2026-11-02T00:00:00Z', CommandLine: 'PRIVATE' },
+    { ProcessId: 3, ParentProcessId: 1, ExecutablePath: 'C:\\cache\\candidate.exe', CreationDate: '/Date(1793577600000)/' },
+    { ProcessId: 4, ParentProcessId: 3, ExecutablePath: 'C:\\temp\\installer-child.exe', CreationDate: '2026-11-02T00:00:01Z', CommandLine: 'PRIVATE' },
+    { ProcessId: 6, ParentProcessId: 3, ExecutablePath: 'C:\\unrelated.exe', CreationDate: '2026-11-01T00:00:00Z' },
+    { ProcessId: 5, ParentProcessId: 1, ExecutablePath: 'C:\\fixture\\Kun-other\\unrelated.exe' }
+  ]
+  const paths = { executable: 'c:\\fixture\\Kun\\Kun.exe', verifiedInstallerPaths: ['C:\\cache\\candidate.exe'] }
+  const result = selectOwnedWindowsProcesses(rows, paths)
+  assert.deepEqual(result.processes.map(row => row.ProcessId), [2, 3, 4])
+  assert.equal(result.processes[0].CreationDate, '2026-11-02T00:00:00Z')
+  assert.equal(result.truncated, false)
+  assert.doesNotMatch(JSON.stringify(result), /CommandLine|SECRET|PRIVATE|runner|unrelated/)
+  assert.equal(selectOwnedWindowsProcesses(rows, paths, 2).truncated, true)
+  assert.equal(selectOwnedWindowsProcesses(rows, paths, 2).processes.length, 2)
+  assert.deepEqual(selectOwnedWindowsProcesses(rows, {}).processes, [])
+  assert.deepEqual(selectOwnedWindowsProcesses(rows, { executable: 'Kun.exe', verifiedInstallerPaths: ['candidate.exe'] }).processes, [])
+})
