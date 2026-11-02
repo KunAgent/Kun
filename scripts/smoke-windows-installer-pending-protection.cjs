@@ -1,8 +1,10 @@
 'use strict'
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
-const { open, readFile, appendFile, readdir, stat } = require('node:fs/promises')
+const { open, readFile, appendFile, readdir, stat, lstat, realpath, opendir } = require('node:fs/promises')
 const { join, resolve, relative, isAbsolute, sep } = require('node:path')
+const { constants } = require('node:fs')
+const { sameOwnedPath } = require('./smoke-windows-installer-relaunch.cjs')
 const { sanitizeDiagnostic } = require('./stage-windows-upgrade-evidence.cjs')
 const MAX_PENDING_BYTES = 64 * 1024
 
@@ -104,7 +106,74 @@ function classifyReconciliation(state, versions, now = Date.now()) {
     recovery.recoveryEnvironment?.KUN_INSTALLER_TRANSACTION === transaction.path
   return grace ? 'healthy-runtime-with-valid-recovery-grace' : 'unconfirmed'
 }
-async function readReconciliationState(userData, recoveryRoot, installerLog) {
+function parseGuiFinalizationMarker(text, expected, now = Date.now()) {
+  if (!expected || !Number.isSafeInteger(expected.pid) || expected.pid <= 0 ||
+      !Number.isFinite(Date.parse(expected.createdAt)) || typeof expected.version !== 'string' || !expected.version ||
+      !sameOwnedPath(expected.executablePath, expected.executablePath, 'win32')) return null
+  for (const entry of text.split(/(?=^\[\d{4}-\d{2}-\d{2}T)/m)) {
+    // Logger records end in a newline. A partial final append is not evidence.
+    const match = entry.match(/^\[([^\]]+)\] \[INFO\] \[kun-gui updater\] Native update transaction finalized\. - detail: (\{[\s\S]*\})\r?\n$/)
+    if (!match) continue
+    const at = Date.parse(match[1])
+    if (!Number.isFinite(at) || at <= Date.parse(expected.createdAt) || at > now + 1000 ||
+        (expected.notAfter && (!Number.isFinite(Date.parse(expected.notAfter)) || at >= Date.parse(expected.notAfter)))) continue
+    try {
+      const value = JSON.parse(match[2])
+      if (value.event === 'native_update_finalized' && value.pid === expected.pid && value.version === expected.version &&
+          sameOwnedPath(value.executablePath, expected.executablePath, 'win32')) {
+        return { source: 'owned-automatic-gui-log', event: value.event, pid: value.pid, version: value.version, at: match[1] }
+      }
+    } catch { /* Malformed or truncated records never authorize cleanup success. */ }
+  }
+  return null
+}
+async function readBoundedOwnedText(file, maximum, tail = false) {
+  let handle
+  try {
+    const before = await lstat(file)
+    if (!before.isFile() || before.isSymbolicLink() || !sameOwnedPath(await realpath(file), resolve(file))) return null
+    if (!tail && before.size > maximum) return null
+    handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW || 0))
+    const info = await handle.stat()
+    if (!info.isFile() || info.dev !== before.dev || info.ino !== before.ino || (!tail && info.size > maximum)) return null
+    if (!sameOwnedPath(await realpath(file), resolve(file))) return null
+    const start = tail ? Math.max(0, info.size - maximum) : 0
+    const bytes = Buffer.alloc(Math.min(info.size, maximum))
+    let offset = 0
+    while (offset < bytes.length) {
+      const part = await handle.read(bytes, offset, bytes.length - offset, start + offset)
+      if (!part.bytesRead) break
+      offset += part.bytesRead
+    }
+    let text = bytes.subarray(0, offset).toString('utf8')
+    if (start > 0) text = text.includes('\n') ? text.slice(text.indexOf('\n') + 1) : ''
+    return text
+  } catch (error) { if (error.code === 'ENOENT') return null; throw error }
+  finally { await handle?.close() }
+}
+async function readGuiFinalizationMarker(userData, expected) {
+  if (!expected?.ownerRoot) return null
+  const owner = await readBoundedOwnedText(join(userData, '.upgrade-acceptance-owner'), 4096)
+  if (!owner || !sameOwnedPath(owner.trim(), expected.ownerRoot)) return null
+  const directory = join(userData, 'logs')
+  try {
+    const info = await lstat(directory)
+    if (!info.isDirectory() || info.isSymbolicLink() || !sameOwnedPath(await realpath(directory), resolve(directory))) return null
+    const files = []
+    let entries = 0
+    for await (const entry of await opendir(directory)) {
+      if (++entries > 64) return null
+      if (entry.isFile() && /^kun-\d{4}-\d{2}-\d{2}\.log$/.test(entry.name)) files.push(entry.name)
+    }
+    for (const name of files.sort().reverse().slice(0, 4)) {
+      const text = await readBoundedOwnedText(join(directory, name), 512 * 1024, true)
+      const marker = text === null ? null : parseGuiFinalizationMarker(text, expected)
+      if (marker) return marker
+    }
+  } catch (error) { if (error.code !== 'ENOENT') throw error }
+  return null
+}
+async function readReconciliationState(userData, recoveryRoot, installerLog, expectedAutomaticGui) {
   const json = async path => {
     try { return JSON.parse((await readFile(path, 'utf8')).replace(/^\uFEFF/u, '')) }
     catch (error) {
@@ -134,16 +203,17 @@ async function readReconciliationState(userData, recoveryRoot, installerLog) {
     if (payload.every(inside)) rollbackPayloadPresent = (await Promise.all(payload.map(path => stat(path).then(info => info.isFile()).catch(() => false)))).every(Boolean)
   }
   // Read only the owned diagnostic log. No helper invocation or record mutation.
-  const log = await readFile(installerLog, 'utf8')
+  const log = await readBoundedOwnedText(installerLog, 512 * 1024, true) || ''
+  const guiFinalizeMarker = await readGuiFinalizationMarker(userData, expectedAutomaticGui)
   return { pending, result, recovery, transactions, backups, rollbackPayloadPresent,
-    finalizeMarker: log.includes('SUCCESS action=FinalizeUpdateTransaction') }
+    finalizeMarker: log.includes('SUCCESS action=FinalizeUpdateTransaction') || Boolean(guiFinalizeMarker), guiFinalizeMarker }
 }
 function reconciliationSummary(state, classification) {
   return { classification, pendingPresent: Boolean(state.pending), resultPresent: Boolean(state.result),
     recoveryPresent: Boolean(state.recovery), transactionPhases: state.transactions.map(value => value.Phase),
-    backupCount: state.backups.length, rollbackPayloadPresent: state.rollbackPayloadPresent, finalizeMarker: state.finalizeMarker,
+    backupCount: state.backups.length, rollbackPayloadPresent: state.rollbackPayloadPresent, finalizeMarker: state.finalizeMarker, guiFinalizeMarker: state.guiFinalizeMarker,
     healthAttempts: state.recovery?.healthAttempts, nextHealthCheckAt: state.recovery?.nextHealthCheckAt,
     backupExpiresAt: state.recovery?.backupExpiresAt }
 }
 module.exports = { pendingFingerprint, samePending, reconcileDenial, captureRestartOutput, pendingProtectionOption,
-  assertPendingProtection, classifyReconciliation, readReconciliationState, reconciliationSummary }
+  assertPendingProtection, classifyReconciliation, parseGuiFinalizationMarker, readGuiFinalizationMarker, readReconciliationState, reconciliationSummary }

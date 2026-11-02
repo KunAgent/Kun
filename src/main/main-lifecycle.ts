@@ -1,3 +1,4 @@
+import { probeUpdateRuntimeAfterStartup } from './update-runtime-health-check'
 import { revokeBrowserBindingBeforeQuit } from './runtime/partial-startup-quit'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { DesktopShutdownSteps } from './runtime/desktop-shutdown-steps'
@@ -293,7 +294,9 @@ export async function loadGuiUpdaterModule(): Promise<GuiUpdaterModule> {
             prepareManagedRuntimesForUpdate,
             async () => (await mainState.store.load()).locale,
             setUpdateInstallQuitting,
-            async () => (await probeRuntimeApi(await mainState.store.load())).ok,
+            () => probeUpdateRuntimeAfterStartup(
+              mainState.startupState, () => mainState.store.load(), probeRuntimeApi
+            ),
             checkProviderMutationsBeforeUpdate
           )
           mainState.guiUpdaterInitialized = true

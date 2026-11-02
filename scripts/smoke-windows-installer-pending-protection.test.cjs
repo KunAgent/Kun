@@ -133,3 +133,63 @@ test('degraded-health grace is explicit and requires matching authoritative roll
     assert.equal(classifyReconciliation({ ...state, ...change }, versions, now), 'unconfirmed')
   }
 })
+
+const { parseGuiFinalizationMarker, readGuiFinalizationMarker, readReconciliationState } = require('./smoke-windows-installer-pending-protection.cjs')
+const { mkdir, symlink } = require('node:fs/promises')
+const expectedGui = { pid: 123, createdAt: '2026-11-02T13:21:33.0000000Z', version: '0.4.4', executablePath: 'C:\\owned\\Kun.exe' }
+function markerLine(change = {}, at = '2026-11-02T13:21:45.000Z') {
+  return `[${at}] [INFO] [kun-gui updater] Native update transaction finalized. - detail: ${JSON.stringify({
+    event: 'native_update_finalized', pid: expectedGui.pid, version: expectedGui.version,
+    executablePath: expectedGui.executablePath, ...change }, null, 2)}\n`
+}
+test('GUI finalization marker must be fresh, complete and from the original automatic GUI identity', () => {
+  const now = Date.parse('2026-11-02T13:22:00Z')
+  const good = parseGuiFinalizationMarker(markerLine(), expectedGui, now)
+  assert.equal(good.pid, expectedGui.pid)
+  assert.equal(good.source, 'owned-automatic-gui-log')
+  for (const change of [{ pid: 456 }, { version: '0.4.3' }, { executablePath: 'C:\\other\\Kun.exe' },
+    { event: 'already_finalized' }, { pid: '123' }]) {
+    assert.equal(parseGuiFinalizationMarker(markerLine(change), expectedGui, now), null)
+  }
+  for (const text of [markerLine({}, '2026-11-02T13:21:32.000Z'), markerLine({}, '2026-11-02T14:00:00.000Z'),
+    markerLine().slice(0, -1), markerLine().slice(0, -8), markerLine().replace('"pid": 123', '"pid": bad'),
+    markerLine().replace('[INFO]', '[WARN]')]) assert.equal(parseGuiFinalizationMarker(text, expectedGui, now), null)
+  assert.equal(parseGuiFinalizationMarker(markerLine(), { ...expectedGui, notAfter: '2026-11-02T13:21:40.000Z' }, now), null,
+    'An inspection-era marker cannot replace the evidence from the original automatic launch')
+  assert.ok(parseGuiFinalizationMarker(markerLine({ executablePath: 'c:\\OWNED\\kun.exe' }), expectedGui, now))
+})
+test('bounded owned-profile reader accepts the automatic GUI marker without installer diagnostic inheritance', async t => {
+  const root = await temporary(t)
+  const profile = join(root, 'profile')
+  const recovery = join(root, 'recovery')
+  await mkdir(join(profile, 'logs'), { recursive: true })
+  await mkdir(recovery)
+  await writeFile(join(profile, '.upgrade-acceptance-owner'), root)
+  const expected = { ...expectedGui, ownerRoot: root }
+  // Use a fresh timestamp relative to actual test clock for the production reader.
+  expected.createdAt = new Date(Date.now() - 5000).toISOString()
+  const marker = markerLine({}, new Date(Date.now() - 1000).toISOString())
+  await writeFile(join(profile, 'logs', 'kun-2026-11-02.log'), 'x'.repeat(600 * 1024) + '\n' + marker)
+  assert.ok(await readGuiFinalizationMarker(profile, expected))
+  const state = await readReconciliationState(profile, recovery, join(root, 'missing-installer.log'), expected)
+  assert.equal(classifyReconciliation(state, versions), 'finalized')
+  assert.equal(state.guiFinalizeMarker.pid, expected.pid)
+  assert.equal(await readGuiFinalizationMarker(profile, { ...expected, pid: 456 }), null, 'Later inspection PID cannot authenticate the automatic GUI')
+  await writeFile(join(profile, 'pending-update.json'), '{"oldVersion":"0.4.3","newVersion":"0.4.4"}')
+  const remaining = await readReconciliationState(profile, recovery, join(root, 'missing-installer.log'), expected)
+  assert.equal(remaining.finalizeMarker, true)
+  assert.notEqual(classifyReconciliation(remaining, versions), 'finalized', 'A valid marker never overrides residual recovery records')
+  await writeFile(join(profile, '.upgrade-acceptance-owner'), join(root, 'wrong-owner'))
+  assert.equal(await readGuiFinalizationMarker(profile, expected), null)
+})
+test('owned log reader rejects log-directory junctions instead of finding a marker in another profile', async t => {
+  const root = await temporary(t)
+  const profile = join(root, 'profile')
+  const outside = join(root, 'outside')
+  await mkdir(profile)
+  await mkdir(outside)
+  await writeFile(join(profile, '.upgrade-acceptance-owner'), root)
+  await writeFile(join(outside, 'kun-2026-11-02.log'), markerLine())
+  await symlink(outside, join(profile, 'logs'), 'junction')
+  assert.equal(await readGuiFinalizationMarker(profile, { ...expectedGui, ownerRoot: root }), null)
+})

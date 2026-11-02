@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppSettingsV1 } from '../shared/app-settings'
 import { DesktopStartupState } from './desktop-startup-state'
+import { probeUpdateRuntimeAfterStartup } from './update-runtime-health-check'
 import { runPostWindowRuntimeStartup } from './main-runtime-startup-flow'
 import type { PostWindowRuntimeStartupDeps } from './main-runtime-startup-flow'
 
@@ -51,6 +52,16 @@ function createDeps(overrides: Partial<PostWindowRuntimeStartupDeps> = {}) {
 }
 
 describe('runPostWindowRuntimeStartup', () => {
+  it('can complete startup with updater health already waiting, without a readiness cycle', async () => {
+    const { deps, startupState } = createDeps()
+    const probe = vi.fn(async () => ({ ok: true }))
+    const earlyHealth = probeUpdateRuntimeAfterStartup(startupState, async () => settings(), probe)
+    await runPostWindowRuntimeStartup(settings(), deps)
+    expect(await earlyHealth).toBe(true)
+    expect(probe).toHaveBeenCalledOnce()
+    expect(deps.loadGuiUpdaterModule).toHaveBeenCalledOnce()
+  })
+
   it('orders handoff, attach, initial settings apply, ready, and release notes', async () => {
     const { deps, events, phases, startupState } = createDeps()
 

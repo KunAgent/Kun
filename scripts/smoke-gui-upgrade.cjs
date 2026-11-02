@@ -13,6 +13,7 @@ const { parse } = require('yaml')
 const { sanitizeDiagnostic } = require('./stage-windows-upgrade-evidence.cjs')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
+const { sameOwnedPath, probeAutomaticRuntime, waitForAutomaticReady } = require('./smoke-windows-installer-relaunch.cjs')
 const { pendingProtectionOption, assertPendingProtection, classifyReconciliation, readReconciliationState, reconciliationSummary } = require('./smoke-windows-installer-pending-protection.cjs')
 const { startPreparedRestartObservation } = require('./smoke-windows-installer-prepared-restart.cjs')
 const { verifyPrCandidateSource } = require('./pr-gui-candidate-source.cjs')
@@ -42,6 +43,15 @@ async function install(executable, parent, env) {
   const args = ['/S', '/currentuser', `"/D=${parent}"`]
   await ps(`$p=Start-Process -FilePath ${q(executable)} -ArgumentList @(${args.map(q).join(',')}) -PassThru; ` +
     '$p.WaitForExit(); $p.Refresh(); if ($p.ExitCode -ne 0) { throw "Installer exit $($p.ExitCode)" }', env)
+}
+
+async function windowsGuiProcesses(executable) {
+  const result = await ps(`$rows=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq ${q(executable)} } | ` +
+    'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
+    'if($p){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle;' +
+    'executablePath=[string]$_.ExecutablePath;createdAt=$_.CreationDate.ToUniversalTime().ToString("O")}} }); ' +
+    'ConvertTo-Json -Compress -InputObject $rows')
+  return parseInstallerJson(result.stdout || '[]')
 }
 
 async function stopInstalledGui(executable) {
@@ -339,15 +349,36 @@ async function scenario(input, name, record, persistReport) {
       if (process.platform === 'win32') {
         journal.phase('automatic_relaunch')
         const relaunched = await pollInstalling(async () => {
-          const result = await ps(`$rows=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq ${q(executable)} } | ` +
-            'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
-            'if($p -and $p.MainWindowHandle -ne 0){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle}} }); ' +
-            'ConvertTo-Json -Compress -InputObject $rows')
-          return parseInstallerJson(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.pid !== record.preparedRestart?.launch?.pid && entry.mainWindowHandle > 0)
+          return (await windowsGuiProcesses(executable)).find(entry => entry.pid !== oldPid && entry.pid !== record.preparedRestart?.launch?.pid && entry.mainWindowHandle > 0)
         }, 10 * 60_000, 'installer relaunch with a real GUI window')
         record.automaticRelaunch = { ...relaunched, source: 'CIM/MainWindowHandle', guiWindowObserved: true,
           observedAt: new Date().toISOString(), beforeHarnessLaunch: true }
         journal.phase('new_gui_started', record.automaticRelaunch)
+        // Do not tear down this first normal launch while it is still creating
+        // Runtime or letting its real updater reconcile the committed install.
+        model.state.mode = 'complete'
+        journal.phase('automatic_runtime_readiness')
+        record.automaticReady = await waitForAutomaticReady({ gui: record.automaticRelaunch,
+          poll: pollInstalling, timeout: TIMEOUT, requireFinalized: input.requirePendingProtection,
+          readGui: async () => (await windowsGuiProcesses(executable)).find(entry => entry.pid === relaunched.pid),
+          readRuntime: async () => {
+            let discovery
+            try { discovery = parseInstallerJson(await readFile(join(dataDir, 'runtime.json'), 'utf8')) }
+            catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return null; throw error }
+            if (!Number.isSafeInteger(discovery.pid) || discovery.pid <= 0 || !processIsAlive(discovery.pid)) return null
+            return probeAutomaticRuntime(discovery, { version: name === 'rollback' ? input.baselineVersion : input.version,
+              oldRuntimePid: oldRuntime.pid, guiCreatedAt: relaunched.createdAt, dataDir })
+          },
+          readReconciliation: async () => {
+            const state = await readReconciliationState(userData, installerRecovery, join(root, 'installer.log'),
+              { ...record.automaticRelaunch, version: input.version, ownerRoot: root })
+            const classification = classifyReconciliation(state, { oldVersion: input.baselineVersion, newVersion: input.version })
+            record.pendingReconciliation = reconciliationSummary(state, classification)
+            journal.persist()
+            return classification
+          }
+        })
+        journal.event('automatic_runtime_ready', record.automaticReady)
       } else {
         await waitForBundleReplacement(async () => {
           const result = await run('/usr/libexec/PlistBuddy', ['-c', 'Print CFBundleShortVersionString', join(bundle, 'Contents', 'Info.plist')])
@@ -392,7 +423,8 @@ async function scenario(input, name, record, persistReport) {
     if (input.requirePendingProtection) {
       journal.phase('pending_protection_reconciliation')
       const reconciled = await poll(async () => {
-        const state = await readReconciliationState(userData, installerRecovery, join(root, 'installer.log'))
+        const state = await readReconciliationState(userData, installerRecovery, join(root, 'installer.log'),
+          { ...record.automaticRelaunch, version: input.version, ownerRoot: root, notAfter: record.inspectionStartedAt })
         const classification = classifyReconciliation(state, { oldVersion: input.baselineVersion, newVersion: input.version })
         record.pendingReconciliation = reconciliationSummary(state, classification)
         journal.persist()
@@ -439,7 +471,7 @@ async function scenario(input, name, record, persistReport) {
       ['stop-owned-manager', async () => {
         const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(parseInstallerJson).catch(() => null)
         if (!manager) return
-        assert.equal(resolve(manager.dataDir), resolve(dataDir), 'Manager must belong to this scenario')
+        assert.ok(sameOwnedPath(manager.dataDir, dataDir), 'Manager must belong to this exact scenario data directory')
         await fetch(`${manager.baseUrl}/v1/manager/shutdown`, {
           method: 'POST', headers: { authorization: `Bearer ${manager.managerToken}`, 'content-type': 'application/json' },
           body: JSON.stringify({ instanceId: manager.instanceId }), signal: AbortSignal.timeout(10_000)
