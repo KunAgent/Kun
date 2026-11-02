@@ -10,6 +10,7 @@ import { detectCodexHome, localPetsRoot, refreshPetLibraries, resolveBuiltinPets
 import { petEventAllowed, petIpcHandlers, type PetIpcEvent } from './pet-ipc'
 import { readPetAsset } from './pet-protocol'
 import { PetStore } from './pet-store'
+import { petRendererTarget } from './pet-renderer-target'
 import { PetWindowController, type PetWindowLike } from './pet-window'
 
 let active: DesktopPets | null = null
@@ -284,13 +285,8 @@ class DesktopPetRuntime implements DesktopPets {
   }
 
   private loadOverlay(window: PetWindowLike): Promise<void> {
-    const devUrl = developmentRendererUrl()
-    if (!devUrl) return window.loadFile(path.join(__dirname, '../renderer/pet-overlay.html'))
-    const target = new URL(devUrl)
-    target.pathname = '/pet-overlay.html'
-    target.search = ''
-    target.hash = ''
-    return window.loadURL(target.toString())
+    const target = petRendererTarget({ appPath: app.getAppPath(), developmentUrl: developmentRendererUrl() })
+    return target.kind === 'file' ? window.loadFile(target.path) : window.loadURL(target.url)
   }
 
   private async openDirectory(dir: string): Promise<void> {
