@@ -44,7 +44,7 @@
   display: grid;
   place-items: center;
   width: 80px;
-  aspect-ratio: 192 / 208;
+  height: 87px;
   overflow: hidden;
   background: transparent;
 }
@@ -177,7 +177,8 @@
 .pet-static-preview {
   display: block;
   width: 42px;
-  aspect-ratio: 192 / 208;
+  height: 45px;
+  overflow: hidden;
   background-color: transparent;
   background-repeat: no-repeat;
   background-position: 0% 0%;
@@ -186,6 +187,7 @@
 
 .pets-settings-preview .pet-static-preview {
   width: 72px;
+  height: 78px;
 }
 
 .pets-settings-item-warning {

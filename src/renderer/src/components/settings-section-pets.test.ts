@@ -94,6 +94,20 @@ describe('pets settings section', () => {
     expect(markup).toContain('petsSelectFirst')
   })
 
+  it('gives a spritesheet preview an explicit box so the cell can paint', async () => {
+    const visible = { ...pet, spritesheetUrl: 'kun-pet://asset/kun%3Akun-dot/spritesheet?v=abc' }
+    const settings = { ...defaultPetSettings(), selectedPetId: visible.id }
+    install([visible], settings)
+    const renderer = await renderSection()
+    const previews = renderer.root.findAll((node) => node.props.className === 'pet-static-preview')
+    expect(previews).toHaveLength(2)
+    for (const preview of previews) {
+      expect(preview.props.style.height).toBeGreaterThan(0)
+      expect(preview.props.style.backgroundImage).toContain('kun-pet://asset/')
+      expect(preview.props.style.backgroundSize).toBe('800% 900%')
+    }
+  })
+
   it('keeps the selected pet pressed and reports a failed refresh', async () => {
     const settings = { ...defaultPetSettings(), selectedPetId: pet.id, overlayOpen: true }
     const installed = install([pet], settings)
