@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { DatabaseSync } from 'node:sqlite'
 import { AgentCommitmentSchema } from '../contracts/agent-commitments.js'
+import { CommitmentAttentionSchema } from '../contracts/collaboration-attention.js'
 import { CommitmentControlSchema, CommitmentLinkSchema } from '../contracts/collaboration-followup.js'
 import { RoomStoreConflictError, type RoomStoreCommit } from './room-store.js'
 type RoomStorePut = NonNullable<RoomStoreCommit['puts']>[number]
@@ -65,6 +66,31 @@ function validateOwnedStart(db: DatabaseSync, target: FollowUpNativeStart): void
   }
 }
 
+/**
+ * A tracked completion must carry, in the same transaction, the transition of an
+ * open acceptance item for this commitment into a user-resolved answer. Re-reading
+ * the external head happens in the attention service; the store proves here that
+ * this is a real transition rather than a freshly written "resolved" row.
+ */
+function versionedAcceptance(db: DatabaseSync, input: RoomStoreCommit,
+  commitment: ReturnType<typeof AgentCommitmentSchema.parse>): boolean {
+  return (input.puts ?? []).some((row) => {
+    if (row.kind !== 'commitment_attention') return false
+    const beforeRow = read(db, 'commitment_attention', row.id)
+    if (!beforeRow) return false
+    const before = CommitmentAttentionSchema.safeParse(beforeRow.value)
+    const after = CommitmentAttentionSchema.safeParse(row.value)
+    if (!before.success || !after.success) return false
+    const prior = before.data, next = after.data
+    return prior.kind === 'acceptance' && prior.status === 'open' && prior.commitmentId === commitment.id &&
+      next.kind === 'acceptance' && next.status === 'resolved' && Boolean(next.resolution) &&
+      next.commitmentId === commitment.id && next.participantAgentId === commitment.participantAgentId &&
+      next.sourceRoomId === commitment.sourceRoomId &&
+      isDeepStrictEqual(prior.artifactVersion, next.artifactVersion) &&
+      (next.resolution!.surface === 'gui' || next.resolution!.surface === 'remote')
+  })
+}
+
 function validateCommitmentChange(db: DatabaseSync, input: RoomStoreCommit, put: RoomStorePut): void {
   if (put.kind !== 'agent_commitment') return
   const beforeRow = read(db, put.kind, put.id), controlRow = read(db, 'commitment_control', put.id)
@@ -81,7 +107,9 @@ function validateCommitmentChange(db: DatabaseSync, input: RoomStoreCommit, put:
     !isDeepStrictEqual(before[field as keyof typeof before], after[field as keyof typeof after]))
   const completionChanged = after.status === 'completed' && (before.status !== 'completed' || scopeChanged ||
     !isDeepStrictEqual(before.results, after.results) || !isDeepStrictEqual(before.acceptanceEvidence, after.acceptanceEvidence))
-  if (completionChanged) fail('tracked completion requires current versioned acceptance')
+  if (completionChanged && !versionedAcceptance(db, input, before)) {
+    fail('tracked completion requires current versioned acceptance')
+  }
   const reopening = ['completed', 'cancelled'].includes(before.status) && after.status !== before.status
   const stopping = after.status === 'cancelled' && !control.stoppedAt
   if (!scopeChanged && !reopening && !stopping) return

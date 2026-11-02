@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { FollowUpId, FollowUpRevision, FollowUpTime, FollowUpUserEvidenceSchema,
-  ContinuationModeSchema, NewWorkModeSchema, CollaborationPolicySchema, FollowUpLinkTargetSchema } from './collaboration-followup.js'
+  ContinuationModeSchema, NewWorkModeSchema, CollaborationPolicySchema, FollowUpLinkTargetSchema,
+  FollowUpArtifactVersionSchema, FollowUpEvidenceRefSchema } from './collaboration-followup.js'
 
 export const FollowUpMutation = z.object({
   clientRequestId: FollowUpId, expectedControlRevision: FollowUpRevision
@@ -57,3 +58,59 @@ export const FollowUpErrorCodeSchema = z.enum([
   'OUTCOME_UNKNOWN', 'CAPABILITY_UNAVAILABLE', 'BUDGET_EXHAUSTED'
 ])
 export type FollowUpErrorCode = z.infer<typeof FollowUpErrorCodeSchema>
+
+/**
+ * Business attention is raised by the host, never by model prose. Native approval
+ * and input gates are owned by their real resolvers and cannot be minted here.
+ */
+export const BusinessAttentionKindSchema = z.enum(['decision', 'acceptance', 'recovery'])
+export const OpenBusinessAttention = FollowUpMutation.extend({
+  expectedControlRevision: FollowUpRevision,
+  kind: BusinessAttentionKindSchema,
+  priority: z.number().int().min(0).max(100).default(50),
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().max(2000).default(''),
+  choices: z.array(z.object({ id: FollowUpId, label: z.string().trim().min(1).max(200) }).strict())
+    .min(1).max(10),
+  question: z.string().trim().min(1).max(4000).optional(),
+  evidenceRefs: z.array(FollowUpEvidenceRefSchema).max(50).default([]),
+  artifactVersion: FollowUpArtifactVersionSchema.optional(),
+  attemptId: FollowUpId.optional()
+}).strict().superRefine((value, context) => {
+  if (value.kind === 'decision' && !value.question) {
+    context.addIssue({ code: 'custom', message: 'a decision needs its question', path: ['question'] })
+  }
+  if (value.kind === 'acceptance' && !value.artifactVersion) {
+    context.addIssue({ code: 'custom', message: 'acceptance needs the artifact version it judges', path: ['artifactVersion'] })
+  }
+  if (value.kind !== 'acceptance' && value.artifactVersion) {
+    context.addIssue({ code: 'custom', message: 'only acceptance is version bound', path: ['artifactVersion'] })
+  }
+  if (value.kind !== 'recovery' && value.attemptId) {
+    context.addIssue({ code: 'custom', message: 'only recovery refers to an attempt', path: ['attemptId'] })
+  }
+  const ids = value.choices.map((choice) => choice.id)
+  if (new Set(ids).size !== ids.length) {
+    context.addIssue({ code: 'custom', message: 'choice ids must be unique', path: ['choices'] })
+  }
+})
+export type OpenBusinessAttention = z.infer<typeof OpenBusinessAttention>
+
+/** Resolution is version bound: an answer always names the attention revision it saw. */
+export const ResolveBusinessAttention = FollowUpMutation.extend({
+  expectedControlRevision: FollowUpRevision,
+  expectedAttentionRevision: FollowUpRevision,
+  choiceId: FollowUpId,
+  surface: z.enum(['gui', 'remote']),
+  connectionId: FollowUpId.optional(),
+  /** Acceptance must restate the observed artifact version; the host re-reads it. */
+  expectedArtifact: FollowUpArtifactVersionSchema.optional()
+}).strict()
+export type ResolveBusinessAttention = z.infer<typeof ResolveBusinessAttention>
+export const BusinessAttentionResult = z.object({
+  attentionId: FollowUpId, attentionRevision: FollowUpRevision,
+  status: z.enum(['open', 'resolved', 'superseded']),
+  choiceId: FollowUpId.optional(), commitmentRevision: FollowUpRevision.optional(),
+  controlRevision: FollowUpRevision
+}).strict()
+export type BusinessAttentionResult = z.infer<typeof BusinessAttentionResult>

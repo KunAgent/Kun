@@ -9,6 +9,7 @@ import { FollowUpState, FollowUpError, followUpCheck, followUpPut, followUpScope
   followUpPolicyCurrent, type FollowUpOptions } from './state.js'
 import { stopFollowUp } from './stop.js'
 import { createFollowUpLink, releaseFollowUpLink } from './links.js'
+import { openBusinessAttention, resolveBusinessAttention } from './attention.js'
 import { projectFollowUp, followUpTargetFact } from './projection.js'
 
 export type FollowUpControlResult = { control: CommitmentControl; controlRevision: number }
@@ -181,6 +182,13 @@ export class FollowUpService {
   stop(agentId: string, id: string, input: unknown) { return stopFollowUp(this.state, agentId, id, input) }
   link(agentId: string, id: string, input: unknown) { return createFollowUpLink(this.state, agentId, id, input) }
   releaseLink(agentId: string, id: string, input: unknown) { return releaseFollowUpLink(this.state, agentId, id, input) }
+  // Business questions are host-raised and user-answered; neither grants execution.
+  openAttention(agentId: string, id: string, input: unknown) {
+    return openBusinessAttention(this.state, agentId, id, input)
+  }
+  resolveAttention(agentId: string, id: string, attentionId: string, input: unknown) {
+    return resolveBusinessAttention(this.state, agentId, id, attentionId, input)
+  }
 
   private validatePolicy(policy: z.infer<typeof FollowUpPolicyInput>, now: string) {
     if (policy.expiresAt <= now) throw new FollowUpError('AUTHORIZATION_CHANGED', 'follow-up policy must expire in the future')

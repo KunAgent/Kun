@@ -123,6 +123,11 @@ export type RoomTaskExecution = {
 }
 export type RoomRuntimeDeps = {
   followUpFeatures?: () => { enabled: boolean; auto: boolean; github: boolean }
+  /**
+   * Authoritative artifact head for version-bound acceptance. Absent by default:
+   * acceptance then fails closed instead of judging a version nobody re-read.
+   */
+  observedHead?: (resourceKey: string) => Promise<{ headSha: string; observationRevision: number } | null>
   manualFollowUp?: {
     stage: (participantAgentId: string, commitmentId: string,
       command: import('../contracts/collaboration-followup-api.js').ContinueCommitment) =>

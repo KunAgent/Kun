@@ -31,6 +31,17 @@ export function registerAgentWorkRoutes(add: Add) {
     const input = await body(request)
     return rooms.exclusive(() => rooms.followUp.continueExplicitly(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
   })
+  // Business questions the host raises on the agent's behalf. Only a user surface
+  // answers them; nothing here approves a native gate or starts work.
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/attention', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.openAttention(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/attention/:attentionId', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.resolveAttention(Id.parse(params.agentId),
+      Id.parse(params.commitmentId), Id.parse(params.attentionId), input))
+  })
   add('POST', '/v1/agents/:agentId/commitments/:commitmentId/cancel', async (rooms, request, { params }) => {
     const input = Action.parse(await body(request))
     return rooms.exclusive(() => rooms.commitments.update(Id.parse(params.agentId), Id.parse(params.commitmentId), { ...input, status: 'cancelled' }))
