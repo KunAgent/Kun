@@ -36,6 +36,25 @@ async function roomTask(f: FollowUpFixture, threadId: string, id = 'room-task') 
 }
 
 describe('tracked commitments at legacy and native persistence boundaries', () => {
+  it('refuses to take ownership of a thread that is already working', async () => {
+    const f = await fixture()
+    await enable(f)
+    // A turn that is already running has no native request row, so the thread guard
+    // could not protect it; ownership must therefore start from an idle thread.
+    await expect(own(f, f.addTarget('busy-thread', 'running')))
+      .rejects.toMatchObject({ code: 'CAPABILITY_UNAVAILABLE' })
+    await expect(own(f, f.addTarget('queued-thread', 'queued')))
+      .rejects.toMatchObject({ code: 'CAPABILITY_UNAVAILABLE' })
+    const idle = await own(f, f.addTarget('idle-thread', 'completed'))
+    expect(idle.link.nativeTarget).toMatchObject({ threadId: 'idle-thread' })
+    // Reference links pin nothing, so they may still point at a busy thread.
+    const control = await f.store.get('commitment_control', f.commitment.id)
+    const referenced = await f.followUp.link('agent-1', f.commitment.id, {
+      clientRequestId: 'link-ref', expectedControlRevision: control!.revision,
+      target: f.addTarget('ref-thread', 'running'), ownership: 'referenced', userEvidence: f.userEvidence })
+    expect(referenced.link.nativeTarget).toBeUndefined()
+  })
+
   it.each(['thread', 'workbench_link', 'room_task'] as const)('freezes the real %s target authority at ownership', async (kind) => {
     const f = await fixture(), target = f.addTarget()
     const wb = kind === 'workbench_link' ? await workbench(f, target.threadId) : undefined
@@ -116,8 +135,10 @@ describe('tracked commitments at legacy and native persistence boundaries', () =
   })
 
   it('never reports a stop or permits reopen from a text/turn ending without physical stop proof', async () => {
-    const f = await fixture(), target = f.addTarget('writer', 'running')
+    // Ownership must start from an idle thread, so the writer starts after the link.
+    const f = await fixture(), target = f.addTarget('writer', 'completed')
     await enable(f); await own(f, target)
+    f.stub.threads.get(target.threadId)!.turns[0]!.status = 'running'
     await f.followUp.stop('agent-1', f.commitment.id, { ...action('stop', 1), scope: 'commitment', targetId: f.commitment.id })
     const reopen = { ...f.enable, clientRequestId: 'reopen', expectedControlRevision: 2, expectedCommitmentRevision: 1 }
     expect((await f.followUp.get('agent-1', f.commitment.id)).stage).toBe('stopping')

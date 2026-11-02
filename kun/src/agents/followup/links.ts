@@ -27,6 +27,13 @@ export async function validateFollowUpTarget(state: FollowUpState, value: AgentC
       metadata.roomContext?.participantAgentId === value.participantAgentId && metadata.roomContext.roomId === value.sourceRoomId ||
       metadata.workbenchOrigin?.agentId === value.participantAgentId && metadata.workbenchOrigin.roomId === value.sourceRoomId
     )) fail()
+    // Taking ownership pins this thread's target, so it must start idle. A turn that is
+    // already running has no native request row, and the thread guard can only protect
+    // work it knows about; linking it would leave that run unguarded.
+    if (ownership === 'owned' && metadata!.turns.some((turn) =>
+      turn.status === 'queued' || turn.status === 'running')) {
+      throw new FollowUpError('CAPABILITY_UNAVAILABLE', 'link an owned target only when its thread is idle')
+    }
     if (ownership === 'owned') nativeTarget = { threadId: id, fingerprint: nativeFollowUpTargetFingerprint(metadata!) }
     return metadata
   }
